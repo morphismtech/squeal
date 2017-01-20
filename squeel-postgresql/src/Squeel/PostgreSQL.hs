@@ -1,0 +1,1 @@
+module Squeel.PostgreSQL where

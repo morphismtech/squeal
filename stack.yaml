@@ -1,0 +1,6 @@
+resolver: nightly-2016-12-31
+packages:
+- squeel-postgresql
+extra-deps: []
+flags: {}
+extra-package-dbs: []
