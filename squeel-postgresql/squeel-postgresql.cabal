@@ -14,7 +14,7 @@ library
   hs-source-dirs: src
   exposed-modules:
     Squeel.PostgreSQL
-    Squeel.PostgreSQL.Connection
+    Squeel.PostgreSQL.PQ
     Squeel.PostgreSQL.Query
     Squeel.PostgreSQL.Query.Expression
     Squeel.PostgreSQL.Query.Relation

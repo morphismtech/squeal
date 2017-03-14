@@ -15,12 +15,8 @@ module Squeel.PostgreSQL.Query.Expression where
 
 import Data.ByteString (ByteString)
 import Data.Monoid
-import Data.Proxy
 import Data.String
 
-import qualified PostgreSQL.Binary.Encoder as Encoder
-
-import Squeel.PostgreSQL.Value
 import Squeel.PostgreSQL.Type
 
 data Expression (ps :: [PGType]) (cols :: [Column]) (x :: PGType) =

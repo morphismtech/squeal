@@ -28,6 +28,9 @@ import Data.Word (Word16, Word32, Word64)
 
 import Squeel.PostgreSQL.Type
 
+decodeValue :: FromValue pg x => Proxy pg -> ByteString -> Either Text x
+decodeValue = Decoder.run . fromValue
+
 class FromValue (pg :: PGType) x where
   fromValue :: Proxy pg -> Decoder x
 instance (Integral x, Bits x) => FromValue ('PGType "int") x where
