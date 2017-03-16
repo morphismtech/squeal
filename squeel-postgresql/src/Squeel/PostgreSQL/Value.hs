@@ -72,53 +72,57 @@ instance FromValue ('PGType "timestamptz") UTCTime where
 instance FromValue ('PGType "interval") DiffTime where
   fromValue _ = Decoder.interval_int
 
-class ToValue (pg :: PGType) x where
+class ToValue x (pg :: PGType) where
   toValue :: Proxy pg -> Encoder x
-instance ToValue ('PGType "int2") Int16 where
+instance ToValue Int16 ('PGType "int2") where
   toValue _ = Encoder.int2_int16
-instance ToValue ('PGType "int4") Int32 where
+instance ToValue Int32 ('PGType "int4") where
   toValue _ = Encoder.int4_int32
-instance ToValue ('PGType "int8") Int64 where
+instance ToValue Int64 ('PGType "int8") where
   toValue _ = Encoder.int8_int64
-instance ToValue ('PGType "word2") Word16 where
+instance ToValue Word16 ('PGType "word2") where
   toValue _ = Encoder.int2_word16
-instance ToValue ('PGType "word4") Word32 where
+instance ToValue Word32 ('PGType "word4") where
   toValue _ = Encoder.int4_word32
-instance ToValue ('PGType "word8") Word64 where
+instance ToValue Word64 ('PGType "word8") where
   toValue _ = Encoder.int8_word64
-instance ToValue ('PGType "float4") Float where
+instance ToValue Float ('PGType "float4") where
   toValue _ = Encoder.float4
-instance ToValue ('PGType "float8") Double where
+instance ToValue Double ('PGType "float8") where
   toValue _ = Encoder.float8
-instance ToValue ('PGType "bool") Bool where
+instance ToValue Bool ('PGType "bool") where
   toValue _ = Encoder.bool
-instance ToValue ('PGType "bytea") ByteString where
+instance ToValue ByteString ('PGType "bytea") where
   toValue _ = Encoder.bytea_strict
-instance ToValue ('PGType "bytea") Lazy.ByteString where
+instance ToValue Lazy.ByteString ('PGType "bytea") where
   toValue _ = Encoder.bytea_lazy
-instance ToValue ('PGType "text") Text where
+instance ToValue Text ('PGType "text") where
   toValue _ = Encoder.text_strict
-instance ToValue ('PGType "text") Lazy.Text where
+instance ToValue Lazy.Text ('PGType "text") where
   toValue _ = Encoder.text_lazy
-instance ToValue ('PGType "char") Char where
+instance ToValue Char ('PGType "char") where
   toValue _ = Encoder.char
-instance ToValue ('PGType "numeric") Scientific where
+instance ToValue Scientific ('PGType "numeric") where
   toValue _ = Encoder.numeric
-instance ToValue ('PGType "uuid") UUID where
+instance ToValue UUID ('PGType "uuid") where
   toValue _ = Encoder.uuid
-instance ToJSON x => ToValue ('PGType "json") x where
+instance ToJSON x => ToValue x ('PGType "json") where
   toValue _ = Encoder.json_bytes . Lazy.toStrict . encode
-instance ToJSON x => ToValue ('PGType "jsonb") x where
+instance ToJSON x => ToValue x ('PGType "jsonb") where
   toValue _ = Encoder.jsonb_bytes . Lazy.toStrict . encode
-instance ToValue ('PGType "date") Day where
+instance ToValue Day ('PGType "date") where
   toValue _ = Encoder.date
-instance ToValue ('PGType "time") TimeOfDay where
+instance ToValue TimeOfDay ('PGType "time") where
   toValue _ = Encoder.time_int
-instance ToValue ('PGType "timetz") (TimeOfDay, TimeZone) where
+instance ToValue (TimeOfDay, TimeZone) ('PGType "timetz") where
   toValue _ = Encoder.timetz_int
-instance ToValue ('PGType "timestamp") LocalTime where
+instance ToValue LocalTime ('PGType "timestamp") where
   toValue _ = Encoder.timestamp_int
-instance ToValue ('PGType "timestamptz") UTCTime where
+instance ToValue UTCTime ('PGType "timestamptz") where
   toValue _ = Encoder.timestamptz_int
-instance ToValue ('PGType "interval") DiffTime where
+instance ToValue DiffTime ('PGType "interval") where
   toValue _ = Encoder.interval_int
+
+type family ToParameters ps xs where
+  ToParameters '[] '[] = ()
+  ToParameters (x ': xs) (p ': ps) = (ToValue x p, ToParameters xs ps)

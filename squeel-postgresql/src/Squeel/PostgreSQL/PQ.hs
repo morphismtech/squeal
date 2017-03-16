@@ -40,6 +40,25 @@ newtype Result xs = Result { unResult :: LibPQ.Result }
 exec :: MonadIO io => Query db0 db1 '[] xs -> PQ io db0 db1 (Result xs)
 exec = undefined
 
+type family To xs y where
+  To '[] y = y
+  To (x ': xs) y = To x (To xs y)
+
+execParams
+  :: (MonadIO io, ToParameters xs ps)
+  => Connection db0
+  -> Query db0 db1 ps ys
+  -> xs `To` PQ io db0 db1 (Result ys)
+execParams = undefined
+
+prepare
+  :: MonadIO io
+  => Connection db0
+  -> ByteString
+  -> Query db0 db1 ps xs
+  -> io (PreparedQuery db0 db1 ps xs)
+prepare = undefined
+
 newtype RowNumber = RowNumber { unRowNumber :: LibPQ.Row }
 
 newtype ColumnNumber cs c = ColumnNumber { unColumnNumber :: LibPQ.Column }
