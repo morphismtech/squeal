@@ -79,7 +79,7 @@ instance IxMonadTrans PQ where
 instance MonadBase b m => MonadBase b (PQ m db db) where
   liftBase = ilift . liftBase
 
-type PQRun db = forall n b. Monad n => PQ n db db b -> n (b, Connection db)
+type PQRun db = forall m x. Monad m => PQ m db db x -> m (x, Connection db)
 
 pqliftWith :: Functor m => (PQRun db -> m a) -> PQ m db db a
 pqliftWith f = PQ $ \ conn ->
