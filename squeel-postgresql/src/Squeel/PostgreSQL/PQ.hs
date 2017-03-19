@@ -1,6 +1,8 @@
 {-# LANGUAGE
     DataKinds
+  , DeriveFunctor
   , FlexibleContexts
+  , FlexibleInstances
   , PolyKinds
   , RecordWildCards
   , ScopedTypeVariables
@@ -11,6 +13,9 @@
 
 module Squeel.PostgreSQL.PQ where
 
+import Control.Arrow
+import Control.Monad.Indexed
+import Control.Monad.Indexed.Trans
 import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
 import Data.Proxy
@@ -28,6 +33,40 @@ newtype Connection db = Connection { unConnection :: LibPQ.Connection }
 
 newtype PQ m db0 db1 x = PQ
   { runPQ :: Connection db0 -> m (x, Connection db1) }
+  deriving Functor
+
+instance Functor m => IxFunctor (PQ m) where
+  imap f (PQ g) = PQ $ fmap (first f) . g
+
+instance Applicative m => IxPointed (PQ m) where
+  ireturn x = PQ $ \ conn -> pure (x, conn)
+
+instance Monad m => IxApplicative (PQ m) where
+  iap (PQ f) (PQ x) = PQ $ \ conn -> do
+    (f', conn') <- f conn
+    (x', conn'') <- x conn'
+    return (f' x', conn'')
+
+instance Monad m => Applicative (PQ m db db) where
+  pure = ireturn
+  (<*>) = iap
+
+instance Monad m => IxMonad (PQ m) where
+  ibind f (PQ x) = PQ $ \ conn -> do
+    (x', conn') <- x conn
+    runPQ (f x') conn'
+
+instance Monad m => Monad (PQ m db db) where
+  return = ireturn
+  (>>=) = flip ibind
+
+instance IxMonadTrans PQ where
+  ilift m = PQ $ \ conn -> do
+    x <- m
+    return (x, conn)
+
+instance MonadIO io => MonadIO (PQ io db db) where
+  liftIO = ilift . liftIO
 
 connectdb :: MonadIO io => ByteString -> io (Connection db)
 connectdb = fmap Connection . liftIO . LibPQ.connectdb

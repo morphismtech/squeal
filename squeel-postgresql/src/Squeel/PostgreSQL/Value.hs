@@ -17,7 +17,6 @@ import Control.Arrow (left)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeStrict, encode)
 import Data.Bits (Bits)
 import Data.ByteString (ByteString)
-import Data.ByteString.Builder
 import qualified Data.ByteString.Lazy as Lazy (ByteString, toStrict)
 import Data.Int (Int16,Int32,Int64)
 import Data.Proxy
@@ -25,6 +24,7 @@ import Data.Vinyl
 import Data.Vinyl.Functor
 import PostgreSQL.Binary.Decoder (Decoder)
 import qualified PostgreSQL.Binary.Decoder as Decoder
+import PostgreSQL.Binary.Encoder (Encoder)
 import qualified PostgreSQL.Binary.Encoder as Encoder
 import Data.Proxy (Proxy)
 import Data.Scientific (Scientific)
@@ -82,7 +82,7 @@ instance FromValue ('PGType "interval") DiffTime where
   fromValue _ = Decoder.interval_int
 
 class ToValue x (pg :: PGType) where
-  toValue :: Proxy pg -> x -> Builder
+  toValue :: Proxy pg -> Encoder x
 instance ToValue Int16 ('PGType "int2") where
   toValue _ = Encoder.int2_int16
 instance ToValue Int32 ('PGType "int4") where
