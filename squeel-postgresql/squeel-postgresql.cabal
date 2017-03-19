@@ -26,11 +26,14 @@ library
     , aeson
     , bytestring
     , indexed
+    , lifted-base
+    , monad-control
     , postgresql-binary
     , postgresql-libpq
     , scientific
     , text
     , time
+    , transformers-base
     , uuid
     , vinyl
 
