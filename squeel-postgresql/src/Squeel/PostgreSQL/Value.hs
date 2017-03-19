@@ -1,8 +1,14 @@
 {-# LANGUAGE
     DataKinds
   , FlexibleInstances
+  , FunctionalDependencies
   , KindSignatures
   , MultiParamTypeClasses
+  , PolyKinds
+  , ScopedTypeVariables
+  , TypeApplications
+  , TypeFamilies
+  , TypeOperators
 #-}
 
 module Squeel.PostgreSQL.Value where
@@ -11,10 +17,13 @@ import Control.Arrow (left)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeStrict, encode)
 import Data.Bits (Bits)
 import Data.ByteString (ByteString)
+import Data.ByteString.Builder
 import qualified Data.ByteString.Lazy as Lazy (ByteString, toStrict)
 import Data.Int (Int16,Int32,Int64)
+import Data.Proxy
+import Data.Vinyl
+import Data.Vinyl.Functor
 import PostgreSQL.Binary.Decoder (Decoder)
-import PostgreSQL.Binary.Encoder (Encoder)
 import qualified PostgreSQL.Binary.Decoder as Decoder
 import qualified PostgreSQL.Binary.Encoder as Encoder
 import Data.Proxy (Proxy)
@@ -73,7 +82,7 @@ instance FromValue ('PGType "interval") DiffTime where
   fromValue _ = Decoder.interval_int
 
 class ToValue x (pg :: PGType) where
-  toValue :: Proxy pg -> Encoder x
+  toValue :: Proxy pg -> x -> Builder
 instance ToValue Int16 ('PGType "int2") where
   toValue _ = Encoder.int2_int16
 instance ToValue Int32 ('PGType "int4") where
@@ -123,6 +132,10 @@ instance ToValue UTCTime ('PGType "timestamptz") where
 instance ToValue DiffTime ('PGType "interval") where
   toValue _ = Encoder.interval_int
 
-type family ToParameters ps xs where
-  ToParameters '[] '[] = ()
-  ToParameters (x ': xs) (p ': ps) = (ToValue x p, ToParameters xs ps)
+class ToValues xs pgs where
+  toValues :: Proxy pgs -> Rec Identity xs -> [ByteString]
+instance ToValues '[] '[] where toValues _ _ = []
+instance (ToValue x pg, ToValues xs pgs)
+  => ToValues (x ': xs) (pg ': pgs) where
+    toValues (_ :: Proxy (pg ': pgs)) (Identity x :& xs) =
+      Encoder.run (toValue (Proxy @pg)) x : toValues (Proxy @pgs) xs

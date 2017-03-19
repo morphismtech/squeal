@@ -1,8 +1,11 @@
 {-# LANGUAGE
     DataKinds
+  , FlexibleContexts
   , PolyKinds
+  , RecordWildCards
   , ScopedTypeVariables
   , TypeApplications
+  , TypeFamilies
   , TypeOperators
 #-}
 
@@ -12,11 +15,14 @@ import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
 import Data.Proxy
 import Data.Text (Text)
+import Data.Vinyl
+import Data.Vinyl.Functor
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Squeel.PostgreSQL.Query
 import Squeel.PostgreSQL.Value
+import Squeel.PostgreSQL.Type
 
 newtype Connection db = Connection { unConnection :: LibPQ.Connection }
 
@@ -37,27 +43,54 @@ finish = liftIO . LibPQ.finish . unConnection
 
 newtype Result xs = Result { unResult :: LibPQ.Result }
 
-exec :: MonadIO io => Query db0 db1 '[] xs -> PQ io db0 db1 (Result xs)
-exec = undefined
-
-type family To xs y where
-  To '[] y = y
-  To (x ': xs) y = To x (To xs y)
+exec
+  :: MonadIO io
+  => Query db0 db1 '[] xs
+  -> PQ io db0 db1 (Maybe (Result xs))
+exec (Query q) = PQ $ \ (Connection conn) -> do
+  result <- liftIO $ LibPQ.exec conn q
+  return (Result <$> result, Connection conn)
 
 execParams
-  :: (MonadIO io, ToParameters xs ps)
-  => Connection db0
-  -> Query db0 db1 ps ys
-  -> xs `To` PQ io db0 db1 (Result ys)
-execParams = undefined
+  :: (MonadIO io, ToValues xs ps, ToOids ps)
+  => Query db0 db1 ps ys
+  -> Rec Identity xs
+  -> PQ io db0 db1 (Maybe (Result ys))
+execParams (Query q :: Query db0 db1 ps ys) params =
+  PQ $ \ (Connection conn) -> do
+    let
+      params' =
+        [ Just (oid, param, LibPQ.Binary)
+        | (oid, param) <-
+            zip (toOids (Proxy @ps)) (toValues (Proxy @ps) params)
+        ]
+    result <- liftIO $ LibPQ.execParams conn q params' LibPQ.Binary
+    return (Result <$> result, Connection conn)
 
 prepare
-  :: MonadIO io
-  => Connection db0
-  -> ByteString
+  :: (MonadIO io, ToOids ps)
+  => ByteString
   -> Query db0 db1 ps xs
-  -> io (PreparedQuery db0 db1 ps xs)
-prepare = undefined
+  -> PQ io db0 db0 (Maybe (Result []), PreparedQuery db0 db1 ps xs)
+prepare statementName (Query q :: Query db0 db1 ps ys) =
+  PQ $ \ (Connection conn) -> do
+    result <- liftIO $
+      LibPQ.prepare conn statementName q (Just (toOids (Proxy @ps)))
+    return ((Result <$> result,PreparedQuery statementName), Connection conn)
+
+execPrepared
+  :: (MonadIO io, ToValues xs ps)
+  => PreparedQuery db0 db1 ps ys
+  -> Rec Identity xs
+  -> PQ io db0 db1 (Maybe (Result ys))
+execPrepared (PreparedQuery q :: PreparedQuery db0 db1 ps ys) params =
+  PQ $ \ (Connection conn) -> do
+    let
+      params' =
+        [Just (param, LibPQ.Binary) | param <- toValues (Proxy @ps) params]
+    result <- liftIO $
+      LibPQ.execPrepared conn q params' LibPQ.Binary
+    return (Result <$> result, Connection conn)
 
 newtype RowNumber = RowNumber { unRowNumber :: LibPQ.Row }
 
