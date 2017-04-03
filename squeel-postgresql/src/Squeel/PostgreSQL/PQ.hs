@@ -62,7 +62,7 @@ class MonadPQ pq where
     -> pq db0 db1 io (Maybe (Result xs))
 
   pqExecParams
-    :: (MonadBase IO io, ToValues xs ps, ToOids ps)
+    :: (MonadBase IO io, ToOids ps, ToValues xs ps)
     => Query db0 db1 ps ys
     -> Rec Identity xs
     -> pq db0 db1 io (Maybe (Result ys))
