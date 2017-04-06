@@ -22,14 +22,15 @@ import Data.ByteString (ByteString)
 import Data.Monoid
 import Data.Proxy
 import Data.String
--- import Data.Vinyl
+import Data.Vinyl
+import Data.Vinyl.Functor
 import GHC.TypeLits
 
 import qualified Data.ByteString.Char8 as Char8
 
 import Squeel.PostgreSQL.Type
 
-data Expression (ps :: [PGType]) (cols :: [Column]) (x :: PGType) =
+data Expression ps cols x =
   Expression { unExpression :: ByteString } deriving Show
 
 param1 :: Expression (p1:ps) cols p1
@@ -135,12 +136,24 @@ instance Num (Expression ps cols 'PGInt4) where
   abs (Expression x) = Expression $ "@" <> x
   signum (Expression x) = Expression $ "sign(" <> x <> ")"
 
-data Relation
-  (ps :: [PGType])
-  (xs :: [Column])
-  (db :: [Table])
-  (ys :: [Column])
-    = Relation { unRelation :: ByteString }
+data Relation ps xs ys = Relation { unRelation :: ByteString } deriving Show
+
+star :: Relation ps xs xs
+star = Relation "*"
+
+project :: Rec (Alias (Expression ps xs)) ys -> Relation ps xs ys
+project
+  = Relation
+  . Char8.intercalate ", "
+  . recordToList
+  . rmap (Const . expressionString)
+  where
+    expressionString :: Alias (Expression ps xs) y -> ByteString
+    expressionString = \case
+      (As (Expression expr) :: Alias (Expression ps xs) y)
+        -> expr <> " AS " <> Char8.pack (symbolVal (Proxy @(Name y)))
+      (Elem :: Alias (Expression ps xs) y)
+        -> Char8.pack (symbolVal (Proxy @(Name y)))
 
 -- star :: Relation db params xs xs
 -- star = Relation "SELECT * FROM "
@@ -153,14 +166,14 @@ data Relation
 -- table (_ :: Proxy tableName) = Relation $
 --   "SELECT * FROM " <> Char8.pack (symbolVal (Proxy @tableName))
 
-starFrom
-  :: forall tableName tableCols db params columns
-  .  Alias (Relation params columns db) (tableName ':= tableCols)
-  -> Relation params columns db tableCols
-starFrom = \case
-  As x -> x
-  Elem -> Relation $
-    "SELECT * FROM " <> Char8.pack (symbolVal (Proxy @tableName))
+-- starFrom
+--   :: forall tableName tableCols db params columns
+--   .  Alias (Relation params columns db) (tableName ':= tableCols)
+--   -> Relation params columns db tableCols
+-- starFrom = \case
+--   As x -> x
+--   Elem -> Relation $
+--     "SELECT * FROM " <> Char8.pack (symbolVal (Proxy @tableName))
 
 -- from
 --   :: Relation db params ys zs
@@ -190,5 +203,5 @@ newtype Query
 newtype PreparedQuery db0 db1 ps xs
   = PreparedQuery { unPreparedQuery :: ByteString }
 
-select :: Relation ps ('[] :: [Column]) db xs -> Query db db ps xs
-select (Relation x) = Query x
+-- select :: Relation ps ('[] :: [Column]) db xs -> Query db db ps xs
+-- select (Relation x) = Query x
