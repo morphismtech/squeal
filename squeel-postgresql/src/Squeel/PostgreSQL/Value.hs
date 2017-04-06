@@ -15,25 +15,24 @@ module Squeel.PostgreSQL.Value where
 
 import Control.Arrow (left)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeStrict, encode)
-import Data.Bits (Bits)
 import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as Lazy (ByteString, toStrict)
 import Data.Int (Int16,Int32,Int64)
 import Data.Proxy
 import Data.Vinyl
 import Data.Vinyl.Functor
 import PostgreSQL.Binary.Decoder (Decoder)
-import qualified PostgreSQL.Binary.Decoder as Decoder
 import PostgreSQL.Binary.Encoder (Encoder)
-import qualified PostgreSQL.Binary.Encoder as Encoder
 import Data.Proxy (Proxy)
 import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
+import Data.UUID (UUID)
+
+import qualified Data.ByteString.Lazy as Lazy (ByteString, toStrict)
 import qualified Data.Text as Text (pack)
 import qualified Data.Text.Lazy as Lazy (Text)
-import Data.UUID (UUID)
-import Data.Word (Word16, Word32, Word64)
+import qualified PostgreSQL.Binary.Decoder as Decoder
+import qualified PostgreSQL.Binary.Encoder as Encoder
 
 import Squeel.PostgreSQL.Type
 
@@ -42,94 +41,92 @@ decodeValue = Decoder.run . fromValue
 
 class FromValue (pg :: PGType) x where
   fromValue :: Proxy pg -> Decoder x
-instance (Integral x, Bits x) => FromValue ('PGType "int") x where
+instance FromValue 'PGInt2 Int16 where
   fromValue _ = Decoder.int
-instance FromValue ('PGType "float4") Float where
+instance FromValue 'PGInt4 Int32 where
+  fromValue _ = Decoder.int
+instance FromValue 'PGInt8 Int64 where
+  fromValue _ = Decoder.int
+instance FromValue 'PGFloat4 Float where
   fromValue _ = Decoder.float4
-instance FromValue ('PGType "float8") Double where
+instance FromValue 'PGFloat8 Double where
   fromValue _ = Decoder.float8
-instance FromValue ('PGType "bool") Bool where
+instance FromValue 'PGBool Bool where
   fromValue _ = Decoder.bool
-instance FromValue ('PGType "bytea") ByteString where
+instance FromValue 'PGBytea ByteString where
   fromValue _ = Decoder.bytea_strict
-instance FromValue ('PGType "bytea") Lazy.ByteString where
+instance FromValue 'PGBytea Lazy.ByteString where
   fromValue _ = Decoder.bytea_lazy
-instance FromValue ('PGType "text") Text where
+instance FromValue 'PGText Text where
   fromValue _ = Decoder.text_strict
-instance FromValue ('PGType "text") Lazy.Text where
+instance FromValue 'PGText Lazy.Text where
   fromValue _ = Decoder.text_lazy
-instance FromValue ('PGType "char") Char where
+instance FromValue ('PGChar 1) Char where
   fromValue _ = Decoder.char
-instance FromValue ('PGType "numeric") Scientific where
+instance FromValue 'PGNumeric Scientific where
   fromValue _ = Decoder.numeric
-instance FromValue ('PGType "uuid") UUID where
+instance FromValue 'PGUuid UUID where
   fromValue _ = Decoder.uuid
-instance FromJSON x => FromValue ('PGType "json") x where
+instance FromJSON x => FromValue 'PGJson x where
   fromValue _ = Decoder.json_bytes (left Text.pack . eitherDecodeStrict)
-instance FromJSON x => FromValue ('PGType "jsonb") x where
+instance FromJSON x => FromValue 'PGJsonb x where
   fromValue _ = Decoder.jsonb_bytes (left Text.pack . eitherDecodeStrict)
-instance FromValue ('PGType "date") Day where
+instance FromValue 'PGDate Day where
   fromValue _ = Decoder.date
-instance FromValue ('PGType "time") TimeOfDay where
+instance FromValue 'PGTime TimeOfDay where
   fromValue _ = Decoder.time_int
-instance FromValue ('PGType "timetz") (TimeOfDay, TimeZone) where
+instance FromValue 'PGTimeTZ (TimeOfDay, TimeZone) where
   fromValue _ = Decoder.timetz_int
-instance FromValue ('PGType "timestamp") LocalTime where
+instance FromValue 'PGTimestamp LocalTime where
   fromValue _ = Decoder.timestamp_int
-instance FromValue ('PGType "timestamptz") UTCTime where
+instance FromValue 'PGTimestampTZ UTCTime where
   fromValue _ = Decoder.timestamptz_int
-instance FromValue ('PGType "interval") DiffTime where
+instance FromValue 'PGInterval DiffTime where
   fromValue _ = Decoder.interval_int
 
 class ToValue x (pg :: PGType) where
   toValue :: Proxy pg -> Encoder x
-instance ToValue Int16 ('PGType "int2") where
+instance ToValue Int16 'PGInt2 where
   toValue _ = Encoder.int2_int16
-instance ToValue Int32 ('PGType "int4") where
+instance ToValue Int32 'PGInt4 where
   toValue _ = Encoder.int4_int32
-instance ToValue Int64 ('PGType "int8") where
+instance ToValue Int64 'PGInt8 where
   toValue _ = Encoder.int8_int64
-instance ToValue Word16 ('PGType "word2") where
-  toValue _ = Encoder.int2_word16
-instance ToValue Word32 ('PGType "word4") where
-  toValue _ = Encoder.int4_word32
-instance ToValue Word64 ('PGType "word8") where
-  toValue _ = Encoder.int8_word64
-instance ToValue Float ('PGType "float4") where
+instance ToValue Float 'PGFloat4 where
   toValue _ = Encoder.float4
-instance ToValue Double ('PGType "float8") where
+instance ToValue Double 'PGFloat8 where
   toValue _ = Encoder.float8
-instance ToValue Bool ('PGType "bool") where
+instance ToValue Bool 'PGBool where
   toValue _ = Encoder.bool
-instance ToValue ByteString ('PGType "bytea") where
+instance ToValue ByteString 'PGBytea where
   toValue _ = Encoder.bytea_strict
-instance ToValue Lazy.ByteString ('PGType "bytea") where
+instance ToValue Lazy.ByteString 'PGBytea where
   toValue _ = Encoder.bytea_lazy
-instance ToValue Text ('PGType "text") where
+instance ToValue Text 'PGText where
   toValue _ = Encoder.text_strict
-instance ToValue Lazy.Text ('PGType "text") where
+instance ToValue Lazy.Text 'PGText where
   toValue _ = Encoder.text_lazy
-instance ToValue Char ('PGType "char") where
+instance ToValue Char ('PGChar 1) where
   toValue _ = Encoder.char
-instance ToValue Scientific ('PGType "numeric") where
+instance ToValue Scientific 'PGNumeric where
   toValue _ = Encoder.numeric
-instance ToValue UUID ('PGType "uuid") where
+instance ToValue UUID 'PGUuid where
   toValue _ = Encoder.uuid
-instance ToJSON x => ToValue x ('PGType "json") where
+instance ToJSON x => ToValue x 'PGJson where
   toValue _ = Encoder.json_bytes . Lazy.toStrict . encode
-instance ToJSON x => ToValue x ('PGType "jsonb") where
+instance ToJSON x => ToValue x 'PGJsonb where
   toValue _ = Encoder.jsonb_bytes . Lazy.toStrict . encode
-instance ToValue Day ('PGType "date") where
+instance ToValue Day 'PGDate where
   toValue _ = Encoder.date
-instance ToValue TimeOfDay ('PGType "time") where
+instance ToValue TimeOfDay 'PGTime where
   toValue _ = Encoder.time_int
-instance ToValue (TimeOfDay, TimeZone) ('PGType "timetz") where
+instance ToValue (TimeOfDay, TimeZone) 'PGTimeTZ where
   toValue _ = Encoder.timetz_int
-instance ToValue LocalTime ('PGType "timestamp") where
+instance ToValue LocalTime 'PGTimestamp where
   toValue _ = Encoder.timestamp_int
-instance ToValue UTCTime ('PGType "timestamptz") where
+instance ToValue UTCTime 'PGTimestampTZ where
   toValue _ = Encoder.timestamptz_int
-instance ToValue DiffTime ('PGType "interval") where
+instance ToValue DiffTime 'PGInterval where
   toValue _ = Encoder.interval_int
 
 class ToValues xs pgs where

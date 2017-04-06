@@ -11,13 +11,39 @@
 module Squeel.PostgreSQL.Type where
 
 import Data.Proxy
-import qualified Database.PostgreSQL.LibPQ as LibPQ
 import GHC.TypeLits
 
-newtype PGType = PGType Symbol
-data Named x = (:=) Symbol x
+import qualified Database.PostgreSQL.LibPQ as LibPQ
+
+data PGType
+  = PGBool
+  | PGInt2
+  | PGInt4
+  | PGInt8
+  | PGNumeric
+  | PGFloat4
+  | PGFloat8
+  | PGSerial2
+  | PGSerial4
+  | PGSerial8
+  | PGMoney
+  | PGChar Nat
+  | PGVarChar Nat
+  | PGText
+  | PGBytea
+  | PGTimestamp
+  | PGTimestampTZ
+  | PGDate
+  | PGTime
+  | PGTimeTZ
+  | PGInterval
+  | PGUuid
+  | PGJson
+  | PGJsonb
+
+data Named k = (:=) Symbol k
 type family Unnamed named where Unnamed (name ':= x) = x
-type family Name x where Name (name ':= x) = name
+type family Name k where Name (name ':= x) = name
 type Column = Named PGType
 type Table = Named [Column]
 type Database = Named [Table]

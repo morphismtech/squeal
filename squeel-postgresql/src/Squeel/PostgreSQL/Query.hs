@@ -52,7 +52,7 @@ whenThen (Expression when_,Expression then_) = mconcat
   ["  WHEN ",when_," THEN ",then_,"\n"]
 
 case_
-  :: [(Expression ps cols ('PGType "bool"),Expression ps cols x)]
+  :: [(Expression ps cols 'PGBool,Expression ps cols x)]
   -> Expression ps cols x
   -> Expression ps cols x
 case_ whens (Expression else_) = Expression $ mconcat
@@ -82,52 +82,52 @@ column = \case
   As x -> x
   Elem -> Expression $ Char8.pack (symbolVal (Proxy @colName))
 
-true :: Expression ps cols ('PGType "bool")
+true :: Expression ps cols 'PGBool
 true = Expression "true"
 
-false :: Expression ps cols ('PGType "bool")
+false :: Expression ps cols 'PGBool
 false = Expression "false"
 
 (.==)
   :: Expression ps cols x
   -> Expression ps cols x
-  -> Expression ps cols ('PGType "bool")
+  -> Expression ps cols 'PGBool
 (.==) (Expression x1) (Expression x2) = Expression $ x1 <> "=" <> x2
 
 (./=)
   :: Expression ps cols x
   -> Expression ps cols x
-  -> Expression ps cols ('PGType "bool")
+  -> Expression ps cols 'PGBool
 (./=) (Expression x1) (Expression x2) = Expression $ x1 <> "<>" <> x2
 
 (.>)
   :: Expression ps cols x
   -> Expression ps cols x
-  -> Expression ps cols ('PGType "bool")
+  -> Expression ps cols 'PGBool
 (.>) (Expression x1) (Expression x2) = Expression $ x1 <> ">" <> x2
 
 (.<)
   :: Expression ps cols x
   -> Expression ps cols x
-  -> Expression ps cols ('PGType "bool")
+  -> Expression ps cols 'PGBool
 (.<) (Expression x1) (Expression x2) = Expression $ x1 <> "<" <> x2
 
 (.>=)
   :: Expression ps cols x
   -> Expression ps cols x
-  -> Expression ps cols ('PGType "bool")
+  -> Expression ps cols 'PGBool
 (.>=) (Expression x1) (Expression x2) = Expression $ x1 <> ">=" <> x2
 
 (.<=)
   :: Expression ps cols x
   -> Expression ps cols x
-  -> Expression ps cols ('PGType "bool")
+  -> Expression ps cols 'PGBool
 (.<=) (Expression x1) (Expression x2) = Expression $ x1 <> "<=" <> x2
 
-instance IsString (Expression ps cols ('PGType "text")) where
+instance IsString (Expression ps cols 'PGText) where
   fromString str = Expression $ "\'" <> fromString str <> "\'"
 
-instance Num (Expression ps cols ('PGType "int4")) where
+instance Num (Expression ps cols 'PGInt4) where
   fromInteger n = Expression . fromString $ show n
   Expression x + Expression y = Expression $ x <> "+" <> y
   Expression x * Expression y = Expression $ x <> "*" <> y
