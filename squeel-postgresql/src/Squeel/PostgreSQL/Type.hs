@@ -45,21 +45,6 @@ data Named k = (:=) Symbol k
 type family Unnamed named where Unnamed (name ':= x) = x
 type family Name k where Name (name ':= x) = name
 
-type family Field1 xs name x where
-  Field1 '[] name x = 'False
-  Field1 ((name ':= x) ': xs) name x = 'True
-  Field1 (y ': xs) name x = Field1 xs name x
-
-type family Field2 xss names x where
-  Field2 '[] names x = 'False
-  Field2 ((name ':= xs) ': xss) '[name,name1] x = Field1 xs name x
-  Field2 (y ': xss) names x = Field2 xss names x
-
-type family Field3 xsss names x where
-  Field3 '[] names x = 'False
-  Field3 ((name ':= xss) ': xsss) (name ': names) x = Field2 xss names x
-  Field3 (y ': xss) names x = Field3 xss names x
-
 type Column = Named PGType
 type Table = Named [Column]
 type Database = Named [Table]
