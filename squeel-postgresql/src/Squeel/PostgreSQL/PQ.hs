@@ -1,5 +1,7 @@
 {-# LANGUAGE
-    DeriveFunctor
+    DataKinds
+  , PolyKinds
+  , DeriveFunctor
   , FlexibleContexts
   , FlexibleInstances
   , MultiParamTypeClasses
@@ -7,7 +9,6 @@
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
-  , TypeInType
   , TypeOperators
   , UndecidableInstances
 #-}
@@ -32,7 +33,7 @@ import Squeel.PostgreSQL.Type
 
 newtype Connection db = Connection { unConnection :: LibPQ.Connection }
 
-newtype PQ (db0 :: [Table]) (db1 :: [Table]) m x = PQ
+newtype PQ db0 db1 m x = PQ
   { runPQ :: Connection db0 -> m (x, Connection db1) }
   deriving Functor
 
@@ -58,24 +59,24 @@ class MonadPQ pq where
 
   pqExec
     :: MonadBase IO io
-    => Query db0 db1 '[] xs
+    => Query '[] db0 db1 xs
     -> pq db0 db1 io (Maybe (Result xs))
 
   pqExecParams
     :: (MonadBase IO io, ToOids ps, ToValues xs ps)
-    => Query db0 db1 ps ys
+    => Query ps db0 db1 ys
     -> Rec Identity xs
     -> pq db0 db1 io (Maybe (Result ys))
 
   pqPrepare
     :: (MonadBase IO io, ToOids ps)
     => ByteString
-    -> Query db0 db1 ps xs
+    -> Query ps db0 db1 xs
     -> pq db0 db1 io (Maybe (Result []), PreparedQuery db0 db1 ps xs)
 
   pqExecPrepared
     :: (MonadBase IO io, ToValues xs ps)
-    => PreparedQuery db0 db1 ps ys
+    => PreparedQuery ps db0 db1 ys
     -> Rec Identity xs
     -> pq db0 db1 io (Maybe (Result ys))
 
@@ -90,11 +91,11 @@ instance MonadPQ PQ where
     (x', conn') <- x conn
     runPQ (f x') conn'
 
-  pqExec (Query q) = PQ $ \ (Connection conn) -> do
+  pqExec (UnsafeQuery q) = PQ $ \ (Connection conn) -> do
     result <- liftBase $ LibPQ.exec conn q
     return (Result <$> result, Connection conn)
 
-  pqExecParams (Query q :: Query db0 db1 ps ys) params =
+  pqExecParams (UnsafeQuery q :: Query ps db0 db1 ys) params =
     PQ $ \ (Connection conn) -> do
       let
         params' =
@@ -105,19 +106,22 @@ instance MonadPQ PQ where
       result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
       return (Result <$> result, Connection conn)
 
-  pqPrepare statementName (Query q :: Query db0 db1 ps ys) =
+  pqPrepare statementName (UnsafeQuery q :: Query ps db0 db1 ys) =
     PQ $ \ (Connection conn) -> do
       result <- liftBase $
         LibPQ.prepare conn statementName q (Just (toOids (Proxy @ps)))
-      return ((Result <$> result,PreparedQuery statementName), Connection conn)
+      return
+        ( ( Result <$> result
+          , UnsafePreparedQuery statementName
+        ) , Connection conn )
 
-  pqExecPrepared (PreparedQuery q :: PreparedQuery db0 db1 ps ys) params =
+  pqExecPrepared (q :: PreparedQuery ps db0 db1 ys) params =
     PQ $ \ (Connection conn) -> do
       let
         params' =
           [Just (param, LibPQ.Binary) | param <- toValues (Proxy @ps) params]
       result <- liftBase $
-        LibPQ.execPrepared conn q params' LibPQ.Binary
+        LibPQ.execPrepared conn (renderPreparedQuery q) params' LibPQ.Binary
       return (Result <$> result, Connection conn)
 
 instance Monad m => Applicative (PQ db db m) where

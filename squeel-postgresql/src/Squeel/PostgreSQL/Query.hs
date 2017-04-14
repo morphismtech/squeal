@@ -1,207 +1,131 @@
 {-# LANGUAGE
-    PolyKinds
-  , DataKinds
-  , FlexibleContexts
+    DataKinds
   , FlexibleInstances
   , GADTs
-  , KindSignatures
-  , LambdaCase
+  , MultiParamTypeClasses
   , OverloadedStrings
-  , RankNTypes
+  , PolyKinds
   , ScopedTypeVariables
   , TypeApplications
-  , TypeInType
+  , TypeFamilies
   , TypeOperators
 #-}
 
-{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
-
 module Squeel.PostgreSQL.Query where
 
-import Data.ByteString (ByteString)
+import Data.Boolean
+import Data.ByteString
 import Data.Monoid
 import Data.Proxy
 import Data.String
-import Data.Vinyl
-import Data.Vinyl.Functor
 import GHC.TypeLits
 
 import qualified Data.ByteString.Char8 as Char8
 
 import Squeel.PostgreSQL.Type
 
-data Expression ps cols x =
-  Expression { unExpression :: ByteString } deriving Show
+newtype Expression ps xs y =
+  UnsafeExpression { renderExpression :: ByteString }
 
 param1 :: Expression (p1:ps) cols p1
-param1 = Expression "$1"
-
+param1 = UnsafeExpression "$1"
 param2 :: Expression (p1:p2:ps) cols p2
-param2 = Expression "$2"
-
+param2 = UnsafeExpression "$2"
 param3 :: Expression (p1:p2:p3:ps) cols p3
-param3 = Expression "$3"
-
+param3 = UnsafeExpression "$3"
 param4 :: Expression (p1:p2:p3:p4:ps) cols p4
-param4 = Expression "$4"
-
+param4 = UnsafeExpression "$4"
 param5 :: Expression (p1:p2:p3:p4:p5:ps) cols p5
-param5 = Expression "$5"
+param5 = UnsafeExpression "$5"
 
-whenThen :: (Expression ps cols x,Expression ps cols y) -> ByteString
-whenThen (Expression when_,Expression then_) = mconcat
-  ["  WHEN ",when_," THEN ",then_,"\n"]
+class HasField ident xs x where
+  fieldName :: Proxy ident -> Proxy xs -> Proxy x -> ByteString
+instance KnownSymbol name => HasField '[name] ((name ':= x) ': xs) x where
+  fieldName _ _ _ = Char8.pack (symbolVal (Proxy @name))
+instance HasField ident xs x => HasField ident (y ': xs) x where
+  fieldName _ _ _ = fieldName (Proxy @ident) (Proxy @xs) (Proxy @x)
+instance (KnownSymbol name, HasField names xs x)
+  => HasField (name ': names) ((name ':= xs) ': xss) x where
+    fieldName _ _ _ = Char8.pack (symbolVal (Proxy @name))
+      <> "." <> fieldName (Proxy @names) (Proxy @xs) (Proxy @x)
 
-case_
-  :: [(Expression ps cols 'PGBool,Expression ps cols x)]
-  -> Expression ps cols x
-  -> Expression ps cols x
-case_ whens (Expression else_) = Expression $ mconcat
-  [ "CASE\n"
-  , mconcat (map whenThen whens)
-  , "  ELSE ",else_
-  , "\nEND"
-  ]
+column_
+  :: forall ident xs x ps
+   . HasField ident xs x
+  => Proxy ident
+  -> Expression ps xs x
+column_ (_ :: Proxy ident) = UnsafeExpression $
+  fieldName (Proxy @ident) (Proxy @xs) (Proxy @x)
 
-caseSwitch
-  :: Expression ps cols x
-  -> [(Expression ps cols x,Expression ps cols y)]
-  -> Expression ps cols y
-  -> Expression ps cols y
-caseSwitch (Expression val) whens (Expression else_) = Expression $ mconcat
-  [ "CASE ",val,"\n"
-  , mconcat (map whenThen whens)
-  , "  ELSE ",else_
-  ,"\nEND"
-  ]
+data Identified ident x = (:=) ident x
+data Aliased obj named where AS :: obj x -> Aliased obj (name ':= x)
+
+unalias :: Aliased obj (name ':= x) -> obj x
+unalias (AS obj) = obj
 
 column
-  :: forall colName colType params columns
-  .  Alias (Expression params columns) (colName ':= colType)
-  -> Expression params columns colType
-column = \case
-  As x -> x
-  Elem -> Expression $ Char8.pack (symbolVal (Proxy @colName))
+  :: forall ident xs x ps
+   . HasField ident xs x
+  => Aliased (Expression ps xs) (ident ':= x)
+column = AS $ column_ (Proxy @ident)
 
-true :: Expression ps cols 'PGBool
-true = Expression "true"
+instance IsString (Expression ps xs 'PGText) where
+  fromString str = UnsafeExpression $ "\'" <> fromString str <> "\'"
 
-false :: Expression ps cols 'PGBool
-false = Expression "false"
+instance Num (Expression ps xs 'PGInt4) where
+  fromInteger n = UnsafeExpression . fromString $ show n
+  x + y = UnsafeExpression $ renderExpression x <> "+" <> renderExpression y
+  x * y = UnsafeExpression $ renderExpression x <> "*" <> renderExpression y
+  UnsafeExpression x - UnsafeExpression y = UnsafeExpression $ x <> "+" <> y
+  abs (UnsafeExpression x) = UnsafeExpression $ "@" <> x
+  signum (UnsafeExpression x) = UnsafeExpression $ "sign(" <> x <> ")"
 
-(.==)
-  :: Expression ps cols x
-  -> Expression ps cols x
-  -> Expression ps cols 'PGBool
-(.==) (Expression x1) (Expression x2) = Expression $ x1 <> "=" <> x2
+instance Boolean (Expression ps xs 'PGBool) where
+  true = UnsafeExpression "TRUE"
+  false = UnsafeExpression "FALSE"
+  notB x = UnsafeExpression $ "NOT " <> renderExpression x
+  x &&* y = UnsafeExpression $
+    renderExpression x <> " AND " <> renderExpression y
+  x ||* y = UnsafeExpression $
+    renderExpression x <> " OR " <> renderExpression y
 
-(./=)
-  :: Expression ps cols x
-  -> Expression ps cols x
-  -> Expression ps cols 'PGBool
-(./=) (Expression x1) (Expression x2) = Expression $ x1 <> "<>" <> x2
+type instance BooleanOf (Expression ps xs y) = Expression ps xs 'PGBool
 
-(.>)
-  :: Expression ps cols x
-  -> Expression ps cols x
-  -> Expression ps cols 'PGBool
-(.>) (Expression x1) (Expression x2) = Expression $ x1 <> ">" <> x2
+instance IfB (Expression ps xs y) where
+  ifB predicate then_ else_ = UnsafeExpression $ mconcat
+    [ "CASE"
+    , "\n  WHEN ",renderExpression predicate
+    , "\n  THEN ",renderExpression then_
+    , "\n  ELSE ",renderExpression else_
+    , "\nEND"
+    ]
 
-(.<)
-  :: Expression ps cols x
-  -> Expression ps cols x
-  -> Expression ps cols 'PGBool
-(.<) (Expression x1) (Expression x2) = Expression $ x1 <> "<" <> x2
+instance EqB (Expression ps xs y) where
+  x ==* y = UnsafeExpression $ renderExpression x <> "=" <> renderExpression y
+  x /=* y = UnsafeExpression $ renderExpression x <> "<>" <> renderExpression y
 
-(.>=)
-  :: Expression ps cols x
-  -> Expression ps cols x
-  -> Expression ps cols 'PGBool
-(.>=) (Expression x1) (Expression x2) = Expression $ x1 <> ">=" <> x2
+instance OrdB (Expression ps xs y) where
+  x >* y = UnsafeExpression $ renderExpression x <> ">" <> renderExpression y
+  x >=* y = UnsafeExpression $ renderExpression x <> ">=" <> renderExpression y
+  x <* y = UnsafeExpression $ renderExpression x <> "<" <> renderExpression y
+  x <=* y = UnsafeExpression $ renderExpression x <> "<=" <> renderExpression y
 
-(.<=)
-  :: Expression ps cols x
-  -> Expression ps cols x
-  -> Expression ps cols 'PGBool
-(.<=) (Expression x1) (Expression x2) = Expression $ x1 <> "<=" <> x2
+data Relation ps xs ys = UnsafeRelation { renderRelation :: ByteString }
 
-instance IsString (Expression ps cols 'PGText) where
-  fromString str = Expression $ "\'" <> fromString str <> "\'"
+table_
+  :: forall ident xss xs ps
+   . HasField ident xss xs
+  => Proxy ident
+  -> Relation ps xss xs
+table_ (_ :: Proxy ident) = UnsafeRelation $
+  fieldName (Proxy @ident) (Proxy @xss) (Proxy @xs)
 
-instance Num (Expression ps cols 'PGInt4) where
-  fromInteger n = Expression . fromString $ show n
-  Expression x + Expression y = Expression $ x <> "+" <> y
-  Expression x * Expression y = Expression $ x <> "*" <> y
-  Expression x - Expression y = Expression $ x <> "+" <> y
-  abs (Expression x) = Expression $ "@" <> x
-  signum (Expression x) = Expression $ "sign(" <> x <> ")"
+table
+  :: forall ident xss xs ps
+   . HasField ident xss xs
+  => Aliased (Relation ps xss) (ident ':= xs)
+table = AS $ table_ (Proxy @ident)
 
-data Relation ps xs ys = Relation { unRelation :: ByteString } deriving Show
-
-star :: Relation ps xs xs
-star = Relation "*"
-
-project :: Rec (Alias (Expression ps xs)) ys -> Relation ps xs ys
-project
-  = Relation
-  . Char8.intercalate ", "
-  . recordToList
-  . rmap (Const . expressionString)
-  where
-    expressionString :: Alias (Expression ps xs) y -> ByteString
-    expressionString = \case
-      (As (Expression expr) :: Alias (Expression ps xs) y)
-        -> expr <> " AS " <> Char8.pack (symbolVal (Proxy @(Name y)))
-      (Elem :: Alias (Expression ps xs) y)
-        -> Char8.pack (symbolVal (Proxy @(Name y)))
-
--- star :: Relation db params xs xs
--- star = Relation "SELECT * FROM "
-
--- table
---   :: forall tableName tableCols db params.
---     ( KnownSymbol tableName
---     , (tableName ':= tableCols) `Elem` Unnamed db ~ 'True
---     ) => Proxy tableName -> Relation db params '[] tableCols
--- table (_ :: Proxy tableName) = Relation $
---   "SELECT * FROM " <> Char8.pack (symbolVal (Proxy @tableName))
-
--- starFrom
---   :: forall tableName tableCols db params columns
---   .  Alias (Relation params columns db) (tableName ':= tableCols)
---   -> Relation params columns db tableCols
--- starFrom = \case
---   As x -> x
---   Elem -> Relation $
---     "SELECT * FROM " <> Char8.pack (symbolVal (Proxy @tableName))
-
--- from
---   :: Relation db params ys zs
---   -> Relation db params xs ys
---   -> Relation db params xs zs
--- from (Relation rel1) (Relation rel2) = Relation $ rel1 <> rel2
-
--- project :: Rec (Alias (Expression ps xs)) ys -> Relation db params xs ys
--- project exprs = Relation $
---   "SELECT " <> Char8.intercalate "," (exprStrings exprs) <> " FROM "
---   where
---     exprStrings :: Rec (Alias (Expression ps xs)) ys -> [ByteString]
---     exprStrings = \case
---       RNil -> []
---       (As (Expression expr) :: Alias (Expression _ _) (exprName ':= _))
---         :& exprs ->
---           (expr <> " As " <> Char8.pack (symbolVal (Proxy @exprName)))
---             : expressionStrings exprs
-
-newtype Query
-  (db0 :: [Table])
-  (db1 :: [Table])
-  (ps :: [PGType])
-  (xs :: [Column])
-    = Query { unQuery :: ByteString }
-
-newtype PreparedQuery db0 db1 ps xs
-  = PreparedQuery { unPreparedQuery :: ByteString }
-
--- select :: Relation ps ('[] :: [Column]) db xs -> Query db db ps xs
--- select (Relation x) = Query x
+newtype Query ps xss yss zs = UnsafeQuery { renderQuery :: ByteString }
+newtype PreparedQuery ps xss yss zs =
+  UnsafePreparedQuery { renderPreparedQuery :: ByteString }

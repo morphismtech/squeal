@@ -16,7 +16,6 @@ library
     Squeel.PostgreSQL
     Squeel.PostgreSQL.PQ
     Squeel.PostgreSQL.Query
-    Squeel.PostgreSQL.Query2
     Squeel.PostgreSQL.Type
     Squeel.PostgreSQL.Value
   default-language: Haskell2010
