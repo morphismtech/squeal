@@ -5,6 +5,7 @@
   , MultiParamTypeClasses
   , OverloadedStrings
   , PolyKinds
+  , RankNTypes
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
@@ -14,12 +15,15 @@
 module Squeel.PostgreSQL.Query where
 
 import Data.Boolean
-import Data.ByteString
+import Data.ByteString (ByteString)
 import Data.Monoid
 import Data.Proxy
 import Data.String
+import Data.Vinyl
+-- import Data.Vinyl.Functor
 import GHC.TypeLits
 
+-- import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
 
 import Squeel.PostgreSQL.Type
@@ -60,6 +64,10 @@ column_ (_ :: Proxy ident) = UnsafeExpression $
 data Identified ident x = (:=) ident x
 data Aliased obj named where AS :: obj x -> Aliased obj (name ':= x)
 
+-- class KnownAlias named obj where
+--   type Alias named
+--   renderAliased :: (obj x -> ByteString) -> Aliased obj named
+
 unalias :: Aliased obj (name ':= x) -> obj x
 unalias (AS obj) = obj
 
@@ -68,6 +76,29 @@ column
    . HasField ident xs x
   => Aliased (Expression ps xs) (ident ':= x)
 column = AS $ column_ (Proxy @ident)
+
+renderAliased
+  :: KnownSymbol name
+  => (obj x -> ByteString)
+  -> Aliased obj (name ':= x)
+  -> ByteString
+renderAliased render (AS obj :: Aliased obj (name ':= x)) =
+  render obj <> " AS " <> Char8.pack (symbolVal (Proxy @name))
+
+class AllAliased xs where
+  renderAllAliased
+    :: (forall x. obj x -> ByteString)
+    -> Rec (Aliased obj) xs
+    -> ByteString
+instance KnownSymbol name => AllAliased '[name ':= x] where
+  renderAllAliased render
+    (aliased :& RNil :: Rec (Aliased obj) '[name ':= x]) =
+      renderAliased render aliased
+instance (KnownSymbol name, AllAliased xs)
+  => AllAliased ((name ':= x) ': xs) where
+    renderAllAliased render
+      (x :& xs :: Rec (Aliased obj) ((name ':= x) ': xs)) =
+        renderAliased render x <> ", " <> renderAllAliased render xs
 
 instance IsString (Expression ps xs 'PGText) where
   fromString str = UnsafeExpression $ "\'" <> fromString str <> "\'"
@@ -110,7 +141,20 @@ instance OrdB (Expression ps xs y) where
   x <* y = UnsafeExpression $ renderExpression x <> "<" <> renderExpression y
   x <=* y = UnsafeExpression $ renderExpression x <> "<=" <> renderExpression y
 
-data Relation ps xs ys = UnsafeRelation { renderRelation :: ByteString }
+newtype Projection ps xs ys = UnsafeProjection
+  { renderProjection :: ByteString }
+
+star :: Projection ps xs xs
+star = UnsafeProjection "*"
+
+project
+  :: AllAliased ys
+  => Rec (Aliased (Expression ps xs)) ys
+  -> Projection ps xs ys
+project = UnsafeProjection . renderAllAliased renderExpression
+
+newtype Relation ps xss ys = UnsafeRelation
+  { renderRelation :: ByteString }
 
 table_
   :: forall ident xss xs ps
