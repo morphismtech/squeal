@@ -64,10 +64,6 @@ column_ (_ :: Proxy ident) = UnsafeExpression $
 data Identified ident x = (:=) ident x
 data Aliased obj named where AS :: obj x -> Aliased obj (name ':= x)
 
--- class KnownAlias named obj where
---   type Alias named
---   renderAliased :: (obj x -> ByteString) -> Aliased obj named
-
 unalias :: Aliased obj (name ':= x) -> obj x
 unalias (AS obj) = obj
 
@@ -169,6 +165,30 @@ table
    . HasField ident xss xs
   => Aliased (Relation ps xss) (ident ':= xs)
 table = AS $ table_ (Proxy @ident)
+
+data Selection ps xss xs ys = Selection
+  { projection :: Projection ps xs ys
+  , relation :: Relation ps xss xs
+  , restriction :: Maybe (Expression ps xs 'PGBool)
+  }
+
+renderSelection :: Selection ps xss xs ys -> ByteString
+renderSelection (Selection xs ys wh) =
+  renderProjection xs <> " FROM " <> renderRelation ys
+    <> maybe "" ((" WHERE " <>) . renderExpression) wh
+
+from :: Projection ps xs ys -> Relation ps xss xs -> Selection ps xss xs ys
+ys `from` xs = Selection ys xs Nothing
+
+where_
+  :: Selection ps xss xs ys
+  -> Expression ps xs 'PGBool
+  -> Selection ps xss xs ys
+ys `where_` condition = ys
+  { restriction = case restriction ys of
+      Nothing -> Just condition
+      Just conditions -> Just (condition &&* conditions)
+  }
 
 newtype Query ps xss yss zs = UnsafeQuery { renderQuery :: ByteString }
 newtype PreparedQuery ps xss yss zs =
