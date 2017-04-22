@@ -3,7 +3,9 @@
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
+  , MagicHash
   , MultiParamTypeClasses
+  , OverloadedLabels
   , OverloadedStrings
   , PolyKinds
   , RankNTypes
@@ -21,10 +23,9 @@ import Data.Monoid
 import Data.Proxy
 import Data.String
 import Data.Vinyl
--- import Data.Vinyl.Functor
+import GHC.OverloadedLabels
 import GHC.TypeLits
 
--- import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
 
 import Squeel.PostgreSQL.Type
@@ -43,45 +44,39 @@ param4 = UnsafeExpression "$4"
 param5 :: Expression (p1:p2:p3:p4:p5:ps) cols p5
 param5 = UnsafeExpression "$5"
 
-class HasField ident xs x where
-  fieldName :: Proxy ident -> Proxy xs -> Proxy x -> ByteString
-instance KnownSymbol name
-  => HasField '[name] ((name ':= x) ': xs) x where
-    fieldName _ _ _ = Char8.pack (symbolVal (Proxy @name))
-instance HasField ident (x ': xs) y => HasField ident (x' ': x ': xs) y where
-  fieldName _ _ _ = fieldName (Proxy @ident) (Proxy @(x ': xs)) (Proxy @y)
-instance (KnownSymbol name, HasField (name' ': names) xs x)
-  => HasField (name ': name' ': names) ((name ':= xs) ': xss) x where
-    fieldName _ _ _ = Char8.pack (symbolVal (Proxy @name))
-      <> "." <> fieldName (Proxy @(name' ': names)) (Proxy @xs) (Proxy @x)
+class HasField label xs x where
+  fieldName :: Proxy label -> Proxy xs -> Proxy x -> ByteString
+instance {-# OVERLAPPING #-} KnownSymbol label
+  => HasField label ((label ':= x) ': xs) x where
+    fieldName _ _ _ = Char8.pack (symbolVal (Proxy @label))
+instance {-# OVERLAPPABLE #-} HasField label xs y
+  => HasField label (x ': xs) y where
+  fieldName _ _ _ = fieldName (Proxy @label) (Proxy @xs) (Proxy @y)
 
-column_
-  :: forall ident xs x ps
-   . HasField ident xs x
-  => Proxy ident
-  -> Expression ps xs x
-column_ (_ :: Proxy ident) = UnsafeExpression $
-  fieldName (Proxy @ident) (Proxy @xs) (Proxy @x)
+instance HasField label xs x => IsLabel label (Expression ps xs x) where
+  fromLabel _ = UnsafeExpression $
+    fieldName (Proxy @label) (Proxy @xs) (Proxy @x)
 
 data Identified ident x = (:=) ident x
-data Aliased obj named where AS :: obj x -> Aliased obj (name ':= x)
+data Alias label = Alias
+data Aliased obj named where
+  As :: obj x -> Alias name -> Aliased obj (name ':= x)
+instance IsLabel label (Alias label) where fromLabel _ = Alias
 
 unalias :: Aliased obj (name ':= x) -> obj x
-unalias (AS obj) = obj
+unalias (obj `As` _) = obj
 
-column
-  :: forall ident xs x ps
-   . HasField '[ident] xs x
-  => Aliased (Expression ps xs) (ident ':= x)
-column = AS $ column_ (Proxy @'[ident])
+instance HasField label xs x =>
+  IsLabel label (Aliased (Expression ps xs) (label ':= x)) where
+    fromLabel p = fromLabel p `As` fromLabel p
 
 renderAliased
   :: KnownSymbol name
   => (obj x -> ByteString)
   -> Aliased obj (name ':= x)
   -> ByteString
-renderAliased render (AS obj :: Aliased obj (name ':= x)) =
-  render obj <> " AS " <> Char8.pack (symbolVal (Proxy @name))
+renderAliased render (obj `As` label) =
+  render obj <> " AS " <> Char8.pack (symbolVal label)
 
 class AllAliased xs where
   renderAllAliased
@@ -154,19 +149,14 @@ project = UnsafeProjection . renderAllAliased renderExpression
 newtype Relation ps xss ys = UnsafeRelation
   { renderRelation :: ByteString }
 
-table_
-  :: forall ident xss xs ps
-   . HasField ident xss xs
-  => Proxy ident
-  -> Relation ps xss xs
-table_ (_ :: Proxy ident) = UnsafeRelation $
-  fieldName (Proxy @ident) (Proxy @xss) (Proxy @xs)
+instance HasField label xss xs
+  => IsLabel label (Relation ps xss xs) where
+    fromLabel _ = UnsafeRelation $
+      fieldName (Proxy @label) (Proxy @xss) (Proxy @xs)
 
-table
-  :: forall ident xss xs ps
-   . HasField ident xss xs
-  => Aliased (Relation ps xss) (ident ':= xs)
-table = AS $ table_ (Proxy @ident)
+instance HasField label xss xs
+  => IsLabel label (Aliased (Relation ps xss) (label ':= xs)) where
+    fromLabel p = fromLabel p `As` fromLabel p
 
 data Selection ps xss xs ys = Selection
   { projection :: Projection ps xs ys
