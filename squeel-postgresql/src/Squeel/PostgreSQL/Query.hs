@@ -1,8 +1,11 @@
 {-# LANGUAGE
     DataKinds
+  , FlexibleContexts
   , FlexibleInstances
   , GADTs
+  , MagicHash
   , MultiParamTypeClasses
+  , OverloadedLabels
   , OverloadedStrings
   , PolyKinds
   , RankNTypes
@@ -20,13 +23,58 @@ import Data.Monoid
 import Data.Proxy
 import Data.String
 import Data.Vinyl
--- import Data.Vinyl.Functor
+import GHC.OverloadedLabels
 import GHC.TypeLits
 
--- import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
 
 import Squeel.PostgreSQL.Type
+
+class HasField label xs x where
+  fieldName :: Proxy label -> Proxy xs -> Proxy x -> ByteString
+instance {-# OVERLAPPING #-} KnownSymbol label
+  => HasField label ('(label, x) ': xs) x where
+    fieldName _ _ _ = Char8.pack (symbolVal (Proxy @label))
+instance {-# OVERLAPPABLE #-} HasField label xs y
+  => HasField label (x ': xs) y where
+  fieldName _ _ _ = fieldName (Proxy @label) (Proxy @xs) (Proxy @y)
+
+data Alias label = Alias
+data Aliased obj labeled where
+  As :: obj x -> Alias label -> Aliased obj '(label, x)
+instance IsLabel label (Alias label) where fromLabel _ = Alias
+instance IsLabel label (obj x)
+  => IsLabel label (Aliased obj '(label, x)) where
+    fromLabel p = fromLabel p `As` fromLabel p
+
+alias :: Aliased obj '(label, x) -> Alias label
+alias _ = Alias
+
+unalias :: Aliased obj '(label, x) -> obj x
+unalias (obj `As` _) = obj
+
+renderAliased
+  :: KnownSymbol label
+  => (obj x -> ByteString)
+  -> Aliased obj '(label, x)
+  -> ByteString
+renderAliased render (obj `As` label) =
+  render obj <> " AS " <> Char8.pack (symbolVal label)
+
+class AllAliased xs where
+  renderAllAliased
+    :: (forall x. obj x -> ByteString)
+    -> Rec (Aliased obj) xs
+    -> ByteString
+instance KnownSymbol label => AllAliased '[ '(label, x)] where
+  renderAllAliased render
+    (aliased :& RNil :: Rec (Aliased obj) '[ '(label, x)]) =
+      renderAliased render aliased
+instance (KnownSymbol label, AllAliased (x' ': xs))
+  => AllAliased ('(label, x) ': (x' ': xs)) where
+    renderAllAliased render
+      (x :& xs :: Rec (Aliased obj) ('(label, x) ': x' : xs)) =
+        renderAliased render x <> ", " <> renderAllAliased render xs
 
 newtype Expression ps xs y =
   UnsafeExpression { renderExpression :: ByteString }
@@ -42,59 +90,9 @@ param4 = UnsafeExpression "$4"
 param5 :: Expression (p1:p2:p3:p4:p5:ps) cols p5
 param5 = UnsafeExpression "$5"
 
-class HasField ident xs x where
-  fieldName :: Proxy ident -> Proxy xs -> Proxy x -> ByteString
-instance KnownSymbol name => HasField '[name] ((name ':= x) ': xs) x where
-  fieldName _ _ _ = Char8.pack (symbolVal (Proxy @name))
-instance HasField ident xs x => HasField ident (y ': xs) x where
-  fieldName _ _ _ = fieldName (Proxy @ident) (Proxy @xs) (Proxy @x)
-instance (KnownSymbol name, HasField names xs x)
-  => HasField (name ': names) ((name ':= xs) ': xss) x where
-    fieldName _ _ _ = Char8.pack (symbolVal (Proxy @name))
-      <> "." <> fieldName (Proxy @names) (Proxy @xs) (Proxy @x)
-
-column_
-  :: forall ident xs x ps
-   . HasField ident xs x
-  => Proxy ident
-  -> Expression ps xs x
-column_ (_ :: Proxy ident) = UnsafeExpression $
-  fieldName (Proxy @ident) (Proxy @xs) (Proxy @x)
-
-data Identified ident x = (:=) ident x
-data Aliased obj named where AS :: obj x -> Aliased obj (name ':= x)
-
-unalias :: Aliased obj (name ':= x) -> obj x
-unalias (AS obj) = obj
-
-column
-  :: forall ident xs x ps
-   . HasField ident xs x
-  => Aliased (Expression ps xs) (ident ':= x)
-column = AS $ column_ (Proxy @ident)
-
-renderAliased
-  :: KnownSymbol name
-  => (obj x -> ByteString)
-  -> Aliased obj (name ':= x)
-  -> ByteString
-renderAliased render (AS obj :: Aliased obj (name ':= x)) =
-  render obj <> " AS " <> Char8.pack (symbolVal (Proxy @name))
-
-class AllAliased xs where
-  renderAllAliased
-    :: (forall x. obj x -> ByteString)
-    -> Rec (Aliased obj) xs
-    -> ByteString
-instance KnownSymbol name => AllAliased '[name ':= x] where
-  renderAllAliased render
-    (aliased :& RNil :: Rec (Aliased obj) '[name ':= x]) =
-      renderAliased render aliased
-instance (KnownSymbol name, AllAliased xs)
-  => AllAliased ((name ':= x) ': xs) where
-    renderAllAliased render
-      (x :& xs :: Rec (Aliased obj) ((name ':= x) ': xs)) =
-        renderAliased render x <> ", " <> renderAllAliased render xs
+instance HasField label xs x => IsLabel label (Expression ps xs x) where
+  fromLabel _ = UnsafeExpression $
+    fieldName (Proxy @label) (Proxy @xs) (Proxy @x)
 
 instance IsString (Expression ps xs 'PGText) where
   fromString str = UnsafeExpression $ "\'" <> fromString str <> "\'"
@@ -149,47 +147,52 @@ project
   -> Projection ps xs ys
 project = UnsafeProjection . renderAllAliased renderExpression
 
-newtype Relation ps xss ys = UnsafeRelation
-  { renderRelation :: ByteString }
+data Tabulation ps xss xs = UnsafeTabulation
+  { renderTabulation :: ByteString }
 
-table_
-  :: forall ident xss xs ps
-   . HasField ident xss xs
-  => Proxy ident
-  -> Relation ps xss xs
-table_ (_ :: Proxy ident) = UnsafeRelation $
-  fieldName (Proxy @ident) (Proxy @xss) (Proxy @xs)
-
-table
-  :: forall ident xss xs ps
-   . HasField ident xss xs
-  => Aliased (Relation ps xss) (ident ':= xs)
-table = AS $ table_ (Proxy @ident)
-
-data Selection ps xss xs ys = Selection
-  { projection :: Projection ps xs ys
-  , relation :: Relation ps xss xs
+data Relation ps xss xs = Relation
+  { tabulation :: Tabulation ps xss xs
   , restriction :: Maybe (Expression ps xs 'PGBool)
   }
 
-renderSelection :: Selection ps xss xs ys -> ByteString
-renderSelection (Selection xs ys wh) =
-  renderProjection xs <> " FROM " <> renderRelation ys
-    <> maybe "" ((" WHERE " <>) . renderExpression) wh
-
-from :: Projection ps xs ys -> Relation ps xss xs -> Selection ps xss xs ys
-ys `from` xs = Selection ys xs Nothing
+renderRelation :: Relation ps xss xs -> ByteString
+renderRelation (Relation tab wh) =
+  renderTabulation tab <> maybe "" ((" WHERE " <>) . renderExpression) wh
 
 where_
-  :: Selection ps xss xs ys
+  :: Relation ps xss xs
   -> Expression ps xs 'PGBool
-  -> Selection ps xss xs ys
+  -> Relation ps xss xs
 ys `where_` condition = ys
   { restriction = case restriction ys of
       Nothing -> Just condition
-      Just conditions -> Just (condition &&* conditions)
+      Just conditions -> Just (conditions &&* condition)
+  }
+
+instance HasField label xss xs
+  => IsLabel label (Relation ps xss xs) where
+    fromLabel _ = Relation
+      { tabulation = UnsafeTabulation $
+          fieldName (Proxy @label) (Proxy @xss) (Proxy @xs)
+      , restriction = Nothing
+      }
+
+newtype Selection ps xss ys = UnsafeSelection
+  { renderSelection :: ByteString }
+
+from :: Projection ps xs ys -> Relation ps xss xs -> Selection ps xss ys
+ys `from` xs = UnsafeSelection $
+  renderProjection ys <> " FROM " <> renderRelation xs
+
+subselect :: Selection ps xss ys -> Relation ps xss ys
+subselect selection = Relation
+  { tabulation = UnsafeTabulation $ "SELECT " <> renderSelection selection
+  , restriction = Nothing
   }
 
 newtype Query ps xss yss zs = UnsafeQuery { renderQuery :: ByteString }
 newtype PreparedQuery ps xss yss zs =
   UnsafePreparedQuery { renderPreparedQuery :: ByteString }
+
+select :: Selection ps xss ys -> Query ps xss xss ys
+select selection = UnsafeQuery $ "SELECT " <> renderSelection selection <> ";"

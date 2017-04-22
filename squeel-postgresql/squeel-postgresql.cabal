@@ -51,8 +51,10 @@ test-suite blockapps-data-test
     Squeel.PostgreSQL.TypeSpec
     Squeel.PostgreSQL.ValueSpec
   build-depends: base
+    , Boolean
     , hspec
     , squeel-postgresql
+    , vinyl
 
 source-repository head
   type: git
