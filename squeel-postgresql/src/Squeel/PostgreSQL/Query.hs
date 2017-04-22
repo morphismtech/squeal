@@ -30,20 +30,6 @@ import qualified Data.ByteString.Char8 as Char8
 
 import Squeel.PostgreSQL.Type
 
-newtype Expression ps xs y =
-  UnsafeExpression { renderExpression :: ByteString }
-
-param1 :: Expression (p1:ps) cols p1
-param1 = UnsafeExpression "$1"
-param2 :: Expression (p1:p2:ps) cols p2
-param2 = UnsafeExpression "$2"
-param3 :: Expression (p1:p2:p3:ps) cols p3
-param3 = UnsafeExpression "$3"
-param4 :: Expression (p1:p2:p3:p4:ps) cols p4
-param4 = UnsafeExpression "$4"
-param5 :: Expression (p1:p2:p3:p4:p5:ps) cols p5
-param5 = UnsafeExpression "$5"
-
 class HasField label xs x where
   fieldName :: Proxy label -> Proxy xs -> Proxy x -> ByteString
 instance {-# OVERLAPPING #-} KnownSymbol label
@@ -52,10 +38,6 @@ instance {-# OVERLAPPING #-} KnownSymbol label
 instance {-# OVERLAPPABLE #-} HasField label xs y
   => HasField label (x ': xs) y where
   fieldName _ _ _ = fieldName (Proxy @label) (Proxy @xs) (Proxy @y)
-
-instance HasField label xs x => IsLabel label (Expression ps xs x) where
-  fromLabel _ = UnsafeExpression $
-    fieldName (Proxy @label) (Proxy @xs) (Proxy @x)
 
 data Alias label = Alias
 data Aliased obj labeled where
@@ -93,6 +75,24 @@ instance (KnownSymbol label, AllAliased (x' ': xs))
     renderAllAliased render
       (x :& xs :: Rec (Aliased obj) ('(label, x) ': x' : xs)) =
         renderAliased render x <> ", " <> renderAllAliased render xs
+
+newtype Expression ps xs y =
+  UnsafeExpression { renderExpression :: ByteString }
+
+param1 :: Expression (p1:ps) cols p1
+param1 = UnsafeExpression "$1"
+param2 :: Expression (p1:p2:ps) cols p2
+param2 = UnsafeExpression "$2"
+param3 :: Expression (p1:p2:p3:ps) cols p3
+param3 = UnsafeExpression "$3"
+param4 :: Expression (p1:p2:p3:p4:ps) cols p4
+param4 = UnsafeExpression "$4"
+param5 :: Expression (p1:p2:p3:p4:p5:ps) cols p5
+param5 = UnsafeExpression "$5"
+
+instance HasField label xs x => IsLabel label (Expression ps xs x) where
+  fromLabel _ = UnsafeExpression $
+    fieldName (Proxy @label) (Proxy @xs) (Proxy @x)
 
 instance IsString (Expression ps xs 'PGText) where
   fromString str = UnsafeExpression $ "\'" <> fromString str <> "\'"
