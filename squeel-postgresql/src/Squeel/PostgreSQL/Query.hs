@@ -3,9 +3,7 @@
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
-  , MagicHash
   , MultiParamTypeClasses
-  , OverloadedLabels
   , OverloadedStrings
   , PolyKinds
   , RankNTypes
@@ -35,7 +33,7 @@ class HasField label xs x where
 instance {-# OVERLAPPING #-} KnownSymbol label
   => HasField label ('(label, x) ': xs) x where
     fieldName _ _ _ = Char8.pack (symbolVal (Proxy @label))
-instance {-# OVERLAPPABLE #-} HasField label xs y
+instance HasField label xs y
   => HasField label (x ': xs) y where
   fieldName _ _ _ = fieldName (Proxy @label) (Proxy @xs) (Proxy @y)
 
@@ -76,7 +74,7 @@ instance (KnownSymbol label, AllAliased (x' ': xs))
       (x :& xs :: Rec (Aliased obj) ('(label, x) ': x' : xs)) =
         renderAliased render x <> ", " <> renderAllAliased render xs
 
-newtype Expression ps xs y =
+newtype Expression ps (xs :: [(Symbol,PGType)]) y =
   UnsafeExpression { renderExpression :: ByteString }
 
 param1 :: Expression (p1:ps) cols p1
@@ -97,7 +95,23 @@ instance HasField label xs x => IsLabel label (Expression ps xs x) where
 instance IsString (Expression ps xs 'PGText) where
   fromString str = UnsafeExpression $ "\'" <> fromString str <> "\'"
 
+instance Num (Expression ps xs 'PGInt2) where
+  fromInteger n = UnsafeExpression . fromString $ show n
+  x + y = UnsafeExpression $ renderExpression x <> "+" <> renderExpression y
+  x * y = UnsafeExpression $ renderExpression x <> "*" <> renderExpression y
+  UnsafeExpression x - UnsafeExpression y = UnsafeExpression $ x <> "+" <> y
+  abs (UnsafeExpression x) = UnsafeExpression $ "@" <> x
+  signum (UnsafeExpression x) = UnsafeExpression $ "sign(" <> x <> ")"
+
 instance Num (Expression ps xs 'PGInt4) where
+  fromInteger n = UnsafeExpression . fromString $ show n
+  x + y = UnsafeExpression $ renderExpression x <> "+" <> renderExpression y
+  x * y = UnsafeExpression $ renderExpression x <> "*" <> renderExpression y
+  UnsafeExpression x - UnsafeExpression y = UnsafeExpression $ x <> "+" <> y
+  abs (UnsafeExpression x) = UnsafeExpression $ "@" <> x
+  signum (UnsafeExpression x) = UnsafeExpression $ "sign(" <> x <> ")"
+
+instance Num (Expression ps xs 'PGInt8) where
   fromInteger n = UnsafeExpression . fromString $ show n
   x + y = UnsafeExpression $ renderExpression x <> "+" <> renderExpression y
   x * y = UnsafeExpression $ renderExpression x <> "*" <> renderExpression y
@@ -118,11 +132,10 @@ type instance BooleanOf (Expression ps xs y) = Expression ps xs 'PGBool
 
 instance IfB (Expression ps xs y) where
   ifB predicate then_ else_ = UnsafeExpression $ mconcat
-    [ "CASE"
-    , "\n  WHEN ",renderExpression predicate
-    , "\n  THEN ",renderExpression then_
-    , "\n  ELSE ",renderExpression else_
-    , "\nEND"
+    [ "CASE WHEN ",renderExpression predicate
+    , " THEN ",renderExpression then_
+    , " ELSE ",renderExpression else_
+    , " END"
     ]
 
 instance EqB (Expression ps xs y) where
@@ -153,11 +166,16 @@ data Tabulation ps xss xs = UnsafeTabulation
 data Relation ps xss xs = Relation
   { tabulation :: Tabulation ps xss xs
   , restriction :: Maybe (Expression ps xs 'PGBool)
+  , limitation :: Maybe (Expression ps '[] 'PGInt8)
+  , offsetting :: Maybe (Expression ps '[] 'PGInt8)
   }
 
 renderRelation :: Relation ps xss xs -> ByteString
-renderRelation (Relation tab wh) =
-  renderTabulation tab <> maybe "" ((" WHERE " <>) . renderExpression) wh
+renderRelation (Relation tab wh lim off) =
+  renderTabulation tab
+    <> maybe "" ((" WHERE " <>) . renderExpression) wh
+    <> maybe "" ((" LIMIT " <>) . renderExpression) lim
+    <> maybe "" ((" OFFSET " <>) . renderExpression) off
 
 where_
   :: Relation ps xss xs
@@ -169,12 +187,34 @@ ys `where_` condition = ys
       Just conditions -> Just (conditions &&* condition)
   }
 
+limit
+  :: Relation ps xss xs
+  -> Expression ps '[] 'PGInt8
+  -> Relation ps xss xs
+ys `limit` n = ys
+  { limitation = case limitation ys of
+      Nothing -> Just n
+      Just n' -> Just (n' `minB` n)
+  }
+
+offset
+  :: Relation ps xss xs
+  -> Expression ps '[] 'PGInt8
+  -> Relation ps xss xs
+ys `offset` n = ys
+  { offsetting = case offsetting ys of
+      Nothing -> Just n
+      Just n' -> Just (n' + n)
+  }
+
 instance HasField label xss xs
   => IsLabel label (Relation ps xss xs) where
     fromLabel _ = Relation
       { tabulation = UnsafeTabulation $
           fieldName (Proxy @label) (Proxy @xss) (Proxy @xs)
       , restriction = Nothing
+      , limitation = Nothing
+      , offsetting = Nothing
       }
 
 newtype Selection ps xss ys = UnsafeSelection
@@ -188,6 +228,8 @@ subselect :: Selection ps xss ys -> Relation ps xss ys
 subselect selection = Relation
   { tabulation = UnsafeTabulation $ "SELECT " <> renderSelection selection
   , restriction = Nothing
+  , limitation = Nothing
+  , offsetting = Nothing
   }
 
 newtype Query ps xss yss zs = UnsafeQuery { renderQuery :: ByteString }
