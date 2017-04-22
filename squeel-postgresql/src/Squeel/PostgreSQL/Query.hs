@@ -61,13 +61,15 @@ data Alias label = Alias
 data Aliased obj labeled where
   As :: obj x -> Alias label -> Aliased obj '(label, x)
 instance IsLabel label (Alias label) where fromLabel _ = Alias
+instance IsLabel label (obj x)
+  => IsLabel label (Aliased obj '(label, x)) where
+    fromLabel p = fromLabel p `As` fromLabel p
+
+alias :: Aliased obj '(label, x) -> Alias label
+alias _ = Alias
 
 unalias :: Aliased obj '(label, x) -> obj x
 unalias (obj `As` _) = obj
-
-instance HasField label xs x =>
-  IsLabel label (Aliased (Expression ps xs) '(label, x)) where
-    fromLabel p = fromLabel p `As` fromLabel p
 
 renderAliased
   :: KnownSymbol label
@@ -152,10 +154,6 @@ instance HasField label xss xs
   => IsLabel label (Relation ps xss xs) where
     fromLabel _ = UnsafeRelation $
       fieldName (Proxy @label) (Proxy @xss) (Proxy @xs)
-
-instance HasField label xss xs
-  => IsLabel label (Aliased (Relation ps xss) '(label, xs)) where
-    fromLabel p = fromLabel p `As` fromLabel p
 
 data Selection ps xss xs ys = Selection
   { projection :: Projection ps xs ys
