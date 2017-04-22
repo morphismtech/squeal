@@ -21,9 +21,11 @@ import Data.Monoid
 import Data.Proxy
 import Data.String
 import Data.Vinyl
+import Data.Vinyl.Functor
 import GHC.OverloadedLabels
 import GHC.TypeLits
 
+import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
 
 import Squeel.PostgreSQL.Type
@@ -33,7 +35,7 @@ class HasField label xs x where
 instance {-# OVERLAPPING #-} KnownSymbol label
   => HasField label ('(label, x) ': xs) x where
     fieldName _ _ _ = Char8.pack (symbolVal (Proxy @label))
-instance HasField label xs y
+instance {-# OVERLAPPABLE #-} HasField label xs y
   => HasField label (x ': xs) y where
   fieldName _ _ _ = fieldName (Proxy @label) (Proxy @xs) (Proxy @y)
 
@@ -232,9 +234,28 @@ subselect selection = Relation
   , offsetting = Nothing
   }
 
+newtype Insertion ps xss = UnsafeInsertion {renderInsertion :: ByteString }
+
+into
+  :: forall label xss xs ps
+   . HasField label xss xs
+  => Proxy label
+  -> Rec (Aliased (Expression ps '[])) xs
+  -> Insertion ps xss
+into table values = UnsafeInsertion $ "INTO "
+  <> fieldName table (Proxy @xss) (Proxy @xs)
+  <> " VALUES "
+  <> ByteString.intercalate ", "
+    (recordToList (rmap (Const . renderExpression . unalias) values))
+
 newtype Query ps xss yss zs = UnsafeQuery { renderQuery :: ByteString }
 newtype PreparedQuery ps xss yss zs =
   UnsafePreparedQuery { renderPreparedQuery :: ByteString }
 
 select :: Selection ps xss ys -> Query ps xss xss ys
-select selection = UnsafeQuery $ "SELECT " <> renderSelection selection <> ";"
+select selection = UnsafeQuery $
+  "SELECT " <> renderSelection selection <> ";"
+
+insert :: Insertion ps xss -> Query ps xss xss '[]
+insert insertion = UnsafeQuery $
+  "INSERT " <> renderInsertion insertion <> ";"
