@@ -47,7 +47,7 @@ param5 = UnsafeExpression "$5"
 class HasField label xs x where
   fieldName :: Proxy label -> Proxy xs -> Proxy x -> ByteString
 instance {-# OVERLAPPING #-} KnownSymbol label
-  => HasField label ((label ':= x) ': xs) x where
+  => HasField label ('(label, x) ': xs) x where
     fieldName _ _ _ = Char8.pack (symbolVal (Proxy @label))
 instance {-# OVERLAPPABLE #-} HasField label xs y
   => HasField label (x ': xs) y where
@@ -57,23 +57,22 @@ instance HasField label xs x => IsLabel label (Expression ps xs x) where
   fromLabel _ = UnsafeExpression $
     fieldName (Proxy @label) (Proxy @xs) (Proxy @x)
 
-data Identified ident x = (:=) ident x
 data Alias label = Alias
-data Aliased obj named where
-  As :: obj x -> Alias name -> Aliased obj (name ':= x)
+data Aliased obj labeled where
+  As :: obj x -> Alias label -> Aliased obj '(label, x)
 instance IsLabel label (Alias label) where fromLabel _ = Alias
 
-unalias :: Aliased obj (name ':= x) -> obj x
+unalias :: Aliased obj '(label, x) -> obj x
 unalias (obj `As` _) = obj
 
 instance HasField label xs x =>
-  IsLabel label (Aliased (Expression ps xs) (label ':= x)) where
+  IsLabel label (Aliased (Expression ps xs) '(label, x)) where
     fromLabel p = fromLabel p `As` fromLabel p
 
 renderAliased
-  :: KnownSymbol name
+  :: KnownSymbol label
   => (obj x -> ByteString)
-  -> Aliased obj (name ':= x)
+  -> Aliased obj '(label, x)
   -> ByteString
 renderAliased render (obj `As` label) =
   render obj <> " AS " <> Char8.pack (symbolVal label)
@@ -83,14 +82,14 @@ class AllAliased xs where
     :: (forall x. obj x -> ByteString)
     -> Rec (Aliased obj) xs
     -> ByteString
-instance KnownSymbol name => AllAliased '[name ':= x] where
+instance KnownSymbol label => AllAliased '[ '(label, x)] where
   renderAllAliased render
-    (aliased :& RNil :: Rec (Aliased obj) '[name ':= x]) =
+    (aliased :& RNil :: Rec (Aliased obj) '[ '(label, x)]) =
       renderAliased render aliased
-instance (KnownSymbol name, AllAliased (x' ': xs))
-  => AllAliased ((name ':= x) ': (x' ': xs)) where
+instance (KnownSymbol label, AllAliased (x' ': xs))
+  => AllAliased ('(label, x) ': (x' ': xs)) where
     renderAllAliased render
-      (x :& xs :: Rec (Aliased obj) ((name ':= x) ': (x' : xs))) =
+      (x :& xs :: Rec (Aliased obj) ('(label, x) ': x' : xs)) =
         renderAliased render x <> ", " <> renderAllAliased render xs
 
 instance IsString (Expression ps xs 'PGText) where
@@ -155,7 +154,7 @@ instance HasField label xss xs
       fieldName (Proxy @label) (Proxy @xss) (Proxy @xs)
 
 instance HasField label xss xs
-  => IsLabel label (Aliased (Relation ps xss) (label ':= xs)) where
+  => IsLabel label (Aliased (Relation ps xss) '(label, xs)) where
     fromLabel p = fromLabel p `As` fromLabel p
 
 data Selection ps xss xs ys = Selection
