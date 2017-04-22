@@ -1,5 +1,6 @@
 {-# LANGUAGE
     DataKinds
+  , FlexibleContexts
   , FlexibleInstances
   , GADTs
   , MultiParamTypeClasses
@@ -44,14 +45,15 @@ param5 = UnsafeExpression "$5"
 
 class HasField ident xs x where
   fieldName :: Proxy ident -> Proxy xs -> Proxy x -> ByteString
-instance KnownSymbol name => HasField '[name] ((name ':= x) ': xs) x where
-  fieldName _ _ _ = Char8.pack (symbolVal (Proxy @name))
-instance HasField ident xs x => HasField ident (y ': xs) x where
-  fieldName _ _ _ = fieldName (Proxy @ident) (Proxy @xs) (Proxy @x)
-instance (KnownSymbol name, HasField names xs x)
-  => HasField (name ': names) ((name ':= xs) ': xss) x where
+instance KnownSymbol name
+  => HasField '[name] ((name ':= x) ': xs) x where
     fieldName _ _ _ = Char8.pack (symbolVal (Proxy @name))
-      <> "." <> fieldName (Proxy @names) (Proxy @xs) (Proxy @x)
+instance HasField ident (x ': xs) y => HasField ident (x' ': x ': xs) y where
+  fieldName _ _ _ = fieldName (Proxy @ident) (Proxy @(x ': xs)) (Proxy @y)
+instance (KnownSymbol name, HasField (name' ': names) xs x)
+  => HasField (name ': name' ': names) ((name ':= xs) ': xss) x where
+    fieldName _ _ _ = Char8.pack (symbolVal (Proxy @name))
+      <> "." <> fieldName (Proxy @(name' ': names)) (Proxy @xs) (Proxy @x)
 
 column_
   :: forall ident xs x ps
@@ -69,9 +71,9 @@ unalias (AS obj) = obj
 
 column
   :: forall ident xs x ps
-   . HasField ident xs x
+   . HasField '[ident] xs x
   => Aliased (Expression ps xs) (ident ':= x)
-column = AS $ column_ (Proxy @ident)
+column = AS $ column_ (Proxy @'[ident])
 
 renderAliased
   :: KnownSymbol name
@@ -90,10 +92,10 @@ instance KnownSymbol name => AllAliased '[name ':= x] where
   renderAllAliased render
     (aliased :& RNil :: Rec (Aliased obj) '[name ':= x]) =
       renderAliased render aliased
-instance (KnownSymbol name, AllAliased xs)
-  => AllAliased ((name ':= x) ': xs) where
+instance (KnownSymbol name, AllAliased (x' ': xs))
+  => AllAliased ((name ':= x) ': (x' ': xs)) where
     renderAllAliased render
-      (x :& xs :: Rec (Aliased obj) ((name ':= x) ': xs)) =
+      (x :& xs :: Rec (Aliased obj) ((name ':= x) ': (x' : xs))) =
         renderAliased render x <> ", " <> renderAllAliased render xs
 
 instance IsString (Expression ps xs 'PGText) where
