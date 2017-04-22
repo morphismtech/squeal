@@ -147,38 +147,46 @@ project
   -> Projection ps xs ys
 project = UnsafeProjection . renderAllAliased renderExpression
 
-newtype Relation ps xss ys = UnsafeRelation
-  { renderRelation :: ByteString }
+data Tabulation ps xss xs = UnsafeTabulation
+  { renderTabulation :: ByteString }
 
-instance HasField label xss xs
-  => IsLabel label (Relation ps xss xs) where
-    fromLabel _ = UnsafeRelation $
-      fieldName (Proxy @label) (Proxy @xss) (Proxy @xs)
-
-data Selection ps xss xs ys = Selection
-  { projection :: Projection ps xs ys
-  , relation :: Relation ps xss xs
+data Relation ps xss xs = Relation
+  { tabulation :: Tabulation ps xss xs
   , restriction :: Maybe (Expression ps xs 'PGBool)
   }
 
-renderSelection :: Selection ps xss xs ys -> ByteString
-renderSelection (Selection xs ys wh) =
-  renderProjection xs <> " FROM " <> renderRelation ys
-    <> maybe "" ((" WHERE " <>) . renderExpression) wh
-
-from :: Projection ps xs ys -> Relation ps xss xs -> Selection ps xss xs ys
-ys `from` xs = Selection ys xs Nothing
+renderRelation :: Relation ps xss xs -> ByteString
+renderRelation (Relation tab wh) =
+  renderTabulation tab <> maybe "" ((" WHERE " <>) . renderExpression) wh
 
 where_
-  :: Selection ps xss xs ys
+  :: Relation ps xss xs
   -> Expression ps xs 'PGBool
-  -> Selection ps xss xs ys
+  -> Relation ps xss xs
 ys `where_` condition = ys
   { restriction = case restriction ys of
       Nothing -> Just condition
-      Just conditions -> Just (condition &&* conditions)
+      Just conditions -> Just (conditions &&* condition)
   }
+
+instance HasField label xss xs
+  => IsLabel label (Relation ps xss xs) where
+    fromLabel _ = Relation
+      { tabulation = UnsafeTabulation $
+          fieldName (Proxy @label) (Proxy @xss) (Proxy @xs)
+      , restriction = Nothing
+      }
+
+newtype Selection ps xss ys = UnsafeSelection
+  { renderSelection :: ByteString }
+
+from :: Projection ps xs ys -> Relation ps xss xs -> Selection ps xss ys
+ys `from` xs = UnsafeSelection $
+  renderProjection ys <> " FROM " <> renderRelation xs
 
 newtype Query ps xss yss zs = UnsafeQuery { renderQuery :: ByteString }
 newtype PreparedQuery ps xss yss zs =
   UnsafePreparedQuery { renderPreparedQuery :: ByteString }
+
+select :: Selection ps xss ys -> Query ps xss xss ys
+select selection = UnsafeQuery $ "SELECT " <> renderSelection selection
