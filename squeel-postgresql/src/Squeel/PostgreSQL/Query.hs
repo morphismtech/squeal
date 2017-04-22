@@ -184,9 +184,15 @@ from :: Projection ps xs ys -> Relation ps xss xs -> Selection ps xss ys
 ys `from` xs = UnsafeSelection $
   renderProjection ys <> " FROM " <> renderRelation xs
 
+subselect :: Selection ps xss ys -> Relation ps xss ys
+subselect selection = Relation
+  { tabulation = UnsafeTabulation $ "SELECT " <> renderSelection selection
+  , restriction = Nothing
+  }
+
 newtype Query ps xss yss zs = UnsafeQuery { renderQuery :: ByteString }
 newtype PreparedQuery ps xss yss zs =
   UnsafePreparedQuery { renderPreparedQuery :: ByteString }
 
 select :: Selection ps xss ys -> Query ps xss xss ys
-select selection = UnsafeQuery $ "SELECT " <> renderSelection selection
+select selection = UnsafeQuery $ "SELECT " <> renderSelection selection <> ";"

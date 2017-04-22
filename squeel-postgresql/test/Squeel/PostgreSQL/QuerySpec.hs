@@ -18,11 +18,15 @@ spec = do
   it "correctly renders a simple SELECT query" $ do
     renderQuery (select (sumAndCol1 `from` (table1 `where_` true)))
     `shouldBe`
-    "SELECT col1+col2 AS sum, col1 AS col1 FROM table1 WHERE TRUE"
+    "SELECT col1+col2 AS sum, col1 AS col1 FROM table1 WHERE TRUE;"
   it "combines WHEREs using AND" $ do
     renderQuery (select (sumAndCol1 `from` (table1 `where_` true `where_` false)))
     `shouldBe`
-    "SELECT col1+col2 AS sum, col1 AS col1 FROM table1 WHERE TRUE AND FALSE"
+    "SELECT col1+col2 AS sum, col1 AS col1 FROM table1 WHERE TRUE AND FALSE;"
+  it "performs subSELECTs" $ do
+    renderQuery (select (star `from` subselect (sumAndCol1 `from` table1)))
+    `shouldBe`
+    "SELECT * FROM SELECT col1+col2 AS sum, col1 AS col1 FROM table1;"
 
 type Columns =
   '[ '("col1", 'PGInt4)
