@@ -1,8 +1,6 @@
 dependencies:
   cache_directories:
     - "~/.stack"
-  pre:
-    - curl -sSL https://get.haskellstack.org/ | sh
   override:
     - stack setup
 test:
