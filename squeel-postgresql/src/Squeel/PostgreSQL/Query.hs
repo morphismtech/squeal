@@ -188,22 +188,18 @@ project
   -> Projection ps xs ys
 project = UnsafeProjection . renderAllAliased renderExpression
 
-data Tabulation ps xss xs = UnsafeTabulation
-  { renderTabulation :: ByteString }
-
-data Relation ps xss xs = Relation
-  { tabulation :: Tabulation ps xss xs
+data Relation ps xss xs = UnsafeRelation
+  { relation :: ByteString
   , restriction :: Maybe (Expression ps xs 'PGBool)
   , limitation :: Maybe (Expression ps '[] 'PGInt8)
   , offsetting :: Maybe (Expression ps '[] 'PGInt8)
   }
 
 renderRelation :: Relation ps xss xs -> ByteString
-renderRelation (Relation tab wh lim off) =
-  renderTabulation tab
-    <> maybe "" ((" WHERE " <>) . renderExpression) wh
-    <> maybe "" ((" LIMIT " <>) . renderExpression) lim
-    <> maybe "" ((" OFFSET " <>) . renderExpression) off
+renderRelation (UnsafeRelation rel wh lim off) = rel
+  <> maybe "" ((" WHERE " <>) . renderExpression) wh
+  <> maybe "" ((" LIMIT " <>) . renderExpression) lim
+  <> maybe "" ((" OFFSET " <>) . renderExpression) off
 
 where_
   :: Relation ps xss xs
@@ -237,9 +233,8 @@ ys `offset` n = ys
 
 instance HasField label xss xs
   => IsLabel label (Relation ps xss xs) where
-    fromLabel _ = Relation
-      { tabulation = UnsafeTabulation $
-          fieldName (Proxy @label) (Proxy @xss) (Proxy @xs)
+    fromLabel _ = UnsafeRelation
+      { relation = fieldName (Proxy @label) (Proxy @xss) (Proxy @xs)
       , restriction = Nothing
       , limitation = Nothing
       , offsetting = Nothing
@@ -253,8 +248,8 @@ ys `from` xs = UnsafeSelection $
   renderProjection ys <> " FROM " <> renderRelation xs
 
 subselect :: Selection ps xss ys -> Relation ps xss ys
-subselect selection = Relation
-  { tabulation = UnsafeTabulation $ "SELECT " <> renderSelection selection
+subselect selection = UnsafeRelation
+  { relation = "SELECT " <> renderSelection selection
   , restriction = Nothing
   , limitation = Nothing
   , offsetting = Nothing
