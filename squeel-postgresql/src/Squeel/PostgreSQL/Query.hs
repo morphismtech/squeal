@@ -96,8 +96,11 @@ instance (KnownSymbol label, AllAliased (x' ': xs))
       (x :& xs :: Rec (Aliased obj) ('(label, x) ': x' : xs)) =
         renderAliased render x <> ", " <> renderAllAliased render xs
 
-newtype Expression ps (xs :: [(Symbol,PGType)]) y =
-  UnsafeExpression { renderExpression :: ByteString }
+newtype Expression
+  (ps :: [PGType])
+  (xs :: [(Symbol,PGType)])
+  (y :: PGType) =
+    UnsafeExpression { renderExpression :: ByteString }
 
 param1 :: Expression (p1:ps) cols p1
 param1 = UnsafeExpression "$1"
@@ -170,8 +173,11 @@ instance OrdB (Expression ps xs y) where
   x <* y = UnsafeExpression $ renderExpression x <> "<" <> renderExpression y
   x <=* y = UnsafeExpression $ renderExpression x <> "<=" <> renderExpression y
 
-newtype Projection ps xs ys = UnsafeProjection
-  { renderProjection :: ByteString }
+newtype Projection
+  (ps :: [PGType])
+  (xs :: [(Symbol,PGType)])
+  (ys :: [(Symbol,PGType)]) =
+    UnsafeProjection { renderProjection :: ByteString }
 
 star :: Projection ps xs xs
 star = UnsafeProjection "*"
@@ -254,26 +260,12 @@ subselect selection = Relation
   , offsetting = Nothing
   }
 
-newtype Insertion ps xss xs = UnsafeInsertion
-  {renderInsertion :: ByteString }
-
-into
-  :: forall label xss xs ps
-   . (HasField label xss xs, UnzipAliased xs)
-  => Proxy label
-  -> Rec (Aliased (Expression ps '[])) xs
-  -> Insertion ps xss xs
-into table values = UnsafeInsertion $ "INTO "
-  <> fieldName table (Proxy @xss) (Proxy @xs)
-  <> " (" <> ByteString.intercalate ", " names
-  <> ") VALUES ("
-  <> ByteString.intercalate ", "
-    (recordToList (rmap (Const . renderExpression) exprs))
-  <> ")"
-  where
-    (names,exprs) = unzipAliased values
-
-newtype Query ps xss yss zs = UnsafeQuery { renderQuery :: ByteString }
+newtype Query
+  (ps :: [PGType])
+  (xss :: [(Symbol,[(Symbol,PGType)])])
+  (yss :: [(Symbol,[(Symbol,PGType)])])
+  (zs :: [(Symbol,PGType)]) =
+    UnsafeQuery { renderQuery :: ByteString }
 newtype PreparedQuery ps xss yss zs =
   UnsafePreparedQuery { renderPreparedQuery :: ByteString }
 
@@ -281,6 +273,18 @@ select :: Selection ps xss ys -> Query ps xss xss ys
 select selection = UnsafeQuery $
   "SELECT " <> renderSelection selection <> ";"
 
-insert :: Insertion ps xss xs -> Query ps xss xss '[]
-insert insertion = UnsafeQuery $
-  "INSERT " <> renderInsertion insertion <> ";"
+insertInto
+  :: forall xss xs label ps
+   . (HasField label xss xs, UnzipAliased xs)
+  => Proxy label
+  -> Rec (Aliased (Expression ps '[])) xs
+  -> Query ps xss xss '[]
+insertInto table values = UnsafeQuery $ "INSERT INTO "
+  <> fieldName table (Proxy @xss) (Proxy @xs)
+  <> " (" <> ByteString.intercalate ", " names
+  <> ") VALUES ("
+  <> ByteString.intercalate ", "
+    (recordToList (rmap (Const . renderExpression) exprs))
+  <> ");"
+  where
+    (names,exprs) = unzipAliased values

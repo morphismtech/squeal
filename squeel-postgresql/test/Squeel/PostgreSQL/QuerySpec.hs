@@ -50,9 +50,15 @@ spec = do
     `shouldBe`
     "SELECT * FROM table1 OFFSET 1+2;"
   it "correctly render simple INSERTs" $ do
-    renderQuery (insert insertion)
+    renderQuery (insertInto @Tables @Columns (Proxy @"table1")
+      ((2 `As` #col1 :& 4 `As` #col2 :& RNil)))
     `shouldBe`
     "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
+  it "should be safe against SQL injection in literal text" $ do
+    pendingWith "gotta find an escape function"
+    -- renderQuery (select (literalText `from` table1))
+    -- `shouldBe`
+    -- "SELECT '\\'DROP TABLE table1;' AS literal FROM table1;"
 
 type Columns = '[ '("col1", 'PGInt4), '("col2", 'PGInt4)]
 type Tables = '[ '("table1", Columns)]
@@ -60,11 +66,11 @@ type Tables = '[ '("table1", Columns)]
 sumAndCol1 :: Projection '[] Columns '[ '("sum", 'PGInt4), '("col1", 'PGInt4)]
 sumAndCol1 = project ((#col1 + #col2) `As` #sum :& #col1 :& RNil)
 
+literalText :: Projection '[] Columns '[ '("literal", 'PGText)]
+literalText = project ("\';DROP TABLE table1;" `As` #literal :& RNil)
+
 table1 :: Relation '[] Tables Columns
 table1 = #table1
 
 parameterizedTable1 :: Relation '[ 'PGInt8] Tables Columns
 parameterizedTable1 = #table1
-
-insertion :: Insertion '[] Tables Columns
-insertion = into (Proxy @"table1") (2 `As` #col1 :& 4 `As` #col2 :& RNil)
