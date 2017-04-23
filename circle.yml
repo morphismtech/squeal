@@ -1,0 +1,11 @@
+machine:
+  ghc:
+    version: 8.0.1
+dependencies:
+  cache_directories:
+    - "~/.stack"
+  pre:
+    - curl -sSL https://get.haskellstack.org/ | sh
+test:
+  override:
+    - stack test
