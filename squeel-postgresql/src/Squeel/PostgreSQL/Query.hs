@@ -47,6 +47,9 @@ instance IsLabel label (obj x)
   => IsLabel label (Aliased obj '(label, x)) where
     fromLabel p = fromLabel p `As` fromLabel p
 
+aliasName :: forall label. KnownSymbol label => Alias label -> ByteString
+aliasName _ = Char8.pack (symbolVal (Proxy @label))
+
 alias :: Aliased obj '(label, x) -> Alias label
 alias _ = Alias
 
@@ -60,6 +63,23 @@ renderAliased
   -> ByteString
 renderAliased render (obj `As` label) =
   render obj <> " AS " <> Char8.pack (symbolVal label)
+
+class UnzipAliased (xs :: [(Symbol,k)]) where
+  type Unaliased xs :: [k]
+  unzipAliased
+    :: Rec (Aliased obj) xs
+    -> ([ByteString], Rec obj (Unaliased xs))
+instance UnzipAliased '[] where
+  type Unaliased '[] = '[]
+  unzipAliased _ = ([], RNil)
+instance (KnownSymbol label, UnzipAliased xs)
+  => UnzipAliased ( '(label, x) ': xs) where
+    type Unaliased ( '(label, x) ': xs) = x ': Unaliased xs
+    unzipAliased (x :& xs) =
+      let
+        (labels,values) = unzipAliased xs
+      in
+        (aliasName (alias x) : labels, unalias x :& values)
 
 class AllAliased xs where
   renderAllAliased
@@ -234,19 +254,24 @@ subselect selection = Relation
   , offsetting = Nothing
   }
 
-newtype Insertion ps xss = UnsafeInsertion {renderInsertion :: ByteString }
+newtype Insertion ps xss xs = UnsafeInsertion
+  {renderInsertion :: ByteString }
 
 into
   :: forall label xss xs ps
-   . HasField label xss xs
+   . (HasField label xss xs, UnzipAliased xs)
   => Proxy label
   -> Rec (Aliased (Expression ps '[])) xs
-  -> Insertion ps xss
+  -> Insertion ps xss xs
 into table values = UnsafeInsertion $ "INTO "
   <> fieldName table (Proxy @xss) (Proxy @xs)
-  <> " VALUES "
+  <> " (" <> ByteString.intercalate ", " names
+  <> ") VALUES ("
   <> ByteString.intercalate ", "
-    (recordToList (rmap (Const . renderExpression . unalias) values))
+    (recordToList (rmap (Const . renderExpression) exprs))
+  <> ")"
+  where
+    (names,exprs) = unzipAliased values
 
 newtype Query ps xss yss zs = UnsafeQuery { renderQuery :: ByteString }
 newtype PreparedQuery ps xss yss zs =
@@ -256,6 +281,6 @@ select :: Selection ps xss ys -> Query ps xss xss ys
 select selection = UnsafeQuery $
   "SELECT " <> renderSelection selection <> ";"
 
-insert :: Insertion ps xss -> Query ps xss xss '[]
+insert :: Insertion ps xss xs -> Query ps xss xss '[]
 insert insertion = UnsafeQuery $
   "INSERT " <> renderInsertion insertion <> ";"
