@@ -36,7 +36,7 @@ library
     , uuid
     , vinyl
 
-test-suite blockapps-data-test
+test-suite squeel-postgresql-test
   default-language: Haskell2010
   type: exitcode-stdio-1.0
   hs-source-dirs: test
