@@ -24,6 +24,7 @@ import Data.Proxy
 import Data.Text (Text)
 import Data.Vinyl
 import Data.Vinyl.Functor
+import GHC.TypeLits
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
@@ -33,9 +34,13 @@ import Squeel.PostgreSQL.Type
 
 newtype Connection db = Connection { unConnection :: LibPQ.Connection }
 
-newtype PQ db0 db1 m x = PQ
-  { runPQ :: Connection db0 -> m (x, Connection db1) }
-  deriving Functor
+newtype PQ
+  (db0 :: [(Symbol,[(Symbol,PGType)])])
+  (db1 :: [(Symbol,[(Symbol,PGType)])])
+  (m :: * -> *)
+  (x :: *) =
+    PQ { runPQ :: Connection db0 -> m (x, Connection db1) }
+    deriving Functor
 
 evalPQ :: Functor m => PQ db0 db1 m x -> Connection db0 -> m x
 evalPQ (PQ pq) = fmap fst . pq
