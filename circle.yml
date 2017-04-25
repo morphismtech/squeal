@@ -4,6 +4,7 @@ dependencies:
     - ".stack-work"
   override:
     - stack setup
+    - stack test --no-run-tests
 test:
   override:
     - stack test

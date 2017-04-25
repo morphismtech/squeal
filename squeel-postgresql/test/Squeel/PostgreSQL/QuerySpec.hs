@@ -55,10 +55,9 @@ spec = do
     `shouldBe`
     "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
   it "should be safe against SQL injection in literal text" $ do
-    pendingWith "gotta find an escape function"
-    -- renderQuery (select (literalText `from` table1))
-    -- `shouldBe`
-    -- "SELECT '\\'DROP TABLE table1;' AS literal FROM table1;"
+    renderQuery (select (literalText `from` table1))
+    `shouldBe`
+    "SELECT E''';DROP TABLE table1;' AS literal FROM table1;"
 
 type Columns = '[ '("col1", 'PGInt4), '("col2", 'PGInt4)]
 type Tables = '[ '("table1", Columns)]

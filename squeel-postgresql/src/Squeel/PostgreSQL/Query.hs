@@ -3,6 +3,7 @@
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
+  , LambdaCase
   , MultiParamTypeClasses
   , OverloadedStrings
   , PolyKinds
@@ -118,7 +119,19 @@ instance HasField label xs x => IsLabel label (Expression ps xs x) where
     fieldName (Proxy @label) (Proxy @xs) (Proxy @x)
 
 instance IsString (Expression ps xs 'PGText) where
-  fromString str = UnsafeExpression $ "\'" <> fromString str <> "\'"
+  fromString str = UnsafeExpression $
+    "E\'" <> fromString (escape =<< str) <> "\'"
+    where
+      escape = \case
+        '\NUL' -> "\\0"
+        '\'' -> "''"
+        '"' -> "\\\""
+        '\b' -> "\\b"
+        '\n' -> "\\n"
+        '\r' -> "\\r"
+        '\t' -> "\\t"
+        '\\' -> "\\\\"
+        c -> [c]
 
 instance Num (Expression ps xs 'PGInt2) where
   fromInteger n = UnsafeExpression . fromString $ show n
