@@ -214,7 +214,7 @@ renderRelation (UnsafeRelation rel wh lim off) = rel
   <> maybe "" ((" LIMIT " <>) . renderExpression) lim
   <> maybe "" ((" OFFSET " <>) . renderExpression) off
 
--- | where_ is a morphism of monoids `PGBool -> End Relation` under (&&*), True
+-- | where_ is a morphism of monoids `PGBool -> End Relation` under (&&*), true
 where_
   :: Expression ps xs 'PGBool
   -> Relation ps xss xs
