@@ -214,31 +214,34 @@ renderRelation (UnsafeRelation rel wh lim off) = rel
   <> maybe "" ((" LIMIT " <>) . renderExpression) lim
   <> maybe "" ((" OFFSET " <>) . renderExpression) off
 
+-- | where_ is a morphism of monoids `PGBool -> End Relation` under (&&*), true
 where_
-  :: Relation ps xss xs
-  -> Expression ps xs 'PGBool
+  :: Expression ps xs 'PGBool
   -> Relation ps xss xs
-ys `where_` condition = ys
+  -> Relation ps xss xs
+where_ condition ys = ys
   { restriction = case restriction ys of
       Nothing -> Just condition
       Just conditions -> Just (conditions &&* condition)
   }
 
+-- | limit is a morphism of semigroups `PGInt8 -> End Relation` under minB
 limit
-  :: Relation ps xss xs
-  -> Expression ps '[] 'PGInt8
+  :: Expression ps '[] 'PGInt8
   -> Relation ps xss xs
-ys `limit` n = ys
+  -> Relation ps xss xs
+limit n ys = ys
   { limitation = case limitation ys of
       Nothing -> Just n
       Just n' -> Just (n' `minB` n)
   }
 
+-- | offset is a morphism of monoids `PGInt8 -> End Relation` under (+), 0
 offset
-  :: Relation ps xss xs
-  -> Expression ps '[] 'PGInt8
+  :: Expression ps '[] 'PGInt8
   -> Relation ps xss xs
-ys `offset` n = ys
+  -> Relation ps xss xs
+offset n ys = ys
   { offsetting = case offsetting ys of
       Nothing -> Just n
       Just n' -> Just (n' + n)
