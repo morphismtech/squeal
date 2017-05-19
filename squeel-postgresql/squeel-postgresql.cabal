@@ -16,7 +16,7 @@ library
     Squeel.PostgreSQL
     Squeel.PostgreSQL.PQ
     Squeel.PostgreSQL.Query
-    Squeel.PostgreSQL.Type
+    Squeel.PostgreSQL.Schema
     Squeel.PostgreSQL.Value
   default-language: Haskell2010
   ghc-options: -Wall -Werror
@@ -52,6 +52,7 @@ test-suite squeel-postgresql-test
     Squeel.PostgreSQL.ValueSpec
   build-depends: base
     , Boolean
+    , bytestring
     , hspec
     , squeel-postgresql
     , vinyl

@@ -4,6 +4,7 @@
   , DeriveFunctor
   , FlexibleContexts
   , FlexibleInstances
+  , MagicHash
   , MultiParamTypeClasses
   , RankNTypes
   , ScopedTypeVariables
@@ -20,17 +21,17 @@ import Control.Monad.Base
 import Control.Monad.Trans
 import Control.Monad.Trans.Control
 import Data.ByteString (ByteString)
-import Data.Proxy
 import Data.Text (Text)
 import Data.Vinyl
 import Data.Vinyl.Functor
+import GHC.Exts
 import GHC.TypeLits
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Squeel.PostgreSQL.Query
 import Squeel.PostgreSQL.Value
-import Squeel.PostgreSQL.Type
+import Squeel.PostgreSQL.Schema
 
 newtype Connection db = Connection { unConnection :: LibPQ.Connection }
 
@@ -104,9 +105,11 @@ instance MonadPQ PQ where
     PQ $ \ (Connection conn) -> do
       let
         params' =
-          [ Just (oid, param, LibPQ.Binary)
-          | (oid, param) <-
-              zip (toOids (Proxy @ps)) (toValues (Proxy @ps) params)
+          [ Just (oid, param', LibPQ.Binary)
+          | (oid, param') <-
+              zip
+                (toOids (proxy# :: Proxy# ps))
+                (toValues (proxy# :: Proxy# ps) params)
           ]
       result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
       return (Result <$> result, Connection conn)
@@ -114,7 +117,7 @@ instance MonadPQ PQ where
   pqPrepare statementName (UnsafeQuery q :: Query ps db0 db1 ys) =
     PQ $ \ (Connection conn) -> do
       result <- liftBase $
-        LibPQ.prepare conn statementName q (Just (toOids (Proxy @ps)))
+        LibPQ.prepare conn statementName q (Just (toOids (proxy# :: Proxy# ps)))
       return
         ( ( Result <$> result
           , UnsafePreparedQuery statementName
@@ -124,7 +127,9 @@ instance MonadPQ PQ where
     PQ $ \ (Connection conn) -> do
       let
         params' =
-          [Just (param, LibPQ.Binary) | param <- toValues (Proxy @ps) params]
+          [ Just (param', LibPQ.Binary)
+          | param' <- toValues (proxy# :: Proxy# ps) params
+          ]
       result <- liftBase $
         LibPQ.execPrepared conn (renderPreparedQuery q) params' LibPQ.Binary
       return (Result <$> result, Connection conn)
@@ -194,7 +199,7 @@ colNum4 = ColumnNumber 4
 
 getvalue
   :: (FromValue x y, MonadBase IO io)
-  => Proxy x
+  => Proxy# x
   -> Result xs
   -> RowNumber
   -> ColumnNumber xs x
