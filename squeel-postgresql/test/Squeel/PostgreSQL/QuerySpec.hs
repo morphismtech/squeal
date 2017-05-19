@@ -116,10 +116,10 @@ type CustomerColumns =
 type ShipperColumns =
   [ "shipperID" ::: 'PGInt4, "shipperVal" ::: 'PGBool ]
 type JoinTables =
-  '[ "order" ::: OrderColumns
-   , "customer" ::: CustomerColumns
-   , "shipper" ::: ShipperColumns
-   ]
+  [ "order" ::: OrderColumns
+  , "customer" ::: CustomerColumns
+  , "shipper" ::: ShipperColumns
+  ]
 type ValueColumns =
   [ "orderVal" ::: 'PGText
   , "customerVal" ::: 'PGFloat4
