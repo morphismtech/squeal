@@ -72,8 +72,7 @@ instance HasColumn column columns ty
     fromLabel = getColumn
 
 (.&.)
-  :: forall columns column params tables table ty
-   . (HasTable table tables columns, HasColumn column columns ty)
+  :: (HasTable table tables columns, HasColumn column columns ty)
   => Alias table -> Alias column -> Expression params tables ty
 Alias table .&. Alias column = UnsafeExpression $
   fromString (symbolVal' table)
@@ -174,13 +173,13 @@ crossJoin
   -> TableRef params schema tables
   -> TableRef params schema (table ': tables)
 crossJoin table tables = UnsafeTableRef $
-  "(" <> renderTableRef tables <> " CROSS JOIN " <> renderTableRef table <> ")"
+  renderTableRef tables <> " CROSS JOIN " <> renderTableRef table
 
 innerJoin
-  :: TableRef params tables '[left]
-  -> Expression params '[left,right] 'PGBool
-  -> TableRef params tables (right ': rest)
-  -> TableRef params tables (left ': right ': rest)
+  :: TableRef params schema '[table]
+  -> Expression params (table ': tables) 'PGBool
+  -> TableRef params schema tables
+  -> TableRef params schema (table ': tables)
 innerJoin table on tables = UnsafeTableRef $
   renderTableRef tables
   <> " INNER JOIN " <>

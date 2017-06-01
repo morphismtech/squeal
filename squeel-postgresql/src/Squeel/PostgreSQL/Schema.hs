@@ -79,7 +79,8 @@ type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
 
 data Alias (alias :: Symbol) = Alias (Proxy# alias)
 
-instance IsLabel alias (Alias alias) where fromLabel = Alias
+instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
+  fromLabel = Alias
 
 data Aliased expression aliased where
   As

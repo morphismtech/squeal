@@ -64,23 +64,27 @@ spec = do
       ("Robert'); DROP TABLE students;" `As` #name :& RNil)
     `shouldRenderAs`
     "INSERT INTO students (name) VALUES (E'Robert''); DROP TABLE students;');"
-  -- describe "JOINs" $ do
-  --   it "should render CROSS JOINs" $
-  --     pending
-  --   it "should render INNER JOINs" $ do
-  --     select (vals `from` joinTable) `shouldRenderAs`
-  --       "((orders\
-  --       \ INNER JOIN customers ON orders.customerID = customers.customerID)\
-  --       \ INNER JOIN shippers ON orders.shipperID = shippers.shipperID)"
--- #orders
---   & innerJoin #customers
---     (#orders .&. #customerID ==* #customers .&. #customerID)
---   & innerJoin #shippers
---     (#orders .&. #shipperID ==* #shippers .&. #shipperID)
---   `shouldRenderAs`
---   "((orders\
---   \ INNER JOIN customers ON orders.customerID = customers.customerID)\
---   \ INNER JOIN shippers ON orders.shipperID = shippers.shipperID)"
+  describe "JOINs" $ do
+    it "should render CROSS JOINs" $ do
+      select (vals `from` crossJoins) `shouldRenderAs`
+        "SELECT\
+        \ orders.orderVal AS orderVal,\
+        \ customers.customerVal AS customerVal,\
+        \ shippers.shipperVal AS shipperVal\
+        \ FROM orders\
+        \ CROSS JOIN customers\
+        \ CROSS JOIN shippers;"
+    it "should render INNER JOINs" $ do
+      select (vals `from` innerJoins) `shouldRenderAs`
+        "SELECT\
+        \ orders.orderVal AS orderVal,\
+        \ customers.customerVal AS customerVal,\
+        \ shippers.shipperVal AS shipperVal\
+        \ FROM orders\
+        \ INNER JOIN customers\
+        \ ON (orders.customerID = customers.customerID)\
+        \ INNER JOIN shippers\
+        \ ON (orders.shipperID = shippers.shipperID);"
 
 type Columns = '[ "col1" ::: 'PGInt4, "col2" ::: 'PGInt4]
 type Tables = '[ "table1" ::: Columns ]
@@ -110,30 +114,37 @@ type StudentsColumns = '["name" ::: 'PGText]
 type StudentsTable = '["students" ::: StudentsColumns]
 
 type OrderColumns =
-  [ "orderID" ::: 'PGInt4, "orderVal" ::: 'PGText ]
+  [ "orderID"    ::: 'PGInt4
+  , "orderVal"   ::: 'PGText
+  , "customerID" ::: 'PGInt4
+  , "shipperID"  ::: 'PGInt4
+  ]
 type CustomerColumns =
   [ "customerID" ::: 'PGInt4, "customerVal" ::: 'PGFloat4 ]
 type ShipperColumns =
   [ "shipperID" ::: 'PGInt4, "shipperVal" ::: 'PGBool ]
 type JoinTables =
-  [ "order" ::: OrderColumns
-  , "customer" ::: CustomerColumns
-  , "shipper" ::: ShipperColumns
+  [ "shippers" ::: ShipperColumns
+  , "customers" ::: CustomerColumns
+  , "orders" ::: OrderColumns
   ]
 type ValueColumns =
   [ "orderVal" ::: 'PGText
   , "customerVal" ::: 'PGFloat4
   , "shipperVal" ::: 'PGBool
   ]
--- vals :: Projection '[] JoinTables ValueColumns
--- vals = project $
---   #orders .&. #orderVal `As` #orderVal
---   :& #customers .&. #customerVal `As` #customerVal
---   :& #shippers .&. #shippersVal `As` #shippersVal :& RNil
--- joinTable :: Tabulation '[] JoinTables JoinTables
--- joinTable = tabulation $
---   #orders
---   & innerJoin #customers
---     (#orders .&. #customerID ==* #customers .&. #customerID)
---   & innerJoin #shippers
---     (#orders .&. #shipperID ==* #shippers .&. #shipperID)
+vals :: Projection '[] JoinTables ValueColumns
+vals = project $
+  #orders .&. #orderVal `As` #orderVal
+  :& #customers .&. #customerVal `As` #customerVal
+  :& #shippers .&. #shipperVal `As` #shipperVal :& RNil
+crossJoins :: Tabulation '[] JoinTables JoinTables
+crossJoins = tabulation $
+  #orders & crossJoin #customers & crossJoin #shippers
+innerJoins :: Tabulation '[] JoinTables JoinTables
+innerJoins = tabulation $
+  #orders
+  & innerJoin #customers
+    (#orders .&. #customerID ==* #customers .&. #customerID)
+  & innerJoin #shippers
+    (#orders .&. #shipperID ==* #shippers .&. #shipperID)
