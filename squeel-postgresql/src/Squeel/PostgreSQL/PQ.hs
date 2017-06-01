@@ -8,7 +8,6 @@
   , MultiParamTypeClasses
   , RankNTypes
   , ScopedTypeVariables
-  , TypeApplications
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances

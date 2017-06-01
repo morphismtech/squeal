@@ -1,14 +1,11 @@
 {-# LANGUAGE
     DataKinds
   , FlexibleInstances
-  , FunctionalDependencies
-  , KindSignatures
+  , GADTs
   , MagicHash
   , MultiParamTypeClasses
   , PolyKinds
   , ScopedTypeVariables
-  , TypeApplications
-  , TypeFamilies
   , TypeOperators
 #-}
 

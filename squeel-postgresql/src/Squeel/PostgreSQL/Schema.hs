@@ -1,6 +1,5 @@
 {-# LANGUAGE
     DataKinds
-  , FlexibleContexts
   , FlexibleInstances
   , GADTs
   , MagicHash
@@ -9,7 +8,6 @@
   , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
-  , TypeApplications
   , TypeOperators
 #-}
 
