@@ -19,8 +19,9 @@ library
     Squeel.PostgreSQL.Value
   default-language: Haskell2010
   ghc-options: -Wall -Werror
-  build-depends: base
-    , aeson
+  build-depends:
+      aeson
+    , base
     , Boolean
     , bytestring
     , lifted-base
@@ -44,7 +45,8 @@ test-suite squeel-postgresql-test
   other-modules:
     Squeel.PostgreSQL.QuerySpec
     Squeel.PostgreSQL.ValueSpec
-  build-depends: base
+  build-depends:
+      base
     , Boolean
     , bytestring
     , hspec
