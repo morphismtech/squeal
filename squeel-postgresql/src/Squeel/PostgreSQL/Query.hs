@@ -1,18 +1,13 @@
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE
     DataKinds
-  , FlexibleContexts
   , FlexibleInstances
   , FunctionalDependencies
-  , GADTs
   , LambdaCase
   , MagicHash
-  , MultiParamTypeClasses
   , OverloadedStrings
   , PolyKinds
-  , RankNTypes
   , ScopedTypeVariables
-  , TypeApplications
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
