@@ -13,7 +13,6 @@ cabal-version: >=1.10
 library
   hs-source-dirs: src
   exposed-modules:
-    Squeel.PostgreSQL
     Squeel.PostgreSQL.PQ
     Squeel.PostgreSQL.Query
     Squeel.PostgreSQL.Schema
@@ -43,12 +42,7 @@ test-suite squeel-postgresql-test
   ghc-options: -Wall -Werror
   main-is: Spec.hs
   other-modules:
-    Squeel.PostgreSQLSpec
-    Squeel.PostgreSQL.ConnectionSpec
     Squeel.PostgreSQL.QuerySpec
-    Squeel.PostgreSQL.Query.ExpressionSpec
-    Squeel.PostgreSQL.Query.RelationSpec
-    Squeel.PostgreSQL.TypeSpec
     Squeel.PostgreSQL.ValueSpec
   build-depends: base
     , Boolean
