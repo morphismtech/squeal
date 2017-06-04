@@ -48,7 +48,6 @@ test-suite squeel-postgresql-test
   build-depends:
       base
     , Boolean
-    , bytestring
     , hspec
     , squeel-postgresql
     , vinyl

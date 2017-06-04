@@ -6,8 +6,6 @@
   , LambdaCase
   , MagicHash
   , OverloadedStrings
-  , PolyKinds
-  , ScopedTypeVariables
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
@@ -62,8 +60,8 @@ instance {-# OVERLAPPING #-} KnownSymbol column
 instance {-# OVERLAPPABLE #-} (KnownSymbol column, HasColumn column table ty)
   => HasColumn column (ty' ': table) ty
 
-instance HasColumn column columns ty
-  => IsLabel column (Expression params '[table ::: columns] ty) where
+instance (HasColumn column columns ty, tables ~ '[table ::: columns])
+  => IsLabel column (Expression params tables ty) where
     fromLabel = getColumn
 
 (.&.)
@@ -167,18 +165,18 @@ crossJoin
   :: TableRef params schema '[table]
   -> TableRef params schema tables
   -> TableRef params schema (table ': tables)
-crossJoin table tables = UnsafeTableRef $
-  renderTableRef tables <> " CROSS JOIN " <> renderTableRef table
+crossJoin tab tabs = UnsafeTableRef $
+  renderTableRef tabs <> " CROSS JOIN " <> renderTableRef tab
 
 innerJoin
   :: TableRef params schema '[table]
   -> Expression params (table ': tables) 'PGBool
   -> TableRef params schema tables
   -> TableRef params schema (table ': tables)
-innerJoin table on tables = UnsafeTableRef $
-  renderTableRef tables
+innerJoin tab on tabs = UnsafeTableRef $
+  renderTableRef tabs
   <> " INNER JOIN " <>
-  renderTableRef table
+  renderTableRef tab
   <> " ON " <>
   renderExpression on
 
@@ -206,81 +204,110 @@ project
   . recordToList
   . rmap (Const . renderAliased renderExpression)
 
-data Tabulation
-  (params :: [PGType])
-  (schema :: [(Symbol,[(Symbol,PGType)])])
-  (tables :: [(Symbol,[(Symbol,PGType)])])
-  = Tabulation
-  { fromClause :: TableRef params schema tables
-  , whereClause :: Maybe (Expression params tables 'PGBool)
+data Clauses params tables = Clauses
+  { whereClause :: Maybe (Expression params tables 'PGBool)
   , limitClause :: Maybe (Expression params '[] 'PGInt8)
   , offsetClause :: Maybe (Expression params '[] 'PGInt8)
   }
 
-tabulation :: TableRef params schema tables -> Tabulation params schema tables
-tabulation tab = Tabulation tab Nothing Nothing Nothing
+instance Monoid (Clauses params tables) where
+  mempty = Clauses Nothing Nothing Nothing
+  Clauses wh1 lim1 off1 `mappend` Clauses wh2 lim2 off2 = Clauses
+    { whereClause = case (wh1,wh2) of
+        (Nothing,Nothing) -> Nothing
+        (Just w1,Nothing) -> Just w1
+        (Nothing,Just w2) -> Just w2
+        (Just w1,Just w2) -> Just (w1 &&* w2)
+    , limitClause = case (lim1,lim2) of
+        (Nothing,Nothing) -> Nothing
+        (Just l1,Nothing) -> Just l1
+        (Nothing,Just l2) -> Just l2
+        (Just l1,Just l2) -> Just (l1 `minB` l2)
+    , offsetClause = case (off1,off2) of
+        (Nothing,Nothing) -> Nothing
+        (Just o1,Nothing) -> Just o1
+        (Nothing,Just o2) -> Just o2
+        (Just o1,Just o2) -> Just (o1 + o2)
+    }
 
-renderTabulation :: Tabulation params schema tables -> ByteString
-renderTabulation (Tabulation fr wh lim off)= mconcat
-  [ renderTableRef fr
+data TableExpression
+  (params :: [PGType])
+  (schema :: [(Symbol,[(Symbol,PGType)])])
+  (tables :: [(Symbol,[(Symbol,PGType)])])
+  = TableExpression
+  { tableRef :: TableRef params schema tables
+  , clauses :: Clauses params tables
+  }
+
+tables
+  :: TableRef params schema tables
+  -> TableExpression params schema tables
+tables tref = TableExpression tref mempty
+
+renderTabulation :: TableExpression params schema tables -> ByteString
+renderTabulation (TableExpression tref (Clauses wh lim off))= mconcat
+  [ renderTableRef tref
   , maybe "" ((" WHERE " <>) . renderExpression) wh
   , maybe "" ((" LIMIT " <>) . renderExpression) lim
   , maybe "" ((" OFFSET " <>) . renderExpression) off
   ]
 
-instance HasTable table schema columns
-  => IsLabel table (TableRef params schema '[table ::: columns]) where
+instance (HasTable table schema columns, table ~ table')
+  => IsLabel table (TableRef params schema '[table' ::: columns]) where
     fromLabel = getTable
 
-instance HasTable table schema columns
-  => IsLabel table (Tabulation params schema '[table ::: columns]) where
-    fromLabel p = Tabulation (getTable p) Nothing Nothing Nothing
+instance (HasTable table schema columns, table ~ table')
+  => IsLabel table (TableExpression params schema '[table' ::: columns]) where
+    fromLabel p = TableExpression (getTable p) mempty
 
 where_
   :: Expression params tables 'PGBool
-  -> Tabulation params schema tables
-  -> Tabulation params schema tables
-where_ condition tables = tables
-  { whereClause = case whereClause tables of
-      Nothing -> Just condition
-      Just conditions -> Just (conditions &&* condition)
-  }
+  -> TableExpression params schema tables
+  -> TableExpression params schema tables
+where_ wh (TableExpression tabs clauses1) = TableExpression tabs
+  (clauses1 <> Clauses (Just wh) Nothing Nothing)
 
 limit
   :: Expression params '[] 'PGInt8
-  -> Tabulation params schema tables
-  -> Tabulation params schema tables
-limit n tables = tables
-  { limitClause = case limitClause tables of
-      Nothing -> Just n
-      Just n' -> Just (n' `minB` n)
-  }
+  -> TableExpression params schema tables
+  -> TableExpression params schema tables
+limit lim (TableExpression tabs clauses1) = TableExpression tabs
+  (clauses1 <> Clauses Nothing (Just lim) Nothing)
 
 offset
   :: Expression params '[] 'PGInt8
-  -> Tabulation params schema tables
-  -> Tabulation params schema tables
-offset n tables = tables
-  { offsetClause = case offsetClause tables of
-      Nothing -> Just n
-      Just n' -> Just (n' + n)
-  }
+  -> TableExpression params schema tables
+  -> TableExpression params schema tables
+offset off (TableExpression tabs clauses1) = TableExpression tabs
+  (clauses1 <> Clauses Nothing Nothing (Just off))
 
-newtype Selection params schema columns = UnsafeSelection
-  { renderSelection :: ByteString }
+newtype Selection
+  (params :: [PGType])
+  (schema :: [(Symbol,[(Symbol,PGType)])])
+  (columns :: [(Symbol,PGType)])
+    = UnsafeSelection
+    { renderSelection :: ByteString }
 
 from
-  :: Projection params tables columns
-  -> Tabulation params schema tables
+  :: TableExpression params schema tables
+  -> Projection params tables columns
   -> Selection params schema columns
-from projection tables = UnsafeSelection $
-  renderProjection projection <> " FROM " <> renderTabulation tables
+from tabs projection = UnsafeSelection $
+  renderProjection projection <> " FROM " <> renderTabulation tabs
 
-newtype Query params schema0 schema1 columns = UnsafeQuery
-  { renderQuery :: ByteString }
+newtype Query
+  (params :: [PGType])
+  (schema0 :: [(Symbol,[(Symbol,PGType)])])
+  (schema1 :: [(Symbol,[(Symbol,PGType)])])
+  (columns :: [(Symbol,PGType)])
+    = UnsafeQuery { renderQuery :: ByteString }
 
-newtype PreparedQuery params schema0 schema1 columns = UnsafePreparedQuery
-  { renderPreparedQuery :: ByteString }
+newtype PreparedQuery
+  (params :: [PGType])
+  (schema0 :: [(Symbol,[(Symbol,PGType)])])
+  (schema1 :: [(Symbol,[(Symbol,PGType)])])
+  (columns :: [(Symbol,PGType)])
+    = UnsafePreparedQuery { renderPreparedQuery :: ByteString }
 
 select
   :: Selection params schema columns
@@ -289,18 +316,15 @@ select = UnsafeQuery . ("SELECT " <>) . (<> ";") . renderSelection
 
 subselect
   :: Aliased (Selection params schema) table
-  -> Tabulation params schema '[table]
-subselect selection = Tabulation
-  { fromClause = UnsafeTableRef . ("SELECT " <>) $
+  -> TableExpression params schema '[table]
+subselect selection = TableExpression
+  { tableRef = UnsafeTableRef . ("SELECT " <>) $
       renderAliased renderSelection selection
-  , whereClause = Nothing
-  , limitClause = Nothing
-  , offsetClause = Nothing
+  , clauses = mempty
   }
 
 insertInto
-  :: forall schema columns table params
-   . HasTable table schema columns
+  :: HasTable table schema columns
   => Alias table
   -> Rec (Aliased (Expression params '[])) columns
   -> Query params schema schema '[]
