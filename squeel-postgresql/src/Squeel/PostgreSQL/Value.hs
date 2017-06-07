@@ -1,13 +1,11 @@
 {-# LANGUAGE
     DataKinds
   , FlexibleInstances
-  , FunctionalDependencies
-  , KindSignatures
+  , GADTs
+  , MagicHash
   , MultiParamTypeClasses
   , PolyKinds
   , ScopedTypeVariables
-  , TypeApplications
-  , TypeFamilies
   , TypeOperators
 #-}
 
@@ -17,16 +15,15 @@ import Control.Arrow (left)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeStrict, encode)
 import Data.ByteString (ByteString)
 import Data.Int (Int16,Int32,Int64)
-import Data.Proxy
 import Data.Vinyl
 import Data.Vinyl.Functor
 import PostgreSQL.Binary.Decoder (Decoder)
 import PostgreSQL.Binary.Encoder (Encoder)
-import Data.Proxy (Proxy)
 import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
 import Data.UUID (UUID)
+import GHC.Exts
 
 import qualified Data.ByteString.Lazy as Lazy (ByteString, toStrict)
 import qualified Data.Text as Text (pack)
@@ -34,13 +31,13 @@ import qualified Data.Text.Lazy as Lazy (Text)
 import qualified PostgreSQL.Binary.Decoder as Decoder
 import qualified PostgreSQL.Binary.Encoder as Encoder
 
-import Squeel.PostgreSQL.Type
+import Squeel.PostgreSQL.Schema
 
-decodeValue :: FromValue pg x => Proxy pg -> ByteString -> Either Text x
-decodeValue = Decoder.run . fromValue
+decodeValue :: FromValue pg x => Proxy# pg -> ByteString -> Either Text x
+decodeValue p = Decoder.run $ fromValue p
 
 class FromValue (pg :: PGType) x where
-  fromValue :: Proxy pg -> Decoder x
+  fromValue :: Proxy# pg -> Decoder x
 instance FromValue 'PGInt2 Int16 where
   fromValue _ = Decoder.int
 instance FromValue 'PGInt4 Int32 where
@@ -85,7 +82,7 @@ instance FromValue 'PGInterval DiffTime where
   fromValue _ = Decoder.interval_int
 
 class ToValue x (pg :: PGType) where
-  toValue :: Proxy pg -> Encoder x
+  toValue :: Proxy# pg -> Encoder x
 instance ToValue Int16 'PGInt2 where
   toValue _ = Encoder.int2_int16
 instance ToValue Int32 'PGInt4 where
@@ -130,9 +127,10 @@ instance ToValue DiffTime 'PGInterval where
   toValue _ = Encoder.interval_int
 
 class ToValues xs pgs where
-  toValues :: Proxy pgs -> Rec Identity xs -> [ByteString]
+  toValues :: Proxy# pgs -> Rec Identity xs -> [ByteString]
 instance ToValues '[] '[] where toValues _ _ = []
 instance (ToValue x pg, ToValues xs pgs)
   => ToValues (x ': xs) (pg ': pgs) where
-    toValues (_ :: Proxy (pg ': pgs)) (Identity x :& xs) =
-      Encoder.run (toValue (Proxy @pg)) x : toValues (Proxy @pgs) xs
+    toValues _ (Identity x :& xs)
+      = Encoder.run (toValue (proxy# :: Proxy# pg)) x
+      : toValues (proxy# :: Proxy# pgs) xs
