@@ -77,7 +77,7 @@ class MonadPQ pq where
     :: (MonadBase IO io, ToOids ps)
     => ByteString
     -> Query ps db0 db1 xs
-    -> pq db0 db1 io (Maybe (Result []), PreparedQuery db0 db1 ps xs)
+    -> pq db0 db1 io (Maybe (Result []), PreparedQuery ps db0 db1 xs)
 
   pqExecPrepared
     :: (MonadBase IO io, ToValues xs ps)
