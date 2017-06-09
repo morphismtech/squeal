@@ -127,13 +127,25 @@ instance Boolean (Expression params tables 'PGBool) where
 type instance BooleanOf (Expression params tables ty) =
   Expression params tables 'PGBool
 
-instance IfB (Expression params tables ty) where
-  ifB if_ then_ else_ = UnsafeExpression $ mconcat
-    [ "CASE WHEN ",renderExpression if_
-    , " THEN ",renderExpression then_
-    , " ELSE ",renderExpression else_
-    , " END"
+caseWhenThenElse
+  :: [(Expression params tables 'PGBool, Expression params tables ty)]
+  -> Expression params tables ty
+  -> Expression params tables ty
+caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
+  [ "CASE"
+  , mconcat
+    [ mconcat
+      [ " WHEN ", renderExpression when_
+      , " THEN ", renderExpression then_
+      ]
+    | (when_,then_) <- whenThens
     ]
+  , " ELSE ", renderExpression else_
+  , " END"
+  ]
+
+instance IfB (Expression params tables ty) where
+  ifB if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 
 instance EqB (Expression params tables ty) where
   (==*) = unsafeBinaryOp "="
@@ -179,30 +191,6 @@ innerJoin tab on tabs = UnsafeTableRef $
   renderTableRef tab
   <> " ON " <>
   renderExpression on
-
-newtype Projection
-  (params :: [PGType])
-  (tables :: [(Symbol,[(Symbol,PGType)])])
-  (columns :: [(Symbol,PGType)]) =
-    UnsafeProjection { renderProjection :: ByteString }
-
-star :: Projection params '[table ::: columns] columns
-star = UnsafeProjection "*"
-
-tableStar
-  :: HasTable table tables columns
-  => Alias table -> Projection params tables columns
-tableStar (Alias table) = UnsafeProjection $
-  fromString (symbolVal' table) <> ".*"
-
-project
-  :: Rec (Aliased (Expression params tables)) columns
-  -> Projection params tables columns
-project
-  = UnsafeProjection
-  . ByteString.intercalate ", "
-  . recordToList
-  . rmap (Const . renderAliased renderExpression)
 
 data Clauses params tables = Clauses
   { whereClause :: Maybe (Expression params tables 'PGBool)
@@ -288,12 +276,31 @@ newtype Selection
     = UnsafeSelection
     { renderSelection :: ByteString }
 
-from
-  :: TableExpression params schema tables
-  -> Projection params tables columns
+starFrom
+  :: tables ~ '[table ::: columns]
+  => TableExpression params schema tables
   -> Selection params schema columns
-from tabs projection = UnsafeSelection $
-  renderProjection projection <> " FROM " <> renderTabulation tabs
+starFrom tabs = UnsafeSelection $ "* FROM " <> renderTabulation tabs
+
+tableStarFrom
+  :: HasTable table tables columns
+  => Alias table
+  -> TableExpression params schema tables
+  -> Selection params schema columns
+Alias tab `tableStarFrom` tabs = UnsafeSelection $
+  fromString (symbolVal' tab) <> ".* FROM" <> renderTabulation tabs
+
+from
+  :: Rec (Aliased (Expression params tables)) columns
+  -> TableExpression params schema tables
+  -> Selection params schema columns
+list `from` tabs = UnsafeSelection $
+  renderList list <> " FROM " <> renderTabulation tabs
+  where
+    renderList
+      = ByteString.intercalate ", "
+      . recordToList
+      . rmap (Const . renderAliased renderExpression)
 
 newtype Query
   (params :: [PGType])
