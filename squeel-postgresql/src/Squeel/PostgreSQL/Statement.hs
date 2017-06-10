@@ -11,7 +11,7 @@
   , UndecidableInstances
 #-}
 
-module Squeel.PostgreSQL.Query where
+module Squeel.PostgreSQL.Statement where
 
 import Data.Boolean
 import Data.ByteString (ByteString)
@@ -302,24 +302,24 @@ list `from` tabs = UnsafeSelection $
       . recordToList
       . rmap (Const . renderAliased renderExpression)
 
-newtype Query
+newtype Statement
   (params :: [PGType])
   (schema0 :: [(Symbol,[(Symbol,PGType)])])
   (schema1 :: [(Symbol,[(Symbol,PGType)])])
   (columns :: [(Symbol,PGType)])
-    = UnsafeQuery { renderQuery :: ByteString }
+    = UnsafeStatement { renderStatement :: ByteString }
 
-newtype PreparedQuery
+newtype PreparedStatement
   (params :: [PGType])
   (schema0 :: [(Symbol,[(Symbol,PGType)])])
   (schema1 :: [(Symbol,[(Symbol,PGType)])])
   (columns :: [(Symbol,PGType)])
-    = UnsafePreparedQuery { renderPreparedQuery :: ByteString }
+    = UnsafePreparedStatement { renderPreparedStatement :: ByteString }
 
 select
   :: Selection params schema columns
-  -> Query params schema schema columns
-select = UnsafeQuery . ("SELECT " <>) . (<> ";") . renderSelection
+  -> Statement params schema schema columns
+select = UnsafeStatement . ("SELECT " <>) . (<> ";") . renderSelection
 
 subselect
   :: Aliased (Selection params schema) table
@@ -334,8 +334,8 @@ insertInto
   :: HasTable table schema columns
   => Alias table
   -> Rec (Aliased (Expression params '[])) columns
-  -> Query params schema schema '[]
-insertInto (Alias table) expressions = UnsafeQuery $ "INSERT INTO "
+  -> Statement params schema schema '[]
+insertInto (Alias table) expressions = UnsafeStatement $ "INSERT INTO "
   <> fromString (symbolVal' table)
   <> " (" <> ByteString.intercalate ", " aliases
   <> ") VALUES ("
@@ -353,8 +353,8 @@ createTable
     :: (KnownSymbol table, KnownColumns columns)
     => Alias table
     -> Proxy# columns
-    -> Query '[] schema ((table ::: columns) ': schema) '[]
-createTable (Alias table) columns = UnsafeQuery $ mconcat
+    -> Statement '[] schema ((table ::: columns) ': schema) '[]
+createTable (Alias table) columns = UnsafeStatement $ mconcat
   [ "CREATE TABLE "
   , fromString $ symbolVal' table
   , " ("
@@ -364,8 +364,8 @@ createTable (Alias table) columns = UnsafeQuery $ mconcat
 
 class KnownSymbol table => DropTable table schema0 schema1
   | table schema0 -> schema1 where
-    dropTable :: Alias table -> Query '[] schema0 schema1 '[]
-    dropTable (Alias table) = UnsafeQuery $
+    dropTable :: Alias table -> Statement '[] schema0 schema1 '[]
+    dropTable (Alias table) = UnsafeStatement $
       "DROP TABLE " <> fromString (symbolVal' table) <> ";"
 instance {-# OVERLAPPING #-}
   (KnownSymbol table, table ~ table')
