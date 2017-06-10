@@ -348,3 +348,28 @@ insertInto (Alias table) expressions = UnsafeQuery $ "INSERT INTO "
     values = recordToList $ rmap
       (\ (expression `As` _) -> Const (renderExpression expression))
       expressions
+
+createTable
+    :: (KnownSymbol table, KnownColumns columns)
+    => Alias table
+    -> Proxy# columns
+    -> Query '[] schema ((table ::: columns) ': schema) '[]
+createTable (Alias table) columns = UnsafeQuery $ mconcat
+  [ "CREATE TABLE "
+  , fromString $ symbolVal' table
+  , " ("
+  , renderColumns columns
+  , ");"
+  ]
+
+class KnownSymbol table => DropTable table schema0 schema1
+  | table schema0 -> schema1 where
+    dropTable :: Alias table -> Query '[] schema0 schema1 '[]
+    dropTable (Alias table) = UnsafeQuery $
+      "DROP TABLE " <> fromString (symbolVal' table) <> ";"
+instance {-# OVERLAPPING #-}
+  (KnownSymbol table, table ~ table')
+    => DropTable table ((table' ::: columns) ': schema) schema
+instance {-# OVERLAPPABLE #-}
+  (KnownSymbol table, DropTable table schema0 schema1)
+    => DropTable table (tabCols ': schema0) (tabCols ': schema1)

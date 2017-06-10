@@ -1,5 +1,6 @@
 {-# LANGUAGE
     DataKinds
+  , FlexibleContexts
   , FlexibleInstances
   , GADTs
   , MagicHash
@@ -19,6 +20,8 @@ module Squeel.PostgreSQL.Schema
   , (:::)
   , Alias (Alias)
   , Aliased (As)
+  , KnownPGType (..)
+  , KnownColumns (..)
   , renderAliased
   , module GHC.OverloadedLabels
   , module GHC.TypeLits
@@ -97,3 +100,58 @@ renderAliased
   -> ByteString
 renderAliased render (expression `As` Alias alias) =
   render expression <> " AS " <> fromString (symbolVal' alias)
+
+class KnownPGType (ty :: PGType) where
+  renderPGType :: Proxy# ty -> ByteString
+instance KnownPGType 'PGBool where renderPGType _ = "bool"
+instance KnownPGType 'PGInt2 where renderPGType _ = "int2"
+instance KnownPGType 'PGInt4 where renderPGType _ = "int4"
+instance KnownPGType 'PGInt8 where renderPGType _ = "int8"
+instance KnownPGType 'PGNumeric where renderPGType _ = "numeric"
+instance KnownPGType 'PGFloat4 where renderPGType _ = "float4"
+instance KnownPGType 'PGFloat8 where renderPGType _ = "float8"
+instance KnownPGType 'PGSerial2 where renderPGType _ = "serial2"
+instance KnownPGType 'PGSerial4 where renderPGType _ = "serial4"
+instance KnownPGType 'PGSerial8 where renderPGType _ = "serial8"
+instance KnownPGType 'PGMoney where renderPGType _ = "money"
+instance KnownNat n => KnownPGType ('PGChar n) where
+  renderPGType _ = "char("
+    <> fromString (show (natVal' (proxy# :: Proxy# n)))
+    <> ")"
+instance KnownNat n => KnownPGType ('PGVarChar n) where
+  renderPGType _ = "varchar("
+    <> fromString (show (natVal' (proxy# :: Proxy# n)))
+    <> ")"
+instance KnownPGType 'PGText where renderPGType _ = "text"
+instance KnownPGType 'PGBytea where renderPGType _ = "bytea"
+instance KnownPGType 'PGTimestamp where renderPGType _ = "timestamp"
+instance KnownPGType 'PGTimestampTZ where renderPGType _ = "timestampTZ"
+instance KnownPGType 'PGDate where renderPGType _ = "date"
+instance KnownPGType 'PGTime where renderPGType _ = "time"
+instance KnownPGType 'PGTimeTZ where renderPGType _ = "timeTZ"
+instance KnownPGType 'PGInterval where renderPGType _ = "interval"
+instance KnownPGType 'PGUuid where renderPGType _ = "uuid"
+instance KnownPGType 'PGJson where renderPGType _ = "json"
+instance KnownPGType 'PGJsonb where renderPGType _ = "jsonb"
+
+class KnownColumns (columns :: [(Symbol,PGType)]) where
+  renderColumns :: Proxy# columns -> ByteString
+instance
+  ( KnownSymbol column
+  , KnownPGType ty
+  ) => KnownColumns '[column ::: ty] where
+    renderColumns _ =
+      fromString (symbolVal' (proxy# :: Proxy# column))
+      <> " "
+      <> renderPGType (proxy# :: Proxy# ty)
+instance
+  ( KnownSymbol column
+  , KnownPGType ty
+  , KnownColumns (columnsHead ': columnsTail)
+  ) => KnownColumns ((column ::: ty) ': columnsHead ': columnsTail) where
+    renderColumns _ =
+      fromString (symbolVal' (proxy# :: Proxy# column))
+      <> " "
+      <> renderPGType (proxy# :: Proxy# ty)
+      <> ", "
+      <> renderColumns (proxy# :: Proxy# (columnsHead ': columnsTail))

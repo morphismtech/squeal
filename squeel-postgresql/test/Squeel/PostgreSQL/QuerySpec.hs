@@ -1,8 +1,8 @@
 {-# LANGUAGE
     DataKinds
+  , MagicHash
   , OverloadedLabels
   , OverloadedStrings
-  , PolyKinds
   , TypeOperators
 #-}
 
@@ -11,6 +11,7 @@ module Squeel.PostgreSQL.QuerySpec where
 import Data.Boolean
 import Data.Function
 import Data.Vinyl
+import GHC.Exts
 import Test.Hspec
 
 import Squeel.PostgreSQL.Query
@@ -122,6 +123,18 @@ spec = do
         \ ON (orders.customerID = customers.customerID)\
         \ INNER JOIN shippers\
         \ ON (orders.shipperID = shippers.shipperID);"
+  it "should render simple CREATE TABLE statements" $ do
+    let
+      statement :: Query '[] '[] Tables '[]
+      statement = createTable #table1 (proxy# :: Proxy# Columns)
+    statement `shouldRenderAs`
+      "CREATE TABLE table1 (col1 int4, col2 int4);"
+  it "should render DROP TABLE statements" $ do
+    let
+      statement :: Query '[] Tables '[] '[]
+      statement = dropTable #table1
+    statement `shouldRenderAs`
+      "DROP TABLE table1;"
 
 type Columns = '[ "col1" ::: 'PGInt4, "col2" ::: 'PGInt4]
 type Tables = '[ "table1" ::: Columns ]
