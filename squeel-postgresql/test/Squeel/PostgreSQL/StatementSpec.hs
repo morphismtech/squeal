@@ -57,7 +57,7 @@ spec = do
       "SELECT * FROM table1 LIMIT CASE WHEN (1 <= 2) THEN 1 ELSE 2 END;"
   it "should render parameters using $ signs" $ do
     let
-      statement :: Statement '[ 'PGInt8] Tables Tables Columns
+      statement :: Statement '[ 'NotNull 'PGInt8] Tables Tables Columns
       statement = select $ starFrom (#table1 & limit param1)
     statement `shouldRenderAs` "SELECT * FROM table1 LIMIT $1;"
   it "does OFFSET clauses" $ do
@@ -128,36 +128,35 @@ spec = do
       statement :: Statement '[] '[] Tables '[]
       statement = createTable #table1 (proxy# :: Proxy# Columns)
     statement `shouldRenderAs`
-      "CREATE TABLE table1 (col1 int4, col2 int4);"
+      "CREATE TABLE table1 (col1 int4 NOT NULL, col2 int4 NOT NULL);"
   it "should render DROP TABLE statements" $ do
     let
       statement :: Statement '[] Tables '[] '[]
       statement = dropTable #table1
-    statement `shouldRenderAs`
-      "DROP TABLE table1;"
+    statement `shouldRenderAs` "DROP TABLE table1;"
 
-type Columns = '[ "col1" ::: 'PGInt4, "col2" ::: 'PGInt4]
+type Columns = '[ "col1" ::: 'NotNull 'PGInt4, "col2" ::: 'NotNull 'PGInt4]
 type Tables = '[ "table1" ::: Columns ]
-type SumAndCol1 = '[ "sum" ::: 'PGInt4, "col1" ::: 'PGInt4]
-type StudentsColumns = '["name" ::: 'PGText]
+type SumAndCol1 = '[ "sum" ::: 'NotNull 'PGInt4, "col1" ::: 'NotNull 'PGInt4]
+type StudentsColumns = '["name" ::: 'NotNull 'PGText]
 type StudentsTable = '["students" ::: StudentsColumns]
 type OrderColumns =
-  [ "orderID"    ::: 'PGInt4
-  , "orderVal"   ::: 'PGText
-  , "customerID" ::: 'PGInt4
-  , "shipperID"  ::: 'PGInt4
+  [ "orderID"    ::: 'NotNull 'PGInt4
+  , "orderVal"   ::: 'NotNull 'PGText
+  , "customerID" ::: 'NotNull 'PGInt4
+  , "shipperID"  ::: 'NotNull 'PGInt4
   ]
 type CustomerColumns =
-  [ "customerID" ::: 'PGInt4, "customerVal" ::: 'PGFloat4 ]
+  [ "customerID" ::: 'NotNull 'PGInt4, "customerVal" ::: 'NotNull 'PGFloat4 ]
 type ShipperColumns =
-  [ "shipperID" ::: 'PGInt4, "shipperVal" ::: 'PGBool ]
+  [ "shipperID" ::: 'NotNull 'PGInt4, "shipperVal" ::: 'NotNull 'PGBool ]
 type JoinTables =
   [ "shippers"  ::: ShipperColumns
   , "customers" ::: CustomerColumns
   , "orders"    ::: OrderColumns
   ]
 type ValueColumns =
-  [ "orderVal"    ::: 'PGText
-  , "customerVal" ::: 'PGFloat4
-  , "shipperVal"  ::: 'PGBool
+  [ "orderVal"    ::: 'NotNull 'PGText
+  , "customerVal" ::: 'NotNull 'PGFloat4
+  , "shipperVal"  ::: 'NotNull 'PGBool
   ]
