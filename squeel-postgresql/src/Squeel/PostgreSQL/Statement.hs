@@ -157,75 +157,75 @@ instance OrdB (Expression params tables ty) where
   (<*) = unsafeBinaryOp "<"
   (<=*) = unsafeBinaryOp "<="
 
-newtype TableRef
+newtype JoinExpression
   (params :: [NullityType])
   (schema :: [(Symbol,[(Symbol,NullityType)])])
   (tables :: [(Symbol,[(Symbol,NullityType)])])
-  = UnsafeTableRef { renderTableRef :: ByteString }
+  = UnsafeJoinExpression { renderJoinExpression :: ByteString }
 
 class KnownSymbol table => HasTable table tables columns
   | table tables -> columns where
-    getTable :: Proxy# table -> TableRef params tables '[table ::: columns]
-    getTable table = UnsafeTableRef $ fromString $ symbolVal' table
+    getTable :: Proxy# table -> JoinExpression params tables '[table ::: columns]
+    getTable table = UnsafeJoinExpression $ fromString $ symbolVal' table
 instance {-# OVERLAPPING #-} KnownSymbol table
   => HasTable table ((table ::: columns) ': tables) columns
 instance {-# OVERLAPPABLE #-}
   (KnownSymbol table, HasTable table schema columns)
     => HasTable table (table' ': schema) columns
 
-crossJoin
-  :: TableRef params schema '[table]
-  -> TableRef params schema tables
-  -> TableRef params schema (table ': tables)
-crossJoin tab tabs = UnsafeTableRef $
-  renderTableRef tabs <> " CROSS JOIN " <> renderTableRef tab
+cross
+  :: JoinExpression params schema '[table]
+  -> JoinExpression params schema tables
+  -> JoinExpression params schema (table ': tables)
+cross tab tabs = UnsafeJoinExpression $
+  renderJoinExpression tabs <> " CROSS JOIN " <> renderJoinExpression tab
 
-innerJoin
-  :: TableRef params schema '[table]
+inner
+  :: JoinExpression params schema '[table]
   -> Expression params (table ': tables) ('NotNull 'PGBool)
-  -> TableRef params schema tables
-  -> TableRef params schema (table ': tables)
-innerJoin tab on tabs = UnsafeTableRef $
-  renderTableRef tabs
+  -> JoinExpression params schema tables
+  -> JoinExpression params schema (table ': tables)
+inner tab on tabs = UnsafeJoinExpression $
+  renderJoinExpression tabs
   <> " INNER JOIN " <>
-  renderTableRef tab
+  renderJoinExpression tab
   <> " ON " <>
   renderExpression on
 
-leftOuterJoin
-  :: TableRef params schema '[right]
-  -> Expression params (right ': tables) ('NotNull 'PGBool)
-  -> TableRef params schema (left : tables)
-  -> TableRef params schema (NullifyTable right ': left ': tables)
-leftOuterJoin tab on tabs = UnsafeTableRef $
-  renderTableRef tabs
+leftOuter
+  :: JoinExpression params schema '[right]
+  -> Expression params (right ': left : tables) ('NotNull 'PGBool)
+  -> JoinExpression params schema (tables)
+  -> JoinExpression params schema (NullifyTable right ': left ': tables)
+leftOuter tab on tabs = UnsafeJoinExpression $
+  renderJoinExpression tabs
   <> " LEFT OUTER JOIN " <>
-  renderTableRef tab
+  renderJoinExpression tab
   <> " ON " <>
   renderExpression on
 
-rightOuterJoin
-  :: TableRef params schema '[right]
+rightOuter
+  :: JoinExpression params schema '[right]
   -> Expression params (right ': tables) ('NotNull 'PGBool)
-  -> TableRef params schema (left : tables)
-  -> TableRef params schema (right ': NullifyTable left ': tables)
-rightOuterJoin tab on tabs = UnsafeTableRef $
-  renderTableRef tabs
+  -> JoinExpression params schema (left : tables)
+  -> JoinExpression params schema (right ': NullifyTable left ': tables)
+rightOuter tab on tabs = UnsafeJoinExpression $
+  renderJoinExpression tabs
   <> " RIGHT OUTER JOIN " <>
-  renderTableRef tab
+  renderJoinExpression tab
   <> " ON " <>
   renderExpression on
 
-fullOuterJoin
-  :: TableRef params schema '[right]
-  -> Expression params (right ': tables) ('NotNull 'PGBool)
-  -> TableRef params schema (left : tables)
-  -> TableRef params schema
+fullOuter
+  :: JoinExpression params schema '[right]
+  -> Expression params (right ': left ': tables) ('NotNull 'PGBool)
+  -> JoinExpression params schema (left : tables)
+  -> JoinExpression params schema
       (NullifyTable right ': NullifyTable left ': tables)
-fullOuterJoin tab on tabs = UnsafeTableRef $
-  renderTableRef tabs
+fullOuter tab on tabs = UnsafeJoinExpression $
+  renderJoinExpression tabs
   <> " FULL OUTER JOIN " <>
-  renderTableRef tab
+  renderJoinExpression tab
   <> " ON " <>
   renderExpression on
 
@@ -255,55 +255,55 @@ instance Monoid (Clauses params tables) where
         (Just o1,Just o2) -> Just (o1 + o2)
     }
 
-data TableExpression
+data FromExpression
   (params :: [NullityType])
   (schema :: [(Symbol,[(Symbol,NullityType)])])
   (tables :: [(Symbol,[(Symbol,NullityType)])])
-  = TableExpression
-  { tableRef :: TableRef params schema tables
+  = FromExpression
+  { joinExpression :: JoinExpression params schema tables
   , clauses :: Clauses params tables
   }
 
-tables
-  :: TableRef params schema tables
-  -> TableExpression params schema tables
-tables tref = TableExpression tref mempty
+join
+  :: JoinExpression params schema tables
+  -> FromExpression params schema tables
+join tref = FromExpression tref mempty
 
-renderTabulation :: TableExpression params schema tables -> ByteString
-renderTabulation (TableExpression tref (Clauses wh lim off))= mconcat
-  [ renderTableRef tref
+renderTabulation :: FromExpression params schema tables -> ByteString
+renderTabulation (FromExpression tref (Clauses wh lim off))= mconcat
+  [ renderJoinExpression tref
   , maybe "" ((" WHERE " <>) . renderExpression) wh
   , maybe "" ((" LIMIT " <>) . renderExpression) lim
   , maybe "" ((" OFFSET " <>) . renderExpression) off
   ]
 
 instance (HasTable table schema columns, table ~ table')
-  => IsLabel table (TableRef params schema '[table' ::: columns]) where
+  => IsLabel table (JoinExpression params schema '[table' ::: columns]) where
     fromLabel = getTable
 
 instance (HasTable table schema columns, table ~ table')
-  => IsLabel table (TableExpression params schema '[table' ::: columns]) where
-    fromLabel p = TableExpression (getTable p) mempty
+  => IsLabel table (FromExpression params schema '[table' ::: columns]) where
+    fromLabel p = FromExpression (getTable p) mempty
 
 where_
   :: Expression params tables ('NotNull 'PGBool)
-  -> TableExpression params schema tables
-  -> TableExpression params schema tables
-where_ wh (TableExpression tabs clauses1) = TableExpression tabs
+  -> FromExpression params schema tables
+  -> FromExpression params schema tables
+where_ wh (FromExpression tabs clauses1) = FromExpression tabs
   (clauses1 <> Clauses (Just wh) Nothing Nothing)
 
 limit
   :: Expression params '[] ('NotNull 'PGInt8)
-  -> TableExpression params schema tables
-  -> TableExpression params schema tables
-limit lim (TableExpression tabs clauses1) = TableExpression tabs
+  -> FromExpression params schema tables
+  -> FromExpression params schema tables
+limit lim (FromExpression tabs clauses1) = FromExpression tabs
   (clauses1 <> Clauses Nothing (Just lim) Nothing)
 
 offset
   :: Expression params '[] ('NotNull 'PGInt8)
-  -> TableExpression params schema tables
-  -> TableExpression params schema tables
-offset off (TableExpression tabs clauses1) = TableExpression tabs
+  -> FromExpression params schema tables
+  -> FromExpression params schema tables
+offset off (FromExpression tabs clauses1) = FromExpression tabs
   (clauses1 <> Clauses Nothing Nothing (Just off))
 
 newtype Selection
@@ -315,21 +315,21 @@ newtype Selection
 
 starFrom
   :: tables ~ '[table ::: columns]
-  => TableExpression params schema tables
+  => FromExpression params schema tables
   -> Selection params schema columns
 starFrom tabs = UnsafeSelection $ "* FROM " <> renderTabulation tabs
 
 dotStarFrom
   :: HasTable table tables columns
   => Alias table
-  -> TableExpression params schema tables
+  -> FromExpression params schema tables
   -> Selection params schema columns
 Alias tab `dotStarFrom` tabs = UnsafeSelection $
   fromString (symbolVal' tab) <> ".* FROM" <> renderTabulation tabs
 
 from
   :: Rec (Aliased (Expression params tables)) columns
-  -> TableExpression params schema tables
+  -> FromExpression params schema tables
   -> Selection params schema columns
 list `from` tabs = UnsafeSelection $
   renderList list <> " FROM " <> renderTabulation tabs
@@ -360,9 +360,9 @@ select = UnsafeStatement . ("SELECT " <>) . (<> ";") . renderSelection
 
 subselect
   :: Aliased (Selection params schema) table
-  -> TableExpression params schema '[table]
-subselect selection = TableExpression
-  { tableRef = UnsafeTableRef . ("SELECT " <>) $
+  -> FromExpression params schema '[table]
+subselect selection = FromExpression
+  { tableRef = UnsafeJoinExpression . ("SELECT " <>) $
       renderAliased renderSelection selection
   , clauses = mempty
   }

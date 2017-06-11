@@ -93,7 +93,7 @@ spec = do
       let
         statement :: Statement '[] JoinTables JoinTables ValueColumns
         statement = select $ vals `from`
-          (tables (#orders & crossJoin #customers & crossJoin #shippers))
+          (join (#orders & cross #customers & cross #shippers))
       statement `shouldRenderAs`
         "SELECT\
         \ orders.orderVal AS orderVal,\
@@ -104,12 +104,12 @@ spec = do
         \ CROSS JOIN shippers;"
     it "should render INNER JOINs" $ do
       let
-        innerJoins :: TableExpression '[] JoinTables JoinTables
-        innerJoins = tables $
+        innerJoins :: FromExpression '[] JoinTables JoinTables
+        innerJoins = join $
           #orders
-          & innerJoin #customers
+          & inner #customers
             (#orders .&. #customerID ==* #customers .&. #customerID)
-          & innerJoin #shippers
+          & inner #shippers
             (#orders .&. #shipperID ==* #shippers .&. #shipperID)
         selection :: Statement '[] JoinTables JoinTables ValueColumns
         selection =  select $ vals `from` innerJoins
