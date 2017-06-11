@@ -362,7 +362,7 @@ subselect
   :: Aliased (Selection params schema) table
   -> FromExpression params schema '[table]
 subselect selection = FromExpression
-  { tableRef = UnsafeJoinExpression . ("SELECT " <>) $
+  { joinExpression = UnsafeJoinExpression . ("SELECT " <>) $
       renderAliased renderSelection selection
   , clauses = mempty
   }
