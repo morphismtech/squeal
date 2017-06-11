@@ -28,9 +28,9 @@ import qualified Data.ByteString as ByteString
 import Squeel.PostgreSQL.Schema
 
 newtype Expression
-  (params :: [PGType])
-  (tables :: [(Symbol,[(Symbol,PGType)])])
-  (ty :: PGType)
+  (params :: [NullityType])
+  (tables :: [(Symbol,[(Symbol,NullityType)])])
+  (ty :: NullityType)
   = UnsafeExpression { renderExpression :: ByteString }
 
 class KnownNat n => HasParameter (n :: Nat) params ty | n params -> ty where
@@ -94,7 +94,7 @@ unsafeFunction
 unsafeFunction fn x = UnsafeExpression $ mconcat
   [fn, "(", renderExpression x, ")"]
 
-instance PGNum ty => Num (Expression params tables ty) where
+instance PGNum ty => Num (Expression params tables (nullity ty)) where
   (+) = unsafeBinaryOp "+"
   (-) = unsafeBinaryOp "-"
   (*) = unsafeBinaryOp "*"
@@ -102,7 +102,7 @@ instance PGNum ty => Num (Expression params tables ty) where
   signum = unsafeFunction "sign"
   fromInteger = UnsafeExpression . fromString . show
 
-instance IsString (Expression params tables 'PGText) where
+instance IsString (Expression params tables (nullity 'PGText)) where
   fromString str = UnsafeExpression $
     "E\'" <> fromString (escape =<< str) <> "\'"
     where
@@ -117,7 +117,7 @@ instance IsString (Expression params tables 'PGText) where
         '\\' -> "\\\\"
         c -> [c]
 
-instance Boolean (Expression params tables 'PGBool) where
+instance Boolean (Expression params tables ('NotNull 'PGBool)) where
   true = UnsafeExpression "TRUE"
   false = UnsafeExpression "FALSE"
   notB = unsafeUnaryOp "NOT"
@@ -125,10 +125,10 @@ instance Boolean (Expression params tables 'PGBool) where
   (||*) = unsafeBinaryOp "OR"
 
 type instance BooleanOf (Expression params tables ty) =
-  Expression params tables 'PGBool
+  Expression params tables ('NotNull 'PGBool)
 
 caseWhenThenElse
-  :: [(Expression params tables 'PGBool, Expression params tables ty)]
+  :: [(Expression params tables ('NotNull 'PGBool), Expression params tables ty)]
   -> Expression params tables ty
   -> Expression params tables ty
 caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
@@ -158,9 +158,9 @@ instance OrdB (Expression params tables ty) where
   (<=*) = unsafeBinaryOp "<="
 
 newtype TableRef
-  (params :: [PGType])
-  (schema :: [(Symbol,[(Symbol,PGType)])])
-  (tables :: [(Symbol,[(Symbol,PGType)])])
+  (params :: [NullityType])
+  (schema :: [(Symbol,[(Symbol,NullityType)])])
+  (tables :: [(Symbol,[(Symbol,NullityType)])])
   = UnsafeTableRef { renderTableRef :: ByteString }
 
 class KnownSymbol table => HasTable table tables columns
@@ -182,7 +182,7 @@ crossJoin tab tabs = UnsafeTableRef $
 
 innerJoin
   :: TableRef params schema '[table]
-  -> Expression params (table ': tables) 'PGBool
+  -> Expression params (table ': tables) ('NotNull 'PGBool)
   -> TableRef params schema tables
   -> TableRef params schema (table ': tables)
 innerJoin tab on tabs = UnsafeTableRef $
@@ -192,10 +192,47 @@ innerJoin tab on tabs = UnsafeTableRef $
   <> " ON " <>
   renderExpression on
 
+leftOuterJoin
+  :: TableRef params schema '[right]
+  -> Expression params (right ': tables) ('NotNull 'PGBool)
+  -> TableRef params schema (left : tables)
+  -> TableRef params schema (NullifyTable right ': left ': tables)
+leftOuterJoin tab on tabs = UnsafeTableRef $
+  renderTableRef tabs
+  <> " LEFT OUTER JOIN " <>
+  renderTableRef tab
+  <> " ON " <>
+  renderExpression on
+
+rightOuterJoin
+  :: TableRef params schema '[right]
+  -> Expression params (right ': tables) ('NotNull 'PGBool)
+  -> TableRef params schema (left : tables)
+  -> TableRef params schema (right ': NullifyTable left ': tables)
+rightOuterJoin tab on tabs = UnsafeTableRef $
+  renderTableRef tabs
+  <> " RIGHT OUTER JOIN " <>
+  renderTableRef tab
+  <> " ON " <>
+  renderExpression on
+
+fullOuterJoin
+  :: TableRef params schema '[right]
+  -> Expression params (right ': tables) ('NotNull 'PGBool)
+  -> TableRef params schema (left : tables)
+  -> TableRef params schema
+      (NullifyTable right ': NullifyTable left ': tables)
+fullOuterJoin tab on tabs = UnsafeTableRef $
+  renderTableRef tabs
+  <> " FULL OUTER JOIN " <>
+  renderTableRef tab
+  <> " ON " <>
+  renderExpression on
+
 data Clauses params tables = Clauses
-  { whereClause :: Maybe (Expression params tables 'PGBool)
-  , limitClause :: Maybe (Expression params '[] 'PGInt8)
-  , offsetClause :: Maybe (Expression params '[] 'PGInt8)
+  { whereClause :: Maybe (Expression params tables ('NotNull 'PGBool))
+  , limitClause :: Maybe (Expression params '[] ('NotNull 'PGInt8))
+  , offsetClause :: Maybe (Expression params '[] ('NotNull 'PGInt8))
   }
 
 instance Monoid (Clauses params tables) where
@@ -219,9 +256,9 @@ instance Monoid (Clauses params tables) where
     }
 
 data TableExpression
-  (params :: [PGType])
-  (schema :: [(Symbol,[(Symbol,PGType)])])
-  (tables :: [(Symbol,[(Symbol,PGType)])])
+  (params :: [NullityType])
+  (schema :: [(Symbol,[(Symbol,NullityType)])])
+  (tables :: [(Symbol,[(Symbol,NullityType)])])
   = TableExpression
   { tableRef :: TableRef params schema tables
   , clauses :: Clauses params tables
@@ -249,30 +286,30 @@ instance (HasTable table schema columns, table ~ table')
     fromLabel p = TableExpression (getTable p) mempty
 
 where_
-  :: Expression params tables 'PGBool
+  :: Expression params tables ('NotNull 'PGBool)
   -> TableExpression params schema tables
   -> TableExpression params schema tables
 where_ wh (TableExpression tabs clauses1) = TableExpression tabs
   (clauses1 <> Clauses (Just wh) Nothing Nothing)
 
 limit
-  :: Expression params '[] 'PGInt8
+  :: Expression params '[] ('NotNull 'PGInt8)
   -> TableExpression params schema tables
   -> TableExpression params schema tables
 limit lim (TableExpression tabs clauses1) = TableExpression tabs
   (clauses1 <> Clauses Nothing (Just lim) Nothing)
 
 offset
-  :: Expression params '[] 'PGInt8
+  :: Expression params '[] ('NotNull 'PGInt8)
   -> TableExpression params schema tables
   -> TableExpression params schema tables
 offset off (TableExpression tabs clauses1) = TableExpression tabs
   (clauses1 <> Clauses Nothing Nothing (Just off))
 
 newtype Selection
-  (params :: [PGType])
-  (schema :: [(Symbol,[(Symbol,PGType)])])
-  (columns :: [(Symbol,PGType)])
+  (params :: [NullityType])
+  (schema :: [(Symbol,[(Symbol,NullityType)])])
+  (columns :: [(Symbol,NullityType)])
     = UnsafeSelection
     { renderSelection :: ByteString }
 
@@ -282,12 +319,12 @@ starFrom
   -> Selection params schema columns
 starFrom tabs = UnsafeSelection $ "* FROM " <> renderTabulation tabs
 
-tableStarFrom
+dotStarFrom
   :: HasTable table tables columns
   => Alias table
   -> TableExpression params schema tables
   -> Selection params schema columns
-Alias tab `tableStarFrom` tabs = UnsafeSelection $
+Alias tab `dotStarFrom` tabs = UnsafeSelection $
   fromString (symbolVal' tab) <> ".* FROM" <> renderTabulation tabs
 
 from
@@ -303,17 +340,17 @@ list `from` tabs = UnsafeSelection $
       . rmap (Const . renderAliased renderExpression)
 
 newtype Statement
-  (params :: [PGType])
-  (schema0 :: [(Symbol,[(Symbol,PGType)])])
-  (schema1 :: [(Symbol,[(Symbol,PGType)])])
-  (columns :: [(Symbol,PGType)])
+  (params :: [NullityType])
+  (schema0 :: [(Symbol,[(Symbol,NullityType)])])
+  (schema1 :: [(Symbol,[(Symbol,NullityType)])])
+  (columns :: [(Symbol,NullityType)])
     = UnsafeStatement { renderStatement :: ByteString }
 
 newtype PreparedStatement
-  (params :: [PGType])
-  (schema0 :: [(Symbol,[(Symbol,PGType)])])
-  (schema1 :: [(Symbol,[(Symbol,PGType)])])
-  (columns :: [(Symbol,PGType)])
+  (params :: [NullityType])
+  (schema0 :: [(Symbol,[(Symbol,NullityType)])])
+  (schema1 :: [(Symbol,[(Symbol,NullityType)])])
+  (columns :: [(Symbol,NullityType)])
     = UnsafePreparedStatement { renderPreparedStatement :: ByteString }
 
 select

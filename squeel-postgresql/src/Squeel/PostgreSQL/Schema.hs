@@ -9,6 +9,7 @@
   , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
+  , TypeFamilies
   , TypeOperators
 #-}
 
@@ -23,6 +24,10 @@ module Squeel.PostgreSQL.Schema
   , KnownPGType (..)
   , KnownColumns (..)
   , renderAliased
+  , NullityType (..)
+  , NullifyType
+  , NullifyColumns
+  , NullifyTable
   , module GHC.OverloadedLabels
   , module GHC.TypeLits
   ) where
@@ -134,24 +139,59 @@ instance KnownPGType 'PGUuid where renderPGType _ = "uuid"
 instance KnownPGType 'PGJson where renderPGType _ = "json"
 instance KnownPGType 'PGJsonb where renderPGType _ = "jsonb"
 
-class KnownColumns (columns :: [(Symbol,PGType)]) where
+class KnownColumns (columns :: [(Symbol,NullityType)]) where
   renderColumns :: Proxy# columns -> ByteString
 instance
   ( KnownSymbol column
   , KnownPGType ty
-  ) => KnownColumns '[column ::: ty] where
+  ) => KnownColumns '[column ::: 'NotNull ty] where
     renderColumns _ =
       fromString (symbolVal' (proxy# :: Proxy# column))
       <> " "
       <> renderPGType (proxy# :: Proxy# ty)
+      <> " NOT NULL"
+instance
+  ( KnownSymbol column
+  , KnownPGType ty
+  ) => KnownColumns '[column ::: 'Null ty] where
+    renderColumns _ =
+      fromString (symbolVal' (proxy# :: Proxy# column))
+      <> " "
+      <> renderPGType (proxy# :: Proxy# ty)
+      <> " NULL"
 instance
   ( KnownSymbol column
   , KnownPGType ty
   , KnownColumns (columnsHead ': columnsTail)
-  ) => KnownColumns ((column ::: ty) ': columnsHead ': columnsTail) where
+  ) => KnownColumns ((column ::: 'NotNull ty) ': columnsHead ': columnsTail) where
     renderColumns _ =
       fromString (symbolVal' (proxy# :: Proxy# column))
       <> " "
       <> renderPGType (proxy# :: Proxy# ty)
-      <> ", "
+      <> " NOT NULL, "
       <> renderColumns (proxy# :: Proxy# (columnsHead ': columnsTail))
+instance
+  ( KnownSymbol column
+  , KnownPGType ty
+  , KnownColumns (columnsHead ': columnsTail)
+  ) => KnownColumns ((column ::: 'Null ty) ': columnsHead ': columnsTail) where
+    renderColumns _ =
+      fromString (symbolVal' (proxy# :: Proxy# column))
+      <> " "
+      <> renderPGType (proxy# :: Proxy# ty)
+      <> " NULL, "
+      <> renderColumns (proxy# :: Proxy# (columnsHead ': columnsTail))
+
+data NullityType = Null PGType | NotNull PGType
+
+type family NullifyType nullty where
+  NullifyType ('Null ty) = 'Null ty
+  NullifyType ('NotNull ty) = 'Null ty
+
+type family NullifyColumns columns where
+  NullifyColumns '[] = '[]
+  NullifyColumns ((column ::: ty) ': columns) =
+    (column ::: (NullifyType ty)) ': (NullifyColumns columns)
+
+type family NullifyTable table where
+  NullifyTable (table ::: columns) = table ::: NullifyColumns columns
