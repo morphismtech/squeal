@@ -15,6 +15,7 @@ module Squeel.PostgreSQL.Statement where
 
 import Data.Boolean
 import Data.ByteString (ByteString)
+import Data.Maybe
 import Data.Monoid
 import Data.String
 import Data.Vinyl
@@ -410,3 +411,34 @@ instance {-# OVERLAPPING #-}
 instance {-# OVERLAPPABLE #-}
   (KnownSymbol table, DropTable table schema0 schema1)
     => DropTable table (tabCols ': schema0) (tabCols ': schema1)
+
+set :: g x -> (Maybe `Compose` g) x
+set = Compose . Just
+
+same :: (Maybe `Compose` g) x
+same = Compose Nothing
+
+update
+  :: HasTable table schema columns
+  => Alias table
+  -> Rec (Aliased (Maybe `Compose` Expression params '[table ::: columns])) columns
+  -> Expression params '[table ::: columns] ('NotNull 'PGBool)
+  -> Statement params schema schema '[]
+update (Alias table) columns where' = UnsafeStatement $ mconcat
+  [ "UPDATE "
+  , fromString $ symbolVal' table
+  , " SET "
+  , ByteString.intercalate ", " . catMaybes . recordToList $
+      rmap (Const . renderSet) columns
+  , " WHERE ", renderExpression where'
+  ] where
+    renderSet
+      :: Aliased (Maybe `Compose` Expression params tables) column
+      -> Maybe ByteString
+    renderSet = \case
+      Compose (Just expression) `As` Alias column -> Just $ mconcat
+        [ fromString $ symbolVal' column
+        , " = "
+        , renderExpression expression
+        ]
+      Compose Nothing `As` _ -> Nothing
