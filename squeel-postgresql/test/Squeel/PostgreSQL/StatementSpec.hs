@@ -127,9 +127,8 @@ spec = do
       let
         statement :: Statement '[] JoinTables JoinTables OrderColumns
         statement = select $ #orders1 `dotStarFrom`
-          (join
-            ( Table (#orders `As` #orders1)
-              & Cross (#orders `As` #orders2)))
+          (join (Table (#orders `As` #orders1)
+            & Cross (#orders `As` #orders2)))
       statement `shouldRenderAs`
         "SELECT orders1.*\
         \ FROM orders AS orders1\
