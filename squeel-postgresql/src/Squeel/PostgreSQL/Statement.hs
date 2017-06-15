@@ -129,6 +129,17 @@ instance Boolean (Expression params tables ('NotNull 'PGBool)) where
 type instance BooleanOf (Expression params tables ty) =
   Expression params tables ('NotNull 'PGBool)
 
+coalesce
+  :: [Expression params tables ('Null x)]
+  -> Expression params tables ('NotNull x)
+  -> Expression params tables ('NotNull x)
+coalesce nulls notNull = UnsafeExpression $ mconcat
+  [ "COALESCE("
+  , ByteString.intercalate ", " $ map renderExpression nulls
+  , ", ", renderExpression notNull
+  , ")"
+  ]
+
 caseWhenThenElse
   :: [(Expression params tables ('NotNull 'PGBool), Expression params tables ty)]
   -> Expression params tables ty
