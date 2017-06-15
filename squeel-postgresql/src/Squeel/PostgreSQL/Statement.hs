@@ -181,6 +181,22 @@ data JoinExpression params schema tables where
     -> Expression params (table ': tables) ('NotNull 'PGBool)
     -> JoinExpression params schema tables
     -> JoinExpression params schema (table ': tables)
+  LeftOuter
+    :: Aliased (TableExpression params schema) right
+    -> Expression params '[left,right] ('NotNull 'PGBool)
+    -> JoinExpression params schema (tables)
+    -> JoinExpression params schema (NullifyTable right ': left ': tables)
+  RightOuter
+    :: Aliased (TableExpression params schema) right
+    -> Expression params '[left,right] ('NotNull 'PGBool)
+    -> JoinExpression params schema (left : tables)
+    -> JoinExpression params schema (right ': NullifyTable left ': tables)
+  FullOuter
+    :: Aliased (TableExpression params schema) right
+    -> Expression params '[left,right] ('NotNull 'PGBool)
+    -> JoinExpression params schema (left : tables)
+    -> JoinExpression params schema
+        (NullifyTable right ': NullifyTable left ': tables)
 
 renderJoinExpression :: JoinExpression params schema tables -> ByteString
 renderJoinExpression = \case
@@ -194,6 +210,27 @@ renderJoinExpression = \case
   Inner table on tables -> mconcat
     [ renderJoinExpression tables
     , " INNER JOIN "
+    , renderAliased renderTableExpression table
+    , " ON "
+    , renderExpression on
+    ]
+  LeftOuter table on tables -> mconcat
+    [ renderJoinExpression tables
+    , " LEFT OUTER JOIN "
+    , renderAliased renderTableExpression table
+    , " ON "
+    , renderExpression on
+    ]
+  RightOuter table on tables -> mconcat
+    [ renderJoinExpression tables
+    , " RIGHT OUTER JOIN "
+    , renderAliased renderTableExpression table
+    , " ON "
+    , renderExpression on
+    ]
+  FullOuter table on tables -> mconcat
+    [ renderJoinExpression tables
+    , " FULL OUTER JOIN "
     , renderAliased renderTableExpression table
     , " ON "
     , renderExpression on
@@ -216,44 +253,6 @@ instance HasTable table schema columns
 instance HasTable table schema columns
   => IsLabel table (JoinExpression params schema '[table ::: columns]) where
     fromLabel p = Table $ fromLabel p
-
-
--- leftOuter
---   :: JoinExpression params schema '[right]
---   -> Expression params (right ': left : tables) ('NotNull 'PGBool)
---   -> JoinExpression params schema (tables)
---   -> JoinExpression params schema (NullifyTable right ': left ': tables)
--- leftOuter tab on tabs = UnsafeJoinExpression $
---   renderJoinExpression tabs
---   <> " LEFT OUTER JOIN " <>
---   renderJoinExpression tab
---   <> " ON " <>
---   renderExpression on
---
--- rightOuter
---   :: JoinExpression params schema '[right]
---   -> Expression params (right ': tables) ('NotNull 'PGBool)
---   -> JoinExpression params schema (left : tables)
---   -> JoinExpression params schema (right ': NullifyTable left ': tables)
--- rightOuter tab on tabs = UnsafeJoinExpression $
---   renderJoinExpression tabs
---   <> " RIGHT OUTER JOIN " <>
---   renderJoinExpression tab
---   <> " ON " <>
---   renderExpression on
---
--- fullOuter
---   :: JoinExpression params schema '[right]
---   -> Expression params (right ': left ': tables) ('NotNull 'PGBool)
---   -> JoinExpression params schema (left : tables)
---   -> JoinExpression params schema
---       (NullifyTable right ': NullifyTable left ': tables)
--- fullOuter tab on tabs = UnsafeJoinExpression $
---   renderJoinExpression tabs
---   <> " FULL OUTER JOIN " <>
---   renderJoinExpression tab
---   <> " ON " <>
---   renderExpression on
 
 data Clauses params tables = Clauses
   { whereClause :: Maybe (Expression params tables ('NotNull 'PGBool))
