@@ -377,6 +377,13 @@ newtype Statement
   (columns :: [(Symbol,NullityType)])
     = UnsafeStatement { renderStatement :: ByteString }
 
+(.>>.)
+  :: Statement params schema0 schema1 '[]
+  -> Statement params schema1 schema2 results
+  -> Statement params schema0 schema2 results
+statement1 .>>. statement2 = UnsafeStatement $
+  renderStatement statement1 <> " " <> renderStatement statement2
+
 newtype PreparedStatement
   (params :: [NullityType])
   (schema0 :: [(Symbol,[(Symbol,NullityType)])])
