@@ -35,8 +35,8 @@ import Squeel.PostgreSQL.Schema
 newtype Connection db = Connection { unConnection :: LibPQ.Connection }
 
 newtype PQ
-  (db0 :: [(Symbol,[(Symbol,PGType)])])
-  (db1 :: [(Symbol,[(Symbol,PGType)])])
+  (db0 :: [(Symbol,[(Symbol,NullityType)])])
+  (db1 :: [(Symbol,[(Symbol,NullityType)])])
   (m :: * -> *)
   (x :: *) =
     PQ { runPQ :: Connection db0 -> m (x, Connection db1) }

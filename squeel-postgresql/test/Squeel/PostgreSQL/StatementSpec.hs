@@ -28,7 +28,7 @@ spec = do
         ((#col1 + #col2) `As` #sum :& #col1 :& RNil)
           `from` (#table1 & where_ true)
     statement `shouldRenderAs`
-      "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 WHERE TRUE;"
+      "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE TRUE;"
   it "combines WHEREs using AND" $ do
     let
       statement :: Statement '[] Tables Tables SumAndCol1
@@ -36,40 +36,40 @@ spec = do
         ((#col1 + #col2) `As` #sum :& #col1 :& RNil)
           `from` (#table1 & where_ true & where_ false)
     statement `shouldRenderAs`
-      "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 WHERE (TRUE AND FALSE);"
+      "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE (TRUE AND FALSE);"
   it "performs sub SELECTs" $ do
     let
       selection = ((#col1 + #col2) `As` #sum :& #col1 :& RNil) `from` #table1
       statement :: Statement '[] Tables Tables SumAndCol1
       statement = select $ starFrom (subselect (selection `As` #sub))
     statement `shouldRenderAs`
-      "SELECT * FROM SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS sub;"
+      "SELECT * FROM SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 AS sub;"
   it "does LIMIT clauses" $ do
     let
       statement :: Statement '[] Tables Tables Columns
       statement = select $ starFrom (#table1 & limit 1)
-    statement `shouldRenderAs` "SELECT * FROM table1 LIMIT 1;"
+    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 LIMIT 1;"
   it "should use the minimum of given LIMITs" $ do
     let
       statement :: Statement '[] Tables Tables Columns
       statement = select $ starFrom (#table1 & limit 1 & limit 2)
     statement `shouldRenderAs`
-      "SELECT * FROM table1 LIMIT CASE WHEN (1 <= 2) THEN 1 ELSE 2 END;"
+      "SELECT * FROM table1 AS table1 LIMIT CASE WHEN (1 <= 2) THEN 1 ELSE 2 END;"
   it "should render parameters using $ signs" $ do
     let
-      statement :: Statement '[ 'PGInt8] Tables Tables Columns
+      statement :: Statement '[ 'NotNull 'PGInt8] Tables Tables Columns
       statement = select $ starFrom (#table1 & limit param1)
-    statement `shouldRenderAs` "SELECT * FROM table1 LIMIT $1;"
+    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 LIMIT $1;"
   it "does OFFSET clauses" $ do
     let
       statement :: Statement '[] Tables Tables Columns
       statement = select $ starFrom (#table1 & offset 1)
-    statement `shouldRenderAs` "SELECT * FROM table1 OFFSET 1;"
+    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET 1;"
   it "should use the sum of given OFFSETs" $ do
     let
       statement :: Statement '[] Tables Tables Columns
       statement =  select $ starFrom (#table1 & offset 1 & offset 2)
-    statement `shouldRenderAs` "SELECT * FROM table1 OFFSET (1 + 2);"
+    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET (1 + 2);"
   it "correctly render simple INSERTs" $ do
     let
       statement :: Statement '[] Tables Tables '[]
@@ -93,23 +93,23 @@ spec = do
       let
         statement :: Statement '[] JoinTables JoinTables ValueColumns
         statement = select $ vals `from`
-          (tables (#orders & crossJoin #customers & crossJoin #shippers))
+          (join (#orders & Cross #customers & Cross #shippers))
       statement `shouldRenderAs`
         "SELECT\
         \ orders.orderVal AS orderVal,\
         \ customers.customerVal AS customerVal,\
         \ shippers.shipperVal AS shipperVal\
-        \ FROM orders\
-        \ CROSS JOIN customers\
-        \ CROSS JOIN shippers;"
+        \ FROM orders AS orders\
+        \ CROSS JOIN customers AS customers\
+        \ CROSS JOIN shippers AS shippers;"
     it "should render INNER JOINs" $ do
       let
-        innerJoins :: TableExpression '[] JoinTables JoinTables
-        innerJoins = tables $
+        innerJoins :: FromExpression '[] JoinTables JoinTables
+        innerJoins = join $
           #orders
-          & innerJoin #customers
+          & Inner #customers
             (#orders .&. #customerID ==* #customers .&. #customerID)
-          & innerJoin #shippers
+          & Inner #shippers
             (#orders .&. #shipperID ==* #shippers .&. #shipperID)
         selection :: Statement '[] JoinTables JoinTables ValueColumns
         selection =  select $ vals `from` innerJoins
@@ -118,46 +118,55 @@ spec = do
         \ orders.orderVal AS orderVal,\
         \ customers.customerVal AS customerVal,\
         \ shippers.shipperVal AS shipperVal\
-        \ FROM orders\
-        \ INNER JOIN customers\
+        \ FROM orders AS orders\
+        \ INNER JOIN customers AS customers\
         \ ON (orders.customerID = customers.customerID)\
-        \ INNER JOIN shippers\
+        \ INNER JOIN shippers AS shippers\
         \ ON (orders.shipperID = shippers.shipperID);"
+    it "should render self JOINs" $ do
+      let
+        statement :: Statement '[] JoinTables JoinTables OrderColumns
+        statement = select $ #orders1 `dotStarFrom`
+          (join (Table (#orders `As` #orders1)
+            & Cross (#orders `As` #orders2)))
+      statement `shouldRenderAs`
+        "SELECT orders1.*\
+        \ FROM orders AS orders1\
+        \ CROSS JOIN orders AS orders2;"
   it "should render simple CREATE TABLE statements" $ do
     let
       statement :: Statement '[] '[] Tables '[]
       statement = createTable #table1 (proxy# :: Proxy# Columns)
     statement `shouldRenderAs`
-      "CREATE TABLE table1 (col1 int4, col2 int4);"
+      "CREATE TABLE table1 (col1 int4 NOT NULL, col2 int4 NOT NULL);"
   it "should render DROP TABLE statements" $ do
     let
       statement :: Statement '[] Tables '[] '[]
       statement = dropTable #table1
-    statement `shouldRenderAs`
-      "DROP TABLE table1;"
+    statement `shouldRenderAs` "DROP TABLE table1;"
 
-type Columns = '[ "col1" ::: 'PGInt4, "col2" ::: 'PGInt4]
+type Columns = '[ "col1" ::: 'NotNull 'PGInt4, "col2" ::: 'NotNull 'PGInt4]
 type Tables = '[ "table1" ::: Columns ]
-type SumAndCol1 = '[ "sum" ::: 'PGInt4, "col1" ::: 'PGInt4]
-type StudentsColumns = '["name" ::: 'PGText]
+type SumAndCol1 = '[ "sum" ::: 'NotNull 'PGInt4, "col1" ::: 'NotNull 'PGInt4]
+type StudentsColumns = '["name" ::: 'NotNull 'PGText]
 type StudentsTable = '["students" ::: StudentsColumns]
 type OrderColumns =
-  [ "orderID"    ::: 'PGInt4
-  , "orderVal"   ::: 'PGText
-  , "customerID" ::: 'PGInt4
-  , "shipperID"  ::: 'PGInt4
+  [ "orderID"    ::: 'NotNull 'PGInt4
+  , "orderVal"   ::: 'NotNull 'PGText
+  , "customerID" ::: 'NotNull 'PGInt4
+  , "shipperID"  ::: 'NotNull 'PGInt4
   ]
 type CustomerColumns =
-  [ "customerID" ::: 'PGInt4, "customerVal" ::: 'PGFloat4 ]
+  [ "customerID" ::: 'NotNull 'PGInt4, "customerVal" ::: 'NotNull 'PGFloat4 ]
 type ShipperColumns =
-  [ "shipperID" ::: 'PGInt4, "shipperVal" ::: 'PGBool ]
+  [ "shipperID" ::: 'NotNull 'PGInt4, "shipperVal" ::: 'NotNull 'PGBool ]
 type JoinTables =
   [ "shippers"  ::: ShipperColumns
   , "customers" ::: CustomerColumns
   , "orders"    ::: OrderColumns
   ]
 type ValueColumns =
-  [ "orderVal"    ::: 'PGText
-  , "customerVal" ::: 'PGFloat4
-  , "shipperVal"  ::: 'PGBool
+  [ "orderVal"    ::: 'NotNull 'PGText
+  , "customerVal" ::: 'NotNull 'PGFloat4
+  , "shipperVal"  ::: 'NotNull 'PGBool
   ]
