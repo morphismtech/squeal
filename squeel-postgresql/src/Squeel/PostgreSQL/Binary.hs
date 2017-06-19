@@ -9,7 +9,7 @@
   , TypeOperators
 #-}
 
-module Squeel.PostgreSQL.Value where
+module Squeel.PostgreSQL.Binary where
 
 import Control.Arrow (left)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeStrict, encode)
@@ -80,6 +80,15 @@ instance FromValue 'PGTimestampTZ UTCTime where
   fromValue _ = Decoder.timestamptz_int
 instance FromValue 'PGInterval DiffTime where
   fromValue _ = Decoder.interval_int
+
+class FromValues pgs xs where
+  decodeValues :: Proxy# pgs -> Rec (Const ByteString) xs -> Rec (Either Text) xs
+instance FromValues '[] '[] where decodeValues _ _ = RNil
+instance (FromValue pg x, FromValues pgs xs)
+  => FromValues (pg ': pgs) (x ': xs) where
+    decodeValues _ (Const result :& results) =
+      decodeValue (proxy# :: Proxy# pg) result
+      :& decodeValues (proxy# :: Proxy# pgs) results
 
 class ToValue x (pg :: PGType) where
   toValue :: Proxy# pg -> Encoder x
