@@ -1,5 +1,7 @@
+{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE
     DataKinds
+  , FunctionalDependencies
   , PolyKinds
   , DeriveFunctor
   , FlexibleContexts
@@ -181,20 +183,25 @@ newtype RowNumber = RowNumber { unRowNumber :: LibPQ.Row }
 
 newtype ColumnNumber cs c = ColumnNumber { unColumnNumber :: LibPQ.Column }
 
+class KnownNat n => HasColumnNumber (n :: Nat) columns column
+  | n columns -> column where
+  colNum :: Proxy# n -> ColumnNumber columns column
+  colNum p = ColumnNumber . fromIntegral $ natVal' p
+instance {-# OVERLAPPING #-} HasColumnNumber 1 (column1:columns) column1
+instance {-# OVERLAPPABLE #-}
+  (KnownNat n, HasColumnNumber (n-1) columns column)
+    => HasColumnNumber n (column' : columns) column
+
 colNum0 :: ColumnNumber (c0:cs) c0
-colNum0 = ColumnNumber 0
-
+colNum0 = colNum (proxy# :: Proxy# 1)
 colNum1 :: ColumnNumber (c0:c1:cs) c1
-colNum1 = ColumnNumber 1
-
+colNum1 = colNum (proxy# :: Proxy# 2)
 colNum2 :: ColumnNumber (c0:c1:c2:cs) c2
-colNum2 = ColumnNumber 2
-
+colNum2 = colNum (proxy# :: Proxy# 3)
 colNum3 :: ColumnNumber (c0:c1:c2:c3:cs) c3
-colNum3 = ColumnNumber 3
-
+colNum3 = colNum (proxy# :: Proxy# 4)
 colNum4 :: ColumnNumber (c0:c1:c2:c3:c4:cs) c4
-colNum4 = ColumnNumber 4
+colNum4 = colNum (proxy# :: Proxy# 5)
 
 getvalue
   :: (FromValue x y, MonadBase IO io)
