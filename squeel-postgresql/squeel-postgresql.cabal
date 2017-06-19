@@ -13,10 +13,10 @@ cabal-version: >=1.10
 library
   hs-source-dirs: src
   exposed-modules:
+    Squeel.PostgreSQL.Binary
     Squeel.PostgreSQL.PQ
     Squeel.PostgreSQL.Statement
     Squeel.PostgreSQL.Schema
-    Squeel.PostgreSQL.Value
   default-language: Haskell2010
   ghc-options: -Wall -Werror
   build-depends:

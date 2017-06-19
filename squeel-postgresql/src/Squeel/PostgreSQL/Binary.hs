@@ -9,7 +9,7 @@
   , TypeOperators
 #-}
 
-module Squeel.PostgreSQL.Value where
+module Squeel.PostgreSQL.Binary where
 
 import Control.Arrow (left)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeStrict, encode)

@@ -28,8 +28,8 @@ import GHC.TypeLits
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
+import Squeel.PostgreSQL.Binary
 import Squeel.PostgreSQL.Statement
-import Squeel.PostgreSQL.Value
 import Squeel.PostgreSQL.Schema
 
 newtype Connection db = Connection { unConnection :: LibPQ.Connection }
