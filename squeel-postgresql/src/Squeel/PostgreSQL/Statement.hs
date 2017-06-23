@@ -378,9 +378,9 @@ newtype Statement
     = UnsafeStatement { renderStatement :: ByteString }
 
 (.>>.)
-  :: Statement params schema0 schema1 '[]
-  -> Statement params schema1 schema2 results
-  -> Statement params schema0 schema2 results
+  :: Statement '[] schema0 schema1 '[]
+  -> Statement '[] schema1 schema2 results
+  -> Statement '[] schema0 schema2 results
 statement1 .>>. statement2 = UnsafeStatement $
   renderStatement statement1 <> " " <> renderStatement statement2
 

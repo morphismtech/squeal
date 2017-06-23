@@ -68,6 +68,13 @@ data PGType
   | PGJsonb
 
 class ToOid pg where toOid :: Proxy# pg -> LibPQ.Oid
+--staticTypeInfo
+instance ToOid 'PGBool where toOid _ = LibPQ.Oid 16
+instance ToOid 'PGBytea where toOid _ = LibPQ.Oid 17
+instance ToOid 'PGInt8 where toOid _ = LibPQ.Oid 20
+instance ToOid 'PGInt2 where toOid _ = LibPQ.Oid 21
+instance ToOid 'PGInt4 where toOid _ = LibPQ.Oid 23
+instance ToOid 'PGText where toOid _ = LibPQ.Oid 26
 class ToOids pgs where toOids :: Proxy# pgs -> [LibPQ.Oid]
 instance ToOids '[] where toOids _ = []
 instance (ToOid pg, ToOids pgs) => ToOids (pg ': pgs) where
