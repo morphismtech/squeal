@@ -11,6 +11,8 @@
 
 module Squeel.PostgreSQL.Binary where
 
+import Debug.Trace
+
 import Control.Arrow (left)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeStrict, encode)
 import Data.ByteString (ByteString)
@@ -36,12 +38,12 @@ import Squeel.PostgreSQL.Schema
 decodeValue :: FromValue pg x => Proxy# pg -> ByteString -> Either Text x
 decodeValue p = Decoder.run $ fromValue p
 
-class FromValue (pg :: PGType) x where
+class FromValue pg x where
   fromValue :: Proxy# pg -> Decoder x
 instance FromValue 'PGInt2 Int16 where
   fromValue _ = Decoder.int
 instance FromValue 'PGInt4 Int32 where
-  fromValue _ = Decoder.int
+  fromValue _ = trace "Decoder.int" Decoder.int
 instance FromValue 'PGInt8 Int64 where
   fromValue _ = Decoder.int
 instance FromValue 'PGFloat4 Float where
@@ -80,6 +82,8 @@ instance FromValue 'PGTimestampTZ UTCTime where
   fromValue _ = Decoder.timestamptz_int
 instance FromValue 'PGInterval DiffTime where
   fromValue _ = Decoder.interval_int
+instance FromValue pg ty => FromValue (column ::: 'NotNull pg) ty where
+  fromValue _ = fromValue (proxy# :: Proxy# pg)
 
 class FromValues pgs xs where
   decodeValues :: Proxy# pgs -> Rec (Const ByteString) xs -> Rec (Either Text) xs
@@ -90,7 +94,7 @@ instance (FromValue pg x, FromValues pgs xs)
       decodeValue (proxy# :: Proxy# pg) result
       :& decodeValues (proxy# :: Proxy# pgs) results
 
-class ToValue x (pg :: PGType) where
+class ToValue x pg where
   toValue :: Proxy# pg -> Encoder x
 instance ToValue Int16 'PGInt2 where
   toValue _ = Encoder.int2_int16

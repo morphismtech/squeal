@@ -17,6 +17,8 @@
 
 module Squeel.PostgreSQL.PQ where
 
+import Debug.Trace
+
 import Control.Exception.Lifted
 import Control.Monad.Base
 import Control.Monad.Trans
@@ -187,28 +189,28 @@ class KnownNat n => HasColumnNumber (n :: Nat) columns column
   | n columns -> column where
   colNum :: Proxy# n -> ColumnNumber columns column
   colNum p = ColumnNumber . fromIntegral $ natVal' p
-instance {-# OVERLAPPING #-} HasColumnNumber 1 (column1:columns) column1
+instance {-# OVERLAPPING #-} HasColumnNumber 0 (column1:columns) column1
 instance {-# OVERLAPPABLE #-}
   (KnownNat n, HasColumnNumber (n-1) columns column)
     => HasColumnNumber n (column' : columns) column
 
 colNum0 :: ColumnNumber (c0:cs) c0
-colNum0 = colNum (proxy# :: Proxy# 1)
+colNum0 = colNum (proxy# :: Proxy# 0)
 colNum1 :: ColumnNumber (c0:c1:cs) c1
-colNum1 = colNum (proxy# :: Proxy# 2)
+colNum1 = colNum (proxy# :: Proxy# 1)
 colNum2 :: ColumnNumber (c0:c1:c2:cs) c2
-colNum2 = colNum (proxy# :: Proxy# 3)
+colNum2 = colNum (proxy# :: Proxy# 2)
 colNum3 :: ColumnNumber (c0:c1:c2:c3:cs) c3
-colNum3 = colNum (proxy# :: Proxy# 4)
+colNum3 = colNum (proxy# :: Proxy# 3)
 colNum4 :: ColumnNumber (c0:c1:c2:c3:c4:cs) c4
-colNum4 = colNum (proxy# :: Proxy# 5)
+colNum4 = colNum (proxy# :: Proxy# 4)
 
 getvalue
   :: (FromValue x y, MonadBase IO io)
-  => Proxy# x
-  -> Result xs
+  => Result xs
   -> RowNumber
   -> ColumnNumber xs x
   -> io (Maybe (Either Text y))
-getvalue proxy (Result result) (RowNumber r) (ColumnNumber c) = liftBase $
-  fmap (fmap (decodeValue proxy)) (LibPQ.getvalue result r c)
+getvalue (Result result) (RowNumber r) (ColumnNumber c :: ColumnNumber xs x) =
+  liftBase $ fmap (fmap (decodeValue (proxy# :: Proxy# x)))
+    (traceShowId <$> LibPQ.getvalue' result r c)
