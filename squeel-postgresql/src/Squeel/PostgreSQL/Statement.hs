@@ -66,10 +66,10 @@ instance (HasColumn column columns ty, tables ~ '[table ::: columns])
   => IsLabel column (Expression params tables ty) where
     fromLabel = getColumn
 
-(.&.)
+(&.)
   :: (HasTable table tables columns, HasColumn column columns ty)
   => Alias table -> Alias column -> Expression params tables ty
-Alias table .&. Alias column = UnsafeExpression $
+Alias table &. Alias column = UnsafeExpression $
   fromString (symbolVal' table)
   <> "." <>
   fromString (symbolVal' column)
@@ -377,11 +377,11 @@ newtype Statement
   (columns :: [(Symbol,NullityType)])
     = UnsafeStatement { renderStatement :: ByteString }
 
-(.>>.)
+(&>>)
   :: Statement '[] schema0 schema1 '[]
   -> Statement '[] schema1 schema2 results
   -> Statement '[] schema0 schema2 results
-statement1 .>>. statement2 = UnsafeStatement $
+statement1 &>> statement2 = UnsafeStatement $
   renderStatement statement1 <> " " <> renderStatement statement2
 
 newtype PreparedStatement

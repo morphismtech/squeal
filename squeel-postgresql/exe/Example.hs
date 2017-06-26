@@ -27,20 +27,13 @@ main = do
   Char8.putStrLn "creating tables"
   connection1 <- flip execPQ connection0 $ pqExec $
     createTable #table1 (proxy# :: Proxy# Columns)
-    .>>.
-    createTable #students (proxy# :: Proxy# StudentsColumns)
-    .>>.
-    createTable #shippers (proxy# :: Proxy# ShipperColumns)
-    .>>.
-    createTable #customers (proxy# :: Proxy# CustomerColumns)
-    .>>.
-    createTable #orders (proxy# :: Proxy# OrderColumns)
   connection2 <- flip execPQ connection1 $ do
     _insertTable1Result <- pqExec $
       insertInto #table1 ( 1 `As` #col1 :& 2 `As` #col2 :& RNil )
-      .>>.
+      &>>
       insertInto #table1 ( 3 `As` #col1 :& 4 `As` #col2 :& RNil )
-    Just selectTable1Result <- pqExec $ select $ starFrom #table1
+    Just selectTable1Result <- flip pqExecParams RNil $
+      (select $ starFrom #table1 :: Statement '[] Tables Tables Columns)
     Just (Right value00) <- getvalue selectTable1Result (RowNumber 0) colNum0
     Just (Right value01) <- getvalue selectTable1Result (RowNumber 0) colNum1
     Just (Right value10) <- getvalue selectTable1Result (RowNumber 1) colNum0
@@ -53,20 +46,20 @@ main = do
   finish connection2
 
 type Columns = '[ "col1" ::: 'NotNull 'PGInt4, "col2" ::: 'NotNull 'PGInt4]
--- type Tables = '[ "table1" ::: Columns ]
+type Tables = '[ "table1" ::: Columns ]
 -- type SumAndCol1 = '[ "sum" ::: 'NotNull 'PGInt4, "col1" ::: 'NotNull 'PGInt4]
-type StudentsColumns = '["name" ::: 'NotNull 'PGText]
+-- type StudentsColumns = '["name" ::: 'NotNull 'PGText]
 -- type StudentsTable = '["students" ::: StudentsColumns]
-type OrderColumns =
-  [ "orderID"    ::: 'NotNull 'PGInt4
-  , "orderVal"   ::: 'NotNull 'PGText
-  , "customerID" ::: 'NotNull 'PGInt4
-  , "shipperID"  ::: 'NotNull 'PGInt4
-  ]
-type CustomerColumns =
-  [ "customerID" ::: 'NotNull 'PGInt4, "customerVal" ::: 'NotNull 'PGFloat4 ]
-type ShipperColumns =
-  [ "shipperID" ::: 'NotNull 'PGInt4, "shipperVal" ::: 'NotNull 'PGBool ]
+-- type OrderColumns =
+--   [ "orderID"    ::: 'NotNull 'PGInt4
+--   , "orderVal"   ::: 'NotNull 'PGText
+--   , "customerID" ::: 'NotNull 'PGInt4
+--   , "shipperID"  ::: 'NotNull 'PGInt4
+--   ]
+-- type CustomerColumns =
+--   [ "customerID" ::: 'NotNull 'PGInt4, "customerVal" ::: 'NotNull 'PGFloat4 ]
+-- type ShipperColumns =
+--   [ "shipperID" ::: 'NotNull 'PGInt4, "shipperVal" ::: 'NotNull 'PGBool ]
 -- type JoinTables =
 --   [ "shippers"  ::: ShipperColumns
 --   , "customers" ::: CustomerColumns

@@ -17,8 +17,6 @@
 
 module Squeel.PostgreSQL.PQ where
 
-import Debug.Trace
-
 import Control.Exception.Lifted
 import Control.Monad.Base
 import Control.Monad.Trans
@@ -68,8 +66,8 @@ class MonadPQ pq where
 
   pqExec
     :: MonadBase IO io
-    => Statement '[] db0 db1 xs
-    -> pq db0 db1 io (Maybe (Result xs))
+    => Statement '[] db0 db1 '[]
+    -> pq db0 db1 io (Maybe (Result '[]))
 
   pqExecParams
     :: (MonadBase IO io, ToOids ps, ToValues xs ps)
@@ -213,4 +211,4 @@ getvalue
   -> io (Maybe (Either Text y))
 getvalue (Result result) (RowNumber r) (ColumnNumber c :: ColumnNumber xs x) =
   liftBase $ fmap (fmap (decodeValue (proxy# :: Proxy# x)))
-    (traceShowId <$> LibPQ.getvalue' result r c)
+    (LibPQ.getvalue' result r c)

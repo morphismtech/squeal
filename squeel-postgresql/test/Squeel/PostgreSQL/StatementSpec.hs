@@ -86,9 +86,9 @@ spec = do
   describe "JOINs" $ do
     let
       vals =
-        #orders .&. #orderVal `As` #orderVal
-        :& #customers .&. #customerVal `As` #customerVal
-        :& #shippers .&. #shipperVal `As` #shipperVal :& RNil
+        #orders &. #orderVal `As` #orderVal
+        :& #customers &. #customerVal `As` #customerVal
+        :& #shippers &. #shipperVal `As` #shipperVal :& RNil
     it "should render CROSS JOINs" $ do
       let
         statement :: Statement '[] JoinTables JoinTables ValueColumns
@@ -108,9 +108,9 @@ spec = do
         innerJoins = join $
           #orders
           & Inner #customers
-            (#orders .&. #customerID ==* #customers .&. #customerID)
+            (#orders &. #customerID ==* #customers &. #customerID)
           & Inner #shippers
-            (#orders .&. #shipperID ==* #shippers .&. #shipperID)
+            (#orders &. #shipperID ==* #shippers &. #shipperID)
         selection :: Statement '[] JoinTables JoinTables ValueColumns
         selection =  select $ vals `from` innerJoins
       selection `shouldRenderAs`
