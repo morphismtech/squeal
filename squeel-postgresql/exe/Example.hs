@@ -33,7 +33,7 @@ main = do
       &>>
       insertInto #table1 ( 3 `As` #col1 :& 4 `As` #col2 :& RNil )
     Just selectTable1Result <- flip pqExecParams RNil $
-      (select $ starFrom #table1 :: Statement '[] Tables Tables Columns)
+      (select $ starFrom #table1 :: Statement '[] Columns Tables Tables)
     Just (Right value00) <- getvalue selectTable1Result (RowNumber 0) colNum0
     Just (Right value01) <- getvalue selectTable1Result (RowNumber 0) colNum1
     Just (Right value10) <- getvalue selectTable1Result (RowNumber 1) colNum0

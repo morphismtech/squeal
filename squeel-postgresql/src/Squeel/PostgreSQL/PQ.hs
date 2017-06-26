@@ -66,24 +66,24 @@ class MonadPQ pq where
 
   pqExec
     :: MonadBase IO io
-    => Statement '[] db0 db1 '[]
+    => Statement '[] '[] db0 db1
     -> pq db0 db1 io (Maybe (Result '[]))
 
   pqExecParams
     :: (MonadBase IO io, ToOids ps, ToValues xs ps)
-    => Statement ps db0 db1 ys
+    => Statement ps ys db0 db1
     -> Rec Identity xs
     -> pq db0 db1 io (Maybe (Result ys))
 
   pqPrepare
     :: (MonadBase IO io, ToOids ps)
     => ByteString
-    -> Statement ps db0 db1 xs
-    -> pq db0 db1 io (Maybe (Result []), PreparedStatement ps db0 db1 xs)
+    -> Statement ps xs db0 db1
+    -> pq db0 db1 io (Maybe (Result []), PreparedStatement ps xs db0 db1)
 
   pqExecPrepared
     :: (MonadBase IO io, ToValues xs ps)
-    => PreparedStatement ps db0 db1 ys
+    => PreparedStatement ps ys db0 db1
     -> Rec Identity xs
     -> pq db0 db1 io (Maybe (Result ys))
 
@@ -102,7 +102,7 @@ instance MonadPQ PQ where
     result <- liftBase $ LibPQ.exec conn q
     return (Result <$> result, Connection conn)
 
-  pqExecParams (UnsafeStatement q :: Statement ps db0 db1 ys) params =
+  pqExecParams (UnsafeStatement q :: Statement ps ys db0 db1) params =
     PQ $ \ (Connection conn) -> do
       let
         params' =
@@ -115,7 +115,7 @@ instance MonadPQ PQ where
       result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
       return (Result <$> result, Connection conn)
 
-  pqPrepare statementName (UnsafeStatement q :: Statement ps db0 db1 ys) =
+  pqPrepare statementName (UnsafeStatement q :: Statement ps ys db0 db1) =
     PQ $ \ (Connection conn) -> do
       result <- liftBase $
         LibPQ.prepare conn statementName q (Just (toOids (proxy# :: Proxy# ps)))
@@ -124,7 +124,7 @@ instance MonadPQ PQ where
           , UnsafePreparedStatement statementName
         ) , Connection conn )
 
-  pqExecPrepared (q :: PreparedStatement ps db0 db1 ys) params =
+  pqExecPrepared (q :: PreparedStatement ps ys db0 db1) params =
     PQ $ \ (Connection conn) -> do
       let
         params' =

@@ -372,28 +372,28 @@ list `from` tabs = UnsafeSelection $
 
 newtype Statement
   (params :: [NullityType])
+  (columns :: [(Symbol,NullityType)])
   (schema0 :: [(Symbol,[(Symbol,NullityType)])])
   (schema1 :: [(Symbol,[(Symbol,NullityType)])])
-  (columns :: [(Symbol,NullityType)])
     = UnsafeStatement { renderStatement :: ByteString }
 
 (&>>)
-  :: Statement '[] schema0 schema1 '[]
-  -> Statement '[] schema1 schema2 results
-  -> Statement '[] schema0 schema2 results
+  :: Statement '[] '[] schema0 schema1
+  -> Statement '[] '[] schema1 schema2
+  -> Statement '[] '[] schema0 schema2
 statement1 &>> statement2 = UnsafeStatement $
   renderStatement statement1 <> " " <> renderStatement statement2
 
 newtype PreparedStatement
   (params :: [NullityType])
+  (columns :: [(Symbol,NullityType)])
   (schema0 :: [(Symbol,[(Symbol,NullityType)])])
   (schema1 :: [(Symbol,[(Symbol,NullityType)])])
-  (columns :: [(Symbol,NullityType)])
     = UnsafePreparedStatement { renderPreparedStatement :: ByteString }
 
 select
   :: Selection params schema columns
-  -> Statement params schema schema columns
+  -> Statement params columns schema schema
 select = UnsafeStatement . ("SELECT " <>) . (<> ";") . renderSelection
 
 subselect
@@ -408,7 +408,7 @@ insertInto
   :: HasTable table schema columns
   => Alias table
   -> Rec (Aliased (Expression params '[])) columns
-  -> Statement params schema schema '[]
+  -> Statement params '[] schema schema
 insertInto (Alias table) expressions = UnsafeStatement $ "INSERT INTO "
   <> fromString (symbolVal' table)
   <> " (" <> ByteString.intercalate ", " aliases
@@ -427,7 +427,7 @@ createTable
     :: (KnownSymbol table, KnownColumns columns)
     => Alias table
     -> Proxy# columns
-    -> Statement '[] schema ((table ::: columns) ': schema) '[]
+    -> Statement '[] '[] schema ((table ::: columns) ': schema)
 createTable (Alias table) columns = UnsafeStatement $ mconcat
   [ "CREATE TABLE "
   , fromString $ symbolVal' table
@@ -438,7 +438,7 @@ createTable (Alias table) columns = UnsafeStatement $ mconcat
 
 class KnownSymbol table => DropTable table schema0 schema1
   | table schema0 -> schema1 where
-    dropTable :: Alias table -> Statement '[] schema0 schema1 '[]
+    dropTable :: Alias table -> Statement '[] '[] schema0 schema1
     dropTable (Alias table) = UnsafeStatement $
       "DROP TABLE " <> fromString (symbolVal' table) <> ";"
 instance {-# OVERLAPPING #-}
@@ -459,7 +459,7 @@ update
   => Alias table
   -> Rec (Aliased (Maybe `Compose` Expression params '[table ::: columns])) columns
   -> Expression params '[table ::: columns] ('NotNull 'PGBool)
-  -> Statement params schema schema '[]
+  -> Statement params '[] schema schema
 update (Alias table) columns where' = UnsafeStatement $ mconcat
   [ "UPDATE "
   , fromString $ symbolVal' table

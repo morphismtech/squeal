@@ -23,7 +23,7 @@ spec = do
     query `shouldRenderAs` str = renderStatement query `shouldBe` str
   it "correctly renders a simple SELECT query" $ do
     let
-      statement :: Statement '[] Tables Tables SumAndCol1
+      statement :: Statement '[] SumAndCol1 Tables Tables
       statement = select $
         ((#col1 + #col2) `As` #sum :& #col1 :& RNil)
           `from` (#table1 & where_ true)
@@ -31,7 +31,7 @@ spec = do
       "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE TRUE;"
   it "combines WHEREs using AND" $ do
     let
-      statement :: Statement '[] Tables Tables SumAndCol1
+      statement :: Statement '[] SumAndCol1 Tables Tables
       statement = select $
         ((#col1 + #col2) `As` #sum :& #col1 :& RNil)
           `from` (#table1 & where_ true & where_ false)
@@ -40,45 +40,45 @@ spec = do
   it "performs sub SELECTs" $ do
     let
       selection = ((#col1 + #col2) `As` #sum :& #col1 :& RNil) `from` #table1
-      statement :: Statement '[] Tables Tables SumAndCol1
+      statement :: Statement '[] SumAndCol1 Tables Tables
       statement = select $ starFrom (subselect (selection `As` #sub))
     statement `shouldRenderAs`
       "SELECT * FROM SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 AS sub;"
   it "does LIMIT clauses" $ do
     let
-      statement :: Statement '[] Tables Tables Columns
+      statement :: Statement '[] Columns Tables Tables
       statement = select $ starFrom (#table1 & limit 1)
     statement `shouldRenderAs` "SELECT * FROM table1 AS table1 LIMIT 1;"
   it "should use the minimum of given LIMITs" $ do
     let
-      statement :: Statement '[] Tables Tables Columns
+      statement :: Statement '[] Columns Tables Tables
       statement = select $ starFrom (#table1 & limit 1 & limit 2)
     statement `shouldRenderAs`
       "SELECT * FROM table1 AS table1 LIMIT CASE WHEN (1 <= 2) THEN 1 ELSE 2 END;"
   it "should render parameters using $ signs" $ do
     let
-      statement :: Statement '[ 'NotNull 'PGInt8] Tables Tables Columns
+      statement :: Statement '[ 'NotNull 'PGInt8] Columns Tables Tables
       statement = select $ starFrom (#table1 & limit param1)
     statement `shouldRenderAs` "SELECT * FROM table1 AS table1 LIMIT $1;"
   it "does OFFSET clauses" $ do
     let
-      statement :: Statement '[] Tables Tables Columns
+      statement :: Statement '[] Columns Tables Tables
       statement = select $ starFrom (#table1 & offset 1)
     statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET 1;"
   it "should use the sum of given OFFSETs" $ do
     let
-      statement :: Statement '[] Tables Tables Columns
+      statement :: Statement '[] Columns Tables Tables
       statement =  select $ starFrom (#table1 & offset 1 & offset 2)
     statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET (1 + 2);"
   it "correctly render simple INSERTs" $ do
     let
-      statement :: Statement '[] Tables Tables '[]
+      statement :: Statement '[] '[] Tables Tables
       statement = insertInto #table1 $ 2 `As` #col1 :& 4 `As` #col2 :& RNil
     statement `shouldRenderAs`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
   it "should be safe against SQL injection in literal text" $ do
     let
-      statement :: Statement '[] StudentsTable StudentsTable '[]
+      statement :: Statement '[] '[] StudentsTable StudentsTable
       statement = insertInto #students $
         "Robert'); DROP TABLE students;" `As` #name :& RNil
     statement `shouldRenderAs`
@@ -91,7 +91,7 @@ spec = do
         :& #shippers &. #shipperVal `As` #shipperVal :& RNil
     it "should render CROSS JOINs" $ do
       let
-        statement :: Statement '[] JoinTables JoinTables ValueColumns
+        statement :: Statement '[] ValueColumns JoinTables JoinTables
         statement = select $ vals `from`
           (join (#orders & Cross #customers & Cross #shippers))
       statement `shouldRenderAs`
@@ -111,7 +111,7 @@ spec = do
             (#orders &. #customerID ==* #customers &. #customerID)
           & Inner #shippers
             (#orders &. #shipperID ==* #shippers &. #shipperID)
-        selection :: Statement '[] JoinTables JoinTables ValueColumns
+        selection :: Statement '[] ValueColumns JoinTables JoinTables
         selection =  select $ vals `from` innerJoins
       selection `shouldRenderAs`
         "SELECT\
@@ -125,7 +125,7 @@ spec = do
         \ ON (orders.shipperID = shippers.shipperID);"
     it "should render self JOINs" $ do
       let
-        statement :: Statement '[] JoinTables JoinTables OrderColumns
+        statement :: Statement '[] OrderColumns JoinTables JoinTables
         statement = select $ #orders1 `dotStarFrom`
           (join (Table (#orders `As` #orders1)
             & Cross (#orders `As` #orders2)))
@@ -135,13 +135,13 @@ spec = do
         \ CROSS JOIN orders AS orders2;"
   it "should render simple CREATE TABLE statements" $ do
     let
-      statement :: Statement '[] '[] Tables '[]
+      statement :: Statement '[] '[] '[] Tables
       statement = createTable #table1 (proxy# :: Proxy# Columns)
     statement `shouldRenderAs`
       "CREATE TABLE table1 (col1 int4 NOT NULL, col2 int4 NOT NULL);"
   it "should render DROP TABLE statements" $ do
     let
-      statement :: Statement '[] Tables '[] '[]
+      statement :: Statement '[] '[] Tables '[]
       statement = dropTable #table1
     statement `shouldRenderAs` "DROP TABLE table1;"
 
