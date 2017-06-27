@@ -132,15 +132,20 @@ spec = do
         "SELECT orders1.*\
         \ FROM orders AS orders1\
         \ CROSS JOIN orders AS orders2;"
-  it "should render simple CREATE TABLE statements" $ do
-    let
-      statement :: Statement '[] '[] '[] Tables
-      statement = createTable #table1
-        (  (int4 & notNull) `As` #col1
-        :& (int4 & notNull) `As` #col2
-        :& RNil)
-    statement `shouldRenderAs`
+  it "should render CREATE TABLE statements" $ do
+    createTable #table1
+      (  (int4 & notNull) `As` #col1
+      :& (int4 & notNull) `As` #col2
+      :& RNil)
+      `shouldRenderAs`
       "CREATE TABLE table1 (col1 int4 NOT NULL, col2 int4 NOT NULL);"
+    createTable #table2
+      (  serial `As` #col1
+      :& text `As` #col2
+      :& (int8 & notNull & default_ 8) `As` #col3
+      :& RNil)
+      `shouldRenderAs`
+      "CREATE TABLE table2 (col1 serial, col2 text, col3 int8 NOT NULL DEFAULT 8);"
   it "should render DROP TABLE statements" $ do
     let
       statement :: Statement '[] '[] Tables '[]
