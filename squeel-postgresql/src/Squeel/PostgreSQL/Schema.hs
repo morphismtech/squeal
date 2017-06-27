@@ -25,9 +25,10 @@ module Squeel.PostgreSQL.Schema
   , KnownColumns (..)
   , renderAliased
   , NullityType (..)
-  , NullifyType
-  , NullifyColumns
-  , NullifyTable
+  -- , NullifyType
+  -- , NullifyColumns
+  -- , NullifyTable
+  , ColumnType (..)
   , module GHC.OverloadedLabels
   , module GHC.TypeLits
   ) where
@@ -191,14 +192,16 @@ instance
 
 data NullityType = Null PGType | NotNull PGType
 
-type family NullifyType nullty where
-  NullifyType ('Null ty) = 'Null ty
-  NullifyType ('NotNull ty) = 'Null ty
+-- type family NullifyType nullty where
+--   NullifyType ('Null ty) = 'Null ty
+--   NullifyType ('NotNull ty) = 'Null ty
+--
+-- type family NullifyColumns columns where
+--   NullifyColumns '[] = '[]
+--   NullifyColumns ((column ::: ty) ': columns) =
+--     (column ::: (NullifyType ty)) ': (NullifyColumns columns)
+--
+-- type family NullifyTable table where
+--   NullifyTable (table ::: columns) = table ::: NullifyColumns columns
 
-type family NullifyColumns columns where
-  NullifyColumns '[] = '[]
-  NullifyColumns ((column ::: ty) ': columns) =
-    (column ::: (NullifyType ty)) ': (NullifyColumns columns)
-
-type family NullifyTable table where
-  NullifyTable (table ::: columns) = table ::: NullifyColumns columns
+data ColumnType = Optional NullityType | Required NullityType

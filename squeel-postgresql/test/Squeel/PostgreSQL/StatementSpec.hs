@@ -11,7 +11,6 @@ module Squeel.PostgreSQL.StatementSpec where
 import Data.Boolean
 import Data.Function
 import Data.Vinyl
-import GHC.Exts
 import Test.Hspec
 
 import Squeel.PostgreSQL.Statement
@@ -57,7 +56,7 @@ spec = do
       "SELECT * FROM table1 AS table1 LIMIT CASE WHEN (1 <= 2) THEN 1 ELSE 2 END;"
   it "should render parameters using $ signs" $ do
     let
-      statement :: Statement '[ 'NotNull 'PGInt8] Columns Tables Tables
+      statement :: Statement '[ 'Required ('NotNull 'PGInt8)] Columns Tables Tables
       statement = select $ starFrom (#table1 & limit param1)
     statement `shouldRenderAs` "SELECT * FROM table1 AS table1 LIMIT $1;"
   it "does OFFSET clauses" $ do
@@ -136,7 +135,10 @@ spec = do
   it "should render simple CREATE TABLE statements" $ do
     let
       statement :: Statement '[] '[] '[] Tables
-      statement = createTable #table1 (proxy# :: Proxy# Columns)
+      statement = createTable #table1
+        (  (int4 & notNull) `As` #col1
+        :& (int4 & notNull) `As` #col2
+        :& RNil)
     statement `shouldRenderAs`
       "CREATE TABLE table1 (col1 int4 NOT NULL, col2 int4 NOT NULL);"
   it "should render DROP TABLE statements" $ do
@@ -145,28 +147,35 @@ spec = do
       statement = dropTable #table1
     statement `shouldRenderAs` "DROP TABLE table1;"
 
-type Columns = '[ "col1" ::: 'NotNull 'PGInt4, "col2" ::: 'NotNull 'PGInt4]
+type Columns =
+  '[ "col1" ::: 'Required ('NotNull 'PGInt4)
+   , "col2" ::: 'Required ('NotNull 'PGInt4)
+   ]
 type Tables = '[ "table1" ::: Columns ]
-type SumAndCol1 = '[ "sum" ::: 'NotNull 'PGInt4, "col1" ::: 'NotNull 'PGInt4]
-type StudentsColumns = '["name" ::: 'NotNull 'PGText]
+type SumAndCol1 = '[ "sum" ::: 'Required ('NotNull 'PGInt4), "col1" ::: 'Required ('NotNull 'PGInt4)]
+type StudentsColumns = '["name" ::: 'Required ('NotNull 'PGText)]
 type StudentsTable = '["students" ::: StudentsColumns]
 type OrderColumns =
-  [ "orderID"    ::: 'NotNull 'PGInt4
-  , "orderVal"   ::: 'NotNull 'PGText
-  , "customerID" ::: 'NotNull 'PGInt4
-  , "shipperID"  ::: 'NotNull 'PGInt4
-  ]
+  '[ "orderID"    ::: 'Required ('NotNull 'PGInt4)
+   , "orderVal"   ::: 'Required ('NotNull 'PGText)
+   , "customerID" ::: 'Required ('NotNull 'PGInt4)
+   , "shipperID"  ::: 'Required ('NotNull 'PGInt4)
+   ]
 type CustomerColumns =
-  [ "customerID" ::: 'NotNull 'PGInt4, "customerVal" ::: 'NotNull 'PGFloat4 ]
+  '[ "customerID" ::: 'Required ('NotNull 'PGInt4)
+   , "customerVal" ::: 'Required ('NotNull 'PGFloat4)
+   ]
 type ShipperColumns =
-  [ "shipperID" ::: 'NotNull 'PGInt4, "shipperVal" ::: 'NotNull 'PGBool ]
+  '[ "shipperID" ::: 'Required ('NotNull 'PGInt4)
+   , "shipperVal" ::: 'Required ('NotNull 'PGBool)
+   ]
 type JoinTables =
-  [ "shippers"  ::: ShipperColumns
-  , "customers" ::: CustomerColumns
-  , "orders"    ::: OrderColumns
-  ]
+  '[ "shippers"  ::: ShipperColumns
+   , "customers" ::: CustomerColumns
+   , "orders"    ::: OrderColumns
+   ]
 type ValueColumns =
-  [ "orderVal"    ::: 'NotNull 'PGText
-  , "customerVal" ::: 'NotNull 'PGFloat4
-  , "shipperVal"  ::: 'NotNull 'PGBool
-  ]
+  '[ "orderVal"    ::: 'Required ('NotNull 'PGText)
+   , "customerVal" ::: 'Required ('NotNull 'PGFloat4)
+   , "shipperVal"  ::: 'Required ('NotNull 'PGBool)
+   ]

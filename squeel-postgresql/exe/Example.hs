@@ -8,11 +8,12 @@
 
 module Main (main) where
 
+import Control.Category ((>>>))
 import Control.Monad.Base
+import Data.Function ((&))
 import Data.Int
 import Data.Monoid
 import Data.Vinyl
-import GHC.Exts
 import Squeel.PostgreSQL
 
 import qualified Data.ByteString.Char8 as Char8
@@ -26,11 +27,18 @@ main = do
   connection0 <- connectdb connectionString
   Char8.putStrLn "creating tables"
   connection1 <- flip execPQ connection0 $ pqExec $
-    createTable #table1 (proxy# :: Proxy# Columns)
+    createTable #students
+      (  (text & notNull) `As` #name
+      :& RNil )
+    >>>
+    createTable #table1
+      (  (int4 & notNull) `As` #col1
+      :& (int4 & notNull) `As` #col2
+      :& RNil )
   connection2 <- flip execPQ connection1 $ do
     _insertTable1Result <- pqExec $
       insertInto #table1 ( 1 `As` #col1 :& 2 `As` #col2 :& RNil )
-      &>>
+      >>>
       insertInto #table1 ( 3 `As` #col1 :& 4 `As` #col2 :& RNil )
     Just selectTable1Result <- flip pqExecParams RNil $
       (select $ starFrom #table1 :: Statement '[] Columns Tables Tables)
@@ -45,11 +53,13 @@ main = do
       print (value11 :: Int32)
   finish connection2
 
-type Columns = '[ "col1" ::: 'NotNull 'PGInt4, "col2" ::: 'NotNull 'PGInt4]
-type Tables = '[ "table1" ::: Columns ]
+type Columns =
+  '[ "col1" ::: 'Required ('NotNull 'PGInt4)
+   , "col2" ::: 'Required ('NotNull 'PGInt4)
+   ]
 -- type SumAndCol1 = '[ "sum" ::: 'NotNull 'PGInt4, "col1" ::: 'NotNull 'PGInt4]
--- type StudentsColumns = '["name" ::: 'NotNull 'PGText]
--- type StudentsTable = '["students" ::: StudentsColumns]
+type StudentsColumns = '["name" ::: 'Required ('NotNull 'PGText)]
+type Tables = '[ "table1" ::: Columns, "students" ::: StudentsColumns]
 -- type OrderColumns =
 --   [ "orderID"    ::: 'NotNull 'PGInt4
 --   , "orderVal"   ::: 'NotNull 'PGText

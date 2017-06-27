@@ -80,7 +80,7 @@ instance FromValue 'PGTimestampTZ UTCTime where
   fromValue _ = Decoder.timestamptz_int
 instance FromValue 'PGInterval DiffTime where
   fromValue _ = Decoder.interval_int
-instance FromValue pg ty => FromValue (column ::: 'NotNull pg) ty where
+instance FromValue pg ty => FromValue (column ::: 'Required ('NotNull pg)) ty where
   fromValue _ = fromValue (proxy# :: Proxy# pg)
 
 class FromValues pgs xs where
