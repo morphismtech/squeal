@@ -1,9 +1,3 @@
-resolver: nightly-2016-12-31
+resolver: nightly-2017-06-26
 packages:
 - squeel-postgresql
-extra-deps:
-- bifunctors-5.3
-- indexed-0.1.3
-- indexed-extras-0.2
-flags: {}
-extra-package-dbs: []

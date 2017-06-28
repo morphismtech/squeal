@@ -14,6 +14,7 @@
 
 module Squeel.PostgreSQL.Statement where
 
+import Control.Category
 import Data.Boolean
 import Data.ByteString (ByteString)
 import Data.Maybe
@@ -24,16 +25,22 @@ import Data.Vinyl.Functor
 import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
+import Prelude hiding (id,(.))
 
 import qualified Data.ByteString as ByteString
 
 import Squeel.PostgreSQL.Schema
 
+{-----------------------------------------
+column expressions
+-----------------------------------------}
+
 newtype Expression
-  (params :: [NullityType])
-  (tables :: [(Symbol,[(Symbol,NullityType)])])
-  (ty :: NullityType)
-  = UnsafeExpression { renderExpression :: ByteString }
+  (params :: [ColumnType])
+  (tables :: [(Symbol,[(Symbol,ColumnType)])])
+  (ty :: ColumnType)
+    = UnsafeExpression { renderExpression :: ByteString }
+    deriving (Show,Eq)
 
 class KnownNat n => HasParameter (n :: Nat) params ty | n params -> ty where
   param :: Proxy# n -> Expression params tables ty
@@ -58,7 +65,7 @@ class KnownSymbol column => HasColumn column columns ty
     getColumn :: Proxy# column -> Expression params '[table ::: columns] ty
     getColumn column = UnsafeExpression $ fromString $ symbolVal' column
 instance {-# OVERLAPPING #-} KnownSymbol column
-  => HasColumn column ((column ::: ty) ': tys) ty
+  => HasColumn column ((column ::: optionality ty) ': tys) ('Required ty)
 instance {-# OVERLAPPABLE #-} (KnownSymbol column, HasColumn column table ty)
   => HasColumn column (ty' ': table) ty
 
@@ -66,13 +73,30 @@ instance (HasColumn column columns ty, tables ~ '[table ::: columns])
   => IsLabel column (Expression params tables ty) where
     fromLabel = getColumn
 
-(.&.)
+(&.)
   :: (HasTable table tables columns, HasColumn column columns ty)
   => Alias table -> Alias column -> Expression params tables ty
-Alias table .&. Alias column = UnsafeExpression $
+Alias table &. Alias column = UnsafeExpression $
   fromString (symbolVal' table)
   <> "." <>
   fromString (symbolVal' column)
+
+def :: Expression params '[] ('Optional (nullity ty))
+def = UnsafeExpression "DEFAULT"
+
+null :: Expression params tables (optionality ('Null ty))
+null = UnsafeExpression "NULL"
+
+coalesce
+  :: [Expression params tables ('Required ('Null x))]
+  -> Expression params tables ('Required ('NotNull x))
+  -> Expression params tables ('Required ('NotNull x))
+coalesce nulls isn'tNull = UnsafeExpression $ mconcat
+  [ "COALESCE("
+  , ByteString.intercalate ", " $ map renderExpression nulls
+  , ", ", renderExpression isn'tNull
+  , ")"
+  ]
 
 unsafeBinaryOp
   :: ByteString
@@ -96,7 +120,7 @@ unsafeFunction
 unsafeFunction fn x = UnsafeExpression $ mconcat
   [fn, "(", renderExpression x, ")"]
 
-instance PGNum ty => Num (Expression params tables (nullity ty)) where
+instance PGNum ty => Num (Expression params tables ('Required (nullity ty))) where
   (+) = unsafeBinaryOp "+"
   (-) = unsafeBinaryOp "-"
   (*) = unsafeBinaryOp "*"
@@ -104,7 +128,7 @@ instance PGNum ty => Num (Expression params tables (nullity ty)) where
   signum = unsafeFunction "sign"
   fromInteger = UnsafeExpression . fromString . show
 
-instance IsString (Expression params tables (nullity 'PGText)) where
+instance IsString (Expression params tables ('Required (nullity 'PGText))) where
   fromString str = UnsafeExpression $
     "E\'" <> fromString (escape =<< str) <> "\'"
     where
@@ -119,7 +143,7 @@ instance IsString (Expression params tables (nullity 'PGText)) where
         '\\' -> "\\\\"
         c -> [c]
 
-instance Boolean (Expression params tables ('NotNull 'PGBool)) where
+instance Boolean (Expression params tables ('Required ('NotNull 'PGBool))) where
   true = UnsafeExpression "TRUE"
   false = UnsafeExpression "FALSE"
   notB = unsafeUnaryOp "NOT"
@@ -127,21 +151,10 @@ instance Boolean (Expression params tables ('NotNull 'PGBool)) where
   (||*) = unsafeBinaryOp "OR"
 
 type instance BooleanOf (Expression params tables ty) =
-  Expression params tables ('NotNull 'PGBool)
-
-coalesce
-  :: [Expression params tables ('Null x)]
-  -> Expression params tables ('NotNull x)
-  -> Expression params tables ('NotNull x)
-coalesce nulls notNull = UnsafeExpression $ mconcat
-  [ "COALESCE("
-  , ByteString.intercalate ", " $ map renderExpression nulls
-  , ", ", renderExpression notNull
-  , ")"
-  ]
+  Expression params tables ('Required ('NotNull 'PGBool))
 
 caseWhenThenElse
-  :: [(Expression params tables ('NotNull 'PGBool), Expression params tables ty)]
+  :: [(Expression params tables ('Required ('NotNull 'PGBool)), Expression params tables ty)]
   -> Expression params tables ty
   -> Expression params tables ty
 caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
@@ -160,92 +173,26 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
 instance IfB (Expression params tables ty) where
   ifB if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 
-instance EqB (Expression params tables ty) where
+instance EqB (Expression params tables (optionality ('NotNull ty))) where
   (==*) = unsafeBinaryOp "="
   (/=*) = unsafeBinaryOp "<>"
 
-instance OrdB (Expression params tables ty) where
+instance OrdB (Expression params tables (optionality ('NotNull ty))) where
   (>*) = unsafeBinaryOp ">"
   (>=*) = unsafeBinaryOp ">="
   (<*) = unsafeBinaryOp "<"
   (<=*) = unsafeBinaryOp "<="
 
+{-----------------------------------------
+table expressions
+-----------------------------------------}
+
 newtype TableExpression
-  (params :: [NullityType])
-  (schema :: [(Symbol,[(Symbol,NullityType)])])
-  (columns :: [(Symbol,NullityType)])
+  (params :: [ColumnType])
+  (schema :: [(Symbol,[(Symbol,ColumnType)])])
+  (columns :: [(Symbol,ColumnType)])
     = UnsafeTableExpression { renderTableExpression :: ByteString }
-
-data JoinExpression params schema tables where
-  Table
-    :: Aliased (TableExpression params schema) table
-    -> JoinExpression params schema '[table]
-  Subselect
-    :: Aliased (Selection params schema) table
-    -> JoinExpression params schema '[table]
-  Cross
-    :: Aliased (TableExpression params schema) table
-    -> JoinExpression params schema tables
-    -> JoinExpression params schema (table ': tables)
-  Inner
-    :: Aliased (TableExpression params schema) table
-    -> Expression params (table ': tables) ('NotNull 'PGBool)
-    -> JoinExpression params schema tables
-    -> JoinExpression params schema (table ': tables)
-  LeftOuter
-    :: Aliased (TableExpression params schema) right
-    -> Expression params '[left,right] ('NotNull 'PGBool)
-    -> JoinExpression params schema (tables)
-    -> JoinExpression params schema (NullifyTable right ': left ': tables)
-  RightOuter
-    :: Aliased (TableExpression params schema) right
-    -> Expression params '[left,right] ('NotNull 'PGBool)
-    -> JoinExpression params schema (left : tables)
-    -> JoinExpression params schema (right ': NullifyTable left ': tables)
-  FullOuter
-    :: Aliased (TableExpression params schema) right
-    -> Expression params '[left,right] ('NotNull 'PGBool)
-    -> JoinExpression params schema (left : tables)
-    -> JoinExpression params schema
-        (NullifyTable right ': NullifyTable left ': tables)
-
-renderJoinExpression :: JoinExpression params schema tables -> ByteString
-renderJoinExpression = \case
-  Table table -> renderAliased renderTableExpression table
-  Subselect selection -> "SELECT " <> renderAliased renderSelection selection
-  Cross table tables -> mconcat
-    [ renderJoinExpression tables
-    , " CROSS JOIN "
-    , renderAliased renderTableExpression table
-    ]
-  Inner table on tables -> mconcat
-    [ renderJoinExpression tables
-    , " INNER JOIN "
-    , renderAliased renderTableExpression table
-    , " ON "
-    , renderExpression on
-    ]
-  LeftOuter table on tables -> mconcat
-    [ renderJoinExpression tables
-    , " LEFT OUTER JOIN "
-    , renderAliased renderTableExpression table
-    , " ON "
-    , renderExpression on
-    ]
-  RightOuter table on tables -> mconcat
-    [ renderJoinExpression tables
-    , " RIGHT OUTER JOIN "
-    , renderAliased renderTableExpression table
-    , " ON "
-    , renderExpression on
-    ]
-  FullOuter table on tables -> mconcat
-    [ renderJoinExpression tables
-    , " FULL OUTER JOIN "
-    , renderAliased renderTableExpression table
-    , " ON "
-    , renderExpression on
-    ]
+    deriving (Show,Eq)
 
 class KnownSymbol table => HasTable table tables columns
   | table tables -> columns where
@@ -261,14 +208,114 @@ instance HasTable table schema columns
   => IsLabel table (TableExpression params schema columns) where
     fromLabel = getTable
 
+{-----------------------------------------
+statements
+-----------------------------------------}
+
+newtype Statement
+  (params :: [ColumnType])
+  (columns :: [(Symbol,ColumnType)])
+  (schema0 :: [(Symbol,[(Symbol,ColumnType)])])
+  (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
+    = UnsafeStatement { renderStatement :: ByteString }
+    deriving (Show,Eq)
+
+instance Category (Statement '[] '[]) where
+  id = UnsafeStatement ";"
+  statement2 . statement1 = UnsafeStatement $
+    renderStatement statement1 <> " " <> renderStatement statement2
+
+newtype PreparedStatement
+  (params :: [ColumnType])
+  (columns :: [(Symbol,ColumnType)])
+  (schema0 :: [(Symbol,[(Symbol,ColumnType)])])
+  (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
+    = UnsafePreparedStatement { renderPreparedStatement :: ByteString }
+    deriving (Show,Eq)
+
+{-----------------------------------------
+SELECT statements
+-----------------------------------------}
+
+data Join params schema tables where
+  Table
+    :: Aliased (TableExpression params schema) table
+    -> Join params schema '[table]
+  Subselect
+    :: Aliased (Selection params schema) table
+    -> Join params schema '[table]
+  Cross
+    :: Aliased (TableExpression params schema) table
+    -> Join params schema tables
+    -> Join params schema (table ': tables)
+  Inner
+    :: Aliased (TableExpression params schema) table
+    -> Expression params (table ': tables) ('Required ('NotNull 'PGBool))
+    -> Join params schema tables
+    -> Join params schema (table ': tables)
+  LeftOuter
+    :: Aliased (TableExpression params schema) right
+    -> Expression params '[left,right] ('Required ('NotNull 'PGBool))
+    -> Join params schema (tables)
+    -> Join params schema (NullifyTable right ': left ': tables)
+  RightOuter
+    :: Aliased (TableExpression params schema) right
+    -> Expression params '[left,right] ('Required ('NotNull 'PGBool))
+    -> Join params schema (left : tables)
+    -> Join params schema (right ': NullifyTable left ': tables)
+  FullOuter
+    :: Aliased (TableExpression params schema) right
+    -> Expression params '[left,right] ('Required ('NotNull 'PGBool))
+    -> Join params schema (left : tables)
+    -> Join params schema
+        (NullifyTable right ': NullifyTable left ': tables)
+
+renderJoin :: Join params schema tables -> ByteString
+renderJoin = \case
+  Table table -> renderAliased renderTableExpression table
+  Subselect selection -> "SELECT " <> renderAliased renderSelection selection
+  Cross table tables -> mconcat
+    [ renderJoin tables
+    , " CROSS JOIN "
+    , renderAliased renderTableExpression table
+    ]
+  Inner table on tables -> mconcat
+    [ renderJoin tables
+    , " INNER JOIN "
+    , renderAliased renderTableExpression table
+    , " ON "
+    , renderExpression on
+    ]
+  LeftOuter table on tables -> mconcat
+    [ renderJoin tables
+    , " LEFT OUTER JOIN "
+    , renderAliased renderTableExpression table
+    , " ON "
+    , renderExpression on
+    ]
+  RightOuter table on tables -> mconcat
+    [ renderJoin tables
+    , " RIGHT OUTER JOIN "
+    , renderAliased renderTableExpression table
+    , " ON "
+    , renderExpression on
+    ]
+  FullOuter table on tables -> mconcat
+    [ renderJoin tables
+    , " FULL OUTER JOIN "
+    , renderAliased renderTableExpression table
+    , " ON "
+    , renderExpression on
+    ]
+
 instance HasTable table schema columns
-  => IsLabel table (JoinExpression params schema '[table ::: columns]) where
+  => IsLabel table (Join params schema '[table ::: columns]) where
     fromLabel p = Table $ fromLabel p
 
 data Clauses params tables = Clauses
-  { whereClause :: Maybe (Expression params tables ('NotNull 'PGBool))
-  , limitClause :: Maybe (Expression params '[] ('NotNull 'PGInt8))
-  , offsetClause :: Maybe (Expression params '[] ('NotNull 'PGInt8))
+  { whereClause :: Maybe (Expression params tables ('Required ('NotNull 'PGBool)))
+  , limitClause :: Maybe (Expression params '[] ('Required ('NotNull 'PGInt8)))
+  , offsetClause :: Maybe (Expression params '[] ('Required ('NotNull 'PGInt8)))
   }
 
 instance Monoid (Clauses params tables) where
@@ -291,124 +338,108 @@ instance Monoid (Clauses params tables) where
         (Just o1,Just o2) -> Just (o1 + o2)
     }
 
-data FromExpression
-  (params :: [NullityType])
-  (schema :: [(Symbol,[(Symbol,NullityType)])])
-  (tables :: [(Symbol,[(Symbol,NullityType)])])
-    = FromExpression
-    { joinExpression :: JoinExpression params schema tables
-    , clauses :: Clauses params tables
+data From
+  (params :: [ColumnType])
+  (schema :: [(Symbol,[(Symbol,ColumnType)])])
+  (tables :: [(Symbol,[(Symbol,ColumnType)])])
+    = From
+    { fromJoin :: Join params schema tables
+    , fromClauses :: Clauses params tables
     }
 
 join
-  :: JoinExpression params schema tables
-  -> FromExpression params schema tables
-join tref = FromExpression tref mempty
+  :: Join params schema tables
+  -> From params schema tables
+join tables = From tables mempty
 
-renderFromExpression :: FromExpression params schema tables -> ByteString
-renderFromExpression (FromExpression tref (Clauses wh lim off))= mconcat
-  [ renderJoinExpression tref
+renderFrom :: From params schema tables -> ByteString
+renderFrom (From tref (Clauses wh lim off))= mconcat
+  [ renderJoin tref
   , maybe "" ((" WHERE " <>) . renderExpression) wh
   , maybe "" ((" LIMIT " <>) . renderExpression) lim
   , maybe "" ((" OFFSET " <>) . renderExpression) off
   ]
 
 instance (HasTable table schema columns, table ~ table')
-  => IsLabel table (FromExpression params schema '[table' ::: columns]) where
-    fromLabel p = FromExpression (fromLabel p) mempty
+  => IsLabel table (From params schema '[table' ::: columns]) where
+    fromLabel p = From (fromLabel p) mempty
 
 where_
-  :: Expression params tables ('NotNull 'PGBool)
-  -> FromExpression params schema tables
-  -> FromExpression params schema tables
-where_ wh (FromExpression tabs clauses1) = FromExpression tabs
-  (clauses1 <> Clauses (Just wh) Nothing Nothing)
+  :: Expression params tables ('Required ('NotNull 'PGBool))
+  -> From params schema tables
+  -> From params schema tables
+where_ wh (From tabs fromClauses1) = From tabs
+  (fromClauses1 <> Clauses (Just wh) Nothing Nothing)
 
 limit
-  :: Expression params '[] ('NotNull 'PGInt8)
-  -> FromExpression params schema tables
-  -> FromExpression params schema tables
-limit lim (FromExpression tabs clauses1) = FromExpression tabs
-  (clauses1 <> Clauses Nothing (Just lim) Nothing)
+  :: Expression params '[] ('Required ('NotNull 'PGInt8))
+  -> From params schema tables
+  -> From params schema tables
+limit lim (From tabs fromClauses1) = From tabs
+  (fromClauses1 <> Clauses Nothing (Just lim) Nothing)
 
 offset
-  :: Expression params '[] ('NotNull 'PGInt8)
-  -> FromExpression params schema tables
-  -> FromExpression params schema tables
-offset off (FromExpression tabs clauses1) = FromExpression tabs
-  (clauses1 <> Clauses Nothing Nothing (Just off))
+  :: Expression params '[] ('Required ('NotNull 'PGInt8))
+  -> From params schema tables
+  -> From params schema tables
+offset off (From tabs fromClauses1) = From tabs
+  (fromClauses1 <> Clauses Nothing Nothing (Just off))
 
 newtype Selection
-  (params :: [NullityType])
-  (schema :: [(Symbol,[(Symbol,NullityType)])])
-  (columns :: [(Symbol,NullityType)])
+  (params :: [ColumnType])
+  (schema :: [(Symbol,[(Symbol,ColumnType)])])
+  (columns :: [(Symbol,ColumnType)])
     = UnsafeSelection { renderSelection :: ByteString }
+    deriving (Show,Eq)
 
 starFrom
   :: tables ~ '[table ::: columns]
-  => FromExpression params schema tables
+  => From params schema tables
   -> Selection params schema columns
-starFrom tabs = UnsafeSelection $ "* FROM " <> renderFromExpression tabs
+starFrom tabs = UnsafeSelection $ "* FROM " <> renderFrom tabs
 
 dotStarFrom
   :: HasTable table tables columns
   => Alias table
-  -> FromExpression params schema tables
+  -> From params schema tables
   -> Selection params schema columns
 Alias tab `dotStarFrom` tabs = UnsafeSelection $
-  fromString (symbolVal' tab) <> ".* FROM " <> renderFromExpression tabs
+  fromString (symbolVal' tab) <> ".* FROM " <> renderFrom tabs
 
 from
   :: Rec (Aliased (Expression params tables)) columns
-  -> FromExpression params schema tables
+  -> From params schema tables
   -> Selection params schema columns
 list `from` tabs = UnsafeSelection $
-  renderList list <> " FROM " <> renderFromExpression tabs
+  renderList list <> " FROM " <> renderFrom tabs
   where
     renderList
       = ByteString.intercalate ", "
       . recordToList
       . rmap (Const . renderAliased renderExpression)
 
-newtype Statement
-  (params :: [NullityType])
-  (schema0 :: [(Symbol,[(Symbol,NullityType)])])
-  (schema1 :: [(Symbol,[(Symbol,NullityType)])])
-  (columns :: [(Symbol,NullityType)])
-    = UnsafeStatement { renderStatement :: ByteString }
-
-(.>>.)
-  :: Statement params schema0 schema1 '[]
-  -> Statement params schema1 schema2 results
-  -> Statement params schema0 schema2 results
-statement1 .>>. statement2 = UnsafeStatement $
-  renderStatement statement1 <> " " <> renderStatement statement2
-
-newtype PreparedStatement
-  (params :: [NullityType])
-  (schema0 :: [(Symbol,[(Symbol,NullityType)])])
-  (schema1 :: [(Symbol,[(Symbol,NullityType)])])
-  (columns :: [(Symbol,NullityType)])
-    = UnsafePreparedStatement { renderPreparedStatement :: ByteString }
-
 select
   :: Selection params schema columns
-  -> Statement params schema schema columns
+  -> Statement params columns schema schema
 select = UnsafeStatement . ("SELECT " <>) . (<> ";") . renderSelection
 
 subselect
   :: Aliased (Selection params schema) table
-  -> FromExpression params schema '[table]
-subselect selection = FromExpression
-  { joinExpression = Subselect selection
-  , clauses = mempty
+  -> From params schema '[table]
+subselect selection = From
+  { fromJoin = Subselect selection
+  , fromClauses = mempty
   }
+
+{-----------------------------------------
+INSERT statements
+-----------------------------------------}
 
 insertInto
   :: HasTable table schema columns
   => Alias table
   -> Rec (Aliased (Expression params '[])) columns
-  -> Statement params schema schema '[]
+  -> Statement params '[] schema schema
 insertInto (Alias table) expressions = UnsafeStatement $ "INSERT INTO "
   <> fromString (symbolVal' table)
   <> " (" <> ByteString.intercalate ", " aliases
@@ -423,22 +454,62 @@ insertInto (Alias table) expressions = UnsafeStatement $ "INSERT INTO "
       (\ (expression `As` _) -> Const (renderExpression expression))
       expressions
 
+{-----------------------------------------
+CREATE statements
+-----------------------------------------}
+
+newtype TypeExpression (ty :: ColumnType)
+  = UnsafeTypeExpression { renderTypeExpression :: ByteString }
+  deriving (Show,Eq)
+
+int2 :: TypeExpression ('Required ('Null 'PGInt2))
+int2 = UnsafeTypeExpression "int2"
+int4 :: TypeExpression ('Required ('Null 'PGInt4))
+int4 = UnsafeTypeExpression "int4"
+int8 :: TypeExpression ('Required ('Null 'PGInt8))
+int8 = UnsafeTypeExpression "int8"
+bool :: TypeExpression ('Required ('Null 'PGBool))
+bool = UnsafeTypeExpression "bool"
+text :: TypeExpression ('Required ('Null 'PGText))
+text = UnsafeTypeExpression "text"
+notNull
+  :: TypeExpression ('Required ('Null ty))
+  -> TypeExpression ('Required ('NotNull ty))
+notNull ty = UnsafeTypeExpression $ renderTypeExpression ty <> " NOT NULL"
+default_
+  :: Expression '[] '[] ('Required ty)
+  -> TypeExpression ('Required ty)
+  -> TypeExpression ('Optional ty)
+default_ x ty = UnsafeTypeExpression $
+  renderTypeExpression ty <> " DEFAULT " <> renderExpression x
+serial :: TypeExpression ('Optional ('NotNull 'PGInt4))
+serial = UnsafeTypeExpression "serial"
+
 createTable
-    :: (KnownSymbol table, KnownColumns columns)
-    => Alias table
-    -> Proxy# columns
-    -> Statement '[] schema ((table ::: columns) ': schema) '[]
+  :: KnownSymbol table
+  => Alias table
+  -> Rec (Aliased TypeExpression) columns
+  -> Statement '[] '[] schema ((table ::: columns) ': schema)
 createTable (Alias table) columns = UnsafeStatement $ mconcat
   [ "CREATE TABLE "
   , fromString $ symbolVal' table
   , " ("
-  , renderColumns columns
+  , ByteString.intercalate ", " . recordToList $
+      rmap (Const . renderColumn) columns
   , ");"
   ]
+  where
+    renderColumn :: Aliased TypeExpression x -> ByteString
+    renderColumn (ty `As` Alias column) =
+      fromString (symbolVal' column) <> " " <> renderTypeExpression ty
+
+{-----------------------------------------
+DROP statements
+-----------------------------------------}
 
 class KnownSymbol table => DropTable table schema0 schema1
   | table schema0 -> schema1 where
-    dropTable :: Alias table -> Statement '[] schema0 schema1 '[]
+    dropTable :: Alias table -> Statement '[] '[] schema0 schema1
     dropTable (Alias table) = UnsafeStatement $
       "DROP TABLE " <> fromString (symbolVal' table) <> ";"
 instance {-# OVERLAPPING #-}
@@ -447,6 +518,10 @@ instance {-# OVERLAPPING #-}
 instance {-# OVERLAPPABLE #-}
   (KnownSymbol table, DropTable table schema0 schema1)
     => DropTable table (tabCols ': schema0) (tabCols ': schema1)
+
+{-----------------------------------------
+UPDATE statements
+-----------------------------------------}
 
 set :: g x -> (Maybe `Compose` g) x
 set = Compose . Just
@@ -458,8 +533,8 @@ update
   :: HasTable table schema columns
   => Alias table
   -> Rec (Aliased (Maybe `Compose` Expression params '[table ::: columns])) columns
-  -> Expression params '[table ::: columns] ('NotNull 'PGBool)
-  -> Statement params schema schema '[]
+  -> Expression params '[table ::: columns] ('Required ('NotNull 'PGBool))
+  -> Statement params '[] schema schema
 update (Alias table) columns where' = UnsafeStatement $ mconcat
   [ "UPDATE "
   , fromString $ symbolVal' table

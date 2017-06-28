@@ -21,13 +21,12 @@ module Squeel.PostgreSQL.Schema
   , (:::)
   , Alias (Alias)
   , Aliased (As)
-  , KnownPGType (..)
-  , KnownColumns (..)
   , renderAliased
   , NullityType (..)
-  , NullifyType
+  , NullifyColumn
   , NullifyColumns
   , NullifyTable
+  , ColumnType (..)
   , module GHC.OverloadedLabels
   , module GHC.TypeLits
   ) where
@@ -68,6 +67,13 @@ data PGType
   | PGJsonb
 
 class ToOid pg where toOid :: Proxy# pg -> LibPQ.Oid
+--staticTypeInfo
+instance ToOid ('NotNull 'PGBool) where toOid _ = LibPQ.Oid 16
+instance ToOid ('NotNull 'PGBytea) where toOid _ = LibPQ.Oid 17
+instance ToOid ('NotNull 'PGInt8) where toOid _ = LibPQ.Oid 20
+instance ToOid ('NotNull 'PGInt2) where toOid _ = LibPQ.Oid 21
+instance ToOid ('NotNull 'PGInt4) where toOid _ = LibPQ.Oid 23
+instance ToOid ('NotNull 'PGText) where toOid _ = LibPQ.Oid 26
 class ToOids pgs where toOids :: Proxy# pgs -> [LibPQ.Oid]
 instance ToOids '[] where toOids _ = []
 instance (ToOid pg, ToOids pgs) => ToOids (pg ': pgs) where
@@ -106,92 +112,18 @@ renderAliased
 renderAliased render (expression `As` Alias alias) =
   render expression <> " AS " <> fromString (symbolVal' alias)
 
-class KnownPGType (ty :: PGType) where
-  renderPGType :: Proxy# ty -> ByteString
-instance KnownPGType 'PGBool where renderPGType _ = "bool"
-instance KnownPGType 'PGInt2 where renderPGType _ = "int2"
-instance KnownPGType 'PGInt4 where renderPGType _ = "int4"
-instance KnownPGType 'PGInt8 where renderPGType _ = "int8"
-instance KnownPGType 'PGNumeric where renderPGType _ = "numeric"
-instance KnownPGType 'PGFloat4 where renderPGType _ = "float4"
-instance KnownPGType 'PGFloat8 where renderPGType _ = "float8"
-instance KnownPGType 'PGSerial2 where renderPGType _ = "serial2"
-instance KnownPGType 'PGSerial4 where renderPGType _ = "serial4"
-instance KnownPGType 'PGSerial8 where renderPGType _ = "serial8"
-instance KnownPGType 'PGMoney where renderPGType _ = "money"
-instance KnownNat n => KnownPGType ('PGChar n) where
-  renderPGType _ = "char("
-    <> fromString (show (natVal' (proxy# :: Proxy# n)))
-    <> ")"
-instance KnownNat n => KnownPGType ('PGVarChar n) where
-  renderPGType _ = "varchar("
-    <> fromString (show (natVal' (proxy# :: Proxy# n)))
-    <> ")"
-instance KnownPGType 'PGText where renderPGType _ = "text"
-instance KnownPGType 'PGBytea where renderPGType _ = "bytea"
-instance KnownPGType 'PGTimestamp where renderPGType _ = "timestamp"
-instance KnownPGType 'PGTimestampTZ where renderPGType _ = "timestampTZ"
-instance KnownPGType 'PGDate where renderPGType _ = "date"
-instance KnownPGType 'PGTime where renderPGType _ = "time"
-instance KnownPGType 'PGTimeTZ where renderPGType _ = "timeTZ"
-instance KnownPGType 'PGInterval where renderPGType _ = "interval"
-instance KnownPGType 'PGUuid where renderPGType _ = "uuid"
-instance KnownPGType 'PGJson where renderPGType _ = "json"
-instance KnownPGType 'PGJsonb where renderPGType _ = "jsonb"
-
-class KnownColumns (columns :: [(Symbol,NullityType)]) where
-  renderColumns :: Proxy# columns -> ByteString
-instance
-  ( KnownSymbol column
-  , KnownPGType ty
-  ) => KnownColumns '[column ::: 'NotNull ty] where
-    renderColumns _ =
-      fromString (symbolVal' (proxy# :: Proxy# column))
-      <> " "
-      <> renderPGType (proxy# :: Proxy# ty)
-      <> " NOT NULL"
-instance
-  ( KnownSymbol column
-  , KnownPGType ty
-  ) => KnownColumns '[column ::: 'Null ty] where
-    renderColumns _ =
-      fromString (symbolVal' (proxy# :: Proxy# column))
-      <> " "
-      <> renderPGType (proxy# :: Proxy# ty)
-      <> " NULL"
-instance
-  ( KnownSymbol column
-  , KnownPGType ty
-  , KnownColumns (columnsHead ': columnsTail)
-  ) => KnownColumns ((column ::: 'NotNull ty) ': columnsHead ': columnsTail) where
-    renderColumns _ =
-      fromString (symbolVal' (proxy# :: Proxy# column))
-      <> " "
-      <> renderPGType (proxy# :: Proxy# ty)
-      <> " NOT NULL, "
-      <> renderColumns (proxy# :: Proxy# (columnsHead ': columnsTail))
-instance
-  ( KnownSymbol column
-  , KnownPGType ty
-  , KnownColumns (columnsHead ': columnsTail)
-  ) => KnownColumns ((column ::: 'Null ty) ': columnsHead ': columnsTail) where
-    renderColumns _ =
-      fromString (symbolVal' (proxy# :: Proxy# column))
-      <> " "
-      <> renderPGType (proxy# :: Proxy# ty)
-      <> " NULL, "
-      <> renderColumns (proxy# :: Proxy# (columnsHead ': columnsTail))
-
 data NullityType = Null PGType | NotNull PGType
 
-type family NullifyType nullty where
-  NullifyType ('Null ty) = 'Null ty
-  NullifyType ('NotNull ty) = 'Null ty
+data ColumnType = Optional NullityType | Required NullityType
+
+type family NullifyColumn (column :: ColumnType) where
+  NullifyColumn (optionality ('Null ty)) = optionality ('Null ty)
+  NullifyColumn (optionality ('NotNull ty)) = optionality ('Null ty)
 
 type family NullifyColumns columns where
   NullifyColumns '[] = '[]
   NullifyColumns ((column ::: ty) ': columns) =
-    (column ::: (NullifyType ty)) ': (NullifyColumns columns)
+    (column ::: NullifyColumn ty) ': (NullifyColumns columns)
 
 type family NullifyTable table where
   NullifyTable (table ::: columns) = table ::: NullifyColumns columns

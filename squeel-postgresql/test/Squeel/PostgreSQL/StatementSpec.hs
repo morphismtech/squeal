@@ -11,7 +11,6 @@ module Squeel.PostgreSQL.StatementSpec where
 import Data.Boolean
 import Data.Function
 import Data.Vinyl
-import GHC.Exts
 import Test.Hspec
 
 import Squeel.PostgreSQL.Statement
@@ -23,7 +22,7 @@ spec = do
     query `shouldRenderAs` str = renderStatement query `shouldBe` str
   it "correctly renders a simple SELECT query" $ do
     let
-      statement :: Statement '[] Tables Tables SumAndCol1
+      statement :: Statement '[] SumAndCol1 Tables Tables
       statement = select $
         ((#col1 + #col2) `As` #sum :& #col1 :& RNil)
           `from` (#table1 & where_ true)
@@ -31,7 +30,7 @@ spec = do
       "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE TRUE;"
   it "combines WHEREs using AND" $ do
     let
-      statement :: Statement '[] Tables Tables SumAndCol1
+      statement :: Statement '[] SumAndCol1 Tables Tables
       statement = select $
         ((#col1 + #col2) `As` #sum :& #col1 :& RNil)
           `from` (#table1 & where_ true & where_ false)
@@ -40,45 +39,45 @@ spec = do
   it "performs sub SELECTs" $ do
     let
       selection = ((#col1 + #col2) `As` #sum :& #col1 :& RNil) `from` #table1
-      statement :: Statement '[] Tables Tables SumAndCol1
+      statement :: Statement '[] SumAndCol1 Tables Tables
       statement = select $ starFrom (subselect (selection `As` #sub))
     statement `shouldRenderAs`
       "SELECT * FROM SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 AS sub;"
   it "does LIMIT clauses" $ do
     let
-      statement :: Statement '[] Tables Tables Columns
+      statement :: Statement '[] Columns Tables Tables
       statement = select $ starFrom (#table1 & limit 1)
     statement `shouldRenderAs` "SELECT * FROM table1 AS table1 LIMIT 1;"
   it "should use the minimum of given LIMITs" $ do
     let
-      statement :: Statement '[] Tables Tables Columns
+      statement :: Statement '[] Columns Tables Tables
       statement = select $ starFrom (#table1 & limit 1 & limit 2)
     statement `shouldRenderAs`
       "SELECT * FROM table1 AS table1 LIMIT CASE WHEN (1 <= 2) THEN 1 ELSE 2 END;"
   it "should render parameters using $ signs" $ do
     let
-      statement :: Statement '[ 'NotNull 'PGInt8] Tables Tables Columns
+      statement :: Statement '[ 'Required ('NotNull 'PGInt8)] Columns Tables Tables
       statement = select $ starFrom (#table1 & limit param1)
     statement `shouldRenderAs` "SELECT * FROM table1 AS table1 LIMIT $1;"
   it "does OFFSET clauses" $ do
     let
-      statement :: Statement '[] Tables Tables Columns
+      statement :: Statement '[] Columns Tables Tables
       statement = select $ starFrom (#table1 & offset 1)
     statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET 1;"
   it "should use the sum of given OFFSETs" $ do
     let
-      statement :: Statement '[] Tables Tables Columns
+      statement :: Statement '[] Columns Tables Tables
       statement =  select $ starFrom (#table1 & offset 1 & offset 2)
     statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET (1 + 2);"
   it "correctly render simple INSERTs" $ do
     let
-      statement :: Statement '[] Tables Tables '[]
+      statement :: Statement '[] '[] Tables Tables
       statement = insertInto #table1 $ 2 `As` #col1 :& 4 `As` #col2 :& RNil
     statement `shouldRenderAs`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
   it "should be safe against SQL injection in literal text" $ do
     let
-      statement :: Statement '[] StudentsTable StudentsTable '[]
+      statement :: Statement '[] '[] StudentsTable StudentsTable
       statement = insertInto #students $
         "Robert'); DROP TABLE students;" `As` #name :& RNil
     statement `shouldRenderAs`
@@ -86,12 +85,12 @@ spec = do
   describe "JOINs" $ do
     let
       vals =
-        #orders .&. #orderVal `As` #orderVal
-        :& #customers .&. #customerVal `As` #customerVal
-        :& #shippers .&. #shipperVal `As` #shipperVal :& RNil
+        #orders &. #orderVal `As` #orderVal
+        :& #customers &. #customerVal `As` #customerVal
+        :& #shippers &. #shipperVal `As` #shipperVal :& RNil
     it "should render CROSS JOINs" $ do
       let
-        statement :: Statement '[] JoinTables JoinTables ValueColumns
+        statement :: Statement '[] ValueColumns JoinTables JoinTables
         statement = select $ vals `from`
           (join (#orders & Cross #customers & Cross #shippers))
       statement `shouldRenderAs`
@@ -104,14 +103,14 @@ spec = do
         \ CROSS JOIN shippers AS shippers;"
     it "should render INNER JOINs" $ do
       let
-        innerJoins :: FromExpression '[] JoinTables JoinTables
+        innerJoins :: From '[] JoinTables JoinTables
         innerJoins = join $
           #orders
           & Inner #customers
-            (#orders .&. #customerID ==* #customers .&. #customerID)
+            (#orders &. #customerID ==* #customers &. #customerID)
           & Inner #shippers
-            (#orders .&. #shipperID ==* #shippers .&. #shipperID)
-        selection :: Statement '[] JoinTables JoinTables ValueColumns
+            (#orders &. #shipperID ==* #shippers &. #shipperID)
+        selection :: Statement '[] ValueColumns JoinTables JoinTables
         selection =  select $ vals `from` innerJoins
       selection `shouldRenderAs`
         "SELECT\
@@ -125,7 +124,7 @@ spec = do
         \ ON (orders.shipperID = shippers.shipperID);"
     it "should render self JOINs" $ do
       let
-        statement :: Statement '[] JoinTables JoinTables OrderColumns
+        statement :: Statement '[] OrderColumns JoinTables JoinTables
         statement = select $ #orders1 `dotStarFrom`
           (join (Table (#orders `As` #orders1)
             & Cross (#orders `As` #orders2)))
@@ -133,40 +132,55 @@ spec = do
         "SELECT orders1.*\
         \ FROM orders AS orders1\
         \ CROSS JOIN orders AS orders2;"
-  it "should render simple CREATE TABLE statements" $ do
-    let
-      statement :: Statement '[] '[] Tables '[]
-      statement = createTable #table1 (proxy# :: Proxy# Columns)
-    statement `shouldRenderAs`
+  it "should render CREATE TABLE statements" $ do
+    createTable #table1
+      (  (int4 & notNull) `As` #col1
+      :& (int4 & notNull) `As` #col2
+      :& RNil)
+      `shouldRenderAs`
       "CREATE TABLE table1 (col1 int4 NOT NULL, col2 int4 NOT NULL);"
+    createTable #table2
+      (  serial `As` #col1
+      :& text `As` #col2
+      :& (int8 & notNull & default_ 8) `As` #col3
+      :& RNil)
+      `shouldRenderAs`
+      "CREATE TABLE table2 (col1 serial, col2 text, col3 int8 NOT NULL DEFAULT 8);"
   it "should render DROP TABLE statements" $ do
     let
-      statement :: Statement '[] Tables '[] '[]
+      statement :: Statement '[] '[] Tables '[]
       statement = dropTable #table1
     statement `shouldRenderAs` "DROP TABLE table1;"
 
-type Columns = '[ "col1" ::: 'NotNull 'PGInt4, "col2" ::: 'NotNull 'PGInt4]
+type Columns =
+  '[ "col1" ::: 'Required ('NotNull 'PGInt4)
+   , "col2" ::: 'Required ('NotNull 'PGInt4)
+   ]
 type Tables = '[ "table1" ::: Columns ]
-type SumAndCol1 = '[ "sum" ::: 'NotNull 'PGInt4, "col1" ::: 'NotNull 'PGInt4]
-type StudentsColumns = '["name" ::: 'NotNull 'PGText]
+type SumAndCol1 = '[ "sum" ::: 'Required ('NotNull 'PGInt4), "col1" ::: 'Required ('NotNull 'PGInt4)]
+type StudentsColumns = '["name" ::: 'Required ('NotNull 'PGText)]
 type StudentsTable = '["students" ::: StudentsColumns]
 type OrderColumns =
-  [ "orderID"    ::: 'NotNull 'PGInt4
-  , "orderVal"   ::: 'NotNull 'PGText
-  , "customerID" ::: 'NotNull 'PGInt4
-  , "shipperID"  ::: 'NotNull 'PGInt4
-  ]
+  '[ "orderID"    ::: 'Required ('NotNull 'PGInt4)
+   , "orderVal"   ::: 'Required ('NotNull 'PGText)
+   , "customerID" ::: 'Required ('NotNull 'PGInt4)
+   , "shipperID"  ::: 'Required ('NotNull 'PGInt4)
+   ]
 type CustomerColumns =
-  [ "customerID" ::: 'NotNull 'PGInt4, "customerVal" ::: 'NotNull 'PGFloat4 ]
+  '[ "customerID" ::: 'Required ('NotNull 'PGInt4)
+   , "customerVal" ::: 'Required ('NotNull 'PGFloat4)
+   ]
 type ShipperColumns =
-  [ "shipperID" ::: 'NotNull 'PGInt4, "shipperVal" ::: 'NotNull 'PGBool ]
+  '[ "shipperID" ::: 'Required ('NotNull 'PGInt4)
+   , "shipperVal" ::: 'Required ('NotNull 'PGBool)
+   ]
 type JoinTables =
-  [ "shippers"  ::: ShipperColumns
-  , "customers" ::: CustomerColumns
-  , "orders"    ::: OrderColumns
-  ]
+  '[ "shippers"  ::: ShipperColumns
+   , "customers" ::: CustomerColumns
+   , "orders"    ::: OrderColumns
+   ]
 type ValueColumns =
-  [ "orderVal"    ::: 'NotNull 'PGText
-  , "customerVal" ::: 'NotNull 'PGFloat4
-  , "shipperVal"  ::: 'NotNull 'PGBool
-  ]
+  '[ "orderVal"    ::: 'Required ('NotNull 'PGText)
+   , "customerVal" ::: 'Required ('NotNull 'PGFloat4)
+   , "shipperVal"  ::: 'Required ('NotNull 'PGBool)
+   ]
