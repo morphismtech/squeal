@@ -1,7 +1,9 @@
 {-# LANGUAGE
     DataKinds
+  , FlexibleContexts
   , FlexibleInstances
   , GADTs
+  , LambdaCase
   , MagicHash
   , MultiParamTypeClasses
   , PolyKinds
@@ -16,8 +18,8 @@ import Data.Aeson (FromJSON, ToJSON, eitherDecodeStrict, encode)
 import Data.ByteString (ByteString)
 import Data.Int (Int16,Int32,Int64)
 import Generics.SOP
+import GHC.Generics
 import PostgreSQL.Binary.Decoding (Value)
-import PostgreSQL.Binary.Encoding (Encoding)
 import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
@@ -92,7 +94,7 @@ instance (FromValue pg x, FromValues pgs xs)
       :* decodeValues (proxy# :: Proxy# pgs) results
 
 class ToValue x pg where
-  toValue :: Proxy# pg -> x -> Encoding
+  toValue :: Proxy# pg -> x -> Encoder.Encoding
 instance ToValue Int16 'PGInt2 where
   toValue _ = Encoder.int2_int16
 instance ToValue Int32 'PGInt4 where
@@ -144,3 +146,28 @@ instance (ToValue x pg, ToValues xs pgs)
     toValues _ (I x :* xs)
       = Encoder.encodingBytes ((toValue (proxy# :: Proxy# pg)) x)
       : toValues (proxy# :: Proxy# pgs) xs
+
+newtype Encoding x = Encoding { unEncoding :: x -> Encoder.Encoding }
+class ToEncoding pg x where toEncoding :: Proxy pg -> Encoding x
+
+toEncodings
+  :: AllZip ToEncoding pgs xs
+  => NP Proxy pgs
+  -> NP Encoding xs
+toEncodings = \case
+  Nil -> Nil
+  proxy :* proxies -> toEncoding proxy :* toEncodings proxies
+
+encodeParameters' :: NP (Encoding :*: I) xs -> NP (K ByteString) xs
+encodeParameters' = \case
+  Nil -> Nil
+  (Encoding enc :*: I x) :* parameters ->
+    K (Encoder.encodingBytes (enc x)) :* encodeParameters' parameters
+
+encodeParameters
+  :: AllZip ToEncoding pgs xs
+  => NP Proxy pgs
+  -> NP I xs
+  -> NP (K ByteString) xs
+encodeParameters proxies parameters = encodeParameters' $
+  hzipWith (:*:) (toEncodings proxies) parameters
