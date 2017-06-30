@@ -15,8 +15,7 @@ import Control.Arrow (left)
 import Data.Aeson (FromJSON, ToJSON, eitherDecodeStrict, encode)
 import Data.ByteString (ByteString)
 import Data.Int (Int16,Int32,Int64)
-import Data.Vinyl
-import Data.Vinyl.Functor
+import Generics.SOP
 import PostgreSQL.Binary.Decoding (Value)
 import PostgreSQL.Binary.Encoding (Encoding)
 import Data.Scientific (Scientific)
@@ -84,13 +83,13 @@ instance FromValue pg ty => FromValue (column ::: 'Required ('NotNull pg)) ty wh
   fromValue _ = fromValue (proxy# :: Proxy# pg)
 
 class FromValues pgs xs where
-  decodeValues :: Proxy# pgs -> Rec (Const ByteString) xs -> Rec (Either Text) xs
-instance FromValues '[] '[] where decodeValues _ _ = RNil
+  decodeValues :: Proxy# pgs -> NP (K ByteString) xs -> NP (Either Text) xs
+instance FromValues '[] '[] where decodeValues _ _ = Nil
 instance (FromValue pg x, FromValues pgs xs)
   => FromValues (pg ': pgs) (x ': xs) where
-    decodeValues _ (Const result :& results) =
+    decodeValues _ (K result :* results) =
       decodeValue (proxy# :: Proxy# pg) result
-      :& decodeValues (proxy# :: Proxy# pgs) results
+      :* decodeValues (proxy# :: Proxy# pgs) results
 
 class ToValue x pg where
   toValue :: Proxy# pg -> x -> Encoding
@@ -138,10 +137,10 @@ instance ToValue DiffTime 'PGInterval where
   toValue _ = Encoder.interval_int
 
 class ToValues xs pgs where
-  toValues :: Proxy# pgs -> Rec Identity xs -> [ByteString]
+  toValues :: Proxy# pgs -> NP I xs -> [ByteString]
 instance ToValues '[] '[] where toValues _ _ = []
 instance (ToValue x pg, ToValues xs pgs)
   => ToValues (x ': xs) (pg ': pgs) where
-    toValues _ (Identity x :& xs)
+    toValues _ (I x :* xs)
       = Encoder.encodingBytes ((toValue (proxy# :: Proxy# pg)) x)
       : toValues (proxy# :: Proxy# pgs) xs

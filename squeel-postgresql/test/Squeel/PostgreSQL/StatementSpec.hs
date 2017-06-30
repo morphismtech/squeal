@@ -10,7 +10,7 @@ module Squeel.PostgreSQL.StatementSpec where
 
 import Data.Boolean
 import Data.Function
-import Data.Vinyl
+import Generics.SOP hiding (from)
 import Test.Hspec
 
 import Squeel.PostgreSQL.Statement
@@ -24,7 +24,7 @@ spec = do
     let
       statement :: Statement '[] SumAndCol1 Tables Tables
       statement = select $
-        ((#col1 + #col2) `As` #sum :& #col1 :& RNil)
+        ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
           `from` (#table1 & where_ true)
     statement `shouldRenderAs`
       "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE TRUE;"
@@ -32,13 +32,13 @@ spec = do
     let
       statement :: Statement '[] SumAndCol1 Tables Tables
       statement = select $
-        ((#col1 + #col2) `As` #sum :& #col1 :& RNil)
+        ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
           `from` (#table1 & where_ true & where_ false)
     statement `shouldRenderAs`
       "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE (TRUE AND FALSE);"
   it "performs sub SELECTs" $ do
     let
-      selection = ((#col1 + #col2) `As` #sum :& #col1 :& RNil) `from` #table1
+      selection = ((#col1 + #col2) `As` #sum :* #col1 :* Nil) `from` #table1
       statement :: Statement '[] SumAndCol1 Tables Tables
       statement = select $ starFrom (subselect (selection `As` #sub))
     statement `shouldRenderAs`
@@ -72,22 +72,22 @@ spec = do
   it "correctly render simple INSERTs" $ do
     let
       statement :: Statement '[] '[] Tables Tables
-      statement = insertInto #table1 $ 2 `As` #col1 :& 4 `As` #col2 :& RNil
+      statement = insertInto #table1 $ 2 `As` #col1 :* 4 `As` #col2 :* Nil
     statement `shouldRenderAs`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
   it "should be safe against SQL injection in literal text" $ do
     let
       statement :: Statement '[] '[] StudentsTable StudentsTable
       statement = insertInto #students $
-        "Robert'); DROP TABLE students;" `As` #name :& RNil
+        "Robert'); DROP TABLE students;" `As` #name :* Nil
     statement `shouldRenderAs`
       "INSERT INTO students (name) VALUES (E'Robert''); DROP TABLE students;');"
   describe "JOINs" $ do
     let
       vals =
         #orders &. #orderVal `As` #orderVal
-        :& #customers &. #customerVal `As` #customerVal
-        :& #shippers &. #shipperVal `As` #shipperVal :& RNil
+        :* #customers &. #customerVal `As` #customerVal
+        :* #shippers &. #shipperVal `As` #shipperVal :* Nil
     it "should render CROSS JOINs" $ do
       let
         statement :: Statement '[] ValueColumns JoinTables JoinTables
@@ -135,15 +135,15 @@ spec = do
   it "should render CREATE TABLE statements" $ do
     createTable #table1
       (  (int4 & notNull) `As` #col1
-      :& (int4 & notNull) `As` #col2
-      :& RNil)
+      :* (int4 & notNull) `As` #col2
+      :* Nil)
       `shouldRenderAs`
       "CREATE TABLE table1 (col1 int4 NOT NULL, col2 int4 NOT NULL);"
     createTable #table2
       (  serial `As` #col1
-      :& text `As` #col2
-      :& (int8 & notNull & default_ 8) `As` #col3
-      :& RNil)
+      :* text `As` #col2
+      :* (int8 & notNull & default_ 8) `As` #col3
+      :* Nil)
       `shouldRenderAs`
       "CREATE TABLE table2 (col1 serial, col2 text, col3 int8 NOT NULL DEFAULT 8);"
   it "should render DROP TABLE statements" $ do

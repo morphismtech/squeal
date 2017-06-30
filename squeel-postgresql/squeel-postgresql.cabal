@@ -25,6 +25,7 @@ library
     , base
     , Boolean
     , bytestring
+    , generics-sop
     , lifted-base
     , monad-control
     , mtl
@@ -35,7 +36,6 @@ library
     , time
     , transformers-base
     , uuid
-    , vinyl
 
 test-suite squeel-postgresql-test
   default-language: Haskell2010
@@ -49,9 +49,9 @@ test-suite squeel-postgresql-test
   build-depends:
       base
     , Boolean
+    , generics-sop
     , hspec
     , squeel-postgresql
-    , vinyl
 
 executable squeel-postgresql-example
   default-language: Haskell2010
@@ -61,9 +61,9 @@ executable squeel-postgresql-example
   build-depends:
       base
     , bytestring
+    , generics-sop
     , squeel-postgresql
     , transformers-base
-    , vinyl
 
 source-repository head
   type: git

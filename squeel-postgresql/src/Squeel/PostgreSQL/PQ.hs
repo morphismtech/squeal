@@ -23,8 +23,7 @@ import Control.Monad.Trans
 import Control.Monad.Trans.Control
 import Data.ByteString (ByteString)
 import Data.Text (Text)
-import Data.Vinyl
-import Data.Vinyl.Functor
+import Generics.SOP
 import GHC.Exts
 import GHC.TypeLits
 
@@ -72,7 +71,7 @@ class MonadPQ pq where
   pqExecParams
     :: (MonadBase IO io, ToOids ps, ToValues xs ps)
     => Statement ps ys db0 db1
-    -> Rec Identity xs
+    -> NP I xs
     -> pq db0 db1 io (Maybe (Result ys))
 
   pqPrepare
@@ -84,7 +83,7 @@ class MonadPQ pq where
   pqExecPrepared
     :: (MonadBase IO io, ToValues xs ps)
     => PreparedStatement ps ys db0 db1
-    -> Rec Identity xs
+    -> NP I xs
     -> pq db0 db1 io (Maybe (Result ys))
 
 instance MonadPQ PQ where

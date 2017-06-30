@@ -20,8 +20,7 @@ import Data.ByteString (ByteString)
 import Data.Maybe
 import Data.Monoid
 import Data.String
-import Data.Vinyl
-import Data.Vinyl.Functor
+import Generics.SOP
 import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
@@ -117,8 +116,8 @@ unsafeFunction
   :: ByteString
   -> Expression params tables xty
   -> Expression params tables yty
-unsafeFunction fn x = UnsafeExpression $ mconcat
-  [fn, "(", renderExpression x, ")"]
+unsafeFunction fun x = UnsafeExpression $ mconcat
+  [fun, "(", renderExpression x, ")"]
 
 instance PGNum ty => Num (Expression params tables ('Required (nullity ty))) where
   (+) = unsafeBinaryOp "+"
@@ -407,7 +406,8 @@ Alias tab `dotStarFrom` tabs = UnsafeSelection $
   fromString (symbolVal' tab) <> ".* FROM " <> renderFrom tabs
 
 from
-  :: Rec (Aliased (Expression params tables)) columns
+  :: SListI columns
+  => NP (Aliased (Expression params tables)) columns
   -> From params schema tables
   -> Selection params schema columns
 list `from` tabs = UnsafeSelection $
@@ -415,8 +415,8 @@ list `from` tabs = UnsafeSelection $
   where
     renderList
       = ByteString.intercalate ", "
-      . recordToList
-      . rmap (Const . renderAliased renderExpression)
+      . hcollapse
+      . hmap (K . renderAliased renderExpression)
 
 select
   :: Selection params schema columns
@@ -436,9 +436,9 @@ INSERT statements
 -----------------------------------------}
 
 insertInto
-  :: HasTable table schema columns
+  :: (SListI columns, HasTable table schema columns)
   => Alias table
-  -> Rec (Aliased (Expression params '[])) columns
+  -> NP (Aliased (Expression params '[])) columns
   -> Statement params '[] schema schema
 insertInto (Alias table) expressions = UnsafeStatement $ "INSERT INTO "
   <> fromString (symbolVal' table)
@@ -447,11 +447,11 @@ insertInto (Alias table) expressions = UnsafeStatement $ "INSERT INTO "
   <> ByteString.intercalate ", " values
   <> ");"
   where
-    aliases = recordToList $ rmap
-      (\ (_ `As` Alias name) -> Const (fromString (symbolVal' name)))
+    aliases = hcollapse $ hmap
+      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
       expressions
-    values = recordToList $ rmap
-      (\ (expression `As` _) -> Const (renderExpression expression))
+    values = hcollapse $ hmap
+      (\ (expression `As` _) -> K (renderExpression expression))
       expressions
 
 {-----------------------------------------
@@ -486,16 +486,16 @@ serial :: TypeExpression ('Optional ('NotNull 'PGInt4))
 serial = UnsafeTypeExpression "serial"
 
 createTable
-  :: KnownSymbol table
+  :: (KnownSymbol table, SListI columns)
   => Alias table
-  -> Rec (Aliased TypeExpression) columns
+  -> NP (Aliased TypeExpression) columns
   -> Statement '[] '[] schema ((table ::: columns) ': schema)
 createTable (Alias table) columns = UnsafeStatement $ mconcat
   [ "CREATE TABLE "
   , fromString $ symbolVal' table
   , " ("
-  , ByteString.intercalate ", " . recordToList $
-      rmap (Const . renderColumn) columns
+  , ByteString.intercalate ", " . hcollapse $
+      hmap (K . renderColumn) columns
   , ");"
   ]
   where
@@ -523,33 +523,33 @@ instance {-# OVERLAPPABLE #-}
 UPDATE statements
 -----------------------------------------}
 
-set :: g x -> (Maybe `Compose` g) x
-set = Compose . Just
+set :: g x -> (Maybe :.: g) x
+set = Comp . Just
 
-same :: (Maybe `Compose` g) x
-same = Compose Nothing
+same :: (Maybe :.: g) x
+same = Comp Nothing
 
 update
-  :: HasTable table schema columns
+  :: (HasTable table schema columns, SListI columns)
   => Alias table
-  -> Rec (Aliased (Maybe `Compose` Expression params '[table ::: columns])) columns
+  -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
   -> Expression params '[table ::: columns] ('Required ('NotNull 'PGBool))
   -> Statement params '[] schema schema
 update (Alias table) columns where' = UnsafeStatement $ mconcat
   [ "UPDATE "
   , fromString $ symbolVal' table
   , " SET "
-  , ByteString.intercalate ", " . catMaybes . recordToList $
-      rmap (Const . renderSet) columns
+  , ByteString.intercalate ", " . catMaybes . hcollapse $
+      hmap (K . renderSet) columns
   , " WHERE ", renderExpression where'
   ] where
     renderSet
-      :: Aliased (Maybe `Compose` Expression params tables) column
+      :: Aliased (Maybe :.: Expression params tables) column
       -> Maybe ByteString
     renderSet = \case
-      Compose (Just expression) `As` Alias column -> Just $ mconcat
+      Comp (Just expression) `As` Alias column -> Just $ mconcat
         [ fromString $ symbolVal' column
         , " = "
         , renderExpression expression
         ]
-      Compose Nothing `As` _ -> Nothing
+      Comp Nothing `As` _ -> Nothing

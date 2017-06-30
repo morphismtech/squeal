@@ -13,7 +13,7 @@ import Control.Monad.Base
 import Data.Function ((&))
 import Data.Int
 import Data.Monoid
-import Data.Vinyl
+import Generics.SOP
 import Squeel.PostgreSQL
 
 import qualified Data.ByteString.Char8 as Char8
@@ -29,18 +29,18 @@ main = do
   connection1 <- flip execPQ connection0 $ pqExec $
     createTable #students
       (  (text & notNull) `As` #name
-      :& RNil )
+      :* Nil )
     >>>
     createTable #table1
       (  (int4 & notNull) `As` #col1
-      :& (int4 & notNull) `As` #col2
-      :& RNil )
+      :* (int4 & notNull) `As` #col2
+      :* Nil )
   connection2 <- flip execPQ connection1 $ do
     _insertTable1Result <- pqExec $
-      insertInto #table1 ( 1 `As` #col1 :& 2 `As` #col2 :& RNil )
+      insertInto #table1 ( 1 `As` #col1 :* 2 `As` #col2 :* Nil )
       >>>
-      insertInto #table1 ( 3 `As` #col1 :& 4 `As` #col2 :& RNil )
-    Just selectTable1Result <- flip pqExecParams RNil $
+      insertInto #table1 ( 3 `As` #col1 :* 4 `As` #col2 :* Nil )
+    Just selectTable1Result <- flip pqExecParams Nil $
       (select $ starFrom #table1 :: Statement '[] Columns Tables Tables)
     Just (Right value00) <- getvalue selectTable1Result (RowNumber 0) colNum0
     Just (Right value01) <- getvalue selectTable1Result (RowNumber 0) colNum1
