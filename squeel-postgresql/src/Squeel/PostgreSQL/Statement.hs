@@ -83,6 +83,11 @@ Alias table &. Alias column = UnsafeExpression $
 def :: Expression params '[] ('Optional (nullity ty))
 def = UnsafeExpression "DEFAULT"
 
+notDef
+  :: Expression params '[] ('Required (nullity ty))
+  -> Expression params '[] ('Optional (nullity ty))
+notDef = UnsafeExpression . renderExpression
+
 null :: Expression params tables (optionality ('Null ty))
 null = UnsafeExpression "NULL"
 
