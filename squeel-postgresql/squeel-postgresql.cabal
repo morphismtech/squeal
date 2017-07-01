@@ -63,7 +63,9 @@ executable squeel-postgresql-example
       base
     , bytestring
     , generics-sop
+    , mtl
     , squeel-postgresql
+    , transformers
     , transformers-base
 
 source-repository head

@@ -73,7 +73,7 @@ class MonadPQ pq where
     -> pq db0 db1 io (Maybe (Result '[]))
 
   pqExecParams
-    :: (MonadBase IO io, ToOids ps, AllZip HasEncoding xs ps, All Top ps)
+    :: (MonadBase IO io, ToOids ps, AllZip HasEncoding ps xs, All Top ps)
     => Statement ps ys db0 db1
     -> NP I xs
     -> pq db0 db1 io (Maybe (Result ys))
@@ -85,7 +85,7 @@ class MonadPQ pq where
     -> pq db0 db1 io (Maybe (Result []), PreparedStatement ps xs db0 db1)
 
   pqExecPrepared
-    :: (MonadBase IO io, AllZip HasEncoding xs ps, All Top ps)
+    :: (MonadBase IO io, AllZip HasEncoding ps xs, All Top ps)
     => PreparedStatement ps ys db0 db1
     -> NP I xs
     -> pq db0 db1 io (Maybe (Result ys))
@@ -240,7 +240,7 @@ getRow
   => RowNumber -> Value pgs (ExceptT Text (MaybeT io)) (NP I xs)
 getRow (RowNumber r) = Value $ \ (Result result :: Result pgs) -> do
   maybeBytestrings <- traverse (liftBase . LibPQ.getvalue result r)
-    [1 .. fromIntegral (lengthSList (Proxy :: Proxy pgs))]
+    [0 .. fromIntegral (lengthSList (Proxy :: Proxy pgs)) - 1]
   case fromList (catMaybes maybeBytestrings) of
     Nothing -> mzero
     Just bytestrings -> case decodings (Proxy :: Proxy pgs) bytestrings of
