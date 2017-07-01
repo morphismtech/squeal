@@ -10,6 +10,7 @@
   , MultiParamTypeClasses
   , RankNTypes
   , ScopedTypeVariables
+  , TypeApplications
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
@@ -22,6 +23,7 @@ import Control.Monad.Base
 import Control.Monad.Trans
 import Control.Monad.Trans.Control
 import Data.ByteString (ByteString)
+import Data.Proxy (Proxy)
 import Data.Text (Text)
 import Generics.SOP
 import GHC.Exts
@@ -69,7 +71,7 @@ class MonadPQ pq where
     -> pq db0 db1 io (Maybe (Result '[]))
 
   pqExecParams
-    :: (MonadBase IO io, ToOids ps, ToValues xs ps)
+    :: (MonadBase IO io, ToOids ps, AllZip HasEncoding xs ps, All Top ps)
     => Statement ps ys db0 db1
     -> NP I xs
     -> pq db0 db1 io (Maybe (Result ys))
@@ -81,7 +83,7 @@ class MonadPQ pq where
     -> pq db0 db1 io (Maybe (Result []), PreparedStatement ps xs db0 db1)
 
   pqExecPrepared
-    :: (MonadBase IO io, ToValues xs ps)
+    :: (MonadBase IO io, AllZip HasEncoding xs ps, All Top ps)
     => PreparedStatement ps ys db0 db1
     -> NP I xs
     -> pq db0 db1 io (Maybe (Result ys))
@@ -104,12 +106,11 @@ instance MonadPQ PQ where
   pqExecParams (UnsafeStatement q :: Statement ps ys db0 db1) params =
     PQ $ \ (Connection conn) -> do
       let
+        paramValues = encodings (Proxy :: Proxy ps) params
+        oids = toOids (proxy# :: Proxy# ps)
         params' =
           [ Just (oid, param', LibPQ.Binary)
-          | (oid, param') <-
-              zip
-                (toOids (proxy# :: Proxy# ps))
-                (toValues (proxy# :: Proxy# ps) params)
+          | (oid, param') <- zip oids paramValues
           ]
       result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
       return (Result <$> result, Connection conn)
@@ -126,9 +127,10 @@ instance MonadPQ PQ where
   pqExecPrepared (q :: PreparedStatement ps ys db0 db1) params =
     PQ $ \ (Connection conn) -> do
       let
+        paramValues = encodings (Proxy :: Proxy ps) params
         params' =
           [ Just (param', LibPQ.Binary)
-          | param' <- toValues (proxy# :: Proxy# ps) params
+          | (param') <- paramValues
           ]
       result <- liftBase $
         LibPQ.execPrepared conn (renderPreparedStatement q) params' LibPQ.Binary
@@ -202,12 +204,20 @@ colNum3 = colNum (proxy# :: Proxy# 3)
 colNum4 :: ColumnNumber (c0:c1:c2:c3:c4:cs) c4
 colNum4 = colNum (proxy# :: Proxy# 4)
 
+newtype Value pgs m x = Value { runValue :: Result pgs -> m x }
+
+-- getValue
+--   :: (HasDecoding pg x, MonadBase IO io)
+--   => RowNumber
+--   -> ColumnNumber pgs pg
+--   -> Value pgs (ExceptT Text (MaybeT io)) x
+
 getvalue
-  :: (FromValue x y, MonadBase IO io)
+  :: (HasDecoding x y, MonadBase IO io)
   => Result xs
   -> RowNumber
   -> ColumnNumber xs x
   -> io (Maybe (Either Text y))
 getvalue (Result result) (RowNumber r) (ColumnNumber c :: ColumnNumber xs x) =
-  liftBase $ fmap (fmap (decodeValue (proxy# :: Proxy# x)))
+  liftBase $ fmap (fmap (decodeValue (Proxy :: Proxy x)))
     (LibPQ.getvalue' result r c)
