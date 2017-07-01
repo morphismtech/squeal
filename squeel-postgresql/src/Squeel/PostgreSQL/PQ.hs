@@ -237,10 +237,8 @@ getValue (RowNumber r) (ColumnNumber c :: ColumnNumber pgs pg) =
 
 getRow
   :: (AllZip HasDecoding pgs xs, MonadBase IO io)
-  => RowNumber
-  -> proxy pgs
-  -> Value pgs (ExceptT Text (MaybeT io)) (NP I xs)
-getRow (RowNumber r) (_ :: proxy pgs) = Value $ \ (Result result) -> do
+  => RowNumber -> Value pgs (ExceptT Text (MaybeT io)) (NP I xs)
+getRow (RowNumber r) = Value $ \ (Result result :: Result pgs) -> do
   maybeBytestrings <- traverse (liftBase . LibPQ.getvalue result r)
     [1 .. fromIntegral (lengthSList (Proxy :: Proxy pgs))]
   case fromList (catMaybes maybeBytestrings) of
