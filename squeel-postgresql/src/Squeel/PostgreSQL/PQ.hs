@@ -20,13 +20,15 @@ module Squeel.PostgreSQL.PQ where
 
 import Control.Exception.Lifted
 import Control.Monad.Base
-import Control.Monad.Trans
+import Control.Monad.Except
+import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Control
 import Data.ByteString (ByteString)
+import Data.Maybe
 import Data.Proxy (Proxy)
 import Data.Text (Text)
 import Generics.SOP
-import GHC.Exts
+import GHC.Exts hiding (fromList)
 import GHC.TypeLits
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
@@ -205,19 +207,44 @@ colNum4 :: ColumnNumber (c0:c1:c2:c3:c4:cs) c4
 colNum4 = colNum (proxy# :: Proxy# 4)
 
 newtype Value pgs m x = Value { runValue :: Result pgs -> m x }
+  deriving (Functor)
+instance Applicative m => Applicative (Value pgs m) where
+  pure x = Value $ \ _result -> pure x
+  mf <*> mx = Value $ \ result -> runValue mf result <*> runValue mx result
+instance Monad m => Monad (Value pgs m) where
+  return = pure
+  mx >>= f = Value $ \ result -> do
+    x <- runValue mx result
+    runValue (f x) result
+instance MonadTrans (Value pgs) where
+  lift m = Value $ \ _result -> m
+instance MonadBase b m => MonadBase b (Value pgs m) where
+  liftBase = lift . liftBase
 
--- getValue
---   :: (HasDecoding pg x, MonadBase IO io)
---   => RowNumber
---   -> ColumnNumber pgs pg
---   -> Value pgs (ExceptT Text (MaybeT io)) x
+getValue
+  :: (HasDecoding pg x, MonadBase IO io)
+  => RowNumber
+  -> ColumnNumber pgs pg
+  -> Value pgs (ExceptT Text (MaybeT io)) x
+getValue (RowNumber r) (ColumnNumber c :: ColumnNumber pgs pg) =
+  Value $ \ (Result result) -> do
+    maybeBytestring <- liftBase $ LibPQ.getvalue result r c
+    case maybeBytestring of
+      Nothing -> mzero
+      Just bytestring -> case decodeValue (Proxy :: Proxy pg) bytestring of
+        Left err -> throwError err
+        Right val -> return val
 
-getvalue
-  :: (HasDecoding x y, MonadBase IO io)
-  => Result xs
-  -> RowNumber
-  -> ColumnNumber xs x
-  -> io (Maybe (Either Text y))
-getvalue (Result result) (RowNumber r) (ColumnNumber c :: ColumnNumber xs x) =
-  liftBase $ fmap (fmap (decodeValue (Proxy :: Proxy x)))
-    (LibPQ.getvalue' result r c)
+getRow
+  :: (AllZip HasDecoding pgs xs, MonadBase IO io)
+  => RowNumber
+  -> proxy pgs
+  -> Value pgs (ExceptT Text (MaybeT io)) (NP I xs)
+getRow (RowNumber r) (_ :: proxy pgs) = Value $ \ (Result result) -> do
+  maybeBytestrings <- traverse (liftBase . LibPQ.getvalue result r)
+    [1 .. fromIntegral (lengthSList (Proxy :: Proxy pgs))]
+  case fromList (catMaybes maybeBytestrings) of
+    Nothing -> mzero
+    Just bytestrings -> case decodings (Proxy :: Proxy pgs) bytestrings of
+      Left err -> throwError err
+      Right row -> return row

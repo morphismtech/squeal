@@ -34,6 +34,7 @@ library
     , scientific
     , text
     , time
+    , transformers
     , transformers-base
     , uuid
 

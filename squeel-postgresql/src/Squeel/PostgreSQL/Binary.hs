@@ -82,18 +82,6 @@ instance HasDecoding 'PGTimestampTZ UTCTime where
 instance HasDecoding 'PGInterval DiffTime where
   decoding _ = Decoder.interval_int
 
-{-
-encodings
-  :: AllZip HasEncoding xs pgs
-  => proxy pgs
-  -> NP I xs
-  -> [ByteString]
-encodings _ Nil = []
-encodings (_ :: proxy pgs) (I x :* xs) =
-  case (hpure Proxy :: NP Proxy pgs) of
-    proxy :* proxies -> undefined (encoding proxy x) : encodings proxies xs
--}
-
 decodings
   :: AllZip HasDecoding pgs xs
   => proxy pgs
@@ -104,17 +92,6 @@ decodings (_ :: proxy pgs) (K bytestring :* bytestrings) =
     proxy :* proxies -> (:*)
       <$> (I <$> Decoder.valueParser (decoding proxy) bytestring)
       <*> decodings proxies bytestrings
--- instance HasDecoding pg ty => HasDecoding (column ::: 'Required ('NotNull pg)) ty where
---   decoding _ = decoding (proxy# :: Proxy# pg)
-
--- class HasDecodings pgs xs where
---   decodeValues :: Proxy# pgs -> NP (K ByteString) xs -> NP (Either Text) xs
--- instance HasDecodings '[] '[] where decodeValues _ _ = Nil
--- instance (HasDecoding pg x, HasDecodings pgs xs)
---   => HasDecodings (pg ': pgs) (x ': xs) where
---     decodeValues _ (K result :* results) =
---       decodeValue (proxy# :: Proxy# pg) result
---       :* decodeValues (proxy# :: Proxy# pgs) results
 
 class HasEncoding x pg where
   encoding :: proxy pg -> x -> Encoder.Encoding
@@ -171,37 +148,3 @@ encodings (_ :: proxy pgs) (I x :* xs) =
   case (hpure Proxy :: NP Proxy pgs) of
     proxy :* proxies -> Encoder.encodingBytes (encoding proxy x)
       : encodings proxies xs
-
--- class HasEncodings xs pgs where
---   encodings :: Proxy# pgs -> NP I xs -> [ByteString]
--- instance HasEncodings '[] '[] where encodings _ _ = []
--- instance (HasEncoding x pg, HasEncodings xs pgs)
---   => HasEncodings (x ': xs) (pg ': pgs) where
---     encodings _ (I x :* xs)
---       = Encoder.encodingBytes ((encoding (proxy# :: Proxy# pg)) x)
---       : encodings (proxy# :: Proxy# pgs) xs
-
--- newtype Encoding x = Encoding { unEncoding :: x -> Encoder.Encoding }
--- class ToEncoding pg x where toEncoding :: Proxy pg -> Encoding x
-
--- toEncodings
---   :: AllZip ToEncoding pgs xs
---   => NP Proxy pgs
---   -> NP Encoding xs
--- toEncodings = \case
---   Nil -> Nil
---   proxy :* proxies -> toEncoding proxy :* toEncodings proxies
---
--- encodeParameters' :: NP (Encoding :*: I) xs -> NP (K ByteString) xs
--- encodeParameters' = \case
---   Nil -> Nil
---   (Encoding enc :*: I x) :* parameters ->
---     K (Encoder.encodingBytes (enc x)) :* encodeParameters' parameters
---
--- encodeParameters
---   :: AllZip ToEncoding pgs xs
---   => NP Proxy pgs
---   -> NP I xs
---   -> NP (K ByteString) xs
--- encodeParameters proxies parameters = encodeParameters' $
---   hzipWith (:*:) (toEncodings proxies) parameters
