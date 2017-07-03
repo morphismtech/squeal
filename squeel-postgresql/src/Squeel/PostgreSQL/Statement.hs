@@ -215,6 +215,24 @@ instance
     ceiling = fromIntegerB . unsafeFunction "ceiling"
     floor = fromIntegerB . unsafeFunction "floor"
 
+instance
+  ( IntegerOf (Expression params tables ('Required ('NotNull ty)))
+    ~ (Expression params tables ('Required ('NotNull 'PGInt8)))
+  , PGNum ty
+  , PGTyped ty
+  , PGCast 'PGInt8 ty
+  , PGCast 'PGNumeric ty
+  , PGFloating ty
+  )
+  => RealFloatB (Expression params tables ('Required ('NotNull ty))) where
+    isNaN x = x ==* UnsafeExpression "\'NaN\'"
+    isInfinite x = x ==* UnsafeExpression "\'Infinity\'"
+      ||* x ==* UnsafeExpression "\'-Infinity\'"
+    isNegativeZero x = x ==* UnsafeExpression "-0"
+    isIEEE _ = true
+    atan2 y x = UnsafeExpression $
+      "atan2(" <> renderExpression y <> ", " <> renderExpression x <> ")"
+
 instance IsString (Expression params tables ('Required (nullity 'PGText))) where
   fromString str = UnsafeExpression $
     "E\'" <> fromString (escape =<< str) <> "\'"
