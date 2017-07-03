@@ -130,10 +130,7 @@ instance MonadPQ PQ where
     PQ $ \ (Connection conn) -> do
       let
         paramValues = encodings (Proxy :: Proxy ps) params
-        params' =
-          [ Just (param', LibPQ.Binary)
-          | (param') <- paramValues
-          ]
+        params' = [ Just (param', LibPQ.Binary) | param' <- paramValues ]
       result <- liftBase $
         LibPQ.execPrepared conn (renderPreparedStatement q) params' LibPQ.Binary
       return (Result <$> result, Connection conn)
