@@ -139,11 +139,7 @@ instance PGNum ty
 instance PGFractional ty
   => Fractional (Expression params tables ('Required (nullity ty))) where
     (/) = unsafeBinaryOp "/"
-    fromRational x = UnsafeExpression $ mconcat
-      [ fromString (show (numerator x)) <> "."
-      , "/"
-      , fromString (show (denominator x)) <> "."
-      ]
+    fromRational x = fromInteger (numerator x) / fromInteger (denominator x)
 
 instance (PGFloating ty, PGCast 'PGNumeric ty, PGTyped ty)
   => Floating (Expression params tables ('Required (nullity ty))) where
