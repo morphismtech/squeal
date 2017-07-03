@@ -520,9 +520,6 @@ class KnownSymbol table => DropTable table schema0 schema1
 instance {-# OVERLAPPING #-}
   (KnownSymbol table, table ~ table')
     => DropTable table ((table' ::: columns) ': schema) schema
--- instance {-# OVERLAPPING #-}
---   (KnownSymbol table, TypeError ('Text "Can't drop table " ':<>: 'ShowType table ':<>: 'Text "; not found."))
---     => DropTable table '[] '[]
 instance {-# OVERLAPPABLE #-}
   DropTable table schema0 schema1
     => DropTable table (table' ': schema0) (table' ': schema1)
