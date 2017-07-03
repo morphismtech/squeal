@@ -10,6 +10,7 @@
   , MultiParamTypeClasses
   , RankNTypes
   , ScopedTypeVariables
+  , TypeApplications
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
@@ -19,13 +20,15 @@ module Squeel.PostgreSQL.PQ where
 
 import Control.Exception.Lifted
 import Control.Monad.Base
-import Control.Monad.Trans
+import Control.Monad.Except
+import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Control
 import Data.ByteString (ByteString)
+import Data.Maybe
+import Data.Proxy (Proxy)
 import Data.Text (Text)
-import Data.Vinyl
-import Data.Vinyl.Functor
-import GHC.Exts
+import Generics.SOP
+import GHC.Exts hiding (fromList)
 import GHC.TypeLits
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
@@ -70,9 +73,9 @@ class MonadPQ pq where
     -> pq db0 db1 io (Maybe (Result '[]))
 
   pqExecParams
-    :: (MonadBase IO io, ToOids ps, ToValues xs ps)
+    :: (MonadBase IO io, ToOids ps, AllZip HasEncoding ps xs, All Top ps)
     => Statement ps ys db0 db1
-    -> Rec Identity xs
+    -> NP I xs
     -> pq db0 db1 io (Maybe (Result ys))
 
   pqPrepare
@@ -82,9 +85,9 @@ class MonadPQ pq where
     -> pq db0 db1 io (Maybe (Result []), PreparedStatement ps xs db0 db1)
 
   pqExecPrepared
-    :: (MonadBase IO io, ToValues xs ps)
+    :: (MonadBase IO io, AllZip HasEncoding ps xs, All Top ps)
     => PreparedStatement ps ys db0 db1
-    -> Rec Identity xs
+    -> NP I xs
     -> pq db0 db1 io (Maybe (Result ys))
 
 instance MonadPQ PQ where
@@ -105,12 +108,11 @@ instance MonadPQ PQ where
   pqExecParams (UnsafeStatement q :: Statement ps ys db0 db1) params =
     PQ $ \ (Connection conn) -> do
       let
+        paramValues = encodings (Proxy :: Proxy ps) params
+        oids = toOids (proxy# :: Proxy# ps)
         params' =
           [ Just (oid, param', LibPQ.Binary)
-          | (oid, param') <-
-              zip
-                (toOids (proxy# :: Proxy# ps))
-                (toValues (proxy# :: Proxy# ps) params)
+          | (oid, param') <- zip oids paramValues
           ]
       result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
       return (Result <$> result, Connection conn)
@@ -127,10 +129,8 @@ instance MonadPQ PQ where
   pqExecPrepared (q :: PreparedStatement ps ys db0 db1) params =
     PQ $ \ (Connection conn) -> do
       let
-        params' =
-          [ Just (param', LibPQ.Binary)
-          | param' <- toValues (proxy# :: Proxy# ps) params
-          ]
+        paramValues = encodings (Proxy :: Proxy ps) params
+        params' = [ Just (param', LibPQ.Binary) | param' <- paramValues ]
       result <- liftBase $
         LibPQ.execPrepared conn (renderPreparedStatement q) params' LibPQ.Binary
       return (Result <$> result, Connection conn)
@@ -203,12 +203,43 @@ colNum3 = colNum (proxy# :: Proxy# 3)
 colNum4 :: ColumnNumber (c0:c1:c2:c3:c4:cs) c4
 colNum4 = colNum (proxy# :: Proxy# 4)
 
-getvalue
-  :: (FromValue x y, MonadBase IO io)
-  => Result xs
-  -> RowNumber
-  -> ColumnNumber xs x
-  -> io (Maybe (Either Text y))
-getvalue (Result result) (RowNumber r) (ColumnNumber c :: ColumnNumber xs x) =
-  liftBase $ fmap (fmap (decodeValue (proxy# :: Proxy# x)))
-    (LibPQ.getvalue' result r c)
+newtype Value pgs m x = Value { runValue :: Result pgs -> m x }
+  deriving (Functor)
+instance Applicative m => Applicative (Value pgs m) where
+  pure x = Value $ \ _result -> pure x
+  mf <*> mx = Value $ \ result -> runValue mf result <*> runValue mx result
+instance Monad m => Monad (Value pgs m) where
+  return = pure
+  mx >>= f = Value $ \ result -> do
+    x <- runValue mx result
+    runValue (f x) result
+instance MonadTrans (Value pgs) where
+  lift m = Value $ \ _result -> m
+instance MonadBase b m => MonadBase b (Value pgs m) where
+  liftBase = lift . liftBase
+
+getValue
+  :: (HasDecoding pg x, MonadBase IO io)
+  => RowNumber
+  -> ColumnNumber pgs pg
+  -> Value pgs (ExceptT Text (MaybeT io)) x
+getValue (RowNumber r) (ColumnNumber c :: ColumnNumber pgs pg) =
+  Value $ \ (Result result) -> do
+    maybeBytestring <- liftBase $ LibPQ.getvalue result r c
+    case maybeBytestring of
+      Nothing -> mzero
+      Just bytestring -> case decodeValue (Proxy :: Proxy pg) bytestring of
+        Left err -> throwError err
+        Right val -> return val
+
+getRow
+  :: (AllZip HasDecoding pgs xs, MonadBase IO io)
+  => RowNumber -> Value pgs (ExceptT Text (MaybeT io)) (NP I xs)
+getRow (RowNumber r) = Value $ \ (Result result :: Result pgs) -> do
+  maybeBytestrings <- traverse (liftBase . LibPQ.getvalue result r)
+    [0 .. fromIntegral (lengthSList (Proxy :: Proxy pgs)) - 1]
+  case fromList (catMaybes maybeBytestrings) of
+    Nothing -> mzero
+    Just bytestrings -> case decodings (Proxy :: Proxy pgs) bytestrings of
+      Left err -> throwError err
+      Right row -> return row

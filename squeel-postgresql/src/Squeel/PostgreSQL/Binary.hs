@@ -1,7 +1,9 @@
 {-# LANGUAGE
     DataKinds
+  , FlexibleContexts
   , FlexibleInstances
   , GADTs
+  , LambdaCase
   , MagicHash
   , MultiParamTypeClasses
   , PolyKinds
@@ -11,137 +13,133 @@
 
 module Squeel.PostgreSQL.Binary where
 
-import Control.Arrow (left)
-import Data.Aeson (FromJSON, ToJSON, eitherDecodeStrict, encode)
 import Data.ByteString (ByteString)
 import Data.Int (Int16,Int32,Int64)
-import Data.Vinyl
-import Data.Vinyl.Functor
-import PostgreSQL.Binary.Decoding (Value)
-import PostgreSQL.Binary.Encoding (Encoding)
+import Generics.SOP
 import Data.Scientific (Scientific)
 import Data.Text (Text)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
 import Data.UUID (UUID)
-import GHC.Exts
 
-import qualified Data.ByteString.Lazy as Lazy (ByteString, toStrict)
-import qualified Data.Text as Text (pack)
+import qualified Data.Aeson as Aeson
+import qualified Data.ByteString.Lazy as Lazy (ByteString)
 import qualified Data.Text.Lazy as Lazy (Text)
 import qualified PostgreSQL.Binary.Decoding as Decoder
 import qualified PostgreSQL.Binary.Encoding as Encoder
 
 import Squeel.PostgreSQL.Schema
 
-decodeValue :: FromValue pg x => Proxy# pg -> ByteString -> Either Text x
-decodeValue p = Decoder.valueParser $ fromValue p
+decodeValue :: HasDecoding pg x => proxy pg -> ByteString -> Either Text x
+decodeValue p = Decoder.valueParser $ decoding p
 
-class FromValue pg x where
-  fromValue :: Proxy# pg -> Value x
-instance FromValue 'PGInt2 Int16 where
-  fromValue _ = Decoder.int
-instance FromValue 'PGInt4 Int32 where
-  fromValue _ = Decoder.int
-instance FromValue 'PGInt8 Int64 where
-  fromValue _ = Decoder.int
-instance FromValue 'PGFloat4 Float where
-  fromValue _ = Decoder.float4
-instance FromValue 'PGFloat8 Double where
-  fromValue _ = Decoder.float8
-instance FromValue 'PGBool Bool where
-  fromValue _ = Decoder.bool
-instance FromValue 'PGBytea ByteString where
-  fromValue _ = Decoder.bytea_strict
-instance FromValue 'PGBytea Lazy.ByteString where
-  fromValue _ = Decoder.bytea_lazy
-instance FromValue 'PGText Text where
-  fromValue _ = Decoder.text_strict
-instance FromValue 'PGText Lazy.Text where
-  fromValue _ = Decoder.text_lazy
-instance FromValue ('PGChar 1) Char where
-  fromValue _ = Decoder.char
-instance FromValue 'PGNumeric Scientific where
-  fromValue _ = Decoder.numeric
-instance FromValue 'PGUuid UUID where
-  fromValue _ = Decoder.uuid
-instance FromJSON x => FromValue 'PGJson x where
-  fromValue _ = Decoder.json_bytes (left Text.pack . eitherDecodeStrict)
-instance FromJSON x => FromValue 'PGJsonb x where
-  fromValue _ = Decoder.jsonb_bytes (left Text.pack . eitherDecodeStrict)
-instance FromValue 'PGDate Day where
-  fromValue _ = Decoder.date
-instance FromValue 'PGTime TimeOfDay where
-  fromValue _ = Decoder.time_int
-instance FromValue 'PGTimeTZ (TimeOfDay, TimeZone) where
-  fromValue _ = Decoder.timetz_int
-instance FromValue 'PGTimestamp LocalTime where
-  fromValue _ = Decoder.timestamp_int
-instance FromValue 'PGTimestampTZ UTCTime where
-  fromValue _ = Decoder.timestamptz_int
-instance FromValue 'PGInterval DiffTime where
-  fromValue _ = Decoder.interval_int
-instance FromValue pg ty => FromValue (column ::: 'Required ('NotNull pg)) ty where
-  fromValue _ = fromValue (proxy# :: Proxy# pg)
+class HasDecoding pg x where
+  decoding :: proxy pg -> Decoder.Value x
+instance HasDecoding (column ::: 'Required ('NotNull 'PGInt2)) Int16 where
+  decoding _ = Decoder.int
+instance HasDecoding (column ::: 'Required ('NotNull 'PGInt4)) Int32 where
+  decoding _ = Decoder.int
+instance HasDecoding (column ::: 'Required ('NotNull 'PGInt8)) Int64 where
+  decoding _ = Decoder.int
+instance HasDecoding (column ::: 'Required ('NotNull 'PGFloat4)) Float where
+  decoding _ = Decoder.float4
+instance HasDecoding (column ::: 'Required ('NotNull 'PGFloat8)) Double where
+  decoding _ = Decoder.float8
+instance HasDecoding (column ::: 'Required ('NotNull 'PGBool)) Bool where
+  decoding _ = Decoder.bool
+instance HasDecoding (column ::: 'Required ('NotNull 'PGBytea)) ByteString where
+  decoding _ = Decoder.bytea_strict
+instance HasDecoding (column ::: 'Required ('NotNull 'PGBytea)) Lazy.ByteString where
+  decoding _ = Decoder.bytea_lazy
+instance HasDecoding (column ::: 'Required ('NotNull 'PGText)) Text where
+  decoding _ = Decoder.text_strict
+instance HasDecoding (column ::: 'Required ('NotNull 'PGText)) Lazy.Text where
+  decoding _ = Decoder.text_lazy
+instance HasDecoding (column ::: 'Required ('NotNull ('PGChar 1))) Char where
+  decoding _ = Decoder.char
+instance HasDecoding (column ::: 'Required ('NotNull 'PGNumeric)) Scientific where
+  decoding _ = Decoder.numeric
+instance HasDecoding (column ::: 'Required ('NotNull 'PGUuid)) UUID where
+  decoding _ = Decoder.uuid
+instance HasDecoding (column ::: 'Required ('NotNull 'PGJson)) Aeson.Value where
+  decoding _ = Decoder.json_ast
+instance HasDecoding (column ::: 'Required ('NotNull 'PGJsonb)) Aeson.Value where
+  decoding _ = Decoder.jsonb_ast
+instance HasDecoding (column ::: 'Required ('NotNull 'PGDate)) Day where
+  decoding _ = Decoder.date
+instance HasDecoding (column ::: 'Required ('NotNull 'PGTime)) TimeOfDay where
+  decoding _ = Decoder.time_int
+instance HasDecoding (column ::: 'Required ('NotNull 'PGTimeTZ)) (TimeOfDay, TimeZone) where
+  decoding _ = Decoder.timetz_int
+instance HasDecoding (column ::: 'Required ('NotNull 'PGTimestamp)) LocalTime where
+  decoding _ = Decoder.timestamp_int
+instance HasDecoding (column ::: 'Required ('NotNull 'PGTimestampTZ)) UTCTime where
+  decoding _ = Decoder.timestamptz_int
+instance HasDecoding (column ::: 'Required ('NotNull 'PGInterval)) DiffTime where
+  decoding _ = Decoder.interval_int
 
-class FromValues pgs xs where
-  decodeValues :: Proxy# pgs -> Rec (Const ByteString) xs -> Rec (Either Text) xs
-instance FromValues '[] '[] where decodeValues _ _ = RNil
-instance (FromValue pg x, FromValues pgs xs)
-  => FromValues (pg ': pgs) (x ': xs) where
-    decodeValues _ (Const result :& results) =
-      decodeValue (proxy# :: Proxy# pg) result
-      :& decodeValues (proxy# :: Proxy# pgs) results
+decodings
+  :: AllZip HasDecoding pgs xs
+  => proxy pgs
+  -> NP (K ByteString) xs -> Either Text (NP I xs)
+decodings _ Nil = return Nil
+decodings (_ :: proxy pgs) (K bytestring :* bytestrings) =
+  case (hpure Proxy :: NP Proxy pgs) of
+    proxy :* proxies -> (:*)
+      <$> (I <$> Decoder.valueParser (decoding proxy) bytestring)
+      <*> decodings proxies bytestrings
 
-class ToValue x pg where
-  toValue :: Proxy# pg -> x -> Encoding
-instance ToValue Int16 'PGInt2 where
-  toValue _ = Encoder.int2_int16
-instance ToValue Int32 'PGInt4 where
-  toValue _ = Encoder.int4_int32
-instance ToValue Int64 'PGInt8 where
-  toValue _ = Encoder.int8_int64
-instance ToValue Float 'PGFloat4 where
-  toValue _ = Encoder.float4
-instance ToValue Double 'PGFloat8 where
-  toValue _ = Encoder.float8
-instance ToValue Bool 'PGBool where
-  toValue _ = Encoder.bool
-instance ToValue ByteString 'PGBytea where
-  toValue _ = Encoder.bytea_strict
-instance ToValue Lazy.ByteString 'PGBytea where
-  toValue _ = Encoder.bytea_lazy
-instance ToValue Text 'PGText where
-  toValue _ = Encoder.text_strict
-instance ToValue Lazy.Text 'PGText where
-  toValue _ = Encoder.text_lazy
-instance ToValue Char ('PGChar 1) where
-  toValue _ = Encoder.char_utf8
-instance ToValue Scientific 'PGNumeric where
-  toValue _ = Encoder.numeric
-instance ToValue UUID 'PGUuid where
-  toValue _ = Encoder.uuid
-instance ToJSON x => ToValue x 'PGJson where
-  toValue _ = Encoder.json_bytes . Lazy.toStrict . encode
-instance ToJSON x => ToValue x 'PGJsonb where
-  toValue _ = Encoder.jsonb_bytes . Lazy.toStrict . encode
-instance ToValue Day 'PGDate where
-  toValue _ = Encoder.date
-instance ToValue TimeOfDay 'PGTime where
-  toValue _ = Encoder.time_int
-instance ToValue (TimeOfDay, TimeZone) 'PGTimeTZ where
-  toValue _ = Encoder.timetz_int
-instance ToValue LocalTime 'PGTimestamp where
-  toValue _ = Encoder.timestamp_int
-instance ToValue UTCTime 'PGTimestampTZ where
-  toValue _ = Encoder.timestamptz_int
-instance ToValue DiffTime 'PGInterval where
-  toValue _ = Encoder.interval_int
+class HasEncoding pg x where
+  encoding :: proxy pg -> x -> Encoder.Encoding
+instance HasEncoding ('Required ('NotNull 'PGInt2)) Int16 where
+  encoding _ = Encoder.int2_int16
+instance HasEncoding ('Required ('NotNull 'PGInt4)) Int32 where
+  encoding _ = Encoder.int4_int32
+instance HasEncoding ('Required ('NotNull 'PGInt8)) Int64 where
+  encoding _ = Encoder.int8_int64
+instance HasEncoding ('Required ('NotNull 'PGFloat4)) Float where
+  encoding _ = Encoder.float4
+instance HasEncoding ('Required ('NotNull 'PGFloat8)) Double where
+  encoding _ = Encoder.float8
+instance HasEncoding ('Required ('NotNull 'PGBool)) Bool where
+  encoding _ = Encoder.bool
+instance HasEncoding ('Required ('NotNull 'PGBytea)) ByteString where
+  encoding _ = Encoder.bytea_strict
+instance HasEncoding ('Required ('NotNull 'PGBytea)) Lazy.ByteString where
+  encoding _ = Encoder.bytea_lazy
+instance HasEncoding ('Required ('NotNull 'PGText)) Text where
+  encoding _ = Encoder.text_strict
+instance HasEncoding ('Required ('NotNull 'PGText)) Lazy.Text where
+  encoding _ = Encoder.text_lazy
+instance HasEncoding ('Required ('NotNull ('PGChar 1))) Char where
+  encoding _ = Encoder.char_utf8
+instance HasEncoding ('Required ('NotNull 'PGNumeric)) Scientific where
+  encoding _ = Encoder.numeric
+instance HasEncoding ('Required ('NotNull 'PGUuid)) UUID where
+  encoding _ = Encoder.uuid
+instance HasEncoding ('Required ('NotNull 'PGJson)) Aeson.Value where
+  encoding _ = Encoder.json_ast
+instance HasEncoding ('Required ('NotNull 'PGJsonb)) Aeson.Value where
+  encoding _ = Encoder.jsonb_ast
+instance HasEncoding ('Required ('NotNull 'PGDate)) Day where
+  encoding _ = Encoder.date
+instance HasEncoding ('Required ('NotNull 'PGTime)) TimeOfDay where
+  encoding _ = Encoder.time_int
+instance HasEncoding ('Required ('NotNull 'PGTimeTZ)) (TimeOfDay, TimeZone) where
+  encoding _ = Encoder.timetz_int
+instance HasEncoding ('Required ('NotNull 'PGTimestamp)) LocalTime where
+  encoding _ = Encoder.timestamp_int
+instance HasEncoding ('Required ('NotNull 'PGTimestampTZ)) UTCTime where
+  encoding _ = Encoder.timestamptz_int
+instance HasEncoding ('Required ('NotNull 'PGInterval)) DiffTime where
+  encoding _ = Encoder.interval_int
 
-class ToValues xs pgs where
-  toValues :: Proxy# pgs -> Rec Identity xs -> [ByteString]
-instance ToValues '[] '[] where toValues _ _ = []
-instance (ToValue x pg, ToValues xs pgs)
-  => ToValues (x ': xs) (pg ': pgs) where
-    toValues _ (Identity x :& xs)
-      = Encoder.encodingBytes ((toValue (proxy# :: Proxy# pg)) x)
-      : toValues (proxy# :: Proxy# pgs) xs
+encodings
+  :: AllZip HasEncoding pgs xs
+  => proxy pgs
+  -> NP I xs
+  -> [ByteString]
+encodings _ Nil = []
+encodings (_ :: proxy pgs) (I x :* xs) =
+  case (hpure Proxy :: NP Proxy pgs) of
+    proxy :* proxies -> Encoder.encodingBytes (encoding proxy x)
+      : encodings proxies xs
