@@ -7,6 +7,7 @@
   , LambdaCase
   , MagicHash
   , OverloadedStrings
+  , ScopedTypeVariables
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
@@ -16,15 +17,17 @@ module Squeel.PostgreSQL.Statement where
 
 import Control.Category
 import Data.Boolean
+import Data.Boolean.Numbers
 import Data.ByteString (ByteString)
 import Data.Maybe
 import Data.Monoid
+import Data.Ratio
 import Data.String
 import Generics.SOP
 import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
-import Prelude hiding (id,(.))
+import Prelude hiding (id,(.),RealFrac(..))
 
 import qualified Data.ByteString as ByteString
 
@@ -124,13 +127,120 @@ unsafeFunction
 unsafeFunction fun x = UnsafeExpression $ mconcat
   [fun, "(", renderExpression x, ")"]
 
-instance PGNum ty => Num (Expression params tables ('Required (nullity ty))) where
-  (+) = unsafeBinaryOp "+"
-  (-) = unsafeBinaryOp "-"
-  (*) = unsafeBinaryOp "*"
-  abs = unsafeUnaryOp "@"
-  signum = unsafeFunction "sign"
-  fromInteger = UnsafeExpression . fromString . show
+instance PGNum ty
+  => Num (Expression params tables ('Required (nullity ty))) where
+    (+) = unsafeBinaryOp "+"
+    (-) = unsafeBinaryOp "-"
+    (*) = unsafeBinaryOp "*"
+    abs = unsafeFunction "abs"
+    signum = unsafeFunction "sign"
+    fromInteger = UnsafeExpression . (<> ".") . fromString . show
+
+instance PGFractional ty
+  => Fractional (Expression params tables ('Required (nullity ty))) where
+    (/) = unsafeBinaryOp "/"
+    fromRational x = fromInteger (numerator x) / fromInteger (denominator x)
+
+instance (PGFloating ty, PGCast 'PGNumeric ty, PGTyped ty)
+  => Floating (Expression params tables ('Required (nullity ty))) where
+    pi = UnsafeExpression "pi()"
+    exp = unsafeFunction "exp"
+    log = unsafeFunction "ln"
+    sqrt = unsafeFunction "sqrt"
+    b ** x = UnsafeExpression $
+      "power(" <> renderExpression b <> ", " <> renderExpression x <> ")"
+    logBase b y = cast pgtype $ logBaseNumeric b y
+      where
+        logBaseNumeric
+          :: Expression params tables ('Required (nullity ty))
+          -> Expression params tables ('Required (nullity ty))
+          -> Expression params tables ('Required (nullity 'PGNumeric))
+        logBaseNumeric b' y' = UnsafeExpression $ mconcat
+          [ "log("
+          , renderExpression b' <> "::numeric"
+          , ", "
+          , renderExpression y' <> "::numeric"
+          , ")"
+          ]
+    sin = unsafeFunction "sin"
+    cos = unsafeFunction "cos"
+    tan = unsafeFunction "tan"
+    asin = unsafeFunction "asin"
+    acos = unsafeFunction "acos"
+    atan = unsafeFunction "atan"
+    sinh x = (exp x - exp (-x)) / 2
+    cosh x = (exp x + exp (-x)) / 2
+    tanh x = sinh x / cosh x
+    asinh x = log (x + sqrt (x*x + 1))
+    acosh x = log (x + sqrt (x*x - 1))
+    atanh x = log ((1 + x) / (1 - x)) / 2
+
+class PGCast (ty0 :: PGType) (ty1 :: PGType) where
+  cast
+    :: TypeExpression ('Required ('Null ty1))
+    -> Expression params tables ('Required (nullity ty0))
+    -> Expression params tables ('Required (nullity ty1))
+  cast ty x = UnsafeExpression $
+    "(" <> renderExpression x <> "::" <> renderTypeExpression ty <> ")"
+instance PGCast 'PGInt2 'PGInt2
+instance PGCast 'PGInt2 'PGInt4
+instance PGCast 'PGInt2 'PGInt8
+instance PGCast 'PGInt4 'PGInt2
+instance PGCast 'PGInt4 'PGInt4
+instance PGCast 'PGInt4 'PGInt8
+instance PGCast 'PGInt8 'PGInt2
+instance PGCast 'PGInt8 'PGInt4
+instance PGCast 'PGInt8 'PGInt8
+instance PGCast 'PGInt8 'PGFloat4
+instance PGCast 'PGInt8 'PGFloat8
+instance PGCast 'PGInt8 'PGNumeric
+
+instance (PGNum ty, PGTyped ty, PGCast 'PGInt8 ty)
+  => NumB (Expression params tables ('Required (nullity ty))) where
+    type IntegerOf (Expression params tables ('Required (nullity ty)))
+      = (Expression params tables ('Required (nullity 'PGInt8)))
+    fromIntegerB = cast pgtype
+
+instance (PGNum ty, PGTyped ty, PGCast 'PGInt8 ty, PGCast ty 'PGInt8)
+  => IntegralB (Expression params tables ('Required ('NotNull ty))) where
+    quot = unsafeBinaryOp "/"
+    rem = unsafeBinaryOp "%"
+    div = unsafeBinaryOp "/"
+    mod = unsafeBinaryOp "%"
+    toIntegerB = cast int8
+
+instance
+  ( IntegerOf (Expression params tables ('Required ('NotNull ty)))
+    ~ (Expression params tables ('Required ('NotNull 'PGInt8)))
+  , PGNum ty
+  , PGTyped ty
+  , PGCast 'PGInt8 ty
+  , PGFractional ty
+  )
+  => RealFracB (Expression params tables ('Required ('NotNull ty))) where
+    properFraction x = (truncate x, x - unsafeFunction "trunc" x)
+    truncate = fromIntegerB . unsafeFunction "trunc"
+    round = fromIntegerB . unsafeFunction "round"
+    ceiling = fromIntegerB . unsafeFunction "ceiling"
+    floor = fromIntegerB . unsafeFunction "floor"
+
+instance
+  ( IntegerOf (Expression params tables ('Required ('NotNull ty)))
+    ~ (Expression params tables ('Required ('NotNull 'PGInt8)))
+  , PGNum ty
+  , PGTyped ty
+  , PGCast 'PGInt8 ty
+  , PGCast 'PGNumeric ty
+  , PGFloating ty
+  )
+  => RealFloatB (Expression params tables ('Required ('NotNull ty))) where
+    isNaN x = x ==* UnsafeExpression "\'NaN\'"
+    isInfinite x = x ==* UnsafeExpression "\'Infinity\'"
+      ||* x ==* UnsafeExpression "\'-Infinity\'"
+    isNegativeZero x = x ==* UnsafeExpression "-0"
+    isIEEE _ = true
+    atan2 y x = UnsafeExpression $
+      "atan2(" <> renderExpression y <> ", " <> renderExpression x <> ")"
 
 instance IsString (Expression params tables ('Required (nullity 'PGText))) where
   fromString str = UnsafeExpression $
@@ -467,16 +577,93 @@ newtype TypeExpression (ty :: ColumnType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (Show,Eq)
 
-int2 :: TypeExpression ('Required ('Null 'PGInt2))
-int2 = UnsafeTypeExpression "int2"
-int4 :: TypeExpression ('Required ('Null 'PGInt4))
-int4 = UnsafeTypeExpression "int4"
-int8 :: TypeExpression ('Required ('Null 'PGInt8))
-int8 = UnsafeTypeExpression "int8"
 bool :: TypeExpression ('Required ('Null 'PGBool))
 bool = UnsafeTypeExpression "bool"
+int2 :: TypeExpression ('Required ('Null 'PGInt2))
+int2 = UnsafeTypeExpression "int2"
+smallint :: TypeExpression ('Required ('Null 'PGInt2))
+smallint = UnsafeTypeExpression "smallint"
+int4 :: TypeExpression ('Required ('Null 'PGInt4))
+int4 = UnsafeTypeExpression "int4"
+int :: TypeExpression ('Required ('Null 'PGInt4))
+int = UnsafeTypeExpression "int"
+integer :: TypeExpression ('Required ('Null 'PGInt4))
+integer = UnsafeTypeExpression "integer"
+int8 :: TypeExpression ('Required ('Null 'PGInt8))
+int8 = UnsafeTypeExpression "int8"
+bigint :: TypeExpression ('Required ('Null 'PGInt8))
+bigint = UnsafeTypeExpression "bigint"
+numeric :: TypeExpression ('Required ('Null 'PGNumeric))
+numeric = UnsafeTypeExpression "numeric"
+float4 :: TypeExpression ('Required ('Null 'PGFloat4))
+float4 = UnsafeTypeExpression "float4"
+real :: TypeExpression ('Required ('Null 'PGFloat4))
+real = UnsafeTypeExpression "real"
+float8 :: TypeExpression ('Required ('Null 'PGFloat8))
+float8 = UnsafeTypeExpression "float8"
+doublePrecision :: TypeExpression ('Required ('Null 'PGFloat8))
+doublePrecision = UnsafeTypeExpression "double precision"
+serial2 :: TypeExpression ('Optional ('NotNull 'PGInt2))
+serial2 = UnsafeTypeExpression "serial2"
+smallserial :: TypeExpression ('Optional ('NotNull 'PGInt2))
+smallserial = UnsafeTypeExpression "smallserial"
+serial4 :: TypeExpression ('Optional ('NotNull 'PGInt4))
+serial4 = UnsafeTypeExpression "serial4"
+serial :: TypeExpression ('Optional ('NotNull 'PGInt4))
+serial = UnsafeTypeExpression "serial"
+serial8 :: TypeExpression ('Optional ('NotNull 'PGInt8))
+serial8 = UnsafeTypeExpression "serial8"
+bigserial :: TypeExpression ('Optional ('NotNull 'PGInt8))
+bigserial = UnsafeTypeExpression "bigserial"
+money :: TypeExpression ('Optional ('NotNull 'PGMoney))
+money = UnsafeTypeExpression "money"
 text :: TypeExpression ('Required ('Null 'PGText))
 text = UnsafeTypeExpression "text"
+char
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('Optional ('NotNull ('PGChar n)))
+char (_ :: proxy n) = UnsafeTypeExpression $
+  "char(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+character
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('Optional ('NotNull ('PGChar n)))
+character (_ :: proxy n) = UnsafeTypeExpression $
+  "character(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+varchar
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('Optional ('NotNull ('PGVarChar n)))
+varchar (_ :: proxy n) = UnsafeTypeExpression $
+  "varchar(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+characterVarying
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('Optional ('NotNull ('PGVarChar n)))
+characterVarying (_ :: proxy n) = UnsafeTypeExpression $
+  "character varying(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+bytea :: TypeExpression ('Optional ('NotNull ('PGBytea)))
+bytea = UnsafeTypeExpression "bytea"
+timestamp :: TypeExpression ('Optional ('NotNull ('PGTimestamp)))
+timestamp = UnsafeTypeExpression "timestamp"
+timestampWithTimeZone :: TypeExpression ('Optional ('NotNull ('PGTimestampTZ)))
+timestampWithTimeZone = UnsafeTypeExpression "timestamp with time zone"
+date :: TypeExpression ('Optional ('NotNull ('PGDate)))
+date = UnsafeTypeExpression "date"
+time :: TypeExpression ('Optional ('NotNull ('PGTime)))
+time = UnsafeTypeExpression "time"
+timeWithTimeZone :: TypeExpression ('Optional ('NotNull ('PGTimeTZ)))
+timeWithTimeZone = UnsafeTypeExpression "time with time zone"
+interval :: TypeExpression ('Optional ('NotNull ('PGInterval)))
+interval = UnsafeTypeExpression "interval"
+uuid :: TypeExpression ('Optional ('NotNull ('PGUuid)))
+uuid = UnsafeTypeExpression "uuid"
+json :: TypeExpression ('Optional ('NotNull ('PGJson)))
+json = UnsafeTypeExpression "json"
+jsonb :: TypeExpression ('Optional ('NotNull ('PGJsonb)))
+jsonb = UnsafeTypeExpression "jsonb"
+
 notNull
   :: TypeExpression ('Required ('Null ty))
   -> TypeExpression ('Required ('NotNull ty))
@@ -487,8 +674,14 @@ default_
   -> TypeExpression ('Optional ty)
 default_ x ty = UnsafeTypeExpression $
   renderTypeExpression ty <> " DEFAULT " <> renderExpression x
-serial :: TypeExpression ('Optional ('NotNull 'PGInt4))
-serial = UnsafeTypeExpression "serial"
+
+class PGTyped (ty :: PGType) where
+  pgtype :: TypeExpression ('Required ('Null ty))
+instance PGTyped 'PGInt2 where pgtype = int2
+instance PGTyped 'PGInt4 where pgtype = int4
+instance PGTyped 'PGInt8 where pgtype = int8
+instance PGTyped 'PGBool where pgtype = bool
+instance PGTyped 'PGText where pgtype = text
 
 createTable
   :: (KnownSymbol table, SListI columns)

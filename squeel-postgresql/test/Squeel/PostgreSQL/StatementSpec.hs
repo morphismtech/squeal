@@ -47,13 +47,13 @@ spec = do
     let
       statement :: Statement '[] Columns Tables Tables
       statement = select $ starFrom (#table1 & limit 1)
-    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 LIMIT 1;"
+    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 LIMIT 1.;"
   it "should use the minimum of given LIMITs" $ do
     let
       statement :: Statement '[] Columns Tables Tables
       statement = select $ starFrom (#table1 & limit 1 & limit 2)
     statement `shouldRenderAs`
-      "SELECT * FROM table1 AS table1 LIMIT CASE WHEN (1 <= 2) THEN 1 ELSE 2 END;"
+      "SELECT * FROM table1 AS table1 LIMIT CASE WHEN (1. <= 2.) THEN 1. ELSE 2. END;"
   it "should render parameters using $ signs" $ do
     let
       statement :: Statement '[ 'Required ('NotNull 'PGInt8)] Columns Tables Tables
@@ -63,18 +63,18 @@ spec = do
     let
       statement :: Statement '[] Columns Tables Tables
       statement = select $ starFrom (#table1 & offset 1)
-    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET 1;"
+    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET 1.;"
   it "should use the sum of given OFFSETs" $ do
     let
       statement :: Statement '[] Columns Tables Tables
       statement =  select $ starFrom (#table1 & offset 1 & offset 2)
-    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET (1 + 2);"
+    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET (1. + 2.);"
   it "correctly render simple INSERTs" $ do
     let
       statement :: Statement '[] '[] Tables Tables
       statement = insertInto #table1 $ 2 `As` #col1 :* 4 `As` #col2 :* Nil
     statement `shouldRenderAs`
-      "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
+      "INSERT INTO table1 (col1, col2) VALUES (2., 4.);"
   it "should be safe against SQL injection in literal text" $ do
     let
       statement :: Statement '[] '[] StudentsTable StudentsTable
@@ -145,7 +145,7 @@ spec = do
       :* (int8 & notNull & default_ 8) `As` #col3
       :* Nil)
       `shouldRenderAs`
-      "CREATE TABLE table2 (col1 serial, col2 text, col3 int8 NOT NULL DEFAULT 8);"
+      "CREATE TABLE table2 (col1 serial, col2 text, col3 int8 NOT NULL DEFAULT 8.);"
   it "should render DROP TABLE statements" $ do
     let
       statement :: Statement '[] '[] Tables '[]
