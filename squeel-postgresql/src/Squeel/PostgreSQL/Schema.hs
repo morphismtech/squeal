@@ -18,6 +18,8 @@ module Squeel.PostgreSQL.Schema
   , ToOid (..)
   , ToOids (..)
   , PGNum
+  , PGFractional
+  , PGFloating
   , (:::)
   , Alias (Alias)
   , Aliased (As)
@@ -86,6 +88,16 @@ instance PGNum 'PGInt8
 instance PGNum 'PGNumeric
 instance PGNum 'PGFloat4
 instance PGNum 'PGFloat8
+
+class PGNum ty => PGFractional (ty :: PGType) where
+instance PGFractional 'PGNumeric
+instance PGFractional 'PGFloat4
+instance PGFractional 'PGFloat8
+
+class PGFractional ty => PGFloating (ty :: PGType) where
+instance PGFloating 'PGNumeric
+instance PGFloating 'PGFloat4
+instance PGFloating 'PGFloat8
 
 type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
 

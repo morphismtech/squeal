@@ -16,15 +16,17 @@ module Squeel.PostgreSQL.Statement where
 
 import Control.Category
 import Data.Boolean
+import Data.Boolean.Numbers
 import Data.ByteString (ByteString)
 import Data.Maybe
 import Data.Monoid
+import Data.Ratio
 import Data.String
 import Generics.SOP
 import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
-import Prelude hiding (id,(.))
+import Prelude hiding (id,(.),RealFrac(..))
 
 import qualified Data.ByteString as ByteString
 
@@ -124,13 +126,94 @@ unsafeFunction
 unsafeFunction fun x = UnsafeExpression $ mconcat
   [fun, "(", renderExpression x, ")"]
 
-instance PGNum ty => Num (Expression params tables ('Required (nullity ty))) where
-  (+) = unsafeBinaryOp "+"
-  (-) = unsafeBinaryOp "-"
-  (*) = unsafeBinaryOp "*"
-  abs = unsafeUnaryOp "@"
-  signum = unsafeFunction "sign"
-  fromInteger = UnsafeExpression . fromString . show
+instance PGNum ty
+  => Num (Expression params tables ('Required (nullity ty))) where
+    (+) = unsafeBinaryOp "+"
+    (-) = unsafeBinaryOp "-"
+    (*) = unsafeBinaryOp "*"
+    abs = unsafeFunction "abs"
+    signum = unsafeFunction "sign"
+    fromInteger = UnsafeExpression . fromString . show
+
+instance PGFractional ty
+  => Fractional (Expression params tables ('Required (nullity ty))) where
+    (/) = unsafeBinaryOp "/"
+    fromRational x = UnsafeExpression $ mconcat
+      [ fromString (show (numerator x))
+      , "/"
+      , fromString (show (denominator x))
+      ]
+
+instance (PGFloating ty, PGCast 'PGNumeric ty, PGTyped ty)
+  => Floating (Expression params tables ('Required (nullity ty))) where
+    pi = UnsafeExpression "pi()"
+    exp = unsafeFunction "exp"
+    log = unsafeFunction "ln"
+    sqrt = unsafeFunction "sqrt"
+    b ** x = UnsafeExpression $
+      "power(" <> renderExpression b <> ", " <> renderExpression x <> ")"
+    logBase b y = cast pgtype $ logBaseNumeric b y
+      where
+        logBaseNumeric
+          :: Expression params tables ('Required (nullity ty))
+          -> Expression params tables ('Required (nullity ty))
+          -> Expression params tables ('Required (nullity 'PGNumeric))
+        logBaseNumeric b' y' = UnsafeExpression $ mconcat
+          [ "log("
+          , renderExpression b' <> "::numeric"
+          , ", "
+          , renderExpression y' <> "::numeric"
+          , ")"
+          ]
+    sin = unsafeFunction "sin"
+    cos = unsafeFunction "cos"
+    tan = unsafeFunction "tan"
+    asin = unsafeFunction "asin"
+    acos = unsafeFunction "acos"
+    atan = unsafeFunction "atan"
+    sinh x = (exp x - exp (-x)) / 2
+    cosh x = (exp x + exp (-x)) / 2
+    tanh x = sinh x / cosh x
+    asinh x = log (x + sqrt (x*x + 1))
+    acosh x = log (x + sqrt (x*x - 1))
+    atanh x = log ((1 + x) / (1 - x)) / 2
+
+class PGCast (ty0 :: PGType) (ty1 :: PGType) where
+  cast
+    :: TypeExpression ('Required ('Null ty1))
+    -> Expression params tables ('Required (nullity ty0))
+    -> Expression params tables ('Required (nullity ty1))
+  cast ty x = UnsafeExpression $
+    "(" <> renderExpression x <> "::" <> renderTypeExpression ty <> ")"
+
+instance (PGNum ty, PGTyped ty, PGCast 'PGInt8 ty)
+  => NumB (Expression params tables ('Required (nullity ty))) where
+    type IntegerOf (Expression params tables ('Required (nullity ty)))
+      = (Expression params tables ('Required (nullity 'PGInt8)))
+    fromIntegerB = cast pgtype
+
+instance (PGNum ty, PGTyped ty, PGCast 'PGInt8 ty, PGCast ty 'PGInt8)
+  => IntegralB (Expression params tables ('Required ('NotNull ty))) where
+    quot = unsafeBinaryOp "/"
+    rem = unsafeBinaryOp "%"
+    div = unsafeBinaryOp "/"
+    mod = unsafeBinaryOp "%"
+    toIntegerB = cast int8
+
+instance
+  ( IntegerOf (Expression params tables ('Required ('NotNull ty)))
+    ~ (Expression params tables ('Required ('NotNull 'PGInt8)))
+  , PGNum ty
+  , PGTyped ty
+  , PGCast 'PGInt8 ty
+  , PGFractional ty
+  )
+  => RealFracB (Expression params tables ('Required ('NotNull ty))) where
+    properFraction x = (truncate x, x - unsafeFunction "trunc" x)
+    truncate = fromIntegerB . unsafeFunction "trunc"
+    round = fromIntegerB . unsafeFunction "round"
+    ceiling = fromIntegerB . unsafeFunction "ceiling"
+    floor = fromIntegerB . unsafeFunction "floor"
 
 instance IsString (Expression params tables ('Required (nullity 'PGText))) where
   fromString str = UnsafeExpression $
@@ -489,6 +572,14 @@ default_ x ty = UnsafeTypeExpression $
   renderTypeExpression ty <> " DEFAULT " <> renderExpression x
 serial :: TypeExpression ('Optional ('NotNull 'PGInt4))
 serial = UnsafeTypeExpression "serial"
+
+class PGTyped (ty :: PGType) where
+  pgtype :: TypeExpression ('Required ('Null ty))
+instance PGTyped 'PGInt2 where pgtype = int2
+instance PGTyped 'PGInt4 where pgtype = int4
+instance PGTyped 'PGInt8 where pgtype = int8
+instance PGTyped 'PGBool where pgtype = bool
+instance PGTyped 'PGText where pgtype = text
 
 createTable
   :: (KnownSymbol table, SListI columns)
