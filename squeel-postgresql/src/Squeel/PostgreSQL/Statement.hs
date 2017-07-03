@@ -7,6 +7,7 @@
   , LambdaCase
   , MagicHash
   , OverloadedStrings
+  , ScopedTypeVariables
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
@@ -568,16 +569,93 @@ newtype TypeExpression (ty :: ColumnType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (Show,Eq)
 
-int2 :: TypeExpression ('Required ('Null 'PGInt2))
-int2 = UnsafeTypeExpression "int2"
-int4 :: TypeExpression ('Required ('Null 'PGInt4))
-int4 = UnsafeTypeExpression "int4"
-int8 :: TypeExpression ('Required ('Null 'PGInt8))
-int8 = UnsafeTypeExpression "int8"
 bool :: TypeExpression ('Required ('Null 'PGBool))
 bool = UnsafeTypeExpression "bool"
+int2 :: TypeExpression ('Required ('Null 'PGInt2))
+int2 = UnsafeTypeExpression "int2"
+smallint :: TypeExpression ('Required ('Null 'PGInt2))
+smallint = UnsafeTypeExpression "smallint"
+int4 :: TypeExpression ('Required ('Null 'PGInt4))
+int4 = UnsafeTypeExpression "int4"
+int :: TypeExpression ('Required ('Null 'PGInt4))
+int = UnsafeTypeExpression "int"
+integer :: TypeExpression ('Required ('Null 'PGInt4))
+integer = UnsafeTypeExpression "integer"
+int8 :: TypeExpression ('Required ('Null 'PGInt8))
+int8 = UnsafeTypeExpression "int8"
+bigint :: TypeExpression ('Required ('Null 'PGInt8))
+bigint = UnsafeTypeExpression "bigint"
+numeric :: TypeExpression ('Required ('Null 'PGNumeric))
+numeric = UnsafeTypeExpression "numeric"
+float4 :: TypeExpression ('Required ('Null 'PGFloat4))
+float4 = UnsafeTypeExpression "float4"
+real :: TypeExpression ('Required ('Null 'PGFloat4))
+real = UnsafeTypeExpression "real"
+float8 :: TypeExpression ('Required ('Null 'PGFloat8))
+float8 = UnsafeTypeExpression "float8"
+doublePrecision :: TypeExpression ('Required ('Null 'PGFloat8))
+doublePrecision = UnsafeTypeExpression "double precision"
+serial2 :: TypeExpression ('Optional ('NotNull 'PGInt2))
+serial2 = UnsafeTypeExpression "serial2"
+smallserial :: TypeExpression ('Optional ('NotNull 'PGInt2))
+smallserial = UnsafeTypeExpression "smallserial"
+serial4 :: TypeExpression ('Optional ('NotNull 'PGInt4))
+serial4 = UnsafeTypeExpression "serial4"
+serial :: TypeExpression ('Optional ('NotNull 'PGInt4))
+serial = UnsafeTypeExpression "serial"
+serial8 :: TypeExpression ('Optional ('NotNull 'PGInt8))
+serial8 = UnsafeTypeExpression "serial8"
+bigserial :: TypeExpression ('Optional ('NotNull 'PGInt8))
+bigserial = UnsafeTypeExpression "bigserial"
+money :: TypeExpression ('Optional ('NotNull 'PGMoney))
+money = UnsafeTypeExpression "money"
 text :: TypeExpression ('Required ('Null 'PGText))
 text = UnsafeTypeExpression "text"
+char
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('Optional ('NotNull ('PGChar n)))
+char (_ :: proxy n) = UnsafeTypeExpression $
+  "char(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+character
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('Optional ('NotNull ('PGChar n)))
+character (_ :: proxy n) = UnsafeTypeExpression $
+  "character(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+varchar
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('Optional ('NotNull ('PGVarChar n)))
+varchar (_ :: proxy n) = UnsafeTypeExpression $
+  "varchar(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+characterVarying
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('Optional ('NotNull ('PGVarChar n)))
+characterVarying (_ :: proxy n) = UnsafeTypeExpression $
+  "character varying(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+bytea :: TypeExpression ('Optional ('NotNull ('PGBytea)))
+bytea = UnsafeTypeExpression "bytea"
+timestamp :: TypeExpression ('Optional ('NotNull ('PGTimestamp)))
+timestamp = UnsafeTypeExpression "timestamp"
+timestampWithTimeZone :: TypeExpression ('Optional ('NotNull ('PGTimestampTZ)))
+timestampWithTimeZone = UnsafeTypeExpression "timestamp with time zone"
+date :: TypeExpression ('Optional ('NotNull ('PGDate)))
+date = UnsafeTypeExpression "date"
+time :: TypeExpression ('Optional ('NotNull ('PGTime)))
+time = UnsafeTypeExpression "time"
+timeWithTimeZone :: TypeExpression ('Optional ('NotNull ('PGTimeTZ)))
+timeWithTimeZone = UnsafeTypeExpression "time with time zone"
+interval :: TypeExpression ('Optional ('NotNull ('PGInterval)))
+interval = UnsafeTypeExpression "interval"
+uuid :: TypeExpression ('Optional ('NotNull ('PGUuid)))
+uuid = UnsafeTypeExpression "uuid"
+json :: TypeExpression ('Optional ('NotNull ('PGJson)))
+json = UnsafeTypeExpression "json"
+jsonb :: TypeExpression ('Optional ('NotNull ('PGJsonb)))
+jsonb = UnsafeTypeExpression "jsonb"
+
 notNull
   :: TypeExpression ('Required ('Null ty))
   -> TypeExpression ('Required ('NotNull ty))
@@ -588,8 +666,6 @@ default_
   -> TypeExpression ('Optional ty)
 default_ x ty = UnsafeTypeExpression $
   renderTypeExpression ty <> " DEFAULT " <> renderExpression x
-serial :: TypeExpression ('Optional ('NotNull 'PGInt4))
-serial = UnsafeTypeExpression "serial"
 
 class PGTyped (ty :: PGType) where
   pgtype :: TypeExpression ('Required ('Null ty))
