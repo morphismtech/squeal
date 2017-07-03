@@ -133,15 +133,15 @@ instance PGNum ty
     (*) = unsafeBinaryOp "*"
     abs = unsafeFunction "abs"
     signum = unsafeFunction "sign"
-    fromInteger = UnsafeExpression . fromString . show
+    fromInteger = UnsafeExpression . (<> ".") . fromString . show
 
 instance PGFractional ty
   => Fractional (Expression params tables ('Required (nullity ty))) where
     (/) = unsafeBinaryOp "/"
     fromRational x = UnsafeExpression $ mconcat
-      [ fromString (show (numerator x))
+      [ fromString (show (numerator x)) <> "."
       , "/"
-      , fromString (show (denominator x))
+      , fromString (show (denominator x)) <> "."
       ]
 
 instance (PGFloating ty, PGCast 'PGNumeric ty, PGTyped ty)
