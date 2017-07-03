@@ -182,6 +182,18 @@ class PGCast (ty0 :: PGType) (ty1 :: PGType) where
     -> Expression params tables ('Required (nullity ty1))
   cast ty x = UnsafeExpression $
     "(" <> renderExpression x <> "::" <> renderTypeExpression ty <> ")"
+instance PGCast 'PGInt2 'PGInt2
+instance PGCast 'PGInt2 'PGInt4
+instance PGCast 'PGInt2 'PGInt8
+instance PGCast 'PGInt4 'PGInt2
+instance PGCast 'PGInt4 'PGInt4
+instance PGCast 'PGInt4 'PGInt8
+instance PGCast 'PGInt8 'PGInt2
+instance PGCast 'PGInt8 'PGInt4
+instance PGCast 'PGInt8 'PGInt8
+instance PGCast 'PGInt8 'PGFloat4
+instance PGCast 'PGInt8 'PGFloat8
+instance PGCast 'PGInt8 'PGNumeric
 
 instance (PGNum ty, PGTyped ty, PGCast 'PGInt8 ty)
   => NumB (Expression params tables ('Required (nullity ty))) where
