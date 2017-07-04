@@ -73,7 +73,7 @@ class MonadPQ pq where
     -> pq db0 db1 io (Maybe (Result '[]))
 
   pqExecParams
-    :: (MonadBase IO io, ToOids ps, AllZip HasEncoding ps xs, All Top ps)
+    :: (MonadBase IO io, ToOids ps, AllZip HasEncoding ps xs)
     => Statement ps ys db0 db1
     -> NP I xs
     -> pq db0 db1 io (Maybe (Result ys))
@@ -85,7 +85,7 @@ class MonadPQ pq where
     -> pq db0 db1 io (Maybe (Result '[]), PreparedStatement ps xs db0 db1)
 
   pqExecPrepared
-    :: (MonadBase IO io, AllZip HasEncoding ps xs, All Top ps)
+    :: (MonadBase IO io, AllZip HasEncoding ps xs)
     => PreparedStatement ps ys db0 db1
     -> NP I xs
     -> pq db0 db1 io (Maybe (Result ys))
@@ -96,6 +96,12 @@ class MonadPQ pq where
   -> Statement '[] '[] db1 db2
   -> pq db0 db2 io (Maybe (Result '[]))
 pq1 &>> statement2 = pqBind (\ _ -> pqExec statement2) pq1
+
+pqExecNil
+  :: (MonadPQ pq, MonadBase IO io)
+  => Statement '[] ys db0 db1
+  -> pq db0 db1 io (Maybe (Result ys))
+pqExecNil statement = pqExecParams statement Nil
 
 instance MonadPQ PQ where
 

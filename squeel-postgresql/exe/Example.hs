@@ -40,7 +40,7 @@ main = do
     &>> insertInto #table1 ( 3 `As` #col1 :* 4 `As` #col2 :* Nil )
   Char8.putStrLn "querying"
   connection2 <- flip execPQ connection1 $ do
-    Just result <- pqExecParams (select (starFrom #table1)) Nil
+    Just result <- pqExecNil $ select $ starFrom #table1
     runMaybeT . runExceptT . flip runValue result $ do
       value00 <- getValue (RowNumber 0) colNum0
       value01 <- getValue (RowNumber 0) colNum1
