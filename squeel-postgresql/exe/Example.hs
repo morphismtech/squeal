@@ -9,7 +9,6 @@
 
 module Main (main) where
 
-import Control.Category ((>>>))
 import Control.Monad.Base
 import Control.Monad.Except
 import Control.Monad.Trans.Maybe
@@ -28,45 +27,38 @@ main = do
     "host=localhost port=5432 dbname=exampledb"
   Char8.putStrLn $ "connecting to " <> connectionString
   connection0 <- connectdb connectionString
-  Char8.putStrLn "creating tables"
-  connection1 <- flip execPQ connection0 $ pqExec $
-    createTable #students
+  Char8.putStrLn "creating database"
+  connection1 <- flip execPQ connection0 $
+    pqExec ( createTable #students
       (  (text & notNull) `As` #name
-      :* Nil )
-    >>>
-    createTable #table1
+      :* Nil ) )
+    &>> createTable #table1
       (  (int4 & notNull) `As` #col1
       :* (int4 & notNull) `As` #col2
       :* Nil )
+    &>> insertInto #table1 ( 1 `As` #col1 :* 2 `As` #col2 :* Nil )
+    &>> insertInto #table1 ( 3 `As` #col1 :* 4 `As` #col2 :* Nil )
+  Char8.putStrLn "querying"
   connection2 <- flip execPQ connection1 $ do
-    _insertTable1Result <- pqExec $
-      insertInto #table1 ( 1 `As` #col1 :* 2 `As` #col2 :* Nil )
-      >>>
-      insertInto #table1 ( 3 `As` #col1 :* 4 `As` #col2 :* Nil )
-    Just selectTable1Result <- flip pqExecParams Nil $
-      (select $ starFrom #table1 :: Statement '[] Columns Tables Tables)
-    Just (Right value00) <- runMaybeT . runExceptT . flip runValue selectTable1Result $
-      getValue (RowNumber 0) colNum0
-    Just (Right value01) <- runMaybeT . runExceptT . flip runValue selectTable1Result $
-      getValue (RowNumber 0) colNum1
-    Just (Right value10) <- runMaybeT . runExceptT . flip runValue selectTable1Result $
-      getValue (RowNumber 1) colNum0
-    Just (Right value11) <- runMaybeT . runExceptT . flip runValue selectTable1Result $
-      getValue (RowNumber 1) colNum1
-    Just (Right row0) <- runMaybeT . runExceptT . flip runValue selectTable1Result $
-      getRow (RowNumber 0)
-    Just (Right row1) <- runMaybeT . runExceptT . flip runValue selectTable1Result $
-      getRow (RowNumber 1)
-    liftBase $ do
-      print (value00 :: Int32)
-      print (value01 :: Int32)
-      print (value10 :: Int32)
-      print (value11 :: Int32)
-      print (row0 :: NP I '[Int32,Int32])
-      print (row1 :: NP I '[Int32,Int32])
-  connection3 :: Connection '[] <- flip execPQ connection2 $ pqExec $
+    Just result <- pqExecParams (select (starFrom #table1)) Nil
+    runMaybeT . runExceptT . flip runValue result $ do
+      value00 <- getValue (RowNumber 0) colNum0
+      value01 <- getValue (RowNumber 0) colNum1
+      value10 <- getValue (RowNumber 1) colNum0
+      value11 <- getValue (RowNumber 1) colNum1
+      row0 <- getRow (RowNumber 0)
+      row1 <- getRow (RowNumber 1)
+      liftBase $ do
+        print (value00 :: Int32)
+        print (value01 :: Int32)
+        print (value10 :: Int32)
+        print (value11 :: Int32)
+        print (row0 :: NP I '[Int32,Int32])
+        print (row1 :: NP I '[Int32,Int32])
+  Char8.putStrLn "tearing down database"
+  connection3 :: Connection '[] <- flip execPQ connection2 $ pqExec
     (dropTable #table1 :: Statement '[] '[] Tables '["students" ::: StudentsColumns])
-    >>> dropTable #students
+    &>> dropTable #students
   finish connection3
 
 type Columns =

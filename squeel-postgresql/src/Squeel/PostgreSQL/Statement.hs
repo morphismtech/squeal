@@ -15,7 +15,6 @@
 
 module Squeel.PostgreSQL.Statement where
 
-import Control.Category
 import Data.Boolean
 import Data.Boolean.Numbers
 import Data.ByteString (ByteString)
@@ -27,7 +26,7 @@ import Generics.SOP
 import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
-import Prelude hiding (id,(.),RealFrac(..))
+import Prelude hiding (RealFrac(..))
 
 import qualified Data.ByteString as ByteString
 
@@ -134,7 +133,11 @@ instance PGNum ty
     (*) = unsafeBinaryOp "*"
     abs = unsafeFunction "abs"
     signum = unsafeFunction "sign"
-    fromInteger = UnsafeExpression . (<> ".") . fromString . show
+    fromInteger
+      = UnsafeExpression
+      . (<> if decimal (Proxy :: Proxy ty) then "." else "")
+      . fromString
+      . show
 
 instance PGFractional ty
   => Fractional (Expression params tables ('Required (nullity ty))) where
@@ -333,11 +336,6 @@ newtype Statement
   (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
     = UnsafeStatement { renderStatement :: ByteString }
     deriving (Show,Eq)
-
-instance Category (Statement '[] '[]) where
-  id = UnsafeStatement ";"
-  statement2 . statement1 = UnsafeStatement $
-    renderStatement statement1 <> " " <> renderStatement statement2
 
 newtype PreparedStatement
   (params :: [ColumnType])
@@ -711,8 +709,8 @@ class KnownSymbol table => DropTable table schema0 schema1
     dropTable (Alias table) = UnsafeStatement $
       "DROP TABLE " <> fromString (symbolVal' table) <> ";"
 instance {-# OVERLAPPING #-}
-  (KnownSymbol table, table ~ table')
-    => DropTable table ((table' ::: columns) ': schema) schema
+  (KnownSymbol table, table ~ table', schema ~ schema')
+    => DropTable table ((table' ::: columns) ': schema) schema'
 instance {-# OVERLAPPABLE #-}
   DropTable table schema0 schema1
     => DropTable table (table' ': schema0) (table' ': schema1)
