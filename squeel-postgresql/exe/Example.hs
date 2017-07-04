@@ -27,7 +27,7 @@ main = do
     "host=localhost port=5432 dbname=exampledb"
   Char8.putStrLn $ "connecting to " <> connectionString
   connection0 <- connectdb connectionString
-  Char8.putStrLn "creating database"
+  Char8.putStrLn "setting up database"
   connection1 <- flip execPQ connection0 $
     pqExec ( createTable #students
       (  (text & notNull) `As` #name
