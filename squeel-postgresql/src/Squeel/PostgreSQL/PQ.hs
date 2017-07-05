@@ -195,27 +195,18 @@ newtype Result (xs :: [(Symbol,ColumnType)])
 
 newtype RowNumber = RowNumber { unRowNumber :: LibPQ.Row }
 
-newtype ColumnNumber cs c = ColumnNumber { unColumnNumber :: LibPQ.Column }
+newtype ColumnNumber n cs c =
+  UnsafeColumnNumber { getColumnNumber :: LibPQ.Column }
 
-class KnownNat n => HasColumnNumber (n :: Nat) columns column
+class KnownNat n => HasColumnNumber n columns column
   | n columns -> column where
-  colNum :: Proxy# n -> ColumnNumber columns column
-  colNum p = ColumnNumber . fromIntegral $ natVal' p
+  columnNumber :: ColumnNumber n columns column
+  columnNumber =
+    UnsafeColumnNumber . fromIntegral $ natVal' (proxy# :: Proxy# n)
 instance {-# OVERLAPPING #-} HasColumnNumber 0 (column1:columns) column1
 instance {-# OVERLAPPABLE #-}
   (KnownNat n, HasColumnNumber (n-1) columns column)
     => HasColumnNumber n (column' : columns) column
-
-colNum0 :: ColumnNumber (c0:cs) c0
-colNum0 = colNum (proxy# :: Proxy# 0)
-colNum1 :: ColumnNumber (c0:c1:cs) c1
-colNum1 = colNum (proxy# :: Proxy# 1)
-colNum2 :: ColumnNumber (c0:c1:c2:cs) c2
-colNum2 = colNum (proxy# :: Proxy# 2)
-colNum3 :: ColumnNumber (c0:c1:c2:c3:cs) c3
-colNum3 = colNum (proxy# :: Proxy# 3)
-colNum4 :: ColumnNumber (c0:c1:c2:c3:c4:cs) c4
-colNum4 = colNum (proxy# :: Proxy# 4)
 
 newtype Value pgs m x = Value { runValue :: Result pgs -> m x }
   deriving (Functor)
@@ -235,9 +226,9 @@ instance MonadBase b m => MonadBase b (Value pgs m) where
 getValue
   :: (HasDecoding pg x, MonadBase IO io)
   => RowNumber
-  -> ColumnNumber pgs pg
+  -> ColumnNumber n pgs pg
   -> Value pgs (ExceptT Text (MaybeT io)) x
-getValue (RowNumber r) (ColumnNumber c :: ColumnNumber pgs pg) =
+getValue (RowNumber r) (UnsafeColumnNumber c :: ColumnNumber n pgs pg) =
   Value $ \ (Result result) -> do
     maybeBytestring <- liftBase $ LibPQ.getvalue result r c
     case maybeBytestring of

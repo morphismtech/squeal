@@ -4,6 +4,7 @@
   , OverloadedLabels
   , OverloadedStrings
   , ScopedTypeVariables
+  , TypeApplications
   , TypeOperators
 #-}
 
@@ -42,10 +43,10 @@ main = do
   connection2 <- flip execPQ connection1 $ do
     Just result <- pqExecNil $ select $ starFrom #table1
     runMaybeT . runExceptT . flip runValue result $ do
-      value00 <- getValue (RowNumber 0) colNum0
-      value01 <- getValue (RowNumber 0) colNum1
-      value10 <- getValue (RowNumber 1) colNum0
-      value11 <- getValue (RowNumber 1) colNum1
+      value00 <- getValue (RowNumber 0) (columnNumber @0)
+      value01 <- getValue (RowNumber 0) (columnNumber @1)
+      value10 <- getValue (RowNumber 1) (columnNumber @0)
+      value11 <- getValue (RowNumber 1) (columnNumber @1)
       row0 <- getRow (RowNumber 0)
       row1 <- getRow (RowNumber 1)
       liftBase $ do
