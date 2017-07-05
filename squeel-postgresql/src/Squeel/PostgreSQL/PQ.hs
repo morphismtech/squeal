@@ -73,7 +73,7 @@ class MonadPQ pq where
     -> pq db0 db1 io (Maybe (Result '[]))
 
   pqExecParams
-    :: (MonadBase IO io, ToOids ps, AllZip HasEncoding ps xs, All Top ps)
+    :: (MonadBase IO io, ToOids ps, AllZip HasEncoding ps xs)
     => Statement ps ys db0 db1
     -> NP I xs
     -> pq db0 db1 io (Maybe (Result ys))
@@ -82,13 +82,26 @@ class MonadPQ pq where
     :: (MonadBase IO io, ToOids ps)
     => ByteString
     -> Statement ps xs db0 db1
-    -> pq db0 db1 io (Maybe (Result []), PreparedStatement ps xs db0 db1)
+    -> pq db0 db1 io (Maybe (Result '[]), PreparedStatement ps xs db0 db1)
 
   pqExecPrepared
-    :: (MonadBase IO io, AllZip HasEncoding ps xs, All Top ps)
+    :: (MonadBase IO io, AllZip HasEncoding ps xs)
     => PreparedStatement ps ys db0 db1
     -> NP I xs
     -> pq db0 db1 io (Maybe (Result ys))
+
+(&>>)
+  :: (MonadPQ pq, MonadBase IO io)
+  => pq db0 db1 io (Maybe (Result '[]))
+  -> Statement '[] '[] db1 db2
+  -> pq db0 db2 io (Maybe (Result '[]))
+pq1 &>> statement2 = pqBind (\ _ -> pqExec statement2) pq1
+
+pqExecNil
+  :: (MonadPQ pq, MonadBase IO io)
+  => Statement '[] ys db0 db1
+  -> pq db0 db1 io (Maybe (Result ys))
+pqExecNil statement = pqExecParams statement Nil
 
 instance MonadPQ PQ where
 
@@ -177,31 +190,23 @@ withConnection
 withConnection connString action =
   bracket (connectdb connString) finish action
 
-newtype Result xs = Result { unResult :: LibPQ.Result }
+newtype Result (xs :: [(Symbol,ColumnType)])
+  = Result { unResult :: LibPQ.Result }
 
 newtype RowNumber = RowNumber { unRowNumber :: LibPQ.Row }
 
-newtype ColumnNumber cs c = ColumnNumber { unColumnNumber :: LibPQ.Column }
+newtype ColumnNumber n cs c =
+  UnsafeColumnNumber { getColumnNumber :: LibPQ.Column }
 
-class KnownNat n => HasColumnNumber (n :: Nat) columns column
+class KnownNat n => HasColumnNumber n columns column
   | n columns -> column where
-  colNum :: Proxy# n -> ColumnNumber columns column
-  colNum p = ColumnNumber . fromIntegral $ natVal' p
+  columnNumber :: ColumnNumber n columns column
+  columnNumber =
+    UnsafeColumnNumber . fromIntegral $ natVal' (proxy# :: Proxy# n)
 instance {-# OVERLAPPING #-} HasColumnNumber 0 (column1:columns) column1
 instance {-# OVERLAPPABLE #-}
   (KnownNat n, HasColumnNumber (n-1) columns column)
     => HasColumnNumber n (column' : columns) column
-
-colNum0 :: ColumnNumber (c0:cs) c0
-colNum0 = colNum (proxy# :: Proxy# 0)
-colNum1 :: ColumnNumber (c0:c1:cs) c1
-colNum1 = colNum (proxy# :: Proxy# 1)
-colNum2 :: ColumnNumber (c0:c1:c2:cs) c2
-colNum2 = colNum (proxy# :: Proxy# 2)
-colNum3 :: ColumnNumber (c0:c1:c2:c3:cs) c3
-colNum3 = colNum (proxy# :: Proxy# 3)
-colNum4 :: ColumnNumber (c0:c1:c2:c3:c4:cs) c4
-colNum4 = colNum (proxy# :: Proxy# 4)
 
 newtype Value pgs m x = Value { runValue :: Result pgs -> m x }
   deriving (Functor)
@@ -221,9 +226,9 @@ instance MonadBase b m => MonadBase b (Value pgs m) where
 getValue
   :: (HasDecoding pg x, MonadBase IO io)
   => RowNumber
-  -> ColumnNumber pgs pg
+  -> ColumnNumber n pgs pg
   -> Value pgs (ExceptT Text (MaybeT io)) x
-getValue (RowNumber r) (ColumnNumber c :: ColumnNumber pgs pg) =
+getValue (RowNumber r) (UnsafeColumnNumber c :: ColumnNumber n pgs pg) =
   Value $ \ (Result result) -> do
     maybeBytestring <- liftBase $ LibPQ.getvalue result r c
     case maybeBytestring of

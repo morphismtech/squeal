@@ -8,6 +8,7 @@
   , MagicHash
   , OverloadedStrings
   , ScopedTypeVariables
+  , TypeApplications
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
@@ -15,7 +16,6 @@
 
 module Squeel.PostgreSQL.Statement where
 
-import Control.Category
 import Data.Boolean
 import Data.Boolean.Numbers
 import Data.ByteString (ByteString)
@@ -27,7 +27,7 @@ import Generics.SOP
 import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
-import Prelude hiding (id,(.),RealFrac(..))
+import Prelude hiding (RealFrac(..))
 
 import qualified Data.ByteString as ByteString
 
@@ -134,7 +134,11 @@ instance PGNum ty
     (*) = unsafeBinaryOp "*"
     abs = unsafeFunction "abs"
     signum = unsafeFunction "sign"
-    fromInteger = UnsafeExpression . (<> ".") . fromString . show
+    fromInteger
+      = UnsafeExpression
+      . (<> if decimal (Proxy :: Proxy ty) then "." else "")
+      . fromString
+      . show
 
 instance PGFractional ty
   => Fractional (Expression params tables ('Required (nullity ty))) where
@@ -333,11 +337,6 @@ newtype Statement
   (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
     = UnsafeStatement { renderStatement :: ByteString }
     deriving (Show,Eq)
-
-instance Category (Statement '[] '[]) where
-  id = UnsafeStatement ";"
-  statement2 . statement1 = UnsafeStatement $
-    renderStatement statement1 <> " " <> renderStatement statement2
 
 newtype PreparedStatement
   (params :: [ColumnType])
@@ -615,53 +614,53 @@ serial8 :: TypeExpression ('Optional ('NotNull 'PGInt8))
 serial8 = UnsafeTypeExpression "serial8"
 bigserial :: TypeExpression ('Optional ('NotNull 'PGInt8))
 bigserial = UnsafeTypeExpression "bigserial"
-money :: TypeExpression ('Optional ('NotNull 'PGMoney))
+money :: TypeExpression ('Required ('Null 'PGMoney))
 money = UnsafeTypeExpression "money"
 text :: TypeExpression ('Required ('Null 'PGText))
 text = UnsafeTypeExpression "text"
 char
   :: KnownNat n
   => proxy n
-  -> TypeExpression ('Optional ('NotNull ('PGChar n)))
+  -> TypeExpression ('Required ('Null ('PGChar n)))
 char (_ :: proxy n) = UnsafeTypeExpression $
   "char(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
 character
   :: KnownNat n
   => proxy n
-  -> TypeExpression ('Optional ('NotNull ('PGChar n)))
+  -> TypeExpression ('Required ('Null ('PGChar n)))
 character (_ :: proxy n) = UnsafeTypeExpression $
   "character(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
 varchar
   :: KnownNat n
   => proxy n
-  -> TypeExpression ('Optional ('NotNull ('PGVarChar n)))
+  -> TypeExpression ('Required ('Null ('PGVarChar n)))
 varchar (_ :: proxy n) = UnsafeTypeExpression $
   "varchar(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
 characterVarying
   :: KnownNat n
   => proxy n
-  -> TypeExpression ('Optional ('NotNull ('PGVarChar n)))
+  -> TypeExpression ('Required ('Null ('PGVarChar n)))
 characterVarying (_ :: proxy n) = UnsafeTypeExpression $
   "character varying(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
-bytea :: TypeExpression ('Optional ('NotNull ('PGBytea)))
+bytea :: TypeExpression ('Required ('Null ('PGBytea)))
 bytea = UnsafeTypeExpression "bytea"
-timestamp :: TypeExpression ('Optional ('NotNull ('PGTimestamp)))
+timestamp :: TypeExpression ('Required ('Null ('PGTimestamp)))
 timestamp = UnsafeTypeExpression "timestamp"
-timestampWithTimeZone :: TypeExpression ('Optional ('NotNull ('PGTimestampTZ)))
+timestampWithTimeZone :: TypeExpression ('Required ('Null ('PGTimestampTZ)))
 timestampWithTimeZone = UnsafeTypeExpression "timestamp with time zone"
-date :: TypeExpression ('Optional ('NotNull ('PGDate)))
+date :: TypeExpression ('Required ('Null ('PGDate)))
 date = UnsafeTypeExpression "date"
-time :: TypeExpression ('Optional ('NotNull ('PGTime)))
+time :: TypeExpression ('Required ('Null ('PGTime)))
 time = UnsafeTypeExpression "time"
-timeWithTimeZone :: TypeExpression ('Optional ('NotNull ('PGTimeTZ)))
+timeWithTimeZone :: TypeExpression ('Required ('Null ('PGTimeTZ)))
 timeWithTimeZone = UnsafeTypeExpression "time with time zone"
-interval :: TypeExpression ('Optional ('NotNull ('PGInterval)))
+interval :: TypeExpression ('Required ('Null ('PGInterval)))
 interval = UnsafeTypeExpression "interval"
-uuid :: TypeExpression ('Optional ('NotNull ('PGUuid)))
+uuid :: TypeExpression ('Required ('Null ('PGUuid)))
 uuid = UnsafeTypeExpression "uuid"
-json :: TypeExpression ('Optional ('NotNull ('PGJson)))
+json :: TypeExpression ('Required ('Null ('PGJson)))
 json = UnsafeTypeExpression "json"
-jsonb :: TypeExpression ('Optional ('NotNull ('PGJsonb)))
+jsonb :: TypeExpression ('Required ('Null ('PGJsonb)))
 jsonb = UnsafeTypeExpression "jsonb"
 
 notNull
@@ -677,11 +676,27 @@ default_ x ty = UnsafeTypeExpression $
 
 class PGTyped (ty :: PGType) where
   pgtype :: TypeExpression ('Required ('Null ty))
+instance PGTyped 'PGBool where pgtype = bool
 instance PGTyped 'PGInt2 where pgtype = int2
 instance PGTyped 'PGInt4 where pgtype = int4
 instance PGTyped 'PGInt8 where pgtype = int8
-instance PGTyped 'PGBool where pgtype = bool
+instance PGTyped 'PGNumeric where pgtype = numeric
+instance PGTyped 'PGFloat4 where pgtype = float4
+instance PGTyped 'PGFloat8 where pgtype = float8
+instance PGTyped 'PGMoney where pgtype = money
 instance PGTyped 'PGText where pgtype = text
+instance KnownNat n => PGTyped ('PGChar n) where pgtype = char (Proxy @n)
+instance KnownNat n => PGTyped ('PGVarChar n) where pgtype = varchar (Proxy @n)
+instance PGTyped 'PGBytea where pgtype = bytea
+instance PGTyped 'PGTimestamp where pgtype = timestamp
+instance PGTyped 'PGTimestampTZ where pgtype = timestampWithTimeZone
+instance PGTyped 'PGDate where pgtype = date
+instance PGTyped 'PGTime where pgtype = time
+instance PGTyped 'PGTimeTZ where pgtype = timeWithTimeZone
+instance PGTyped 'PGInterval where pgtype = interval
+instance PGTyped 'PGUuid where pgtype = uuid
+instance PGTyped 'PGJson where pgtype = json
+instance PGTyped 'PGJsonb where pgtype = jsonb
 
 createTable
   :: (KnownSymbol table, SListI columns)
@@ -711,8 +726,8 @@ class KnownSymbol table => DropTable table schema0 schema1
     dropTable (Alias table) = UnsafeStatement $
       "DROP TABLE " <> fromString (symbolVal' table) <> ";"
 instance {-# OVERLAPPING #-}
-  (KnownSymbol table, table ~ table')
-    => DropTable table ((table' ::: columns) ': schema) schema
+  (KnownSymbol table, table ~ table', schema ~ schema')
+    => DropTable table ((table' ::: columns) ': schema) schema'
 instance {-# OVERLAPPABLE #-}
   DropTable table schema0 schema1
     => DropTable table (table' ': schema0) (table' ': schema1)

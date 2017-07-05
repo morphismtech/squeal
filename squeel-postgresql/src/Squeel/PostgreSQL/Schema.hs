@@ -17,7 +17,7 @@ module Squeel.PostgreSQL.Schema
   ( PGType (..)
   , ToOid (..)
   , ToOids (..)
-  , PGNum
+  , PGNum (..)
   , PGFractional
   , PGFloating
   , (:::)
@@ -82,12 +82,13 @@ instance (ToOid pg, ToOids pgs) => ToOids (pg ': pgs) where
   toOids _ = toOid (proxy# :: Proxy# pg) : toOids (proxy# :: Proxy# pgs)
 
 class PGNum (ty :: PGType) where
-instance PGNum 'PGInt2
-instance PGNum 'PGInt4
-instance PGNum 'PGInt8
-instance PGNum 'PGNumeric
-instance PGNum 'PGFloat4
-instance PGNum 'PGFloat8
+  decimal :: proxy ty -> Bool
+instance PGNum 'PGInt2 where decimal _ = False
+instance PGNum 'PGInt4 where decimal _ = False
+instance PGNum 'PGInt8 where decimal _ = False
+instance PGNum 'PGNumeric where decimal _ = True
+instance PGNum 'PGFloat4 where decimal _ = True
+instance PGNum 'PGFloat8 where decimal _ = True
 
 class PGNum ty => PGFractional (ty :: PGType) where
 instance PGFractional 'PGNumeric
