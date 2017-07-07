@@ -24,6 +24,7 @@ import Control.Monad.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Control
 import Data.ByteString (ByteString)
+import Data.Function ((&))
 import Data.Maybe
 import Data.Proxy (Proxy)
 import Data.Text (Text)
@@ -53,7 +54,7 @@ evalPQ (PQ pq) = fmap fst . pq
 execPQ :: Functor m => PQ db0 db1 m x -> Connection db0 -> m (Connection db1)
 execPQ (PQ pq) = fmap snd . pq
 
-class MonadPQ pq where
+class AtkeyPQ pq where
 
   pqAp
     :: Monad m
@@ -67,16 +68,19 @@ class MonadPQ pq where
     -> pq db0 db1 m x
     -> pq db0 db2 m y
 
+  pqThen
+    :: Monad m
+    => pq db1 db2 m y
+    -> pq db0 db1 m x
+    -> pq db0 db2 m y
+  pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
+
+class AtkeyPQ pq => MonadPQ pq where
+
   pqExec
     :: MonadBase IO io
     => Statement '[] '[] db0 db1
     -> pq db0 db1 io (Maybe (Result '[]))
-
-  pqExecParams
-    :: (MonadBase IO io, ToOids ps, AllZip HasEncoding ps xs)
-    => Statement ps ys db0 db1
-    -> NP I xs
-    -> pq db0 db1 io (Maybe (Result ys))
 
   pqPrepare
     :: (MonadBase IO io, ToOids ps)
@@ -84,26 +88,26 @@ class MonadPQ pq where
     -> Statement ps xs db0 db1
     -> pq db0 db1 io (Maybe (Result '[]), PreparedStatement ps xs db0 db1)
 
-  pqExecPrepared
-    :: (MonadBase IO io, AllZip HasEncoding ps xs)
-    => PreparedStatement ps ys db0 db1
+class MonadQuery db m | m -> db where
+
+  pqExecParams
+    :: (ToOids ps, AllZip HasEncoding ps xs)
+    => Statement ps ys db db
     -> NP I xs
-    -> pq db0 db1 io (Maybe (Result ys))
+    -> m (Maybe (Result ys))
 
-(&>>)
-  :: (MonadPQ pq, MonadBase IO io)
-  => pq db0 db1 io (Maybe (Result '[]))
-  -> Statement '[] '[] db1 db2
-  -> pq db0 db2 io (Maybe (Result '[]))
-pq1 &>> statement2 = pqBind (\ _ -> pqExec statement2) pq1
+  pqExecNil
+    :: Statement '[] ys db db
+    -> m (Maybe (Result ys))
+  pqExecNil statement = pqExecParams statement Nil
 
-pqExecNil
-  :: (MonadPQ pq, MonadBase IO io)
-  => Statement '[] ys db0 db1
-  -> pq db0 db1 io (Maybe (Result ys))
-pqExecNil statement = pqExecParams statement Nil
+  pqExecPrepared
+    :: AllZip HasEncoding ps xs
+    => PreparedStatement ps ys db db
+    -> NP I xs
+    -> m (Maybe (Result ys))
 
-instance MonadPQ PQ where
+instance AtkeyPQ PQ where
 
   pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
     (f', conn') <- f conn
@@ -114,9 +118,22 @@ instance MonadPQ PQ where
     (x', conn') <- x conn
     runPQ (f x') conn'
 
+instance MonadPQ PQ where
+
   pqExec (UnsafeStatement q) = PQ $ \ (Connection conn) -> do
     result <- liftBase $ LibPQ.exec conn q
     return (Result <$> result, Connection conn)
+
+  pqPrepare statementName (UnsafeStatement q :: Statement ps ys db0 db1) =
+    PQ $ \ (Connection conn) -> do
+      result <- liftBase $
+        LibPQ.prepare conn statementName q (Just (toOids (proxy# :: Proxy# ps)))
+      return
+        ( ( Result <$> result
+          , UnsafePreparedStatement statementName
+        ) , Connection conn )
+
+instance MonadBase IO io => MonadQuery db (PQ db db io) where
 
   pqExecParams (UnsafeStatement q :: Statement ps ys db0 db1) params =
     PQ $ \ (Connection conn) -> do
@@ -129,15 +146,6 @@ instance MonadPQ PQ where
           ]
       result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
       return (Result <$> result, Connection conn)
-
-  pqPrepare statementName (UnsafeStatement q :: Statement ps ys db0 db1) =
-    PQ $ \ (Connection conn) -> do
-      result <- liftBase $
-        LibPQ.prepare conn statementName q (Just (toOids (proxy# :: Proxy# ps)))
-      return
-        ( ( Result <$> result
-          , UnsafePreparedStatement statementName
-        ) , Connection conn )
 
   pqExecPrepared (q :: PreparedStatement ps ys db0 db1) params =
     PQ $ \ (Connection conn) -> do
