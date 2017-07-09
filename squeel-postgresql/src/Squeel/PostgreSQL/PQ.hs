@@ -75,20 +75,33 @@ class AtkeyPQ pq where
     -> pq db0 db2 m y
   pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 
-class AtkeyPQ pq => MonadPQ pq where
-
   pqExec
     :: MonadBase IO io
     => Statement '[] '[] db0 db1
     -> pq db0 db1 io (Maybe (Result '[]))
 
-  pqPrepare
-    :: (MonadBase IO io, ToOids ps)
-    => ByteString
-    -> Statement ps xs db0 db1
-    -> pq db0 db1 io (Maybe (Result '[]), PreparedStatement ps xs db0 db1)
+  pqThenExec
+    :: MonadBase IO io
+    => Statement '[] '[] db1 db2
+    -> pq db0 db1 io x
+    -> pq db0 db2 io (Maybe (Result '[]))
+  pqThenExec = pqThen . pqExec
 
-class MonadQuery db m | m -> db where
+  -- pqPrepare
+  --   :: (MonadBase IO io, ToOids ps)
+  --   => ByteString
+  --   -> Statement ps xs db0 db1
+  --   -> pq db0 db1 io (Maybe (Result '[]), PreparedStatement ps xs db0 db1)
+
+  -- pqThenPrepare
+  --   :: MonadBase IO io
+  --   => ByteString
+  --   -> Statement ps xs schema0 schema1
+  --   -> pq db0 db1 io x
+  --   -> pq db1 db1 io (Maybe (Result '[]), PreparedStatement ps xs schema0 schema1)
+  -- pqThenPrepare name st pq = pqThen (pqPrepare name st) pq
+
+class MonadPQ db m | m -> db where
 
   pqExecParams
     :: (ToOids ps, AllZip HasEncoding ps xs)
@@ -118,22 +131,20 @@ instance AtkeyPQ PQ where
     (x', conn') <- x conn
     runPQ (f x') conn'
 
-instance MonadPQ PQ where
-
   pqExec (UnsafeStatement q) = PQ $ \ (Connection conn) -> do
     result <- liftBase $ LibPQ.exec conn q
     return (Result <$> result, Connection conn)
 
-  pqPrepare statementName (UnsafeStatement q :: Statement ps ys db0 db1) =
-    PQ $ \ (Connection conn) -> do
-      result <- liftBase $
-        LibPQ.prepare conn statementName q (Just (toOids (proxy# :: Proxy# ps)))
-      return
-        ( ( Result <$> result
-          , UnsafePreparedStatement statementName
-        ) , Connection conn )
+  -- pqPrepare statementName (UnsafeStatement q :: Statement ps ys db0 db1) =
+  --   PQ $ \ (Connection conn) -> do
+  --     result <- liftBase $
+  --       LibPQ.prepare conn statementName q (Just (toOids (proxy# :: Proxy# ps)))
+  --     return
+  --       ( ( Result <$> result
+  --         , UnsafePreparedStatement statementName
+  --       ) , Connection conn )
 
-instance MonadBase IO io => MonadQuery db (PQ db db io) where
+instance MonadBase IO io => MonadPQ db (PQ db db io) where
 
   pqExecParams (UnsafeStatement q :: Statement ps ys db0 db1) params =
     PQ $ \ (Connection conn) -> do

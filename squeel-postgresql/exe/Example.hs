@@ -34,14 +34,14 @@ main = do
       ( createTable #students
         (  (text & notNull) `As` #name
         :* Nil ) )
-    & (pqThen . pqExec)
+    & pqThenExec
       ( createTable #table1
         (  (int4 & notNull) `As` #col1
         :* (int4 & notNull) `As` #col2
         :* Nil ) )
-    & (pqThen . pqExec)
+    & pqThenExec
       ( insertInto #table1 ( 1 `As` #col1 :* 2 `As` #col2 :* Nil ) )
-    & (pqThen . pqExec)
+    & pqThenExec
       ( insertInto #table1 ( 3 `As` #col1 :* 4 `As` #col2 :* Nil ) )
   Char8.putStrLn "querying"
   connection2 <- flip execPQ connection1 $ do
@@ -63,7 +63,7 @@ main = do
   Char8.putStrLn "tearing down database"
   connection3 :: Connection '[] <- flip execPQ connection2 $ pqExec
     (dropTable #table1 :: Statement '[] '[] Tables '["students" ::: StudentsColumns])
-    & (pqThen . pqExec) (dropTable #students)
+    & pqThenExec (dropTable #students)
   finish connection3
 
 type Columns =
