@@ -25,7 +25,7 @@ spec = do
       statement :: Statement '[] SumAndCol1 Tables Tables
       statement = select $
         ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
-          `from` (#table1 & where_ ((#col1 :: Expression '[] Tables ('Required ('NotNull 'PGInt4)))>* #col2))
+          `from` (#table1 & where_ ((#col1 :: Expression '[] Tables ('Required ('NotNull 'PGInt4))) >* #col2))
     statement `shouldRenderAs`
       "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE (col1 > col2);"
   it "combines WHEREs using AND" $ do
@@ -93,7 +93,7 @@ spec = do
   it "correctly renders DELETEs" $ do
     let
       statement :: Statement '[] '[] Tables Tables
-      statement = delete #table1 ((#col1 :: Expression '[] Tables ('Required ('NotNull 'PGInt4))) ==* #col2)
+      statement = deleteFrom #table1 ((#col1 :: Expression '[] Tables ('Required ('NotNull 'PGInt4))) ==* #col2)
     statement `shouldRenderAs`
       "DELETE FROM table1 WHERE (col1 = col2);"
   it "should be safe against SQL injection in literal text" $ do
