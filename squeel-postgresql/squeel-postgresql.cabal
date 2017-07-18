@@ -46,7 +46,6 @@ test-suite squeel-postgresql-test
   main-is: Spec.hs
   other-modules:
     Squeel.PostgreSQL.StatementSpec
-    Squeel.PostgreSQL.ValueSpec
   build-depends:
       base
     , Boolean
