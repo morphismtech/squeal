@@ -339,13 +339,13 @@ newtype Statement
     = UnsafeStatement { renderStatement :: ByteString }
     deriving (Show,Eq)
 
-newtype PreparedStatement
-  (params :: [ColumnType])
-  (columns :: [(Symbol,ColumnType)])
-  (schema0 :: [(Symbol,[(Symbol,ColumnType)])])
-  (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
-    = UnsafePreparedStatement { renderPreparedStatement :: ByteString }
-    deriving (Show,Eq)
+-- newtype PreparedStatement
+--   (params :: [ColumnType])
+--   (columns :: [(Symbol,ColumnType)])
+--   (schema0 :: [(Symbol,[(Symbol,ColumnType)])])
+--   (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
+--     = UnsafePreparedStatement { renderPreparedStatement :: ByteString }
+--     deriving (Show,Eq)
 
 {-----------------------------------------
 SELECT statements
