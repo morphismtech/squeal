@@ -736,10 +736,10 @@ instance {-# OVERLAPPABLE #-}
 UPDATE statements
 -----------------------------------------}
 
-set :: g x -> (Maybe :.: g) x
+set :: Expression params tables x -> (Maybe :.: Expression params tables) x
 set = Comp . Just
 
-same :: (Maybe :.: g) x
+same :: (Maybe :.: Expression params tables) x
 same = Comp Nothing
 
 update
@@ -754,7 +754,7 @@ update (Alias table) columns where' = UnsafeStatement $ mconcat
   , " SET "
   , ByteString.intercalate ", " . catMaybes . hcollapse $
       hmap (K . renderSet) columns
-  , " WHERE ", renderExpression where'
+  , " WHERE ", renderExpression where', ";"
   ] where
     renderSet
       :: Aliased (Maybe :.: Expression params tables) column

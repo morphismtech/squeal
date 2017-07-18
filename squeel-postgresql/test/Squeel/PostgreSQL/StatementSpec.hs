@@ -75,6 +75,12 @@ spec = do
       statement = insertInto #table1 $ 2 `As` #col1 :* 4 `As` #col2 :* Nil
     statement `shouldRenderAs`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
+  it "correctly render simple UPDATEs" $ do
+    let
+      statement :: Statement '[] '[] Tables Tables
+      statement = update #table1 (set 2 `As` #col1 :* same `As` #col2 :* Nil) true
+    statement `shouldRenderAs`
+      "UPDATE table1 SET col1 = 2 WHERE TRUE;"
   it "should be safe against SQL injection in literal text" $ do
     let
       statement :: Statement '[] '[] StudentsTable StudentsTable
