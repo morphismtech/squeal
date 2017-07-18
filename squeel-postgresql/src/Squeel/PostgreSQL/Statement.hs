@@ -16,8 +16,8 @@
 
 module Squeel.PostgreSQL.Statement where
 
-import Data.Boolean
-import Data.Boolean.Numbers
+-- import Data.Boolean
+-- import Data.Boolean.Numbers
 import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Maybe
@@ -200,52 +200,52 @@ instance PGCast 'PGInt8 'PGFloat4
 instance PGCast 'PGInt8 'PGFloat8
 instance PGCast 'PGInt8 'PGNumeric
 
-instance (PGNum ty, PGTyped ty, PGCast 'PGInt8 ty)
-  => NumB (Expression params tables ('Required (nullity ty))) where
-    type IntegerOf (Expression params tables ('Required (nullity ty)))
-      = (Expression params tables ('Required (nullity 'PGInt8)))
-    fromIntegerB = cast pgtype
+-- instance (PGNum ty, PGTyped ty, PGCast 'PGInt8 ty)
+--   => NumB (Expression params tables ('Required (nullity ty))) where
+--     type IntegerOf (Expression params tables ('Required (nullity ty)))
+--       = (Expression params tables ('Required (nullity 'PGInt8)))
+--     fromIntegerB = cast pgtype
 
-instance (PGNum ty, PGTyped ty, PGCast 'PGInt8 ty, PGCast ty 'PGInt8)
-  => IntegralB (Expression params tables ('Required ('NotNull ty))) where
-    quot = unsafeBinaryOp "/"
-    rem = unsafeBinaryOp "%"
-    div = unsafeBinaryOp "/"
-    mod = unsafeBinaryOp "%"
-    toIntegerB = cast int8
+-- instance (PGNum ty, PGTyped ty, PGCast 'PGInt8 ty, PGCast ty 'PGInt8)
+--   => IntegralB (Expression params tables ('Required ('NotNull ty))) where
+--     quot = unsafeBinaryOp "/"
+--     rem = unsafeBinaryOp "%"
+--     div = unsafeBinaryOp "/"
+--     mod = unsafeBinaryOp "%"
+--     toIntegerB = cast int8
 
-instance
-  ( IntegerOf (Expression params tables ('Required ('NotNull ty)))
-    ~ (Expression params tables ('Required ('NotNull 'PGInt8)))
-  , PGNum ty
-  , PGTyped ty
-  , PGCast 'PGInt8 ty
-  , PGFractional ty
-  )
-  => RealFracB (Expression params tables ('Required ('NotNull ty))) where
-    properFraction x = (truncate x, x - unsafeFunction "trunc" x)
-    truncate = fromIntegerB . unsafeFunction "trunc"
-    round = fromIntegerB . unsafeFunction "round"
-    ceiling = fromIntegerB . unsafeFunction "ceiling"
-    floor = fromIntegerB . unsafeFunction "floor"
+-- instance
+--   ( IntegerOf (Expression params tables ('Required ('NotNull ty)))
+--     ~ (Expression params tables ('Required ('NotNull 'PGInt8)))
+--   , PGNum ty
+--   , PGTyped ty
+--   , PGCast 'PGInt8 ty
+--   , PGFractional ty
+--   )
+--   => RealFracB (Expression params tables ('Required ('NotNull ty))) where
+--     properFraction x = (truncate x, x - unsafeFunction "trunc" x)
+--     truncate = fromIntegerB . unsafeFunction "trunc"
+--     round = fromIntegerB . unsafeFunction "round"
+--     ceiling = fromIntegerB . unsafeFunction "ceiling"
+--     floor = fromIntegerB . unsafeFunction "floor"
 
-instance
-  ( IntegerOf (Expression params tables ('Required ('NotNull ty)))
-    ~ (Expression params tables ('Required ('NotNull 'PGInt8)))
-  , PGNum ty
-  , PGTyped ty
-  , PGCast 'PGInt8 ty
-  , PGCast 'PGNumeric ty
-  , PGFloating ty
-  )
-  => RealFloatB (Expression params tables ('Required ('NotNull ty))) where
-    isNaN x = x ==* UnsafeExpression "\'NaN\'"
-    isInfinite x = x ==* UnsafeExpression "\'Infinity\'"
-      ||* x ==* UnsafeExpression "\'-Infinity\'"
-    isNegativeZero x = x ==* UnsafeExpression "-0"
-    isIEEE _ = true
-    atan2 y x = UnsafeExpression $
-      "atan2(" <> renderExpression y <> ", " <> renderExpression x <> ")"
+-- instance
+--   ( IntegerOf (Expression params tables ('Required ('NotNull ty)))
+--     ~ (Expression params tables ('Required ('NotNull 'PGInt8)))
+--   , PGNum ty
+--   , PGTyped ty
+--   , PGCast 'PGInt8 ty
+--   , PGCast 'PGNumeric ty
+--   , PGFloating ty
+--   )
+--   => RealFloatB (Expression params tables ('Required ('NotNull ty))) where
+--     isNaN x = x ==* UnsafeExpression "\'NaN\'"
+--     isInfinite x = x ==* UnsafeExpression "\'Infinity\'"
+--       ||* x ==* UnsafeExpression "\'-Infinity\'"
+--     isNegativeZero x = x ==* UnsafeExpression "-0"
+--     isIEEE _ = true
+--     atan2 y x = UnsafeExpression $
+--       "atan2(" <> renderExpression y <> ", " <> renderExpression x <> ")"
 
 instance IsString (Expression params tables ('Required (nullity 'PGText))) where
   fromString str = UnsafeExpression $
@@ -262,15 +262,28 @@ instance IsString (Expression params tables ('Required (nullity 'PGText))) where
         '\\' -> "\\\\"
         c -> [c]
 
-instance Boolean (Expression params tables ('Required ('NotNull 'PGBool))) where
-  true = UnsafeExpression "TRUE"
-  false = UnsafeExpression "FALSE"
-  notB = unsafeUnaryOp "NOT"
-  (&&*) = unsafeBinaryOp "AND"
-  (||*) = unsafeBinaryOp "OR"
+-- instance Boolean (Expression params tables ('Required ('NotNull 'PGBool))) where
+true :: Expression params tables ('Required ('NotNull 'PGBool))
+true = UnsafeExpression "TRUE"
+false :: Expression params tables ('Required ('NotNull 'PGBool))
+false = UnsafeExpression "FALSE"
+notB
+  :: Expression params tables ('Required ('NotNull 'PGBool))
+  -> Expression params tables ('Required ('NotNull 'PGBool))
+notB = unsafeUnaryOp "NOT"
+(&&*)
+  :: Expression params tables ('Required ('NotNull 'PGBool))
+  -> Expression params tables ('Required ('NotNull 'PGBool))
+  -> Expression params tables ('Required ('NotNull 'PGBool))
+(&&*) = unsafeBinaryOp "AND"
+(||*)
+  :: Expression params tables ('Required ('NotNull 'PGBool))
+  -> Expression params tables ('Required ('NotNull 'PGBool))
+  -> Expression params tables ('Required ('NotNull 'PGBool))
+(||*) = unsafeBinaryOp "OR"
 
-type instance BooleanOf (Expression params tables ty) =
-  Expression params tables ('Required ('NotNull 'PGBool))
+-- type instance BooleanOf (Expression params tables ty) =
+--   Expression params tables ('Required ('NotNull 'PGBool))
 
 caseWhenThenElse
   :: [(Expression params tables ('Required ('NotNull 'PGBool)), Expression params tables ty)]
@@ -289,18 +302,47 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   , " END"
   ]
 
-instance IfB (Expression params tables ty) where
-  ifB if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
+-- instance IfB (Expression params tables ty) where
+ifThenElse
+  :: Expression params tables ('Required ('NotNull 'PGBool))
+  -> Expression params tables ty
+  -> Expression params tables ty
+  -> Expression params tables ty
+ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 
-instance EqB (Expression params tables (optionality ('NotNull ty))) where
-  (==*) = unsafeBinaryOp "="
-  (/=*) = unsafeBinaryOp "<>"
+-- instance EqB (Expression params tables (optionality ('NotNull ty))) where
+(==*)
+  :: Expression params tables ty
+  -> Expression params tables ty
+  -> Expression params tables ('Required ('NotNull 'PGBool))
+(==*) = unsafeBinaryOp "="
+(/=*)
+  :: Expression params tables ty
+  -> Expression params tables ty
+  -> Expression params tables ('Required ('NotNull 'PGBool))
+(/=*) = unsafeBinaryOp "<>"
 
-instance OrdB (Expression params tables (optionality ('NotNull ty))) where
-  (>*) = unsafeBinaryOp ">"
-  (>=*) = unsafeBinaryOp ">="
-  (<*) = unsafeBinaryOp "<"
-  (<=*) = unsafeBinaryOp "<="
+-- instance OrdB (Expression params tables (optionality ('NotNull ty))) where
+(>=*)
+  :: Expression params tables ty
+  -> Expression params tables ty
+  -> Expression params tables ('Required ('NotNull 'PGBool))
+(>=*) = unsafeBinaryOp ">="
+(<*)
+  :: Expression params tables ty
+  -> Expression params tables ty
+  -> Expression params tables ('Required ('NotNull 'PGBool))
+(<*) = unsafeBinaryOp "<"
+(<=*)
+  :: Expression params tables ty
+  -> Expression params tables ty
+  -> Expression params tables ('Required ('NotNull 'PGBool))
+(<=*) = unsafeBinaryOp "<="
+(>*)
+  :: Expression params tables ty
+  -> Expression params tables ty
+  -> Expression params tables ('Required ('NotNull 'PGBool))
+(>*) = unsafeBinaryOp ">"
 
 {-----------------------------------------
 tables

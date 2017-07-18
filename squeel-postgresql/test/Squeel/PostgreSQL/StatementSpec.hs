@@ -8,7 +8,7 @@
 
 module Squeel.PostgreSQL.StatementSpec where
 
-import Data.Boolean
+-- import Data.Boolean
 import Data.Function
 import Generics.SOP hiding (from)
 import Test.Hspec
@@ -25,7 +25,7 @@ spec = do
       statement :: Statement '[] SumAndCol1 Tables Tables
       statement = select $
         ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
-          `from` (#table1 & where_ ((#col1 :: Expression '[] Tables ('Required ('NotNull 'PGInt4))) >* #col2))
+          `from` (#table1 & where_ (#col1 >* #col2))
     statement `shouldRenderAs`
       "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE (col1 > col2);"
   it "combines WHEREs using AND" $ do
@@ -78,7 +78,7 @@ spec = do
   it "correctly render simple UPDATEs" $ do
     let
       statement :: Statement '[] '[] Tables Tables
-      statement = update #table1 (set 2 `As` #col1 :* same `As` #col2 :* Nil) ((#col1 :: Expression '[] Tables ('Required ('NotNull 'PGInt4))) /=* #col2)
+      statement = update #table1 (set 2 `As` #col1 :* same `As` #col2 :* Nil) (#col1 /=* #col2)
     statement `shouldRenderAs`
       "UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
   it "correctly render upsert INSERTs" $ do
@@ -87,13 +87,13 @@ spec = do
       statement = upsertInto #table1
         (2 `As` #col1 :* 4 `As` #col2 :* Nil)
         (set 2 `As` #col1 :* same `As` #col2 :* Nil)
-        ((#col1 :: Expression '[] Tables ('Required ('NotNull 'PGInt4))) /=* #col2)
+        (#col1 /=* #col2)
     statement `shouldRenderAs`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4) ON CONFLICT UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
   it "correctly renders DELETEs" $ do
     let
       statement :: Statement '[] '[] Tables Tables
-      statement = deleteFrom #table1 ((#col1 :: Expression '[] Tables ('Required ('NotNull 'PGInt4))) ==* #col2)
+      statement = deleteFrom #table1 (#col1 ==* #col2)
     statement `shouldRenderAs`
       "DELETE FROM table1 WHERE (col1 = col2);"
   it "should be safe against SQL injection in literal text" $ do
@@ -106,9 +106,9 @@ spec = do
   describe "JOINs" $ do
     let
       vals =
-        #orders &. #orderVal `As` #orderVal
-        :* #customers &. #customerVal `As` #customerVal
-        :* #shippers &. #shipperVal `As` #shipperVal :* Nil
+        (#orders &. #orderVal) `As` #orderVal
+        :* (#customers &. #customerVal) `As` #customerVal
+        :* (#shippers &. #shipperVal) `As` #shipperVal :* Nil
     it "should render CROSS JOINs" $ do
       let
         statement :: Statement '[] ValueColumns JoinTables JoinTables
@@ -128,9 +128,9 @@ spec = do
         innerJoins = join $
           #orders
           & Inner #customers
-            (#orders &. #customerID ==* #customers &. #customerID)
+            ((#orders &. #customerID) ==* (#customers &. #customerID))
           & Inner #shippers
-            (#orders &. #shipperID ==* #shippers &. #shipperID)
+            ((#orders &. #shipperID) ==* (#shippers &. #shipperID))
         selection :: Statement '[] ValueColumns JoinTables JoinTables
         selection =  select $ vals `from` innerJoins
       selection `shouldRenderAs`
