@@ -735,13 +735,13 @@ update
   -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
   -> Expression params '[table ::: columns] ('Required ('NotNull 'PGBool))
   -> Statement params '[] schema schema
-update (Alias table) columns where' = UnsafeStatement $ mconcat
+update (Alias table) columns wh = UnsafeStatement $ mconcat
   [ "UPDATE "
   , fromString $ symbolVal' table
   , " SET "
   , ByteString.intercalate ", " . catMaybes . hcollapse $
       hmap (K . renderSet) columns
-  , " WHERE ", renderExpression where', ";"
+  , " WHERE ", renderExpression wh, ";"
   ] where
     renderSet
       :: Aliased (Maybe :.: Expression params tables) column
@@ -753,3 +753,40 @@ update (Alias table) columns where' = UnsafeStatement $ mconcat
         , renderExpression expression
         ]
       Comp Nothing `As` _ -> Nothing
+
+upsertInto
+  :: (SListI columns, HasTable table schema columns)
+  => Alias table
+  -> NP (Aliased (Expression params '[])) columns
+  -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
+  -> Expression params '[table ::: columns] ('Required ('NotNull 'PGBool))
+  -> Statement params '[] schema schema
+upsertInto (Alias table) inserts updates wh = UnsafeStatement . mconcat $
+  [ "INSERT INTO "
+  , fromString (symbolVal' table)
+  , " (" <> ByteString.intercalate ", " aliases
+  , ") VALUES ("
+  , ByteString.intercalate ", " values
+  , ") ON CONFLICT UPDATE "
+  , fromString $ symbolVal' table
+  , " SET "
+  , ByteString.intercalate ", " . catMaybes . hcollapse $
+      hmap (K . renderSet) updates
+  , " WHERE ", renderExpression wh, ";"
+  ] where
+    renderSet
+      :: Aliased (Maybe :.: Expression params '[table ::: columns]) column
+      -> Maybe ByteString
+    renderSet = \case
+      Comp (Just expression) `As` Alias column -> Just $ mconcat
+        [ fromString $ symbolVal' column
+        , " = "
+        , renderExpression expression
+        ]
+      Comp Nothing `As` _ -> Nothing
+    aliases = hcollapse $ hmap
+      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
+      inserts
+    values = hcollapse $ hmap
+      (\ (expression `As` _) -> K (renderExpression expression))
+      inserts
