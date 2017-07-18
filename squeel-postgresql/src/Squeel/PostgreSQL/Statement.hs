@@ -426,24 +426,19 @@ instance HasTable table schema columns
   => IsLabel table (Join params schema '[table ::: columns]) where
     fromLabel p = Table $ fromLabel p
 
-data From
+data TableExpression
   (params :: [ColumnType])
   (schema :: [(Symbol,[(Symbol,ColumnType)])])
   (tables :: [(Symbol,[(Symbol,ColumnType)])])
-    = From
+    = TableExpression
     { joinClause :: Join params schema tables
     , whereClause :: [Expression params tables ('Required ('NotNull 'PGBool))]
     , limitClause :: [Expression params '[] ('Required ('NotNull 'PGInt8))]
     , offsetClause :: [Expression params '[] ('Required ('NotNull 'PGInt8))]
     }
 
-join
-  :: Join params schema tables
-  -> From params schema tables
-join tables = From tables [] [] []
-
-renderFrom :: From params schema tables -> ByteString
-renderFrom (From tables whs' lims' offs') = mconcat
+renderTableExpression :: TableExpression params schema tables -> ByteString
+renderTableExpression (TableExpression tables whs' lims' offs') = mconcat
   [ renderJoin tables
   , renderWheres whs'
   , renderLimits lims'
@@ -467,26 +462,31 @@ renderFrom (From tables whs' lims' offs') = mconcat
     off:offs -> " OFFSET " <> renderExpression (foldr (+) off offs)
 
 instance (HasTable table schema columns, table ~ table')
-  => IsLabel table (From params schema '[table' ::: columns]) where
+  => IsLabel table (TableExpression params schema '[table' ::: columns]) where
     fromLabel p = join (fromLabel p)
+
+join
+  :: Join params schema tables
+  -> TableExpression params schema tables
+join tables = TableExpression tables [] [] []
 
 where_
   :: Expression params tables ('Required ('NotNull 'PGBool))
-  -> From params schema tables
-  -> From params schema tables
-where_ wh (From tabs whs lims offs) = From tabs (wh:whs) lims offs
+  -> TableExpression params schema tables
+  -> TableExpression params schema tables
+where_ wh (TableExpression tabs whs lims offs) = TableExpression tabs (wh:whs) lims offs
 
 limit
   :: Expression params '[] ('Required ('NotNull 'PGInt8))
-  -> From params schema tables
-  -> From params schema tables
-limit lim (From tabs whs lims offs) = From tabs whs (lim:lims) offs
+  -> TableExpression params schema tables
+  -> TableExpression params schema tables
+limit lim (TableExpression tabs whs lims offs) = TableExpression tabs whs (lim:lims) offs
 
 offset
   :: Expression params '[] ('Required ('NotNull 'PGInt8))
-  -> From params schema tables
-  -> From params schema tables
-offset off (From tabs whs lims offs) = From tabs whs lims (off:offs)
+  -> TableExpression params schema tables
+  -> TableExpression params schema tables
+offset off (TableExpression tabs whs lims offs) = TableExpression tabs whs lims (off:offs)
 
 newtype Selection
   (params :: [ColumnType])
@@ -497,25 +497,25 @@ newtype Selection
 
 starFrom
   :: tables ~ '[table ::: columns]
-  => From params schema tables
+  => TableExpression params schema tables
   -> Selection params schema columns
-starFrom tabs = UnsafeSelection $ "* FROM " <> renderFrom tabs
+starFrom tabs = UnsafeSelection $ "* FROM " <> renderTableExpression tabs
 
 dotStarFrom
   :: HasTable table tables columns
   => Alias table
-  -> From params schema tables
+  -> TableExpression params schema tables
   -> Selection params schema columns
 Alias tab `dotStarFrom` tabs = UnsafeSelection $
-  fromString (symbolVal' tab) <> ".* FROM " <> renderFrom tabs
+  fromString (symbolVal' tab) <> ".* FROM " <> renderTableExpression tabs
 
 from
   :: SListI columns
   => NP (Aliased (Expression params tables)) columns
-  -> From params schema tables
+  -> TableExpression params schema tables
   -> Selection params schema columns
 list `from` tabs = UnsafeSelection $
-  renderList list <> " FROM " <> renderFrom tabs
+  renderList list <> " FROM " <> renderTableExpression tabs
   where
     renderList
       = ByteString.intercalate ", "
@@ -529,7 +529,7 @@ select = UnsafeStatement . ("SELECT " <>) . (<> ";") . renderSelection
 
 subselect
   :: Aliased (Selection params schema) table
-  -> From params schema '[table]
+  -> TableExpression params schema '[table]
 subselect selection = join (Subselect selection)
 
 {-----------------------------------------

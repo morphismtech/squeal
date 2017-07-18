@@ -109,7 +109,7 @@ spec = do
         \ CROSS JOIN shippers AS shippers;"
     it "should render INNER JOINs" $ do
       let
-        innerJoins :: From '[] JoinTables JoinTables
+        innerJoins :: TableExpression '[] JoinTables JoinTables
         innerJoins = join $
           #orders
           & Inner #customers
