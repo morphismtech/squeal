@@ -306,17 +306,17 @@ instance OrdB (Expression params tables (optionality ('NotNull ty))) where
 table expressions
 -----------------------------------------}
 
-newtype TableExpression
+newtype Table
   (params :: [ColumnType])
   (schema :: [(Symbol,[(Symbol,ColumnType)])])
   (columns :: [(Symbol,ColumnType)])
-    = UnsafeTableExpression { renderTableExpression :: ByteString }
+    = UnsafeTable { renderTable :: ByteString }
     deriving (Show,Eq)
 
 class KnownSymbol table => HasTable table tables columns
   | table tables -> columns where
-    getTable :: Proxy# table -> TableExpression params tables columns
-    getTable table = UnsafeTableExpression $ fromString $ symbolVal' table
+    getTable :: Proxy# table -> Table params tables columns
+    getTable table = UnsafeTable $ fromString $ symbolVal' table
 instance {-# OVERLAPPING #-} KnownSymbol table
   => HasTable table ((table ::: columns) ': tables) columns
 instance {-# OVERLAPPABLE #-}
@@ -324,7 +324,7 @@ instance {-# OVERLAPPABLE #-}
     => HasTable table (table' ': schema) columns
 
 instance HasTable table schema columns
-  => IsLabel table (TableExpression params schema columns) where
+  => IsLabel table (Table params schema columns) where
     fromLabel = getTable
 
 {-----------------------------------------
@@ -353,32 +353,32 @@ SELECT statements
 
 data Join params schema tables where
   Table
-    :: Aliased (TableExpression params schema) table
+    :: Aliased (Table params schema) table
     -> Join params schema '[table]
   Subselect
     :: Aliased (Selection params schema) table
     -> Join params schema '[table]
   Cross
-    :: Aliased (TableExpression params schema) table
+    :: Aliased (Table params schema) table
     -> Join params schema tables
     -> Join params schema (table ': tables)
   Inner
-    :: Aliased (TableExpression params schema) table
+    :: Aliased (Table params schema) table
     -> Expression params (table ': tables) ('Required ('NotNull 'PGBool))
     -> Join params schema tables
     -> Join params schema (table ': tables)
   LeftOuter
-    :: Aliased (TableExpression params schema) right
+    :: Aliased (Table params schema) right
     -> Expression params '[left,right] ('Required ('NotNull 'PGBool))
     -> Join params schema (tables)
     -> Join params schema (NullifyTable right ': left ': tables)
   RightOuter
-    :: Aliased (TableExpression params schema) right
+    :: Aliased (Table params schema) right
     -> Expression params '[left,right] ('Required ('NotNull 'PGBool))
     -> Join params schema (left : tables)
     -> Join params schema (right ': NullifyTable left ': tables)
   FullOuter
-    :: Aliased (TableExpression params schema) right
+    :: Aliased (Table params schema) right
     -> Expression params '[left,right] ('Required ('NotNull 'PGBool))
     -> Join params schema (left : tables)
     -> Join params schema
@@ -386,38 +386,38 @@ data Join params schema tables where
 
 renderJoin :: Join params schema tables -> ByteString
 renderJoin = \case
-  Table table -> renderAliased renderTableExpression table
+  Table table -> renderAliased renderTable table
   Subselect selection -> "SELECT " <> renderAliased renderSelection selection
   Cross table tables -> mconcat
     [ renderJoin tables
     , " CROSS JOIN "
-    , renderAliased renderTableExpression table
+    , renderAliased renderTable table
     ]
   Inner table on tables -> mconcat
     [ renderJoin tables
     , " INNER JOIN "
-    , renderAliased renderTableExpression table
+    , renderAliased renderTable table
     , " ON "
     , renderExpression on
     ]
   LeftOuter table on tables -> mconcat
     [ renderJoin tables
     , " LEFT OUTER JOIN "
-    , renderAliased renderTableExpression table
+    , renderAliased renderTable table
     , " ON "
     , renderExpression on
     ]
   RightOuter table on tables -> mconcat
     [ renderJoin tables
     , " RIGHT OUTER JOIN "
-    , renderAliased renderTableExpression table
+    , renderAliased renderTable table
     , " ON "
     , renderExpression on
     ]
   FullOuter table on tables -> mconcat
     [ renderJoin tables
     , " FULL OUTER JOIN "
-    , renderAliased renderTableExpression table
+    , renderAliased renderTable table
     , " ON "
     , renderExpression on
     ]
