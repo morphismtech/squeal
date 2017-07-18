@@ -27,18 +27,22 @@ main = do
   connectionString <- pure
     "host=localhost port=5432 dbname=exampledb"
   Char8.putStrLn $ "connecting to " <> connectionString
-  connection0 <- connectdb connectionString
+  connection0 :: Connection '[] <- connectdb connectionString
   Char8.putStrLn "setting up database"
   connection1 <- flip execPQ connection0 $
-    pqExec ( createTable #students
-      (  (text & notNull) `As` #name
-      :* Nil ) )
-    &>> createTable #table1
-      (  (int4 & notNull) `As` #col1
-      :* (int4 & notNull) `As` #col2
-      :* Nil )
-    &>> insertInto #table1 ( 1 `As` #col1 :* 2 `As` #col2 :* Nil )
-    &>> insertInto #table1 ( 3 `As` #col1 :* 4 `As` #col2 :* Nil )
+    pqExec
+      ( createTable #students
+        (  (text & notNull) `As` #name
+        :* Nil ) )
+    & pqThenExec
+      ( createTable #table1
+        (  (int4 & notNull) `As` #col1
+        :* (int4 & notNull) `As` #col2
+        :* Nil ) )
+    & pqThenExec
+      ( insertInto #table1 ( 1 `As` #col1 :* 2 `As` #col2 :* Nil ) )
+    & pqThenExec
+      ( insertInto #table1 ( 3 `As` #col1 :* 4 `As` #col2 :* Nil ) )
   Char8.putStrLn "querying"
   connection2 <- flip execPQ connection1 $ do
     Just result <- pqExecNil $ select $ starFrom #table1
@@ -59,7 +63,7 @@ main = do
   Char8.putStrLn "tearing down database"
   connection3 :: Connection '[] <- flip execPQ connection2 $ pqExec
     (dropTable #table1 :: Statement '[] '[] Tables '["students" ::: StudentsColumns])
-    &>> dropTable #students
+    & pqThenExec (dropTable #students)
   finish connection3
 
 type Columns =
