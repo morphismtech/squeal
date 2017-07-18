@@ -303,7 +303,7 @@ instance OrdB (Expression params tables (optionality ('NotNull ty))) where
   (<=*) = unsafeBinaryOp "<="
 
 {-----------------------------------------
-table expressions
+tables
 -----------------------------------------}
 
 newtype Table
@@ -790,3 +790,18 @@ upsertInto (Alias table) inserts updates wh = UnsafeStatement . mconcat $
     values = hcollapse $ hmap
       (\ (expression `As` _) -> K (renderExpression expression))
       inserts
+
+{-----------------------------------------
+DELETE statements
+-----------------------------------------}
+
+deleteFrom
+  :: (HasTable table schema columns, SListI columns)
+  => Alias table
+  -> Expression params '[table ::: columns] ('Required ('NotNull 'PGBool))
+  -> Statement params '[] schema schema
+deleteFrom (Alias table) wh = UnsafeStatement $ mconcat
+  [ "DELETE FROM "
+  , fromString $ symbolVal' table
+  , " WHERE ", renderExpression wh, ";"
+  ]

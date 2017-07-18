@@ -81,15 +81,21 @@ spec = do
       statement = update #table1 (set 2 `As` #col1 :* same `As` #col2 :* Nil) ((#col1 :: Expression '[] Tables ('Required ('NotNull 'PGInt4))) /=* #col2)
     statement `shouldRenderAs`
       "UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
-  -- it "correctly render upsert INSERTs" $ do
-  --   let
-  --     statement :: Statement '[] '[] Tables Tables
-  --     statement = upsertInto #table1
-  --       (2 `As` #col1 :* 4 `As` #col2 :* Nil)
-  --       (set 2 `As` #col1 :* same `As` #col2 :* Nil)
-  --       (#col1 /=* #col2)
-  --   statement `shouldRenderAs`
-  --     "UPDATE table1 SET col1 = 2 WHERE TRUE;"
+  it "correctly render upsert INSERTs" $ do
+    let
+      statement :: Statement '[] '[] Tables Tables
+      statement = upsertInto #table1
+        (2 `As` #col1 :* 4 `As` #col2 :* Nil)
+        (set 2 `As` #col1 :* same `As` #col2 :* Nil)
+        ((#col1 :: Expression '[] Tables ('Required ('NotNull 'PGInt4))) /=* #col2)
+    statement `shouldRenderAs`
+      "INSERT INTO table1 (col1, col2) VALUES (2, 4) ON CONFLICT UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
+  it "correctly renders DELETEs" $ do
+    let
+      statement :: Statement '[] '[] Tables Tables
+      statement = delete #table1 ((#col1 :: Expression '[] Tables ('Required ('NotNull 'PGInt4))) ==* #col2)
+    statement `shouldRenderAs`
+      "DELETE FROM table1 WHERE (col1 = col2);"
   it "should be safe against SQL injection in literal text" $ do
     let
       statement :: Statement '[] '[] StudentsTable StudentsTable
