@@ -19,6 +19,7 @@ module Squeel.PostgreSQL.Statement where
 import Data.Boolean
 import Data.Boolean.Numbers
 import Data.ByteString (ByteString)
+import Data.Foldable
 import Data.Maybe
 import Data.Monoid
 import Data.Ratio
@@ -425,78 +426,67 @@ instance HasTable table schema columns
   => IsLabel table (Join params schema '[table ::: columns]) where
     fromLabel p = Table $ fromLabel p
 
-data Clauses params tables = Clauses
-  { whereClause :: Maybe (Expression params tables ('Required ('NotNull 'PGBool)))
-  , limitClause :: Maybe (Expression params '[] ('Required ('NotNull 'PGInt8)))
-  , offsetClause :: Maybe (Expression params '[] ('Required ('NotNull 'PGInt8)))
-  }
-
-instance Monoid (Clauses params tables) where
-  mempty = Clauses Nothing Nothing Nothing
-  Clauses wh1 lim1 off1 `mappend` Clauses wh2 lim2 off2 = Clauses
-    { whereClause = case (wh1,wh2) of
-        (Nothing,Nothing) -> Nothing
-        (Just w1,Nothing) -> Just w1
-        (Nothing,Just w2) -> Just w2
-        (Just w1,Just w2) -> Just (w1 &&* w2)
-    , limitClause = case (lim1,lim2) of
-        (Nothing,Nothing) -> Nothing
-        (Just l1,Nothing) -> Just l1
-        (Nothing,Just l2) -> Just l2
-        (Just l1,Just l2) -> Just (l1 `minB` l2)
-    , offsetClause = case (off1,off2) of
-        (Nothing,Nothing) -> Nothing
-        (Just o1,Nothing) -> Just o1
-        (Nothing,Just o2) -> Just o2
-        (Just o1,Just o2) -> Just (o1 + o2)
-    }
-
 data From
   (params :: [ColumnType])
   (schema :: [(Symbol,[(Symbol,ColumnType)])])
   (tables :: [(Symbol,[(Symbol,ColumnType)])])
     = From
-    { fromJoin :: Join params schema tables
-    , fromClauses :: Clauses params tables
+    { joinClause :: Join params schema tables
+    , whereClause :: [Expression params tables ('Required ('NotNull 'PGBool))]
+    , limitClause :: [Expression params '[] ('Required ('NotNull 'PGInt8))]
+    , offsetClause :: [Expression params '[] ('Required ('NotNull 'PGInt8))]
     }
 
 join
   :: Join params schema tables
   -> From params schema tables
-join tables = From tables mempty
+join tables = From tables [] [] []
 
 renderFrom :: From params schema tables -> ByteString
-renderFrom (From tref (Clauses wh lim off))= mconcat
-  [ renderJoin tref
-  , maybe "" ((" WHERE " <>) . renderExpression) wh
-  , maybe "" ((" LIMIT " <>) . renderExpression) lim
-  , maybe "" ((" OFFSET " <>) . renderExpression) off
-  ]
+renderFrom (From tables whs' lims' offs') = mconcat
+  [ renderJoin tables
+  , renderWheres whs'
+  , renderLimits lims'
+  , renderOffsets offs'
+  ] where
+  renderWheres = \case
+    [] -> ""
+    wh:[] -> " WHERE " <> renderExpression wh
+    wh:whs -> " WHERE " <> renderExpression (foldr (&&*) wh whs)
+  renderLimits = \case
+    [] -> ""
+    lim:[] -> " LIMIT " <> renderExpression lim
+    lims -> mconcat
+      [ " LIMIT LEAST("
+      , ByteString.intercalate ", " (renderExpression <$> reverse lims)
+      , ")"
+      ]
+  renderOffsets = \case
+    [] -> ""
+    off:[] -> " OFFSET " <> renderExpression off
+    off:offs -> " OFFSET " <> renderExpression (foldr (+) off offs)
 
 instance (HasTable table schema columns, table ~ table')
   => IsLabel table (From params schema '[table' ::: columns]) where
-    fromLabel p = From (fromLabel p) mempty
+    fromLabel p = join (fromLabel p)
 
 where_
   :: Expression params tables ('Required ('NotNull 'PGBool))
   -> From params schema tables
   -> From params schema tables
-where_ wh (From tabs fromClauses1) = From tabs
-  (fromClauses1 <> Clauses (Just wh) Nothing Nothing)
+where_ wh (From tabs whs lims offs) = From tabs (wh:whs) lims offs
 
 limit
   :: Expression params '[] ('Required ('NotNull 'PGInt8))
   -> From params schema tables
   -> From params schema tables
-limit lim (From tabs fromClauses1) = From tabs
-  (fromClauses1 <> Clauses Nothing (Just lim) Nothing)
+limit lim (From tabs whs lims offs) = From tabs whs (lim:lims) offs
 
 offset
   :: Expression params '[] ('Required ('NotNull 'PGInt8))
   -> From params schema tables
   -> From params schema tables
-offset off (From tabs fromClauses1) = From tabs
-  (fromClauses1 <> Clauses Nothing Nothing (Just off))
+offset off (From tabs whs lims offs) = From tabs whs lims (off:offs)
 
 newtype Selection
   (params :: [ColumnType])
@@ -540,10 +530,7 @@ select = UnsafeStatement . ("SELECT " <>) . (<> ";") . renderSelection
 subselect
   :: Aliased (Selection params schema) table
   -> From params schema '[table]
-subselect selection = From
-  { fromJoin = Subselect selection
-  , fromClauses = mempty
-  }
+subselect selection = join (Subselect selection)
 
 {-----------------------------------------
 INSERT statements

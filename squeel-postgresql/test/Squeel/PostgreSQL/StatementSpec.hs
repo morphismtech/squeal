@@ -53,7 +53,7 @@ spec = do
       statement :: Statement '[] Columns Tables Tables
       statement = select $ starFrom (#table1 & limit 1 & limit 2)
     statement `shouldRenderAs`
-      "SELECT * FROM table1 AS table1 LIMIT CASE WHEN (1 <= 2) THEN 1 ELSE 2 END;"
+      "SELECT * FROM table1 AS table1 LIMIT LEAST(1, 2);"
   it "should render parameters using $ signs" $ do
     let
       statement :: Statement '[ 'Required ('NotNull 'PGInt8)] Columns Tables Tables
