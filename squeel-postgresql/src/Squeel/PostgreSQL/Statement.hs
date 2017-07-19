@@ -418,22 +418,22 @@ data Join params schema tables where
     -> Join params schema (table ': tables)
   Inner
     :: Aliased (Table params schema) table
-    -> Expression params (table ': tables) ('Required ('NotNull 'PGBool))
+    -> Predicate params (table ': tables)
     -> Join params schema tables
     -> Join params schema (table ': tables)
   LeftOuter
     :: Aliased (Table params schema) right
-    -> Expression params '[left,right] ('Required ('NotNull 'PGBool))
+    -> Predicate params '[left,right]
     -> Join params schema (tables)
     -> Join params schema (NullifyTable right ': left ': tables)
   RightOuter
     :: Aliased (Table params schema) right
-    -> Expression params '[left,right] ('Required ('NotNull 'PGBool))
+    -> Predicate params '[left,right]
     -> Join params schema (left : tables)
     -> Join params schema (right ': NullifyTable left ': tables)
   FullOuter
     :: Aliased (Table params schema) right
-    -> Expression params '[left,right] ('Required ('NotNull 'PGBool))
+    -> Predicate params '[left,right]
     -> Join params schema (left : tables)
     -> Join params schema
         (NullifyTable right ': NullifyTable left ': tables)
@@ -827,7 +827,7 @@ update
   :: (HasTable table schema columns, SListI columns)
   => Alias table
   -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
-  -> Expression params '[table ::: columns] ('Required ('NotNull 'PGBool))
+  -> Predicate params '[table ::: columns]
   -> Statement params '[] schema schema
 update (Alias table) columns wh = UnsafeStatement $ mconcat
   [ "UPDATE "
@@ -838,12 +838,35 @@ update (Alias table) columns wh = UnsafeStatement $ mconcat
   , " WHERE ", renderExpression wh, ";"
   ]
 
+updateReturning
+  :: (SListI columns, SListI results, HasTable table schema columns)
+  => Alias table
+  -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
+  -> Predicate params '[table ::: columns]
+  -> NP (Aliased (Expression params '[table ::: columns])) results
+  -> Statement params results schema schema
+updateReturning (Alias table) updates wh results = UnsafeStatement $ mconcat
+  [ "UPDATE "
+  , fromString $ symbolVal' table
+  , " SET "
+  , ByteString.intercalate ", " . catMaybes . hcollapse $
+      hmap (K . renderSet) updates
+  , " WHERE ", renderExpression wh
+  , " RETURNING ", renderList results
+  , ";"
+  ]
+  where
+    renderList
+      = ByteString.intercalate ", "
+      . hcollapse
+      . hmap (K . renderAliased renderExpression)
+
 upsertInto
   :: (SListI columns, HasTable table schema columns)
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
   -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
-  -> Expression params '[table ::: columns] ('Required ('NotNull 'PGBool))
+  -> Predicate params '[table ::: columns]
   -> Statement params '[] schema schema
 upsertInto (Alias table) inserts updates wh = UnsafeStatement . mconcat $
   [ "INSERT INTO "
@@ -865,6 +888,40 @@ upsertInto (Alias table) inserts updates wh = UnsafeStatement . mconcat $
       (\ (expression `As` _) -> K (renderExpression expression))
       inserts
 
+upsertIntoReturning
+  :: (SListI columns, SListI results, HasTable table schema columns)
+  => Alias table
+  -> NP (Aliased (Expression params '[])) columns
+  -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
+  -> Predicate params '[table ::: columns]
+  -> NP (Aliased (Expression params '[table ::: columns])) results
+  -> Statement params results schema schema
+upsertIntoReturning (Alias table) inserts updates wh results = UnsafeStatement . mconcat $
+  [ "INSERT INTO "
+  , fromString (symbolVal' table)
+  , " (" <> ByteString.intercalate ", " aliases
+  , ") VALUES ("
+  , ByteString.intercalate ", " values
+  , ") ON CONFLICT UPDATE "
+  , fromString $ symbolVal' table
+  , " SET "
+  , ByteString.intercalate ", " . catMaybes . hcollapse $
+      hmap (K . renderSet) updates
+  , " WHERE ", renderExpression wh
+  , " RETURNING ", renderList results
+  , ";"
+  ] where
+    aliases = hcollapse $ hmap
+      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
+      inserts
+    values = hcollapse $ hmap
+      (\ (expression `As` _) -> K (renderExpression expression))
+      inserts
+    renderList
+      = ByteString.intercalate ", "
+      . hcollapse
+      . hmap (K . renderAliased renderExpression)
+
 {-----------------------------------------
 DELETE statements
 -----------------------------------------}
@@ -872,7 +929,7 @@ DELETE statements
 deleteFrom
   :: (HasTable table schema columns, SListI columns)
   => Alias table
-  -> Expression params '[table ::: columns] ('Required ('NotNull 'PGBool))
+  -> Predicate params '[table ::: columns]
   -> Statement params '[] schema schema
 deleteFrom (Alias table) wh = UnsafeStatement $ mconcat
   [ "DELETE FROM "
