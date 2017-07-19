@@ -17,8 +17,6 @@
 
 module Squeel.PostgreSQL.Statement where
 
--- import Data.Boolean
--- import Data.Boolean.Numbers
 import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Maybe
