@@ -23,7 +23,6 @@ library
   build-depends:
       aeson
     , base
-    , Boolean
     , bytestring
     , generics-sop
     , lifted-base
@@ -48,7 +47,6 @@ test-suite squeel-postgresql-test
     Squeel.PostgreSQL.StatementSpec
   build-depends:
       base
-    , Boolean
     , generics-sop
     , hspec
     , squeel-postgresql
