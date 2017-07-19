@@ -587,29 +587,6 @@ subselect
 subselect selection = join (Subselect selection)
 
 {-----------------------------------------
-INSERT statements
------------------------------------------}
-
-insertInto
-  :: (SListI columns, HasTable table schema columns)
-  => Alias table
-  -> NP (Aliased (Expression params '[])) columns
-  -> Statement params '[] schema schema
-insertInto (Alias table) expressions = UnsafeStatement $ "INSERT INTO "
-  <> fromString (symbolVal' table)
-  <> " (" <> ByteString.intercalate ", " aliases
-  <> ") VALUES ("
-  <> ByteString.intercalate ", " values
-  <> ");"
-  where
-    aliases = hcollapse $ hmap
-      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
-      expressions
-    values = hcollapse $ hmap
-      (\ (expression `As` _) -> K (renderExpression expression))
-      expressions
-
-{-----------------------------------------
 CREATE statements
 -----------------------------------------}
 
@@ -772,6 +749,58 @@ instance {-# OVERLAPPING #-}
 instance {-# OVERLAPPABLE #-}
   DropTable table schema0 schema1
     => DropTable table (table' ': schema0) (table' ': schema1)
+
+{-----------------------------------------
+INSERT statements
+-----------------------------------------}
+
+insertInto
+  :: (SListI columns, HasTable table schema columns)
+  => Alias table
+  -> NP (Aliased (Expression params '[])) columns
+  -> Statement params '[] schema schema
+insertInto (Alias table) expressions = UnsafeStatement $ "INSERT INTO "
+  <> fromString (symbolVal' table)
+  <> " (" <> ByteString.intercalate ", " aliases
+  <> ") VALUES ("
+  <> ByteString.intercalate ", " values
+  <> ");"
+  where
+    aliases = hcollapse $ hmap
+      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
+      expressions
+    values = hcollapse $ hmap
+      (\ (expression `As` _) -> K (renderExpression expression))
+      expressions
+
+insertIntoReturning
+  :: (SListI columns, SListI results, HasTable table schema columns)
+  => Alias table
+  -> NP (Aliased (Expression params '[])) columns
+  -> NP (Aliased (Expression params '[table ::: columns])) results
+  -> Statement params results schema schema
+insertIntoReturning (Alias table) inserts results
+  = UnsafeStatement . mconcat $
+    [ "INSERT INTO "
+    , fromString (symbolVal' table)
+    , " (" <> ByteString.intercalate ", " aliases
+    , ") VALUES ("
+    , ByteString.intercalate ", " values
+    , ") RETURNING "
+    , renderList results
+    , ";"
+    ]
+  where
+    aliases = hcollapse $ hmap
+      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
+      inserts
+    values = hcollapse $ hmap
+      (\ (expression `As` _) -> K (renderExpression expression))
+      inserts
+    renderList
+      = ByteString.intercalate ", "
+      . hcollapse
+      . hmap (K . renderAliased renderExpression)
 
 {-----------------------------------------
 UPDATE statements

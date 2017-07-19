@@ -69,19 +69,27 @@ spec = do
       statement :: Statement '[] Columns Tables Tables
       statement =  select $ starFrom (#table1 & offset 1 & offset 2)
     statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET (1 + 2);"
-  it "correctly render simple INSERTs" $ do
+  it "correctly renders simple INSERTs" $ do
     let
       statement :: Statement '[] '[] Tables Tables
       statement = insertInto #table1 $ 2 `As` #col1 :* 4 `As` #col2 :* Nil
     statement `shouldRenderAs`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
-  it "correctly render simple UPDATEs" $ do
+  it "correctly renders returning INSERTs" $ do
+    let
+      statement :: Statement '[] SumAndCol1 Tables Tables
+      statement = insertIntoReturning #table1
+        (2 `As` #col1 :* 4 `As` #col2 :* Nil)
+        ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
+    statement `shouldRenderAs`
+      "INSERT INTO table1 (col1, col2) VALUES (2, 4) RETURNING (col1 + col2) AS sum, col1 AS col1;"
+  it "correctly renders simple UPDATEs" $ do
     let
       statement :: Statement '[] '[] Tables Tables
       statement = update #table1 (set 2 `As` #col1 :* same `As` #col2 :* Nil) (#col1 /=* #col2)
     statement `shouldRenderAs`
       "UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
-  it "correctly render upsert INSERTs" $ do
+  it "correctly renders upsert INSERTs" $ do
     let
       statement :: Statement '[] '[] Tables Tables
       statement = upsertInto #table1
