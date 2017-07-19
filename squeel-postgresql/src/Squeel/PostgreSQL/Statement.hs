@@ -783,6 +783,17 @@ set = Comp . Just
 same :: (Maybe :.: Expression params tables) x
 same = Comp Nothing
 
+renderSet
+  :: Aliased (Maybe :.: Expression params '[table ::: columns]) column
+  -> Maybe ByteString
+renderSet = \case
+  Comp (Just expression) `As` Alias column -> Just $ mconcat
+    [ fromString $ symbolVal' column
+    , " = "
+    , renderExpression expression
+    ]
+  Comp Nothing `As` _ -> Nothing
+
 update
   :: (HasTable table schema columns, SListI columns)
   => Alias table
@@ -796,17 +807,7 @@ update (Alias table) columns wh = UnsafeStatement $ mconcat
   , ByteString.intercalate ", " . catMaybes . hcollapse $
       hmap (K . renderSet) columns
   , " WHERE ", renderExpression wh, ";"
-  ] where
-    renderSet
-      :: Aliased (Maybe :.: Expression params tables) column
-      -> Maybe ByteString
-    renderSet = \case
-      Comp (Just expression) `As` Alias column -> Just $ mconcat
-        [ fromString $ symbolVal' column
-        , " = "
-        , renderExpression expression
-        ]
-      Comp Nothing `As` _ -> Nothing
+  ]
 
 upsertInto
   :: (SListI columns, HasTable table schema columns)
@@ -828,16 +829,6 @@ upsertInto (Alias table) inserts updates wh = UnsafeStatement . mconcat $
       hmap (K . renderSet) updates
   , " WHERE ", renderExpression wh, ";"
   ] where
-    renderSet
-      :: Aliased (Maybe :.: Expression params '[table ::: columns]) column
-      -> Maybe ByteString
-    renderSet = \case
-      Comp (Just expression) `As` Alias column -> Just $ mconcat
-        [ fromString $ symbolVal' column
-        , " = "
-        , renderExpression expression
-        ]
-      Comp Nothing `As` _ -> Nothing
     aliases = hcollapse $ hmap
       (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
       inserts
