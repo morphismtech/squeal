@@ -72,7 +72,7 @@ type Columns =
    ]
 -- type SumAndCol1 = '[ "sum" ::: 'NotNull 'PGInt4, "col1" ::: 'NotNull 'PGInt4]
 type StudentsColumns = '["name" ::: 'Required ('NotNull 'PGText)]
-type Tables = '[ "table1" ::: Columns, "students" ::: StudentsColumns]
+type Tables = '["students" ::: StudentsColumns, "table1" ::: Columns]
 -- type OrderColumns =
 --   [ "orderID"    ::: 'NotNull 'PGInt4
 --   , "orderVal"   ::: 'NotNull 'PGText

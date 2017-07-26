@@ -28,6 +28,7 @@ module Squeel.PostgreSQL.Schema
   , NullifyColumn
   , NullifyColumns
   , NullifyTable
+  , Create
   , Drop
   , Alter
   , Rename
@@ -143,6 +144,10 @@ type family NullifyColumns columns where
 
 type family NullifyTable table where
   NullifyTable (table ::: columns) = table ::: NullifyColumns columns
+
+type family Create alias x xs where
+  Create alias x '[] = '[alias ::: x]
+  Create alias y (x ': xs) = x ': Create alias y xs
 
 type family Drop alias xs where
   Drop alias ((alias ::: x) ': xs) = xs
