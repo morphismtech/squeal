@@ -114,11 +114,11 @@ class MonadPQ db m | m -> db where
     -> m (Maybe (Result ys))
   pqExecNil statement = pqExecParams statement Nil
 
-  pqExecPrepared
-    :: AllZip HasEncoding ps xs
-    => PreparedStatement ps ys db db
-    -> NP I xs
-    -> m (Maybe (Result ys))
+  -- pqExecPrepared
+  --   :: AllZip HasEncoding ps xs
+  --   => PreparedStatement ps ys db db
+  --   -> NP I xs
+  --   -> m (Maybe (Result ys))
 
 instance AtkeyPQ PQ where
 
@@ -158,14 +158,14 @@ instance MonadBase IO io => MonadPQ db (PQ db db io) where
       result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
       return (Result <$> result, Connection conn)
 
-  pqExecPrepared (q :: PreparedStatement ps ys db0 db1) params =
-    PQ $ \ (Connection conn) -> do
-      let
-        paramValues = encodings (Proxy :: Proxy ps) params
-        params' = [ Just (param', LibPQ.Binary) | param' <- paramValues ]
-      result <- liftBase $
-        LibPQ.execPrepared conn (renderPreparedStatement q) params' LibPQ.Binary
-      return (Result <$> result, Connection conn)
+  -- pqExecPrepared (q :: PreparedStatement ps ys db0 db1) params =
+  --   PQ $ \ (Connection conn) -> do
+  --     let
+  --       paramValues = encodings (Proxy :: Proxy ps) params
+  --       params' = [ Just (param', LibPQ.Binary) | param' <- paramValues ]
+  --     result <- liftBase $
+  --       LibPQ.execPrepared conn (renderPreparedStatement q) params' LibPQ.Binary
+  --     return (Result <$> result, Connection conn)
 
 instance Monad m => Applicative (PQ db db m) where
   pure x = PQ $ \ conn -> pure (x, conn)

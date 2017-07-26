@@ -8,7 +8,6 @@
 
 module Squeel.PostgreSQL.StatementSpec where
 
-import Data.Boolean
 import Data.Function
 import Generics.SOP hiding (from)
 import Test.Hspec
@@ -25,9 +24,9 @@ spec = do
       statement :: Statement '[] SumAndCol1 Tables Tables
       statement = select $
         ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
-          `from` (#table1 & where_ true)
+          `from` (#table1 & where_ (#col1 >* #col2))
     statement `shouldRenderAs`
-      "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE TRUE;"
+      "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE (col1 > col2);"
   it "combines WHEREs using AND" $ do
     let
       statement :: Statement '[] SumAndCol1 Tables Tables
@@ -53,7 +52,7 @@ spec = do
       statement :: Statement '[] Columns Tables Tables
       statement = select $ starFrom (#table1 & limit 1 & limit 2)
     statement `shouldRenderAs`
-      "SELECT * FROM table1 AS table1 LIMIT CASE WHEN (1 <= 2) THEN 1 ELSE 2 END;"
+      "SELECT * FROM table1 AS table1 LIMIT LEAST(1, 2);"
   it "should render parameters using $ signs" $ do
     let
       statement :: Statement '[ 'Required ('NotNull 'PGInt8)] Columns Tables Tables
@@ -69,12 +68,60 @@ spec = do
       statement :: Statement '[] Columns Tables Tables
       statement =  select $ starFrom (#table1 & offset 1 & offset 2)
     statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET (1 + 2);"
-  it "correctly render simple INSERTs" $ do
+  it "correctly renders simple INSERTs" $ do
     let
       statement :: Statement '[] '[] Tables Tables
       statement = insertInto #table1 $ 2 `As` #col1 :* 4 `As` #col2 :* Nil
     statement `shouldRenderAs`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
+  it "correctly renders returning INSERTs" $ do
+    let
+      statement :: Statement '[] SumAndCol1 Tables Tables
+      statement = insertIntoReturning #table1
+        (2 `As` #col1 :* 4 `As` #col2 :* Nil)
+        ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
+    statement `shouldRenderAs`
+      "INSERT INTO table1 (col1, col2) VALUES (2, 4) RETURNING (col1 + col2) AS sum, col1 AS col1;"
+  it "correctly renders simple UPDATEs" $ do
+    let
+      statement :: Statement '[] '[] Tables Tables
+      statement = update #table1 (set 2 `As` #col1 :* same `As` #col2 :* Nil) (#col1 /=* #col2)
+    statement `shouldRenderAs`
+      "UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
+  it "correctly renders returning UPDATEs" $ do
+    let
+      statement :: Statement '[] SumAndCol1 Tables Tables
+      statement = updateReturning #table1
+        (set 2 `As` #col1 :* same `As` #col2 :* Nil)
+        (#col1 /=* #col2)
+        ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
+    statement `shouldRenderAs`
+      "UPDATE table1 SET col1 = 2 WHERE (col1 <> col2) RETURNING (col1 + col2) AS sum, col1 AS col1;"
+  it "correctly renders upsert INSERTs" $ do
+    let
+      statement :: Statement '[] '[] Tables Tables
+      statement = upsertInto #table1
+        (2 `As` #col1 :* 4 `As` #col2 :* Nil)
+        (set 2 `As` #col1 :* same `As` #col2 :* Nil)
+        (#col1 /=* #col2)
+    statement `shouldRenderAs`
+      "INSERT INTO table1 (col1, col2) VALUES (2, 4) ON CONFLICT UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
+  it "correctly renders returning upsert INSERTs" $ do
+    let
+      statement :: Statement '[] SumAndCol1 Tables Tables
+      statement = upsertIntoReturning #table1
+        (2 `As` #col1 :* 4 `As` #col2 :* Nil)
+        (set 2 `As` #col1 :* same `As` #col2 :* Nil)
+        (#col1 /=* #col2)
+        ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
+    statement `shouldRenderAs`
+      "INSERT INTO table1 (col1, col2) VALUES (2, 4) ON CONFLICT UPDATE table1 SET col1 = 2 WHERE (col1 <> col2) RETURNING (col1 + col2) AS sum, col1 AS col1;"
+  it "correctly renders DELETEs" $ do
+    let
+      statement :: Statement '[] '[] Tables Tables
+      statement = deleteFrom #table1 (#col1 ==* #col2)
+    statement `shouldRenderAs`
+      "DELETE FROM table1 WHERE (col1 = col2);"
   it "should be safe against SQL injection in literal text" $ do
     let
       statement :: Statement '[] '[] StudentsTable StudentsTable
@@ -85,9 +132,9 @@ spec = do
   describe "JOINs" $ do
     let
       vals =
-        #orders &. #orderVal `As` #orderVal
-        :* #customers &. #customerVal `As` #customerVal
-        :* #shippers &. #shipperVal `As` #shipperVal :* Nil
+        (#orders &. #orderVal) `As` #orderVal
+        :* (#customers &. #customerVal) `As` #customerVal
+        :* (#shippers &. #shipperVal) `As` #shipperVal :* Nil
     it "should render CROSS JOINs" $ do
       let
         statement :: Statement '[] ValueColumns JoinTables JoinTables
@@ -103,13 +150,13 @@ spec = do
         \ CROSS JOIN shippers AS shippers;"
     it "should render INNER JOINs" $ do
       let
-        innerJoins :: From '[] JoinTables JoinTables
+        innerJoins :: TableExpression '[] JoinTables JoinTables
         innerJoins = join $
           #orders
           & Inner #customers
-            (#orders &. #customerID ==* #customers &. #customerID)
+            ((#orders &. #customerID) ==* (#customers &. #customerID))
           & Inner #shippers
-            (#orders &. #shipperID ==* #shippers &. #shipperID)
+            ((#orders &. #shipperID) ==* (#shippers &. #shipperID))
         selection :: Statement '[] ValueColumns JoinTables JoinTables
         selection =  select $ vals `from` innerJoins
       selection `shouldRenderAs`
