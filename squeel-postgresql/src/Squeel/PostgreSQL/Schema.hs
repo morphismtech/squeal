@@ -28,6 +28,9 @@ module Squeel.PostgreSQL.Schema
   , NullifyColumn
   , NullifyColumns
   , NullifyTable
+  , Drop
+  , Alter
+  , Rename
   , ColumnType (..)
   , module GHC.OverloadedLabels
   , module GHC.TypeLits
@@ -140,3 +143,15 @@ type family NullifyColumns columns where
 
 type family NullifyTable table where
   NullifyTable (table ::: columns) = table ::: NullifyColumns columns
+
+type family Drop alias xs where
+  Drop alias ((alias ::: x) ': xs) = xs
+  Drop alias (x ': xs) = x ': Drop alias xs
+
+type family Alter alias xs x where
+  Alter alias ((alias ::: x0) ': xs) x1 = (alias ::: x1) ': xs
+  Alter alias (x0 ': xs) x1 = x0 ': Alter alias xs x1
+
+type family Rename alias0 alias1 xs where
+  Rename alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
+  Rename alias0 alias1 (x ': xs) = x ': Rename alias0 alias1 xs

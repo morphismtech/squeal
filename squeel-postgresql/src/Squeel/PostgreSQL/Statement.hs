@@ -736,17 +736,118 @@ createTable (Alias table) columns = UnsafeStatement $ mconcat
 DROP statements
 -----------------------------------------}
 
-class KnownSymbol table => DropTable table schema0 schema1
-  | table schema0 -> schema1 where
-    dropTable :: Alias table -> Statement '[] '[] schema0 schema1
-    dropTable (Alias table) = UnsafeStatement $
-      "DROP TABLE " <> fromString (symbolVal' table) <> ";"
-instance {-# OVERLAPPING #-}
-  (KnownSymbol table, table ~ table', schema ~ schema')
-    => DropTable table ((table' ::: columns) ': schema) schema'
-instance {-# OVERLAPPABLE #-}
-  DropTable table schema0 schema1
-    => DropTable table (table' ': schema0) (table' ': schema1)
+dropTable
+  :: KnownSymbol table
+  => Alias table
+  -> Statement '[] '[] schema (Drop table schema)
+dropTable (Alias table) = UnsafeStatement $
+  "DROP TABLE " <> fromString (symbolVal' table) <> ";"
+
+{-----------------------------------------
+ALTER statements
+-----------------------------------------}
+
+alterTable
+  :: HasTable table schema columns0
+  => Alias table
+  -> AlterTable columns0 columns1
+  -> Statement '[] '[] schema (Alter table schema columns1)
+alterTable (Alias table) alteration = UnsafeStatement $
+  "ALTER TABLE "
+  <> fromString (symbolVal' table)
+  <> " "
+  <> renderAlterTable alteration
+  <> ";"
+
+alterTableRename
+  :: (KnownSymbol table0, KnownSymbol table1)
+  => Alias table0
+  -> Alias table1
+  -> Statement '[] '[] schema (Rename table0 table1 schema)
+alterTableRename (Alias table0) (Alias table1) = UnsafeStatement $
+  "ALTER TABLE "
+  <> fromString (symbolVal' table0)
+  <> " RENAME TO "
+  <> fromString (symbolVal' table1)
+  <> ";"
+
+data AlterTable
+  (columns0 :: [(Symbol, ColumnType)])
+  (columns1 :: [(Symbol, ColumnType)]) =
+    UnsafeAlterTable {renderAlterTable :: ByteString}
+
+addColumnDefault
+  :: KnownSymbol column
+  => Alias column
+  -> TypeExpression ('Optional ty)
+  -> AlterTable columns ((column ::: 'Optional ty) ': columns)
+addColumnDefault (Alias column) ty = UnsafeAlterTable $
+  "ADD COLUMN "
+  <> fromString (symbolVal' column)
+  <> " "
+  <> renderTypeExpression ty
+
+addColumnNull
+  :: KnownSymbol column
+  => Alias column
+  -> TypeExpression ('Required ('Null ty))
+  -> AlterTable columns ((column ::: 'Required ('Null ty)) ': columns)
+addColumnNull (Alias column) ty = UnsafeAlterTable $
+  "ADD COLUMN "
+  <> fromString (symbolVal' column)
+  <> " "
+  <> renderTypeExpression ty
+
+dropColumn
+  :: KnownSymbol column
+  => Alias column
+  -> AlterTable columns (Drop column columns)
+dropColumn (Alias column) = UnsafeAlterTable $
+  "DROP COLUMN " <> fromString (symbolVal' column)
+
+renameColumn
+  :: (KnownSymbol column0, KnownSymbol column1)
+  => Alias column0
+  -> Alias column1
+  -> AlterTable columns (Rename column0 column1 columns)
+renameColumn (Alias column0) (Alias column1) = UnsafeAlterTable $
+  "RENAME COLUMN " <> fromString (symbolVal' column0)
+  <> " TO " <> fromString (symbolVal' column1)
+
+alterColumn
+  :: (KnownSymbol column, HasColumn column columns ty0)
+  => Alias column
+  -> AlterColumn ty0 ty1
+  -> AlterTable columns (Alter column columns ty1)
+alterColumn (Alias column) alteration = UnsafeAlterTable $
+  "ALTER COLUMN " <> fromString (symbolVal' column)
+  <> " " <> renderAlterColumn alteration
+
+data AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
+  UnsafeAlterColumn {renderAlterColumn :: ByteString}
+
+setDefault
+  :: Expression '[] '[] ('Required ty)
+  -> AlterColumn ('Required ty) ('Optional ty)
+setDefault expression = UnsafeAlterColumn $
+  "SET DEFAULT " <> renderExpression expression
+
+dropDefault :: AlterColumn ('Optional ty) ('Required ty)
+dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
+
+setNotNull
+  :: AlterColumn (optionality ('Null ty)) (optionality ('NotNull ty))
+setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
+
+dropNotNull
+  :: AlterColumn (optionality ('NotNull ty)) (optionality ('Null ty))
+dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
+
+alterType
+  :: PGCast ty0 ty1
+  => TypeExpression (optionality (nullity ty1))
+  -> AlterColumn (optionality (nullity ty0)) (optionality (nullity ty1))
+alterType ty = UnsafeAlterColumn $ "TYPE " <> renderTypeExpression ty
 
 {-----------------------------------------
 INSERT statements
