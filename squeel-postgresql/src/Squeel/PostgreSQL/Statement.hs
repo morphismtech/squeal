@@ -78,10 +78,8 @@ instance (HasColumn column columns ty, tables ~ '[table ::: columns])
 (&.)
   :: (HasTable table tables columns, HasColumn column columns ty)
   => Alias table -> Alias column -> Expression params tables ty
-Alias table &. Alias column = UnsafeExpression $
-  fromString (symbolVal' table)
-  <> "." <>
-  fromString (symbolVal' column)
+table &. column = UnsafeExpression $
+  renderAlias table <> "." <> renderAlias column
 
 def :: Expression params '[] ('Optional (nullity ty))
 def = UnsafeExpression "DEFAULT"
@@ -691,8 +689,8 @@ dotStarFrom
   => Alias table
   -> TableExpression params schema tables
   -> Selection params schema columns
-Alias tab `dotStarFrom` tabs = UnsafeSelection $
-  fromString (symbolVal' tab) <> ".* FROM " <> renderTableExpression tabs
+table `dotStarFrom` tables = UnsafeSelection $
+  renderAlias table <> ".* FROM " <> renderTableExpression tables
 
 from
   :: SListI columns
@@ -726,9 +724,9 @@ createTable
   => Alias table
   -> NP (Aliased TypeExpression) columns
   -> Statement '[] '[] schema (Create table columns schema)
-createTable (Alias table) columns = UnsafeStatement $ mconcat
+createTable table columns = UnsafeStatement $ mconcat
   [ "CREATE TABLE "
-  , fromString $ symbolVal' table
+  , renderAlias table
   , " ("
   , ByteString.intercalate ", " . hcollapse $
       hmap (K . renderColumn) columns
@@ -736,8 +734,8 @@ createTable (Alias table) columns = UnsafeStatement $ mconcat
   ]
   where
     renderColumn :: Aliased TypeExpression x -> ByteString
-    renderColumn (ty `As` Alias column) =
-      fromString (symbolVal' column) <> " " <> renderTypeExpression ty
+    renderColumn (ty `As` column) =
+      renderAlias column <> " " <> renderTypeExpression ty
 
 {-----------------------------------------
 DROP statements
@@ -747,8 +745,8 @@ dropTable
   :: KnownSymbol table
   => Alias table
   -> Statement '[] '[] schema (Drop table schema)
-dropTable (Alias table) = UnsafeStatement $
-  "DROP TABLE " <> fromString (symbolVal' table) <> ";"
+dropTable table = UnsafeStatement $
+  "DROP TABLE " <> renderAlias table <> ";"
 
 {-----------------------------------------
 ALTER statements
@@ -759,9 +757,9 @@ alterTable
   => Alias table
   -> AlterTable columns0 columns1
   -> Statement '[] '[] schema (Alter table schema columns1)
-alterTable (Alias table) alteration = UnsafeStatement $
+alterTable table alteration = UnsafeStatement $
   "ALTER TABLE "
-  <> fromString (symbolVal' table)
+  <> renderAlias table
   <> " "
   <> renderAlterTable alteration
   <> ";"
@@ -771,11 +769,11 @@ alterTableRename
   => Alias table0
   -> Alias table1
   -> Statement '[] '[] schema (Rename table0 table1 schema)
-alterTableRename (Alias table0) (Alias table1) = UnsafeStatement $
+alterTableRename table0 table1 = UnsafeStatement $
   "ALTER TABLE "
-  <> fromString (symbolVal' table0)
+  <> renderAlias table0
   <> " RENAME TO "
-  <> fromString (symbolVal' table1)
+  <> renderAlias table1
   <> ";"
 
 data AlterTable
@@ -788,9 +786,9 @@ addColumnDefault
   => Alias column
   -> TypeExpression ('Optional ty)
   -> AlterTable columns (Create column ('Optional ty) columns)
-addColumnDefault (Alias column) ty = UnsafeAlterTable $
+addColumnDefault column ty = UnsafeAlterTable $
   "ADD COLUMN "
-  <> fromString (symbolVal' column)
+  <> renderAlias column
   <> " "
   <> renderTypeExpression ty
 
@@ -799,9 +797,9 @@ addColumnNull
   => Alias column
   -> TypeExpression ('Required ('Null ty))
   -> AlterTable columns ((column ::: 'Required ('Null ty)) ': columns)
-addColumnNull (Alias column) ty = UnsafeAlterTable $
+addColumnNull column ty = UnsafeAlterTable $
   "ADD COLUMN "
-  <> fromString (symbolVal' column)
+  <> renderAlias column
   <> " "
   <> renderTypeExpression ty
 
@@ -809,25 +807,25 @@ dropColumn
   :: KnownSymbol column
   => Alias column
   -> AlterTable columns (Drop column columns)
-dropColumn (Alias column) = UnsafeAlterTable $
-  "DROP COLUMN " <> fromString (symbolVal' column)
+dropColumn column = UnsafeAlterTable $
+  "DROP COLUMN " <> renderAlias column
 
 renameColumn
   :: (KnownSymbol column0, KnownSymbol column1)
   => Alias column0
   -> Alias column1
   -> AlterTable columns (Rename column0 column1 columns)
-renameColumn (Alias column0) (Alias column1) = UnsafeAlterTable $
-  "RENAME COLUMN " <> fromString (symbolVal' column0)
-  <> " TO " <> fromString (symbolVal' column1)
+renameColumn column0 column1 = UnsafeAlterTable $
+  "RENAME COLUMN " <> renderAlias column0
+  <> " TO " <> renderAlias column1
 
 alterColumn
   :: (KnownSymbol column, HasColumn column columns ty0)
   => Alias column
   -> AlterColumn ty0 ty1
   -> AlterTable columns (Alter column columns ty1)
-alterColumn (Alias column) alteration = UnsafeAlterTable $
-  "ALTER COLUMN " <> fromString (symbolVal' column)
+alterColumn column alteration = UnsafeAlterTable $
+  "ALTER COLUMN " <> renderAlias column
   <> " " <> renderAlterColumn alteration
 
 data AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
@@ -865,15 +863,15 @@ insertInto
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
   -> Statement params '[] schema schema
-insertInto (Alias table) expressions = UnsafeStatement $ "INSERT INTO "
-  <> fromString (symbolVal' table)
+insertInto table expressions = UnsafeStatement $ "INSERT INTO "
+  <> renderAlias table
   <> " (" <> ByteString.intercalate ", " aliases
   <> ") VALUES ("
   <> ByteString.intercalate ", " values
   <> ");"
   where
     aliases = hcollapse $ hmap
-      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
+      (\ (_ `As` name) -> K (renderAlias name))
       expressions
     values = hcollapse $ hmap
       (\ (expression `As` _) -> K (renderExpression expression))
@@ -885,10 +883,10 @@ insertIntoReturning
   -> NP (Aliased (Expression params '[])) columns
   -> NP (Aliased (Expression params '[table ::: columns])) results
   -> Statement params results schema schema
-insertIntoReturning (Alias table) inserts results
+insertIntoReturning table inserts results
   = UnsafeStatement . mconcat $
     [ "INSERT INTO "
-    , fromString (symbolVal' table)
+    , renderAlias table
     , " (" <> ByteString.intercalate ", " aliases
     , ") VALUES ("
     , ByteString.intercalate ", " values
@@ -898,7 +896,7 @@ insertIntoReturning (Alias table) inserts results
     ]
   where
     aliases = hcollapse $ hmap
-      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
+      (\ (_ `As` name) -> K (renderAlias name))
       inserts
     values = hcollapse $ hmap
       (\ (expression `As` _) -> K (renderExpression expression))
@@ -912,51 +910,49 @@ insertIntoReturning (Alias table) inserts results
 UPDATE statements
 -----------------------------------------}
 
-set :: Expression params tables x -> (Maybe :.: Expression params tables) x
-set = Comp . Just
+data UpdateExpression params table ty
+  = Same
+  | Set (Expression params table ty)
 
-same :: (Maybe :.: Expression params tables) x
-same = Comp Nothing
-
-renderSet
-  :: Aliased (Maybe :.: Expression params '[table ::: columns]) column
+renderUpdateExpression
+  :: Aliased (UpdateExpression params '[table ::: columns]) column
   -> Maybe ByteString
-renderSet = \case
-  Comp (Just expression) `As` Alias column -> Just $ mconcat
-    [ fromString $ symbolVal' column
+renderUpdateExpression = \case
+  Same `As` _ -> Nothing
+  Set expression `As` column -> Just $ mconcat
+    [ renderAlias column
     , " = "
     , renderExpression expression
     ]
-  Comp Nothing `As` _ -> Nothing
 
 update
   :: (HasTable table schema columns, SListI columns)
   => Alias table
-  -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
+  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Predicate params '[table ::: columns]
   -> Statement params '[] schema schema
-update (Alias table) columns wh = UnsafeStatement $ mconcat
+update table columns wh = UnsafeStatement $ mconcat
   [ "UPDATE "
-  , fromString $ symbolVal' table
+  , renderAlias table
   , " SET "
   , ByteString.intercalate ", " . catMaybes . hcollapse $
-      hmap (K . renderSet) columns
+      hmap (K . renderUpdateExpression) columns
   , " WHERE ", renderExpression wh, ";"
   ]
 
 updateReturning
   :: (SListI columns, SListI results, HasTable table schema columns)
   => Alias table
-  -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
+  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Predicate params '[table ::: columns]
   -> NP (Aliased (Expression params '[table ::: columns])) results
   -> Statement params results schema schema
-updateReturning (Alias table) updates wh results = UnsafeStatement $ mconcat
+updateReturning table updates wh results = UnsafeStatement $ mconcat
   [ "UPDATE "
-  , fromString $ symbolVal' table
+  , renderAlias table
   , " SET "
   , ByteString.intercalate ", " . catMaybes . hcollapse $
-      hmap (K . renderSet) updates
+      hmap (K . renderUpdateExpression) updates
   , " WHERE ", renderExpression wh
   , " RETURNING ", renderList results
   , ";"
@@ -971,24 +967,24 @@ upsertInto
   :: (SListI columns, HasTable table schema columns)
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
-  -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
+  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Predicate params '[table ::: columns]
   -> Statement params '[] schema schema
-upsertInto (Alias table) inserts updates wh = UnsafeStatement . mconcat $
+upsertInto table inserts updates wh = UnsafeStatement . mconcat $
   [ "INSERT INTO "
-  , fromString (symbolVal' table)
+  , renderAlias table
   , " (" <> ByteString.intercalate ", " aliases
   , ") VALUES ("
   , ByteString.intercalate ", " values
   , ") ON CONFLICT UPDATE "
-  , fromString $ symbolVal' table
+  , renderAlias table
   , " SET "
   , ByteString.intercalate ", " . catMaybes . hcollapse $
-      hmap (K . renderSet) updates
+      hmap (K . renderUpdateExpression) updates
   , " WHERE ", renderExpression wh, ";"
   ] where
     aliases = hcollapse $ hmap
-      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
+      (\ (_ `As` name) -> K (renderAlias name))
       inserts
     values = hcollapse $ hmap
       (\ (expression `As` _) -> K (renderExpression expression))
@@ -998,35 +994,36 @@ upsertIntoReturning
   :: (SListI columns, SListI results, HasTable table schema columns)
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
-  -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
+  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Predicate params '[table ::: columns]
   -> NP (Aliased (Expression params '[table ::: columns])) results
   -> Statement params results schema schema
-upsertIntoReturning (Alias table) inserts updates wh results = UnsafeStatement . mconcat $
-  [ "INSERT INTO "
-  , fromString (symbolVal' table)
-  , " (" <> ByteString.intercalate ", " aliases
-  , ") VALUES ("
-  , ByteString.intercalate ", " values
-  , ") ON CONFLICT UPDATE "
-  , fromString $ symbolVal' table
-  , " SET "
-  , ByteString.intercalate ", " . catMaybes . hcollapse $
-      hmap (K . renderSet) updates
-  , " WHERE ", renderExpression wh
-  , " RETURNING ", renderList results
-  , ";"
-  ] where
-    aliases = hcollapse $ hmap
-      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
-      inserts
-    values = hcollapse $ hmap
-      (\ (expression `As` _) -> K (renderExpression expression))
-      inserts
-    renderList
-      = ByteString.intercalate ", "
-      . hcollapse
-      . hmap (K . renderAliased renderExpression)
+upsertIntoReturning table inserts updates wh results =
+  UnsafeStatement . mconcat $
+    [ "INSERT INTO "
+    , renderAlias table
+    , " (" <> ByteString.intercalate ", " aliases
+    , ") VALUES ("
+    , ByteString.intercalate ", " values
+    , ") ON CONFLICT UPDATE "
+    , renderAlias table
+    , " SET "
+    , ByteString.intercalate ", " . catMaybes . hcollapse $
+        hmap (K . renderUpdateExpression) updates
+    , " WHERE ", renderExpression wh
+    , " RETURNING ", renderList results
+    , ";"
+    ] where
+      aliases = hcollapse $ hmap
+        (\ (_ `As` name) -> K (renderAlias name))
+        inserts
+      values = hcollapse $ hmap
+        (\ (expression `As` _) -> K (renderExpression expression))
+        inserts
+      renderList
+        = ByteString.intercalate ", "
+        . hcollapse
+        . hmap (K . renderAliased renderExpression)
 
 {-----------------------------------------
 DELETE statements
@@ -1037,8 +1034,8 @@ deleteFrom
   => Alias table
   -> Predicate params '[table ::: columns]
   -> Statement params '[] schema schema
-deleteFrom (Alias table) wh = UnsafeStatement $ mconcat
+deleteFrom table wh = UnsafeStatement $ mconcat
   [ "DELETE FROM "
-  , fromString $ symbolVal' table
+  , renderAlias table
   , " WHERE ", renderExpression wh, ";"
   ]

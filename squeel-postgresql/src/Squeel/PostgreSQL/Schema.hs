@@ -22,6 +22,7 @@ module Squeel.PostgreSQL.Schema
   , PGFloating
   , (:::)
   , Alias (Alias)
+  , renderAlias
   , Aliased (As)
   , renderAliased
   , NullityType (..)
@@ -107,6 +108,9 @@ instance PGFloating 'PGFloat8
 type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
 
 data Alias (alias :: Symbol) = Alias (Proxy# alias)
+
+renderAlias :: KnownSymbol alias => Alias alias -> ByteString
+renderAlias (Alias alias) = fromString (symbolVal' alias)
 
 instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias

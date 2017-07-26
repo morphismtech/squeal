@@ -85,14 +85,14 @@ spec = do
   it "correctly renders simple UPDATEs" $ do
     let
       statement :: Statement '[] '[] Tables Tables
-      statement = update #table1 (set 2 `As` #col1 :* same `As` #col2 :* Nil) (#col1 /=* #col2)
+      statement = update #table1 (Set 2 `As` #col1 :* Same `As` #col2 :* Nil) (#col1 /=* #col2)
     statement `shouldRenderAs`
       "UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
   it "correctly renders returning UPDATEs" $ do
     let
       statement :: Statement '[] SumAndCol1 Tables Tables
       statement = updateReturning #table1
-        (set 2 `As` #col1 :* same `As` #col2 :* Nil)
+        (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
         (#col1 /=* #col2)
         ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
     statement `shouldRenderAs`
@@ -102,7 +102,7 @@ spec = do
       statement :: Statement '[] '[] Tables Tables
       statement = upsertInto #table1
         (2 `As` #col1 :* 4 `As` #col2 :* Nil)
-        (set 2 `As` #col1 :* same `As` #col2 :* Nil)
+        (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
         (#col1 /=* #col2)
     statement `shouldRenderAs`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4) ON CONFLICT UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
@@ -111,7 +111,7 @@ spec = do
       statement :: Statement '[] SumAndCol1 Tables Tables
       statement = upsertIntoReturning #table1
         (2 `As` #col1 :* 4 `As` #col2 :* Nil)
-        (set 2 `As` #col1 :* same `As` #col2 :* Nil)
+        (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
         (#col1 /=* #col2)
         ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
     statement `shouldRenderAs`
