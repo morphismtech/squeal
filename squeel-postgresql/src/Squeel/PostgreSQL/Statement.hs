@@ -656,19 +656,22 @@ where_
   :: Predicate params tables
   -> TableExpression params schema tables
   -> TableExpression params schema tables
-where_ wh (TableExpression tabs whs lims offs) = TableExpression tabs (wh:whs) lims offs
+where_ wh (TableExpression tabs whs lims offs) =
+  TableExpression tabs (wh:whs) lims offs
 
 limit
   :: Expression params '[] ('Required ('NotNull 'PGInt8))
   -> TableExpression params schema tables
   -> TableExpression params schema tables
-limit lim (TableExpression tabs whs lims offs) = TableExpression tabs whs (lim:lims) offs
+limit lim (TableExpression tabs whs lims offs) =
+  TableExpression tabs whs (lim:lims) offs
 
 offset
   :: Expression params '[] ('Required ('NotNull 'PGInt8))
   -> TableExpression params schema tables
   -> TableExpression params schema tables
-offset off (TableExpression tabs whs lims offs) = TableExpression tabs whs lims (off:offs)
+offset off (TableExpression tabs whs lims offs) =
+  TableExpression tabs whs lims (off:offs)
 
 newtype Selection
   (params :: [ColumnType])
