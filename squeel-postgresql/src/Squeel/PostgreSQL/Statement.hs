@@ -78,10 +78,8 @@ instance (HasColumn column columns ty, tables ~ '[table ::: columns])
 (&.)
   :: (HasTable table tables columns, HasColumn column columns ty)
   => Alias table -> Alias column -> Expression params tables ty
-Alias table &. Alias column = UnsafeExpression $
-  fromString (symbolVal' table)
-  <> "." <>
-  fromString (symbolVal' column)
+table &. column = UnsafeExpression $
+  renderAlias table <> "." <> renderAlias column
 
 def :: Expression params '[] ('Optional (nullity ty))
 def = UnsafeExpression "DEFAULT"
@@ -380,6 +378,136 @@ instance HasTable table schema columns
     fromLabel = getTable
 
 {-----------------------------------------
+type expressions
+-----------------------------------------}
+
+newtype TypeExpression (ty :: ColumnType)
+  = UnsafeTypeExpression { renderTypeExpression :: ByteString }
+  deriving (Show,Eq)
+
+bool :: TypeExpression ('Required ('Null 'PGBool))
+bool = UnsafeTypeExpression "bool"
+int2 :: TypeExpression ('Required ('Null 'PGInt2))
+int2 = UnsafeTypeExpression "int2"
+smallint :: TypeExpression ('Required ('Null 'PGInt2))
+smallint = UnsafeTypeExpression "smallint"
+int4 :: TypeExpression ('Required ('Null 'PGInt4))
+int4 = UnsafeTypeExpression "int4"
+int :: TypeExpression ('Required ('Null 'PGInt4))
+int = UnsafeTypeExpression "int"
+integer :: TypeExpression ('Required ('Null 'PGInt4))
+integer = UnsafeTypeExpression "integer"
+int8 :: TypeExpression ('Required ('Null 'PGInt8))
+int8 = UnsafeTypeExpression "int8"
+bigint :: TypeExpression ('Required ('Null 'PGInt8))
+bigint = UnsafeTypeExpression "bigint"
+numeric :: TypeExpression ('Required ('Null 'PGNumeric))
+numeric = UnsafeTypeExpression "numeric"
+float4 :: TypeExpression ('Required ('Null 'PGFloat4))
+float4 = UnsafeTypeExpression "float4"
+real :: TypeExpression ('Required ('Null 'PGFloat4))
+real = UnsafeTypeExpression "real"
+float8 :: TypeExpression ('Required ('Null 'PGFloat8))
+float8 = UnsafeTypeExpression "float8"
+doublePrecision :: TypeExpression ('Required ('Null 'PGFloat8))
+doublePrecision = UnsafeTypeExpression "double precision"
+serial2 :: TypeExpression ('Optional ('NotNull 'PGInt2))
+serial2 = UnsafeTypeExpression "serial2"
+smallserial :: TypeExpression ('Optional ('NotNull 'PGInt2))
+smallserial = UnsafeTypeExpression "smallserial"
+serial4 :: TypeExpression ('Optional ('NotNull 'PGInt4))
+serial4 = UnsafeTypeExpression "serial4"
+serial :: TypeExpression ('Optional ('NotNull 'PGInt4))
+serial = UnsafeTypeExpression "serial"
+serial8 :: TypeExpression ('Optional ('NotNull 'PGInt8))
+serial8 = UnsafeTypeExpression "serial8"
+bigserial :: TypeExpression ('Optional ('NotNull 'PGInt8))
+bigserial = UnsafeTypeExpression "bigserial"
+money :: TypeExpression ('Required ('Null 'PGMoney))
+money = UnsafeTypeExpression "money"
+text :: TypeExpression ('Required ('Null 'PGText))
+text = UnsafeTypeExpression "text"
+char
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('Required ('Null ('PGChar n)))
+char (_ :: proxy n) = UnsafeTypeExpression $
+  "char(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+character
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('Required ('Null ('PGChar n)))
+character (_ :: proxy n) = UnsafeTypeExpression $
+  "character(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+varchar
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('Required ('Null ('PGVarChar n)))
+varchar (_ :: proxy n) = UnsafeTypeExpression $
+  "varchar(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+characterVarying
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('Required ('Null ('PGVarChar n)))
+characterVarying (_ :: proxy n) = UnsafeTypeExpression $
+  "character varying(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+bytea :: TypeExpression ('Required ('Null ('PGBytea)))
+bytea = UnsafeTypeExpression "bytea"
+timestamp :: TypeExpression ('Required ('Null ('PGTimestamp)))
+timestamp = UnsafeTypeExpression "timestamp"
+timestampWithTimeZone :: TypeExpression ('Required ('Null ('PGTimestampTZ)))
+timestampWithTimeZone = UnsafeTypeExpression "timestamp with time zone"
+date :: TypeExpression ('Required ('Null ('PGDate)))
+date = UnsafeTypeExpression "date"
+time :: TypeExpression ('Required ('Null ('PGTime)))
+time = UnsafeTypeExpression "time"
+timeWithTimeZone :: TypeExpression ('Required ('Null ('PGTimeTZ)))
+timeWithTimeZone = UnsafeTypeExpression "time with time zone"
+interval :: TypeExpression ('Required ('Null ('PGInterval)))
+interval = UnsafeTypeExpression "interval"
+uuid :: TypeExpression ('Required ('Null ('PGUuid)))
+uuid = UnsafeTypeExpression "uuid"
+json :: TypeExpression ('Required ('Null ('PGJson)))
+json = UnsafeTypeExpression "json"
+jsonb :: TypeExpression ('Required ('Null ('PGJsonb)))
+jsonb = UnsafeTypeExpression "jsonb"
+
+notNull
+  :: TypeExpression ('Required ('Null ty))
+  -> TypeExpression ('Required ('NotNull ty))
+notNull ty = UnsafeTypeExpression $ renderTypeExpression ty <> " NOT NULL"
+default_
+  :: Expression '[] '[] ('Required ty)
+  -> TypeExpression ('Required ty)
+  -> TypeExpression ('Optional ty)
+default_ x ty = UnsafeTypeExpression $
+  renderTypeExpression ty <> " DEFAULT " <> renderExpression x
+
+class PGTyped (ty :: PGType) where
+  pgtype :: TypeExpression ('Required ('Null ty))
+instance PGTyped 'PGBool where pgtype = bool
+instance PGTyped 'PGInt2 where pgtype = int2
+instance PGTyped 'PGInt4 where pgtype = int4
+instance PGTyped 'PGInt8 where pgtype = int8
+instance PGTyped 'PGNumeric where pgtype = numeric
+instance PGTyped 'PGFloat4 where pgtype = float4
+instance PGTyped 'PGFloat8 where pgtype = float8
+instance PGTyped 'PGMoney where pgtype = money
+instance PGTyped 'PGText where pgtype = text
+instance KnownNat n => PGTyped ('PGChar n) where pgtype = char (Proxy @n)
+instance KnownNat n => PGTyped ('PGVarChar n) where pgtype = varchar (Proxy @n)
+instance PGTyped 'PGBytea where pgtype = bytea
+instance PGTyped 'PGTimestamp where pgtype = timestamp
+instance PGTyped 'PGTimestampTZ where pgtype = timestampWithTimeZone
+instance PGTyped 'PGDate where pgtype = date
+instance PGTyped 'PGTime where pgtype = time
+instance PGTyped 'PGTimeTZ where pgtype = timeWithTimeZone
+instance PGTyped 'PGInterval where pgtype = interval
+instance PGTyped 'PGUuid where pgtype = uuid
+instance PGTyped 'PGJson where pgtype = json
+instance PGTyped 'PGJsonb where pgtype = jsonb
+
+{-----------------------------------------
 statements
 -----------------------------------------}
 
@@ -526,19 +654,22 @@ where_
   :: Predicate params tables
   -> TableExpression params schema tables
   -> TableExpression params schema tables
-where_ wh (TableExpression tabs whs lims offs) = TableExpression tabs (wh:whs) lims offs
+where_ wh (TableExpression tabs whs lims offs) =
+  TableExpression tabs (wh:whs) lims offs
 
 limit
   :: Expression params '[] ('Required ('NotNull 'PGInt8))
   -> TableExpression params schema tables
   -> TableExpression params schema tables
-limit lim (TableExpression tabs whs lims offs) = TableExpression tabs whs (lim:lims) offs
+limit lim (TableExpression tabs whs lims offs) =
+  TableExpression tabs whs (lim:lims) offs
 
 offset
   :: Expression params '[] ('Required ('NotNull 'PGInt8))
   -> TableExpression params schema tables
   -> TableExpression params schema tables
-offset off (TableExpression tabs whs lims offs) = TableExpression tabs whs lims (off:offs)
+offset off (TableExpression tabs whs lims offs) =
+  TableExpression tabs whs lims (off:offs)
 
 newtype Selection
   (params :: [ColumnType])
@@ -558,8 +689,8 @@ dotStarFrom
   => Alias table
   -> TableExpression params schema tables
   -> Selection params schema columns
-Alias tab `dotStarFrom` tabs = UnsafeSelection $
-  fromString (symbolVal' tab) <> ".* FROM " <> renderTableExpression tabs
+table `dotStarFrom` tables = UnsafeSelection $
+  renderAlias table <> ".* FROM " <> renderTableExpression tables
 
 from
   :: SListI columns
@@ -588,140 +719,14 @@ subselect selection = join (Subselect selection)
 CREATE statements
 -----------------------------------------}
 
-newtype TypeExpression (ty :: ColumnType)
-  = UnsafeTypeExpression { renderTypeExpression :: ByteString }
-  deriving (Show,Eq)
-
-bool :: TypeExpression ('Required ('Null 'PGBool))
-bool = UnsafeTypeExpression "bool"
-int2 :: TypeExpression ('Required ('Null 'PGInt2))
-int2 = UnsafeTypeExpression "int2"
-smallint :: TypeExpression ('Required ('Null 'PGInt2))
-smallint = UnsafeTypeExpression "smallint"
-int4 :: TypeExpression ('Required ('Null 'PGInt4))
-int4 = UnsafeTypeExpression "int4"
-int :: TypeExpression ('Required ('Null 'PGInt4))
-int = UnsafeTypeExpression "int"
-integer :: TypeExpression ('Required ('Null 'PGInt4))
-integer = UnsafeTypeExpression "integer"
-int8 :: TypeExpression ('Required ('Null 'PGInt8))
-int8 = UnsafeTypeExpression "int8"
-bigint :: TypeExpression ('Required ('Null 'PGInt8))
-bigint = UnsafeTypeExpression "bigint"
-numeric :: TypeExpression ('Required ('Null 'PGNumeric))
-numeric = UnsafeTypeExpression "numeric"
-float4 :: TypeExpression ('Required ('Null 'PGFloat4))
-float4 = UnsafeTypeExpression "float4"
-real :: TypeExpression ('Required ('Null 'PGFloat4))
-real = UnsafeTypeExpression "real"
-float8 :: TypeExpression ('Required ('Null 'PGFloat8))
-float8 = UnsafeTypeExpression "float8"
-doublePrecision :: TypeExpression ('Required ('Null 'PGFloat8))
-doublePrecision = UnsafeTypeExpression "double precision"
-serial2 :: TypeExpression ('Optional ('NotNull 'PGInt2))
-serial2 = UnsafeTypeExpression "serial2"
-smallserial :: TypeExpression ('Optional ('NotNull 'PGInt2))
-smallserial = UnsafeTypeExpression "smallserial"
-serial4 :: TypeExpression ('Optional ('NotNull 'PGInt4))
-serial4 = UnsafeTypeExpression "serial4"
-serial :: TypeExpression ('Optional ('NotNull 'PGInt4))
-serial = UnsafeTypeExpression "serial"
-serial8 :: TypeExpression ('Optional ('NotNull 'PGInt8))
-serial8 = UnsafeTypeExpression "serial8"
-bigserial :: TypeExpression ('Optional ('NotNull 'PGInt8))
-bigserial = UnsafeTypeExpression "bigserial"
-money :: TypeExpression ('Required ('Null 'PGMoney))
-money = UnsafeTypeExpression "money"
-text :: TypeExpression ('Required ('Null 'PGText))
-text = UnsafeTypeExpression "text"
-char
-  :: KnownNat n
-  => proxy n
-  -> TypeExpression ('Required ('Null ('PGChar n)))
-char (_ :: proxy n) = UnsafeTypeExpression $
-  "char(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
-character
-  :: KnownNat n
-  => proxy n
-  -> TypeExpression ('Required ('Null ('PGChar n)))
-character (_ :: proxy n) = UnsafeTypeExpression $
-  "character(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
-varchar
-  :: KnownNat n
-  => proxy n
-  -> TypeExpression ('Required ('Null ('PGVarChar n)))
-varchar (_ :: proxy n) = UnsafeTypeExpression $
-  "varchar(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
-characterVarying
-  :: KnownNat n
-  => proxy n
-  -> TypeExpression ('Required ('Null ('PGVarChar n)))
-characterVarying (_ :: proxy n) = UnsafeTypeExpression $
-  "character varying(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
-bytea :: TypeExpression ('Required ('Null ('PGBytea)))
-bytea = UnsafeTypeExpression "bytea"
-timestamp :: TypeExpression ('Required ('Null ('PGTimestamp)))
-timestamp = UnsafeTypeExpression "timestamp"
-timestampWithTimeZone :: TypeExpression ('Required ('Null ('PGTimestampTZ)))
-timestampWithTimeZone = UnsafeTypeExpression "timestamp with time zone"
-date :: TypeExpression ('Required ('Null ('PGDate)))
-date = UnsafeTypeExpression "date"
-time :: TypeExpression ('Required ('Null ('PGTime)))
-time = UnsafeTypeExpression "time"
-timeWithTimeZone :: TypeExpression ('Required ('Null ('PGTimeTZ)))
-timeWithTimeZone = UnsafeTypeExpression "time with time zone"
-interval :: TypeExpression ('Required ('Null ('PGInterval)))
-interval = UnsafeTypeExpression "interval"
-uuid :: TypeExpression ('Required ('Null ('PGUuid)))
-uuid = UnsafeTypeExpression "uuid"
-json :: TypeExpression ('Required ('Null ('PGJson)))
-json = UnsafeTypeExpression "json"
-jsonb :: TypeExpression ('Required ('Null ('PGJsonb)))
-jsonb = UnsafeTypeExpression "jsonb"
-
-notNull
-  :: TypeExpression ('Required ('Null ty))
-  -> TypeExpression ('Required ('NotNull ty))
-notNull ty = UnsafeTypeExpression $ renderTypeExpression ty <> " NOT NULL"
-default_
-  :: Expression '[] '[] ('Required ty)
-  -> TypeExpression ('Required ty)
-  -> TypeExpression ('Optional ty)
-default_ x ty = UnsafeTypeExpression $
-  renderTypeExpression ty <> " DEFAULT " <> renderExpression x
-
-class PGTyped (ty :: PGType) where
-  pgtype :: TypeExpression ('Required ('Null ty))
-instance PGTyped 'PGBool where pgtype = bool
-instance PGTyped 'PGInt2 where pgtype = int2
-instance PGTyped 'PGInt4 where pgtype = int4
-instance PGTyped 'PGInt8 where pgtype = int8
-instance PGTyped 'PGNumeric where pgtype = numeric
-instance PGTyped 'PGFloat4 where pgtype = float4
-instance PGTyped 'PGFloat8 where pgtype = float8
-instance PGTyped 'PGMoney where pgtype = money
-instance PGTyped 'PGText where pgtype = text
-instance KnownNat n => PGTyped ('PGChar n) where pgtype = char (Proxy @n)
-instance KnownNat n => PGTyped ('PGVarChar n) where pgtype = varchar (Proxy @n)
-instance PGTyped 'PGBytea where pgtype = bytea
-instance PGTyped 'PGTimestamp where pgtype = timestamp
-instance PGTyped 'PGTimestampTZ where pgtype = timestampWithTimeZone
-instance PGTyped 'PGDate where pgtype = date
-instance PGTyped 'PGTime where pgtype = time
-instance PGTyped 'PGTimeTZ where pgtype = timeWithTimeZone
-instance PGTyped 'PGInterval where pgtype = interval
-instance PGTyped 'PGUuid where pgtype = uuid
-instance PGTyped 'PGJson where pgtype = json
-instance PGTyped 'PGJsonb where pgtype = jsonb
-
 createTable
   :: (KnownSymbol table, SListI columns)
   => Alias table
   -> NP (Aliased TypeExpression) columns
-  -> Statement '[] '[] schema ((table ::: columns) ': schema)
-createTable (Alias table) columns = UnsafeStatement $ mconcat
+  -> Statement '[] '[] schema (Create table columns schema)
+createTable table columns = UnsafeStatement $ mconcat
   [ "CREATE TABLE "
-  , fromString $ symbolVal' table
+  , renderAlias table
   , " ("
   , ByteString.intercalate ", " . hcollapse $
       hmap (K . renderColumn) columns
@@ -729,24 +734,125 @@ createTable (Alias table) columns = UnsafeStatement $ mconcat
   ]
   where
     renderColumn :: Aliased TypeExpression x -> ByteString
-    renderColumn (ty `As` Alias column) =
-      fromString (symbolVal' column) <> " " <> renderTypeExpression ty
+    renderColumn (ty `As` column) =
+      renderAlias column <> " " <> renderTypeExpression ty
 
 {-----------------------------------------
 DROP statements
 -----------------------------------------}
 
-class KnownSymbol table => DropTable table schema0 schema1
-  | table schema0 -> schema1 where
-    dropTable :: Alias table -> Statement '[] '[] schema0 schema1
-    dropTable (Alias table) = UnsafeStatement $
-      "DROP TABLE " <> fromString (symbolVal' table) <> ";"
-instance {-# OVERLAPPING #-}
-  (KnownSymbol table, table ~ table', schema ~ schema')
-    => DropTable table ((table' ::: columns) ': schema) schema'
-instance {-# OVERLAPPABLE #-}
-  DropTable table schema0 schema1
-    => DropTable table (table' ': schema0) (table' ': schema1)
+dropTable
+  :: KnownSymbol table
+  => Alias table
+  -> Statement '[] '[] schema (Drop table schema)
+dropTable table = UnsafeStatement $
+  "DROP TABLE " <> renderAlias table <> ";"
+
+{-----------------------------------------
+ALTER statements
+-----------------------------------------}
+
+alterTable
+  :: HasTable table schema columns0
+  => Alias table
+  -> AlterTable columns0 columns1
+  -> Statement '[] '[] schema (Alter table schema columns1)
+alterTable table alteration = UnsafeStatement $
+  "ALTER TABLE "
+  <> renderAlias table
+  <> " "
+  <> renderAlterTable alteration
+  <> ";"
+
+alterTableRename
+  :: (KnownSymbol table0, KnownSymbol table1)
+  => Alias table0
+  -> Alias table1
+  -> Statement '[] '[] schema (Rename table0 table1 schema)
+alterTableRename table0 table1 = UnsafeStatement $
+  "ALTER TABLE "
+  <> renderAlias table0
+  <> " RENAME TO "
+  <> renderAlias table1
+  <> ";"
+
+data AlterTable
+  (columns0 :: [(Symbol, ColumnType)])
+  (columns1 :: [(Symbol, ColumnType)]) =
+    UnsafeAlterTable {renderAlterTable :: ByteString}
+
+addColumnDefault
+  :: KnownSymbol column
+  => Alias column
+  -> TypeExpression ('Optional ty)
+  -> AlterTable columns (Create column ('Optional ty) columns)
+addColumnDefault column ty = UnsafeAlterTable $
+  "ADD COLUMN "
+  <> renderAlias column
+  <> " "
+  <> renderTypeExpression ty
+
+addColumnNull
+  :: KnownSymbol column
+  => Alias column
+  -> TypeExpression ('Required ('Null ty))
+  -> AlterTable columns ((column ::: 'Required ('Null ty)) ': columns)
+addColumnNull column ty = UnsafeAlterTable $
+  "ADD COLUMN "
+  <> renderAlias column
+  <> " "
+  <> renderTypeExpression ty
+
+dropColumn
+  :: KnownSymbol column
+  => Alias column
+  -> AlterTable columns (Drop column columns)
+dropColumn column = UnsafeAlterTable $
+  "DROP COLUMN " <> renderAlias column
+
+renameColumn
+  :: (KnownSymbol column0, KnownSymbol column1)
+  => Alias column0
+  -> Alias column1
+  -> AlterTable columns (Rename column0 column1 columns)
+renameColumn column0 column1 = UnsafeAlterTable $
+  "RENAME COLUMN " <> renderAlias column0
+  <> " TO " <> renderAlias column1
+
+alterColumn
+  :: (KnownSymbol column, HasColumn column columns ty0)
+  => Alias column
+  -> AlterColumn ty0 ty1
+  -> AlterTable columns (Alter column columns ty1)
+alterColumn column alteration = UnsafeAlterTable $
+  "ALTER COLUMN " <> renderAlias column
+  <> " " <> renderAlterColumn alteration
+
+data AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
+  UnsafeAlterColumn {renderAlterColumn :: ByteString}
+
+setDefault
+  :: Expression '[] '[] ('Required ty)
+  -> AlterColumn ('Required ty) ('Optional ty)
+setDefault expression = UnsafeAlterColumn $
+  "SET DEFAULT " <> renderExpression expression
+
+dropDefault :: AlterColumn ('Optional ty) ('Required ty)
+dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
+
+setNotNull
+  :: AlterColumn (optionality ('Null ty)) (optionality ('NotNull ty))
+setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
+
+dropNotNull
+  :: AlterColumn (optionality ('NotNull ty)) (optionality ('Null ty))
+dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
+
+alterType
+  :: PGCast ty0 ty1
+  => TypeExpression (optionality (nullity ty1))
+  -> AlterColumn (optionality (nullity ty0)) (optionality (nullity ty1))
+alterType ty = UnsafeAlterColumn $ "TYPE " <> renderTypeExpression ty
 
 {-----------------------------------------
 INSERT statements
@@ -757,15 +863,15 @@ insertInto
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
   -> Statement params '[] schema schema
-insertInto (Alias table) expressions = UnsafeStatement $ "INSERT INTO "
-  <> fromString (symbolVal' table)
+insertInto table expressions = UnsafeStatement $ "INSERT INTO "
+  <> renderAlias table
   <> " (" <> ByteString.intercalate ", " aliases
   <> ") VALUES ("
   <> ByteString.intercalate ", " values
   <> ");"
   where
     aliases = hcollapse $ hmap
-      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
+      (\ (_ `As` name) -> K (renderAlias name))
       expressions
     values = hcollapse $ hmap
       (\ (expression `As` _) -> K (renderExpression expression))
@@ -777,10 +883,10 @@ insertIntoReturning
   -> NP (Aliased (Expression params '[])) columns
   -> NP (Aliased (Expression params '[table ::: columns])) results
   -> Statement params results schema schema
-insertIntoReturning (Alias table) inserts results
+insertIntoReturning table inserts results
   = UnsafeStatement . mconcat $
     [ "INSERT INTO "
-    , fromString (symbolVal' table)
+    , renderAlias table
     , " (" <> ByteString.intercalate ", " aliases
     , ") VALUES ("
     , ByteString.intercalate ", " values
@@ -790,7 +896,7 @@ insertIntoReturning (Alias table) inserts results
     ]
   where
     aliases = hcollapse $ hmap
-      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
+      (\ (_ `As` name) -> K (renderAlias name))
       inserts
     values = hcollapse $ hmap
       (\ (expression `As` _) -> K (renderExpression expression))
@@ -804,51 +910,49 @@ insertIntoReturning (Alias table) inserts results
 UPDATE statements
 -----------------------------------------}
 
-set :: Expression params tables x -> (Maybe :.: Expression params tables) x
-set = Comp . Just
+data UpdateExpression params table ty
+  = Same
+  | Set (Expression params table ty)
 
-same :: (Maybe :.: Expression params tables) x
-same = Comp Nothing
-
-renderSet
-  :: Aliased (Maybe :.: Expression params '[table ::: columns]) column
+renderUpdateExpression
+  :: Aliased (UpdateExpression params '[table ::: columns]) column
   -> Maybe ByteString
-renderSet = \case
-  Comp (Just expression) `As` Alias column -> Just $ mconcat
-    [ fromString $ symbolVal' column
+renderUpdateExpression = \case
+  Same `As` _ -> Nothing
+  Set expression `As` column -> Just $ mconcat
+    [ renderAlias column
     , " = "
     , renderExpression expression
     ]
-  Comp Nothing `As` _ -> Nothing
 
 update
   :: (HasTable table schema columns, SListI columns)
   => Alias table
-  -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
+  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Predicate params '[table ::: columns]
   -> Statement params '[] schema schema
-update (Alias table) columns wh = UnsafeStatement $ mconcat
+update table columns wh = UnsafeStatement $ mconcat
   [ "UPDATE "
-  , fromString $ symbolVal' table
+  , renderAlias table
   , " SET "
   , ByteString.intercalate ", " . catMaybes . hcollapse $
-      hmap (K . renderSet) columns
+      hmap (K . renderUpdateExpression) columns
   , " WHERE ", renderExpression wh, ";"
   ]
 
 updateReturning
   :: (SListI columns, SListI results, HasTable table schema columns)
   => Alias table
-  -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
+  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Predicate params '[table ::: columns]
   -> NP (Aliased (Expression params '[table ::: columns])) results
   -> Statement params results schema schema
-updateReturning (Alias table) updates wh results = UnsafeStatement $ mconcat
+updateReturning table updates wh results = UnsafeStatement $ mconcat
   [ "UPDATE "
-  , fromString $ symbolVal' table
+  , renderAlias table
   , " SET "
   , ByteString.intercalate ", " . catMaybes . hcollapse $
-      hmap (K . renderSet) updates
+      hmap (K . renderUpdateExpression) updates
   , " WHERE ", renderExpression wh
   , " RETURNING ", renderList results
   , ";"
@@ -863,24 +967,24 @@ upsertInto
   :: (SListI columns, HasTable table schema columns)
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
-  -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
+  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Predicate params '[table ::: columns]
   -> Statement params '[] schema schema
-upsertInto (Alias table) inserts updates wh = UnsafeStatement . mconcat $
+upsertInto table inserts updates wh = UnsafeStatement . mconcat $
   [ "INSERT INTO "
-  , fromString (symbolVal' table)
+  , renderAlias table
   , " (" <> ByteString.intercalate ", " aliases
   , ") VALUES ("
   , ByteString.intercalate ", " values
   , ") ON CONFLICT UPDATE "
-  , fromString $ symbolVal' table
+  , renderAlias table
   , " SET "
   , ByteString.intercalate ", " . catMaybes . hcollapse $
-      hmap (K . renderSet) updates
+      hmap (K . renderUpdateExpression) updates
   , " WHERE ", renderExpression wh, ";"
   ] where
     aliases = hcollapse $ hmap
-      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
+      (\ (_ `As` name) -> K (renderAlias name))
       inserts
     values = hcollapse $ hmap
       (\ (expression `As` _) -> K (renderExpression expression))
@@ -890,47 +994,48 @@ upsertIntoReturning
   :: (SListI columns, SListI results, HasTable table schema columns)
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
-  -> NP (Aliased (Maybe :.: Expression params '[table ::: columns])) columns
+  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Predicate params '[table ::: columns]
   -> NP (Aliased (Expression params '[table ::: columns])) results
   -> Statement params results schema schema
-upsertIntoReturning (Alias table) inserts updates wh results = UnsafeStatement . mconcat $
-  [ "INSERT INTO "
-  , fromString (symbolVal' table)
-  , " (" <> ByteString.intercalate ", " aliases
-  , ") VALUES ("
-  , ByteString.intercalate ", " values
-  , ") ON CONFLICT UPDATE "
-  , fromString $ symbolVal' table
-  , " SET "
-  , ByteString.intercalate ", " . catMaybes . hcollapse $
-      hmap (K . renderSet) updates
-  , " WHERE ", renderExpression wh
-  , " RETURNING ", renderList results
-  , ";"
-  ] where
-    aliases = hcollapse $ hmap
-      (\ (_ `As` Alias name) -> K (fromString (symbolVal' name)))
-      inserts
-    values = hcollapse $ hmap
-      (\ (expression `As` _) -> K (renderExpression expression))
-      inserts
-    renderList
-      = ByteString.intercalate ", "
-      . hcollapse
-      . hmap (K . renderAliased renderExpression)
+upsertIntoReturning table inserts updates wh results =
+  UnsafeStatement . mconcat $
+    [ "INSERT INTO "
+    , renderAlias table
+    , " (" <> ByteString.intercalate ", " aliases
+    , ") VALUES ("
+    , ByteString.intercalate ", " values
+    , ") ON CONFLICT UPDATE "
+    , renderAlias table
+    , " SET "
+    , ByteString.intercalate ", " . catMaybes . hcollapse $
+        hmap (K . renderUpdateExpression) updates
+    , " WHERE ", renderExpression wh
+    , " RETURNING ", renderList results
+    , ";"
+    ] where
+      aliases = hcollapse $ hmap
+        (\ (_ `As` name) -> K (renderAlias name))
+        inserts
+      values = hcollapse $ hmap
+        (\ (expression `As` _) -> K (renderExpression expression))
+        inserts
+      renderList
+        = ByteString.intercalate ", "
+        . hcollapse
+        . hmap (K . renderAliased renderExpression)
 
 {-----------------------------------------
 DELETE statements
 -----------------------------------------}
 
 deleteFrom
-  :: (HasTable table schema columns, SListI columns)
+  :: HasTable table schema columns
   => Alias table
   -> Predicate params '[table ::: columns]
   -> Statement params '[] schema schema
-deleteFrom (Alias table) wh = UnsafeStatement $ mconcat
+deleteFrom table wh = UnsafeStatement $ mconcat
   [ "DELETE FROM "
-  , fromString $ symbolVal' table
+  , renderAlias table
   , " WHERE ", renderExpression wh, ";"
   ]

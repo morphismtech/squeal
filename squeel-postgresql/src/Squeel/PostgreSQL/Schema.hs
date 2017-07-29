@@ -22,12 +22,17 @@ module Squeel.PostgreSQL.Schema
   , PGFloating
   , (:::)
   , Alias (Alias)
+  , renderAlias
   , Aliased (As)
   , renderAliased
   , NullityType (..)
   , NullifyColumn
   , NullifyColumns
   , NullifyTable
+  , Create
+  , Drop
+  , Alter
+  , Rename
   , ColumnType (..)
   , module GHC.OverloadedLabels
   , module GHC.TypeLits
@@ -104,6 +109,9 @@ type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
 
 data Alias (alias :: Symbol) = Alias (Proxy# alias)
 
+renderAlias :: KnownSymbol alias => Alias alias -> ByteString
+renderAlias (Alias alias) = fromString (symbolVal' alias)
+
 instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
 
@@ -140,3 +148,19 @@ type family NullifyColumns columns where
 
 type family NullifyTable table where
   NullifyTable (table ::: columns) = table ::: NullifyColumns columns
+
+type family Create alias x xs where
+  Create alias x '[] = '[alias ::: x]
+  Create alias y (x ': xs) = x ': Create alias y xs
+
+type family Drop alias xs where
+  Drop alias ((alias ::: x) ': xs) = xs
+  Drop alias (x ': xs) = x ': Drop alias xs
+
+type family Alter alias xs x where
+  Alter alias ((alias ::: x0) ': xs) x1 = (alias ::: x1) ': xs
+  Alter alias (x0 ': xs) x1 = x0 ': Alter alias xs x1
+
+type family Rename alias0 alias1 xs where
+  Rename alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
+  Rename alias0 alias1 (x ': xs) = x ': Rename alias0 alias1 xs
