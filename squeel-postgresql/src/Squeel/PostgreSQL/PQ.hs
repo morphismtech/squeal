@@ -38,7 +38,8 @@ import Squeel.PostgreSQL.Binary
 import Squeel.PostgreSQL.Statement
 import Squeel.PostgreSQL.Schema
 
-newtype Connection db = Connection { unConnection :: LibPQ.Connection }
+newtype Connection (db :: [(Symbol,[(Symbol,ColumnType)])]) =
+  Connection { unConnection :: LibPQ.Connection }
 
 newtype PQ
   (db0 :: [(Symbol,[(Symbol,ColumnType)])])

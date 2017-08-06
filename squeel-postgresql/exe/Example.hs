@@ -1,9 +1,7 @@
 {-# LANGUAGE
     DataKinds
-  , MagicHash
   , OverloadedLabels
   , OverloadedStrings
-  , ScopedTypeVariables
   , TypeApplications
   , TypeOperators
 #-}
@@ -29,9 +27,9 @@ main = do
   connectionString <- pure
     "host=localhost port=5432 dbname=exampledb"
   Char8.putStrLn $ "connecting to " <> connectionString
-  connection0 :: Connection '[] <- connectdb connectionString
+  connection0 <- connectdb connectionString
   Char8.putStrLn "setting up database"
-  connection1 :: Connection Tables <- flip execPQ connection0 $ pqExec $
+  connection1 <- flip execPQ (connection0 :: Connection '[]) $ pqExec $
     createTable #students
       (  (text & notNull) `As` #name
       :* Nil )
@@ -41,7 +39,7 @@ main = do
       :* (int4 & notNull) `As` #col2
       :* Nil )
   Char8.putStrLn "querying"
-  connection2 :: Connection Tables <- flip execPQ connection1 $ do
+  connection2 <- flip execPQ (connection1 :: Connection Tables) $ do
     for_ [I i :* I (i+1) :* Nil | i <- [1::Int32,3..9]] $ pqExecParams
       (insertInto #table1 (param1 `As` #col1 :* param2 `As` #col2 :* Nil))
     Just result <- pqExecNil . query $
@@ -61,9 +59,9 @@ main = do
         print (row0 :: NP I '[Int32,Int32])
         print (row1 :: NP I '[Int32,Int32])
   Char8.putStrLn "tearing down database"
-  connection3 :: Connection '[] <- flip execPQ connection2 $ pqExec $
+  connection3 <- flip execPQ (connection2 :: Connection Tables) $ pqExec $
     dropTable #table1 >>> dropTable #students
-  finish connection3
+  finish (connection3 :: Connection '[])
 
 type Columns =
   '[ "col1" ::: 'Required ('NotNull 'PGInt4)
