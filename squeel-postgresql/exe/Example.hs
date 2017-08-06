@@ -42,9 +42,8 @@ main = do
       :* Nil )
   Char8.putStrLn "querying"
   connection2 :: Connection Tables <- flip execPQ connection1 $ do
-    for_ [I i :* I (i+1) :* Nil | i <- [1::Int32,3..9]] $
-      pqExecParams
-        (insertInto #table1 (param1 `As` #col1 :* param2 `As` #col2 :* Nil))
+    for_ [I i :* I (i+1) :* Nil | i <- [1::Int32,3..9]] $ pqExecParams
+      (insertInto #table1 (param1 `As` #col1 :* param2 `As` #col2 :* Nil))
     Just result <- pqExecNil . query $
       selectStar (from (Table (#table1 `As` #table1)))
     runMaybeT . runExceptT . flip runValue result $ do
@@ -70,26 +69,5 @@ type Columns =
   '[ "col1" ::: 'Required ('NotNull 'PGInt4)
    , "col2" ::: 'Required ('NotNull 'PGInt4)
    ]
--- type SumAndCol1 = '[ "sum" ::: 'NotNull 'PGInt4, "col1" ::: 'NotNull 'PGInt4]
 type StudentsColumns = '["name" ::: 'Required ('NotNull 'PGText)]
 type Tables = '["students" ::: StudentsColumns, "table1" ::: Columns]
--- type OrderColumns =
---   [ "orderID"    ::: 'NotNull 'PGInt4
---   , "orderVal"   ::: 'NotNull 'PGText
---   , "customerID" ::: 'NotNull 'PGInt4
---   , "shipperID"  ::: 'NotNull 'PGInt4
---   ]
--- type CustomerColumns =
---   [ "customerID" ::: 'NotNull 'PGInt4, "customerVal" ::: 'NotNull 'PGFloat4 ]
--- type ShipperColumns =
---   [ "shipperID" ::: 'NotNull 'PGInt4, "shipperVal" ::: 'NotNull 'PGBool ]
--- type JoinTables =
---   [ "shippers"  ::: ShipperColumns
---   , "customers" ::: CustomerColumns
---   , "orders"    ::: OrderColumns
---   ]
--- type ValueColumns =
---   [ "orderVal"    ::: 'NotNull 'PGText
---   , "customerVal" ::: 'NotNull 'PGFloat4
---   , "shipperVal"  ::: 'NotNull 'PGBool
---   ]
