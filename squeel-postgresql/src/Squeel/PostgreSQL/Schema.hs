@@ -26,14 +26,15 @@ module Squeel.PostgreSQL.Schema
   , Aliased (As)
   , renderAliased
   , NullityType (..)
-  , NullifyColumn
+  , NullifyType
   , NullifyColumns
-  , NullifyTable
+  , NullifyTables
+  , ColumnType (..)
   , Create
   , Drop
   , Alter
   , Rename
-  , ColumnType (..)
+  , Join
   , module GHC.OverloadedLabels
   , module GHC.TypeLits
   ) where
@@ -75,12 +76,12 @@ data PGType
 
 class ToOid pg where toOid :: Proxy# pg -> LibPQ.Oid
 --staticTypeInfo
-instance ToOid ('NotNull 'PGBool) where toOid _ = LibPQ.Oid 16
-instance ToOid ('NotNull 'PGBytea) where toOid _ = LibPQ.Oid 17
-instance ToOid ('NotNull 'PGInt8) where toOid _ = LibPQ.Oid 20
-instance ToOid ('NotNull 'PGInt2) where toOid _ = LibPQ.Oid 21
-instance ToOid ('NotNull 'PGInt4) where toOid _ = LibPQ.Oid 23
-instance ToOid ('NotNull 'PGText) where toOid _ = LibPQ.Oid 26
+instance ToOid ('Required ('NotNull 'PGBool)) where toOid _ = LibPQ.Oid 16
+instance ToOid ('Required ('NotNull 'PGBytea)) where toOid _ = LibPQ.Oid 17
+instance ToOid ('Required ('NotNull 'PGInt8)) where toOid _ = LibPQ.Oid 20
+instance ToOid ('Required ('NotNull 'PGInt2)) where toOid _ = LibPQ.Oid 21
+instance ToOid ('Required ('NotNull 'PGInt4)) where toOid _ = LibPQ.Oid 23
+instance ToOid ('Required ('NotNull 'PGText)) where toOid _ = LibPQ.Oid 26
 class ToOids pgs where toOids :: Proxy# pgs -> [LibPQ.Oid]
 instance ToOids '[] where toOids _ = []
 instance (ToOid pg, ToOids pgs) => ToOids (pg ': pgs) where
@@ -122,10 +123,6 @@ data Aliased expression aliased where
     -> Alias alias
     -> Aliased expression (alias ::: ty)
 
-instance (KnownSymbol alias, IsLabel alias (expression ty))
-  => IsLabel alias (Aliased expression (alias ::: ty)) where
-    fromLabel alias = fromLabel alias `As` fromLabel alias
-
 renderAliased
   :: (forall ty. expression ty -> ByteString)
   -> Aliased expression aliased
@@ -137,17 +134,19 @@ data NullityType = Null PGType | NotNull PGType
 
 data ColumnType = Optional NullityType | Required NullityType
 
-type family NullifyColumn (column :: ColumnType) where
-  NullifyColumn (optionality ('Null ty)) = optionality ('Null ty)
-  NullifyColumn (optionality ('NotNull ty)) = optionality ('Null ty)
+type family NullifyType (ty :: ColumnType) where
+  NullifyType (optionality ('Null ty)) = optionality ('Null ty)
+  NullifyType (optionality ('NotNull ty)) = optionality ('Null ty)
 
 type family NullifyColumns columns where
   NullifyColumns '[] = '[]
   NullifyColumns ((column ::: ty) ': columns) =
-    (column ::: NullifyColumn ty) ': (NullifyColumns columns)
+    (column ::: NullifyType ty) ': NullifyColumns columns
 
-type family NullifyTable table where
-  NullifyTable (table ::: columns) = table ::: NullifyColumns columns
+type family NullifyTables tables where
+  NullifyTables '[] = '[]
+  NullifyTables ((column ::: ty) ': columns) =
+    (column ::: NullifyColumns ty) ': NullifyTables columns
 
 type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
@@ -164,3 +163,7 @@ type family Alter alias xs x where
 type family Rename alias0 alias1 xs where
   Rename alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
   Rename alias0 alias1 (x ': xs) = x ': Rename alias0 alias1 xs
+
+type family Join xs ys where
+  Join '[] ys = ys
+  Join (x ': xs) ys = x ': Join xs ys

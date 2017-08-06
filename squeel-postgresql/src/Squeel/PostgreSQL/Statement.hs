@@ -17,17 +17,19 @@
 
 module Squeel.PostgreSQL.Statement where
 
+import Control.Category
 import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Maybe
 import Data.Monoid
 import Data.Ratio
 import Data.String
+import Data.Word
 import Generics.SOP
 import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
-import Prelude hiding (RealFrac(..))
+import Prelude hiding (RealFrac(..), id, (.))
 
 import qualified Data.ByteString as ByteString
 
@@ -267,33 +269,34 @@ instance IsString (Expression params tables ('Required (nullity 'PGText))) where
         '\\' -> "\\\\"
         c -> [c]
 
-type Predicate params tables = Expression params tables ('Required ('NotNull 'PGBool))
+type Condition params tables =
+  Expression params tables ('Required ('NotNull 'PGBool))
 
-true :: Predicate params tables
+true :: Condition params tables
 true = UnsafeExpression "TRUE"
 
-false :: Predicate params tables
+false :: Condition params tables
 false = UnsafeExpression "FALSE"
 
 notB
-  :: Predicate params tables
-  -> Predicate params tables
+  :: Condition params tables
+  -> Condition params tables
 notB = unsafeUnaryOp "NOT"
 
 (&&*)
-  :: Predicate params tables
-  -> Predicate params tables
-  -> Predicate params tables
+  :: Condition params tables
+  -> Condition params tables
+  -> Condition params tables
 (&&*) = unsafeBinaryOp "AND"
 
 (||*)
-  :: Predicate params tables
-  -> Predicate params tables
-  -> Predicate params tables
+  :: Condition params tables
+  -> Condition params tables
+  -> Condition params tables
 (||*) = unsafeBinaryOp "OR"
 
 caseWhenThenElse
-  :: [(Predicate params tables, Expression params tables ty)]
+  :: [(Condition params tables, Expression params tables ty)]
   -> Expression params tables ty
   -> Expression params tables ty
 caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
@@ -310,7 +313,7 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   ]
 
 ifThenElse
-  :: Predicate params tables
+  :: Condition params tables
   -> Expression params tables ty
   -> Expression params tables ty
   -> Expression params tables ty
@@ -319,37 +322,37 @@ ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 (==*)
   :: Expression params tables ty
   -> Expression params tables ty
-  -> Predicate params tables
+  -> Condition params tables
 (==*) = unsafeBinaryOp "="
 
 (/=*)
   :: Expression params tables ty
   -> Expression params tables ty
-  -> Predicate params tables
+  -> Condition params tables
 (/=*) = unsafeBinaryOp "<>"
 
 (>=*)
   :: Expression params tables ty
   -> Expression params tables ty
-  -> Predicate params tables
+  -> Condition params tables
 (>=*) = unsafeBinaryOp ">="
 
 (<*)
   :: Expression params tables ty
   -> Expression params tables ty
-  -> Predicate params tables
+  -> Condition params tables
 (<*) = unsafeBinaryOp "<"
 
 (<=*)
   :: Expression params tables ty
   -> Expression params tables ty
-  -> Predicate params tables
+  -> Condition params tables
 (<=*) = unsafeBinaryOp "<="
 
 (>*)
   :: Expression params tables ty
   -> Expression params tables ty
-  -> Predicate params tables
+  -> Condition params tables
 (>*) = unsafeBinaryOp ">"
 
 {-----------------------------------------
@@ -357,7 +360,6 @@ tables
 -----------------------------------------}
 
 newtype Table
-  (params :: [ColumnType])
   (schema :: [(Symbol,[(Symbol,ColumnType)])])
   (columns :: [(Symbol,ColumnType)])
     = UnsafeTable { renderTable :: ByteString }
@@ -365,7 +367,7 @@ newtype Table
 
 class KnownSymbol table => HasTable table tables columns
   | table tables -> columns where
-    getTable :: Proxy# table -> Table params tables columns
+    getTable :: Proxy# table -> Table tables columns
     getTable table = UnsafeTable $ fromString $ symbolVal' table
 instance {-# OVERLAPPING #-} KnownSymbol table
   => HasTable table ((table ::: columns) ': tables) columns
@@ -374,8 +376,135 @@ instance {-# OVERLAPPABLE #-}
     => HasTable table (table' ': schema) columns
 
 instance HasTable table schema columns
-  => IsLabel table (Table params schema columns) where
+  => IsLabel table (Table schema columns) where
     fromLabel = getTable
+
+data TableReference params schema tables where
+  Table
+    :: Aliased (Table schema) table
+    -> TableReference params schema '[table]
+  Subquery
+    :: Aliased (Query schema params) table
+    -> TableReference params schema '[table]
+  CrossJoin
+    :: TableReference params schema right
+    -> TableReference params schema left
+    -> TableReference params schema (Join left right)
+  InnerJoin
+    :: TableReference params schema right
+    -> Condition params (Join left right)
+    -> TableReference params schema left
+    -> TableReference params schema (Join left right)
+  LeftOuterJoin
+    :: TableReference params schema right
+    -> Condition params (Join left right)
+    -> TableReference params schema left
+    -> TableReference params schema (Join left (NullifyTables right))
+  RightOuterJoin
+    :: TableReference params schema right
+    -> Condition params (Join left right)
+    -> TableReference params schema left
+    -> TableReference params schema (Join (NullifyTables left) right)
+  FullOuterJoin
+    :: TableReference params schema right
+    -> Condition params (Join left right)
+    -> TableReference params schema left
+    -> TableReference params schema
+        (Join (NullifyTables left) (NullifyTables right))
+
+renderTableReference :: TableReference params schema tables -> ByteString
+renderTableReference = \case
+  Table table -> renderAliased renderTable table
+  Subquery selection -> renderAliased renderQuery selection
+  CrossJoin right left -> mconcat
+    [ renderTableReference left
+    , " CROSS JOIN "
+    , renderTableReference right
+    ]
+  InnerJoin right on left -> mconcat
+    [ renderTableReference left
+    , " INNER JOIN "
+    , renderTableReference right
+    , " ON "
+    , renderExpression on
+    ]
+  LeftOuterJoin right on left -> mconcat
+    [ renderTableReference left
+    , " LEFT OUTER JOIN "
+    , renderTableReference right
+    , " ON "
+    , renderExpression on
+    ]
+  RightOuterJoin right on left -> mconcat
+    [ renderTableReference left
+    , " RIGHT OUTER JOIN "
+    , renderTableReference right
+    , " ON "
+    , renderExpression on
+    ]
+  FullOuterJoin right on left -> mconcat
+    [ renderTableReference left
+    , " FULL OUTER JOIN "
+    , renderTableReference right
+    , " ON "
+    , renderExpression on
+    ]
+
+data TableExpression
+  (params :: [ColumnType])
+  (schema :: [(Symbol,[(Symbol,ColumnType)])])
+  (tables :: [(Symbol,[(Symbol,ColumnType)])])
+    = TableExpression
+    { fromClause :: TableReference params schema tables
+    , whereClause :: [Condition params tables]
+    , limitClause :: Maybe Word64
+    , offsetClause :: Maybe Word64
+    }
+
+renderTableExpression
+  :: TableExpression params schema tables
+  -> ByteString
+renderTableExpression (TableExpression tables whs' lims' offs') = mconcat
+  [ "FROM ", renderTableReference tables
+  , renderWheres whs'
+  , renderLimits lims'
+  , renderOffsets offs'
+  ] where
+  renderWheres = \case
+    [] -> ""
+    wh:[] -> " WHERE " <> renderExpression wh
+    wh:whs -> " WHERE " <> renderExpression (foldr (&&*) wh whs)
+  renderLimits = \case
+    Nothing -> ""
+    Just lim -> " LIMIT " <> fromString (show lim)
+  renderOffsets = \case
+    Nothing -> ""
+    Just off -> " OFFSET " <> fromString (show off)
+
+from
+  :: TableReference params schema tables
+  -> TableExpression params schema tables
+from tables = TableExpression tables [] Nothing Nothing
+
+where_
+  :: Condition params tables
+  -> TableExpression params schema tables
+  -> TableExpression params schema tables
+where_ wh tables = tables {whereClause = wh : whereClause tables}
+
+limit
+  :: Word64
+  -> TableExpression params schema tables
+  -> TableExpression params schema tables
+limit lim tables = tables
+  {limitClause = maybe (Just lim) (Just . min lim) (limitClause tables)}
+
+offset
+  :: Word64
+  -> TableExpression params schema tables
+  -> TableExpression params schema tables
+offset off tables = tables
+  {offsetClause = maybe (Just off) (Just . (off +)) (offsetClause tables)}
 
 {-----------------------------------------
 type expressions
@@ -511,209 +640,80 @@ instance PGTyped 'PGJsonb where pgtype = jsonb
 statements
 -----------------------------------------}
 
-newtype Statement
-  (params :: [ColumnType])
-  (columns :: [(Symbol,ColumnType)])
+newtype DataDefinition
   (schema0 :: [(Symbol,[(Symbol,ColumnType)])])
   (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
-    = UnsafeStatement { renderStatement :: ByteString }
-    deriving (Show,Eq)
+  = UnsafeDataDefinition { renderDataDefinition :: ByteString }
 
--- newtype PreparedStatement
---   (params :: [ColumnType])
---   (columns :: [(Symbol,ColumnType)])
---   (schema0 :: [(Symbol,[(Symbol,ColumnType)])])
---   (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
---     = UnsafePreparedStatement { renderPreparedStatement :: ByteString }
---     deriving (Show,Eq)
+instance Category DataDefinition where
+  id = UnsafeDataDefinition ";"
+  dd1 . dd0 = UnsafeDataDefinition $
+    renderDataDefinition dd0 <> " " <> renderDataDefinition dd1
+
+newtype DataManipulation
+  (schema :: [(Symbol,[(Symbol,ColumnType)])])
+  (params :: [ColumnType])
+  (columns :: [(Symbol,ColumnType)])
+    = UnsafeDataManipulation { renderDataManipulation :: ByteString }
+
+newtype Query
+  (schema :: [(Symbol,[(Symbol,ColumnType)])])
+  (params :: [ColumnType])
+  (columns :: [(Symbol,ColumnType)])
+    = UnsafeQuery { renderQuery :: ByteString }
+
+query
+  :: Query schema params columns
+  -> DataManipulation schema params columns
+query q = UnsafeDataManipulation $ renderQuery q <> ";"
+
+union, unionAll, intersect, intersectAll, except, exceptAll
+  :: Query schema params columns
+  -> Query schema params columns
+  -> Query schema params columns
+q1 `union` q2 = UnsafeQuery $
+  renderQuery q1 <> " UNION " <> renderQuery q2
+q1 `unionAll` q2 = UnsafeQuery $
+  renderQuery q1 <> " UNION ALL " <> renderQuery q2
+q1 `intersect` q2 = UnsafeQuery $
+  renderQuery q1 <> " INTERSECT " <> renderQuery q2
+q1 `intersectAll` q2 = UnsafeQuery $
+  renderQuery q1 <> " INTERSECT ALL " <> renderQuery q2
+q1 `except` q2 = UnsafeQuery $
+  renderQuery q1 <> " EXCEPT " <> renderQuery q2
+q1 `exceptAll` q2 = UnsafeQuery $
+  renderQuery q1 <> " EXCEPT ALL " <> renderQuery q2
 
 {-----------------------------------------
 SELECT statements
 -----------------------------------------}
 
-data Join params schema tables where
-  Table
-    :: Aliased (Table params schema) table
-    -> Join params schema '[table]
-  Subselect
-    :: Aliased (Selection params schema) table
-    -> Join params schema '[table]
-  Cross
-    :: Aliased (Table params schema) table
-    -> Join params schema tables
-    -> Join params schema (table ': tables)
-  Inner
-    :: Aliased (Table params schema) table
-    -> Predicate params (table ': tables)
-    -> Join params schema tables
-    -> Join params schema (table ': tables)
-  LeftOuter
-    :: Aliased (Table params schema) right
-    -> Predicate params '[left,right]
-    -> Join params schema (tables)
-    -> Join params schema (NullifyTable right ': left ': tables)
-  RightOuter
-    :: Aliased (Table params schema) right
-    -> Predicate params '[left,right]
-    -> Join params schema (left : tables)
-    -> Join params schema (right ': NullifyTable left ': tables)
-  FullOuter
-    :: Aliased (Table params schema) right
-    -> Predicate params '[left,right]
-    -> Join params schema (left : tables)
-    -> Join params schema
-        (NullifyTable right ': NullifyTable left ': tables)
-
-renderJoin :: Join params schema tables -> ByteString
-renderJoin = \case
-  Table table -> renderAliased renderTable table
-  Subselect selection -> "SELECT " <> renderAliased renderSelection selection
-  Cross table tables -> mconcat
-    [ renderJoin tables
-    , " CROSS JOIN "
-    , renderAliased renderTable table
-    ]
-  Inner table on tables -> mconcat
-    [ renderJoin tables
-    , " INNER JOIN "
-    , renderAliased renderTable table
-    , " ON "
-    , renderExpression on
-    ]
-  LeftOuter table on tables -> mconcat
-    [ renderJoin tables
-    , " LEFT OUTER JOIN "
-    , renderAliased renderTable table
-    , " ON "
-    , renderExpression on
-    ]
-  RightOuter table on tables -> mconcat
-    [ renderJoin tables
-    , " RIGHT OUTER JOIN "
-    , renderAliased renderTable table
-    , " ON "
-    , renderExpression on
-    ]
-  FullOuter table on tables -> mconcat
-    [ renderJoin tables
-    , " FULL OUTER JOIN "
-    , renderAliased renderTable table
-    , " ON "
-    , renderExpression on
-    ]
-
-instance HasTable table schema columns
-  => IsLabel table (Join params schema '[table ::: columns]) where
-    fromLabel p = Table $ fromLabel p
-
-data TableExpression
-  (params :: [ColumnType])
-  (schema :: [(Symbol,[(Symbol,ColumnType)])])
-  (tables :: [(Symbol,[(Symbol,ColumnType)])])
-    = TableExpression
-    { joinClause :: Join params schema tables
-    , whereClause :: [Predicate params tables]
-    , limitClause :: [Expression params '[] ('Required ('NotNull 'PGInt8))]
-    , offsetClause :: [Expression params '[] ('Required ('NotNull 'PGInt8))]
-    }
-
-renderTableExpression :: TableExpression params schema tables -> ByteString
-renderTableExpression (TableExpression tables whs' lims' offs') = mconcat
-  [ renderJoin tables
-  , renderWheres whs'
-  , renderLimits lims'
-  , renderOffsets offs'
-  ] where
-  renderWheres = \case
-    [] -> ""
-    wh:[] -> " WHERE " <> renderExpression wh
-    wh:whs -> " WHERE " <> renderExpression (foldr (&&*) wh whs)
-  renderLimits = \case
-    [] -> ""
-    lim:[] -> " LIMIT " <> renderExpression lim
-    lims -> mconcat
-      [ " LIMIT LEAST("
-      , ByteString.intercalate ", " (renderExpression <$> reverse lims)
-      , ")"
-      ]
-  renderOffsets = \case
-    [] -> ""
-    off:[] -> " OFFSET " <> renderExpression off
-    off:offs -> " OFFSET " <> renderExpression (foldr (+) off offs)
-
-instance (HasTable table schema columns, table ~ table')
-  => IsLabel table (TableExpression params schema '[table' ::: columns]) where
-    fromLabel p = join (fromLabel p)
-
-join
-  :: Join params schema tables
-  -> TableExpression params schema tables
-join tables = TableExpression tables [] [] []
-
-where_
-  :: Predicate params tables
-  -> TableExpression params schema tables
-  -> TableExpression params schema tables
-where_ wh (TableExpression tabs whs lims offs) =
-  TableExpression tabs (wh:whs) lims offs
-
-limit
-  :: Expression params '[] ('Required ('NotNull 'PGInt8))
-  -> TableExpression params schema tables
-  -> TableExpression params schema tables
-limit lim (TableExpression tabs whs lims offs) =
-  TableExpression tabs whs (lim:lims) offs
-
-offset
-  :: Expression params '[] ('Required ('NotNull 'PGInt8))
-  -> TableExpression params schema tables
-  -> TableExpression params schema tables
-offset off (TableExpression tabs whs lims offs) =
-  TableExpression tabs whs lims (off:offs)
-
-newtype Selection
-  (params :: [ColumnType])
-  (schema :: [(Symbol,[(Symbol,ColumnType)])])
-  (columns :: [(Symbol,ColumnType)])
-    = UnsafeSelection { renderSelection :: ByteString }
-    deriving (Show,Eq)
-
-starFrom
-  :: tables ~ '[table ::: columns]
-  => TableExpression params schema tables
-  -> Selection params schema columns
-starFrom tabs = UnsafeSelection $ "* FROM " <> renderTableExpression tabs
-
-dotStarFrom
-  :: HasTable table tables columns
-  => Alias table
-  -> TableExpression params schema tables
-  -> Selection params schema columns
-table `dotStarFrom` tables = UnsafeSelection $
-  renderAlias table <> ".* FROM " <> renderTableExpression tables
-
-from
+select
   :: SListI columns
   => NP (Aliased (Expression params tables)) columns
   -> TableExpression params schema tables
-  -> Selection params schema columns
-list `from` tabs = UnsafeSelection $
-  renderList list <> " FROM " <> renderTableExpression tabs
+  -> Query schema params columns
+select list tabs = UnsafeQuery $
+  "SELECT " <> renderList list <> " " <> renderTableExpression tabs
   where
     renderList
       = ByteString.intercalate ", "
       . hcollapse
       . hmap (K . renderAliased renderExpression)
 
-select
-  :: Selection params schema columns
-  -> Statement params columns schema schema
-select = UnsafeStatement . ("SELECT " <>) . (<> ";") . renderSelection
+selectStar
+  :: (tables ~ '[table ::: columns])
+  => TableExpression params schema tables
+  -> Query schema params columns
+selectStar tabs = UnsafeQuery $ "SELECT * " <> renderTableExpression tabs
 
-subselect
-  :: Aliased (Selection params schema) table
-  -> TableExpression params schema '[table]
-subselect selection = join (Subselect selection)
+selectDotStar
+  :: HasTable table tables columns
+  => Alias table
+  -> TableExpression params schema tables
+  -> Query schema params columns
+selectDotStar table tables = UnsafeQuery $
+  "SELECT " <> renderAlias table <> ".* " <> renderTableExpression tables
 
 {-----------------------------------------
 CREATE statements
@@ -723,8 +723,8 @@ createTable
   :: (KnownSymbol table, SListI columns)
   => Alias table
   -> NP (Aliased TypeExpression) columns
-  -> Statement '[] '[] schema (Create table columns schema)
-createTable table columns = UnsafeStatement $ mconcat
+  -> DataDefinition schema (Create table columns schema)
+createTable table columns = UnsafeDataDefinition $ mconcat
   [ "CREATE TABLE "
   , renderAlias table
   , " ("
@@ -744,9 +744,8 @@ DROP statements
 dropTable
   :: KnownSymbol table
   => Alias table
-  -> Statement '[] '[] schema (Drop table schema)
-dropTable table = UnsafeStatement $
-  "DROP TABLE " <> renderAlias table <> ";"
+  -> DataDefinition schema (Drop table schema)
+dropTable table = UnsafeDataDefinition $ "DROP TABLE " <> renderAlias table <> ";"
 
 {-----------------------------------------
 ALTER statements
@@ -756,8 +755,8 @@ alterTable
   :: HasTable table schema columns0
   => Alias table
   -> AlterTable columns0 columns1
-  -> Statement '[] '[] schema (Alter table schema columns1)
-alterTable table alteration = UnsafeStatement $
+  -> DataDefinition schema (Alter table schema columns1)
+alterTable table alteration = UnsafeDataDefinition $
   "ALTER TABLE "
   <> renderAlias table
   <> " "
@@ -768,8 +767,8 @@ alterTableRename
   :: (KnownSymbol table0, KnownSymbol table1)
   => Alias table0
   -> Alias table1
-  -> Statement '[] '[] schema (Rename table0 table1 schema)
-alterTableRename table0 table1 = UnsafeStatement $
+  -> DataDefinition schema (Rename table0 table1 schema)
+alterTableRename table0 table1 = UnsafeDataDefinition $
   "ALTER TABLE "
   <> renderAlias table0
   <> " RENAME TO "
@@ -862,8 +861,8 @@ insertInto
   :: (SListI columns, HasTable table schema columns)
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
-  -> Statement params '[] schema schema
-insertInto table expressions = UnsafeStatement $ "INSERT INTO "
+  -> DataManipulation schema params '[]
+insertInto table expressions = UnsafeDataManipulation $ "INSERT INTO "
   <> renderAlias table
   <> " (" <> ByteString.intercalate ", " aliases
   <> ") VALUES ("
@@ -882,9 +881,9 @@ insertIntoReturning
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
   -> NP (Aliased (Expression params '[table ::: columns])) results
-  -> Statement params results schema schema
+  -> DataManipulation schema params results
 insertIntoReturning table inserts results
-  = UnsafeStatement . mconcat $
+  = UnsafeDataManipulation . mconcat $
     [ "INSERT INTO "
     , renderAlias table
     , " (" <> ByteString.intercalate ", " aliases
@@ -929,9 +928,9 @@ update
   :: (HasTable table schema columns, SListI columns)
   => Alias table
   -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
-  -> Predicate params '[table ::: columns]
-  -> Statement params '[] schema schema
-update table columns wh = UnsafeStatement $ mconcat
+  -> Condition params '[table ::: columns]
+  -> DataManipulation schema params '[]
+update table columns wh = UnsafeDataManipulation $ mconcat
   [ "UPDATE "
   , renderAlias table
   , " SET "
@@ -944,10 +943,10 @@ updateReturning
   :: (SListI columns, SListI results, HasTable table schema columns)
   => Alias table
   -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
-  -> Predicate params '[table ::: columns]
+  -> Condition params '[table ::: columns]
   -> NP (Aliased (Expression params '[table ::: columns])) results
-  -> Statement params results schema schema
-updateReturning table updates wh results = UnsafeStatement $ mconcat
+  -> DataManipulation schema params results
+updateReturning table updates wh results = UnsafeDataManipulation $ mconcat
   [ "UPDATE "
   , renderAlias table
   , " SET "
@@ -968,9 +967,9 @@ upsertInto
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
   -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
-  -> Predicate params '[table ::: columns]
-  -> Statement params '[] schema schema
-upsertInto table inserts updates wh = UnsafeStatement . mconcat $
+  -> Condition params '[table ::: columns]
+  -> DataManipulation schema params '[]
+upsertInto table inserts updates wh = UnsafeDataManipulation . mconcat $
   [ "INSERT INTO "
   , renderAlias table
   , " (" <> ByteString.intercalate ", " aliases
@@ -995,11 +994,11 @@ upsertIntoReturning
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
   -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
-  -> Predicate params '[table ::: columns]
+  -> Condition params '[table ::: columns]
   -> NP (Aliased (Expression params '[table ::: columns])) results
-  -> Statement params results schema schema
+  -> DataManipulation schema params results
 upsertIntoReturning table inserts updates wh results =
-  UnsafeStatement . mconcat $
+  UnsafeDataManipulation . mconcat $
     [ "INSERT INTO "
     , renderAlias table
     , " (" <> ByteString.intercalate ", " aliases
@@ -1032,9 +1031,9 @@ DELETE statements
 deleteFrom
   :: HasTable table schema columns
   => Alias table
-  -> Predicate params '[table ::: columns]
-  -> Statement params '[] schema schema
-deleteFrom table wh = UnsafeStatement $ mconcat
+  -> Condition params '[table ::: columns]
+  -> DataManipulation schema params '[]
+deleteFrom table wh = UnsafeDataManipulation $ mconcat
   [ "DELETE FROM "
   , renderAlias table
   , " WHERE ", renderExpression wh, ";"
