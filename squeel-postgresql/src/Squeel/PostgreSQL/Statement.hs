@@ -80,12 +80,6 @@ instance (HasColumn column columns ty, tables ~ '[table ::: columns])
   => IsLabel column (Expression params tables 'Ungrouped ty) where
     fromLabel = getColumn
 
-(&.)
-  :: (HasTable table tables columns, HasColumn column columns ty)
-  => Alias table -> Alias column -> Expression params tables 'Ungrouped ty
-table &. column = UnsafeExpression $
-  renderAlias table <> "." <> renderAlias column
-
 def :: Expression params '[] grouping ('Optional (nullity ty))
 def = UnsafeExpression "DEFAULT"
 
@@ -386,7 +380,7 @@ class (KnownSymbol table, KnownSymbol column)
       :: (HasTable table tables columns, HasColumn column columns ty)
       => Alias table
       -> Alias column
-      -> Expression params tables ('Grouped distincts) ty 
+      -> Expression params tables ('Grouped distincts) ty
 
 class (KnownSymbol table, KnownSymbol column)
   => Aggregated table column distincts ty where
@@ -396,6 +390,30 @@ class (KnownSymbol table, KnownSymbol column)
       -> Alias column
       -> Aggregate ty0 ty
       -> Expression params tables ('Grouped distincts) ty
+
+class TableColumn table column expression where
+  (&.) :: Alias table -> Alias column -> expression
+instance (HasTable table tables columns, HasColumn column columns ty)
+  => TableColumn table column (Expression params tables 'Ungrouped ty) where
+    table &. column = UnsafeExpression $
+      renderAlias table <> "." <> renderAlias column
+instance (HasTable table tables columns, HasColumn column columns ty)
+  => TableColumn table column (By tables (table ::: (column ::: ty))) where
+    (&.) = By
+instance
+  ( HasTable table tables columns
+  , HasColumn column columns ty
+  , GroupedBy table column distincts ty
+  ) => TableColumn table column
+    (Expression params tables ('Grouped distincts) ty) where
+      (&.) = getGroup
+instance
+  ( HasTable table tables columns
+  , HasColumn column columns ty0
+  , Aggregated table column distincts ty
+  ) => TableColumn table column
+    (Aggregate ty0 ty -> Expression params tables ('Grouped distincts) ty) where
+      (&.) = getAggregate
 
 {-----------------------------------------
 tables
