@@ -369,10 +369,10 @@ renderSortExpression = \case
 data Aggregate (ty0 :: ColumnType) (ty1 :: ColumnType) =
   UnsafeAggregate { renderAggregate :: ByteString }
 
-sumAggregate
+sum_
   :: PGNum ty
   => Aggregate ('Required (nullity ty)) ('Required (nullity ty))
-sumAggregate = UnsafeAggregate "sum"
+sum_ = UnsafeAggregate "sum"
 
 class (KnownSymbol table, KnownSymbol column)
   => GroupedBy table column distincts ty where
