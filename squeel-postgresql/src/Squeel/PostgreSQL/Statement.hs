@@ -640,21 +640,21 @@ instance PGTyped 'PGJsonb where pgtype = jsonb
 statements
 -----------------------------------------}
 
-newtype DataDefinition
+newtype Definition
   (schema0 :: [(Symbol,[(Symbol,ColumnType)])])
   (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
-  = UnsafeDataDefinition { renderDataDefinition :: ByteString }
+  = UnsafeDefinition { renderDefinition :: ByteString }
 
-instance Category DataDefinition where
-  id = UnsafeDataDefinition ";"
-  dd1 . dd0 = UnsafeDataDefinition $
-    renderDataDefinition dd0 <> " " <> renderDataDefinition dd1
+instance Category Definition where
+  id = UnsafeDefinition ";"
+  dd1 . dd0 = UnsafeDefinition $
+    renderDefinition dd0 <> " " <> renderDefinition dd1
 
-newtype DataManipulation
+newtype Manipulation
   (schema :: [(Symbol,[(Symbol,ColumnType)])])
   (params :: [ColumnType])
   (columns :: [(Symbol,ColumnType)])
-    = UnsafeDataManipulation { renderDataManipulation :: ByteString }
+    = UnsafeManipulation { renderManipulation :: ByteString }
 
 newtype Query
   (schema :: [(Symbol,[(Symbol,ColumnType)])])
@@ -664,8 +664,8 @@ newtype Query
 
 query
   :: Query schema params columns
-  -> DataManipulation schema params columns
-query q = UnsafeDataManipulation $ renderQuery q <> ";"
+  -> Manipulation schema params columns
+query q = UnsafeManipulation $ renderQuery q <> ";"
 
 union, unionAll, intersect, intersectAll, except, exceptAll
   :: Query schema params columns
@@ -723,8 +723,8 @@ createTable
   :: (KnownSymbol table, SListI columns)
   => Alias table
   -> NP (Aliased TypeExpression) columns
-  -> DataDefinition schema (Create table columns schema)
-createTable table columns = UnsafeDataDefinition $ mconcat
+  -> Definition schema (Create table columns schema)
+createTable table columns = UnsafeDefinition $ mconcat
   [ "CREATE TABLE "
   , renderAlias table
   , " ("
@@ -744,8 +744,8 @@ DROP statements
 dropTable
   :: KnownSymbol table
   => Alias table
-  -> DataDefinition schema (Drop table schema)
-dropTable table = UnsafeDataDefinition $ "DROP TABLE " <> renderAlias table <> ";"
+  -> Definition schema (Drop table schema)
+dropTable table = UnsafeDefinition $ "DROP TABLE " <> renderAlias table <> ";"
 
 {-----------------------------------------
 ALTER statements
@@ -755,8 +755,8 @@ alterTable
   :: HasTable table schema columns0
   => Alias table
   -> AlterTable columns0 columns1
-  -> DataDefinition schema (Alter table schema columns1)
-alterTable table alteration = UnsafeDataDefinition $
+  -> Definition schema (Alter table schema columns1)
+alterTable table alteration = UnsafeDefinition $
   "ALTER TABLE "
   <> renderAlias table
   <> " "
@@ -767,8 +767,8 @@ alterTableRename
   :: (KnownSymbol table0, KnownSymbol table1)
   => Alias table0
   -> Alias table1
-  -> DataDefinition schema (Rename table0 table1 schema)
-alterTableRename table0 table1 = UnsafeDataDefinition $
+  -> Definition schema (Rename table0 table1 schema)
+alterTableRename table0 table1 = UnsafeDefinition $
   "ALTER TABLE "
   <> renderAlias table0
   <> " RENAME TO "
@@ -861,8 +861,8 @@ insertInto
   :: (SListI columns, HasTable table schema columns)
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
-  -> DataManipulation schema params '[]
-insertInto table expressions = UnsafeDataManipulation $ "INSERT INTO "
+  -> Manipulation schema params '[]
+insertInto table expressions = UnsafeManipulation $ "INSERT INTO "
   <> renderAlias table
   <> " (" <> ByteString.intercalate ", " aliases
   <> ") VALUES ("
@@ -881,9 +881,9 @@ insertIntoReturning
   => Alias table
   -> NP (Aliased (Expression params '[])) columns
   -> NP (Aliased (Expression params '[table ::: columns])) results
-  -> DataManipulation schema params results
+  -> Manipulation schema params results
 insertIntoReturning table inserts results
-  = UnsafeDataManipulation . mconcat $
+  = UnsafeManipulation . mconcat $
     [ "INSERT INTO "
     , renderAlias table
     , " (" <> ByteString.intercalate ", " aliases
@@ -929,8 +929,8 @@ update
   => Alias table
   -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Condition params '[table ::: columns]
-  -> DataManipulation schema params '[]
-update table columns wh = UnsafeDataManipulation $ mconcat
+  -> Manipulation schema params '[]
+update table columns wh = UnsafeManipulation $ mconcat
   [ "UPDATE "
   , renderAlias table
   , " SET "
@@ -945,8 +945,8 @@ updateReturning
   -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Condition params '[table ::: columns]
   -> NP (Aliased (Expression params '[table ::: columns])) results
-  -> DataManipulation schema params results
-updateReturning table updates wh results = UnsafeDataManipulation $ mconcat
+  -> Manipulation schema params results
+updateReturning table updates wh results = UnsafeManipulation $ mconcat
   [ "UPDATE "
   , renderAlias table
   , " SET "
@@ -968,8 +968,8 @@ upsertInto
   -> NP (Aliased (Expression params '[])) columns
   -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Condition params '[table ::: columns]
-  -> DataManipulation schema params '[]
-upsertInto table inserts updates wh = UnsafeDataManipulation . mconcat $
+  -> Manipulation schema params '[]
+upsertInto table inserts updates wh = UnsafeManipulation . mconcat $
   [ "INSERT INTO "
   , renderAlias table
   , " (" <> ByteString.intercalate ", " aliases
@@ -996,9 +996,9 @@ upsertIntoReturning
   -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Condition params '[table ::: columns]
   -> NP (Aliased (Expression params '[table ::: columns])) results
-  -> DataManipulation schema params results
+  -> Manipulation schema params results
 upsertIntoReturning table inserts updates wh results =
-  UnsafeDataManipulation . mconcat $
+  UnsafeManipulation . mconcat $
     [ "INSERT INTO "
     , renderAlias table
     , " (" <> ByteString.intercalate ", " aliases
@@ -1032,8 +1032,8 @@ deleteFrom
   :: HasTable table schema columns
   => Alias table
   -> Condition params '[table ::: columns]
-  -> DataManipulation schema params '[]
-deleteFrom table wh = UnsafeDataManipulation $ mconcat
+  -> Manipulation schema params '[]
+deleteFrom table wh = UnsafeManipulation $ mconcat
   [ "DELETE FROM "
   , renderAlias table
   , " WHERE ", renderExpression wh, ";"

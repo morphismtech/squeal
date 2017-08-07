@@ -78,12 +78,12 @@ class AtkeyPQ pq where
 
   pqExec
     :: MonadBase IO io
-    => DataDefinition db0 db1
+    => Definition db0 db1
     -> pq db0 db1 io (Maybe (Result '[]))
 
   pqThenExec
     :: MonadBase IO io
-    => DataDefinition db1 db2
+    => Definition db1 db2
     -> pq db0 db1 io x
     -> pq db0 db2 io (Maybe (Result '[]))
   pqThenExec = pqThen . pqExec
@@ -92,12 +92,12 @@ class MonadPQ db m | m -> db where
 
   pqExecParams
     :: (ToOids ps, AllZip HasEncoding ps xs)
-    => DataManipulation db ps ys
+    => Manipulation db ps ys
     -> NP I xs
     -> m (Maybe (Result ys))
 
   pqExecNil
-    :: DataManipulation db '[] ys
+    :: Manipulation db '[] ys
     -> m (Maybe (Result ys))
   pqExecNil statement = pqExecParams statement Nil
 
@@ -112,13 +112,13 @@ instance AtkeyPQ PQ where
     (x', conn') <- x conn
     runPQ (f x') conn'
 
-  pqExec (UnsafeDataDefinition q) = PQ $ \ (Connection conn) -> do
+  pqExec (UnsafeDefinition q) = PQ $ \ (Connection conn) -> do
     result <- liftBase $ LibPQ.exec conn q
     return (Result <$> result, Connection conn)
 
 instance MonadBase IO io => MonadPQ db (PQ db db io) where
 
-  pqExecParams (UnsafeDataManipulation q :: DataManipulation db ps ys) params =
+  pqExecParams (UnsafeManipulation q :: Manipulation db ps ys) params =
     PQ $ \ (Connection conn) -> do
       let
         paramValues = encodings (Proxy :: Proxy ps) params

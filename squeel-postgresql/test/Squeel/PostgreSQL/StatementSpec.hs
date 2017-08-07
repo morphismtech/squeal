@@ -20,9 +20,9 @@ spec = do
   let
     qry `queryRenders` str = query qry `manipulationRenders` str
     definition `definitionRenders` str =
-      renderDataDefinition definition `shouldBe` str
+      renderDefinition definition `shouldBe` str
     manipulation `manipulationRenders` str =
-      renderDataManipulation manipulation `shouldBe` str
+      renderManipulation manipulation `shouldBe` str
   it "correctly renders a simple SELECT query" $ do
     let
       statement :: Query Tables '[] SumAndCol1
@@ -81,13 +81,13 @@ spec = do
     statement `queryRenders` "SELECT * FROM table1 AS table1 OFFSET 3;"
   it "correctly renders simple INSERTs" $ do
     let
-      statement :: DataManipulation Tables '[] '[]
+      statement :: Manipulation Tables '[] '[]
       statement = insertInto #table1 $ 2 `As` #col1 :* 4 `As` #col2 :* Nil
     statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
   it "correctly renders returning INSERTs" $ do
     let
-      statement :: DataManipulation Tables '[] SumAndCol1
+      statement :: Manipulation Tables '[] SumAndCol1
       statement = insertIntoReturning #table1
         (2 `As` #col1 :* 4 `As` #col2 :* Nil)
         ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
@@ -95,7 +95,7 @@ spec = do
       "INSERT INTO table1 (col1, col2) VALUES (2, 4) RETURNING (col1 + col2) AS sum, col1 AS col1;"
   it "correctly renders simple UPDATEs" $ do
     let
-      statement :: DataManipulation Tables '[] '[]
+      statement :: Manipulation Tables '[] '[]
       statement = update #table1
         (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
         (#col1 /=* #col2)
@@ -103,7 +103,7 @@ spec = do
       "UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
   it "correctly renders returning UPDATEs" $ do
     let
-      statement :: DataManipulation Tables '[] SumAndCol1
+      statement :: Manipulation Tables '[] SumAndCol1
       statement = updateReturning #table1
         (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
         (#col1 /=* #col2)
@@ -112,7 +112,7 @@ spec = do
       "UPDATE table1 SET col1 = 2 WHERE (col1 <> col2) RETURNING (col1 + col2) AS sum, col1 AS col1;"
   it "correctly renders upsert INSERTs" $ do
     let
-      statement :: DataManipulation Tables '[] '[]
+      statement :: Manipulation Tables '[] '[]
       statement = upsertInto #table1
         (2 `As` #col1 :* 4 `As` #col2 :* Nil)
         (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
@@ -121,7 +121,7 @@ spec = do
       "INSERT INTO table1 (col1, col2) VALUES (2, 4) ON CONFLICT UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
   it "correctly renders returning upsert INSERTs" $ do
     let
-      statement :: DataManipulation Tables '[] SumAndCol1
+      statement :: Manipulation Tables '[] SumAndCol1
       statement = upsertIntoReturning #table1
         (2 `As` #col1 :* 4 `As` #col2 :* Nil)
         (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
@@ -131,13 +131,13 @@ spec = do
       "INSERT INTO table1 (col1, col2) VALUES (2, 4) ON CONFLICT UPDATE table1 SET col1 = 2 WHERE (col1 <> col2) RETURNING (col1 + col2) AS sum, col1 AS col1;"
   it "correctly renders DELETEs" $ do
     let
-      statement :: DataManipulation Tables '[] '[]
+      statement :: Manipulation Tables '[] '[]
       statement = deleteFrom #table1 (#col1 ==* #col2)
     statement `manipulationRenders`
       "DELETE FROM table1 WHERE (col1 = col2);"
   it "should be safe against SQL injection in literal text" $ do
     let
-      statement :: DataManipulation StudentsTable '[] '[]
+      statement :: Manipulation StudentsTable '[] '[]
       statement = insertInto #students $
         "Robert'); DROP TABLE students;" `As` #name :* Nil
     statement `manipulationRenders`
@@ -209,7 +209,7 @@ spec = do
       "CREATE TABLE table2 (col1 serial, col2 text, col3 int8 NOT NULL DEFAULT 8);"
   it "should render DROP TABLE statements" $ do
     let
-      statement :: DataDefinition Tables '[]
+      statement :: Definition Tables '[]
       statement = dropTable #table1
     statement `definitionRenders` "DROP TABLE table1;"
 
