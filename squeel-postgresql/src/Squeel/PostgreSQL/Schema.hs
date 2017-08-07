@@ -35,6 +35,7 @@ module Squeel.PostgreSQL.Schema
   , Alter
   , Rename
   , Join
+  , Grouping (..)
   , module GHC.OverloadedLabels
   , module GHC.TypeLits
   ) where
@@ -167,3 +168,7 @@ type family Rename alias0 alias1 xs where
 type family Join xs ys where
   Join '[] ys = ys
   Join (x ': xs) ys = x ': Join xs ys
+
+data Grouping
+  = Ungrouped
+  | Grouped [(Symbol,(Symbol,ColumnType))]
