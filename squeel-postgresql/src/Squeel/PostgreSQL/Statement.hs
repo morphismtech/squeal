@@ -829,17 +829,17 @@ union, unionAll, intersect, intersectAll, except, exceptAll
   -> Query schema params columns
   -> Query schema params columns
 q1 `union` q2 = UnsafeQuery $
-  renderQuery q1 <> " UNION " <> renderQuery q2
+  "(" <> renderQuery q1 <> ") UNION (" <> renderQuery q2 <> ")"
 q1 `unionAll` q2 = UnsafeQuery $
-  renderQuery q1 <> " UNION ALL " <> renderQuery q2
+  "(" <> renderQuery q1 <> ") UNION ALL " <> renderQuery q2
 q1 `intersect` q2 = UnsafeQuery $
-  renderQuery q1 <> " INTERSECT " <> renderQuery q2
+  "(" <> renderQuery q1 <> ") INTERSECT " <> renderQuery q2
 q1 `intersectAll` q2 = UnsafeQuery $
-  renderQuery q1 <> " INTERSECT ALL " <> renderQuery q2
+  "(" <> renderQuery q1 <> ") INTERSECT ALL " <> renderQuery q2
 q1 `except` q2 = UnsafeQuery $
-  renderQuery q1 <> " EXCEPT " <> renderQuery q2
+  "(" <> renderQuery q1 <> ") EXCEPT " <> renderQuery q2
 q1 `exceptAll` q2 = UnsafeQuery $
-  renderQuery q1 <> " EXCEPT ALL " <> renderQuery q2
+  "(" <> renderQuery q1 <> ") EXCEPT ALL " <> renderQuery q2
 
 {-----------------------------------------
 SELECT statements
