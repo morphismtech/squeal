@@ -402,23 +402,23 @@ renderBy (By (table, column)) = renderAlias table <> "." <> renderAlias column
 
 data GroupByClause tables grouping where
   NoGroups :: GroupByClause tables 'Ungrouped
-  Distinct
-    :: SListI distincts
-    => NP (By tables) distincts
-    -> GroupByClause tables ('Grouped distincts)
+  Group
+    :: SListI bys
+    => NP (By tables) bys
+    -> GroupByClause tables ('Grouped bys)
 
 renderGroupByClause :: GroupByClause tables grouping -> ByteString
 renderGroupByClause = \case
   NoGroups -> ""
-  Distinct Nil -> ""
-  Distinct distincts -> " GROUP BY " <> ByteString.intercalate ", "
-    (hcollapse (hmap (K . renderBy) distincts))
+  Group Nil -> ""
+  Group bys -> " GROUP BY " <> ByteString.intercalate ", "
+    (hcollapse (hmap (K . renderBy) bys))
 
 data HavingClause params tables grouping where
   NoHaving :: HavingClause params tables 'Ungrouped
   Having
-    :: [Condition params tables ('Grouped distincts)]
-    -> HavingClause params tables ('Grouped distincts)
+    :: [Condition params tables ('Grouped bys)]
+    -> HavingClause params tables ('Grouped bys)
 
 renderHavingClause :: HavingClause params tables grouping -> ByteString
 renderHavingClause = \case
@@ -428,12 +428,12 @@ renderHavingClause = \case
     (renderExpression <$> conditions)
 
 class (KnownSymbol table, KnownSymbol column)
-  => GroupedBy table column distincts where
+  => GroupedBy table column bys where
     getGroup
       :: (HasTable table tables columns, HasColumn column columns ty)
       => Alias table
       -> Alias column
-      -> Expression params tables ('Grouped distincts) ty
+      -> Expression params tables ('Grouped bys) ty
     getGroup table column = UnsafeExpression $
       renderAlias table <> "." <> renderAlias column
 instance {-# OVERLAPPING #-} (KnownSymbol table, KnownSymbol column)
@@ -441,36 +441,36 @@ instance {-# OVERLAPPING #-} (KnownSymbol table, KnownSymbol column)
 instance {-# OVERLAPPABLE #-}
   ( KnownSymbol table
   , KnownSymbol column
-  , GroupedBy table column distincts
-  ) => GroupedBy table column (tabcol ': distincts)
+  , GroupedBy table column bys
+  ) => GroupedBy table column (tabcol ': bys)
 
 instance
   ( tables ~ '[table ::: columns]
   , HasColumn column columns ty
-  , GroupedBy table column distincts
+  , GroupedBy table column bys
   ) => IsLabel column
-    (Expression params tables ('Grouped distincts) ty) where
+    (Expression params tables ('Grouped bys) ty) where
       fromLabel p = getGroup (Alias (proxy# :: Proxy# table)) (Alias p)
 
 instance
   ( HasTable table tables columns
   , HasColumn column columns ty
-  , GroupedBy table column distincts
+  , GroupedBy table column bys
   ) => TableColumn table column
-    (Expression params tables ('Grouped distincts) ty) where
+    (Expression params tables ('Grouped bys) ty) where
       (&.) = getGroup
 
 unsafeAggregate
   :: ByteString
   -> Expression params tables 'Ungrouped xty
-  -> Expression params tables ('Grouped distincts) yty
+  -> Expression params tables ('Grouped bys) yty
 unsafeAggregate fun x = UnsafeExpression $ mconcat
   [fun, "(", renderExpression x, ")"]
 
 sum_
   :: PGNum ty
   => Expression params tables 'Ungrouped ('Required (nullity ty))
-  -> Expression params tables ('Grouped distincts) ('Required (nullity ty))
+  -> Expression params tables ('Grouped bys) ('Required (nullity ty))
 sum_ = unsafeAggregate "sum"
 
 {-----------------------------------------
@@ -624,14 +624,14 @@ where_
 where_ wh tables = tables {whereClause = wh : whereClause tables}
 
 group
-  :: SListI distincts
-  => NP (By tables) distincts
+  :: SListI bys
+  => NP (By tables) bys
   -> TableExpression params schema tables 'Ungrouped 
-  -> TableExpression params schema tables ('Grouped distincts)
-group distincts tables = TableExpression
+  -> TableExpression params schema tables ('Grouped bys)
+group bys tables = TableExpression
   { fromClause = fromClause tables
   , whereClause = whereClause tables
-  , groupByClause = Distinct distincts
+  , groupByClause = Group bys
   , havingClause = Having []
   , orderByClause = []
   , limitClause = limitClause tables
@@ -639,9 +639,9 @@ group distincts tables = TableExpression
   }
 
 having
-  :: Condition params tables ('Grouped distincts)
-  -> TableExpression params schema tables ('Grouped distincts)
-  -> TableExpression params schema tables ('Grouped distincts)
+  :: Condition params tables ('Grouped bys)
+  -> TableExpression params schema tables ('Grouped bys)
+  -> TableExpression params schema tables ('Grouped bys)
 having hv tables = tables
   { havingClause = case havingClause tables of Having hvs -> Having (hv:hvs) }
 
