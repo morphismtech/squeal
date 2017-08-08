@@ -376,18 +376,56 @@ renderSortExpression = \case
   Asc expression -> renderExpression expression <> " ASC"
   Desc expression -> renderExpression expression <> " DESC"
 
-unsafeAggregate
-  :: ByteString
-  -> Expression params tables 'Ungrouped xty
-  -> Expression params tables ('Grouped distincts) yty
-unsafeAggregate fun x = UnsafeExpression $ mconcat
-  [fun, "(", renderExpression x, ")"]
+{-----------------------------------------
+aggregation
+-----------------------------------------}
 
-sum_
-  :: PGNum ty
-  => Expression params tables 'Ungrouped ('Required (nullity ty))
-  -> Expression params tables ('Grouped distincts) ('Required (nullity ty))
-sum_ = unsafeAggregate "sum"
+data By
+  (tables :: [(Symbol,[(Symbol,ColumnType)])])
+  (tabcol :: (Symbol,Symbol)) where
+  By
+    :: (HasTable table tables columns, HasColumn column columns ty)
+    => (Alias table, Alias column)
+    -> By tables '(table, column)
+
+by
+  :: ( KnownSymbol table
+     , tables ~ '[table ::: columns]
+     , HasColumn column columns ty
+     )
+  => Alias column
+  -> By tables '(table, column)
+by column = By (Alias (proxy# :: Proxy# (table :: Symbol)), column)
+
+renderBy :: By tables tabcolty -> ByteString
+renderBy (By (table, column)) = renderAlias table <> "." <> renderAlias column
+
+data GroupByClause tables grouping where
+  NoGroups :: GroupByClause tables 'Ungrouped
+  Distinct
+    :: SListI distincts
+    => NP (By tables) distincts
+    -> GroupByClause tables ('Grouped distincts)
+
+renderGroupByClause :: GroupByClause tables grouping -> ByteString
+renderGroupByClause = \case
+  NoGroups -> ""
+  Distinct Nil -> ""
+  Distinct distincts -> " GROUP BY " <> ByteString.intercalate ", "
+    (hcollapse (hmap (K . renderBy) distincts))
+
+data HavingClause params tables grouping where
+  NoHaving :: HavingClause params tables 'Ungrouped
+  Having
+    :: [Condition params tables ('Grouped distincts)]
+    -> HavingClause params tables ('Grouped distincts)
+
+renderHavingClause :: HavingClause params tables grouping -> ByteString
+renderHavingClause = \case
+  NoHaving -> ""
+  Having [] -> ""
+  Having conditions -> " HAVING " <> ByteString.intercalate ", "
+    (renderExpression <$> conditions)
 
 class (KnownSymbol table, KnownSymbol column)
   => GroupedBy table column distincts where
@@ -421,6 +459,19 @@ instance
   ) => TableColumn table column
     (Expression params tables ('Grouped distincts) ty) where
       (&.) = getGroup
+
+unsafeAggregate
+  :: ByteString
+  -> Expression params tables 'Ungrouped xty
+  -> Expression params tables ('Grouped distincts) yty
+unsafeAggregate fun x = UnsafeExpression $ mconcat
+  [fun, "(", renderExpression x, ")"]
+
+sum_
+  :: PGNum ty
+  => Expression params tables 'Ungrouped ('Required (nullity ty))
+  -> Expression params tables ('Grouped distincts) ('Required (nullity ty))
+sum_ = unsafeAggregate "sum"
 
 {-----------------------------------------
 tables
@@ -516,53 +567,6 @@ renderTableReference = \case
     , " ON "
     , renderExpression on
     ]
-
-data By
-  (tables :: [(Symbol,[(Symbol,ColumnType)])])
-  (tabcol :: (Symbol,Symbol)) where
-  By
-    :: (HasTable table tables columns, HasColumn column columns ty)
-    => (Alias table, Alias column)
-    -> By tables '(table, column)
-
-by
-  :: ( KnownSymbol table
-     , tables ~ '[table ::: columns]
-     , HasColumn column columns ty
-     )
-  => Alias column
-  -> By tables '(table, column)
-by column = By (Alias (proxy# :: Proxy# (table :: Symbol)), column)
-
-renderBy :: By tables tabcolty -> ByteString
-renderBy (By (table, column)) = renderAlias table <> "." <> renderAlias column
-
-data GroupByClause tables grouping where
-  NoGroups :: GroupByClause tables 'Ungrouped
-  Distinct
-    :: SListI distincts
-    => NP (By tables) distincts
-    -> GroupByClause tables ('Grouped distincts)
-
-renderGroupByClause :: GroupByClause tables grouping -> ByteString
-renderGroupByClause = \case
-  NoGroups -> ""
-  Distinct Nil -> ""
-  Distinct distincts -> " GROUP BY " <> ByteString.intercalate ", "
-    (hcollapse (hmap (K . renderBy) distincts))
-
-data HavingClause params tables grouping where
-  NoHaving :: HavingClause params tables 'Ungrouped
-  Having
-    :: [Condition params tables ('Grouped distincts)]
-    -> HavingClause params tables ('Grouped distincts)
-
-renderHavingClause :: HavingClause params tables grouping -> ByteString
-renderHavingClause = \case
-  NoHaving -> ""
-  Having [] -> ""
-  Having conditions -> " HAVING " <> ByteString.intercalate ", "
-    (renderExpression <$> conditions)
 
 data TableExpression
   (params :: [ColumnType])
