@@ -388,15 +388,6 @@ data By
     => (Alias table, Alias column)
     -> By tables '(table, column)
 
-by
-  :: ( KnownSymbol table
-     , tables ~ '[table ::: columns]
-     , HasColumn column columns ty
-     )
-  => Alias column
-  -> By tables '(table, column)
-by column = By (Alias (proxy# :: Proxy# (table :: Symbol)), column)
-
 renderBy :: By tables tabcolty -> ByteString
 renderBy (By (table, column)) = renderAlias table <> "." <> renderAlias column
 
@@ -429,12 +420,17 @@ renderHavingClause = \case
 
 class (KnownSymbol table, KnownSymbol column)
   => GroupedBy table column bys where
-    getGroup
+    getGroup1
+      :: (tables ~ '[table ::: columns], HasColumn column columns ty)
+      => Proxy# column
+      -> Expression params tables ('Grouped bys) ty
+    getGroup1 column = UnsafeExpression $ fromString (symbolVal' column)
+    getGroup2
       :: (HasTable table tables columns, HasColumn column columns ty)
       => Alias table
       -> Alias column
       -> Expression params tables ('Grouped bys) ty
-    getGroup table column = UnsafeExpression $
+    getGroup2 table column = UnsafeExpression $
       renderAlias table <> "." <> renderAlias column
 instance {-# OVERLAPPING #-} (KnownSymbol table, KnownSymbol column)
   => GroupedBy table column '[ '(table,column)]
@@ -449,16 +445,14 @@ instance
   , HasColumn column columns ty
   , GroupedBy table column bys
   ) => IsLabel column
-    (Expression params tables ('Grouped bys) ty) where
-      fromLabel p = getGroup (Alias (proxy# :: Proxy# table)) (Alias p)
+    (Expression params tables ('Grouped bys) ty) where fromLabel = getGroup1
 
 instance
   ( HasTable table tables columns
   , HasColumn column columns ty
   , GroupedBy table column bys
   ) => TableColumn table column
-    (Expression params tables ('Grouped bys) ty) where
-      (&.) = getGroup
+    (Expression params tables ('Grouped bys) ty) where (&.) = getGroup2
 
 unsafeAggregate
   :: ByteString
