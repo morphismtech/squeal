@@ -38,7 +38,8 @@ import Squeel.PostgreSQL.Binary
 import Squeel.PostgreSQL.Statement
 import Squeel.PostgreSQL.Schema
 
-newtype Connection db = Connection { unConnection :: LibPQ.Connection }
+newtype Connection (db :: [(Symbol,[(Symbol,ColumnType)])]) =
+  Connection { unConnection :: LibPQ.Connection }
 
 newtype PQ
   (db0 :: [(Symbol,[(Symbol,ColumnType)])])
@@ -77,48 +78,28 @@ class AtkeyPQ pq where
 
   pqExec
     :: MonadBase IO io
-    => Statement '[] '[] db0 db1
+    => Definition db0 db1
     -> pq db0 db1 io (Maybe (Result '[]))
 
   pqThenExec
     :: MonadBase IO io
-    => Statement '[] '[] db1 db2
+    => Definition db1 db2
     -> pq db0 db1 io x
     -> pq db0 db2 io (Maybe (Result '[]))
   pqThenExec = pqThen . pqExec
-
-  -- pqPrepare
-  --   :: (MonadBase IO io, ToOids ps)
-  --   => ByteString
-  --   -> Statement ps xs db0 db1
-  --   -> pq db0 db1 io (Maybe (Result '[]), PreparedStatement ps xs db0 db1)
-
-  -- pqThenPrepare
-  --   :: MonadBase IO io
-  --   => ByteString
-  --   -> Statement ps xs schema0 schema1
-  --   -> pq db0 db1 io x
-  --   -> pq db1 db1 io (Maybe (Result '[]), PreparedStatement ps xs schema0 schema1)
-  -- pqThenPrepare name st pq = pqThen (pqPrepare name st) pq
 
 class MonadPQ db m | m -> db where
 
   pqExecParams
     :: (ToOids ps, AllZip HasEncoding ps xs)
-    => Statement ps ys db db
+    => Manipulation db ps ys
     -> NP I xs
     -> m (Maybe (Result ys))
 
   pqExecNil
-    :: Statement '[] ys db db
+    :: Manipulation db '[] ys
     -> m (Maybe (Result ys))
   pqExecNil statement = pqExecParams statement Nil
-
-  -- pqExecPrepared
-  --   :: AllZip HasEncoding ps xs
-  --   => PreparedStatement ps ys db db
-  --   -> NP I xs
-  --   -> m (Maybe (Result ys))
 
 instance AtkeyPQ PQ where
 
@@ -131,22 +112,13 @@ instance AtkeyPQ PQ where
     (x', conn') <- x conn
     runPQ (f x') conn'
 
-  pqExec (UnsafeStatement q) = PQ $ \ (Connection conn) -> do
+  pqExec (UnsafeDefinition q) = PQ $ \ (Connection conn) -> do
     result <- liftBase $ LibPQ.exec conn q
     return (Result <$> result, Connection conn)
 
-  -- pqPrepare statementName (UnsafeStatement q :: Statement ps ys db0 db1) =
-  --   PQ $ \ (Connection conn) -> do
-  --     result <- liftBase $
-  --       LibPQ.prepare conn statementName q (Just (toOids (proxy# :: Proxy# ps)))
-  --     return
-  --       ( ( Result <$> result
-  --         , UnsafePreparedStatement statementName
-  --       ) , Connection conn )
-
 instance MonadBase IO io => MonadPQ db (PQ db db io) where
 
-  pqExecParams (UnsafeStatement q :: Statement ps ys db0 db1) params =
+  pqExecParams (UnsafeManipulation q :: Manipulation db ps ys) params =
     PQ $ \ (Connection conn) -> do
       let
         paramValues = encodings (Proxy :: Proxy ps) params
@@ -157,15 +129,6 @@ instance MonadBase IO io => MonadPQ db (PQ db db io) where
           ]
       result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
       return (Result <$> result, Connection conn)
-
-  -- pqExecPrepared (q :: PreparedStatement ps ys db0 db1) params =
-  --   PQ $ \ (Connection conn) -> do
-  --     let
-  --       paramValues = encodings (Proxy :: Proxy ps) params
-  --       params' = [ Just (param', LibPQ.Binary) | param' <- paramValues ]
-  --     result <- liftBase $
-  --       LibPQ.execPrepared conn (renderPreparedStatement q) params' LibPQ.Binary
-  --     return (Result <$> result, Connection conn)
 
 instance Monad m => Applicative (PQ db db m) where
   pure x = PQ $ \ conn -> pure (x, conn)

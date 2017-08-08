@@ -1,22 +1,22 @@
 {-# LANGUAGE
     DataKinds
-  , MagicHash
   , OverloadedLabels
   , OverloadedStrings
-  , ScopedTypeVariables
   , TypeApplications
   , TypeOperators
 #-}
 
 module Main (main) where
 
+import Control.Category ((>>>))
 import Control.Monad.Base
 import Control.Monad.Except
 import Control.Monad.Trans.Maybe
+import Data.Foldable (for_)
 import Data.Function ((&))
 import Data.Int
 import Data.Monoid
-import Generics.SOP
+import Generics.SOP hiding (from)
 import Squeel.PostgreSQL
 
 import qualified Data.ByteString.Char8 as Char8
@@ -27,25 +27,23 @@ main = do
   connectionString <- pure
     "host=localhost port=5432 dbname=exampledb"
   Char8.putStrLn $ "connecting to " <> connectionString
-  connection0 :: Connection '[] <- connectdb connectionString
+  connection0 <- connectdb connectionString
   Char8.putStrLn "setting up database"
-  connection1 <- flip execPQ connection0 $
-    pqExec
-      ( createTable #students
-        (  (text & notNull) `As` #name
-        :* Nil ) )
-    & pqThenExec
-      ( createTable #table1
-        (  (int4 & notNull) `As` #col1
-        :* (int4 & notNull) `As` #col2
-        :* Nil ) )
-    & pqThenExec
-      ( insertInto #table1 ( 1 `As` #col1 :* 2 `As` #col2 :* Nil ) )
-    & pqThenExec
-      ( insertInto #table1 ( 3 `As` #col1 :* 4 `As` #col2 :* Nil ) )
+  connection1 <- flip execPQ (connection0 :: Connection '[]) $ pqExec $
+    createTable #students
+      (  (text & notNull) `As` #name
+      :* Nil )
+    >>>
+    createTable #table1
+      (  (int4 & notNull) `As` #col1
+      :* (int4 & notNull) `As` #col2
+      :* Nil )
   Char8.putStrLn "querying"
-  connection2 <- flip execPQ connection1 $ do
-    Just result <- pqExecNil $ select $ starFrom #table1
+  connection2 <- flip execPQ (connection1 :: Connection Tables) $ do
+    for_ [I i :* I (i+1) :* Nil | i <- [1::Int32,3..9]] $ pqExecParams
+      (insertInto #table1 (param1 `As` #col1 :* param2 `As` #col2 :* Nil))
+    Just result <- pqExecNil . query $
+      selectStar (from (Table (#table1 `As` #table1)))
     runMaybeT . runExceptT . flip runValue result $ do
       value00 <- getValue (RowNumber 0) (columnNumber @0)
       value01 <- getValue (RowNumber 0) (columnNumber @1)
@@ -61,35 +59,13 @@ main = do
         print (row0 :: NP I '[Int32,Int32])
         print (row1 :: NP I '[Int32,Int32])
   Char8.putStrLn "tearing down database"
-  connection3 :: Connection '[] <- flip execPQ connection2 $ pqExec
-    (dropTable #table1 :: Statement '[] '[] Tables '["students" ::: StudentsColumns])
-    & pqThenExec (dropTable #students)
-  finish connection3
+  connection3 <- flip execPQ (connection2 :: Connection Tables) $ pqExec $
+    dropTable #table1 >>> dropTable #students
+  finish (connection3 :: Connection '[])
 
 type Columns =
   '[ "col1" ::: 'Required ('NotNull 'PGInt4)
    , "col2" ::: 'Required ('NotNull 'PGInt4)
    ]
--- type SumAndCol1 = '[ "sum" ::: 'NotNull 'PGInt4, "col1" ::: 'NotNull 'PGInt4]
 type StudentsColumns = '["name" ::: 'Required ('NotNull 'PGText)]
 type Tables = '["students" ::: StudentsColumns, "table1" ::: Columns]
--- type OrderColumns =
---   [ "orderID"    ::: 'NotNull 'PGInt4
---   , "orderVal"   ::: 'NotNull 'PGText
---   , "customerID" ::: 'NotNull 'PGInt4
---   , "shipperID"  ::: 'NotNull 'PGInt4
---   ]
--- type CustomerColumns =
---   [ "customerID" ::: 'NotNull 'PGInt4, "customerVal" ::: 'NotNull 'PGFloat4 ]
--- type ShipperColumns =
---   [ "shipperID" ::: 'NotNull 'PGInt4, "shipperVal" ::: 'NotNull 'PGBool ]
--- type JoinTables =
---   [ "shippers"  ::: ShipperColumns
---   , "customers" ::: CustomerColumns
---   , "orders"    ::: OrderColumns
---   ]
--- type ValueColumns =
---   [ "orderVal"    ::: 'NotNull 'PGText
---   , "customerVal" ::: 'NotNull 'PGFloat4
---   , "shipperVal"  ::: 'NotNull 'PGBool
---   ]

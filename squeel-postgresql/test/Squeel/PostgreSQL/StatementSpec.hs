@@ -18,129 +18,156 @@ import Squeel.PostgreSQL.Schema
 spec :: Spec
 spec = do
   let
-    query `shouldRenderAs` str = renderStatement query `shouldBe` str
+    qry `queryRenders` str = query qry `manipulationRenders` str
+    definition `definitionRenders` str =
+      renderDefinition definition `shouldBe` str
+    manipulation `manipulationRenders` str =
+      renderManipulation manipulation `shouldBe` str
   it "correctly renders a simple SELECT query" $ do
     let
-      statement :: Statement '[] SumAndCol1 Tables Tables
-      statement = select $
-        ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
-          `from` (#table1 & where_ (#col1 >* #col2))
-    statement `shouldRenderAs`
+      statement :: Query Tables '[] SumAndCol1
+      statement = select
+        ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+        (from (Table (#table1 `As` #table1)) & where_ (#col1 >* #col2))
+    statement `queryRenders`
       "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE (col1 > col2);"
   it "combines WHEREs using AND" $ do
     let
-      statement :: Statement '[] SumAndCol1 Tables Tables
-      statement = select $
-        ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
-          `from` (#table1 & where_ true & where_ false)
-    statement `shouldRenderAs`
+      statement :: Query Tables '[] SumAndCol1
+      statement = select
+        ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+        (from (Table (#table1 `As` #table1)) & where_ true & where_ false)
+    statement `queryRenders`
       "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE (TRUE AND FALSE);"
   it "performs sub SELECTs" $ do
     let
-      selection = ((#col1 + #col2) `As` #sum :* #col1 :* Nil) `from` #table1
-      statement :: Statement '[] SumAndCol1 Tables Tables
-      statement = select $ starFrom (subselect (selection `As` #sub))
-    statement `shouldRenderAs`
+      selection = select
+        ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+        (from (Table (#table1 `As` #table1)))
+      statement :: Query Tables '[] SumAndCol1
+      statement = selectStar (from (Subquery (selection `As` #sub)))
+    statement `queryRenders`
       "SELECT * FROM SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 AS sub;"
   it "does LIMIT clauses" $ do
     let
-      statement :: Statement '[] Columns Tables Tables
-      statement = select $ starFrom (#table1 & limit 1)
-    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 LIMIT 1;"
+      statement :: Query Tables '[] Columns
+      statement = selectStar
+        (from (Table (#table1 `As` #table1)) & limit 1)
+    statement `queryRenders` "SELECT * FROM table1 AS table1 LIMIT 1;"
   it "should use the minimum of given LIMITs" $ do
     let
-      statement :: Statement '[] Columns Tables Tables
-      statement = select $ starFrom (#table1 & limit 1 & limit 2)
-    statement `shouldRenderAs`
-      "SELECT * FROM table1 AS table1 LIMIT LEAST(1, 2);"
+      statement :: Query Tables '[] Columns
+      statement = selectStar
+        (from (Table (#table1 `As` #table1)) & limit 1 & limit 2)
+    statement `queryRenders`
+      "SELECT * FROM table1 AS table1 LIMIT 1;"
   it "should render parameters using $ signs" $ do
     let
-      statement :: Statement '[ 'Required ('NotNull 'PGInt8)] Columns Tables Tables
-      statement = select $ starFrom (#table1 & limit param1)
-    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 LIMIT $1;"
+      statement :: Query Tables '[ 'Required ('NotNull 'PGBool)] Columns
+      statement = selectStar
+        (from (Table (#table1 `As` #table1)) & where_ param1)
+    statement `queryRenders` "SELECT * FROM table1 AS table1 WHERE $1;"
   it "does OFFSET clauses" $ do
     let
-      statement :: Statement '[] Columns Tables Tables
-      statement = select $ starFrom (#table1 & offset 1)
-    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET 1;"
+      statement :: Query Tables '[] Columns
+      statement = selectStar
+        (from (Table (#table1 `As` #table1)) & offset 1)
+    statement `queryRenders` "SELECT * FROM table1 AS table1 OFFSET 1;"
   it "should use the sum of given OFFSETs" $ do
     let
-      statement :: Statement '[] Columns Tables Tables
-      statement =  select $ starFrom (#table1 & offset 1 & offset 2)
-    statement `shouldRenderAs` "SELECT * FROM table1 AS table1 OFFSET (1 + 2);"
+      statement :: Query Tables '[] Columns
+      statement =  selectStar
+        (from (Table (#table1 `As` #table1)) & offset 1 & offset 2)
+    statement `queryRenders` "SELECT * FROM table1 AS table1 OFFSET 3;"
+  it "should render GROUP BY and HAVING clauses" $ do
+    let
+      statement :: Query Tables '[] SumAndCol1
+      statement = select
+        (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
+        ( from (Table (#table1 `As` #table1))
+          & group (by #col1 :* Nil) 
+          & having ((#col1 + sum_ #col2) >* 1) )
+    statement `queryRenders`
+      "SELECT\
+      \ sum(col2) AS sum, table1.col1 AS col1\
+      \ FROM table1 AS table1\
+      \ GROUP BY table1.col1\
+      \ HAVING ((table1.col1 + sum(col2)) > 1);"
   it "correctly renders simple INSERTs" $ do
     let
-      statement :: Statement '[] '[] Tables Tables
+      statement :: Manipulation Tables '[] '[]
       statement = insertInto #table1 $ 2 `As` #col1 :* 4 `As` #col2 :* Nil
-    statement `shouldRenderAs`
+    statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
   it "correctly renders returning INSERTs" $ do
     let
-      statement :: Statement '[] SumAndCol1 Tables Tables
+      statement :: Manipulation Tables '[] SumAndCol1
       statement = insertIntoReturning #table1
         (2 `As` #col1 :* 4 `As` #col2 :* Nil)
-        ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
-    statement `shouldRenderAs`
+        ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+    statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4) RETURNING (col1 + col2) AS sum, col1 AS col1;"
   it "correctly renders simple UPDATEs" $ do
     let
-      statement :: Statement '[] '[] Tables Tables
-      statement = update #table1 (Set 2 `As` #col1 :* Same `As` #col2 :* Nil) (#col1 /=* #col2)
-    statement `shouldRenderAs`
+      statement :: Manipulation Tables '[] '[]
+      statement = update #table1
+        (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
+        (#col1 /=* #col2)
+    statement `manipulationRenders`
       "UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
   it "correctly renders returning UPDATEs" $ do
     let
-      statement :: Statement '[] SumAndCol1 Tables Tables
+      statement :: Manipulation Tables '[] SumAndCol1
       statement = updateReturning #table1
         (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
         (#col1 /=* #col2)
-        ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
-    statement `shouldRenderAs`
+        ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+    statement `manipulationRenders`
       "UPDATE table1 SET col1 = 2 WHERE (col1 <> col2) RETURNING (col1 + col2) AS sum, col1 AS col1;"
   it "correctly renders upsert INSERTs" $ do
     let
-      statement :: Statement '[] '[] Tables Tables
+      statement :: Manipulation Tables '[] '[]
       statement = upsertInto #table1
         (2 `As` #col1 :* 4 `As` #col2 :* Nil)
         (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
         (#col1 /=* #col2)
-    statement `shouldRenderAs`
+    statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4) ON CONFLICT UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
   it "correctly renders returning upsert INSERTs" $ do
     let
-      statement :: Statement '[] SumAndCol1 Tables Tables
+      statement :: Manipulation Tables '[] SumAndCol1
       statement = upsertIntoReturning #table1
         (2 `As` #col1 :* 4 `As` #col2 :* Nil)
         (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
         (#col1 /=* #col2)
-        ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
-    statement `shouldRenderAs`
+        ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+    statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4) ON CONFLICT UPDATE table1 SET col1 = 2 WHERE (col1 <> col2) RETURNING (col1 + col2) AS sum, col1 AS col1;"
   it "correctly renders DELETEs" $ do
     let
-      statement :: Statement '[] '[] Tables Tables
+      statement :: Manipulation Tables '[] '[]
       statement = deleteFrom #table1 (#col1 ==* #col2)
-    statement `shouldRenderAs`
+    statement `manipulationRenders`
       "DELETE FROM table1 WHERE (col1 = col2);"
   it "should be safe against SQL injection in literal text" $ do
     let
-      statement :: Statement '[] '[] StudentsTable StudentsTable
+      statement :: Manipulation StudentsTable '[] '[]
       statement = insertInto #students $
         "Robert'); DROP TABLE students;" `As` #name :* Nil
-    statement `shouldRenderAs`
+    statement `manipulationRenders`
       "INSERT INTO students (name) VALUES (E'Robert''); DROP TABLE students;');"
   describe "JOINs" $ do
-    let
-      vals =
-        (#orders &. #orderVal) `As` #orderVal
-        :* (#customers &. #customerVal) `As` #customerVal
-        :* (#shippers &. #shipperVal) `As` #shipperVal :* Nil
     it "should render CROSS JOINs" $ do
       let
-        statement :: Statement '[] ValueColumns JoinTables JoinTables
-        statement = select $ vals `from`
-          (join (#orders & Cross #customers & Cross #shippers))
-      statement `shouldRenderAs`
+        statement :: Query JoinTables '[] ValueColumns
+        statement = select
+          ( (#orders &. #orderVal) `As` #orderVal
+            :* (#customers &. #customerVal) `As` #customerVal
+            :* (#shippers &. #shipperVal) `As` #shipperVal :* Nil)
+          ( from (Table (#orders `As` #orders)
+            & CrossJoin (Table (#customers `As` #customers))
+            & CrossJoin (Table (#shippers `As` #shippers))))
+      statement `queryRenders`
         "SELECT\
         \ orders.orderVal AS orderVal,\
         \ customers.customerVal AS customerVal,\
@@ -150,16 +177,17 @@ spec = do
         \ CROSS JOIN shippers AS shippers;"
     it "should render INNER JOINs" $ do
       let
-        innerJoins :: TableExpression '[] JoinTables JoinTables
-        innerJoins = join $
-          #orders
-          & Inner #customers
-            ((#orders &. #customerID) ==* (#customers &. #customerID))
-          & Inner #shippers
-            ((#orders &. #shipperID) ==* (#shippers &. #shipperID))
-        selection :: Statement '[] ValueColumns JoinTables JoinTables
-        selection =  select $ vals `from` innerJoins
-      selection `shouldRenderAs`
+        statement :: Query JoinTables '[] ValueColumns
+        statement = select
+          ( (#orders &. #orderVal) `As` #orderVal
+            :* (#customers &. #customerVal) `As` #customerVal
+            :* (#shippers &. #shipperVal) `As` #shipperVal :* Nil)
+          ( from (Table (#orders `As` #orders)
+            & InnerJoin (Table (#customers `As` #customers))
+              ((#orders &. #customerID) ==* (#customers &. #customerID))
+            & InnerJoin (Table (#shippers `As` #shippers))
+              ((#orders &. #shipperID) ==* (#shippers &. #shipperID))))
+      statement `queryRenders`
         "SELECT\
         \ orders.orderVal AS orderVal,\
         \ customers.customerVal AS customerVal,\
@@ -171,11 +199,11 @@ spec = do
         \ ON (orders.shipperID = shippers.shipperID);"
     it "should render self JOINs" $ do
       let
-        statement :: Statement '[] OrderColumns JoinTables JoinTables
-        statement = select $ #orders1 `dotStarFrom`
-          (join (Table (#orders `As` #orders1)
-            & Cross (#orders `As` #orders2)))
-      statement `shouldRenderAs`
+        statement :: Query JoinTables '[] OrderColumns
+        statement = selectDotStar #orders1
+          (from (Table (#orders `As` #orders1)
+            & CrossJoin (Table (#orders `As` #orders2))))
+      statement `queryRenders`
         "SELECT orders1.*\
         \ FROM orders AS orders1\
         \ CROSS JOIN orders AS orders2;"
@@ -184,20 +212,20 @@ spec = do
       (  (int4 & notNull) `As` #col1
       :* (int4 & notNull) `As` #col2
       :* Nil)
-      `shouldRenderAs`
+      `definitionRenders`
       "CREATE TABLE table1 (col1 int4 NOT NULL, col2 int4 NOT NULL);"
     createTable #table2
       (  serial `As` #col1
       :* text `As` #col2
       :* (int8 & notNull & default_ 8) `As` #col3
       :* Nil)
-      `shouldRenderAs`
+      `definitionRenders`
       "CREATE TABLE table2 (col1 serial, col2 text, col3 int8 NOT NULL DEFAULT 8);"
   it "should render DROP TABLE statements" $ do
     let
-      statement :: Statement '[] '[] Tables '[]
+      statement :: Definition Tables '[]
       statement = dropTable #table1
-    statement `shouldRenderAs` "DROP TABLE table1;"
+    statement `definitionRenders` "DROP TABLE table1;"
 
 type Columns =
   '[ "col1" ::: 'Required ('NotNull 'PGInt4)
@@ -222,9 +250,9 @@ type ShipperColumns =
    , "shipperVal" ::: 'Required ('NotNull 'PGBool)
    ]
 type JoinTables =
-  '[ "shippers"  ::: ShipperColumns
+  '[ "orders"    ::: OrderColumns
    , "customers" ::: CustomerColumns
-   , "orders"    ::: OrderColumns
+   , "shippers"  ::: ShipperColumns
    ]
 type ValueColumns =
   '[ "orderVal"    ::: 'Required ('NotNull 'PGText)
