@@ -172,7 +172,7 @@ type family Join xs ys where
 
 data Grouping
   = Ungrouped
-  | Grouped [(Symbol,(Symbol,ColumnType))]
+  | Grouped [(Symbol,Symbol)]
 
 class TableColumn table column expression where
   (&.) :: Alias table -> Alias column -> expression

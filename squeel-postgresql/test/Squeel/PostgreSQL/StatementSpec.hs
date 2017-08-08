@@ -79,6 +79,20 @@ spec = do
       statement =  selectStar
         (from (Table (#table1 `As` #table1)) & offset 1 & offset 2)
     statement `queryRenders` "SELECT * FROM table1 AS table1 OFFSET 3;"
+  it "should render GROUP BY and HAVING clauses" $ do
+    let
+      statement :: Query Tables '[] SumAndCol1
+      statement = select
+        (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
+        ( from (Table (#table1 `As` #table1))
+          & group (by #col1 :* Nil) 
+          & having ((#col1 + sum_ #col2) >* 1) )
+    statement `queryRenders`
+      "SELECT\
+      \ sum(col2) AS sum, table1.col1 AS col1\
+      \ FROM table1 AS table1\
+      \ GROUP BY table1.col1\
+      \ HAVING ((table1.col1 + sum(col2)) > 1);"
   it "correctly renders simple INSERTs" $ do
     let
       statement :: Manipulation Tables '[] '[]

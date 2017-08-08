@@ -88,13 +88,18 @@ instance (HasTable table tables columns, HasColumn column columns ty)
 def :: Expression params '[] grouping ('Optional (nullity ty))
 def = UnsafeExpression "DEFAULT"
 
-notDef
+unDef
   :: Expression params '[] grouping ('Required (nullity ty))
   -> Expression params '[] grouping ('Optional (nullity ty))
-notDef = UnsafeExpression . renderExpression
+unDef = UnsafeExpression . renderExpression
 
 null :: Expression params tables grouping (optionality ('Null ty))
 null = UnsafeExpression "NULL"
+
+unNull
+  :: Expression params tables grouping (optionality ('NotNull ty))
+  -> Expression params tables grouping (optionality ('Null ty))
+unNull = UnsafeExpression . renderExpression
 
 coalesce
   :: [Expression params tables grouping ('Required ('Null x))]
@@ -371,46 +376,51 @@ renderSortExpression = \case
   Asc expression -> renderExpression expression <> " ASC"
   Desc expression -> renderExpression expression <> " DESC"
 
-data Aggregate (ty0 :: ColumnType) (ty1 :: ColumnType) =
-  UnsafeAggregate { renderAggregate :: ByteString }
+unsafeAggregate
+  :: ByteString
+  -> Expression params tables 'Ungrouped xty
+  -> Expression params tables ('Grouped distincts) yty
+unsafeAggregate fun x = UnsafeExpression $ mconcat
+  [fun, "(", renderExpression x, ")"]
 
 sum_
   :: PGNum ty
-  => Aggregate ('Required (nullity ty)) ('Required (nullity ty))
-sum_ = UnsafeAggregate "sum"
+  => Expression params tables 'Ungrouped ('Required (nullity ty))
+  -> Expression params tables ('Grouped distincts) ('Required (nullity ty))
+sum_ = unsafeAggregate "sum"
 
 class (KnownSymbol table, KnownSymbol column)
-  => GroupedBy table column distincts ty where
+  => GroupedBy table column distincts where
     getGroup
       :: (HasTable table tables columns, HasColumn column columns ty)
       => Alias table
       -> Alias column
       -> Expression params tables ('Grouped distincts) ty
+    getGroup table column = UnsafeExpression $
+      renderAlias table <> "." <> renderAlias column
+instance {-# OVERLAPPING #-} (KnownSymbol table, KnownSymbol column)
+  => GroupedBy table column '[ '(table,column)]
+instance {-# OVERLAPPABLE #-}
+  ( KnownSymbol table
+  , KnownSymbol column
+  , GroupedBy table column distincts
+  ) => GroupedBy table column (tabcol ': distincts)
+
+instance
+  ( tables ~ '[table ::: columns]
+  , HasColumn column columns ty
+  , GroupedBy table column distincts
+  ) => IsLabel column
+    (Expression params tables ('Grouped distincts) ty) where
+      fromLabel p = getGroup (Alias (proxy# :: Proxy# table)) (Alias p)
 
 instance
   ( HasTable table tables columns
   , HasColumn column columns ty
-  , GroupedBy table column distincts ty
+  , GroupedBy table column distincts
   ) => TableColumn table column
     (Expression params tables ('Grouped distincts) ty) where
       (&.) = getGroup
-
-class (KnownSymbol table, KnownSymbol column)
-  => Aggregated table column distincts ty where
-    getAggregate
-      :: (HasTable table tables columns, HasColumn column columns ty0)
-      => Alias table
-      -> Alias column
-      -> Aggregate ty0 ty
-      -> Expression params tables ('Grouped distincts) ty
-
-instance
-  ( HasTable table tables columns
-  , HasColumn column columns ty0
-  , Aggregated table column distincts ty
-  ) => TableColumn table column
-    (Aggregate ty0 ty -> Expression params tables ('Grouped distincts) ty) where
-      (&.) = getAggregate
 
 {-----------------------------------------
 tables
@@ -507,19 +517,25 @@ renderTableReference = \case
     , renderExpression on
     ]
 
-data By tables tabcolty where
+data By
+  (tables :: [(Symbol,[(Symbol,ColumnType)])])
+  (tabcol :: (Symbol,Symbol)) where
   By
     :: (HasTable table tables columns, HasColumn column columns ty)
-    => Alias table
-    -> Alias column
-    -> By tables (table ::: (column ::: ty))
+    => (Alias table, Alias column)
+    -> By tables '(table, column)
 
-instance (HasTable table tables columns, HasColumn column columns ty)
-  => TableColumn table column (By tables (table ::: (column ::: ty))) where
-    (&.) = By
+by
+  :: ( KnownSymbol table
+     , tables ~ '[table ::: columns]
+     , HasColumn column columns ty
+     )
+  => Alias column
+  -> By tables '(table, column)
+by column = By (Alias (proxy# :: Proxy# (table :: Symbol)), column)
 
 renderBy :: By tables tabcolty -> ByteString
-renderBy (By table column) = renderAlias table <> "." <> renderAlias column
+renderBy (By (table, column)) = renderAlias table <> "." <> renderAlias column
 
 data GroupByClause tables grouping where
   NoGroups :: GroupByClause tables 'Ungrouped
