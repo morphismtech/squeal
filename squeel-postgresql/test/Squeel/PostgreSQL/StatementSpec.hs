@@ -26,52 +26,54 @@ spec = do
   it "correctly renders a simple SELECT query" $ do
     let
       statement :: Query Tables '[] SumAndCol1
-      statement = select
-        ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+      statement =
+        select ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
         (from (Table (#table1 `As` #table1)) & where_ (#col1 >* #col2))
     statement `queryRenders`
-      "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE (col1 > col2);"
+      "SELECT (col1 + col2) AS sum, col1 AS col1\
+      \ FROM table1 AS table1 WHERE (col1 > col2);"
   it "combines WHEREs using AND" $ do
     let
       statement :: Query Tables '[] SumAndCol1
-      statement = select
-        ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+      statement =
+        select ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
         (from (Table (#table1 `As` #table1)) & where_ true & where_ false)
     statement `queryRenders`
-      "SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 WHERE (TRUE AND FALSE);"
+      "SELECT (col1 + col2) AS sum, col1 AS col1\
+      \ FROM table1 AS table1 WHERE (TRUE AND FALSE);"
   it "performs sub SELECTs" $ do
     let
-      selection = select
-        ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
-        (from (Table (#table1 `As` #table1)))
       statement :: Query Tables '[] SumAndCol1
-      statement = selectStar (from (Subquery (selection `As` #sub)))
+      statement =
+        selectStar (from (Subquery
+          (select ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+            (from (Table (#table1 `As` #table1))) `As` #sub)))
     statement `queryRenders`
-      "SELECT * FROM SELECT (col1 + col2) AS sum, col1 AS col1 FROM table1 AS table1 AS sub;"
+      "SELECT * FROM\
+      \ SELECT (col1 + col2) AS sum, col1 AS col1\
+      \ FROM table1 AS table1 AS sub;"
   it "does LIMIT clauses" $ do
     let
       statement :: Query Tables '[] Columns
-      statement = selectStar
-        (from (Table (#table1 `As` #table1)) & limit 1)
+      statement = selectStar (from (Table (#table1 `As` #table1)) & limit 1)
     statement `queryRenders` "SELECT * FROM table1 AS table1 LIMIT 1;"
   it "should use the minimum of given LIMITs" $ do
     let
       statement :: Query Tables '[] Columns
-      statement = selectStar
-        (from (Table (#table1 `As` #table1)) & limit 1 & limit 2)
-    statement `queryRenders`
-      "SELECT * FROM table1 AS table1 LIMIT 1;"
+      statement =
+        selectStar (from (Table (#table1 `As` #table1)) & limit 1 & limit 2)
+    statement `queryRenders` "SELECT * FROM table1 AS table1 LIMIT 1;"
   it "should render parameters using $ signs" $ do
     let
       statement :: Query Tables '[ 'Required ('NotNull 'PGBool)] Columns
-      statement = selectStar
-        (from (Table (#table1 `As` #table1)) & where_ param1)
+      statement =
+        selectStar (from (Table (#table1 `As` #table1)) & where_ param1)
     statement `queryRenders` "SELECT * FROM table1 AS table1 WHERE $1;"
   it "does OFFSET clauses" $ do
     let
       statement :: Query Tables '[] Columns
-      statement = selectStar
-        (from (Table (#table1 `As` #table1)) & offset 1)
+      statement =
+        selectStar (from (Table (#table1 `As` #table1)) & offset 1)
     statement `queryRenders` "SELECT * FROM table1 AS table1 OFFSET 1;"
   it "should use the sum of given OFFSETs" $ do
     let
@@ -82,67 +84,81 @@ spec = do
   it "should render GROUP BY and HAVING clauses" $ do
     let
       statement :: Query Tables '[] SumAndCol1
-      statement = select
-        (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
+      statement =
+        select (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
         ( from (Table (#table1 `As` #table1))
           & group (By (#table1,#col1) :* Nil) 
           & having ((#col1 + sum_ #col2) >* 1) )
     statement `queryRenders`
-      "SELECT\
-      \ sum(col2) AS sum, col1 AS col1\
+      "SELECT sum(col2) AS sum, col1 AS col1\
       \ FROM table1 AS table1\
       \ GROUP BY table1.col1\
       \ HAVING ((col1 + sum(col2)) > 1);"
   it "correctly renders simple INSERTs" $ do
     let
       statement :: Manipulation Tables '[] '[]
-      statement = insertInto #table1 $ 2 `As` #col1 :* 4 `As` #col2 :* Nil
+      statement =
+        into #table1 (insertRow $ 2 `As` #col1 :* 4 `As` #col2 :* Nil)
+          Conflict ReturningNil
     statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
   it "correctly renders returning INSERTs" $ do
     let
       statement :: Manipulation Tables '[] SumAndCol1
-      statement = insertIntoReturning #table1
-        (2 `As` #col1 :* 4 `As` #col2 :* Nil)
-        ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+      statement =
+        into #table1 (insertRow $ 2 `As` #col1 :* 4 `As` #col2 :* Nil)
+          Conflict
+          (Returning $ (#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
     statement `manipulationRenders`
-      "INSERT INTO table1 (col1, col2) VALUES (2, 4) RETURNING (col1 + col2) AS sum, col1 AS col1;"
+      "INSERT INTO table1 (col1, col2) VALUES (2, 4)\
+      \ RETURNING (col1 + col2) AS sum, col1 AS col1;"
   it "correctly renders simple UPDATEs" $ do
     let
       statement :: Manipulation Tables '[] '[]
-      statement = update #table1
-        (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-        (#col1 /=* #col2)
+      statement =
+        update #table1 (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
+          (#col1 /=* #col2) ReturningNil
     statement `manipulationRenders`
-      "UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
+      "UPDATE table1 SET col1 = 2\
+      \ WHERE (col1 <> col2);"
   it "correctly renders returning UPDATEs" $ do
     let
       statement :: Manipulation Tables '[] SumAndCol1
-      statement = updateReturning #table1
-        (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-        (#col1 /=* #col2)
-        ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+      statement =
+        update #table1 (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
+          (#col1 /=* #col2)
+          (Returning $ (#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
     statement `manipulationRenders`
-      "UPDATE table1 SET col1 = 2 WHERE (col1 <> col2) RETURNING (col1 + col2) AS sum, col1 AS col1;"
+      "UPDATE table1 SET col1 = 2\
+      \ WHERE (col1 <> col2)\
+      \ RETURNING (col1 + col2) AS sum, col1 AS col1;"
   it "correctly renders upsert INSERTs" $ do
     let
       statement :: Manipulation Tables '[] '[]
-      statement = upsertInto #table1
-        (2 `As` #col1 :* 4 `As` #col2 :* Nil)
-        (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-        (#col1 /=* #col2)
+      statement =
+        into #table1 (insertRow $ 2 `As` #col1 :* 4 `As` #col2 :* Nil)
+          (OnConflictDoUpdate
+            (Set 2 `As` #col1 :* Same `As` #col2 :* Nil) (#col1 /=* #col2))
+          ReturningNil
     statement `manipulationRenders`
-      "INSERT INTO table1 (col1, col2) VALUES (2, 4) ON CONFLICT UPDATE table1 SET col1 = 2 WHERE (col1 <> col2);"
+      "INSERT INTO table1 (col1, col2) VALUES (2, 4)\
+      \ ON CONFLICT DO UPDATE\
+      \ SET col1 = 2 WHERE (col1 <> col2);"
   it "correctly renders returning upsert INSERTs" $ do
     let
       statement :: Manipulation Tables '[] SumAndCol1
-      statement = upsertIntoReturning #table1
-        (2 `As` #col1 :* 4 `As` #col2 :* Nil)
-        (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-        (#col1 /=* #col2)
-        ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+      statement =
+        into #table1 (insertRow $ 2 `As` #col1 :* 4 `As` #col2 :* Nil)
+          (OnConflictDoUpdate
+            (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
+            (#col1 /=* #col2))
+          (Returning $ (#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
     statement `manipulationRenders`
-      "INSERT INTO table1 (col1, col2) VALUES (2, 4) ON CONFLICT UPDATE table1 SET col1 = 2 WHERE (col1 <> col2) RETURNING (col1 + col2) AS sum, col1 AS col1;"
+      "INSERT INTO table1 (col1, col2) VALUES (2, 4)\
+      \ ON CONFLICT DO UPDATE\
+      \ SET col1 = 2\
+      \ WHERE (col1 <> col2)\
+      \ RETURNING (col1 + col2) AS sum, col1 AS col1;"
   it "correctly renders DELETEs" $ do
     let
       statement :: Manipulation Tables '[] '[]
@@ -152,8 +168,9 @@ spec = do
   it "should be safe against SQL injection in literal text" $ do
     let
       statement :: Manipulation StudentsTable '[] '[]
-      statement = insertInto #students $
-        "Robert'); DROP TABLE students;" `As` #name :* Nil
+      statement = into #students
+        (insertRow $ "Robert'); DROP TABLE students;" `As` #name :* Nil)
+        Conflict ReturningNil
     statement `manipulationRenders`
       "INSERT INTO students (name) VALUES (E'Robert''); DROP TABLE students;');"
   describe "JOINs" $ do
@@ -209,18 +226,19 @@ spec = do
         \ CROSS JOIN orders AS orders2;"
   it "should render CREATE TABLE statements" $ do
     createTable #table1
-      (  (int4 & notNull) `As` #col1
-      :* (int4 & notNull) `As` #col2
-      :* Nil)
+      ((int4 & notNull) `As` #col1 :* (int4 & notNull) `As` #col2 :* Nil)
       `definitionRenders`
-      "CREATE TABLE table1 (col1 int4 NOT NULL, col2 int4 NOT NULL);"
+      "CREATE TABLE table1\
+      \ (col1 int4 NOT NULL, col2 int4 NOT NULL);"
     createTable #table2
-      (  serial `As` #col1
-      :* text `As` #col2
-      :* (int8 & notNull & default_ 8) `As` #col3
-      :* Nil)
+      ( serial `As` #col1 :*
+        text `As` #col2 :*
+        (int8 & notNull & default_ 8) `As` #col3 :* Nil )
       `definitionRenders`
-      "CREATE TABLE table2 (col1 serial, col2 text, col3 int8 NOT NULL DEFAULT 8);"
+      "CREATE TABLE table2\
+      \ (col1 serial,\
+      \ col2 text,\
+      \ col3 int8 NOT NULL DEFAULT 8);"
   it "should render DROP TABLE statements" $ do
     let
       statement :: Definition Tables '[]

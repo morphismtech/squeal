@@ -36,7 +36,7 @@ module Squeel.PostgreSQL.Schema
   , Rename
   , Join
   , Grouping (..)
-  , TableColumn (..)
+  , IsTableColumn (..)
   , module GHC.OverloadedLabels
   , module GHC.TypeLits
   ) where
@@ -174,5 +174,5 @@ data Grouping
   = Ungrouped
   | Grouped [(Symbol,Symbol)]
 
-class TableColumn table column expression where
+class IsTableColumn table column expression where
   (&.) :: Alias table -> Alias column -> expression

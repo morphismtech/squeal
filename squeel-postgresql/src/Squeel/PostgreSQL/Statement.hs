@@ -8,6 +8,8 @@
   , LambdaCase
   , MagicHash
   , OverloadedStrings
+  , PolyKinds
+  , RankNTypes
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
@@ -70,7 +72,7 @@ class KnownSymbol column => HasColumn column columns ty
     getColumn
       :: Proxy# column
       -> Expression params '[table ::: columns] 'Ungrouped ty
-    getColumn column = UnsafeExpression $ fromString $ symbolVal' column
+    getColumn column = UnsafeExpression $ renderSymbol column
 instance {-# OVERLAPPING #-} KnownSymbol column
   => HasColumn column ((column ::: optionality ty) ': tys) ('Required ty)
 instance {-# OVERLAPPABLE #-} (KnownSymbol column, HasColumn column table ty)
@@ -81,7 +83,7 @@ instance (HasColumn column columns ty, tables ~ '[table ::: columns])
     fromLabel = getColumn
 
 instance (HasTable table tables columns, HasColumn column columns ty)
-  => TableColumn table column (Expression params tables 'Ungrouped ty) where
+  => IsTableColumn table column (Expression params tables 'Ungrouped ty) where
     table &. column = UnsafeExpression $
       renderAlias table <> "." <> renderAlias column
 
@@ -105,34 +107,32 @@ coalesce
   :: [Expression params tables grouping ('Required ('Null x))]
   -> Expression params tables grouping ('Required ('NotNull x))
   -> Expression params tables grouping ('Required ('NotNull x))
-coalesce nulls isn'tNull = UnsafeExpression $ mconcat
-  [ "COALESCE("
-  , ByteString.intercalate ", " $ map renderExpression nulls
-  , ", ", renderExpression isn'tNull
-  , ")"
-  ]
+coalesce nulls isn'tNull = UnsafeExpression $
+  "COALESCE"
+  <> parenthesized (commaSeparated (renderExpression <$> nulls))
+  <> ", " <> renderExpression isn'tNull
 
 unsafeBinaryOp
   :: ByteString
   -> Expression params tables grouping ty0
   -> Expression params tables grouping ty1
   -> Expression params tables grouping ty2
-unsafeBinaryOp op x y = UnsafeExpression $ mconcat
-  ["(", renderExpression x, " ", op, " ", renderExpression y, ")"]
+unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
+  renderExpression x <+> op <+> renderExpression y
 
 unsafeUnaryOp
   :: ByteString
   -> Expression params tables grouping ty0
   -> Expression params tables grouping ty1
-unsafeUnaryOp op x = UnsafeExpression $ mconcat
-  ["(", op, " ", renderExpression x, ")"]
+unsafeUnaryOp op x = UnsafeExpression $ parenthesized $
+  op <+> renderExpression x
 
 unsafeFunction
   :: ByteString
   -> Expression params tables grouping xty
   -> Expression params tables grouping yty
-unsafeFunction fun x = UnsafeExpression $ mconcat
-  [fun, "(", renderExpression x, ")"]
+unsafeFunction fun x = UnsafeExpression $
+  fun <> parenthesized (renderExpression x)
 
 instance PGNum ty
   => Num (Expression params tables grouping ('Required (nullity ty))) where
@@ -373,8 +373,8 @@ data SortExpression params tables grouping where
 
 renderSortExpression :: SortExpression params tables grouping -> ByteString
 renderSortExpression = \case
-  Asc expression -> renderExpression expression <> " ASC"
-  Desc expression -> renderExpression expression <> " DESC"
+  Asc expression -> renderExpression expression <+> "ASC"
+  Desc expression -> renderExpression expression <+> "DESC"
 
 {-----------------------------------------
 aggregation
@@ -402,8 +402,7 @@ renderGroupByClause :: GroupByClause tables grouping -> ByteString
 renderGroupByClause = \case
   NoGroups -> ""
   Group Nil -> ""
-  Group bys -> " GROUP BY " <> ByteString.intercalate ", "
-    (hcollapse (hmap (K . renderBy) bys))
+  Group bys -> " GROUP BY" <+> renderCommaSeparated renderBy bys
 
 data HavingClause params tables grouping where
   NoHaving :: HavingClause params tables 'Ungrouped
@@ -415,8 +414,8 @@ renderHavingClause :: HavingClause params tables grouping -> ByteString
 renderHavingClause = \case
   NoHaving -> ""
   Having [] -> ""
-  Having conditions -> " HAVING " <> ByteString.intercalate ", "
-    (renderExpression <$> conditions)
+  Having conditions ->
+    " HAVING" <+> commaSeparated (renderExpression <$> conditions)
 
 class (KnownSymbol table, KnownSymbol column)
   => GroupedBy table column bys where
@@ -451,7 +450,7 @@ instance
   ( HasTable table tables columns
   , HasColumn column columns ty
   , GroupedBy table column bys
-  ) => TableColumn table column
+  ) => IsTableColumn table column
     (Expression params tables ('Grouped bys) ty) where (&.) = getGroup2
 
 unsafeAggregate
@@ -528,39 +527,16 @@ renderTableReference :: TableReference params schema tables -> ByteString
 renderTableReference = \case
   Table table -> renderAliased renderTable table
   Subquery selection -> renderAliased renderQuery selection
-  CrossJoin right left -> mconcat
-    [ renderTableReference left
-    , " CROSS JOIN "
-    , renderTableReference right
-    ]
-  InnerJoin right on left -> mconcat
-    [ renderTableReference left
-    , " INNER JOIN "
-    , renderTableReference right
-    , " ON "
-    , renderExpression on
-    ]
-  LeftOuterJoin right on left -> mconcat
-    [ renderTableReference left
-    , " LEFT OUTER JOIN "
-    , renderTableReference right
-    , " ON "
-    , renderExpression on
-    ]
-  RightOuterJoin right on left -> mconcat
-    [ renderTableReference left
-    , " RIGHT OUTER JOIN "
-    , renderTableReference right
-    , " ON "
-    , renderExpression on
-    ]
-  FullOuterJoin right on left -> mconcat
-    [ renderTableReference left
-    , " FULL OUTER JOIN "
-    , renderTableReference right
-    , " ON "
-    , renderExpression on
-    ]
+  CrossJoin right left ->
+    renderTableReference left <+> "CROSS JOIN" <+> renderTableReference right
+  InnerJoin right on left -> renderJoin "INNER JOIN" right on left
+  LeftOuterJoin right on left -> renderJoin "LEFT OUTER JOIN" right on left
+  RightOuterJoin right on left -> renderJoin "RIGHT OUTER JOIN" right on left
+  FullOuterJoin right on left -> renderJoin "FULL OUTER JOIN" right on left
+  where
+    renderJoin op right on left =
+      renderTableReference left <+> op <+> renderTableReference right
+      <+> "ON" <+> renderExpression on
 
 data TableExpression
   (params :: [ColumnType])
@@ -593,18 +569,18 @@ renderTableExpression
     where
       renderWheres = \case
         [] -> ""
-        wh:[] -> " WHERE " <> renderExpression wh
-        wh:whs -> " WHERE " <> renderExpression (foldr (&&*) wh whs)
+        wh:[] -> " WHERE" <+> renderExpression wh
+        wh:whs -> " WHERE" <+> renderExpression (foldr (&&*) wh whs)
       renderSorts = \case
         [] -> ""
-        srts -> " SORT BY "
-          <> ByteString.intercalate ", " (renderSortExpression <$> srts)
+        srts -> " SORT BY"
+          <+> commaSeparated (renderSortExpression <$> srts)
       renderLimits = \case
         [] -> ""
-        lims -> " LIMIT " <> fromString (show (minimum lims))
+        lims -> " LIMIT" <+> fromString (show (minimum lims))
       renderOffsets = \case
         [] -> ""
-        offs -> " OFFSET " <> fromString (show (sum offs))
+        offs -> " OFFSET" <+> fromString (show (sum offs))
 
 from
   :: TableReference params schema tables
@@ -753,15 +729,15 @@ jsonb :: TypeExpression ('Required ('Null ('PGJsonb)))
 jsonb = UnsafeTypeExpression "jsonb"
 
 notNull
-  :: TypeExpression ('Required ('Null ty))
-  -> TypeExpression ('Required ('NotNull ty))
-notNull ty = UnsafeTypeExpression $ renderTypeExpression ty <> " NOT NULL"
+  :: TypeExpression (optionality ('Null ty))
+  -> TypeExpression (optionality ('NotNull ty))
+notNull ty = UnsafeTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
 default_
   :: Expression '[] '[] 'Ungrouped ('Required ty)
   -> TypeExpression ('Required ty)
   -> TypeExpression ('Optional ty)
 default_ x ty = UnsafeTypeExpression $
-  renderTypeExpression ty <> " DEFAULT " <> renderExpression x
+  renderTypeExpression ty <+> "DEFAULT" <+> renderExpression x
 
 class PGTyped (ty :: PGType) where
   pgtype :: TypeExpression ('Required ('Null ty))
@@ -798,8 +774,8 @@ newtype Definition
 
 instance Category Definition where
   id = UnsafeDefinition ";"
-  dd1 . dd0 = UnsafeDefinition $
-    renderDefinition dd0 <> " " <> renderDefinition dd1
+  ddl1 . ddl0 = UnsafeDefinition $
+    renderDefinition ddl0 <+> renderDefinition ddl1
 
 newtype Manipulation
   (schema :: [(Symbol,[(Symbol,ColumnType)])])
@@ -823,17 +799,29 @@ union, unionAll, intersect, intersectAll, except, exceptAll
   -> Query schema params columns
   -> Query schema params columns
 q1 `union` q2 = UnsafeQuery $
-  "(" <> renderQuery q1 <> ") UNION (" <> renderQuery q2 <> ")"
+  parenthesized (renderQuery q1)
+  <+> "UNION"
+  <+> parenthesized (renderQuery q2)
 q1 `unionAll` q2 = UnsafeQuery $
-  "(" <> renderQuery q1 <> ") UNION ALL " <> renderQuery q2
+  parenthesized (renderQuery q1)
+  <+> "UNION" <+> "ALL"
+  <+> parenthesized (renderQuery q2)
 q1 `intersect` q2 = UnsafeQuery $
-  "(" <> renderQuery q1 <> ") INTERSECT " <> renderQuery q2
+  parenthesized (renderQuery q1)
+  <+> "INTERSECT"
+  <+> parenthesized (renderQuery q2)
 q1 `intersectAll` q2 = UnsafeQuery $
-  "(" <> renderQuery q1 <> ") INTERSECT ALL " <> renderQuery q2
+  parenthesized (renderQuery q1)
+  <+> "INTERSECT" <+> "ALL"
+  <+> parenthesized (renderQuery q2)
 q1 `except` q2 = UnsafeQuery $
-  "(" <> renderQuery q1 <> ") EXCEPT " <> renderQuery q2
+  parenthesized (renderQuery q1)
+  <+> "EXCEPT"
+  <+> parenthesized (renderQuery q2)
 q1 `exceptAll` q2 = UnsafeQuery $
-  "(" <> renderQuery q1 <> ") EXCEPT ALL " <> renderQuery q2
+  parenthesized (renderQuery q1)
+  <+> "EXCEPT" <+> "ALL"
+  <+> parenthesized (renderQuery q2)
 
 {-----------------------------------------
 SELECT statements
@@ -845,18 +833,15 @@ select
   -> TableExpression params schema tables grouping
   -> Query schema params columns
 select list tabs = UnsafeQuery $
-  "SELECT " <> renderList list <> " " <> renderTableExpression tabs
-  where
-    renderList
-      = ByteString.intercalate ", "
-      . hcollapse
-      . hmap (K . renderAliased renderExpression)
+  "SELECT"
+  <+> renderCommaSeparated (renderAliased renderExpression) list
+  <+> renderTableExpression tabs
 
 selectStar
   :: (tables ~ '[table ::: columns])
   => TableExpression params schema tables 'Ungrouped
   -> Query schema params columns
-selectStar tabs = UnsafeQuery $ "SELECT * " <> renderTableExpression tabs
+selectStar tabs = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression tabs
 
 selectDotStar
   :: HasTable table tables columns
@@ -864,7 +849,14 @@ selectDotStar
   -> TableExpression params schema tables 'Ungrouped
   -> Query schema params columns
 selectDotStar table tables = UnsafeQuery $
-  "SELECT " <> renderAlias table <> ".* " <> renderTableExpression tables
+  "SELECT" <+> renderAlias table <> ".*" <+> renderTableExpression tables
+
+selectRow
+  :: SListI columns
+  => NP (Aliased (Expression params '[] 'Ungrouped)) columns
+  -> Query schema params columns
+selectRow row = UnsafeQuery $
+  "SELECT" <+> renderCommaSeparated (renderAliased renderExpression) row
 
 {-----------------------------------------
 CREATE statements
@@ -875,18 +867,13 @@ createTable
   => Alias table
   -> NP (Aliased TypeExpression) columns
   -> Definition schema (Create table columns schema)
-createTable table columns = UnsafeDefinition $ mconcat
-  [ "CREATE TABLE "
-  , renderAlias table
-  , " ("
-  , ByteString.intercalate ", " . hcollapse $
-      hmap (K . renderColumn) columns
-  , ");"
-  ]
+createTable table columns = UnsafeDefinition $
+  "CREATE TABLE" <+> renderAlias table
+  <+> parenthesized (renderCommaSeparated renderColumn columns) <> ";"
   where
     renderColumn :: Aliased TypeExpression x -> ByteString
     renderColumn (ty `As` column) =
-      renderAlias column <> " " <> renderTypeExpression ty
+      renderAlias column <+> renderTypeExpression ty
 
 {-----------------------------------------
 DROP statements
@@ -896,7 +883,7 @@ dropTable
   :: KnownSymbol table
   => Alias table
   -> Definition schema (Drop table schema)
-dropTable table = UnsafeDefinition $ "DROP TABLE " <> renderAlias table <> ";"
+dropTable table = UnsafeDefinition $ "DROP TABLE" <+> renderAlias table <> ";"
 
 {-----------------------------------------
 ALTER statements
@@ -908,10 +895,9 @@ alterTable
   -> AlterTable columns0 columns1
   -> Definition schema (Alter table schema columns1)
 alterTable table alteration = UnsafeDefinition $
-  "ALTER TABLE "
-  <> renderAlias table
-  <> " "
-  <> renderAlterTable alteration
+  "ALTER TABLE"
+  <+> renderAlias table
+  <+> renderAlterTable alteration
   <> ";"
 
 alterTableRename
@@ -920,11 +906,8 @@ alterTableRename
   -> Alias table1
   -> Definition schema (Rename table0 table1 schema)
 alterTableRename table0 table1 = UnsafeDefinition $
-  "ALTER TABLE "
-  <> renderAlias table0
-  <> " RENAME TO "
-  <> renderAlias table1
-  <> ";"
+  "ALTER TABLE" <+> renderAlias table0
+  <+> "RENAME TO" <+> renderAlias table1 <> ";"
 
 data AlterTable
   (columns0 :: [(Symbol, ColumnType)])
@@ -937,10 +920,7 @@ addColumnDefault
   -> TypeExpression ('Optional ty)
   -> AlterTable columns (Create column ('Optional ty) columns)
 addColumnDefault column ty = UnsafeAlterTable $
-  "ADD COLUMN "
-  <> renderAlias column
-  <> " "
-  <> renderTypeExpression ty
+  "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
 addColumnNull
   :: KnownSymbol column
@@ -948,17 +928,14 @@ addColumnNull
   -> TypeExpression ('Required ('Null ty))
   -> AlterTable columns ((column ::: 'Required ('Null ty)) ': columns)
 addColumnNull column ty = UnsafeAlterTable $
-  "ADD COLUMN "
-  <> renderAlias column
-  <> " "
-  <> renderTypeExpression ty
+  "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
 dropColumn
   :: KnownSymbol column
   => Alias column
   -> AlterTable columns (Drop column columns)
 dropColumn column = UnsafeAlterTable $
-  "DROP COLUMN " <> renderAlias column
+  "DROP COLUMN" <+> renderAlias column
 
 renameColumn
   :: (KnownSymbol column0, KnownSymbol column1)
@@ -966,8 +943,7 @@ renameColumn
   -> Alias column1
   -> AlterTable columns (Rename column0 column1 columns)
 renameColumn column0 column1 = UnsafeAlterTable $
-  "RENAME COLUMN " <> renderAlias column0
-  <> " TO " <> renderAlias column1
+  "RENAME COLUMN" <+> renderAlias column0  <+> "TO" <+> renderAlias column1
 
 alterColumn
   :: (KnownSymbol column, HasColumn column columns ty0)
@@ -975,8 +951,7 @@ alterColumn
   -> AlterColumn ty0 ty1
   -> AlterTable columns (Alter column columns ty1)
 alterColumn column alteration = UnsafeAlterTable $
-  "ALTER COLUMN " <> renderAlias column
-  <> " " <> renderAlterColumn alteration
+  "ALTER COLUMN" <+> renderAlias column <+> renderAlterColumn alteration
 
 data AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
   UnsafeAlterColumn {renderAlterColumn :: ByteString}
@@ -985,7 +960,7 @@ setDefault
   :: Expression '[] '[] 'Ungrouped ('Required ty)
   -> AlterColumn ('Required ty) ('Optional ty)
 setDefault expression = UnsafeAlterColumn $
-  "SET DEFAULT " <> renderExpression expression
+  "SET DEFAULT" <+> renderExpression expression
 
 dropDefault :: AlterColumn ('Optional ty) ('Required ty)
 dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
@@ -1008,53 +983,90 @@ alterType ty = UnsafeAlterColumn $ "TYPE " <> renderTypeExpression ty
 INSERT statements
 -----------------------------------------}
 
-insertInto
-  :: (SListI columns, HasTable table schema columns)
-  => Alias table
-  -> NP (Aliased (Expression params '[] 'Ungrouped)) columns
-  -> Manipulation schema params '[]
-insertInto table expressions = UnsafeManipulation $ "INSERT INTO "
-  <> renderAlias table
-  <> " (" <> ByteString.intercalate ", " aliases
-  <> ") VALUES ("
-  <> ByteString.intercalate ", " values
-  <> ");"
-  where
-    aliases = hcollapse $ hmap
-      (\ (_ `As` name) -> K (renderAlias name))
-      expressions
-    values = hcollapse $ hmap
-      (\ (expression `As` _) -> K (renderExpression expression))
-      expressions
-
-insertIntoReturning
+into
   :: (SListI columns, SListI results, HasTable table schema columns)
   => Alias table
-  -> NP (Aliased (Expression params '[] 'Ungrouped)) columns
-  -> NP (Aliased (Expression params '[table ::: columns] 'Ungrouped)) results
+  -> InsertClause schema params columns
+  -> ConflictClause params columns
+  -> ReturningClause params columns results
   -> Manipulation schema params results
-insertIntoReturning table inserts results
-  = UnsafeManipulation . mconcat $
-    [ "INSERT INTO "
-    , renderAlias table
-    , " (" <> ByteString.intercalate ", " aliases
-    , ") VALUES ("
-    , ByteString.intercalate ", " values
-    , ") RETURNING "
-    , renderList results
-    , ";"
-    ]
+into table insert conflict returning = UnsafeManipulation $
+  "INSERT" <+> "INTO" <+> renderAlias table
+  <+> renderInsertClause insert
+  <> renderConflictClause conflict
+  <> renderReturningClause returning
+
+data InsertClause
+  (schema :: [(Symbol,[(Symbol,ColumnType)])])
+  (params :: [ColumnType])
+  (columns :: [(Symbol,ColumnType)])
+  = InsertValues
+      (NP (Aliased (Expression params '[] 'Ungrouped)) columns)
+      [NP (Aliased (Expression params '[] 'Ungrouped)) columns]
+  | InsertQuery (Query schema params columns)
+
+insertRow
+  :: (NP (Aliased (Expression params '[] 'Ungrouped)) columns)
+  -> InsertClause schema params columns
+insertRow row = InsertValues row []
+
+renderInsertClause
+  :: SListI columns
+  => InsertClause schema params columns
+  -> ByteString
+renderInsertClause = \case
+  InsertValues row rows ->
+    parenthesized (renderCommaSeparated renderAliasPart row)
+    <+> "VALUES"
+    <+> commaSeparated
+      (parenthesized . renderCommaSeparated renderValuePart <$> row:rows)
+    where
+      renderAliasPart, renderValuePart
+        :: Aliased (Expression params '[] 'Ungrouped) ty -> ByteString
+      renderAliasPart (_ `As` name) = renderAlias name
+      renderValuePart (value `As` _) = renderExpression value
+  InsertQuery q -> renderQuery q
+
+data ReturningClause
+  (params :: [ColumnType])
+  (columns :: [(Symbol,ColumnType)])
+  (results :: [(Symbol,ColumnType)])
   where
-    aliases = hcollapse $ hmap
-      (\ (_ `As` name) -> K (renderAlias name))
-      inserts
-    values = hcollapse $ hmap
-      (\ (expression `As` _) -> K (renderExpression expression))
-      inserts
-    renderList
-      = ByteString.intercalate ", "
-      . hcollapse
-      . hmap (K . renderAliased renderExpression)
+    ReturningNil :: ReturningClause params columns '[]
+    ReturningStar :: ReturningClause params columns columns
+    Returning
+      :: NP (Aliased (Expression params '[table ::: columns] 'Ungrouped)) results
+      -> ReturningClause params columns results
+
+renderReturningClause
+  :: SListI results
+  => ReturningClause params columns results
+  -> ByteString
+renderReturningClause = \case
+  ReturningNil -> ";"
+  ReturningStar -> " RETURNING *;"
+  Returning results -> " RETURNING"
+    <+> renderCommaSeparated (renderAliased renderExpression) results <> ";"
+
+data ConflictClause params columns where
+  Conflict :: ConflictClause params columns
+  OnConflictDoNothing :: ConflictClause params columns
+  OnConflictDoUpdate
+    :: NP (Aliased (UpdateExpression params '[table ::: columns])) columns
+    -> Condition params '[table ::: columns] 'Ungrouped
+    -> ConflictClause params columns
+
+renderConflictClause
+  :: SListI columns
+  => ConflictClause params columns
+  -> ByteString
+renderConflictClause = \case
+  Conflict -> ""
+  OnConflictDoNothing -> " ON CONFLICT DO NOTHING"
+  OnConflictDoUpdate updates wh
+    -> " ON CONFLICT DO UPDATE SET"
+      <+> renderCommaSeparatedMaybe renderUpdateExpression updates
+      <+> "WHERE" <+> renderExpression wh
 
 {-----------------------------------------
 UPDATE statements
@@ -1069,111 +1081,23 @@ renderUpdateExpression
   -> Maybe ByteString
 renderUpdateExpression = \case
   Same `As` _ -> Nothing
-  Set expression `As` column -> Just $ mconcat
-    [ renderAlias column
-    , " = "
-    , renderExpression expression
-    ]
+  Set expression `As` column -> Just $
+    renderAlias column <+> "=" <+> renderExpression expression
 
 update
-  :: (HasTable table schema columns, SListI columns)
+  :: (HasTable table schema columns, SListI columns, SListI results)
   => Alias table
   -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
   -> Condition params '[table ::: columns] 'Ungrouped
-  -> Manipulation schema params '[]
-update table columns wh = UnsafeManipulation $ mconcat
-  [ "UPDATE "
-  , renderAlias table
-  , " SET "
-  , ByteString.intercalate ", " . catMaybes . hcollapse $
-      hmap (K . renderUpdateExpression) columns
-  , " WHERE ", renderExpression wh, ";"
-  ]
-
-updateReturning
-  :: (SListI columns, SListI results, HasTable table schema columns)
-  => Alias table
-  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
-  -> Condition params '[table ::: columns] 'Ungrouped
-  -> NP (Aliased (Expression params '[table ::: columns] 'Ungrouped)) results
+  -> ReturningClause params columns results
   -> Manipulation schema params results
-updateReturning table updates wh results = UnsafeManipulation $ mconcat
-  [ "UPDATE "
-  , renderAlias table
-  , " SET "
-  , ByteString.intercalate ", " . catMaybes . hcollapse $
-      hmap (K . renderUpdateExpression) updates
-  , " WHERE ", renderExpression wh
-  , " RETURNING ", renderList results
-  , ";"
-  ]
-  where
-    renderList
-      = ByteString.intercalate ", "
-      . hcollapse
-      . hmap (K . renderAliased renderExpression)
-
-upsertInto
-  :: (SListI columns, HasTable table schema columns)
-  => Alias table
-  -> NP (Aliased (Expression params '[] 'Ungrouped)) columns
-  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
-  -> Condition params '[table ::: columns] 'Ungrouped
-  -> Manipulation schema params '[]
-upsertInto table inserts updates wh = UnsafeManipulation . mconcat $
-  [ "INSERT INTO "
-  , renderAlias table
-  , " (" <> ByteString.intercalate ", " aliases
-  , ") VALUES ("
-  , ByteString.intercalate ", " values
-  , ") ON CONFLICT UPDATE "
-  , renderAlias table
-  , " SET "
-  , ByteString.intercalate ", " . catMaybes . hcollapse $
-      hmap (K . renderUpdateExpression) updates
-  , " WHERE ", renderExpression wh, ";"
-  ] where
-    aliases = hcollapse $ hmap
-      (\ (_ `As` name) -> K (renderAlias name))
-      inserts
-    values = hcollapse $ hmap
-      (\ (expression `As` _) -> K (renderExpression expression))
-      inserts
-
-upsertIntoReturning
-  :: (SListI columns, SListI results, HasTable table schema columns)
-  => Alias table
-  -> NP (Aliased (Expression params '[] 'Ungrouped)) columns
-  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
-  -> Condition params '[table ::: columns] 'Ungrouped
-  -> NP (Aliased (Expression params '[table ::: columns] 'Ungrouped)) results
-  -> Manipulation schema params results
-upsertIntoReturning table inserts updates wh results =
-  UnsafeManipulation . mconcat $
-    [ "INSERT INTO "
-    , renderAlias table
-    , " (" <> ByteString.intercalate ", " aliases
-    , ") VALUES ("
-    , ByteString.intercalate ", " values
-    , ") ON CONFLICT UPDATE "
-    , renderAlias table
-    , " SET "
-    , ByteString.intercalate ", " . catMaybes . hcollapse $
-        hmap (K . renderUpdateExpression) updates
-    , " WHERE ", renderExpression wh
-    , " RETURNING ", renderList results
-    , ";"
-    ] where
-      aliases = hcollapse $ hmap
-        (\ (_ `As` name) -> K (renderAlias name))
-        inserts
-      values = hcollapse $ hmap
-        (\ (expression `As` _) -> K (renderExpression expression))
-        inserts
-      renderList
-        = ByteString.intercalate ", "
-        . hcollapse
-        . hmap (K . renderAliased renderExpression)
+update table columns wh returning = UnsafeManipulation $
+  "UPDATE"
+  <+> renderAlias table
+  <+> "SET"
+  <+> renderCommaSeparatedMaybe renderUpdateExpression columns
+  <+> "WHERE" <+> renderExpression wh
+  <> renderReturningClause returning
 
 {-----------------------------------------
 DELETE statements
@@ -1184,8 +1108,41 @@ deleteFrom
   => Alias table
   -> Condition params '[table ::: columns] 'Ungrouped
   -> Manipulation schema params '[]
-deleteFrom table wh = UnsafeManipulation $ mconcat
-  [ "DELETE FROM "
-  , renderAlias table
-  , " WHERE ", renderExpression wh, ";"
-  ]
+deleteFrom table wh = UnsafeManipulation $
+  "DELETE FROM" <+> renderAlias table
+  <+> "WHERE" <+> renderExpression wh <> ";"
+
+{-----------------------------------------
+render helper functions
+-----------------------------------------}
+
+parenthesized :: ByteString -> ByteString
+parenthesized str = "(" <> str <> ")"
+
+(<+>) :: ByteString -> ByteString -> ByteString
+str1 <+> str2 = str1 <> " " <> str2
+
+commaSeparated :: [ByteString] -> ByteString
+commaSeparated = ByteString.intercalate ", "
+
+renderCommaSeparated
+  :: SListI xs
+  => (forall x. expression x -> ByteString)
+  -> NP expression xs -> ByteString
+renderCommaSeparated render
+  = commaSeparated
+  . hcollapse
+  . hmap (K . render)
+
+renderCommaSeparatedMaybe
+  :: SListI xs
+  => (forall x. expression x -> Maybe ByteString)
+  -> NP expression xs -> ByteString
+renderCommaSeparatedMaybe render
+  = commaSeparated
+  . catMaybes
+  . hcollapse
+  . hmap (K . render)
+
+renderSymbol :: KnownSymbol str => Proxy# str -> ByteString
+renderSymbol p = fromString $ symbolVal' p
