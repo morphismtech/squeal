@@ -433,7 +433,7 @@ class (KnownSymbol table, KnownSymbol column)
     getGroup2 table column = UnsafeExpression $
       renderAlias table <> "." <> renderAlias column
 instance {-# OVERLAPPING #-} (KnownSymbol table, KnownSymbol column)
-  => GroupedBy table column '[ '(table,column)]
+  => GroupedBy table column ('(table,column) ': bys)
 instance {-# OVERLAPPABLE #-}
   ( KnownSymbol table
   , KnownSymbol column
