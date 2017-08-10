@@ -108,9 +108,8 @@ coalesce
   -> Expression params tables grouping ('Required ('NotNull x))
   -> Expression params tables grouping ('Required ('NotNull x))
 coalesce nulls isn'tNull = UnsafeExpression $
-  "COALESCE"
-  <> parenthesized (commaSeparated (renderExpression <$> nulls))
-  <> ", " <> renderExpression isn'tNull
+  "COALESCE" <> parenthesized (commaSeparated
+    ((renderExpression <$> nulls) <> [renderExpression isn'tNull]))
 
 unsafeBinaryOp
   :: ByteString
