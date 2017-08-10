@@ -383,12 +383,18 @@ data By
   (tables :: [(Symbol,[(Symbol,ColumnType)])])
   (tabcol :: (Symbol,Symbol)) where
   By
+    :: (tables ~ '[table ::: columns], HasColumn column columns ty)
+    => Alias column
+    -> By tables '(table, column)
+  By2
     :: (HasTable table tables columns, HasColumn column columns ty)
     => (Alias table, Alias column)
     -> By tables '(table, column)
 
 renderBy :: By tables tabcolty -> ByteString
-renderBy (By (table, column)) = renderAlias table <> "." <> renderAlias column
+renderBy = \case
+  By column -> renderAlias column
+  By2 (table, column) -> renderAlias table <> "." <> renderAlias column
 
 data GroupByClause tables grouping where
   NoGroups :: GroupByClause tables 'Ungrouped
@@ -893,13 +899,17 @@ check
 check condition = UnsafeTableConstraint $
   "CHECK" <+> renderExpression condition
 
-newtype Column
+data Column
   (columns :: [(Symbol,ColumnType)])
   (columnty :: (Symbol,ColumnType))
-    = UnsafeColumn {renderColumn :: ByteString}
-instance HasColumn column columns ty
-  => IsLabel column (Column columns (column ::: ty)) where
-    fromLabel symbol = UnsafeColumn (renderSymbol symbol)
+    where
+      Column
+        :: HasColumn column columns ty
+        => Alias column
+        -> Column columns (column ::: ty)
+
+renderColumn :: Column columns columnty -> ByteString
+renderColumn (Column column) = renderAlias column
 
 unique
   :: SListI subcolumns
@@ -913,7 +923,7 @@ primaryKey
   => NP (Column columns) subcolumns
   -> TableConstraint schema columns
 primaryKey columns = UnsafeTableConstraint $
-  "PRIMARY KEY" <+> renderCommaSeparated renderColumn columns
+  "PRIMARY KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
 type family SameTypes columns0 columns1 :: Constraint where
   SameTypes '[] '[] = ()

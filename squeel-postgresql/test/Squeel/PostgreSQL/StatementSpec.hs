@@ -87,12 +87,12 @@ spec = do
       statement =
         select (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
         ( from (Table (#table1 `As` #table1))
-          & group (By (#table1,#col1) :* Nil) 
+          & group (By #col1 :* Nil) 
           & having ((#col1 + sum_ #col2) >* 1) )
     statement `queryRenders`
       "SELECT sum(col2) AS sum, col1 AS col1\
       \ FROM table1 AS table1\
-      \ GROUP BY table1.col1\
+      \ GROUP BY col1\
       \ HAVING ((col1 + sum(col2)) > 1);"
   it "correctly renders simple INSERTs" $ do
     let
@@ -226,10 +226,12 @@ spec = do
         \ CROSS JOIN orders AS orders2;"
   it "should render CREATE TABLE statements" $ do
     createTable #table1
-      ((int4 & notNull) `As` #col1 :* (int4 & notNull) `As` #col2 :* Nil) []
+      ((int4 & notNull) `As` #col1 :* (int4 & notNull) `As` #col2 :* Nil)
+      [primaryKey (Column #col1 :* Column #col2 :* Nil)]
       `definitionRenders`
       "CREATE TABLE table1\
-      \ (col1 int4 NOT NULL, col2 int4 NOT NULL);"
+      \ (col1 int4 NOT NULL, col2 int4 NOT NULL,\
+      \ PRIMARY KEY (col1, col2));"
     createTable #table2
       ( serial `As` #col1 :*
         text `As` #col2 :*
