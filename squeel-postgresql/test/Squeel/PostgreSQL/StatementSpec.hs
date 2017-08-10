@@ -8,6 +8,7 @@
 
 module Squeel.PostgreSQL.StatementSpec where
 
+import Control.Category ((>>>))
 import Data.Function
 import Generics.SOP hiding (from)
 import Test.Hspec
@@ -243,6 +244,41 @@ spec = do
       \ col2 text,\
       \ col3 int8 NOT NULL DEFAULT 8,\
       \ CHECK (col3 > 0));"
+    let
+      statement :: Definition '[]
+        '[ "users" :::
+           '[ "id" ::: 'Optional ('NotNull 'PGInt4)
+            , "username" ::: 'Required ('NotNull 'PGText)
+            ]
+         , "emails" :::
+            '[ "id" ::: 'Optional ('NotNull 'PGInt4)
+            , "userid" ::: 'Required ('NotNull 'PGInt4)
+            , "email" ::: 'Required ('NotNull 'PGText)
+            ]
+         ]
+      statement =
+        createTable #users
+          (serial `As` #id :* (text & notNull) `As` #username :* Nil)
+          [primaryKey (Column #id :* Nil)]
+        >>>
+        createTable #emails
+          ( serial `As` #id :*
+            (integer & notNull) `As` #userid :*
+            (text & notNull) `As` #email :* Nil )
+          [ primaryKey (Column #id :* Nil)
+          , foreignKey (Column #userid :* Nil) #users (Column #id :* Nil)
+          ]
+    statement `definitionRenders`
+      "CREATE TABLE users\
+      \ (id serial, username text NOT NULL,\
+      \ PRIMARY KEY (id));\
+      \ \
+      \CREATE TABLE emails\
+      \ (id serial,\
+      \ userid integer NOT NULL,\
+      \ email text NOT NULL,\
+      \ PRIMARY KEY (id),\
+      \ FOREIGN KEY (userid) REFERENCES users (id));"
   it "should render DROP TABLE statements" $ do
     let
       statement :: Definition Tables '[]
