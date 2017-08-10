@@ -41,8 +41,8 @@ main = do
   Char8.putStrLn "querying"
   connection2 <- flip execPQ (connection1 :: Connection Tables) $ do
     for_ [I i :* I (i+1) :* Nil | i <- [1::Int32,3..9]] $ pqExecParams
-      ( into #table1
-        (insertRow (param1 `As` #col1 :* param2 `As` #col2 :* Nil))
+      ( insertInto #table1
+        (Values (param1 `As` #col1 :* param2 `As` #col2 :* Nil) [])
         Conflict ReturningNil )
     Just result <- pqExecNil . query $
       selectStar (from (Table (#table1 `As` #table1)))

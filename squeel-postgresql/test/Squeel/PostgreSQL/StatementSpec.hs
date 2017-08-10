@@ -98,7 +98,7 @@ spec = do
     let
       statement :: Manipulation Tables '[] '[]
       statement =
-        into #table1 (insertRow $ 2 `As` #col1 :* 4 `As` #col2 :* Nil)
+        insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
           Conflict ReturningNil
     statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
@@ -106,7 +106,7 @@ spec = do
     let
       statement :: Manipulation Tables '[] SumAndCol1
       statement =
-        into #table1 (insertRow $ 2 `As` #col1 :* 4 `As` #col2 :* Nil)
+        insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
           Conflict
           (Returning $ (#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
     statement `manipulationRenders`
@@ -136,7 +136,7 @@ spec = do
     let
       statement :: Manipulation Tables '[] '[]
       statement =
-        into #table1 (insertRow $ 2 `As` #col1 :* 4 `As` #col2 :* Nil)
+        insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
           (OnConflictDoUpdate
             (Set 2 `As` #col1 :* Same `As` #col2 :* Nil) (#col1 /=* #col2))
           ReturningNil
@@ -148,7 +148,7 @@ spec = do
     let
       statement :: Manipulation Tables '[] SumAndCol1
       statement =
-        into #table1 (insertRow $ 2 `As` #col1 :* 4 `As` #col2 :* Nil)
+        insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
           (OnConflictDoUpdate
             (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
             (#col1 /=* #col2))
@@ -168,8 +168,8 @@ spec = do
   it "should be safe against SQL injection in literal text" $ do
     let
       statement :: Manipulation StudentsTable '[] '[]
-      statement = into #students
-        (insertRow $ "Robert'); DROP TABLE students;" `As` #name :* Nil)
+      statement = insertInto #students
+        (Values ("Robert'); DROP TABLE students;" `As` #name :* Nil) [])
         Conflict ReturningNil
     statement `manipulationRenders`
       "INSERT INTO students (name) VALUES (E'Robert''); DROP TABLE students;');"

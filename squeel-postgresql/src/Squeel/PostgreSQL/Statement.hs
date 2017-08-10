@@ -983,39 +983,34 @@ alterType ty = UnsafeAlterColumn $ "TYPE " <> renderTypeExpression ty
 INSERT statements
 -----------------------------------------}
 
-into
+insertInto
   :: (SListI columns, SListI results, HasTable table schema columns)
   => Alias table
-  -> InsertClause schema params columns
+  -> ValuesClause schema params columns
   -> ConflictClause params columns
   -> ReturningClause params columns results
   -> Manipulation schema params results
-into table insert conflict returning = UnsafeManipulation $
+insertInto table insert conflict returning = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderAlias table
-  <+> renderInsertClause insert
+  <+> renderValuesClause insert
   <> renderConflictClause conflict
   <> renderReturningClause returning
 
-data InsertClause
+data ValuesClause
   (schema :: [(Symbol,[(Symbol,ColumnType)])])
   (params :: [ColumnType])
   (columns :: [(Symbol,ColumnType)])
-  = InsertValues
+  = Values
       (NP (Aliased (Expression params '[] 'Ungrouped)) columns)
       [NP (Aliased (Expression params '[] 'Ungrouped)) columns]
-  | InsertQuery (Query schema params columns)
+  | ValuesQuery (Query schema params columns)
 
-insertRow
-  :: (NP (Aliased (Expression params '[] 'Ungrouped)) columns)
-  -> InsertClause schema params columns
-insertRow row = InsertValues row []
-
-renderInsertClause
+renderValuesClause
   :: SListI columns
-  => InsertClause schema params columns
+  => ValuesClause schema params columns
   -> ByteString
-renderInsertClause = \case
-  InsertValues row rows ->
+renderValuesClause = \case
+  Values row rows ->
     parenthesized (renderCommaSeparated renderAliasPart row)
     <+> "VALUES"
     <+> commaSeparated
@@ -1025,7 +1020,7 @@ renderInsertClause = \case
         :: Aliased (Expression params '[] 'Ungrouped) ty -> ByteString
       renderAliasPart (_ `As` name) = renderAlias name
       renderValuePart (value `As` _) = renderExpression value
-  InsertQuery q -> renderQuery q
+  ValuesQuery q -> renderQuery q
 
 data ReturningClause
   (params :: [ColumnType])
