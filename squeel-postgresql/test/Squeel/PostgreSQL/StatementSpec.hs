@@ -243,7 +243,7 @@ spec = do
       \ (col1 serial,\
       \ col2 text,\
       \ col3 int8 NOT NULL DEFAULT 8,\
-      \ CHECK (col3 > 0));"
+      \ CHECK ((col3 > 0)));"
     let
       statement :: Definition '[]
         '[ "users" :::
@@ -267,6 +267,8 @@ spec = do
             (text & notNull) `As` #email :* Nil )
           [ primaryKey (Column #id :* Nil)
           , foreignKey (Column #userid :* Nil) #users (Column #id :* Nil)
+          , unique (Column #email :* Nil)
+          , check (#email /=* "")
           ]
     statement `definitionRenders`
       "CREATE TABLE users\
@@ -278,7 +280,9 @@ spec = do
       \ userid integer NOT NULL,\
       \ email text NOT NULL,\
       \ PRIMARY KEY (id),\
-      \ FOREIGN KEY (userid) REFERENCES users (id));"
+      \ FOREIGN KEY (userid) REFERENCES users (id),\
+      \ UNIQUE (email),\
+      \ CHECK ((email <> E'')));"
   it "should render DROP TABLE statements" $ do
     let
       statement :: Definition Tables '[]

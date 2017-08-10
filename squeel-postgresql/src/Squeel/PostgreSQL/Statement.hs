@@ -897,7 +897,7 @@ check
   :: Condition '[] '[table ::: columns] 'Ungrouped
   -> TableConstraint schema columns
 check condition = UnsafeTableConstraint $
-  "CHECK" <+> renderExpression condition
+  "CHECK" <+> parenthesized (renderExpression condition)
 
 data Column
   (columns :: [(Symbol,ColumnType)])
@@ -916,7 +916,7 @@ unique
   => NP (Column columns) subcolumns
   -> TableConstraint schema columns
 unique columns = UnsafeTableConstraint $
-  "UNIQUE" <+> renderCommaSeparated renderColumn columns
+  "UNIQUE" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
 primaryKey
   :: (SListI subcolumns, NotNullTypes subcolumns)
