@@ -251,7 +251,7 @@ spec = do
             , "username" ::: 'Required ('NotNull 'PGText)
             ]
          , "emails" :::
-            '[ "id" ::: 'Optional ('NotNull 'PGInt4)
+           '[ "id" ::: 'Optional ('NotNull 'PGInt4)
             , "userid" ::: 'Required ('NotNull 'PGInt4)
             , "email" ::: 'Required ('NotNull 'PGText)
             ]
