@@ -226,7 +226,7 @@ spec = do
         \ CROSS JOIN orders AS orders2;"
   it "should render CREATE TABLE statements" $ do
     createTable #table1
-      ((int4 & notNull) `As` #col1 :* (int4 & notNull) `As` #col2 :* Nil)
+      ((int4 & notNull) `As` #col1 :* (int4 & notNull) `As` #col2 :* Nil) []
       `definitionRenders`
       "CREATE TABLE table1\
       \ (col1 int4 NOT NULL, col2 int4 NOT NULL);"
@@ -234,11 +234,13 @@ spec = do
       ( serial `As` #col1 :*
         text `As` #col2 :*
         (int8 & notNull & default_ 8) `As` #col3 :* Nil )
+        [check (#col3 >* 0)]
       `definitionRenders`
       "CREATE TABLE table2\
       \ (col1 serial,\
       \ col2 text,\
-      \ col3 int8 NOT NULL DEFAULT 8);"
+      \ col3 int8 NOT NULL DEFAULT 8,\
+      \ CHECK (col3 > 0));"
   it "should render DROP TABLE statements" $ do
     let
       statement :: Definition Tables '[]
