@@ -15,6 +15,7 @@ library
   exposed-modules:
     Squeel.PostgreSQL
     Squeel.PostgreSQL.Binary
+    Squeel.PostgreSQL.Binary2
     Squeel.PostgreSQL.PQ
     Squeel.PostgreSQL.Statement
     Squeel.PostgreSQL.Schema
