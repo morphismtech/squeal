@@ -32,12 +32,12 @@ main = do
   connection1 <- flip execPQ (connection0 :: Connection '[]) $ pqExec $
     createTable #students
       (  (text & notNull) `As` #name
-      :* Nil )
+      :* Nil ) []
     >>>
     createTable #table1
       (  (int4 & notNull) `As` #col1
       :* (int4 & notNull) `As` #col2
-      :* Nil )
+      :* Nil ) []
   Char8.putStrLn "querying"
   connection2 <- flip execPQ (connection1 :: Connection Tables) $ do
     for_ [I i :* I (i+1) :* Nil | i <- [1::Int32,3..9]] $ pqExecParams
