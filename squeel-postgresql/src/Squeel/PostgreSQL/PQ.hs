@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE
     DataKinds
+  , DefaultSignatures
   , FunctionalDependencies
   , PolyKinds
   , DeriveFunctor
@@ -55,66 +56,69 @@ evalPQ (PQ pq) = fmap fst . pq
 execPQ :: Functor m => PQ db0 db1 m x -> Connection db0 -> m (Connection db1)
 execPQ (PQ pq) = fmap snd . pq
 
-class AtkeyPQ pq where
+pqAp
+  :: Monad m
+  => PQ db0 db1 m (x -> y)
+  -> PQ db1 db2 m x
+  -> PQ db0 db2 m y
+pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
+  (f', conn') <- f conn
+  (x', conn'') <- x conn'
+  return (f' x', conn'')
 
-  pqAp
-    :: Monad m
-    => pq db0 db1 m (x -> y)
-    -> pq db1 db2 m x
-    -> pq db0 db2 m y
+pqBind
+  :: Monad m
+  => (x -> PQ db1 db2 m y)
+  -> PQ db0 db1 m x
+  -> PQ db0 db2 m y
+pqBind f (PQ x) = PQ $ \ conn -> do
+  (x', conn') <- x conn
+  runPQ (f x') conn'
 
-  pqBind
-    :: Monad m
-    => (x -> pq db1 db2 m y)
-    -> pq db0 db1 m x
-    -> pq db0 db2 m y
+pqThen
+  :: Monad m
+  => PQ db1 db2 m y
+  -> PQ db0 db1 m x
+  -> PQ db0 db2 m y
+pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 
-  pqThen
-    :: Monad m
-    => pq db1 db2 m y
-    -> pq db0 db1 m x
-    -> pq db0 db2 m y
-  pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
+pqExec
+  :: MonadBase IO io
+  => Definition db0 db1
+  -> PQ db0 db1 io (Maybe (Result '[]))
+pqExec (UnsafeDefinition q) = PQ $ \ (Connection conn) -> do
+  result <- liftBase $ LibPQ.exec conn q
+  return (Result <$> result, Connection conn)
 
-  pqExec
-    :: MonadBase IO io
-    => Definition db0 db1
-    -> pq db0 db1 io (Maybe (Result '[]))
+pqThenExec
+  :: MonadBase IO io
+  => Definition db1 db2
+  -> PQ db0 db1 io x
+  -> PQ db0 db2 io (Maybe (Result '[]))
+pqThenExec = pqThen . pqExec
 
-  pqThenExec
-    :: MonadBase IO io
-    => Definition db1 db2
-    -> pq db0 db1 io x
-    -> pq db0 db2 io (Maybe (Result '[]))
-  pqThenExec = pqThen . pqExec
-
-class MonadPQ db m | m -> db where
+class Monad m => MonadPQ db m | m -> db where
 
   pqExecParams
     :: (ToOids ps, AllZip HasEncoding ps xs)
     => Manipulation db ps ys
     -> NP I xs
     -> m (Maybe (Result ys))
+  default pqExecParams
+    :: ( MonadTrans t
+       , MonadPQ db m1
+       , m ~ t m1
+       , ToOids ps
+       , AllZip HasEncoding ps xs )
+    => Manipulation db ps ys
+    -> NP I xs
+    -> m (Maybe (Result ys))
+  pqExecParams manipulation params = lift $ pqExecParams manipulation params
 
   pqExecNil
     :: Manipulation db '[] ys
     -> m (Maybe (Result ys))
   pqExecNil statement = pqExecParams statement Nil
-
-instance AtkeyPQ PQ where
-
-  pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
-    (f', conn') <- f conn
-    (x', conn'') <- x conn'
-    return (f' x', conn'')
-
-  pqBind f (PQ x) = PQ $ \ conn -> do
-    (x', conn') <- x conn
-    runPQ (f x') conn'
-
-  pqExec (UnsafeDefinition q) = PQ $ \ (Connection conn) -> do
-    result <- liftBase $ LibPQ.exec conn q
-    return (Result <$> result, Connection conn)
 
 instance MonadBase IO io => MonadPQ db (PQ db db io) where
 
