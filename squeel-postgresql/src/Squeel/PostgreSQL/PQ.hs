@@ -39,28 +39,32 @@ import Squeel.PostgreSQL.Binary
 import Squeel.PostgreSQL.Statement
 import Squeel.PostgreSQL.Schema
 
-newtype Connection (db :: [(Symbol,[(Symbol,ColumnType)])]) =
+newtype Connection (schema :: [(Symbol,[(Symbol,ColumnType)])]) =
   Connection { unConnection :: LibPQ.Connection }
 
 newtype PQ
-  (db0 :: [(Symbol,[(Symbol,ColumnType)])])
-  (db1 :: [(Symbol,[(Symbol,ColumnType)])])
+  (schema0 :: [(Symbol,[(Symbol,ColumnType)])])
+  (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
   (m :: * -> *)
   (x :: *) =
-    PQ { runPQ :: Connection db0 -> m (x, Connection db1) }
+    PQ { unPQ :: Connection schema0 -> m (x, Connection schema1) }
     deriving Functor
 
-evalPQ :: Functor m => PQ db0 db1 m x -> Connection db0 -> m x
-evalPQ (PQ pq) = fmap fst . pq
+evalPQ :: Functor m => Connection schema0 -> PQ schema0 schema1 m x -> m x
+evalPQ conn (PQ pq) = fmap fst $ pq conn
 
-execPQ :: Functor m => PQ db0 db1 m x -> Connection db0 -> m (Connection db1)
-execPQ (PQ pq) = fmap snd . pq
+runPQ
+  :: Functor m
+  => Connection schema0
+  -> PQ schema0 schema1 m x
+  -> m (Connection schema1)
+runPQ conn (PQ pq) = fmap snd $ pq conn
 
 pqAp
   :: Monad m
-  => PQ db0 db1 m (x -> y)
-  -> PQ db1 db2 m x
-  -> PQ db0 db2 m y
+  => PQ schema0 schema1 m (x -> y)
+  -> PQ schema1 schema2 m x
+  -> PQ schema0 schema2 m y
 pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
   (f', conn') <- f conn
   (x', conn'') <- x conn'
@@ -68,61 +72,52 @@ pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
 
 pqBind
   :: Monad m
-  => (x -> PQ db1 db2 m y)
-  -> PQ db0 db1 m x
-  -> PQ db0 db2 m y
+  => (x -> PQ schema1 schema2 m y)
+  -> PQ schema0 schema1 m x
+  -> PQ schema0 schema2 m y
 pqBind f (PQ x) = PQ $ \ conn -> do
   (x', conn') <- x conn
-  runPQ (f x') conn'
+  unPQ (f x') conn'
 
 pqThen
   :: Monad m
-  => PQ db1 db2 m y
-  -> PQ db0 db1 m x
-  -> PQ db0 db2 m y
+  => PQ schema1 schema2 m y
+  -> PQ schema0 schema1 m x
+  -> PQ schema0 schema2 m y
 pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 
 pqExec
   :: MonadBase IO io
-  => Definition db0 db1
-  -> PQ db0 db1 io (Maybe (Result '[]))
+  => Definition schema0 schema1
+  -> PQ schema0 schema1 io (Maybe (Result '[]))
 pqExec (UnsafeDefinition q) = PQ $ \ (Connection conn) -> do
   result <- liftBase $ LibPQ.exec conn q
   return (Result <$> result, Connection conn)
 
 pqThenExec
   :: MonadBase IO io
-  => Definition db1 db2
-  -> PQ db0 db1 io x
-  -> PQ db0 db2 io (Maybe (Result '[]))
+  => Definition schema1 schema2
+  -> PQ schema0 schema1 io x
+  -> PQ schema0 schema2 io (Maybe (Result '[]))
 pqThenExec = pqThen . pqExec
 
-class Monad m => MonadPQ db m | m -> db where
+class Monad m => MonadPQ schema m | m -> schema where
 
   pqExecParams
     :: (ToOids ps, AllZip HasEncoding ps xs)
-    => Manipulation db ps ys
-    -> NP I xs
-    -> m (Maybe (Result ys))
+    => Manipulation schema ps ys -> NP I xs -> m (Maybe (Result ys))
   default pqExecParams
-    :: ( MonadTrans t
-       , MonadPQ db m1
-       , m ~ t m1
-       , ToOids ps
-       , AllZip HasEncoding ps xs )
-    => Manipulation db ps ys
-    -> NP I xs
-    -> m (Maybe (Result ys))
+    :: (MonadTrans t, MonadPQ schema m1, m ~ t m1)
+    => (ToOids ps, AllZip HasEncoding ps xs)
+    => Manipulation schema ps ys -> NP I xs -> m (Maybe (Result ys))
   pqExecParams manipulation params = lift $ pqExecParams manipulation params
 
-  pqExecNil
-    :: Manipulation db '[] ys
-    -> m (Maybe (Result ys))
+  pqExecNil :: Manipulation schema '[] ys -> m (Maybe (Result ys))
   pqExecNil statement = pqExecParams statement Nil
 
-instance MonadBase IO io => MonadPQ db (PQ db db io) where
+instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
 
-  pqExecParams (UnsafeManipulation q :: Manipulation db ps ys) params =
+  pqExecParams (UnsafeManipulation q :: Manipulation schema ps ys) params =
     PQ $ \ (Connection conn) -> do
       let
         paramValues = encodings (Proxy :: Proxy ps) params
@@ -134,44 +129,45 @@ instance MonadBase IO io => MonadPQ db (PQ db db io) where
       result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
       return (Result <$> result, Connection conn)
 
-instance Monad m => Applicative (PQ db db m) where
+instance Monad m => Applicative (PQ schema schema m) where
   pure x = PQ $ \ conn -> pure (x, conn)
   (<*>) = pqAp
 
-instance Monad m => Monad (PQ db db m) where
+instance Monad m => Monad (PQ schema schema m) where
   return = pure
   (>>=) = flip pqBind
 
-instance MonadTrans (PQ db db) where
+instance MonadTrans (PQ schema schema) where
   lift m = PQ $ \ conn -> do
     x <- m
     return (x, conn)
 
-instance MonadBase b m => MonadBase b (PQ db db m) where
+instance MonadBase b m => MonadBase b (PQ schema schema m) where
   liftBase = lift . liftBase
 
-type PQRun db = forall m x. Monad m => PQ db db m x -> m (x, Connection db)
+type PQRun schema =
+  forall m x. Monad m => PQ schema schema m x -> m (x, Connection schema)
 
-pqliftWith :: Functor m => (PQRun db -> m a) -> PQ db db m a
+pqliftWith :: Functor m => (PQRun schema -> m a) -> PQ schema schema m a
 pqliftWith f = PQ $ \ conn ->
-  fmap (\ x -> (x, conn)) (f $ \ pq -> runPQ pq conn)
+  fmap (\ x -> (x, conn)) (f $ \ pq -> unPQ pq conn)
 
-instance MonadBaseControl b m => MonadBaseControl b (PQ db db m) where
-  type StM (PQ db db m) x = StM m (x, Connection db)
+instance MonadBaseControl b m => MonadBaseControl b (PQ schema schema m) where
+  type StM (PQ schema schema m) x = StM m (x, Connection schema)
   liftBaseWith f =
     pqliftWith $ \ run -> liftBaseWith $ \ runInBase -> f $ runInBase . run
   restoreM = PQ . const . restoreM
 
-connectdb :: MonadBase IO io => ByteString -> io (Connection db)
+connectdb :: MonadBase IO io => ByteString -> io (Connection schema)
 connectdb = fmap Connection . liftBase . LibPQ.connectdb
 
-finish :: MonadBase IO io => Connection db -> io ()
+finish :: MonadBase IO io => Connection schema -> io ()
 finish = liftBase . LibPQ.finish . unConnection
 
 withConnection
   :: MonadBaseControl IO io
   => ByteString
-  -> (Connection db -> io x)
+  -> (Connection schema -> io x)
   -> io x
 withConnection connString action =
   bracket (connectdb connString) finish action
