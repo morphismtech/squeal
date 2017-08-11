@@ -8,6 +8,7 @@
 
 module Squeel.PostgreSQL.StatementSpec where
 
+import Control.Category ((>>>))
 import Data.Function
 import Generics.SOP hiding (from)
 import Test.Hspec
@@ -87,12 +88,12 @@ spec = do
       statement =
         select (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
         ( from (Table (#table1 `As` #table1))
-          & group (By (#table1,#col1) :* Nil) 
+          & group (By #col1 :* Nil) 
           & having ((#col1 + sum_ #col2) >* 1) )
     statement `queryRenders`
       "SELECT sum(col2) AS sum, col1 AS col1\
       \ FROM table1 AS table1\
-      \ GROUP BY table1.col1\
+      \ GROUP BY col1\
       \ HAVING ((col1 + sum(col2)) > 1);"
   it "correctly renders simple INSERTs" $ do
     let
@@ -227,18 +228,61 @@ spec = do
   it "should render CREATE TABLE statements" $ do
     createTable #table1
       ((int4 & notNull) `As` #col1 :* (int4 & notNull) `As` #col2 :* Nil)
+      [primaryKey (Column #col1 :* Column #col2 :* Nil)]
       `definitionRenders`
       "CREATE TABLE table1\
-      \ (col1 int4 NOT NULL, col2 int4 NOT NULL);"
+      \ (col1 int4 NOT NULL, col2 int4 NOT NULL,\
+      \ PRIMARY KEY (col1, col2));"
     createTable #table2
       ( serial `As` #col1 :*
         text `As` #col2 :*
         (int8 & notNull & default_ 8) `As` #col3 :* Nil )
+        [check (#col3 >* 0)]
       `definitionRenders`
       "CREATE TABLE table2\
       \ (col1 serial,\
       \ col2 text,\
-      \ col3 int8 NOT NULL DEFAULT 8);"
+      \ col3 int8 NOT NULL DEFAULT 8,\
+      \ CHECK ((col3 > 0)));"
+    let
+      statement :: Definition '[]
+        '[ "users" :::
+           '[ "id" ::: 'Optional ('NotNull 'PGInt4)
+            , "username" ::: 'Required ('NotNull 'PGText)
+            ]
+         , "emails" :::
+           '[ "id" ::: 'Optional ('NotNull 'PGInt4)
+            , "userid" ::: 'Required ('NotNull 'PGInt4)
+            , "email" ::: 'Required ('NotNull 'PGText)
+            ]
+         ]
+      statement =
+        createTable #users
+          (serial `As` #id :* (text & notNull) `As` #username :* Nil)
+          [primaryKey (Column #id :* Nil)]
+        >>>
+        createTable #emails
+          ( serial `As` #id :*
+            (integer & notNull) `As` #userid :*
+            (text & notNull) `As` #email :* Nil )
+          [ primaryKey (Column #id :* Nil)
+          , foreignKey (Column #userid :* Nil) #users (Column #id :* Nil)
+          , unique (Column #email :* Nil)
+          , check (#email /=* "")
+          ]
+    statement `definitionRenders`
+      "CREATE TABLE users\
+      \ (id serial, username text NOT NULL,\
+      \ PRIMARY KEY (id));\
+      \ \
+      \CREATE TABLE emails\
+      \ (id serial,\
+      \ userid integer NOT NULL,\
+      \ email text NOT NULL,\
+      \ PRIMARY KEY (id),\
+      \ FOREIGN KEY (userid) REFERENCES users (id),\
+      \ UNIQUE (email),\
+      \ CHECK ((email <> E'')));"
   it "should render DROP TABLE statements" $ do
     let
       statement :: Definition Tables '[]

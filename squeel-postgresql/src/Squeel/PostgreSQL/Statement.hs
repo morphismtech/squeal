@@ -108,9 +108,8 @@ coalesce
   -> Expression params tables grouping ('Required ('NotNull x))
   -> Expression params tables grouping ('Required ('NotNull x))
 coalesce nulls isn'tNull = UnsafeExpression $
-  "COALESCE"
-  <> parenthesized (commaSeparated (renderExpression <$> nulls))
-  <> ", " <> renderExpression isn'tNull
+  "COALESCE" <> parenthesized (commaSeparated
+    ((renderExpression <$> nulls) <> [renderExpression isn'tNull]))
 
 unsafeBinaryOp
   :: ByteString
@@ -384,12 +383,18 @@ data By
   (tables :: [(Symbol,[(Symbol,ColumnType)])])
   (tabcol :: (Symbol,Symbol)) where
   By
+    :: (tables ~ '[table ::: columns], HasColumn column columns ty)
+    => Alias column
+    -> By tables '(table, column)
+  By2
     :: (HasTable table tables columns, HasColumn column columns ty)
     => (Alias table, Alias column)
     -> By tables '(table, column)
 
 renderBy :: By tables tabcolty -> ByteString
-renderBy (By (table, column)) = renderAlias table <> "." <> renderAlias column
+renderBy = \case
+  By column -> renderAlias column
+  By2 (table, column) -> renderAlias table <> "." <> renderAlias column
 
 data GroupByClause tables grouping where
   NoGroups :: GroupByClause tables 'Ungrouped
@@ -866,14 +871,84 @@ createTable
   :: (KnownSymbol table, SListI columns)
   => Alias table
   -> NP (Aliased TypeExpression) columns
+  -> [TableConstraint schema columns]
   -> Definition schema (Create table columns schema)
-createTable table columns = UnsafeDefinition $
+createTable table columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderAlias table
-  <+> parenthesized (renderCommaSeparated renderColumn columns) <> ";"
+  <+> parenthesized
+    ( renderCommaSeparated renderColumnDef columns
+      <> renderConstraints constraints )
+  <> ";"
   where
-    renderColumn :: Aliased TypeExpression x -> ByteString
-    renderColumn (ty `As` column) =
+    renderColumnDef :: Aliased TypeExpression x -> ByteString
+    renderColumnDef (ty `As` column) =
       renderAlias column <+> renderTypeExpression ty
+    renderConstraints :: [TableConstraint schema columns] -> ByteString
+    renderConstraints = \case
+      [] -> ""
+      _ -> ", " <> commaSeparated (renderTableConstraint <$> constraints)
+
+data TableConstraint
+  (schema :: [(Symbol,[(Symbol,ColumnType)])])
+  (columns :: [(Symbol,ColumnType)])
+  = UnsafeTableConstraint { renderTableConstraint :: ByteString }
+
+check
+  :: Condition '[] '[table ::: columns] 'Ungrouped
+  -> TableConstraint schema columns
+check condition = UnsafeTableConstraint $
+  "CHECK" <+> parenthesized (renderExpression condition)
+
+data Column
+  (columns :: [(Symbol,ColumnType)])
+  (columnty :: (Symbol,ColumnType))
+    where
+      Column
+        :: HasColumn column columns ty
+        => Alias column
+        -> Column columns (column ::: ty)
+
+renderColumn :: Column columns columnty -> ByteString
+renderColumn (Column column) = renderAlias column
+
+unique
+  :: SListI subcolumns
+  => NP (Column columns) subcolumns
+  -> TableConstraint schema columns
+unique columns = UnsafeTableConstraint $
+  "UNIQUE" <+> parenthesized (renderCommaSeparated renderColumn columns)
+
+primaryKey
+  :: (SListI subcolumns, NotNullTypes subcolumns)
+  => NP (Column columns) subcolumns
+  -> TableConstraint schema columns
+primaryKey columns = UnsafeTableConstraint $
+  "PRIMARY KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
+
+type family SameTypes columns0 columns1 :: Constraint where
+  SameTypes '[] '[] = ()
+  SameTypes ((column0 ::: ty0) ': columns0) ((column1 ::: ty1) ': columns1)
+    = (ty0 ~ ty1, SameTypes columns0 columns1)
+
+type family NotNullTypes columns :: Constraint where
+  NotNullTypes '[] = ()
+  NotNullTypes ((column ::: (optionality ('NotNull ty))) ': columns)
+    = NotNullTypes columns
+
+foreignKey
+  :: ( HasTable reftable schema refcolumns
+     , SameTypes subcolumns refsubcolumns
+     , NotNullTypes subcolumns
+     , SListI subcolumns
+     , SListI refsubcolumns)
+  => NP (Column columns) subcolumns
+  -> Alias reftable
+  -> NP (Column refcolumns) refsubcolumns
+  -> TableConstraint schema columns
+foreignKey columns reftable refcolumns = UnsafeTableConstraint $
+  "FOREIGN KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
+  <+> "REFERENCES" <+> renderAlias reftable
+  <+> parenthesized (renderCommaSeparated renderColumn refcolumns)
 
 {-----------------------------------------
 DROP statements
