@@ -11,6 +11,8 @@
 
 module Squeel.PostgreSQL.Binary2 where
 
+import Data.Aeson hiding (Null)
+import Data.Bits
 import Data.Int
 import Data.Scientific
 import Data.Time
@@ -57,6 +59,8 @@ instance ToParam LocalTime 'PGTimestamp where
 instance ToParam UTCTime 'PGTimestampTZ where
   toParam = K . Encoding.timestamptz_int
 instance ToParam DiffTime 'PGInterval where toParam = K . Encoding.interval_int
+instance ToParam Value 'PGJson where toParam = K . Encoding.json_ast
+instance ToParam Value 'PGJsonb where toParam = K . Encoding.jsonb_ast
 
 class ToColumnParam x (ty :: ColumnType) where
   toColumnParam :: x -> K (Maybe Encoding.Encoding) ty
@@ -76,8 +80,40 @@ class ToParams x (tys :: [ColumnType]) where
     = htrans (Proxy :: Proxy ToColumnParam) (toColumnParam . unI)
     . unZ . unSOP . from
 
-class FromValue pg y where
+class FromValue (pg :: PGType) y where
   fromValue :: proxy pg -> Decoding.Value y
+instance FromValue 'PGBool Bool where fromValue _ = Decoding.bool
+instance (Integral int, Bits int) => FromValue 'PGInt2 int where
+  fromValue _ = Decoding.int
+instance (Integral int, Bits int) => FromValue 'PGInt4 int where
+  fromValue _ = Decoding.int
+instance (Integral int, Bits int) => FromValue 'PGInt8 int where
+  fromValue _ = Decoding.int
+instance FromValue 'PGFloat4 Float where fromValue _ = Decoding.float4
+instance FromValue 'PGFloat8 Double where fromValue _ = Decoding.float8
+instance FromValue 'PGNumeric Scientific where fromValue _ = Decoding.numeric
+instance FromValue 'PGUuid UUID where fromValue _ = Decoding.uuid
+instance FromValue 'PGInet (NetAddr IP) where fromValue _ = Decoding.inet
+instance FromValue ('PGChar 1) Char where fromValue _ = Decoding.char
+instance FromValue 'PGText Strict.Text where fromValue _ = Decoding.text_strict
+instance FromValue 'PGText Lazy.Text where fromValue _ = Decoding.text_lazy
+instance FromValue 'PGBytea Strict.ByteString where
+  fromValue _ = Decoding.bytea_strict
+instance FromValue 'PGBytea Lazy.ByteString where
+  fromValue _ = Decoding.bytea_lazy
+instance FromValue 'PGDate Day where fromValue _ = Decoding.date
+instance FromValue 'PGTime TimeOfDay where fromValue _ = Decoding.time_int
+instance FromValue 'PGTimeTZ (TimeOfDay, TimeZone) where
+  fromValue _ = Decoding.timetz_int
+instance FromValue 'PGTimestamp LocalTime where
+  fromValue _ = Decoding.timestamp_int
+instance FromValue 'PGTimestampTZ UTCTime where
+  fromValue _ = Decoding.timestamptz_int
+instance FromValue 'PGInterval DiffTime where
+  fromValue _ = Decoding.interval_int
+instance FromValue 'PGJson Value where fromValue _ = Decoding.json_ast
+instance FromValue 'PGJsonb Value where fromValue _ = Decoding.jsonb_ast
+
 class FromRow pgs y where
   fromRow :: NP proxy pgs -> Decoding.Value y
   default fromRow
