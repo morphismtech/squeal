@@ -58,9 +58,6 @@ data PGType
   | PGNumeric
   | PGFloat4
   | PGFloat8
-  | PGSerial2
-  | PGSerial4
-  | PGSerial8
   | PGMoney
   | PGChar Nat
   | PGVarChar Nat
@@ -73,6 +70,7 @@ data PGType
   | PGTimeTZ
   | PGInterval
   | PGUuid
+  | PGInet
   | PGJson
   | PGJsonb
 
