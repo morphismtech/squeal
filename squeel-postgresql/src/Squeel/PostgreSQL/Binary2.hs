@@ -4,9 +4,12 @@
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
+  , LambdaCase
   , KindSignatures
   , MultiParamTypeClasses
   , ScopedTypeVariables
+  , TypeApplications
+  , TypeOperators
 #-}
 
 module Squeel.PostgreSQL.Binary2 where
@@ -22,7 +25,7 @@ import Generics.SOP
 import Network.IP.Addr
 
 import qualified Data.ByteString.Lazy as Lazy
-import qualified Data.ByteString as Strict
+import qualified Data.ByteString as Strict hiding (unpack)
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text as Strict
 import qualified PostgreSQL.Binary.Decoding as Decoding
@@ -65,11 +68,11 @@ instance ToParam Value 'PGJsonb where toParam = K . Encoding.jsonb_ast
 class ToColumnParam x (ty :: ColumnType) where
   toColumnParam :: x -> K (Maybe Encoding.Encoding) ty
 instance ToParam x pg => ToColumnParam x ('Required ('NotNull pg)) where
-  toColumnParam = K . Just . unK . (toParam :: x -> K Encoding.Encoding pg)
+  toColumnParam = K . Just . unK . toParam @x @pg
 instance ToParam x pg => ToColumnParam (Maybe x) ('Required ('Null pg)) where
-  toColumnParam = K . fmap (unK . (toParam :: x -> K Encoding.Encoding pg))
+  toColumnParam = K . fmap (unK . toParam @x @pg)
 instance ToParam x pg => ToColumnParam (Maybe x) ('Optional (nullity pg)) where
-  toColumnParam = K . fmap (unK . (toParam :: x -> K Encoding.Encoding pg))
+  toColumnParam = K . fmap (unK . toParam @x @pg)
 
 class ToParams x (tys :: [ColumnType]) where
   toParams :: x -> NP (K (Maybe Encoding.Encoding)) tys
@@ -77,7 +80,7 @@ class ToParams x (tys :: [ColumnType]) where
     :: (IsProductType x xs, AllZip ToColumnParam xs tys)
     => x -> NP (K (Maybe Encoding.Encoding)) tys
   toParams
-    = htrans (Proxy :: Proxy ToColumnParam) (toColumnParam . unI)
+    = htrans (Proxy @ToColumnParam) (toColumnParam . unI)
     . unZ . unSOP . from
 
 class FromValue (pg :: PGType) y where
@@ -114,11 +117,33 @@ instance FromValue 'PGInterval DiffTime where
 instance FromValue 'PGJson Value where fromValue _ = Decoding.json_ast
 instance FromValue 'PGJsonb Value where fromValue _ = Decoding.jsonb_ast
 
-class FromRow pgs y where
-  fromRow :: NP proxy pgs -> Decoding.Value y
+class FromColumnValue (colty :: (Symbol,ColumnType)) y where
+  fromColumnValue :: K (Maybe Strict.ByteString) colty -> y
+instance FromValue pg y
+  => FromColumnValue (column ::: ('Required ('NotNull pg))) y where
+    fromColumnValue = \case
+      K Nothing -> error "fromColumnValue: saw NULL when expecting NOT NULL"
+      (K (Just bytes)) ->
+        let
+          errOrValue =
+            Decoding.valueParser (fromValue @pg @y Proxy) bytes
+          err str = error $ "fromColumnValue: " ++ Strict.unpack str
+        in
+          either err id errOrValue
+instance FromValue pg y
+  => FromColumnValue (column ::: ('Required ('Null pg))) (Maybe y) where
+    fromColumnValue (K nullOrBytes)
+      = either err id
+      . Decoding.valueParser (fromValue @pg @y Proxy)
+      <$> nullOrBytes
+      where
+        err str = error $ "fromColumnValue: " ++ Strict.unpack str
+
+class FromRow (columns :: [(Symbol,ColumnType)]) y where
+  fromRow :: NP (K (Maybe Strict.ByteString)) columns -> y
   default fromRow
-    :: (IsProductType y ys, AllZip FromValue pgs ys)
-    => NP proxy pgs -> Decoding.Value y
+    :: (IsProductType y ys, AllZip FromColumnValue columns ys)
+    => NP (K (Maybe Strict.ByteString)) columns -> y
   fromRow
-    = fmap to . hsequence
-    . htrans (Proxy :: Proxy FromValue) fromValue . SOP . Z
+    = to . SOP . Z
+    . htrans (Proxy :: Proxy FromColumnValue) (I . fromColumnValue)
