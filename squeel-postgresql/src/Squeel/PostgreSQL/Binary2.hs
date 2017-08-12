@@ -66,19 +66,19 @@ instance ToParam Value 'PGJson where toParam = K . Encoding.json_ast
 instance ToParam Value 'PGJsonb where toParam = K . Encoding.jsonb_ast
 
 class ToColumnParam x (ty :: ColumnType) where
-  toColumnParam :: x -> K (Maybe Encoding.Encoding) ty
+  toColumnParam :: x -> K (Maybe Strict.ByteString) ty
 instance ToParam x pg => ToColumnParam x ('Required ('NotNull pg)) where
-  toColumnParam = K . Just . unK . toParam @x @pg
+  toColumnParam = K . Just . Encoding.encodingBytes . unK . toParam @x @pg
 instance ToParam x pg => ToColumnParam (Maybe x) ('Required ('Null pg)) where
-  toColumnParam = K . fmap (unK . toParam @x @pg)
+  toColumnParam = K . fmap (Encoding.encodingBytes . unK . toParam @x @pg)
 instance ToParam x pg => ToColumnParam (Maybe x) ('Optional (nullity pg)) where
-  toColumnParam = K . fmap (unK . toParam @x @pg)
+  toColumnParam = K . fmap (Encoding.encodingBytes . unK . toParam @x @pg)
 
 class ToParams x (tys :: [ColumnType]) where
-  toParams :: x -> NP (K (Maybe Encoding.Encoding)) tys
+  toParams :: x -> NP (K (Maybe Strict.ByteString)) tys
   default toParams
     :: (IsProductType x xs, AllZip ToColumnParam xs tys)
-    => x -> NP (K (Maybe Encoding.Encoding)) tys
+    => x -> NP (K (Maybe Strict.ByteString)) tys
   toParams
     = htrans (Proxy @ToColumnParam) (toColumnParam . unI)
     . unZ . unSOP . from
@@ -123,7 +123,7 @@ instance FromValue pg y
   => FromColumnValue (column ::: ('Required ('NotNull pg))) y where
     fromColumnValue = \case
       K Nothing -> error "fromColumnValue: saw NULL when expecting NOT NULL"
-      (K (Just bytes)) ->
+      K (Just bytes) ->
         let
           errOrValue =
             Decoding.valueParser (fromValue @pg @y Proxy) bytes
@@ -146,4 +146,4 @@ class FromRow (columns :: [(Symbol,ColumnType)]) y where
     => NP (K (Maybe Strict.ByteString)) columns -> y
   fromRow
     = to . SOP . Z
-    . htrans (Proxy :: Proxy FromColumnValue) (I . fromColumnValue)
+    . htrans (Proxy @FromColumnValue) (I . fromColumnValue)
