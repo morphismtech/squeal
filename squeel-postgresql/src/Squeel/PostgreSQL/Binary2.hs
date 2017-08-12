@@ -74,7 +74,7 @@ instance ToParam x pg => ToColumnParam (Maybe x) ('Required ('Null pg)) where
 instance ToParam x pg => ToColumnParam (Maybe x) ('Optional (nullity pg)) where
   toColumnParam = K . fmap (Encoding.encodingBytes . unK . toParam @x @pg)
 
-class ToParams x (tys :: [ColumnType]) where
+class SListI tys => ToParams x (tys :: [ColumnType]) where
   toParams :: x -> NP (K (Maybe Strict.ByteString)) tys
   default toParams
     :: (IsProductType x xs, AllZip ToColumnParam xs tys)
@@ -82,6 +82,26 @@ class ToParams x (tys :: [ColumnType]) where
   toParams
     = htrans (Proxy @ToColumnParam) (toColumnParam . unI)
     . unZ . unSOP . from
+instance ToParams () '[]
+instance ToColumnParam x ty => ToParams x '[ty] where
+  toParams x = toColumnParam x :* Nil
+instance (ToColumnParam x1 ty1, ToColumnParam x2 ty2)
+  => ToParams (x1,x2) '[ty1,ty2]
+instance (ToColumnParam x1 ty1, ToColumnParam x2 ty2, ToColumnParam x3 ty3)
+  => ToParams (x1,x2,x3) '[ty1,ty2,ty3]
+instance
+  ( ToColumnParam x1 ty1
+  , ToColumnParam x2 ty2
+  , ToColumnParam x3 ty3
+  , ToColumnParam x4 ty4
+  ) => ToParams (x1,x2,x3,x4) '[ty1,ty2,ty3,ty4]
+instance
+  ( ToColumnParam x1 ty1
+  , ToColumnParam x2 ty2
+  , ToColumnParam x3 ty3
+  , ToColumnParam x4 ty4
+  , ToColumnParam x5 ty5
+  ) => ToParams (x1,x2,x3,x4,x5) '[ty1,ty2,ty3,ty4,ty5]
 
 class FromValue (pg :: PGType) y where
   fromValue :: proxy pg -> Decoding.Value y
@@ -139,7 +159,7 @@ instance FromValue pg y
       where
         err str = error $ "fromColumnValue: " ++ Strict.unpack str
 
-class FromRow (columns :: [(Symbol,ColumnType)]) y where
+class SListI columns => FromRow (columns :: [(Symbol,ColumnType)]) y where
   fromRow :: NP (K (Maybe Strict.ByteString)) columns -> y
   default fromRow
     :: (IsProductType y ys, AllZip FromColumnValue columns ys)
@@ -147,3 +167,6 @@ class FromRow (columns :: [(Symbol,ColumnType)]) y where
   fromRow
     = to . SOP . Z
     . htrans (Proxy @FromColumnValue) (I . fromColumnValue)
+instance FromRow '[] ()
+instance FromColumnValue ty y => FromRow '[ty] y where
+  fromRow (y :* Nil) = fromColumnValue y
