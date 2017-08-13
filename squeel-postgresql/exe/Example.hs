@@ -39,10 +39,10 @@ main = do
   connection2 <- runPQ (connection1 :: Connection Schema) $ do
     let
       manipulation :: Manipulation Schema
-        '[ 'Required ('NotNull 'PGInt4)
-         , 'Required ('NotNull 'PGInt4)
-         , 'Required ('NotNull 'PGInt4)
-         , 'Required ('NotNull 'PGInt4)
+        '[ 'Required ('NotNull 'PGint4)
+         , 'Required ('NotNull 'PGint4)
+         , 'Required ('NotNull 'PGint4)
+         , 'Required ('NotNull 'PGint4)
          ] '[]
       manipulation =
         insertInto #table1
@@ -78,9 +78,9 @@ data Table1Row = Table1Row { col1 :: Int32, col2 :: Int32 }
 instance Generic Table1Row
 
 type Schema =
-  '[ "students" ::: '["name" ::: 'Required ('NotNull 'PGText)]
+  '[ "students" ::: '["name" ::: 'Required ('NotNull 'PGtext)]
    , "table1" :::
-       '[ "col1" ::: 'Required ('NotNull 'PGInt4)
-        , "col2" ::: 'Required ('NotNull 'PGInt4)
+       '[ "col1" ::: 'Required ('NotNull 'PGint4)
+        , "col2" ::: 'Required ('NotNull 'PGint4)
         ]
    ]
