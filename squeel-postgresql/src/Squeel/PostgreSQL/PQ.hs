@@ -31,7 +31,7 @@ import GHC.TypeLits
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
-import Squeel.PostgreSQL.Binary2
+import Squeel.PostgreSQL.Binary
 import Squeel.PostgreSQL.Statement
 import Squeel.PostgreSQL.Schema
 

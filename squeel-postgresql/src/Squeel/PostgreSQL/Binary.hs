@@ -13,7 +13,7 @@
   , UndecidableInstances
 #-}
 
-module Squeel.PostgreSQL.Binary2 where
+module Squeel.PostgreSQL.Binary where
 
 import Data.Aeson hiding (Null)
 import Data.Bits
