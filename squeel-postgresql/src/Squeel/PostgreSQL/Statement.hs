@@ -49,23 +49,17 @@ newtype Expression
     = UnsafeExpression { renderExpression :: ByteString }
     deriving (Show,Eq)
 
-class KnownNat n => HasParameter (n :: Nat) params ty | n params -> ty where
-  param :: Proxy# n -> Expression params tables grouping ty
-  param p = UnsafeExpression $ ("$" <>) $ fromString $ show $ natVal' p
-instance {-# OVERLAPPING #-} HasParameter 1 (ty1:tys) ty1
+class (PGTyped (BaseType ty), KnownNat n)
+  => HasParameter (n :: Nat) params ty | n params -> ty where
+    param :: proxy n -> Expression params tables grouping ty
+    param _ = UnsafeExpression $ parenthesized $
+      "$" <> paramNum <+> "::" <+> renderTypeExpression (pgtype @(BaseType ty))
+      where
+        paramNum = fromString $ show $ natVal (Proxy @n)
+instance {-# OVERLAPPING #-} PGTyped (BaseType ty1)
+  => HasParameter 1 (ty1:tys) ty1
 instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
   => HasParameter n (ty' : params) ty
-
-param1 :: Expression (ty1:tys) tables grouping ty1
-param1 = param (proxy# :: Proxy# 1)
-param2 :: Expression (ty1:ty2:tys) tables grouping ty2
-param2 = param (proxy# :: Proxy# 2)
-param3 :: Expression (ty1:ty2:ty3:tys) tables grouping ty3
-param3 = param (proxy# :: Proxy# 3)
-param4 :: Expression (ty1:ty2:ty3:ty4:tys) tables grouping ty4
-param4 = param (proxy# :: Proxy# 4)
-param5 :: Expression (ty1:ty2:ty3:ty4:ty5:tys) tables grouping ty5
-param5 = param (proxy# :: Proxy# 5)
 
 class KnownSymbol column => HasColumn column columns ty
   | column columns -> ty where

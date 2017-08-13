@@ -30,6 +30,7 @@ module Squeel.PostgreSQL.Schema
   , NullifyColumns
   , NullifyTables
   , ColumnType (..)
+  , BaseType
   , Create
   , Drop
   , Alter
@@ -133,6 +134,9 @@ renderAliased render (expression `As` Alias alias) =
 data NullityType = Null PGType | NotNull PGType
 
 data ColumnType = Optional NullityType | Required NullityType
+
+type family BaseType (ty :: ColumnType) where
+  BaseType (optionality (nullity pg)) = pg
 
 type family NullifyType (ty :: ColumnType) where
   NullifyType (optionality ('Null ty)) = optionality ('Null ty)

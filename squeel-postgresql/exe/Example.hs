@@ -30,32 +30,29 @@ main = do
     "host=localhost port=5432 dbname=exampledb"
   Char8.putStrLn $ "connecting to " <> connectionString
   connection0 <- connectdb connectionString
-  Char8.putStrLn "setting up database"
+  Char8.putStrLn "setting up schema"
   connection1 <- runPQ (connection0 :: Connection '[]) $ pqExec $
-    createTable #students
-      (  (text & notNull) `As` #name
-      :* Nil ) []
+    createTable #students ((text & notNull) `As` #name :* Nil ) []
     >>>
     createTable #table1
-      (  (int4 & notNull) `As` #col1
-      :* (int4 & notNull) `As` #col2
-      :* Nil ) []
-  Char8.putStrLn "querying"
-  connection2 <- runPQ (connection1 :: Connection Tables) $ do
+      ((int4 & notNull) `As` #col1 :* (int4 & notNull) `As` #col2 :* Nil) []
+  connection2 <- runPQ (connection1 :: Connection Schema) $ do
     let
-      statement :: Manipulation Tables
+      manipulation :: Manipulation Schema
         '[ 'Required ('NotNull 'PGInt4)
          , 'Required ('NotNull 'PGInt4)
          , 'Required ('NotNull 'PGInt4)
          , 'Required ('NotNull 'PGInt4)
          ] '[]
-      statement =
+      manipulation =
         insertInto #table1
-          (Values
-            (param1 `As` #col1 :* param2 `As` #col2 :* Nil)
-            [param3 `As` #col1 :* param4 `As` #col2 :* Nil] )
-        Conflict ReturningNil
-    _ <- pqExecParams statement (1::Int32,2::Int32,3::Int32,4::Int32)
+          ( Values
+            (param (Proxy @1) `As` #col1 :* param (Proxy @2) `As` #col2 :* Nil)
+            [param (Proxy @3) `As` #col1 :* param (Proxy @4) `As` #col2 :* Nil]
+          ) Conflict ReturningNil
+    liftBase $ Char8.putStrLn "manipulating"
+    _ <- pqExecParams manipulation (1::Int32,2::Int32,3::Int32,4::Int32)
+    liftBase $ Char8.putStrLn "querying"
     Just result <- pqExecNil . query $
       selectStar (from (Table (#table1 `As` #table1)))
     value00 <- getValue (RowNumber 0) (columnNumber @0) result
@@ -69,21 +66,21 @@ main = do
       print (value01 :: Int32)
       print (value10 :: Int32)
       print (value11 :: Int32)
-      print (row0 :: ColumnsRecord)
-      print (row1 :: ColumnsRecord)
-  Char8.putStrLn "tearing down database"
-  connection3 <- runPQ (connection2 :: Connection Tables) $ pqExec $
+      print (row0 :: Table1Row)
+      print (row1 :: Table1Row)
+  Char8.putStrLn "tearing down schema"
+  connection3 <- runPQ (connection2 :: Connection Schema) $ pqExec $
     dropTable #table1 >>> dropTable #students
   finish (connection3 :: Connection '[])
 
-type Columns =
-  '[ "col1" ::: 'Required ('NotNull 'PGInt4)
-   , "col2" ::: 'Required ('NotNull 'PGInt4)
-   ]
-data ColumnsRecord = ColumnsRecord { col1 :: Int32, col2 :: Int32 }
+data Table1Row = Table1Row { col1 :: Int32, col2 :: Int32 }
   deriving (Show, GHC.Generic)
-instance Generic ColumnsRecord
-instance FromRow Columns ColumnsRecord
+instance Generic Table1Row
 
-type StudentsColumns = '["name" ::: 'Required ('NotNull 'PGText)]
-type Tables = '["students" ::: StudentsColumns, "table1" ::: Columns]
+type Schema =
+  '[ "students" ::: '["name" ::: 'Required ('NotNull 'PGText)]
+   , "table1" :::
+       '[ "col1" ::: 'Required ('NotNull 'PGInt4)
+        , "col2" ::: 'Required ('NotNull 'PGInt4)
+        ]
+   ]
