@@ -13,7 +13,7 @@
   , TypeOperators
 #-}
 
-module Squeel.PostgreSQL.Schema
+module Squeal.PostgreSQL.Schema
   ( PGType (..)
   , PGNum (..)
   , PGIntegral

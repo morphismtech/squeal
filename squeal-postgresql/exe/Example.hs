@@ -18,7 +18,7 @@ import Data.Function ((&))
 import Data.Int
 import Data.Monoid
 import Generics.SOP hiding (from)
-import Squeel.PostgreSQL
+import Squeal.PostgreSQL
 
 import qualified Data.ByteString.Char8 as Char8
 import qualified GHC.Generics as GHC
@@ -38,7 +38,7 @@ instance HasDatatypeInfo Table1Row
 
 main :: IO ()
 main = do
-  Char8.putStrLn "squeel"
+  Char8.putStrLn "squeal"
   connectionString <- pure
     "host=localhost port=5432 dbname=exampledb"
   Char8.putStrLn $ "connecting to " <> connectionString

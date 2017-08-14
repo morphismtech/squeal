@@ -17,7 +17,7 @@
   , UndecidableInstances
 #-}
 
-module Squeel.PostgreSQL.Statement where
+module Squeal.PostgreSQL.Statement where
 
 import Control.Category
 import Data.ByteString (ByteString)
@@ -35,7 +35,7 @@ import Prelude hiding (RealFrac(..), id, (.))
 
 import qualified Data.ByteString as ByteString
 
-import Squeel.PostgreSQL.Schema
+import Squeal.PostgreSQL.Schema
 
 {-----------------------------------------
 column expressions
