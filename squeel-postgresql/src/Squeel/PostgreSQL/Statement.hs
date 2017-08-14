@@ -104,25 +104,31 @@ coalesce nulls isn'tNull = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
     ((renderExpression <$> nulls) <> [renderExpression isn'tNull]))
 
+fromNull
+  :: Expression params tables grouping ('Required ('NotNull x))
+  -> Expression params tables grouping ('Required ('Null x))
+  -> Expression params tables grouping ('Required ('NotNull x))
+fromNull isn'tNull isNull = coalesce [isNull] isn'tNull
+
 unsafeBinaryOp
   :: ByteString
-  -> Expression params tables grouping ty0
-  -> Expression params tables grouping ty1
-  -> Expression params tables grouping ty2
+  -> Expression params tables grouping ('Required ty0)
+  -> Expression params tables grouping ('Required ty1)
+  -> Expression params tables grouping ('Required ty2)
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderExpression x <+> op <+> renderExpression y
 
 unsafeUnaryOp
   :: ByteString
-  -> Expression params tables grouping ty0
-  -> Expression params tables grouping ty1
+  -> Expression params tables grouping ('Required ty0)
+  -> Expression params tables grouping ('Required ty1)
 unsafeUnaryOp op x = UnsafeExpression $ parenthesized $
   op <+> renderExpression x
 
 unsafeFunction
   :: ByteString
-  -> Expression params tables grouping xty
-  -> Expression params tables grouping yty
+  -> Expression params tables grouping ('Required xty)
+  -> Expression params tables grouping ('Required yty)
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderExpression x)
 
@@ -283,9 +289,11 @@ not_ = unsafeUnaryOp "NOT"
 (||*) = unsafeBinaryOp "OR"
 
 caseWhenThenElse
-  :: [(Condition params tables grouping, Expression params tables grouping ty)]
-  -> Expression params tables grouping ty
-  -> Expression params tables grouping ty
+  :: [ ( Condition params tables grouping
+       , Expression params tables grouping ('Required ty)
+     ) ]
+  -> Expression params tables grouping ('Required ty)
+  -> Expression params tables grouping ('Required ty)
 caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   [ "CASE"
   , mconcat
@@ -301,9 +309,9 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
 
 ifThenElse
   :: Condition params tables grouping
-  -> Expression params tables grouping ty
-  -> Expression params tables grouping ty
-  -> Expression params tables grouping ty
+  -> Expression params tables grouping ('Required ty)
+  -> Expression params tables grouping ('Required ty)
+  -> Expression params tables grouping ('Required ty)
 ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 
 (==*)
@@ -440,8 +448,8 @@ instance
 
 unsafeAggregate
   :: ByteString
-  -> Expression params tables 'Ungrouped xty
-  -> Expression params tables ('Grouped bys) yty
+  -> Expression params tables 'Ungrouped ('Required xty)
+  -> Expression params tables ('Grouped bys) ('Required yty)
 unsafeAggregate fun x = UnsafeExpression $ mconcat
   [fun, "(", renderExpression x, ")"]
 
@@ -450,6 +458,90 @@ sum_
   => Expression params tables 'Ungrouped ('Required (nullity ty))
   -> Expression params tables ('Grouped bys) ('Required (nullity ty))
 sum_ = unsafeAggregate "sum"
+
+avgInt
+  :: PGIntegral int
+  => Expression params tables 'Ungrouped ('Required (nullity int))
+  -> Expression params tables ('Grouped bys) ('Required (nullity 'PGnumeric))
+avgInt = unsafeAggregate "avg"
+
+avgFloat
+  :: PGFloating float
+  => Expression params tables 'Ungrouped ('Required (nullity float))
+  -> Expression params tables ('Grouped bys) ('Required (nullity 'PGfloat8))
+avgFloat = unsafeAggregate "avg"
+
+bitAnd
+  :: PGIntegral int
+  => Expression params tables 'Ungrouped ('Required (nullity int))
+  -> Expression params tables ('Grouped bys) ('Required (nullity int))
+bitAnd = unsafeAggregate "bit_and"
+
+bitOr
+  :: PGIntegral int
+  => Expression params tables 'Ungrouped ('Required (nullity int))
+  -> Expression params tables ('Grouped bys) ('Required (nullity int))
+bitOr = unsafeAggregate "bit_or"
+
+boolAnd
+  :: Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
+  -> Expression params tables ('Grouped bys) ('Required (nullity 'PGbool))
+boolAnd = unsafeAggregate "bool_and"
+
+boolOr
+  :: Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
+  -> Expression params tables ('Grouped bys) ('Required (nullity 'PGbool))
+boolOr = unsafeAggregate "bool_or"
+
+countStar
+  :: Expression params table ('Grouped bys) ('Required ('NotNull 'PGint8))
+countStar = UnsafeExpression "count(*)"
+
+count
+  :: Expression params tables 'Ungrouped ('Required ty)
+  -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGint8))
+count = unsafeAggregate "count"
+  
+every
+  :: Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
+  -> Expression params tables ('Grouped bys) ('Required (nullity 'PGbool))
+every = unsafeAggregate "every"
+
+jsonAgg
+  :: Expression params tables 'Ungrouped ('Required ty)
+  -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGjson))
+jsonAgg = unsafeAggregate "json_agg"
+
+jsonbAgg
+  :: Expression params tables 'Ungrouped ('Required ty)
+  -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGjsonb))
+jsonbAgg = unsafeAggregate "jsonb_agg"
+
+jsonObjectAgg
+  :: Expression params tables 'Ungrouped ('Required ('NotNull keyty))
+  -> Expression params tables 'Ungrouped ('Required valty)
+  -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGjson))
+jsonObjectAgg k v = UnsafeExpression $
+  "json_object_agg(" <> renderExpression k
+    <> ", " <> renderExpression v <> ")"
+
+jsonbObjectAgg
+  :: Expression params tables 'Ungrouped ('Required ('NotNull keyty))
+  -> Expression params tables 'Ungrouped ('Required valty)
+  -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGjsonb))
+jsonbObjectAgg k v = UnsafeExpression $
+  "jsonb_object_agg(" <> renderExpression k
+    <> ", " <> renderExpression v <> ")"
+
+max_
+  :: Expression params tables 'Ungrouped ('Required (nullity ty))
+  -> Expression params tables ('Grouped bys) ('Required (nullity ty))
+max_ = unsafeAggregate "max"
+
+min_
+  :: Expression params tables 'Ungrouped ('Required (nullity ty))
+  -> Expression params tables ('Grouped bys) ('Required (nullity ty))
+min_ = unsafeAggregate "min"
 
 {-----------------------------------------
 tables
