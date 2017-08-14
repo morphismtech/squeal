@@ -190,8 +190,8 @@ cast
   :: TypeExpression ('Required ('Null ty1))
   -> Expression params tables grouping ('Required (nullity ty0))
   -> Expression params tables grouping ('Required (nullity ty1))
-cast ty x = UnsafeExpression $
-  "(" <> renderExpression x <+> "::" <+> renderTypeExpression ty <> ")"
+cast ty x = UnsafeExpression $ parenthesized $
+  renderExpression x <+> "::" <+> renderTypeExpression ty
 
 div
   :: PGIntegral ty
