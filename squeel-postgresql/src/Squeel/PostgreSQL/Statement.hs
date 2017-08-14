@@ -53,7 +53,7 @@ class (PGTyped (BaseType ty), KnownNat n)
   => HasParameter (n :: Nat) params ty | n params -> ty where
     param :: proxy n -> Expression params tables grouping ty
     param _ = UnsafeExpression $ parenthesized $
-      "$" <> renderNat (Proxy @n) <+> " :: "
+      "$" <> renderNat (Proxy @n) <+> "::"
         <+> renderTypeExpression (pgtype @(BaseType ty))
 instance {-# OVERLAPPING #-} PGTyped (BaseType ty1)
   => HasParameter 1 (ty1:tys) ty1
@@ -191,7 +191,7 @@ cast
   -> Expression params tables grouping ('Required (nullity ty0))
   -> Expression params tables grouping ('Required (nullity ty1))
 cast ty x = UnsafeExpression $
-  "(" <> renderExpression x <> " :: " <> renderTypeExpression ty <> ")"
+  "(" <> renderExpression x <+> "::" <+> renderTypeExpression ty <> ")"
 
 div
   :: PGIntegral ty
