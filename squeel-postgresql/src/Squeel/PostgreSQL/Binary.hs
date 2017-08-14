@@ -1,6 +1,10 @@
 {-# LANGUAGE
     DataKinds
   , DefaultSignatures
+  , DeriveFoldable
+  , DeriveFunctor
+  , DeriveGeneric
+  , DeriveTraversable
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
@@ -9,6 +13,7 @@
   , MultiParamTypeClasses
   , ScopedTypeVariables
   , TypeApplications
+  , TypeFamilies
   , TypeOperators
   , UndecidableInstances
 #-}
@@ -29,6 +34,8 @@ import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict hiding (unpack)
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text as Strict
+import qualified Generics.SOP.Type.Metadata as Type
+import qualified GHC.Generics as GHC
 import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
 
@@ -77,8 +84,6 @@ instance ToParam x pg => ToColumnParam (Maybe x) ('Optional (nullity pg)) where
 
 class SListI tys => ToParams x (tys :: [ColumnType]) where
   toParams :: x -> NP (K (Maybe Strict.ByteString)) tys
-instance ToColumnParam x ty => ToParams x '[ty] where
-  toParams x = toColumnParam x :* Nil
 instance (SListI tys, IsProductType x xs, AllZip ToColumnParam xs tys)
   => ToParams x tys where
       toParams
@@ -143,11 +148,31 @@ instance FromValue pg y
 
 class SListI columns => FromRow (columns :: [(Symbol,ColumnType)]) y where
   fromRow :: NP (K (Maybe Strict.ByteString)) columns -> y
-instance FromColumnValue ty y => FromRow '[ty] y where
-  fromRow (y :* Nil) = fromColumnValue y
 instance
   ( SListI columns, IsProductType y ys
   , AllZip FromColumnValue columns ys
+  , HasDatatypeInfo y
+  , SameFields (DatatypeInfoOf y) columns
   ) => FromRow columns y where
     fromRow
       = to . SOP . Z . htrans (Proxy @FromColumnValue) (I . fromColumnValue)
+
+class SameField
+  (fieldInfo :: Type.FieldInfo) (columnty :: (Symbol,ColumnType)) where
+instance field ~ column => SameField ('Type.FieldInfo field) (column ::: ty)
+
+type family SameFields
+  (datatypeInfo :: Type.DatatypeInfo) (columns :: [(Symbol,ColumnType)]) where
+    SameFields
+      ('Type.ADT _module _datatype '[ 'Type.Record _constructor fields])
+      columns
+        = AllZip SameField fields columns
+    SameFields
+      ('Type.Newtype _module _datatype ('Type.Record _constructor '[field]))
+      '[column]
+        = SameField field column
+
+newtype Only x = Only { only :: x }
+  deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
+instance Generic (Only x)
+instance HasDatatypeInfo (Only x)

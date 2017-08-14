@@ -23,6 +23,19 @@ import Squeel.PostgreSQL
 import qualified Data.ByteString.Char8 as Char8
 import qualified GHC.Generics as GHC
 
+type Schema =
+  '[ "students" ::: '["name" ::: 'Required ('NotNull 'PGtext)]
+   , "table1" :::
+       '[ "col1" ::: 'Required ('NotNull 'PGint4)
+        , "col2" ::: 'Required ('NotNull 'PGint4)
+        ]
+   ]
+
+data Table1Row = Table1Row { col1 :: Int32, col2 :: Int32 }
+  deriving (Show, GHC.Generic)
+instance Generic Table1Row
+instance HasDatatypeInfo Table1Row
+
 main :: IO ()
 main = do
   Char8.putStrLn "squeel"
@@ -72,15 +85,3 @@ main = do
   connection3 <- runPQ (connection2 :: Connection Schema) $ pqExec $
     dropTable #table1 >>> dropTable #students
   finish (connection3 :: Connection '[])
-
-data Table1Row = Table1Row { col1 :: Int32, col2 :: Int32 }
-  deriving (Show, GHC.Generic)
-instance Generic Table1Row
-
-type Schema =
-  '[ "students" ::: '["name" ::: 'Required ('NotNull 'PGtext)]
-   , "table1" :::
-       '[ "col1" ::: 'Required ('NotNull 'PGint4)
-        , "col2" ::: 'Required ('NotNull 'PGint4)
-        ]
-   ]
