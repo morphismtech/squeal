@@ -3,6 +3,7 @@
   , MagicHash
   , OverloadedLabels
   , OverloadedStrings
+  , TypeApplications
   , TypeOperators
 #-}
 
@@ -66,10 +67,11 @@ spec = do
     statement `queryRenders` "SELECT * FROM table1 AS table1 LIMIT 1;"
   it "should render parameters using $ signs" $ do
     let
-      statement :: Query Tables '[ 'Required ('NotNull 'PGBool)] Columns
-      statement =
-        selectStar (from (Table (#table1 `As` #table1)) & where_ param1)
-    statement `queryRenders` "SELECT * FROM table1 AS table1 WHERE $1;"
+      statement :: Query Tables '[ 'Required ('NotNull 'PGbool)] Columns
+      statement = selectStar
+        (from (Table (#table1 `As` #table1)) & where_ (param (Proxy @1)))
+    statement `queryRenders`
+      "SELECT * FROM table1 AS table1 WHERE ($1 :: bool);"
   it "does OFFSET clauses" $ do
     let
       statement :: Query Tables '[] Columns
@@ -247,13 +249,13 @@ spec = do
     let
       statement :: Definition '[]
         '[ "users" :::
-           '[ "id" ::: 'Optional ('NotNull 'PGInt4)
-            , "username" ::: 'Required ('NotNull 'PGText)
+           '[ "id" ::: 'Optional ('NotNull 'PGint4)
+            , "username" ::: 'Required ('NotNull 'PGtext)
             ]
          , "emails" :::
-           '[ "id" ::: 'Optional ('NotNull 'PGInt4)
-            , "userid" ::: 'Required ('NotNull 'PGInt4)
-            , "email" ::: 'Required ('NotNull 'PGText)
+           '[ "id" ::: 'Optional ('NotNull 'PGint4)
+            , "userid" ::: 'Required ('NotNull 'PGint4)
+            , "email" ::: 'Required ('NotNull 'PGtext)
             ]
          ]
       statement =
@@ -290,26 +292,29 @@ spec = do
     statement `definitionRenders` "DROP TABLE table1;"
 
 type Columns =
-  '[ "col1" ::: 'Required ('NotNull 'PGInt4)
-   , "col2" ::: 'Required ('NotNull 'PGInt4)
+  '[ "col1" ::: 'Required ('NotNull 'PGint4)
+   , "col2" ::: 'Required ('NotNull 'PGint4)
    ]
 type Tables = '[ "table1" ::: Columns ]
-type SumAndCol1 = '[ "sum" ::: 'Required ('NotNull 'PGInt4), "col1" ::: 'Required ('NotNull 'PGInt4)]
-type StudentsColumns = '["name" ::: 'Required ('NotNull 'PGText)]
+type SumAndCol1 =
+  '[ "sum" ::: 'Required ('NotNull 'PGint4)
+   , "col1" ::: 'Required ('NotNull 'PGint4)
+   ]
+type StudentsColumns = '["name" ::: 'Required ('NotNull 'PGtext)]
 type StudentsTable = '["students" ::: StudentsColumns]
 type OrderColumns =
-  '[ "orderID"    ::: 'Required ('NotNull 'PGInt4)
-   , "orderVal"   ::: 'Required ('NotNull 'PGText)
-   , "customerID" ::: 'Required ('NotNull 'PGInt4)
-   , "shipperID"  ::: 'Required ('NotNull 'PGInt4)
+  '[ "orderID"    ::: 'Required ('NotNull 'PGint4)
+   , "orderVal"   ::: 'Required ('NotNull 'PGtext)
+   , "customerID" ::: 'Required ('NotNull 'PGint4)
+   , "shipperID"  ::: 'Required ('NotNull 'PGint4)
    ]
 type CustomerColumns =
-  '[ "customerID" ::: 'Required ('NotNull 'PGInt4)
-   , "customerVal" ::: 'Required ('NotNull 'PGFloat4)
+  '[ "customerID" ::: 'Required ('NotNull 'PGint4)
+   , "customerVal" ::: 'Required ('NotNull 'PGfloat4)
    ]
 type ShipperColumns =
-  '[ "shipperID" ::: 'Required ('NotNull 'PGInt4)
-   , "shipperVal" ::: 'Required ('NotNull 'PGBool)
+  '[ "shipperID" ::: 'Required ('NotNull 'PGint4)
+   , "shipperVal" ::: 'Required ('NotNull 'PGbool)
    ]
 type JoinTables =
   '[ "orders"    ::: OrderColumns
@@ -317,7 +322,7 @@ type JoinTables =
    , "shippers"  ::: ShipperColumns
    ]
 type ValueColumns =
-  '[ "orderVal"    ::: 'Required ('NotNull 'PGText)
-   , "customerVal" ::: 'Required ('NotNull 'PGFloat4)
-   , "shipperVal"  ::: 'Required ('NotNull 'PGBool)
+  '[ "orderVal"    ::: 'Required ('NotNull 'PGtext)
+   , "customerVal" ::: 'Required ('NotNull 'PGfloat4)
+   , "shipperVal"  ::: 'Required ('NotNull 'PGbool)
    ]

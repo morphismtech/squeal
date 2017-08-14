@@ -19,7 +19,7 @@ library
     Squeel.PostgreSQL.Statement
     Squeel.PostgreSQL.Schema
   default-language: Haskell2010
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall -Werror -fprint-explicit-kinds
   build-depends:
       aeson
     , base
@@ -28,6 +28,7 @@ library
     , lifted-base
     , monad-control
     , mtl
+    , network-ip
     , postgresql-binary
     , postgresql-libpq
     , scientific

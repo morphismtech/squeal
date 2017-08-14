@@ -15,10 +15,8 @@
 
 module Squeel.PostgreSQL.Schema
   ( PGType (..)
-  , ToOid (..)
-  , ToOids (..)
   , PGNum (..)
-  , PGFractional
+  , PGIntegral
   , PGFloating
   , (:::)
   , Alias (Alias)
@@ -30,6 +28,7 @@ module Squeel.PostgreSQL.Schema
   , NullifyColumns
   , NullifyTables
   , ColumnType (..)
+  , BaseType
   , Create
   , Drop
   , Alter
@@ -48,65 +47,47 @@ import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
 
-import qualified Database.PostgreSQL.LibPQ as LibPQ
-
 data PGType
-  = PGBool
-  | PGInt2
-  | PGInt4
-  | PGInt8
-  | PGNumeric
-  | PGFloat4
-  | PGFloat8
-  | PGSerial2
-  | PGSerial4
-  | PGSerial8
-  | PGMoney
-  | PGChar Nat
-  | PGVarChar Nat
-  | PGText
-  | PGBytea
-  | PGTimestamp
-  | PGTimestampTZ
-  | PGDate
-  | PGTime
-  | PGTimeTZ
-  | PGInterval
-  | PGUuid
-  | PGJson
-  | PGJsonb
-
-class ToOid pg where toOid :: Proxy# pg -> LibPQ.Oid
---staticTypeInfo
-instance ToOid ('Required ('NotNull 'PGBool)) where toOid _ = LibPQ.Oid 16
-instance ToOid ('Required ('NotNull 'PGBytea)) where toOid _ = LibPQ.Oid 17
-instance ToOid ('Required ('NotNull 'PGInt8)) where toOid _ = LibPQ.Oid 20
-instance ToOid ('Required ('NotNull 'PGInt2)) where toOid _ = LibPQ.Oid 21
-instance ToOid ('Required ('NotNull 'PGInt4)) where toOid _ = LibPQ.Oid 23
-instance ToOid ('Required ('NotNull 'PGText)) where toOid _ = LibPQ.Oid 26
-class ToOids pgs where toOids :: Proxy# pgs -> [LibPQ.Oid]
-instance ToOids '[] where toOids _ = []
-instance (ToOid pg, ToOids pgs) => ToOids (pg ': pgs) where
-  toOids _ = toOid (proxy# :: Proxy# pg) : toOids (proxy# :: Proxy# pgs)
+  = PGbool
+  | PGint2
+  | PGint4
+  | PGint8
+  | PGnumeric
+  | PGfloat4
+  | PGfloat8
+  | PGchar Nat
+  | PGvarchar Nat
+  | PGtext
+  | PGbytea
+  | PGtimestamp
+  | PGtimestamptz
+  | PGdate
+  | PGtime
+  | PGtimetz
+  | PGinterval
+  | PGuuid
+  | PGinet
+  | PGjson
+  | PGjsonb
 
 class PGNum (ty :: PGType) where
   decimal :: proxy ty -> Bool
-instance PGNum 'PGInt2 where decimal _ = False
-instance PGNum 'PGInt4 where decimal _ = False
-instance PGNum 'PGInt8 where decimal _ = False
-instance PGNum 'PGNumeric where decimal _ = True
-instance PGNum 'PGFloat4 where decimal _ = True
-instance PGNum 'PGFloat8 where decimal _ = True
+instance PGNum 'PGint2 where decimal _ = False
+instance PGNum 'PGint4 where decimal _ = False
+instance PGNum 'PGint8 where decimal _ = False
+instance PGNum 'PGnumeric where decimal _ = True
+instance PGNum 'PGfloat4 where decimal _ = True
+instance PGNum 'PGfloat8 where decimal _ = True
 
-class PGNum ty => PGFractional (ty :: PGType) where
-instance PGFractional 'PGNumeric
-instance PGFractional 'PGFloat4
-instance PGFractional 'PGFloat8
+class PGNum ty => PGIntegral (ty :: PGType) where
+instance PGIntegral 'PGint2
+instance PGIntegral 'PGint4
+instance PGIntegral 'PGint8
 
-class PGFractional ty => PGFloating (ty :: PGType) where
-instance PGFloating 'PGNumeric
-instance PGFloating 'PGFloat4
-instance PGFloating 'PGFloat8
+class PGNum ty => PGFloating (ty :: PGType) where
+instance PGFloating 'PGnumeric
+instance PGFloating 'PGfloat4
+instance PGFloating 'PGfloat8
 
 type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
 
@@ -135,6 +116,9 @@ renderAliased render (expression `As` Alias alias) =
 data NullityType = Null PGType | NotNull PGType
 
 data ColumnType = Optional NullityType | Required NullityType
+
+type family BaseType (ty :: ColumnType) where
+  BaseType (optionality (nullity pg)) = pg
 
 type family NullifyType (ty :: ColumnType) where
   NullifyType (optionality ('Null ty)) = optionality ('Null ty)

@@ -22,13 +22,9 @@ module Squeel.PostgreSQL.PQ where
 import Control.Exception.Lifted
 import Control.Monad.Base
 import Control.Monad.Except
-import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Control
 import Data.ByteString (ByteString)
 import Data.Function ((&))
-import Data.Maybe
-import Data.Proxy (Proxy)
-import Data.Text (Text)
 import Generics.SOP
 import GHC.Exts hiding (fromList)
 import GHC.TypeLits
@@ -104,28 +100,24 @@ pqThenExec = pqThen . pqExec
 class Monad m => MonadPQ schema m | m -> schema where
 
   pqExecParams
-    :: (ToOids ps, AllZip HasEncoding ps xs)
-    => Manipulation schema ps ys -> NP I xs -> m (Maybe (Result ys))
+    :: ToParams x params
+    => Manipulation schema params ys -> x -> m (Maybe (Result ys))
   default pqExecParams
     :: (MonadTrans t, MonadPQ schema m1, m ~ t m1)
-    => (ToOids ps, AllZip HasEncoding ps xs)
-    => Manipulation schema ps ys -> NP I xs -> m (Maybe (Result ys))
+    => ToParams x params
+    => Manipulation schema params ys -> x -> m (Maybe (Result ys))
   pqExecParams manipulation params = lift $ pqExecParams manipulation params
 
   pqExecNil :: Manipulation schema '[] ys -> m (Maybe (Result ys))
-  pqExecNil statement = pqExecParams statement Nil
+  pqExecNil statement = pqExecParams statement ()
 
 instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
 
-  pqExecParams (UnsafeManipulation q :: Manipulation schema ps ys) params =
+  pqExecParams (UnsafeManipulation q :: Manipulation schema ps ys) (params :: x) =
     PQ $ \ (Connection conn) -> do
       let
-        paramValues = encodings (Proxy :: Proxy ps) params
-        oids = toOids (proxy# :: Proxy# ps)
-        params' =
-          [ Just (oid, param', LibPQ.Binary)
-          | (oid, param') <- zip oids paramValues
-          ]
+        toParam' bytes = (LibPQ.invalidOid,bytes,LibPQ.Binary)
+        params' = fmap (fmap toParam') (hcollapse (toParams @x @ps params))
       result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
       return (Result <$> result, Connection conn)
 
@@ -190,43 +182,25 @@ instance {-# OVERLAPPABLE #-}
   (KnownNat n, HasColumnNumber (n-1) columns column)
     => HasColumnNumber n (column' : columns) column
 
-newtype Value pgs m x = Value { runValue :: Result pgs -> m x }
-  deriving (Functor)
-instance Applicative m => Applicative (Value pgs m) where
-  pure x = Value $ \ _result -> pure x
-  mf <*> mx = Value $ \ result -> runValue mf result <*> runValue mx result
-instance Monad m => Monad (Value pgs m) where
-  return = pure
-  mx >>= f = Value $ \ result -> do
-    x <- runValue mx result
-    runValue (f x) result
-instance MonadTrans (Value pgs) where
-  lift m = Value $ \ _result -> m
-instance MonadBase b m => MonadBase b (Value pgs m) where
-  liftBase = lift . liftBase
-
 getValue
-  :: (HasDecoding pg x, MonadBase IO io)
+  :: (FromColumnValue colty y, MonadBase IO io)
   => RowNumber
-  -> ColumnNumber n pgs pg
-  -> Value pgs (ExceptT Text (MaybeT io)) x
-getValue (RowNumber r) (UnsafeColumnNumber c :: ColumnNumber n pgs pg) =
-  Value $ \ (Result result) -> do
-    maybeBytestring <- liftBase $ LibPQ.getvalue result r c
-    case maybeBytestring of
-      Nothing -> mzero
-      Just bytestring -> case decodeValue (Proxy :: Proxy pg) bytestring of
-        Left err -> throwError err
-        Right val -> return val
+  -> ColumnNumber n columns colty
+  -> Result columns
+  -> io y
+getValue
+  (RowNumber r)
+  (UnsafeColumnNumber c :: ColumnNumber n columns colty)
+  (Result result)
+   = fromColumnValue @colty . K <$>
+    liftBase (LibPQ.getvalue result r c)
 
 getRow
-  :: (AllZip HasDecoding pgs xs, MonadBase IO io)
-  => RowNumber -> Value pgs (ExceptT Text (MaybeT io)) (NP I xs)
-getRow (RowNumber r) = Value $ \ (Result result :: Result pgs) -> do
-  maybeBytestrings <- traverse (liftBase . LibPQ.getvalue result r)
-    [0 .. fromIntegral (lengthSList (Proxy :: Proxy pgs)) - 1]
-  case fromList (catMaybes maybeBytestrings) of
-    Nothing -> mzero
-    Just bytestrings -> case decodings (Proxy :: Proxy pgs) bytestrings of
-      Left err -> throwError err
-      Right row -> return row
+  :: (FromRow columns y, MonadBase IO io)
+  => RowNumber -> Result columns -> io y
+getRow (RowNumber r) (Result result :: Result columns) = do
+  let len = fromIntegral (lengthSList (Proxy @columns))
+  row' <- traverse (liftBase . LibPQ.getvalue result r) [0 .. len - 1]
+  case fromList row' of
+    Nothing -> error "getRow: found unexpected length"
+    Just row -> return $ fromRow @columns row

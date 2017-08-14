@@ -1,145 +1,178 @@
 {-# LANGUAGE
     DataKinds
+  , DefaultSignatures
+  , DeriveFoldable
+  , DeriveFunctor
+  , DeriveGeneric
+  , DeriveTraversable
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
   , LambdaCase
-  , MagicHash
+  , KindSignatures
   , MultiParamTypeClasses
-  , PolyKinds
   , ScopedTypeVariables
+  , TypeApplications
+  , TypeFamilies
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Squeel.PostgreSQL.Binary where
 
-import Data.ByteString (ByteString)
-import Data.Int (Int16,Int32,Int64)
+import Data.Aeson hiding (Null)
+import Data.Bits
+import Data.Int
+import Data.Scientific
+import Data.Time
+import Data.Word
+import Data.UUID
 import Generics.SOP
-import Data.Scientific (Scientific)
-import Data.Text (Text)
-import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
-import Data.UUID (UUID)
+import Network.IP.Addr
 
-import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Lazy as Lazy (ByteString)
-import qualified Data.Text.Lazy as Lazy (Text)
-import qualified PostgreSQL.Binary.Decoding as Decoder
-import qualified PostgreSQL.Binary.Encoding as Encoder
+import qualified Data.ByteString.Lazy as Lazy
+import qualified Data.ByteString as Strict hiding (unpack)
+import qualified Data.Text.Lazy as Lazy
+import qualified Data.Text as Strict
+import qualified Generics.SOP.Type.Metadata as Type
+import qualified GHC.Generics as GHC
+import qualified PostgreSQL.Binary.Decoding as Decoding
+import qualified PostgreSQL.Binary.Encoding as Encoding
 
 import Squeel.PostgreSQL.Schema
 
-decodeValue :: HasDecoding pg x => proxy pg -> ByteString -> Either Text x
-decodeValue p = Decoder.valueParser $ decoding p
+class ToParam x (pg :: PGType) where toParam :: x -> K Encoding.Encoding pg
+instance ToParam Bool 'PGbool where toParam = K . Encoding.bool
+instance ToParam Int16 'PGint2 where toParam = K . Encoding.int2_int16
+instance ToParam Word16 'PGint2 where toParam = K . Encoding.int2_word16
+instance ToParam Int32 'PGint4 where toParam = K . Encoding.int4_int32
+instance ToParam Word32 'PGint4 where toParam = K . Encoding.int4_word32
+instance ToParam Int64 'PGint8 where toParam = K . Encoding.int8_int64
+instance ToParam Word64 'PGint8 where toParam = K . Encoding.int8_word64
+instance ToParam Float 'PGfloat4 where toParam = K . Encoding.float4
+instance ToParam Double 'PGfloat8 where toParam = K . Encoding.float8
+instance ToParam Scientific 'PGnumeric where toParam = K . Encoding.numeric
+instance ToParam UUID 'PGuuid where toParam = K . Encoding.uuid
+instance ToParam (NetAddr IP) 'PGinet where toParam = K . Encoding.inet
+instance ToParam Char ('PGchar 1) where toParam = K . Encoding.char_utf8
+instance ToParam Strict.Text 'PGtext where toParam = K . Encoding.text_strict
+instance ToParam Lazy.Text 'PGtext where toParam = K . Encoding.text_lazy
+instance ToParam Strict.ByteString 'PGbytea where
+  toParam = K . Encoding.bytea_strict
+instance ToParam Lazy.ByteString 'PGbytea where
+  toParam = K . Encoding.bytea_lazy
+instance ToParam Day 'PGdate where toParam = K . Encoding.date
+instance ToParam TimeOfDay 'PGtime where toParam = K . Encoding.time_int
+instance ToParam (TimeOfDay, TimeZone) 'PGtimetz where
+  toParam = K . Encoding.timetz_int
+instance ToParam LocalTime 'PGtimestamp where
+  toParam = K . Encoding.timestamp_int
+instance ToParam UTCTime 'PGtimestamptz where
+  toParam = K . Encoding.timestamptz_int
+instance ToParam DiffTime 'PGinterval where toParam = K . Encoding.interval_int
+instance ToParam Value 'PGjson where toParam = K . Encoding.json_ast
+instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
 
-class HasDecoding pg x where
-  decoding :: proxy pg -> Decoder.Value x
-instance HasDecoding (column ::: 'Required ('NotNull 'PGInt2)) Int16 where
-  decoding _ = Decoder.int
-instance HasDecoding (column ::: 'Required ('NotNull 'PGInt4)) Int32 where
-  decoding _ = Decoder.int
-instance HasDecoding (column ::: 'Required ('NotNull 'PGInt8)) Int64 where
-  decoding _ = Decoder.int
-instance HasDecoding (column ::: 'Required ('NotNull 'PGFloat4)) Float where
-  decoding _ = Decoder.float4
-instance HasDecoding (column ::: 'Required ('NotNull 'PGFloat8)) Double where
-  decoding _ = Decoder.float8
-instance HasDecoding (column ::: 'Required ('NotNull 'PGBool)) Bool where
-  decoding _ = Decoder.bool
-instance HasDecoding (column ::: 'Required ('NotNull 'PGBytea)) ByteString where
-  decoding _ = Decoder.bytea_strict
-instance HasDecoding (column ::: 'Required ('NotNull 'PGBytea)) Lazy.ByteString where
-  decoding _ = Decoder.bytea_lazy
-instance HasDecoding (column ::: 'Required ('NotNull 'PGText)) Text where
-  decoding _ = Decoder.text_strict
-instance HasDecoding (column ::: 'Required ('NotNull 'PGText)) Lazy.Text where
-  decoding _ = Decoder.text_lazy
-instance HasDecoding (column ::: 'Required ('NotNull ('PGChar 1))) Char where
-  decoding _ = Decoder.char
-instance HasDecoding (column ::: 'Required ('NotNull 'PGNumeric)) Scientific where
-  decoding _ = Decoder.numeric
-instance HasDecoding (column ::: 'Required ('NotNull 'PGUuid)) UUID where
-  decoding _ = Decoder.uuid
-instance HasDecoding (column ::: 'Required ('NotNull 'PGJson)) Aeson.Value where
-  decoding _ = Decoder.json_ast
-instance HasDecoding (column ::: 'Required ('NotNull 'PGJsonb)) Aeson.Value where
-  decoding _ = Decoder.jsonb_ast
-instance HasDecoding (column ::: 'Required ('NotNull 'PGDate)) Day where
-  decoding _ = Decoder.date
-instance HasDecoding (column ::: 'Required ('NotNull 'PGTime)) TimeOfDay where
-  decoding _ = Decoder.time_int
-instance HasDecoding (column ::: 'Required ('NotNull 'PGTimeTZ)) (TimeOfDay, TimeZone) where
-  decoding _ = Decoder.timetz_int
-instance HasDecoding (column ::: 'Required ('NotNull 'PGTimestamp)) LocalTime where
-  decoding _ = Decoder.timestamp_int
-instance HasDecoding (column ::: 'Required ('NotNull 'PGTimestampTZ)) UTCTime where
-  decoding _ = Decoder.timestamptz_int
-instance HasDecoding (column ::: 'Required ('NotNull 'PGInterval)) DiffTime where
-  decoding _ = Decoder.interval_int
+class ToColumnParam x (ty :: ColumnType) where
+  toColumnParam :: x -> K (Maybe Strict.ByteString) ty
+instance ToParam x pg => ToColumnParam x ('Required ('NotNull pg)) where
+  toColumnParam = K . Just . Encoding.encodingBytes . unK . toParam @x @pg
+instance ToParam x pg => ToColumnParam (Maybe x) ('Required ('Null pg)) where
+  toColumnParam = K . fmap (Encoding.encodingBytes . unK . toParam @x @pg)
+instance ToParam x pg => ToColumnParam (Maybe x) ('Optional (nullity pg)) where
+  toColumnParam = K . fmap (Encoding.encodingBytes . unK . toParam @x @pg)
 
-decodings
-  :: AllZip HasDecoding pgs xs
-  => proxy pgs
-  -> NP (K ByteString) xs -> Either Text (NP I xs)
-decodings _ Nil = return Nil
-decodings (_ :: proxy pgs) (K bytestring :* bytestrings) =
-  case (hpure Proxy :: NP Proxy pgs) of
-    proxy :* proxies -> (:*)
-      <$> (I <$> Decoder.valueParser (decoding proxy) bytestring)
-      <*> decodings proxies bytestrings
+class SListI tys => ToParams x (tys :: [ColumnType]) where
+  toParams :: x -> NP (K (Maybe Strict.ByteString)) tys
+instance (SListI tys, IsProductType x xs, AllZip ToColumnParam xs tys)
+  => ToParams x tys where
+      toParams
+        = htrans (Proxy @ToColumnParam) (toColumnParam . unI)
+        . unZ . unSOP . from
 
-class HasEncoding pg x where
-  encoding :: proxy pg -> x -> Encoder.Encoding
-instance HasEncoding ('Required ('NotNull 'PGInt2)) Int16 where
-  encoding _ = Encoder.int2_int16
-instance HasEncoding ('Required ('NotNull 'PGInt4)) Int32 where
-  encoding _ = Encoder.int4_int32
-instance HasEncoding ('Required ('NotNull 'PGInt8)) Int64 where
-  encoding _ = Encoder.int8_int64
-instance HasEncoding ('Required ('NotNull 'PGFloat4)) Float where
-  encoding _ = Encoder.float4
-instance HasEncoding ('Required ('NotNull 'PGFloat8)) Double where
-  encoding _ = Encoder.float8
-instance HasEncoding ('Required ('NotNull 'PGBool)) Bool where
-  encoding _ = Encoder.bool
-instance HasEncoding ('Required ('NotNull 'PGBytea)) ByteString where
-  encoding _ = Encoder.bytea_strict
-instance HasEncoding ('Required ('NotNull 'PGBytea)) Lazy.ByteString where
-  encoding _ = Encoder.bytea_lazy
-instance HasEncoding ('Required ('NotNull 'PGText)) Text where
-  encoding _ = Encoder.text_strict
-instance HasEncoding ('Required ('NotNull 'PGText)) Lazy.Text where
-  encoding _ = Encoder.text_lazy
-instance HasEncoding ('Required ('NotNull ('PGChar 1))) Char where
-  encoding _ = Encoder.char_utf8
-instance HasEncoding ('Required ('NotNull 'PGNumeric)) Scientific where
-  encoding _ = Encoder.numeric
-instance HasEncoding ('Required ('NotNull 'PGUuid)) UUID where
-  encoding _ = Encoder.uuid
-instance HasEncoding ('Required ('NotNull 'PGJson)) Aeson.Value where
-  encoding _ = Encoder.json_ast
-instance HasEncoding ('Required ('NotNull 'PGJsonb)) Aeson.Value where
-  encoding _ = Encoder.jsonb_ast
-instance HasEncoding ('Required ('NotNull 'PGDate)) Day where
-  encoding _ = Encoder.date
-instance HasEncoding ('Required ('NotNull 'PGTime)) TimeOfDay where
-  encoding _ = Encoder.time_int
-instance HasEncoding ('Required ('NotNull 'PGTimeTZ)) (TimeOfDay, TimeZone) where
-  encoding _ = Encoder.timetz_int
-instance HasEncoding ('Required ('NotNull 'PGTimestamp)) LocalTime where
-  encoding _ = Encoder.timestamp_int
-instance HasEncoding ('Required ('NotNull 'PGTimestampTZ)) UTCTime where
-  encoding _ = Encoder.timestamptz_int
-instance HasEncoding ('Required ('NotNull 'PGInterval)) DiffTime where
-  encoding _ = Encoder.interval_int
+class FromValue (pg :: PGType) y where
+  fromValue :: proxy pg -> Decoding.Value y
+instance FromValue 'PGbool Bool where fromValue _ = Decoding.bool
+instance (Integral int, Bits int) => FromValue 'PGint2 int where
+  fromValue _ = Decoding.int
+instance (Integral int, Bits int) => FromValue 'PGint4 int where
+  fromValue _ = Decoding.int
+instance (Integral int, Bits int) => FromValue 'PGint8 int where
+  fromValue _ = Decoding.int
+instance FromValue 'PGfloat4 Float where fromValue _ = Decoding.float4
+instance FromValue 'PGfloat8 Double where fromValue _ = Decoding.float8
+instance FromValue 'PGnumeric Scientific where fromValue _ = Decoding.numeric
+instance FromValue 'PGuuid UUID where fromValue _ = Decoding.uuid
+instance FromValue 'PGinet (NetAddr IP) where fromValue _ = Decoding.inet
+instance FromValue ('PGchar 1) Char where fromValue _ = Decoding.char
+instance FromValue 'PGtext Strict.Text where fromValue _ = Decoding.text_strict
+instance FromValue 'PGtext Lazy.Text where fromValue _ = Decoding.text_lazy
+instance FromValue 'PGbytea Strict.ByteString where
+  fromValue _ = Decoding.bytea_strict
+instance FromValue 'PGbytea Lazy.ByteString where
+  fromValue _ = Decoding.bytea_lazy
+instance FromValue 'PGdate Day where fromValue _ = Decoding.date
+instance FromValue 'PGtime TimeOfDay where fromValue _ = Decoding.time_int
+instance FromValue 'PGtimetz (TimeOfDay, TimeZone) where
+  fromValue _ = Decoding.timetz_int
+instance FromValue 'PGtimestamp LocalTime where
+  fromValue _ = Decoding.timestamp_int
+instance FromValue 'PGtimestamptz UTCTime where
+  fromValue _ = Decoding.timestamptz_int
+instance FromValue 'PGinterval DiffTime where
+  fromValue _ = Decoding.interval_int
+instance FromValue 'PGjson Value where fromValue _ = Decoding.json_ast
+instance FromValue 'PGjsonb Value where fromValue _ = Decoding.jsonb_ast
 
-encodings
-  :: AllZip HasEncoding pgs xs
-  => proxy pgs
-  -> NP I xs
-  -> [ByteString]
-encodings _ Nil = []
-encodings (_ :: proxy pgs) (I x :* xs) =
-  case (hpure Proxy :: NP Proxy pgs) of
-    proxy :* proxies -> Encoder.encodingBytes (encoding proxy x)
-      : encodings proxies xs
+class FromColumnValue (colty :: (Symbol,ColumnType)) y where
+  fromColumnValue :: K (Maybe Strict.ByteString) colty -> y
+instance FromValue pg y
+  => FromColumnValue (column ::: ('Required ('NotNull pg))) y where
+    fromColumnValue = \case
+      K Nothing -> error "fromColumnValue: saw NULL when expecting NOT NULL"
+      K (Just bytes) ->
+        let
+          errOrValue =
+            Decoding.valueParser (fromValue @pg @y Proxy) bytes
+          err str = error $ "fromColumnValue: " ++ Strict.unpack str
+        in
+          either err id errOrValue
+instance FromValue pg y
+  => FromColumnValue (column ::: ('Required ('Null pg))) (Maybe y) where
+    fromColumnValue (K nullOrBytes)
+      = either err id
+      . Decoding.valueParser (fromValue @pg @y Proxy)
+      <$> nullOrBytes
+      where
+        err str = error $ "fromColumnValue: " ++ Strict.unpack str
+
+class SListI columns => FromRow (columns :: [(Symbol,ColumnType)]) y where
+  fromRow :: NP (K (Maybe Strict.ByteString)) columns -> y
+instance
+  ( SListI columns, IsProductType y ys
+  , AllZip FromColumnValue columns ys
+  , HasDatatypeInfo y
+  , SameFields (DatatypeInfoOf y) columns
+  ) => FromRow columns y where
+    fromRow
+      = to . SOP . Z . htrans (Proxy @FromColumnValue) (I . fromColumnValue)
+
+class SameField
+  (fieldInfo :: Type.FieldInfo) (columnty :: (Symbol,ColumnType)) where
+instance field ~ column => SameField ('Type.FieldInfo field) (column ::: ty)
+
+type family SameFields
+  (datatypeInfo :: Type.DatatypeInfo) (columns :: [(Symbol,ColumnType)]) where
+    SameFields
+      ('Type.ADT _module _datatype '[ 'Type.Record _constructor fields])
+      columns
+        = AllZip SameField fields columns
+    SameFields
+      ('Type.Newtype _module _datatype ('Type.Record _constructor '[field]))
+      '[column]
+        = SameField field column
+
+newtype Only x = Only { only :: x }
+  deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
+instance Generic (Only x)
+instance HasDatatypeInfo (Only x)
