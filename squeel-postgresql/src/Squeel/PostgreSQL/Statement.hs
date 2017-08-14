@@ -53,9 +53,8 @@ class (PGTyped (BaseType ty), KnownNat n)
   => HasParameter (n :: Nat) params ty | n params -> ty where
     param :: proxy n -> Expression params tables grouping ty
     param _ = UnsafeExpression $ parenthesized $
-      "$" <> paramNum <+> "::" <+> renderTypeExpression (pgtype @(BaseType ty))
-      where
-        paramNum = fromString $ show $ natVal (Proxy @n)
+      "$" <> renderNat (Proxy @n) <+> " :: "
+        <+> renderTypeExpression (pgtype @(BaseType ty))
 instance {-# OVERLAPPING #-} PGTyped (BaseType ty1)
   => HasParameter 1 (ty1:tys) ty1
 instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
@@ -409,7 +408,7 @@ class (KnownSymbol table, KnownSymbol column)
       :: (tables ~ '[table ::: columns], HasColumn column columns ty)
       => Proxy# column
       -> Expression params tables ('Grouped bys) ty
-    getGroup1 column = UnsafeExpression $ fromString (symbolVal' column)
+    getGroup1 column = UnsafeExpression $ renderSymbol column
     getGroup2
       :: (HasTable table tables columns, HasColumn column columns ty)
       => Alias table
@@ -465,7 +464,7 @@ newtype Table
 class KnownSymbol table => HasTable table tables columns
   | table tables -> columns where
     getTable :: Proxy# table -> Table tables columns
-    getTable table = UnsafeTable $ fromString $ symbolVal' table
+    getTable table = UnsafeTable $ renderSymbol table
 instance {-# OVERLAPPING #-} KnownSymbol table
   => HasTable table ((table ::: columns) ': tables) columns
 instance {-# OVERLAPPABLE #-}
@@ -671,20 +670,17 @@ char
   :: KnownNat n
   => proxy n
   -> TypeExpression ('Required ('Null ('PGchar n)))
-char (_ :: proxy n) = UnsafeTypeExpression $
-  "char(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+char p = UnsafeTypeExpression $ "char(" <> renderNat p <> ")"
 character
   :: KnownNat n
   => proxy n
   -> TypeExpression ('Required ('Null ('PGchar n)))
-character (_ :: proxy n) = UnsafeTypeExpression $
-  "character(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+character p = UnsafeTypeExpression $  "character(" <> renderNat p <> ")"
 varchar
   :: KnownNat n
   => proxy n
   -> TypeExpression ('Required ('Null ('PGvarchar n)))
-varchar (_ :: proxy n) = UnsafeTypeExpression $
-  "varchar(" <> fromString (show (natVal' (proxy# :: Proxy# n))) <> ")"
+varchar p = UnsafeTypeExpression $ "varchar(" <> renderNat p <> ")"
 characterVarying
   :: KnownNat n
   => proxy n
