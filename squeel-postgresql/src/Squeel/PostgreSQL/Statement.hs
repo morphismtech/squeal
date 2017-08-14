@@ -104,25 +104,31 @@ coalesce nulls isn'tNull = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
     ((renderExpression <$> nulls) <> [renderExpression isn'tNull]))
 
+fromNull
+  :: Expression params tables grouping ('Required ('NotNull x))
+  -> Expression params tables grouping ('Required ('Null x))
+  -> Expression params tables grouping ('Required ('NotNull x))
+fromNull isn'tNull isNull = coalesce [isNull] isn'tNull
+
 unsafeBinaryOp
   :: ByteString
-  -> Expression params tables grouping ty0
-  -> Expression params tables grouping ty1
-  -> Expression params tables grouping ty2
+  -> Expression params tables grouping ('Required ty0)
+  -> Expression params tables grouping ('Required ty1)
+  -> Expression params tables grouping ('Required ty2)
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderExpression x <+> op <+> renderExpression y
 
 unsafeUnaryOp
   :: ByteString
-  -> Expression params tables grouping ty0
-  -> Expression params tables grouping ty1
+  -> Expression params tables grouping ('Required ty0)
+  -> Expression params tables grouping ('Required ty1)
 unsafeUnaryOp op x = UnsafeExpression $ parenthesized $
   op <+> renderExpression x
 
 unsafeFunction
   :: ByteString
-  -> Expression params tables grouping xty
-  -> Expression params tables grouping yty
+  -> Expression params tables grouping ('Required xty)
+  -> Expression params tables grouping ('Required yty)
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderExpression x)
 
@@ -283,9 +289,11 @@ not_ = unsafeUnaryOp "NOT"
 (||*) = unsafeBinaryOp "OR"
 
 caseWhenThenElse
-  :: [(Condition params tables grouping, Expression params tables grouping ty)]
-  -> Expression params tables grouping ty
-  -> Expression params tables grouping ty
+  :: [ ( Condition params tables grouping
+       , Expression params tables grouping ('Required ty)
+     ) ]
+  -> Expression params tables grouping ('Required ty)
+  -> Expression params tables grouping ('Required ty)
 caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   [ "CASE"
   , mconcat
@@ -301,9 +309,9 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
 
 ifThenElse
   :: Condition params tables grouping
-  -> Expression params tables grouping ty
-  -> Expression params tables grouping ty
-  -> Expression params tables grouping ty
+  -> Expression params tables grouping ('Required ty)
+  -> Expression params tables grouping ('Required ty)
+  -> Expression params tables grouping ('Required ty)
 ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 
 (==*)
@@ -440,8 +448,8 @@ instance
 
 unsafeAggregate
   :: ByteString
-  -> Expression params tables 'Ungrouped xty
-  -> Expression params tables ('Grouped bys) yty
+  -> Expression params tables 'Ungrouped ('Required xty)
+  -> Expression params tables ('Grouped bys) ('Required yty)
 unsafeAggregate fun x = UnsafeExpression $ mconcat
   [fun, "(", renderExpression x, ")"]
 
