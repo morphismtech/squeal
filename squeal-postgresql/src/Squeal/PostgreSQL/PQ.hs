@@ -17,7 +17,7 @@
   , UndecidableInstances
 #-}
 
-module Squeel.PostgreSQL.PQ where
+module Squeal.PostgreSQL.PQ where
 
 import Control.Exception.Lifted
 import Control.Monad.Base
@@ -31,9 +31,9 @@ import GHC.TypeLits
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
-import Squeel.PostgreSQL.Binary
-import Squeel.PostgreSQL.Statement
-import Squeel.PostgreSQL.Schema
+import Squeal.PostgreSQL.Binary
+import Squeal.PostgreSQL.Statement
+import Squeal.PostgreSQL.Schema
 
 newtype Connection (schema :: [(Symbol,[(Symbol,ColumnType)])]) =
   Connection { unConnection :: LibPQ.Connection }

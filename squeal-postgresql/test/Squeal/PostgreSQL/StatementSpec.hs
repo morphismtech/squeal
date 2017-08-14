@@ -7,15 +7,15 @@
   , TypeOperators
 #-}
 
-module Squeel.PostgreSQL.StatementSpec where
+module Squeal.PostgreSQL.StatementSpec where
 
 import Control.Category ((>>>))
 import Data.Function
 import Generics.SOP hiding (from)
 import Test.Hspec
 
-import Squeel.PostgreSQL.Statement
-import Squeel.PostgreSQL.Schema
+import Squeal.PostgreSQL.Statement
+import Squeal.PostgreSQL.Schema
 
 spec :: Spec
 spec = do

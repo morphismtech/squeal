@@ -18,7 +18,7 @@
   , UndecidableInstances
 #-}
 
-module Squeel.PostgreSQL.Binary where
+module Squeal.PostgreSQL.Binary where
 
 import Data.Aeson hiding (Null)
 import Data.Bits
@@ -39,7 +39,7 @@ import qualified GHC.Generics as GHC
 import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
 
-import Squeel.PostgreSQL.Schema
+import Squeal.PostgreSQL.Schema
 
 class ToParam x (pg :: PGType) where toParam :: x -> K Encoding.Encoding pg
 instance ToParam Bool 'PGbool where toParam = K . Encoding.bool
