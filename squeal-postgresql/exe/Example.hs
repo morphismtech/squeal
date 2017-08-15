@@ -62,7 +62,7 @@ main = do
           ( Values
             (param (Proxy @1) `As` #col1 :* param (Proxy @2) `As` #col2 :* Nil)
             [param (Proxy @3) `As` #col1 :* param (Proxy @4) `As` #col2 :* Nil]
-          ) Conflict ReturningNil
+          ) Conflict (Returning Nil)
     liftBase $ Char8.putStrLn "manipulating"
     _ <- pqExecParams manipulation (1::Int32,2::Int32,3::Int32,4::Int32)
     liftBase $ Char8.putStrLn "querying"

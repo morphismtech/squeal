@@ -900,9 +900,9 @@ SELECT statements
 
 select
   :: SListI columns
-  => NP (Aliased (Expression params tables grouping)) columns
+  => NP (Aliased (Expression params tables grouping)) (column ': columns)
   -> TableExpression params schema tables grouping
-  -> Query schema params columns
+  -> Query schema params (column ': columns)
 select list tabs = UnsafeQuery $
   "SELECT"
   <+> renderCommaSeparated (renderAliased renderExpression) list
@@ -936,9 +936,9 @@ CREATE statements
 createTable
   :: (KnownSymbol table, SListI columns)
   => Alias table
-  -> NP (Aliased TypeExpression) columns
-  -> [TableConstraint schema columns]
-  -> Definition schema (Create table columns schema)
+  -> NP (Aliased TypeExpression) (column ': columns)
+  -> [TableConstraint schema (column ': columns)]
+  -> Definition schema (Create table (column ': columns) schema)
 createTable table columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderAlias table
   <+> parenthesized
@@ -1167,10 +1167,10 @@ data ReturningClause
   (columns :: [(Symbol,ColumnType)])
   (results :: [(Symbol,ColumnType)])
   where
-    ReturningNil :: ReturningClause params columns '[]
     ReturningStar :: ReturningClause params columns columns
     Returning
-      :: NP (Aliased (Expression params '[table ::: columns] 'Ungrouped)) results
+      :: NP (Aliased (Expression params '[table ::: columns] 'Ungrouped))
+          results
       -> ReturningClause params columns results
 
 renderReturningClause
@@ -1178,8 +1178,8 @@ renderReturningClause
   => ReturningClause params columns results
   -> ByteString
 renderReturningClause = \case
-  ReturningNil -> ";"
   ReturningStar -> " RETURNING *;"
+  Returning Nil -> ";"
   Returning results -> " RETURNING"
     <+> renderCommaSeparated (renderAliased renderExpression) results <> ";"
 
