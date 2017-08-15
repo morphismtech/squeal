@@ -97,18 +97,56 @@ unNull
 unNull = UnsafeExpression . renderExpression
 
 coalesce
-  :: [Expression params tables grouping ('Required ('Null x))]
-  -> Expression params tables grouping ('Required ('NotNull x))
-  -> Expression params tables grouping ('Required ('NotNull x))
-coalesce nulls isn'tNull = UnsafeExpression $
+  :: [Expression params tables grouping ('Required ('Null ty))]
+  -> Expression params tables grouping ('Required ('NotNull ty))
+  -> Expression params tables grouping ('Required ('NotNull ty))
+coalesce nullxs notNullx = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
-    ((renderExpression <$> nulls) <> [renderExpression isn'tNull]))
+    ((renderExpression <$> nullxs) <> [renderExpression notNullx]))
 
 fromNull
-  :: Expression params tables grouping ('Required ('NotNull x))
-  -> Expression params tables grouping ('Required ('Null x))
-  -> Expression params tables grouping ('Required ('NotNull x))
-fromNull isn'tNull isNull = coalesce [isNull] isn'tNull
+  :: Expression params tables grouping ('Required ('NotNull ty))
+  -> Expression params tables grouping ('Required ('Null ty))
+  -> Expression params tables grouping ('Required ('NotNull ty))
+fromNull notNullx nullx = coalesce [nullx] notNullx
+
+isNull
+  :: Expression params tables grouping ('Required ('Null ty))
+  -> Condition params tables grouping
+isNull x = UnsafeExpression $ renderExpression x <+> "IS NULL"
+
+isn'tNull
+  :: Expression params tables grouping ('Required ('Null ty))
+  -> Condition params tables grouping
+isn'tNull x = UnsafeExpression $ renderExpression x <+> "IS NOT NULL"
+
+matchNull
+  :: Expression params tables grouping ('Required nullty)
+  -> ( Expression params tables grouping ('Required ('NotNull ty))
+       -> Expression params tables grouping ('Required nullty) )
+  -> Expression params tables grouping ('Required ('Null ty))
+  -> Expression params tables grouping ('Required nullty)
+matchNull y f x = ifThenElse (isNull x) y
+  (f (UnsafeExpression (renderExpression y)))
+
+nullIf
+  :: Expression params tables grouping ('Required ('NotNull ty))
+  -> Expression params tables grouping ('Required ('NotNull ty))
+  -> Expression params tables grouping ('Required ('Null ty))
+nullIf x y = UnsafeExpression $ parenthesized $
+  renderExpression x <> ", " <> renderExpression y
+
+greatest
+  :: [Expression params tables grouping ('Required nullty)]
+  -> Expression params table grouping ('Required nullty)
+greatest xs = UnsafeExpression $ "GREATEST("
+  <> commaSeparated (renderExpression <$> xs) <> ")"
+
+least
+  :: [Expression params tables grouping ('Required nullty)]
+  -> Expression params table grouping ('Required nullty)
+least xs = UnsafeExpression $ "LEAST("
+  <> commaSeparated (renderExpression <$> xs) <> ")"
 
 unsafeBinaryOp
   :: ByteString
@@ -200,51 +238,36 @@ cast ty x = UnsafeExpression $ parenthesized $
   renderExpression x <+> "::" <+> renderTypeExpression ty
 
 div
-  :: PGIntegral ty
-  => Expression params tables grouping ('Required (nullity ty))
-  -> Expression params tables grouping ('Required (nullity ty))
-  -> Expression params tables grouping ('Required (nullity ty))
+  :: PGIntegral int
+  => Expression params tables grouping ('Required (nullity int))
+  -> Expression params tables grouping ('Required (nullity int))
+  -> Expression params tables grouping ('Required (nullity int))
 div = unsafeBinaryOp "/"
 
 mod
-  :: PGIntegral ty
-  => Expression params tables grouping ('Required (nullity ty))
-  -> Expression params tables grouping ('Required (nullity ty))
-  -> Expression params tables grouping ('Required (nullity ty))
+  :: PGIntegral int
+  => Expression params tables grouping ('Required (nullity int))
+  -> Expression params tables grouping ('Required (nullity int))
+  -> Expression params tables grouping ('Required (nullity int))
 mod = unsafeBinaryOp "%"
 
-truncate
-  :: (PGFloating frac, PGTyped int)
+trunc
+  :: PGFloating frac
   => Expression params tables grouping ('Required (nullity frac))
-  -> Expression params tables grouping ('Required (nullity int))
-truncate = cast pgtype . truncate'
-  where
-    truncate'
-      :: Expression params tables grouping ('Required (nullity frac))
-      -> Expression params tables grouping ('Required (nullity frac))
-    truncate' = unsafeFunction "trunc"
+  -> Expression params tables grouping ('Required (nullity frac))
+trunc = unsafeFunction "trunc"
 
-round
-  :: (PGFloating frac, PGTyped int)
+round_
+  :: PGFloating frac
   => Expression params tables grouping ('Required (nullity frac))
-  -> Expression params tables grouping ('Required (nullity int))
-round = cast pgtype . round'
-  where
-    round'
-      :: Expression params tables grouping ('Required (nullity frac))
-      -> Expression params tables grouping ('Required (nullity frac))
-    round' = unsafeFunction "round"
+  -> Expression params tables grouping ('Required (nullity frac))
+round_ = unsafeFunction "round"
 
-ceiling
-  :: (PGFloating frac, PGTyped int)
+ceiling_
+  :: PGFloating frac
   => Expression params tables grouping ('Required (nullity frac))
-  -> Expression params tables grouping ('Required (nullity int))
-ceiling = cast pgtype . ceiling'
-  where
-    ceiling'
-      :: Expression params tables grouping ('Required (nullity frac))
-      -> Expression params tables grouping ('Required (nullity frac))
-    ceiling' = unsafeFunction "ceiling"
+  -> Expression params tables grouping ('Required (nullity frac))
+ceiling_ = unsafeFunction "ceiling"
 
 instance IsString
   (Expression params tables grouping ('Required (nullity 'PGtext))) where
