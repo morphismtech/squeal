@@ -73,7 +73,7 @@ instance {-# OVERLAPPABLE #-} (KnownSymbol column, HasColumn column table ty)
 
 instance (HasColumn column columns ty, tables ~ '[table ::: columns])
   => IsLabel column (Expression params tables 'Ungrouped ty) where
-    fromLabel = getColumn
+    fromLabel = getColumn (proxy# @Symbol @column)
 
 instance (HasTable table tables columns, HasColumn column columns ty)
   => IsTableColumn table column (Expression params tables 'Ungrouped ty) where
@@ -460,7 +460,8 @@ instance
   , HasColumn column columns ty
   , GroupedBy table column bys
   ) => IsLabel column
-    (Expression params tables ('Grouped bys) ty) where fromLabel = getGroup1
+    (Expression params tables ('Grouped bys) ty) where
+      fromLabel = getGroup1 (proxy# @Symbol @column)
 
 instance
   ( HasTable table tables columns
@@ -588,7 +589,7 @@ instance {-# OVERLAPPABLE #-}
 
 instance HasTable table schema columns
   => IsLabel table (Table schema columns) where
-    fromLabel = getTable
+    fromLabel = getTable (proxy# @Symbol @table)
 
 data TableReference params schema tables where
   Table
