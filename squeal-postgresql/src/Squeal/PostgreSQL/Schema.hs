@@ -159,4 +159,4 @@ data Grouping
   | Grouped [(Symbol,Symbol)]
 
 class IsTableColumn table column expression where
-  (&.) :: Alias table -> Alias column -> expression
+  (!) :: Alias table -> Alias column -> expression
