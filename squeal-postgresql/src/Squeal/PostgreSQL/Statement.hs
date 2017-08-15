@@ -77,7 +77,7 @@ instance (HasColumn column columns ty, tables ~ '[table ::: columns])
 
 instance (HasTable table tables columns, HasColumn column columns ty)
   => IsTableColumn table column (Expression params tables 'Ungrouped ty) where
-    table &. column = UnsafeExpression $
+    table ! column = UnsafeExpression $
       renderAlias table <> "." <> renderAlias column
 
 def :: Expression params '[] grouping ('Optional (nullity ty))
@@ -468,7 +468,7 @@ instance
   , HasColumn column columns ty
   , GroupedBy table column bys
   ) => IsTableColumn table column
-    (Expression params tables ('Grouped bys) ty) where (&.) = getGroup2
+    (Expression params tables ('Grouped bys) ty) where (!) = getGroup2
 
 unsafeAggregate
   :: ByteString
