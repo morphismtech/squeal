@@ -102,7 +102,7 @@ spec = do
       statement :: Manipulation Tables '[] '[]
       statement =
         insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
-          Conflict ReturningNil
+          Conflict (Returning Nil)
     statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
   it "correctly renders returning INSERTs" $ do
@@ -120,7 +120,7 @@ spec = do
       statement :: Manipulation Tables '[] '[]
       statement =
         update #table1 (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-          (#col1 /=* #col2) ReturningNil
+          (#col1 /=* #col2) (Returning Nil)
     statement `manipulationRenders`
       "UPDATE table1 SET col1 = 2\
       \ WHERE (col1 <> col2);"
@@ -142,7 +142,7 @@ spec = do
         insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
           (OnConflictDoUpdate
             (Set 2 `As` #col1 :* Same `As` #col2 :* Nil) (#col1 /=* #col2))
-          ReturningNil
+          (Returning Nil)
     statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4)\
       \ ON CONFLICT DO UPDATE\
@@ -173,7 +173,7 @@ spec = do
       statement :: Manipulation StudentsTable '[] '[]
       statement = insertInto #students
         (Values ("Robert'); DROP TABLE students;" `As` #name :* Nil) [])
-        Conflict ReturningNil
+        Conflict (Returning Nil)
     statement `manipulationRenders`
       "INSERT INTO students (name) VALUES (E'Robert''); DROP TABLE students;');"
   describe "JOINs" $ do
