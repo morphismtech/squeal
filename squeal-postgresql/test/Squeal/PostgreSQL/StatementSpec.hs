@@ -20,7 +20,7 @@ import Squeal.PostgreSQL.Schema
 spec :: Spec
 spec = do
   let
-    qry `queryRenders` str = query qry `manipulationRenders` str
+    qry `queryRenders` str = queryStatement qry `manipulationRenders` str
     definition `definitionRenders` str =
       renderDefinition definition `shouldBe` str
     manipulation `manipulationRenders` str =

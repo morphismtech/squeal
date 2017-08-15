@@ -154,6 +154,8 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
     => list x -> Manipulation schema params ys -> pq ()
   forPrepared_ = flip traversePrepared_
 
+  connectPoll :: pq LibPQ.PollingStatus
+
 instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
 
   manipulateParams
@@ -197,6 +199,10 @@ instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
           LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
         return ((), Connection conn)
 
+  connectPoll = undefined--PQ $ \ (Connection conn) -> do
+    -- pollingStatus <- liftBase $ connectPoll conn
+    -- return (pollingStatus, Connection conn)
+
 instance Monad m => Applicative (PQ schema schema m) where
   pure x = PQ $ \ conn -> pure (x, conn)
   (<*>) = pqAp
@@ -233,12 +239,12 @@ finish :: MonadBase IO io => Connection schema -> io ()
 finish = liftBase . LibPQ.finish . unConnection
 
 withConnection
-  :: MonadBaseControl IO io
+  :: forall schema io x
+   . MonadBaseControl IO io
   => ByteString
   -> (Connection schema -> io x)
   -> io x
-withConnection connString action =
-  bracket (connectdb connString) finish action
+withConnection connString = bracket (connectdb connString) finish
 
 newtype Result (xs :: [(Symbol,ColumnType)])
   = Result { unResult :: LibPQ.Result }
