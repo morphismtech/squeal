@@ -883,10 +883,10 @@ newtype Query
   (columns :: [(Symbol,ColumnType)])
     = UnsafeQuery { renderQuery :: ByteString }
 
-query
+queryStatement
   :: Query schema params columns
   -> Manipulation schema params columns
-query q = UnsafeManipulation $ renderQuery q <> ";"
+queryStatement q = UnsafeManipulation $ renderQuery q <> ";"
 
 union, unionAll, intersect, intersectAll, except, exceptAll
   :: Query schema params columns

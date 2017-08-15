@@ -9,6 +9,7 @@
   , FlexibleInstances
   , MagicHash
   , MultiParamTypeClasses
+  , OverloadedStrings
   , RankNTypes
   , ScopedTypeVariables
   , TypeApplications
@@ -24,7 +25,10 @@ import Control.Monad.Base
 import Control.Monad.Except
 import Control.Monad.Trans.Control
 import Data.ByteString (ByteString)
+import Data.Foldable
 import Data.Function ((&))
+import Data.Monoid
+import Data.Traversable
 import Generics.SOP
 import GHC.Exts hiding (fromList)
 import GHC.TypeLits
@@ -43,18 +47,18 @@ newtype PQ
   (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
   (m :: * -> *)
   (x :: *) =
-    PQ { unPQ :: Connection schema0 -> m (x, Connection schema1) }
+    PQ { runPQ :: Connection schema0 -> m (x, Connection schema1) }
     deriving Functor
 
-evalPQ :: Functor m => Connection schema0 -> PQ schema0 schema1 m x -> m x
-evalPQ conn (PQ pq) = fmap fst $ pq conn
+evalPQ :: Functor m => PQ schema0 schema1 m x -> Connection schema0 -> m x
+evalPQ (PQ pq) = fmap fst . pq
 
-runPQ
+execPQ
   :: Functor m
-  => Connection schema0
-  -> PQ schema0 schema1 m x
+  => PQ schema0 schema1 m x
+  -> Connection schema0
   -> m (Connection schema1)
-runPQ conn (PQ pq) = fmap snd $ pq conn
+execPQ (PQ pq) = fmap snd . pq
 
 pqAp
   :: Monad m
@@ -73,7 +77,7 @@ pqBind
   -> PQ schema0 schema2 m y
 pqBind f (PQ x) = PQ $ \ conn -> do
   (x', conn') <- x conn
-  unPQ (f x') conn'
+  runPQ (f x') conn'
 
 pqThen
   :: Monad m
@@ -82,44 +86,116 @@ pqThen
   -> PQ schema0 schema2 m y
 pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 
-pqExec
+define
   :: MonadBase IO io
   => Definition schema0 schema1
   -> PQ schema0 schema1 io (Maybe (Result '[]))
-pqExec (UnsafeDefinition q) = PQ $ \ (Connection conn) -> do
+define (UnsafeDefinition q) = PQ $ \ (Connection conn) -> do
   result <- liftBase $ LibPQ.exec conn q
   return (Result <$> result, Connection conn)
 
-pqThenExec
+pqThenDefine
   :: MonadBase IO io
   => Definition schema1 schema2
   -> PQ schema0 schema1 io x
   -> PQ schema0 schema2 io (Maybe (Result '[]))
-pqThenExec = pqThen . pqExec
+pqThenDefine = pqThen . define
 
-class Monad m => MonadPQ schema m | m -> schema where
+class Monad pq => MonadPQ schema pq | pq -> schema where
 
-  pqExecParams
+  manipulateParams
     :: ToParams x params
-    => Manipulation schema params ys -> x -> m (Maybe (Result ys))
-  default pqExecParams
-    :: (MonadTrans t, MonadPQ schema m1, m ~ t m1)
+    => Manipulation schema params ys -> x -> pq (Maybe (Result ys))
+  default manipulateParams
+    :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
     => ToParams x params
-    => Manipulation schema params ys -> x -> m (Maybe (Result ys))
-  pqExecParams manipulation params = lift $ pqExecParams manipulation params
+    => Manipulation schema params ys -> x -> pq (Maybe (Result ys))
+  manipulateParams manipulation params = lift $
+    manipulateParams manipulation params
 
-  pqExecNil :: Manipulation schema '[] ys -> m (Maybe (Result ys))
-  pqExecNil statement = pqExecParams statement ()
+  manipulate :: Manipulation schema '[] ys -> pq (Maybe (Result ys))
+  manipulate statement = manipulateParams statement ()
+
+  queryParams
+    :: ToParams x params
+    => Query schema params ys -> x -> pq (Maybe (Result ys))
+  queryParams = manipulateParams . queryStatement
+
+  query :: Query schema '[] ys -> pq (Maybe (Result ys))
+  query q = queryParams q ()
+
+  traversePrepared
+    :: (ToParams x params, Traversable list)
+    => Manipulation schema params ys -> list x -> pq (list (Maybe (Result ys)))
+  default traversePrepared
+    :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
+    => (ToParams x params, Traversable list)
+    => Manipulation schema params ys -> list x -> pq (list (Maybe (Result ys)))
+  traversePrepared manipulation params = lift $
+    traversePrepared manipulation params
+
+  forPrepared
+    :: (ToParams x params, Traversable list)
+    => list x -> Manipulation schema params ys -> pq (list (Maybe (Result ys)))
+  forPrepared = flip traversePrepared
+
+  traversePrepared_
+    :: (ToParams x params, Foldable list)
+    => Manipulation schema params ys -> list x -> pq ()
+  default traversePrepared_
+    :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
+    => (ToParams x params, Foldable list)
+    => Manipulation schema params ys -> list x -> pq ()
+  traversePrepared_ manipulation params = lift $
+    traversePrepared_ manipulation params
+
+  forPrepared_
+    :: (ToParams x params, Traversable list)
+    => list x -> Manipulation schema params ys -> pq ()
+  forPrepared_ = flip traversePrepared_
 
 instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
 
-  pqExecParams (UnsafeManipulation q :: Manipulation schema ps ys) (params :: x) =
-    PQ $ \ (Connection conn) -> do
-      let
-        toParam' bytes = (LibPQ.invalidOid,bytes,LibPQ.Binary)
-        params' = fmap (fmap toParam') (hcollapse (toParams @x @ps params))
-      result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
-      return (Result <$> result, Connection conn)
+  manipulateParams
+    (UnsafeManipulation q :: Manipulation schema ps ys) (params :: x) =
+      PQ $ \ (Connection conn) -> do
+        let
+          toParam' bytes = (LibPQ.invalidOid,bytes,LibPQ.Binary)
+          params' = fmap (fmap toParam') (hcollapse (toParams @x @ps params))
+        result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
+        return (Result <$> result, Connection conn)
+
+  traversePrepared
+    (UnsafeManipulation q :: Manipulation schema xs ys) (list :: list x) =
+      PQ $ \ (Connection conn) -> do
+        let temp = "temporary_statement"
+        _prepResult <- liftBase $ LibPQ.prepare conn temp q Nothing
+        results <- for list $ \ params -> do
+          let
+            toParam' bytes = (bytes,LibPQ.Binary)
+            params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
+          result <- liftBase $
+            LibPQ.execPrepared conn temp params' LibPQ.Binary
+          return $ Result <$> result
+        _deallocResult <- liftBase $
+          LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
+        return (results, Connection conn)
+
+  traversePrepared_
+    (UnsafeManipulation q :: Manipulation schema xs ys) (list :: list x) =
+      PQ $ \ (Connection conn) -> do
+        let temp = "temporary_statement"
+        _prepResult <- liftBase $ LibPQ.prepare conn temp q Nothing
+        for_ list $ \ params -> do
+          let
+            toParam' bytes = (bytes,LibPQ.Binary)
+            params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
+          _result <- liftBase $
+            LibPQ.execPrepared conn temp params' LibPQ.Binary
+          return ()
+        _deallocResult <- liftBase $
+          LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
+        return ((), Connection conn)
 
 instance Monad m => Applicative (PQ schema schema m) where
   pure x = PQ $ \ conn -> pure (x, conn)
@@ -142,7 +218,7 @@ type PQRun schema =
 
 pqliftWith :: Functor m => (PQRun schema -> m a) -> PQ schema schema m a
 pqliftWith f = PQ $ \ conn ->
-  fmap (\ x -> (x, conn)) (f $ \ pq -> unPQ pq conn)
+  fmap (\ x -> (x, conn)) (f $ \ pq -> runPQ pq conn)
 
 instance MonadBaseControl b m => MonadBaseControl b (PQ schema schema m) where
   type StM (PQ schema schema m) x = StM m (x, Connection schema)
