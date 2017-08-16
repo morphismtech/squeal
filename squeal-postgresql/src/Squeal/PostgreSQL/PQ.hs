@@ -105,38 +105,38 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
 
   manipulateParams
     :: ToParams x params
-    => Manipulation schema params ys -> x -> pq (Maybe (Result ys))
+    => Manipulation schema params ys -> x -> pq (Result ys)
   default manipulateParams
     :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
     => ToParams x params
-    => Manipulation schema params ys -> x -> pq (Maybe (Result ys))
+    => Manipulation schema params ys -> x -> pq (Result ys)
   manipulateParams manipulation params = lift $
     manipulateParams manipulation params
 
-  manipulate :: Manipulation schema '[] ys -> pq (Maybe (Result ys))
+  manipulate :: Manipulation schema '[] ys -> pq (Result ys)
   manipulate statement = manipulateParams statement ()
 
   queryParams
     :: ToParams x params
-    => Query schema params ys -> x -> pq (Maybe (Result ys))
+    => Query schema params ys -> x -> pq (Result ys)
   queryParams = manipulateParams . queryStatement
 
-  query :: Query schema '[] ys -> pq (Maybe (Result ys))
+  query :: Query schema '[] ys -> pq (Result ys)
   query q = queryParams q ()
 
   traversePrepared
     :: (ToParams x params, Traversable list)
-    => Manipulation schema params ys -> list x -> pq (list (Maybe (Result ys)))
+    => Manipulation schema params ys -> list x -> pq (list (Result ys))
   default traversePrepared
     :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
     => (ToParams x params, Traversable list)
-    => Manipulation schema params ys -> list x -> pq (list (Maybe (Result ys)))
+    => Manipulation schema params ys -> list x -> pq (list (Result ys))
   traversePrepared manipulation params = lift $
     traversePrepared manipulation params
 
   forPrepared
     :: (ToParams x params, Traversable list)
-    => list x -> Manipulation schema params ys -> pq (list (Maybe (Result ys)))
+    => list x -> Manipulation schema params ys -> pq (list (Result ys))
   forPrepared = flip traversePrepared
 
   traversePrepared_
@@ -154,7 +154,11 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
     => list x -> Manipulation schema params ys -> pq ()
   forPrepared_ = flip traversePrepared_
 
-  connectPoll :: pq LibPQ.PollingStatus
+  liftPQ :: (LibPQ.Connection -> IO a) -> pq a
+  default liftPQ
+    :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
+    => (LibPQ.Connection -> IO a) -> pq a
+  liftPQ = lift . liftPQ
 
 instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
 
@@ -164,44 +168,71 @@ instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
         let
           toParam' bytes = (LibPQ.invalidOid,bytes,LibPQ.Binary)
           params' = fmap (fmap toParam') (hcollapse (toParams @x @ps params))
-        result <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
-        return (Result <$> result, Connection conn)
+        resultMaybe <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
+        case resultMaybe of
+          Nothing -> error
+            "manipulateParams: LibPQ.execParams returned no results"
+          Just result -> return (Result result, Connection conn)
 
   traversePrepared
     (UnsafeManipulation q :: Manipulation schema xs ys) (list :: list x) =
       PQ $ \ (Connection conn) -> do
         let temp = "temporary_statement"
-        _prepResult <- liftBase $ LibPQ.prepare conn temp q Nothing
+        prepResultMaybe <- liftBase $ LibPQ.prepare conn temp q Nothing
+        case prepResultMaybe of
+          Nothing -> error
+            "traversePrepared: LibPQ.prepare returned no results"
+          Just _prepResult -> return () -- todo: check status of prepResult
         results <- for list $ \ params -> do
           let
             toParam' bytes = (bytes,LibPQ.Binary)
             params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
-          result <- liftBase $
+          resultMaybe <- liftBase $
             LibPQ.execPrepared conn temp params' LibPQ.Binary
-          return $ Result <$> result
-        _deallocResult <- liftBase $
+          case resultMaybe of
+            Nothing -> error
+              "traversePrepared: LibPQ.execParams returned no results"
+            Just result -> return $ Result result
+        deallocResultMaybe <- liftBase $
           LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
+        case deallocResultMaybe of
+          Nothing -> error
+            "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
+          Just _deallocResult -> return ()
+          -- todo: check status of deallocResult
         return (results, Connection conn)
 
   traversePrepared_
     (UnsafeManipulation q :: Manipulation schema xs ys) (list :: list x) =
       PQ $ \ (Connection conn) -> do
         let temp = "temporary_statement"
-        _prepResult <- liftBase $ LibPQ.prepare conn temp q Nothing
+        prepResultMaybe <- liftBase $ LibPQ.prepare conn temp q Nothing
+        case prepResultMaybe of
+          Nothing -> error
+            "traversePrepared_: LibPQ.prepare returned no results"
+          Just _prepResult -> return () -- todo: check status of prepResult
         for_ list $ \ params -> do
           let
             toParam' bytes = (bytes,LibPQ.Binary)
             params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
-          _result <- liftBase $
+          resultMaybe <- liftBase $
             LibPQ.execPrepared conn temp params' LibPQ.Binary
-          return ()
-        _deallocResult <- liftBase $
+          case resultMaybe of
+            Nothing -> error
+              "traversePrepared_: LibPQ.execParams returned no results"
+            Just _result -> return ()
+        deallocResultMaybe <- liftBase $
           LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
+        case deallocResultMaybe of
+          Nothing -> error
+            "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
+          Just _deallocResult -> return ()
+          -- todo: check status of deallocResult
         return ((), Connection conn)
 
-  connectPoll = PQ $ \ (Connection conn) -> do
-    pollingStatus <- liftBase $ LibPQ.connectPoll conn
-    return (pollingStatus, Connection conn)
+  liftPQ pq = PQ $ \ (Connection conn) -> do
+    y <- liftBase $ pq conn
+    return (y, Connection conn)
 
 instance Monad m => Applicative (PQ schema schema m) where
   pure x = PQ $ \ conn -> pure (x, conn)
@@ -274,15 +305,73 @@ getValue
   (RowNumber r)
   (UnsafeColumnNumber c :: ColumnNumber n columns colty)
   (Result result)
-   = fromColumnValue @colty . K <$>
-    liftBase (LibPQ.getvalue result r c)
+   = fmap (fromColumnValue @colty . K) $ liftBase $ do
+      numRows <- LibPQ.ntuples result
+      when (numRows < r) $ error $
+        "getValue: expected at least " <> show r <> "rows but only saw "
+        <> show numRows
+      LibPQ.getvalue result r c
 
 getRow
   :: (FromRow columns y, MonadBase IO io)
   => RowNumber -> Result columns -> io y
-getRow (RowNumber r) (Result result :: Result columns) = do
+getRow (RowNumber r) (Result result :: Result columns) = liftBase $do
+  numRows <- LibPQ.ntuples result
+  when (numRows < r) $ error $
+    "getRow: expected at least " <> show r <> "rows but only saw "
+    <> show numRows
   let len = fromIntegral (lengthSList (Proxy @columns))
-  row' <- traverse (liftBase . LibPQ.getvalue result r) [0 .. len - 1]
+  numCols <- LibPQ.nfields result
+  when (numCols /= len) $ error $
+    "getRow: expected at least " <> show len <> "columns but only saw "
+    <> show numCols
+  row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
   case fromList row' of
     Nothing -> error "getRow: found unexpected length"
     Just row -> return $ fromRow @columns row
+
+nextRow
+  :: (FromRow columns y, MonadBase IO io)
+  => Result columns -> RowNumber -> io (Maybe (RowNumber,y))
+nextRow (Result result :: Result columns) (RowNumber r) = liftBase $ do
+  numRows <- LibPQ.ntuples result -- todo: cache this
+  if numRows < r then return Nothing else do
+    let len = fromIntegral (lengthSList (Proxy @columns))
+    numCols <- LibPQ.nfields result -- todo: cache this
+    when (numCols /= len) $ error $
+      "nextRow: expected at least " <> show len <> "columns but only saw "
+      <> show numCols
+    row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
+    case fromList row' of
+      Nothing -> error "nextRow: found unexpected length"
+      Just row -> return $ Just (RowNumber (r+1), fromRow @columns row)
+
+getRows :: (FromRow columns y, MonadBase IO io) => Result columns -> io [y]
+getRows (Result result :: Result columns) = liftBase $ do
+  let len = fromIntegral (lengthSList (Proxy @columns))
+  numCols <- LibPQ.nfields result
+  when (numCols /= len) $ error $
+    "getRow: expected at least " <> show len <> "columns but only saw "
+    <> show numCols
+  numRows <- LibPQ.ntuples result
+  for [0 .. numRows - 1] $ \ r -> do
+    row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
+    case fromList row' of
+      Nothing -> error "getRows: found unexpected length"
+      Just row -> return $ fromRow @columns row
+
+getRowMaybe
+  :: (FromRow columns y, MonadBase IO io)
+  => RowNumber -> Result columns -> io (Maybe y)
+getRowMaybe (RowNumber r) (Result result :: Result columns) = liftBase $do
+  numRows <- LibPQ.ntuples result
+  if numRows < r then return Nothing else do
+    let len = fromIntegral (lengthSList (Proxy @columns))
+    numCols <- LibPQ.nfields result
+    when (numCols /= len) $ error $
+      "getRow: expected at least " <> show len <> "columns but only saw "
+      <> show numCols
+    row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
+    case fromList row' of
+      Nothing -> error "getRow: found unexpected length"
+      Just row -> return . Just $ fromRow @columns row
