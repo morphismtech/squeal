@@ -160,3 +160,4 @@ data Grouping
 
 class IsTableColumn table column expression where
   (!) :: Alias table -> Alias column -> expression
+  infixl 9 !
