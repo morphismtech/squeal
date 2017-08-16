@@ -91,7 +91,7 @@ spec = do
         select (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
         ( from (Table (#table1 `As` #table1))
           & group (By #col1 :* Nil) 
-          & having ((#col1 + sum_ #col2) >* 1) )
+          & having (#col1 + sum_ #col2 >* 1) )
     statement `queryRenders`
       "SELECT sum(col2) AS sum, col1 AS col1\
       \ FROM table1 AS table1\
@@ -181,12 +181,12 @@ spec = do
       let
         statement :: Query JoinTables '[] ValueColumns
         statement = select
-          ( (#orders ! #orderVal) `As` #orderVal
-            :* (#customers ! #customerVal) `As` #customerVal
-            :* (#shippers ! #shipperVal) `As` #shipperVal :* Nil)
+          ( #orders ! #orderVal `As` #orderVal :*
+            #customers ! #customerVal `As` #customerVal :*
+            #shippers ! #shipperVal `As` #shipperVal :* Nil )
           ( from (Table (#orders `As` #orders)
             & CrossJoin (Table (#customers `As` #customers))
-            & CrossJoin (Table (#shippers `As` #shippers))))
+            & CrossJoin (Table (#shippers `As` #shippers))) )
       statement `queryRenders`
         "SELECT\
         \ orders.orderVal AS orderVal,\

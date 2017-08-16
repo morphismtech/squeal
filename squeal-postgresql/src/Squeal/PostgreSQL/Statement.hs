@@ -381,16 +381,35 @@ infix 4 >*
 
 data SortExpression params tables grouping where
   Asc
-    :: Expression params tables grouping ty
+    :: Expression params tables grouping ('Required ('NotNull ty))
     -> SortExpression params tables grouping
   Desc
-    :: Expression params tables grouping ty
+    :: Expression params tables grouping ('Required ('NotNull ty))
+    -> SortExpression params tables grouping
+  AscNullsFirst
+    :: Expression params tables grouping ('Required ('Null ty))
+    -> SortExpression params tables grouping
+  AscNullsLast
+    :: Expression params tables grouping ('Required ('Null ty))
+    -> SortExpression params tables grouping
+  DescNullsFirst
+    :: Expression params tables grouping ('Required ('Null ty))
+    -> SortExpression params tables grouping
+  DescNullsLast
+    :: Expression params tables grouping ('Required ('Null ty))
     -> SortExpression params tables grouping
 
 renderSortExpression :: SortExpression params tables grouping -> ByteString
 renderSortExpression = \case
   Asc expression -> renderExpression expression <+> "ASC"
   Desc expression -> renderExpression expression <+> "DESC"
+  AscNullsFirst expression -> renderExpression expression
+    <+> "ASC NULLS FIRST"
+  DescNullsFirst expression -> renderExpression expression
+    <+> "DESC NULLS FIRST"
+  AscNullsLast expression -> renderExpression expression <+> "ASC NULLS LAST"
+  DescNullsLast expression -> renderExpression expression <+> "DESC NULLS LAST"
+
 
 {-----------------------------------------
 aggregation
@@ -597,52 +616,52 @@ instance HasTable table schema columns
   => IsLabel table (Table schema columns) where
     fromLabel = getTable (Alias @table)
 
-data TableReference params schema tables where
+data FromClause params schema tables where
   Table
     :: Aliased (Table schema) table
-    -> TableReference params schema '[table]
+    -> FromClause params schema '[table]
   Subquery
     :: Aliased (Query schema params) table
-    -> TableReference params schema '[table]
+    -> FromClause params schema '[table]
   CrossJoin
-    :: TableReference params schema right
-    -> TableReference params schema left
-    -> TableReference params schema (Join left right)
+    :: FromClause params schema right
+    -> FromClause params schema left
+    -> FromClause params schema (Join left right)
   InnerJoin
-    :: TableReference params schema right
+    :: FromClause params schema right
     -> Condition params (Join left right) 'Ungrouped
-    -> TableReference params schema left
-    -> TableReference params schema (Join left right)
+    -> FromClause params schema left
+    -> FromClause params schema (Join left right)
   LeftOuterJoin
-    :: TableReference params schema right
+    :: FromClause params schema right
     -> Condition params (Join left right) 'Ungrouped
-    -> TableReference params schema left
-    -> TableReference params schema (Join left (NullifyTables right))
+    -> FromClause params schema left
+    -> FromClause params schema (Join left (NullifyTables right))
   RightOuterJoin
-    :: TableReference params schema right
+    :: FromClause params schema right
     -> Condition params (Join left right) 'Ungrouped
-    -> TableReference params schema left
-    -> TableReference params schema (Join (NullifyTables left) right)
+    -> FromClause params schema left
+    -> FromClause params schema (Join (NullifyTables left) right)
   FullOuterJoin
-    :: TableReference params schema right
+    :: FromClause params schema right
     -> Condition params (Join left right) 'Ungrouped
-    -> TableReference params schema left
-    -> TableReference params schema
+    -> FromClause params schema left
+    -> FromClause params schema
         (Join (NullifyTables left) (NullifyTables right))
 
-renderTableReference :: TableReference params schema tables -> ByteString
-renderTableReference = \case
+renderFromClause :: FromClause params schema tables -> ByteString
+renderFromClause = \case
   Table table -> renderAliased renderTable table
   Subquery selection -> renderAliased renderQuery selection
   CrossJoin right left ->
-    renderTableReference left <+> "CROSS JOIN" <+> renderTableReference right
+    renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
   InnerJoin right on left -> renderJoin "INNER JOIN" right on left
   LeftOuterJoin right on left -> renderJoin "LEFT OUTER JOIN" right on left
   RightOuterJoin right on left -> renderJoin "RIGHT OUTER JOIN" right on left
   FullOuterJoin right on left -> renderJoin "FULL OUTER JOIN" right on left
   where
     renderJoin op right on left =
-      renderTableReference left <+> op <+> renderTableReference right
+      renderFromClause left <+> op <+> renderFromClause right
       <+> "ON" <+> renderExpression on
 
 data TableExpression
@@ -651,7 +670,7 @@ data TableExpression
   (tables :: [(Symbol,[(Symbol,ColumnType)])])
   (grouping :: Grouping)
     = TableExpression
-    { fromClause :: TableReference params schema tables
+    { fromClause :: FromClause params schema tables
     , whereClause :: [Condition params tables 'Ungrouped]
     , groupByClause :: GroupByClause tables grouping
     , havingClause :: HavingClause params tables grouping
@@ -665,7 +684,7 @@ renderTableExpression
   -> ByteString
 renderTableExpression
   (TableExpression tables whs' grps' hvs' srts' lims' offs') = mconcat
-    [ "FROM ", renderTableReference tables
+    [ "FROM ", renderFromClause tables
     , renderWheres whs'
     , renderGroupByClause grps'
     , renderHavingClause hvs'
@@ -690,7 +709,7 @@ renderTableExpression
         offs -> " OFFSET" <+> fromString (show (sum offs))
 
 from
-  :: TableReference params schema tables
+  :: FromClause params schema tables
   -> TableExpression params schema tables 'Ungrouped
 from tables = TableExpression tables [] NoGroups NoHaving [] [] []
 
@@ -990,7 +1009,7 @@ data TableConstraint
   = UnsafeTableConstraint { renderTableConstraint :: ByteString }
 
 check
-  :: Condition '[] '[table ::: columns] 'Ungrouped
+  :: (forall table. Condition '[] '[table ::: columns] 'Ungrouped)
   -> TableConstraint schema columns
 check condition = UnsafeTableConstraint $
   "CHECK" <+> parenthesized (renderExpression condition)
