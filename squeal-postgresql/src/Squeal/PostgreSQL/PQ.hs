@@ -199,9 +199,9 @@ instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
           LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
         return ((), Connection conn)
 
-  connectPoll = undefined--PQ $ \ (Connection conn) -> do
-    -- pollingStatus <- liftBase $ connectPoll conn
-    -- return (pollingStatus, Connection conn)
+  connectPoll = PQ $ \ (Connection conn) -> do
+    pollingStatus <- liftBase $ LibPQ.connectPoll conn
+    return (pollingStatus, Connection conn)
 
 instance Monad m => Applicative (PQ schema schema m) where
   pure x = PQ $ \ conn -> pure (x, conn)
