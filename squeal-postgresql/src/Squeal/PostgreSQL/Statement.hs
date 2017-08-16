@@ -958,7 +958,7 @@ select list tabs = UnsafeQuery $
   <+> renderTableExpression tabs
 
 selectStar
-  :: (tables ~ '[table ::: columns])
+  :: tables ~ '[table ::: columns]
   => TableExpression params schema tables 'Ungrouped
   -> Query schema params columns
 selectStar tabs = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression tabs
@@ -1235,7 +1235,8 @@ data ReturningClause
   where
     ReturningStar :: ReturningClause params columns columns
     Returning
-      :: NP (Aliased (Expression params '[table ::: columns] 'Ungrouped))
+      :: NP
+          (Aliased (Expression params '[table ::: columns] 'Ungrouped))
           results
       -> ReturningClause params columns results
 
@@ -1253,8 +1254,8 @@ data ConflictClause params columns where
   Conflict :: ConflictClause params columns
   OnConflictDoNothing :: ConflictClause params columns
   OnConflictDoUpdate
-    :: NP (Aliased (UpdateExpression params '[table ::: columns])) columns
-    -> Condition params '[table ::: columns] 'Ungrouped
+    :: NP (Aliased (UpdateExpression params columns)) columns
+    -> (forall table. Condition params '[table ::: columns] 'Ungrouped)
     -> ConflictClause params columns
 
 renderConflictClause
@@ -1273,12 +1274,12 @@ renderConflictClause = \case
 UPDATE statements
 -----------------------------------------}
 
-data UpdateExpression params table ty
+data UpdateExpression params columns ty
   = Same
-  | Set (Expression params table 'Ungrouped ty)
+  | Set (forall table. Expression params '[table ::: columns] 'Ungrouped ty)
 
 renderUpdateExpression
-  :: Aliased (UpdateExpression params '[table ::: columns]) column
+  :: Aliased (UpdateExpression params columns) column
   -> Maybe ByteString
 renderUpdateExpression = \case
   Same `As` _ -> Nothing
@@ -1288,8 +1289,8 @@ renderUpdateExpression = \case
 update
   :: (HasTable table schema columns, SListI columns, SListI results)
   => Alias table
-  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
-  -> Condition params '[table ::: columns] 'Ungrouped
+  -> NP (Aliased (UpdateExpression params columns)) columns
+  -> (forall tab. Condition params '[tab ::: columns] 'Ungrouped)
   -> ReturningClause params columns results
   -> Manipulation schema params results
 update table columns wh returning = UnsafeManipulation $
