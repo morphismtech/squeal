@@ -9,6 +9,7 @@
   , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
+  , TypeApplications
   , TypeFamilies
   , TypeOperators
 #-}
@@ -43,7 +44,6 @@ module Squeal.PostgreSQL.Schema
 import Data.ByteString
 import Data.Monoid
 import Data.String
-import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
 
@@ -91,10 +91,10 @@ instance PGFloating 'PGfloat8
 
 type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
 
-data Alias (alias :: Symbol) = Alias (Proxy# alias)
+data Alias (alias :: Symbol) = Alias
 
 renderAlias :: KnownSymbol alias => Alias alias -> ByteString
-renderAlias (Alias alias) = fromString (symbolVal' alias)
+renderAlias = fromString . symbolVal
 
 instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
@@ -110,8 +110,8 @@ renderAliased
   :: (forall ty. expression ty -> ByteString)
   -> Aliased expression aliased
   -> ByteString
-renderAliased render (expression `As` Alias alias) =
-  render expression <> " AS " <> fromString (symbolVal' alias)
+renderAliased render (expression `As` alias) =
+  render expression <> " AS " <> renderAlias alias
 
 data NullityType = Null PGType | NotNull PGType
 
@@ -159,4 +159,4 @@ data Grouping
   | Grouped [(Symbol,Symbol)]
 
 class IsTableColumn table column expression where
-  (&.) :: Alias table -> Alias column -> expression
+  (!) :: Alias table -> Alias column -> expression

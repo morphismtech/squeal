@@ -181,9 +181,9 @@ spec = do
       let
         statement :: Query JoinTables '[] ValueColumns
         statement = select
-          ( (#orders &. #orderVal) `As` #orderVal
-            :* (#customers &. #customerVal) `As` #customerVal
-            :* (#shippers &. #shipperVal) `As` #shipperVal :* Nil)
+          ( (#orders ! #orderVal) `As` #orderVal
+            :* (#customers ! #customerVal) `As` #customerVal
+            :* (#shippers ! #shipperVal) `As` #shipperVal :* Nil)
           ( from (Table (#orders `As` #orders)
             & CrossJoin (Table (#customers `As` #customers))
             & CrossJoin (Table (#shippers `As` #shippers))))
@@ -199,14 +199,14 @@ spec = do
       let
         statement :: Query JoinTables '[] ValueColumns
         statement = select
-          ( (#orders &. #orderVal) `As` #orderVal
-            :* (#customers &. #customerVal) `As` #customerVal
-            :* (#shippers &. #shipperVal) `As` #shipperVal :* Nil)
+          ( (#orders ! #orderVal) `As` #orderVal
+            :* (#customers ! #customerVal) `As` #customerVal
+            :* (#shippers ! #shipperVal) `As` #shipperVal :* Nil)
           ( from (Table (#orders `As` #orders)
             & InnerJoin (Table (#customers `As` #customers))
-              ((#orders &. #customerID) ==* (#customers &. #customerID))
+              ((#orders ! #customerID) ==* (#customers ! #customerID))
             & InnerJoin (Table (#shippers `As` #shippers))
-              ((#orders &. #shipperID) ==* (#shippers &. #shipperID))))
+              ((#orders ! #shipperID) ==* (#shippers ! #shipperID))))
       statement `queryRenders`
         "SELECT\
         \ orders.orderVal AS orderVal,\

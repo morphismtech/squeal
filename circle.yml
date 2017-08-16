@@ -3,6 +3,8 @@ dependencies:
     - "~/.stack"
     - ".stack-work"
   override:
+    - stack upgrade
+    - stack update
     - stack setup
     - stack test --no-run-tests
 test:
