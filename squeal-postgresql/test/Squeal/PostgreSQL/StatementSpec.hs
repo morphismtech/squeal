@@ -269,6 +269,7 @@ spec = do
             (text & notNull) `As` #email :* Nil )
           [ primaryKey (Column #id :* Nil)
           , foreignKey (Column #userid :* Nil) #users (Column #id :* Nil)
+            OnDeleteCascade OnUpdateRestrict
           , unique (Column #email :* Nil)
           , check (#email /=* "")
           ]
@@ -282,7 +283,8 @@ spec = do
       \ userid integer NOT NULL,\
       \ email text NOT NULL,\
       \ PRIMARY KEY (id),\
-      \ FOREIGN KEY (userid) REFERENCES users (id),\
+      \ FOREIGN KEY (userid) REFERENCES users (id)\
+      \ ON DELETE CASCADE ON UPDATE RESTRICT,\
       \ UNIQUE (email),\
       \ CHECK ((email <> E'')));"
   it "should render DROP TABLE statements" $ do

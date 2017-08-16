@@ -1034,36 +1034,53 @@ unique columns = UnsafeTableConstraint $
   "UNIQUE" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
 primaryKey
-  :: (SListI subcolumns, NotNullTypes subcolumns)
+  :: (SListI subcolumns, AllNotNull subcolumns)
   => NP (Column columns) subcolumns
   -> TableConstraint schema columns
 primaryKey columns = UnsafeTableConstraint $
   "PRIMARY KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
-type family SameTypes columns0 columns1 :: Constraint where
-  SameTypes '[] '[] = ()
-  SameTypes ((column0 ::: ty0) ': columns0) ((column1 ::: ty1) ': columns1)
-    = (ty0 ~ ty1, SameTypes columns0 columns1)
-
-type family NotNullTypes columns :: Constraint where
-  NotNullTypes '[] = ()
-  NotNullTypes ((column ::: (optionality ('NotNull ty))) ': columns)
-    = NotNullTypes columns
-
 foreignKey
   :: ( HasTable reftable schema refcolumns
      , SameTypes subcolumns refsubcolumns
-     , NotNullTypes subcolumns
+     , NotAllNull subcolumns
      , SListI subcolumns
      , SListI refsubcolumns)
   => NP (Column columns) subcolumns
   -> Alias reftable
   -> NP (Column refcolumns) refsubcolumns
+  -> OnDelete
+  -> OnUpdate
   -> TableConstraint schema columns
-foreignKey columns reftable refcolumns = UnsafeTableConstraint $
-  "FOREIGN KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
-  <+> "REFERENCES" <+> renderAlias reftable
-  <+> parenthesized (renderCommaSeparated renderColumn refcolumns)
+foreignKey columns reftable refcolumns onDelete onUpdate =
+  UnsafeTableConstraint $
+    "FOREIGN KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
+    <+> "REFERENCES" <+> renderAlias reftable
+    <+> parenthesized (renderCommaSeparated renderColumn refcolumns)
+    <+> renderOnDelete onDelete
+    <+> renderOnUpdate onUpdate
+
+data OnDelete
+  = OnDeleteNoAction
+  | OnDeleteRestrict
+  | OnDeleteCascade
+
+renderOnDelete :: OnDelete -> ByteString
+renderOnDelete = \case
+  OnDeleteNoAction -> "ON DELETE NO ACTION"
+  OnDeleteRestrict -> "ON DELETE RESTRICT"
+  OnDeleteCascade -> "ON DELETE CASCADE"
+
+data OnUpdate
+  = OnUpdateNoAction
+  | OnUpdateRestrict
+  | OnUpdateCascade
+
+renderOnUpdate :: OnUpdate -> ByteString
+renderOnUpdate = \case
+  OnUpdateNoAction -> "ON UPDATE NO ACTION"
+  OnUpdateRestrict -> "ON UPDATE RESTRICT"
+  OnUpdateCascade -> "ON UPDATE CASCADE"
 
 {-----------------------------------------
 DROP statements
