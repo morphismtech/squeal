@@ -89,16 +89,19 @@ pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 define
   :: MonadBase IO io
   => Definition schema0 schema1
-  -> PQ schema0 schema1 io (Maybe (Result '[]))
+  -> PQ schema0 schema1 io (Result '[])
 define (UnsafeDefinition q) = PQ $ \ (Connection conn) -> do
-  result <- liftBase $ LibPQ.exec conn q
-  return (Result <$> result, Connection conn)
+  resultMaybe <- liftBase $ LibPQ.exec conn q
+  case resultMaybe of
+    Nothing -> error
+      "define: LibPQ.exec returned no results"
+    Just result -> return (Result result, Connection conn)
 
 pqThenDefine
   :: MonadBase IO io
   => Definition schema1 schema2
   -> PQ schema0 schema1 io x
-  -> PQ schema0 schema2 io (Maybe (Result '[]))
+  -> PQ schema0 schema2 io (Result '[])
 pqThenDefine = pqThen . define
 
 class Monad pq => MonadPQ schema pq | pq -> schema where
@@ -375,3 +378,9 @@ getRowMaybe (RowNumber r) (Result result :: Result columns) = liftBase $do
     case fromList row' of
       Nothing -> error "getRow: found unexpected length"
       Just row -> return . Just $ fromRow @columns row
+
+liftResult
+  :: MonadBase IO io
+  => (LibPQ.Result -> IO x)
+  -> Result results -> io x
+liftResult f (Result result) = liftBase $ f result
