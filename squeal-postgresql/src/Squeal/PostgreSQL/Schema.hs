@@ -113,9 +113,18 @@ renderAliased
 renderAliased render (expression `As` alias) =
   render expression <> " AS " <> renderAlias alias
 
+class IsTableColumn table column expression where
+  (!) :: Alias table -> Alias column -> expression
+  infixl 9 !
+instance IsTableColumn table column (Alias table, Alias column) where (!) = (,)
+
 data NullityType = Null PGType | NotNull PGType
 
 data ColumnType = Optional NullityType | Required NullityType
+
+data Grouping
+  = Ungrouped
+  | Grouped [(Symbol,Symbol)]
 
 type family BaseType (ty :: ColumnType) where
   BaseType (optionality (nullity pg)) = pg
@@ -153,11 +162,3 @@ type family Rename alias0 alias1 xs where
 type family Join xs ys where
   Join '[] ys = ys
   Join (x ': xs) ys = x ': Join xs ys
-
-data Grouping
-  = Ungrouped
-  | Grouped [(Symbol,Symbol)]
-
-class IsTableColumn table column expression where
-  (!) :: Alias table -> Alias column -> expression
-  infixl 9 !

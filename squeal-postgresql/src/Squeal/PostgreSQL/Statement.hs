@@ -80,12 +80,12 @@ instance (HasTable table tables columns, HasColumn column columns ty)
     table ! column = UnsafeExpression $
       renderAlias table <> "." <> renderAlias column
 
-def :: Expression params '[] grouping ('Optional (nullity ty))
+def :: Expression params '[] 'Ungrouped ('Optional (nullity ty))
 def = UnsafeExpression "DEFAULT"
 
 unDef
-  :: Expression params '[] grouping ('Required (nullity ty))
-  -> Expression params '[] grouping ('Optional (nullity ty))
+  :: Expression params '[] 'Ungrouped ('Required (nullity ty))
+  -> Expression params '[] 'Ungrouped ('Optional (nullity ty))
 unDef = UnsafeExpression . renderExpression
 
 null :: Expression params tables grouping (optionality ('Null ty))
