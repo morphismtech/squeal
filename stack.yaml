@@ -1,3 +1,3 @@
-resolver: nightly-2017-06-26
+resolver: nightly-2017-08-15
 packages:
 - squeal-postgresql

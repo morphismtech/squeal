@@ -63,9 +63,9 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
 class KnownSymbol column => HasColumn column columns ty
   | column columns -> ty where
     getColumn
-      :: Proxy# column
+      :: Alias column
       -> Expression params '[table ::: columns] 'Ungrouped ty
-    getColumn column = UnsafeExpression $ renderSymbol column
+    getColumn column = UnsafeExpression $ renderAlias column
 instance {-# OVERLAPPING #-} KnownSymbol column
   => HasColumn column ((column ::: optionality ty) ': tys) ('Required ty)
 instance {-# OVERLAPPABLE #-} (KnownSymbol column, HasColumn column table ty)
@@ -73,11 +73,11 @@ instance {-# OVERLAPPABLE #-} (KnownSymbol column, HasColumn column table ty)
 
 instance (HasColumn column columns ty, tables ~ '[table ::: columns])
   => IsLabel column (Expression params tables 'Ungrouped ty) where
-    fromLabel = getColumn
+    fromLabel = getColumn (Alias @column)
 
 instance (HasTable table tables columns, HasColumn column columns ty)
   => IsTableColumn table column (Expression params tables 'Ungrouped ty) where
-    table &. column = UnsafeExpression $
+    table ! column = UnsafeExpression $
       renderAlias table <> "." <> renderAlias column
 
 def :: Expression params '[] grouping ('Optional (nullity ty))
@@ -342,49 +342,74 @@ ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
 (==*) = unsafeBinaryOp "="
+infix 4 ==*
 
 (/=*)
   :: Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
 (/=*) = unsafeBinaryOp "<>"
+infix 4 /=*
 
 (>=*)
   :: Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
 (>=*) = unsafeBinaryOp ">="
+infix 4 >=*
 
 (<*)
   :: Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
 (<*) = unsafeBinaryOp "<"
+infix 4 <*
 
 (<=*)
   :: Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
 (<=*) = unsafeBinaryOp "<="
+infix 4 <=*
 
 (>*)
   :: Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
 (>*) = unsafeBinaryOp ">"
+infix 4 >*
 
 data SortExpression params tables grouping where
   Asc
-    :: Expression params tables grouping ty
+    :: Expression params tables grouping ('Required ('NotNull ty))
     -> SortExpression params tables grouping
   Desc
-    :: Expression params tables grouping ty
+    :: Expression params tables grouping ('Required ('NotNull ty))
+    -> SortExpression params tables grouping
+  AscNullsFirst
+    :: Expression params tables grouping ('Required ('Null ty))
+    -> SortExpression params tables grouping
+  AscNullsLast
+    :: Expression params tables grouping ('Required ('Null ty))
+    -> SortExpression params tables grouping
+  DescNullsFirst
+    :: Expression params tables grouping ('Required ('Null ty))
+    -> SortExpression params tables grouping
+  DescNullsLast
+    :: Expression params tables grouping ('Required ('Null ty))
     -> SortExpression params tables grouping
 
 renderSortExpression :: SortExpression params tables grouping -> ByteString
 renderSortExpression = \case
   Asc expression -> renderExpression expression <+> "ASC"
   Desc expression -> renderExpression expression <+> "DESC"
+  AscNullsFirst expression -> renderExpression expression
+    <+> "ASC NULLS FIRST"
+  DescNullsFirst expression -> renderExpression expression
+    <+> "DESC NULLS FIRST"
+  AscNullsLast expression -> renderExpression expression <+> "ASC NULLS LAST"
+  DescNullsLast expression -> renderExpression expression <+> "DESC NULLS LAST"
+
 
 {-----------------------------------------
 aggregation
@@ -437,9 +462,9 @@ class (KnownSymbol table, KnownSymbol column)
   => GroupedBy table column bys where
     getGroup1
       :: (tables ~ '[table ::: columns], HasColumn column columns ty)
-      => Proxy# column
+      => Alias column
       -> Expression params tables ('Grouped bys) ty
-    getGroup1 column = UnsafeExpression $ renderSymbol column
+    getGroup1 column = UnsafeExpression $ renderAlias column
     getGroup2
       :: (HasTable table tables columns, HasColumn column columns ty)
       => Alias table
@@ -460,14 +485,15 @@ instance
   , HasColumn column columns ty
   , GroupedBy table column bys
   ) => IsLabel column
-    (Expression params tables ('Grouped bys) ty) where fromLabel = getGroup1
+    (Expression params tables ('Grouped bys) ty) where
+      fromLabel = getGroup1 (Alias @column)
 
 instance
   ( HasTable table tables columns
   , HasColumn column columns ty
   , GroupedBy table column bys
   ) => IsTableColumn table column
-    (Expression params tables ('Grouped bys) ty) where (&.) = getGroup2
+    (Expression params tables ('Grouped bys) ty) where (!) = getGroup2
 
 unsafeAggregate
   :: ByteString
@@ -578,8 +604,8 @@ newtype Table
 
 class KnownSymbol table => HasTable table tables columns
   | table tables -> columns where
-    getTable :: Proxy# table -> Table tables columns
-    getTable table = UnsafeTable $ renderSymbol table
+    getTable :: Alias table -> Table tables columns
+    getTable table = UnsafeTable $ renderAlias table
 instance {-# OVERLAPPING #-} KnownSymbol table
   => HasTable table ((table ::: columns) ': tables) columns
 instance {-# OVERLAPPABLE #-}
@@ -588,54 +614,54 @@ instance {-# OVERLAPPABLE #-}
 
 instance HasTable table schema columns
   => IsLabel table (Table schema columns) where
-    fromLabel = getTable
+    fromLabel = getTable (Alias @table)
 
-data TableReference params schema tables where
+data FromClause params schema tables where
   Table
     :: Aliased (Table schema) table
-    -> TableReference params schema '[table]
+    -> FromClause params schema '[table]
   Subquery
     :: Aliased (Query schema params) table
-    -> TableReference params schema '[table]
+    -> FromClause params schema '[table]
   CrossJoin
-    :: TableReference params schema right
-    -> TableReference params schema left
-    -> TableReference params schema (Join left right)
+    :: FromClause params schema right
+    -> FromClause params schema left
+    -> FromClause params schema (Join left right)
   InnerJoin
-    :: TableReference params schema right
+    :: FromClause params schema right
     -> Condition params (Join left right) 'Ungrouped
-    -> TableReference params schema left
-    -> TableReference params schema (Join left right)
+    -> FromClause params schema left
+    -> FromClause params schema (Join left right)
   LeftOuterJoin
-    :: TableReference params schema right
+    :: FromClause params schema right
     -> Condition params (Join left right) 'Ungrouped
-    -> TableReference params schema left
-    -> TableReference params schema (Join left (NullifyTables right))
+    -> FromClause params schema left
+    -> FromClause params schema (Join left (NullifyTables right))
   RightOuterJoin
-    :: TableReference params schema right
+    :: FromClause params schema right
     -> Condition params (Join left right) 'Ungrouped
-    -> TableReference params schema left
-    -> TableReference params schema (Join (NullifyTables left) right)
+    -> FromClause params schema left
+    -> FromClause params schema (Join (NullifyTables left) right)
   FullOuterJoin
-    :: TableReference params schema right
+    :: FromClause params schema right
     -> Condition params (Join left right) 'Ungrouped
-    -> TableReference params schema left
-    -> TableReference params schema
+    -> FromClause params schema left
+    -> FromClause params schema
         (Join (NullifyTables left) (NullifyTables right))
 
-renderTableReference :: TableReference params schema tables -> ByteString
-renderTableReference = \case
+renderFromClause :: FromClause params schema tables -> ByteString
+renderFromClause = \case
   Table table -> renderAliased renderTable table
   Subquery selection -> renderAliased renderQuery selection
   CrossJoin right left ->
-    renderTableReference left <+> "CROSS JOIN" <+> renderTableReference right
+    renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
   InnerJoin right on left -> renderJoin "INNER JOIN" right on left
   LeftOuterJoin right on left -> renderJoin "LEFT OUTER JOIN" right on left
   RightOuterJoin right on left -> renderJoin "RIGHT OUTER JOIN" right on left
   FullOuterJoin right on left -> renderJoin "FULL OUTER JOIN" right on left
   where
     renderJoin op right on left =
-      renderTableReference left <+> op <+> renderTableReference right
+      renderFromClause left <+> op <+> renderFromClause right
       <+> "ON" <+> renderExpression on
 
 data TableExpression
@@ -644,7 +670,7 @@ data TableExpression
   (tables :: [(Symbol,[(Symbol,ColumnType)])])
   (grouping :: Grouping)
     = TableExpression
-    { fromClause :: TableReference params schema tables
+    { fromClause :: FromClause params schema tables
     , whereClause :: [Condition params tables 'Ungrouped]
     , groupByClause :: GroupByClause tables grouping
     , havingClause :: HavingClause params tables grouping
@@ -658,7 +684,7 @@ renderTableExpression
   -> ByteString
 renderTableExpression
   (TableExpression tables whs' grps' hvs' srts' lims' offs') = mconcat
-    [ "FROM ", renderTableReference tables
+    [ "FROM ", renderFromClause tables
     , renderWheres whs'
     , renderGroupByClause grps'
     , renderHavingClause hvs'
@@ -683,7 +709,7 @@ renderTableExpression
         offs -> " OFFSET" <+> fromString (show (sum offs))
 
 from
-  :: TableReference params schema tables
+  :: FromClause params schema tables
   -> TableExpression params schema tables 'Ungrouped
 from tables = TableExpression tables [] NoGroups NoHaving [] [] []
 
@@ -983,7 +1009,7 @@ data TableConstraint
   = UnsafeTableConstraint { renderTableConstraint :: ByteString }
 
 check
-  :: Condition '[] '[table ::: columns] 'Ungrouped
+  :: (forall table. Condition '[] '[table ::: columns] 'Ungrouped)
   -> TableConstraint schema columns
 check condition = UnsafeTableConstraint $
   "CHECK" <+> parenthesized (renderExpression condition)
@@ -1301,9 +1327,6 @@ renderCommaSeparatedMaybe render
   . catMaybes
   . hcollapse
   . hmap (K . render)
-
-renderSymbol :: KnownSymbol str => Proxy# str -> ByteString
-renderSymbol p = fromString $ symbolVal' p
 
 renderNat :: KnownNat n => proxy n -> ByteString
 renderNat (_ :: proxy n) = fromString (show (natVal' (proxy# :: Proxy# n)))
