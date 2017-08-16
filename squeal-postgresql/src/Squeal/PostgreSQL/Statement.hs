@@ -63,9 +63,9 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
 class KnownSymbol column => HasColumn column columns ty
   | column columns -> ty where
     getColumn
-      :: Proxy# column
+      :: Alias column
       -> Expression params '[table ::: columns] 'Ungrouped ty
-    getColumn column = UnsafeExpression $ renderSymbol column
+    getColumn column = UnsafeExpression $ renderAlias column
 instance {-# OVERLAPPING #-} KnownSymbol column
   => HasColumn column ((column ::: optionality ty) ': tys) ('Required ty)
 instance {-# OVERLAPPABLE #-} (KnownSymbol column, HasColumn column table ty)
@@ -73,7 +73,7 @@ instance {-# OVERLAPPABLE #-} (KnownSymbol column, HasColumn column table ty)
 
 instance (HasColumn column columns ty, tables ~ '[table ::: columns])
   => IsLabel column (Expression params tables 'Ungrouped ty) where
-    fromLabel = getColumn (proxy# @Symbol @column)
+    fromLabel = getColumn (Alias @column)
 
 instance (HasTable table tables columns, HasColumn column columns ty)
   => IsTableColumn table column (Expression params tables 'Ungrouped ty) where
@@ -342,36 +342,42 @@ ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
 (==*) = unsafeBinaryOp "="
+infix 4 ==*
 
 (/=*)
   :: Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
 (/=*) = unsafeBinaryOp "<>"
+infix 4 /=*
 
 (>=*)
   :: Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
 (>=*) = unsafeBinaryOp ">="
+infix 4 >=*
 
 (<*)
   :: Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
 (<*) = unsafeBinaryOp "<"
+infix 4 <*
 
 (<=*)
   :: Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
 (<=*) = unsafeBinaryOp "<="
+infix 4 <=*
 
 (>*)
   :: Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
 (>*) = unsafeBinaryOp ">"
+infix 4 >*
 
 data SortExpression params tables grouping where
   Asc
@@ -437,9 +443,9 @@ class (KnownSymbol table, KnownSymbol column)
   => GroupedBy table column bys where
     getGroup1
       :: (tables ~ '[table ::: columns], HasColumn column columns ty)
-      => Proxy# column
+      => Alias column
       -> Expression params tables ('Grouped bys) ty
-    getGroup1 column = UnsafeExpression $ renderSymbol column
+    getGroup1 column = UnsafeExpression $ renderAlias column
     getGroup2
       :: (HasTable table tables columns, HasColumn column columns ty)
       => Alias table
@@ -461,7 +467,7 @@ instance
   , GroupedBy table column bys
   ) => IsLabel column
     (Expression params tables ('Grouped bys) ty) where
-      fromLabel = getGroup1 (proxy# @Symbol @column)
+      fromLabel = getGroup1 (Alias @column)
 
 instance
   ( HasTable table tables columns
@@ -579,8 +585,8 @@ newtype Table
 
 class KnownSymbol table => HasTable table tables columns
   | table tables -> columns where
-    getTable :: Proxy# table -> Table tables columns
-    getTable table = UnsafeTable $ renderSymbol table
+    getTable :: Alias table -> Table tables columns
+    getTable table = UnsafeTable $ renderAlias table
 instance {-# OVERLAPPING #-} KnownSymbol table
   => HasTable table ((table ::: columns) ': tables) columns
 instance {-# OVERLAPPABLE #-}
@@ -589,7 +595,7 @@ instance {-# OVERLAPPABLE #-}
 
 instance HasTable table schema columns
   => IsLabel table (Table schema columns) where
-    fromLabel = getTable (proxy# @Symbol @table)
+    fromLabel = getTable (Alias @table)
 
 data TableReference params schema tables where
   Table
@@ -1302,9 +1308,6 @@ renderCommaSeparatedMaybe render
   . catMaybes
   . hcollapse
   . hmap (K . render)
-
-renderSymbol :: KnownSymbol str => Proxy# str -> ByteString
-renderSymbol p = fromString $ symbolVal' p
 
 renderNat :: KnownNat n => proxy n -> ByteString
 renderNat (_ :: proxy n) = fromString (show (natVal' (proxy# :: Proxy# n)))
