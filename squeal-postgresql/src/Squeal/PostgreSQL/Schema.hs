@@ -1,5 +1,8 @@
 {-# LANGUAGE
     DataKinds
+  , DeriveAnyClass
+  , DeriveDataTypeable
+  , DeriveGeneric
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
@@ -9,6 +12,7 @@
   , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
+  , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
   , TypeOperators
@@ -44,9 +48,12 @@ module Squeal.PostgreSQL.Schema
   , module GHC.TypeLits
   ) where
 
+import Control.DeepSeq
 import Data.ByteString
+import Data.Data (Data)
 import Data.Monoid
 import Data.String
+import GHC.Generics (Generic)
 import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
@@ -96,6 +103,7 @@ instance PGFloating 'PGfloat8
 type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
 
 data Alias (alias :: Symbol) = Alias
+  deriving (Eq,Generic,Data,Ord,Show,NFData)
 
 renderAlias :: KnownSymbol alias => Alias alias -> ByteString
 renderAlias = fromString . symbolVal
@@ -109,6 +117,12 @@ data Aliased expression aliased where
     => expression ty
     -> Alias alias
     -> Aliased expression (alias ::: ty)
+deriving instance Show (expression ty)
+  => Show (Aliased expression (alias ::: ty))
+deriving instance Eq (expression ty)
+  => Eq (Aliased expression (alias ::: ty))
+deriving instance Ord (expression ty)
+  => Ord (Aliased expression (alias ::: ty))
 
 renderAliased
   :: (forall ty. expression ty -> ByteString)
