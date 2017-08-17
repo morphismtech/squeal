@@ -141,12 +141,12 @@ spec = do
       statement =
         insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
           (OnConflictDoUpdate
-            (Set 2 `As` #col1 :* Same `As` #col2 :* Nil) (#col1 /=* #col2))
+            (Set 2 `As` #col1 :* Same `As` #col2 :* Nil) Nothing)
           (Returning Nil)
     statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4)\
       \ ON CONFLICT DO UPDATE\
-      \ SET col1 = 2 WHERE (col1 <> col2);"
+      \ SET col1 = 2;"
   it "correctly renders returning upsert INSERTs" $ do
     let
       statement :: Manipulation Tables '[] SumAndCol1
@@ -154,7 +154,7 @@ spec = do
         insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
           (OnConflictDoUpdate
             (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-            (#col1 /=* #col2))
+            (Just (#col1 /=* #col2)))
           (Returning $ (#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
     statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4)\

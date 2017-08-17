@@ -1009,7 +1009,7 @@ data TableConstraint
   = UnsafeTableConstraint { renderTableConstraint :: ByteString }
 
 check
-  :: (forall table. Condition '[] '[table ::: columns] 'Ungrouped)
+  :: Condition '[] '[table ::: columns] 'Ungrouped
   -> TableConstraint schema columns
 check condition = UnsafeTableConstraint $
   "CHECK" <+> parenthesized (renderExpression condition)
@@ -1255,7 +1255,7 @@ data ConflictClause params columns where
   OnConflictDoNothing :: ConflictClause params columns
   OnConflictDoUpdate
     :: NP (Aliased (UpdateExpression params columns)) columns
-    -> (forall table. Condition params '[table ::: columns] 'Ungrouped)
+    -> Maybe (Condition params '[table ::: columns] 'Ungrouped)
     -> ConflictClause params columns
 
 renderConflictClause
@@ -1265,10 +1265,12 @@ renderConflictClause
 renderConflictClause = \case
   Conflict -> ""
   OnConflictDoNothing -> " ON CONFLICT DO NOTHING"
-  OnConflictDoUpdate updates wh
+  OnConflictDoUpdate updates whMaybe
     -> " ON CONFLICT DO UPDATE SET"
       <+> renderCommaSeparatedMaybe renderUpdateExpression updates
-      <+> "WHERE" <+> renderExpression wh
+      <> case whMaybe of
+        Nothing -> ""
+        Just wh -> " WHERE" <+> renderExpression wh
 
 {-----------------------------------------
 UPDATE statements
@@ -1290,7 +1292,7 @@ update
   :: (HasTable table schema columns, SListI columns, SListI results)
   => Alias table
   -> NP (Aliased (UpdateExpression params columns)) columns
-  -> (forall tab. Condition params '[tab ::: columns] 'Ungrouped)
+  -> Condition params '[tab ::: columns] 'Ungrouped
   -> ReturningClause params columns results
   -> Manipulation schema params results
 update table columns wh returning = UnsafeManipulation $
