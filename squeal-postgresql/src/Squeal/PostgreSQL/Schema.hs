@@ -24,19 +24,22 @@ module Squeal.PostgreSQL.Schema
   , renderAlias
   , Aliased (As)
   , renderAliased
+  , IsTableColumn (..)
   , NullityType (..)
+  , ColumnType (..)
+  , Grouping (..)
+  , SameTypes
+  , AllNotNull
+  , NotAllNull
   , NullifyType
   , NullifyColumns
   , NullifyTables
-  , ColumnType (..)
   , BaseType
   , Create
   , Drop
   , Alter
   , Rename
   , Join
-  , Grouping (..)
-  , IsTableColumn (..)
   , module GHC.OverloadedLabels
   , module GHC.TypeLits
   ) where
@@ -44,6 +47,7 @@ module Squeal.PostgreSQL.Schema
 import Data.ByteString
 import Data.Monoid
 import Data.String
+import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
 
@@ -113,12 +117,36 @@ renderAliased
 renderAliased render (expression `As` alias) =
   render expression <> " AS " <> renderAlias alias
 
+class IsTableColumn table column expression where
+  (!) :: Alias table -> Alias column -> expression
+  infixl 9 !
+instance IsTableColumn table column (Alias table, Alias column) where (!) = (,)
+
 data NullityType = Null PGType | NotNull PGType
 
 data ColumnType = Optional NullityType | Required NullityType
 
+data Grouping
+  = Ungrouped
+  | Grouped [(Symbol,Symbol)]
+
 type family BaseType (ty :: ColumnType) where
   BaseType (optionality (nullity pg)) = pg
+
+type family SameTypes columns0 columns1 :: Constraint where
+  SameTypes '[] '[] = ()
+  SameTypes ((column0 ::: ty0) ': columns0) ((column1 ::: ty1) ': columns1)
+    = (ty0 ~ ty1, SameTypes columns0 columns1)
+
+type family AllNotNull columns :: Constraint where
+  AllNotNull '[] = ()
+  AllNotNull ((column ::: (optionality ('NotNull ty))) ': columns)
+    = AllNotNull columns
+
+type family NotAllNull columns :: Constraint where
+  NotAllNull ((column ::: (optionality ('NotNull ty))) ': columns) = ()
+  NotAllNull ((column ::: (optionality ('Null ty))) ': columns)
+    = NotAllNull columns
 
 type family NullifyType (ty :: ColumnType) where
   NullifyType (optionality ('Null ty)) = optionality ('Null ty)
@@ -153,11 +181,3 @@ type family Rename alias0 alias1 xs where
 type family Join xs ys where
   Join '[] ys = ys
   Join (x ': xs) ys = x ': Join xs ys
-
-data Grouping
-  = Ungrouped
-  | Grouped [(Symbol,Symbol)]
-
-class IsTableColumn table column expression where
-  (!) :: Alias table -> Alias column -> expression
-  infixl 9 !

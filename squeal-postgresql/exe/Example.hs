@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
 {-# LANGUAGE
     DataKinds
   , DeriveGeneric
@@ -44,29 +45,30 @@ main = do
   Char8.putStrLn $ "connecting to " <> connectionString
   connection0 <- connectdb connectionString
   Char8.putStrLn "setting up schema"
-  connection1 <- runPQ (connection0 :: Connection '[]) $ pqExec $
+  connection1 <- flip execPQ (connection0 :: Connection '[]) $ define $
     createTable #students ((text & notNull) `As` #name :* Nil ) []
     >>>
     createTable #table1
       ((int4 & notNull) `As` #col1 :* (int4 & notNull) `As` #col2 :* Nil) []
-  connection2 <- runPQ (connection1 :: Connection Schema) $ do
+  connection2 <- flip execPQ (connection1 :: Connection Schema) $ do
     let
-      manipulation :: Manipulation Schema
+      insert :: Manipulation Schema
         '[ 'Required ('NotNull 'PGint4)
          , 'Required ('NotNull 'PGint4)
          , 'Required ('NotNull 'PGint4)
          , 'Required ('NotNull 'PGint4)
          ] '[]
-      manipulation =
+      insert =
         insertInto #table1
           ( Values
             (param (Proxy @1) `As` #col1 :* param (Proxy @2) `As` #col2 :* Nil)
             [param (Proxy @3) `As` #col1 :* param (Proxy @4) `As` #col2 :* Nil]
           ) Conflict (Returning Nil)
     liftBase $ Char8.putStrLn "manipulating"
-    _ <- pqExecParams manipulation (1::Int32,2::Int32,3::Int32,4::Int32)
+    _insertResult <- manipulateParams insert
+      (1::Int32,2::Int32,3::Int32,4::Int32)
     liftBase $ Char8.putStrLn "querying"
-    Just result <- pqExecNil . query $
+    result <- query $
       selectStar (from (Table (#table1 `As` #table1)))
     value00 <- getValue (RowNumber 0) (columnNumber @0) result
     value01 <- getValue (RowNumber 0) (columnNumber @1) result
@@ -74,6 +76,7 @@ main = do
     value11 <- getValue (RowNumber 1) (columnNumber @1) result
     row0 <- getRow (RowNumber 0) result
     row1 <- getRow (RowNumber 1) result
+    rows <- getRows result
     liftBase $ do
       print (value00 :: Int32)
       print (value01 :: Int32)
@@ -81,7 +84,8 @@ main = do
       print (value11 :: Int32)
       print (row0 :: Table1Row)
       print (row1 :: Table1Row)
+      print (rows :: [Table1Row])
   Char8.putStrLn "tearing down schema"
-  connection3 <- runPQ (connection2 :: Connection Schema) $ pqExec $
+  connection3 <- flip execPQ (connection2 :: Connection Schema) $ define $
     dropTable #table1 >>> dropTable #students
   finish (connection3 :: Connection '[])

@@ -20,7 +20,7 @@ import Squeal.PostgreSQL.Schema
 spec :: Spec
 spec = do
   let
-    qry `queryRenders` str = query qry `manipulationRenders` str
+    qry `queryRenders` str = queryStatement qry `manipulationRenders` str
     definition `definitionRenders` str =
       renderDefinition definition `shouldBe` str
     manipulation `manipulationRenders` str =
@@ -141,12 +141,12 @@ spec = do
       statement =
         insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
           (OnConflictDoUpdate
-            (Set 2 `As` #col1 :* Same `As` #col2 :* Nil) (#col1 /=* #col2))
+            (Set 2 `As` #col1 :* Same `As` #col2 :* Nil) Nothing)
           (Returning Nil)
     statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4)\
       \ ON CONFLICT DO UPDATE\
-      \ SET col1 = 2 WHERE (col1 <> col2);"
+      \ SET col1 = 2;"
   it "correctly renders returning upsert INSERTs" $ do
     let
       statement :: Manipulation Tables '[] SumAndCol1
@@ -154,7 +154,7 @@ spec = do
         insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
           (OnConflictDoUpdate
             (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-            (#col1 /=* #col2))
+            (Just (#col1 /=* #col2)))
           (Returning $ (#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
     statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4)\
@@ -269,6 +269,7 @@ spec = do
             (text & notNull) `As` #email :* Nil )
           [ primaryKey (Column #id :* Nil)
           , foreignKey (Column #userid :* Nil) #users (Column #id :* Nil)
+            OnDeleteCascade OnUpdateRestrict
           , unique (Column #email :* Nil)
           , check (#email /=* "")
           ]
@@ -282,7 +283,8 @@ spec = do
       \ userid integer NOT NULL,\
       \ email text NOT NULL,\
       \ PRIMARY KEY (id),\
-      \ FOREIGN KEY (userid) REFERENCES users (id),\
+      \ FOREIGN KEY (userid) REFERENCES users (id)\
+      \ ON DELETE CASCADE ON UPDATE RESTRICT,\
       \ UNIQUE (email),\
       \ CHECK ((email <> E'')));"
   it "should render DROP TABLE statements" $ do

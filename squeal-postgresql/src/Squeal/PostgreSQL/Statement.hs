@@ -80,12 +80,12 @@ instance (HasTable table tables columns, HasColumn column columns ty)
     table ! column = UnsafeExpression $
       renderAlias table <> "." <> renderAlias column
 
-def :: Expression params '[] grouping ('Optional (nullity ty))
+def :: Expression params '[] 'Ungrouped ('Optional (nullity ty))
 def = UnsafeExpression "DEFAULT"
 
 unDef
-  :: Expression params '[] grouping ('Required (nullity ty))
-  -> Expression params '[] grouping ('Optional (nullity ty))
+  :: Expression params '[] 'Ungrouped ('Required (nullity ty))
+  -> Expression params '[] 'Ungrouped ('Optional (nullity ty))
 unDef = UnsafeExpression . renderExpression
 
 null :: Expression params tables grouping (optionality ('Null ty))
@@ -909,10 +909,10 @@ newtype Query
   (columns :: [(Symbol,ColumnType)])
     = UnsafeQuery { renderQuery :: ByteString }
 
-query
+queryStatement
   :: Query schema params columns
   -> Manipulation schema params columns
-query q = UnsafeManipulation $ renderQuery q <> ";"
+queryStatement q = UnsafeManipulation $ renderQuery q <> ";"
 
 union, unionAll, intersect, intersectAll, except, exceptAll
   :: Query schema params columns
@@ -958,7 +958,7 @@ select list tabs = UnsafeQuery $
   <+> renderTableExpression tabs
 
 selectStar
-  :: (tables ~ '[table ::: columns])
+  :: tables ~ '[table ::: columns]
   => TableExpression params schema tables 'Ungrouped
   -> Query schema params columns
 selectStar tabs = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression tabs
@@ -1009,7 +1009,7 @@ data TableConstraint
   = UnsafeTableConstraint { renderTableConstraint :: ByteString }
 
 check
-  :: (forall table. Condition '[] '[table ::: columns] 'Ungrouped)
+  :: Condition '[] '[table ::: columns] 'Ungrouped
   -> TableConstraint schema columns
 check condition = UnsafeTableConstraint $
   "CHECK" <+> parenthesized (renderExpression condition)
@@ -1034,36 +1034,53 @@ unique columns = UnsafeTableConstraint $
   "UNIQUE" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
 primaryKey
-  :: (SListI subcolumns, NotNullTypes subcolumns)
+  :: (SListI subcolumns, AllNotNull subcolumns)
   => NP (Column columns) subcolumns
   -> TableConstraint schema columns
 primaryKey columns = UnsafeTableConstraint $
   "PRIMARY KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
-type family SameTypes columns0 columns1 :: Constraint where
-  SameTypes '[] '[] = ()
-  SameTypes ((column0 ::: ty0) ': columns0) ((column1 ::: ty1) ': columns1)
-    = (ty0 ~ ty1, SameTypes columns0 columns1)
-
-type family NotNullTypes columns :: Constraint where
-  NotNullTypes '[] = ()
-  NotNullTypes ((column ::: (optionality ('NotNull ty))) ': columns)
-    = NotNullTypes columns
-
 foreignKey
   :: ( HasTable reftable schema refcolumns
      , SameTypes subcolumns refsubcolumns
-     , NotNullTypes subcolumns
+     , NotAllNull subcolumns
      , SListI subcolumns
      , SListI refsubcolumns)
   => NP (Column columns) subcolumns
   -> Alias reftable
   -> NP (Column refcolumns) refsubcolumns
+  -> OnDelete
+  -> OnUpdate
   -> TableConstraint schema columns
-foreignKey columns reftable refcolumns = UnsafeTableConstraint $
-  "FOREIGN KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
-  <+> "REFERENCES" <+> renderAlias reftable
-  <+> parenthesized (renderCommaSeparated renderColumn refcolumns)
+foreignKey columns reftable refcolumns onDelete onUpdate =
+  UnsafeTableConstraint $
+    "FOREIGN KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
+    <+> "REFERENCES" <+> renderAlias reftable
+    <+> parenthesized (renderCommaSeparated renderColumn refcolumns)
+    <+> renderOnDelete onDelete
+    <+> renderOnUpdate onUpdate
+
+data OnDelete
+  = OnDeleteNoAction
+  | OnDeleteRestrict
+  | OnDeleteCascade
+
+renderOnDelete :: OnDelete -> ByteString
+renderOnDelete = \case
+  OnDeleteNoAction -> "ON DELETE NO ACTION"
+  OnDeleteRestrict -> "ON DELETE RESTRICT"
+  OnDeleteCascade -> "ON DELETE CASCADE"
+
+data OnUpdate
+  = OnUpdateNoAction
+  | OnUpdateRestrict
+  | OnUpdateCascade
+
+renderOnUpdate :: OnUpdate -> ByteString
+renderOnUpdate = \case
+  OnUpdateNoAction -> "ON UPDATE NO ACTION"
+  OnUpdateRestrict -> "ON UPDATE RESTRICT"
+  OnUpdateCascade -> "ON UPDATE CASCADE"
 
 {-----------------------------------------
 DROP statements
@@ -1218,7 +1235,8 @@ data ReturningClause
   where
     ReturningStar :: ReturningClause params columns columns
     Returning
-      :: NP (Aliased (Expression params '[table ::: columns] 'Ungrouped))
+      :: NP
+          (Aliased (Expression params '[table ::: columns] 'Ungrouped))
           results
       -> ReturningClause params columns results
 
@@ -1236,8 +1254,8 @@ data ConflictClause params columns where
   Conflict :: ConflictClause params columns
   OnConflictDoNothing :: ConflictClause params columns
   OnConflictDoUpdate
-    :: NP (Aliased (UpdateExpression params '[table ::: columns])) columns
-    -> Condition params '[table ::: columns] 'Ungrouped
+    :: NP (Aliased (UpdateExpression params columns)) columns
+    -> Maybe (Condition params '[table ::: columns] 'Ungrouped)
     -> ConflictClause params columns
 
 renderConflictClause
@@ -1247,21 +1265,23 @@ renderConflictClause
 renderConflictClause = \case
   Conflict -> ""
   OnConflictDoNothing -> " ON CONFLICT DO NOTHING"
-  OnConflictDoUpdate updates wh
+  OnConflictDoUpdate updates whMaybe
     -> " ON CONFLICT DO UPDATE SET"
       <+> renderCommaSeparatedMaybe renderUpdateExpression updates
-      <+> "WHERE" <+> renderExpression wh
+      <> case whMaybe of
+        Nothing -> ""
+        Just wh -> " WHERE" <+> renderExpression wh
 
 {-----------------------------------------
 UPDATE statements
 -----------------------------------------}
 
-data UpdateExpression params table ty
+data UpdateExpression params columns ty
   = Same
-  | Set (Expression params table 'Ungrouped ty)
+  | Set (forall table. Expression params '[table ::: columns] 'Ungrouped ty)
 
 renderUpdateExpression
-  :: Aliased (UpdateExpression params '[table ::: columns]) column
+  :: Aliased (UpdateExpression params columns) column
   -> Maybe ByteString
 renderUpdateExpression = \case
   Same `As` _ -> Nothing
@@ -1271,8 +1291,8 @@ renderUpdateExpression = \case
 update
   :: (HasTable table schema columns, SListI columns, SListI results)
   => Alias table
-  -> NP (Aliased (UpdateExpression params '[table ::: columns])) columns
-  -> Condition params '[table ::: columns] 'Ungrouped
+  -> NP (Aliased (UpdateExpression params columns)) columns
+  -> Condition params '[tab ::: columns] 'Ungrouped
   -> ReturningClause params columns results
   -> Manipulation schema params results
 update table columns wh returning = UnsafeManipulation $
