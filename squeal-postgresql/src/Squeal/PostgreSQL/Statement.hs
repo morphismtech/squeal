@@ -724,7 +724,7 @@ data FromClause params schema tables where
 renderFromClause :: FromClause params schema tables -> ByteString
 renderFromClause = \case
   Table table -> renderAliased renderTable table
-  Subquery selection -> renderAliased renderQuery selection
+  Subquery selection -> renderAliased (parenthesized . renderQuery) selection
   CrossJoin right left ->
     renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
   InnerJoin right on left -> renderJoin "INNER JOIN" right on left

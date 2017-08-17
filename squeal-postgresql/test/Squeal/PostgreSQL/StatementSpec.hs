@@ -52,8 +52,8 @@ spec = do
             (from (Table (#table1 `As` #table1))) `As` #sub)))
     statement `queryRenders`
       "SELECT * FROM\
-      \ SELECT (col1 + col2) AS sum, col1 AS col1\
-      \ FROM table1 AS table1 AS sub;"
+      \ (SELECT (col1 + col2) AS sum, col1 AS col1\
+      \ FROM table1 AS table1) AS sub;"
   it "does LIMIT clauses" $ do
     let
       statement :: Query Tables '[] Columns
