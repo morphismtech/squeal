@@ -1,16 +1,20 @@
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE
     DataKinds
+  , DeriveGeneric
+  , DeriveDataTypeable
   , FlexibleContexts
   , FlexibleInstances
   , FunctionalDependencies
   , GADTs
+  , GeneralizedNewtypeDeriving
   , LambdaCase
   , MagicHash
   , OverloadedStrings
   , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
+  , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
   , TypeOperators
@@ -20,10 +24,12 @@
 module Squeal.PostgreSQL.Statement where
 
 import Control.Category
+import Control.DeepSeq
 import Data.ByteString (ByteString)
+import Data.Data (Data)
 import Data.Foldable
 import Data.Maybe
-import Data.Monoid
+import Data.Monoid hiding (All)
 import Data.Ratio
 import Data.String
 import Data.Word
@@ -33,6 +39,7 @@ import GHC.OverloadedLabels
 import GHC.TypeLits
 import Prelude hiding (RealFrac(..), id, (.))
 
+import qualified GHC.Generics as GHC
 import qualified Data.ByteString as ByteString
 
 import Squeal.PostgreSQL.Schema
@@ -47,7 +54,7 @@ newtype Expression
   (grouping :: Grouping)
   (ty :: ColumnType)
     = UnsafeExpression { renderExpression :: ByteString }
-    deriving (Show,Eq)
+    deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
 class (PGTyped (BaseType ty), KnownNat n)
   => HasParameter (n :: Nat) params ty | n params -> ty where
@@ -79,6 +86,18 @@ instance (HasTable table tables columns, HasColumn column columns ty)
   => IsTableColumn table column (Expression params tables 'Ungrouped ty) where
     table ! column = UnsafeExpression $
       renderAlias table <> "." <> renderAlias column
+
+data Column
+  (columns :: [(Symbol,ColumnType)])
+  (columnty :: (Symbol,ColumnType))
+    where
+      Column
+        :: HasColumn column columns ty
+        => Alias column
+        -> Column columns (column ::: ty)
+deriving instance Show (Column columns columnty)
+deriving instance Eq (Column columns columnty)
+deriving instance Ord (Column columns columnty)
 
 def :: Expression params '[] 'Ungrouped ('Optional (nullity ty))
 def = UnsafeExpression "DEFAULT"
@@ -418,6 +437,7 @@ data SortExpression params tables grouping where
   DescNullsLast
     :: Expression params tables grouping ('Required ('Null ty))
     -> SortExpression params tables grouping
+deriving instance Show (SortExpression params tables grouping)
 
 renderSortExpression :: SortExpression params tables grouping -> ByteString
 renderSortExpression = \case
@@ -437,7 +457,7 @@ aggregation
 
 data By
   (tables :: [(Symbol,[(Symbol,ColumnType)])])
-  (tabcol :: (Symbol,Symbol)) where
+  (by :: (Symbol,Symbol)) where
   By
     :: (tables ~ '[table ::: columns], HasColumn column columns ty)
     => Alias column
@@ -446,6 +466,9 @@ data By
     :: (HasTable table tables columns, HasColumn column columns ty)
     => (Alias table, Alias column)
     -> By tables '(table, column)
+deriving instance Show (By tables by)
+deriving instance Eq (By tables by)
+deriving instance Ord (By tables by)
 
 renderBy :: By tables tabcolty -> ByteString
 renderBy = \case
@@ -470,6 +493,9 @@ data HavingClause params tables grouping where
   Having
     :: [Condition params tables ('Grouped bys)]
     -> HavingClause params tables ('Grouped bys)
+deriving instance Show (HavingClause params tables grouping)
+deriving instance Eq (HavingClause params tables grouping)
+deriving instance Ord (HavingClause params tables grouping)
 
 renderHavingClause :: HavingClause params tables grouping -> ByteString
 renderHavingClause = \case
@@ -515,74 +541,97 @@ instance
   ) => IsTableColumn table column
     (Expression params tables ('Grouped bys) ty) where (!) = getGroup2
 
+data AllOrDistinct = All | Distinct
+  deriving (GHC.Generic,Show,Eq,Ord,Data)
+instance NFData AllOrDistinct
+
+renderAllOrDistinct :: AllOrDistinct -> ByteString
+renderAllOrDistinct = \case
+  All -> "ALL"
+  Distinct -> "DISTINCT"
+
 unsafeAggregate
   :: ByteString
+  -> AllOrDistinct
   -> Expression params tables 'Ungrouped ('Required xty)
   -> Expression params tables ('Grouped bys) ('Required yty)
-unsafeAggregate fun x = UnsafeExpression $ mconcat
-  [fun, "(", renderExpression x, ")"]
+unsafeAggregate fun allOrDistinct x = UnsafeExpression $ mconcat
+  [fun, "(", renderAllOrDistinct allOrDistinct <+> renderExpression x, ")"]
 
 sum_
   :: PGNum ty
-  => Expression params tables 'Ungrouped ('Required (nullity ty))
+  => AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required (nullity ty))
   -> Expression params tables ('Grouped bys) ('Required (nullity ty))
 sum_ = unsafeAggregate "sum"
 
 avgInt
   :: PGIntegral int
-  => Expression params tables 'Ungrouped ('Required (nullity int))
+  => AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required (nullity int))
   -> Expression params tables ('Grouped bys) ('Required (nullity 'PGnumeric))
 avgInt = unsafeAggregate "avg"
 
 avgFloat
   :: PGFloating float
-  => Expression params tables 'Ungrouped ('Required (nullity float))
+  => AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required (nullity float))
   -> Expression params tables ('Grouped bys) ('Required (nullity 'PGfloat8))
 avgFloat = unsafeAggregate "avg"
 
 bitAnd
   :: PGIntegral int
-  => Expression params tables 'Ungrouped ('Required (nullity int))
+  => AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required (nullity int))
   -> Expression params tables ('Grouped bys) ('Required (nullity int))
 bitAnd = unsafeAggregate "bit_and"
 
 bitOr
   :: PGIntegral int
-  => Expression params tables 'Ungrouped ('Required (nullity int))
+  => AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required (nullity int))
   -> Expression params tables ('Grouped bys) ('Required (nullity int))
 bitOr = unsafeAggregate "bit_or"
 
 boolAnd
-  :: Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
+  :: AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
   -> Expression params tables ('Grouped bys) ('Required (nullity 'PGbool))
 boolAnd = unsafeAggregate "bool_and"
 
 boolOr
-  :: Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
+  :: AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
   -> Expression params tables ('Grouped bys) ('Required (nullity 'PGbool))
 boolOr = unsafeAggregate "bool_or"
 
 countStar
-  :: Expression params table ('Grouped bys) ('Required ('NotNull 'PGint8))
-countStar = UnsafeExpression "count(*)"
+  :: AllOrDistinct
+  -> Expression params table ('Grouped bys) ('Required ('NotNull 'PGint8))
+countStar allOrDistinct = UnsafeExpression $
+  "count(" <> renderAllOrDistinct allOrDistinct <+> "*)"
 
 count
-  :: Expression params tables 'Ungrouped ('Required ty)
+  :: AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required ty)
   -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGint8))
 count = unsafeAggregate "count"
   
 every
-  :: Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
+  :: AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
   -> Expression params tables ('Grouped bys) ('Required (nullity 'PGbool))
 every = unsafeAggregate "every"
 
 jsonAgg
-  :: Expression params tables 'Ungrouped ('Required ty)
+  :: AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required ty)
   -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGjson))
 jsonAgg = unsafeAggregate "json_agg"
 
 jsonbAgg
-  :: Expression params tables 'Ungrouped ('Required ty)
+  :: AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required ty)
   -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGjsonb))
 jsonbAgg = unsafeAggregate "jsonb_agg"
 
@@ -595,20 +644,23 @@ jsonObjectAgg k v = UnsafeExpression $
     <> ", " <> renderExpression v <> ")"
 
 jsonbObjectAgg
-  :: Expression params tables 'Ungrouped ('Required ('NotNull keyty))
+  :: AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required ('NotNull keyty))
   -> Expression params tables 'Ungrouped ('Required valty)
   -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGjsonb))
-jsonbObjectAgg k v = UnsafeExpression $
-  "jsonb_object_agg(" <> renderExpression k
-    <> ", " <> renderExpression v <> ")"
+jsonbObjectAgg allOrDistinct k v = UnsafeExpression $
+  "jsonb_object_agg(" <> renderAllOrDistinct allOrDistinct
+    <+> renderExpression k <> ", " <> renderExpression v <> ")"
 
 max_
-  :: Expression params tables 'Ungrouped ('Required (nullity ty))
+  :: AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required (nullity ty))
   -> Expression params tables ('Grouped bys) ('Required (nullity ty))
 max_ = unsafeAggregate "max"
 
 min_
-  :: Expression params tables 'Ungrouped ('Required (nullity ty))
+  :: AllOrDistinct
+  -> Expression params tables 'Ungrouped ('Required (nullity ty))
   -> Expression params tables ('Grouped bys) ('Required (nullity ty))
 min_ = unsafeAggregate "min"
 
@@ -620,7 +672,7 @@ newtype Table
   (schema :: [(Symbol,[(Symbol,ColumnType)])])
   (columns :: [(Symbol,ColumnType)])
     = UnsafeTable { renderTable :: ByteString }
-    deriving (Show,Eq)
+    deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
 class KnownSymbol table => HasTable table tables columns
   | table tables -> columns where
@@ -785,7 +837,7 @@ type expressions
 
 newtype TypeExpression (ty :: ColumnType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
-  deriving (Show,Eq)
+  deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
 bool :: TypeExpression ('Required ('Null 'PGbool))
 bool = UnsafeTypeExpression "bool"
@@ -911,6 +963,7 @@ newtype Definition
   (schema0 :: [(Symbol,[(Symbol,ColumnType)])])
   (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
   = UnsafeDefinition { renderDefinition :: ByteString }
+  deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
 instance Category Definition where
   id = UnsafeDefinition ";"
@@ -922,12 +975,14 @@ newtype Manipulation
   (params :: [ColumnType])
   (columns :: [(Symbol,ColumnType)])
     = UnsafeManipulation { renderManipulation :: ByteString }
+    deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
 newtype Query
   (schema :: [(Symbol,[(Symbol,ColumnType)])])
   (params :: [ColumnType])
   (columns :: [(Symbol,ColumnType)])
     = UnsafeQuery { renderQuery :: ByteString }
+    deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
 queryStatement
   :: Query schema params columns
@@ -977,11 +1032,28 @@ select list tabs = UnsafeQuery $
   <+> renderCommaSeparated (renderAliased renderExpression) list
   <+> renderTableExpression tabs
 
+selectDistinct
+  :: SListI columns
+  => NP (Aliased (Expression params tables grouping)) (column ': columns)
+  -> TableExpression params schema tables grouping
+  -> Query schema params (column ': columns)
+selectDistinct list tabs = UnsafeQuery $
+  "SELECT DISTINCT"
+  <+> renderCommaSeparated (renderAliased renderExpression) list
+  <+> renderTableExpression tabs
+
 selectStar
   :: tables ~ '[table ::: columns]
   => TableExpression params schema tables 'Ungrouped
   -> Query schema params columns
 selectStar tabs = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression tabs
+
+selectDistinctStar
+  :: tables ~ '[table ::: columns]
+  => TableExpression params schema tables 'Ungrouped
+  -> Query schema params columns
+selectDistinctStar tabs = UnsafeQuery $
+  "SELECT DISTINCT" <+> "*" <+> renderTableExpression tabs
 
 selectDotStar
   :: HasTable table tables columns
@@ -991,12 +1063,14 @@ selectDotStar
 selectDotStar table tables = UnsafeQuery $
   "SELECT" <+> renderAlias table <> ".*" <+> renderTableExpression tables
 
-selectRow
-  :: SListI columns
-  => NP (Aliased (Expression params '[] 'Ungrouped)) columns
+selectDistinctDotStar
+  :: HasTable table tables columns
+  => Alias table
+  -> TableExpression params schema tables 'Ungrouped
   -> Query schema params columns
-selectRow row = UnsafeQuery $
-  "SELECT" <+> renderCommaSeparated (renderAliased renderExpression) row
+selectDistinctDotStar table tables = UnsafeQuery $
+  "SELECT DISTINCT" <+> renderAlias table <> ".*"
+  <+> renderTableExpression tables
 
 {-----------------------------------------
 CREATE statements
@@ -1023,25 +1097,17 @@ createTable table columns constraints = UnsafeDefinition $
       [] -> ""
       _ -> ", " <> commaSeparated (renderTableConstraint <$> constraints)
 
-data TableConstraint
+newtype TableConstraint
   (schema :: [(Symbol,[(Symbol,ColumnType)])])
   (columns :: [(Symbol,ColumnType)])
-  = UnsafeTableConstraint { renderTableConstraint :: ByteString }
+    = UnsafeTableConstraint { renderTableConstraint :: ByteString }
+    deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
 check
   :: Condition '[] '[table ::: columns] 'Ungrouped
   -> TableConstraint schema columns
 check condition = UnsafeTableConstraint $
   "CHECK" <+> parenthesized (renderExpression condition)
-
-data Column
-  (columns :: [(Symbol,ColumnType)])
-  (columnty :: (Symbol,ColumnType))
-    where
-      Column
-        :: HasColumn column columns ty
-        => Alias column
-        -> Column columns (column ::: ty)
 
 renderColumn :: Column columns columnty -> ByteString
 renderColumn (Column column) = renderAlias column
@@ -1084,6 +1150,8 @@ data OnDelete
   = OnDeleteNoAction
   | OnDeleteRestrict
   | OnDeleteCascade
+  deriving (GHC.Generic,Show,Eq,Ord,Data)
+instance NFData OnDelete
 
 renderOnDelete :: OnDelete -> ByteString
 renderOnDelete = \case
@@ -1095,6 +1163,8 @@ data OnUpdate
   = OnUpdateNoAction
   | OnUpdateRestrict
   | OnUpdateCascade
+  deriving (GHC.Generic,Show,Eq,Ord,Data)
+instance NFData OnUpdate
 
 renderOnUpdate :: OnUpdate -> ByteString
 renderOnUpdate = \case
@@ -1136,10 +1206,11 @@ alterTableRename table0 table1 = UnsafeDefinition $
   "ALTER TABLE" <+> renderAlias table0
   <+> "RENAME TO" <+> renderAlias table1 <> ";"
 
-data AlterTable
+newtype AlterTable
   (columns0 :: [(Symbol, ColumnType)])
   (columns1 :: [(Symbol, ColumnType)]) =
     UnsafeAlterTable {renderAlterTable :: ByteString}
+  deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
 addColumnDefault
   :: KnownSymbol column
@@ -1180,8 +1251,9 @@ alterColumn
 alterColumn column alteration = UnsafeAlterTable $
   "ALTER COLUMN" <+> renderAlias column <+> renderAlterColumn alteration
 
-data AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
+newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
   UnsafeAlterColumn {renderAlterColumn :: ByteString}
+  deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
 setDefault
   :: Expression '[] '[] 'Ungrouped ('Required ty)
@@ -1226,10 +1298,10 @@ data ValuesClause
   (schema :: [(Symbol,[(Symbol,ColumnType)])])
   (params :: [ColumnType])
   (columns :: [(Symbol,ColumnType)])
-  = Values
-      (NP (Aliased (Expression params '[] 'Ungrouped)) columns)
-      [NP (Aliased (Expression params '[] 'Ungrouped)) columns]
-  | ValuesQuery (Query schema params columns)
+    = Values
+        (NP (Aliased (Expression params '[] 'Ungrouped)) columns)
+        [NP (Aliased (Expression params '[] 'Ungrouped)) columns]
+    | ValuesQuery (Query schema params columns)
 
 renderValuesClause
   :: SListI columns
@@ -1299,6 +1371,9 @@ UPDATE statements
 data UpdateExpression params columns ty
   = Same
   | Set (forall table. Expression params '[table ::: columns] 'Ungrouped ty)
+deriving instance Show (UpdateExpression params columns ty)
+deriving instance Eq (UpdateExpression params columns ty)
+deriving instance Ord (UpdateExpression params columns ty)
 
 renderUpdateExpression
   :: Aliased (UpdateExpression params columns) column

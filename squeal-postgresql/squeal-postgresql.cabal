@@ -24,6 +24,7 @@ library
       aeson
     , base
     , bytestring
+    , deepseq
     , generics-sop
     , lifted-base
     , monad-control

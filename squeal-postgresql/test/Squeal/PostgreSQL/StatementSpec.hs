@@ -88,15 +88,15 @@ spec = do
     let
       statement :: Query Tables '[] SumAndCol1
       statement =
-        select (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
+        select (sum_ All #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
         ( from (Table (#table1 `As` #table1))
           & group (By #col1 :* Nil) 
-          & having (#col1 + sum_ #col2 >* 1) )
+          & having (#col1 + sum_ All #col2 >* 1) )
     statement `queryRenders`
-      "SELECT sum(col2) AS sum, col1 AS col1\
+      "SELECT sum(ALL col2) AS sum, col1 AS col1\
       \ FROM table1 AS table1\
       \ GROUP BY col1\
-      \ HAVING ((col1 + sum(col2)) > 1);"
+      \ HAVING ((col1 + sum(ALL col2)) > 1);"
   it "correctly renders simple INSERTs" $ do
     let
       statement :: Manipulation Tables '[] '[]
