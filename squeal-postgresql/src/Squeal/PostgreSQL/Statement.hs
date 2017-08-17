@@ -379,6 +379,26 @@ infix 4 <=*
 (>*) = unsafeBinaryOp ">"
 infix 4 >*
 
+currentDate
+  :: Expression params tables grouping ('Required (nullity 'PGdate))
+currentDate = UnsafeExpression "CURRENT_DATE"
+
+currentTime
+  :: Expression params tables grouping ('Required (nullity 'PGtimetz))
+currentTime = UnsafeExpression "CURRENT_TIME"
+
+currentTimestamp
+  :: Expression params tables grouping ('Required (nullity 'PGtimestamptz))
+currentTimestamp = UnsafeExpression "CURRENT_TIMESTAMP"
+
+localTime
+  :: Expression params tables grouping ('Required (nullity 'PGtime))
+localTime = UnsafeExpression "LOCALTIME"
+
+localTimestamp
+  :: Expression params tables grouping ('Required (nullity 'PGtimestamp))
+localTimestamp = UnsafeExpression "LOCALTIMESTAMP"
+
 data SortExpression params tables grouping where
   Asc
     :: Expression params tables grouping ('Required ('NotNull ty))

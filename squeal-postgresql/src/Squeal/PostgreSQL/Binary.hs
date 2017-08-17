@@ -75,11 +75,9 @@ instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
 
 class ToColumnParam x (ty :: ColumnType) where
   toColumnParam :: x -> K (Maybe Strict.ByteString) ty
-instance ToParam x pg => ToColumnParam x ('Required ('NotNull pg)) where
+instance ToParam x pg => ToColumnParam x (optionality ('NotNull pg)) where
   toColumnParam = K . Just . Encoding.encodingBytes . unK . toParam @x @pg
-instance ToParam x pg => ToColumnParam (Maybe x) ('Required ('Null pg)) where
-  toColumnParam = K . fmap (Encoding.encodingBytes . unK . toParam @x @pg)
-instance ToParam x pg => ToColumnParam (Maybe x) ('Optional (nullity pg)) where
+instance ToParam x pg => ToColumnParam (Maybe x) (optionality ('Null pg)) where
   toColumnParam = K . fmap (Encoding.encodingBytes . unK . toParam @x @pg)
 
 class SListI tys => ToParams x (tys :: [ColumnType]) where
