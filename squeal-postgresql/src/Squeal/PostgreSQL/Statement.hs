@@ -17,11 +17,205 @@
   , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
+  , TypeInType
   , TypeOperators
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.Statement where
+module Squeal.PostgreSQL.Statement 
+  ( -- * Column Expressions
+    Expression (UnsafeExpression, renderExpression)
+  , HasParameter (param)
+  , HasColumn (getColumn)
+  , Column (Column)
+  , renderColumn
+    -- ** Default
+  , def
+  , unDef
+    -- ** Null
+  , null_
+  , unNull
+  , coalesce
+  , fromNull
+  , isNull
+  , isn'tNull
+  , matchNull
+  , nullIf
+  -- ** Functions
+  , unsafeBinaryOp
+  , unsafeUnaryOp
+  , unsafeFunction
+  , atan2_
+  , cast
+  , div_
+  , mod_
+  , trunc
+  , round_
+  , ceiling_
+  , greatest
+  , least
+    -- ** Conditions
+  , Condition
+  , true
+  , false
+  , not_
+  , (&&*)
+  , (||*)
+  , caseWhenThenElse
+  , ifThenElse
+  , (==*)
+  , (/=*)
+  , (>=*)
+  , (*<)
+  , (*<=)
+  , (>*)
+    -- ** Time
+  , currentDate
+  , currentTime
+  , currentTimestamp
+  , localTime
+  , localTimestamp
+    -- ** Aggregation
+  , unsafeAggregate
+  , unsafeAggregateDistinct
+  , sum_
+  , sumDistinct
+  , PGAvg (avg, avgDistinct)
+  , bitAnd
+  , bitOr
+  , boolAnd
+  , boolOr
+  , countStar
+  , countDistinctStar
+  , count
+  , every
+  , jsonAgg
+  , jsonbAgg
+  , jsonObjectAgg
+  , jsonbObjectAgg
+  , max_
+  , min_
+    -- * Tables
+  , Table (UnsafeTable, renderTable)
+  , HasTable (getTable)
+    -- ** Froms and Joins
+  , FromClause (..)
+  , renderFromClause
+    -- ** Table Expressions
+  , TableExpression (..)
+  , renderTableExpression
+  , from
+  , where_
+  , group
+  , having
+  , orderBy
+  , limit
+  , offset
+  , By (By, By2)
+  , renderBy
+  , GroupByClause (NoGroups, Group)
+  , renderGroupByClause
+  , HavingClause (NoHaving, Having)
+  , renderHavingClause
+  , GroupedBy (getGroup1, getGroup2)
+  , SortExpression (..)
+  , renderSortExpression
+    -- * TypeExpression
+  , TypeExpression (UnsafeTypeExpression, renderTypeExpression)
+  , PGTyped (pgtype)
+  , bool
+  , int2
+  , smallint
+  , int4
+  , int
+  , integer
+  , int8
+  , bigint
+  , numeric
+  , float4
+  , real
+  , float8
+  , doublePrecision
+  , serial2
+  , smallserial
+  , serial4
+  , serial
+  , serial8
+  , bigserial
+  , text
+  , char
+  , character
+  , varchar
+  , characterVarying
+  , bytea
+  , timestamp
+  , timestampWithTimeZone
+  , date
+  , time
+  , timeWithTimeZone
+  , interval
+  , uuid
+  , json
+  , jsonb
+  , notNull
+  , default_
+    -- * Statements
+    -- ** Queries
+  , Query (UnsafeQuery, renderQuery)
+  , select
+  , selectDistinct
+  , selectStar
+  , selectDistinctStar
+  , selectDotStar
+  , selectDistinctDotStar
+  , union
+  , unionAll
+  , intersect
+  , intersectAll
+  , except
+  , exceptAll
+    -- ** Data Definition Language
+  , Definition (UnsafeDefinition, renderDefinition)
+  , createTable
+  , TableConstraint (UnsafeTableConstraint, renderTableConstraint)
+  , check
+  , unique
+  , primaryKey
+  , foreignKey
+  , OnDelete (OnDeleteNoAction, OnDeleteRestrict, OnDeleteCascade)
+  , renderOnDelete
+  , OnUpdate (OnUpdateNoAction, OnUpdateRestrict, OnUpdateCascade)
+  , renderOnUpdate
+  , dropTable
+  , alterTable
+  , alterTableRename
+  , AlterTable (UnsafeAlterTable, renderAlterTable)
+  , addColumnDefault
+  , addColumnNull
+  , dropColumn
+  , renameColumn
+  , alterColumn
+  , AlterColumn (UnsafeAlterColumn, renderAlterColumn)
+  , setDefault
+  , dropDefault
+  , setNotNull
+  , dropNotNull
+  , alterType
+    -- ** Data Manipulation Language
+  , Manipulation (UnsafeManipulation, renderManipulation)
+  , queryStatement
+  , insertInto
+  , ValuesClause (Values, ValuesQuery)
+  , renderValuesClause
+  , ReturningClause (ReturningStar, Returning)
+  , renderReturningClause
+  , ConflictClause (Conflict, OnConflictDoNothing, OnConflictDoUpdate)
+  , renderConflictClause
+  , UpdateExpression (Same, Set)
+  , renderUpdateExpression
+  , update
+  , deleteFrom
+  ) where
 
 import Control.Category
 import Control.DeepSeq
@@ -33,11 +227,11 @@ import Data.Monoid hiding (All)
 import Data.Ratio
 import Data.String
 import Data.Word
-import Generics.SOP
+import Generics.SOP hiding (from)
 import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
-import Prelude hiding (RealFrac(..), id, (.))
+import Prelude hiding (id, (.))
 
 import qualified GHC.Generics as GHC
 import qualified Data.ByteString as ByteString
@@ -48,14 +242,31 @@ import Squeal.PostgreSQL.Schema
 column expressions
 -----------------------------------------}
 
+{- | `Expression`s are used in a variety of contexts,
+such as in the target list of the `select` command,
+as new column values in `insertInto` or `update`,
+or in search `Condition`s in a number of commands.
+
+The expression syntax allows the calculation of
+values from primitive expression using arithmetic, logical,
+and other operations.
+-}
 newtype Expression
   (params :: [ColumnType])
-  (tables :: [(Symbol,[(Symbol,ColumnType)])])
+  (tables :: TablesType)
   (grouping :: Grouping)
   (ty :: ColumnType)
     = UnsafeExpression { renderExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
+{- | A `HasParameter` constraint is used to indicate a value that is
+supplied externally to a SQL statement.
+`Squeal.PostgreSQL.PQ.manipulateParams`,
+`Squeal.PostgreSQL.PQ.queryParams` and
+`Squeal.PostgreSQL.PQ.traversePrepared` support specifying data values
+separately from the SQL command string, in which case `param`s are used to
+refer to the out-of-line data values.
+-}
 class (PGTyped (BaseType ty), KnownNat n)
   => HasParameter (n :: Nat) params ty | n params -> ty where
     param :: proxy n -> Expression params tables grouping ty
@@ -67,18 +278,25 @@ instance {-# OVERLAPPING #-} PGTyped (BaseType ty1)
 instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
   => HasParameter n (ty' : params) ty
 
+{- | A `HasColumn` constraint indicates an unqualified column reference.
+`getColumn` can only be unambiguous when the `TableExpression` the column
+references is unique, in which case the column may be referenced using
+@-XOverloadedLabels@. Otherwise, combined with a `HasTable` constraint, the
+qualified column reference operator `!` may be used.
+-}
 class KnownSymbol column => HasColumn column columns ty
   | column columns -> ty where
     getColumn
-      :: Alias column
-      -> Expression params '[table ::: columns] 'Ungrouped ty
+      :: HasUnique table tables columns
+      => Alias column
+      -> Expression params tables 'Ungrouped ty
     getColumn column = UnsafeExpression $ renderAlias column
 instance {-# OVERLAPPING #-} KnownSymbol column
   => HasColumn column ((column ::: optionality ty) ': tys) ('Required ty)
 instance {-# OVERLAPPABLE #-} (KnownSymbol column, HasColumn column table ty)
   => HasColumn column (ty' ': table) ty
 
-instance (HasColumn column columns ty, tables ~ '[table ::: columns])
+instance (HasColumn column columns ty, HasUnique table tables columns)
   => IsLabel column (Expression params tables 'Ungrouped ty) where
     fromLabel = getColumn (Alias @column)
 
@@ -88,7 +306,7 @@ instance (HasTable table tables columns, HasColumn column columns ty)
       renderAlias table <> "." <> renderAlias column
 
 data Column
-  (columns :: [(Symbol,ColumnType)])
+  (columns :: ColumnsType)
   (columnty :: (Symbol,ColumnType))
     where
       Column
@@ -99,22 +317,38 @@ deriving instance Show (Column columns columnty)
 deriving instance Eq (Column columns columnty)
 deriving instance Ord (Column columns columnty)
 
+-- | >>> renderExpression def
+-- "DEFAULT"
 def :: Expression params '[] 'Ungrouped ('Optional (nullity ty))
 def = UnsafeExpression "DEFAULT"
 
+-- | >>> renderExpression $ unDef false
+-- "FALSE"
 unDef
   :: Expression params '[] 'Ungrouped ('Required (nullity ty))
   -> Expression params '[] 'Ungrouped ('Optional (nullity ty))
 unDef = UnsafeExpression . renderExpression
 
-null :: Expression params tables grouping (optionality ('Null ty))
-null = UnsafeExpression "NULL"
+-- | analagous to `Nothing`
+--
+-- >>> renderExpression $ null_
+-- "NULL"
+null_ :: Expression params tables grouping (optionality ('Null ty))
+null_ = UnsafeExpression "NULL"
 
+-- | analagous to `Just`
+--
+-- >>> renderExpression $ unNull true
+-- "TRUE"
 unNull
   :: Expression params tables grouping (optionality ('NotNull ty))
   -> Expression params tables grouping (optionality ('Null ty))
 unNull = UnsafeExpression . renderExpression
 
+-- | return the leftmost value which is not NULL
+--
+-- >>> renderExpression $ coalesce [null_, unNull true] false
+-- "COALESCE(NULL, TRUE, FALSE)"
 coalesce
   :: [Expression params tables grouping ('Required ('Null ty))]
   -> Expression params tables grouping ('Required ('NotNull ty))
@@ -123,22 +357,34 @@ coalesce nullxs notNullx = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
     ((renderExpression <$> nullxs) <> [renderExpression notNullx]))
 
+-- | analagous to `fromMaybe` using @COALESCE@
+--
+-- >>> renderExpression $ fromNull true null_
+-- "COALESCE(NULL, TRUE)"
 fromNull
   :: Expression params tables grouping ('Required ('NotNull ty))
   -> Expression params tables grouping ('Required ('Null ty))
   -> Expression params tables grouping ('Required ('NotNull ty))
 fromNull notNullx nullx = coalesce [nullx] notNullx
 
+-- | >>> renderExpression $ null_ & isNull
+-- "NULL IS NULL"
 isNull
   :: Expression params tables grouping ('Required ('Null ty))
   -> Condition params tables grouping
 isNull x = UnsafeExpression $ renderExpression x <+> "IS NULL"
 
+-- | >>> renderExpression $ null_ & isn'tNull
+-- "NULL IS NOT NULL"
 isn'tNull
   :: Expression params tables grouping ('Required ('Null ty))
   -> Condition params tables grouping
 isn'tNull x = UnsafeExpression $ renderExpression x <+> "IS NOT NULL"
 
+-- | analagous to `maybe` using @IS NULL@
+--
+-- >>> renderExpression $ matchNull true not null_
+-- "CASE WHEN NULL IS NULL THEN TRUE ELSE (NOT TRUE) END"
 matchNull
   :: Expression params tables grouping ('Required nullty)
   -> ( Expression params tables grouping ('Required ('NotNull ty))
@@ -148,24 +394,34 @@ matchNull
 matchNull y f x = ifThenElse (isNull x) y
   (f (UnsafeExpression (renderExpression y)))
 
+-- | left inverse to `fromNull`
+--
+-- >>> renderExpression $ nullIf false (fromNull false null_)
+-- "NULL IF (FALSE, COALESCE(NULL, FALSE))"
 nullIf
   :: Expression params tables grouping ('Required ('NotNull ty))
   -> Expression params tables grouping ('Required ('NotNull ty))
   -> Expression params tables grouping ('Required ('Null ty))
-nullIf x y = UnsafeExpression $ parenthesized $
-  renderExpression x <> ", " <> renderExpression y
+nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
+  (renderExpression x <> ", " <> renderExpression y)
 
+-- | >>> renderExpression $ greatest @'[_] currentTimestamp [param (Proxy @1)]
+-- "GREATEST(CURRENT_TIMESTAMP, ($1 :: timestamp with time zone))"
 greatest
-  :: [Expression params tables grouping ('Required nullty)]
+  :: Expression params tables grouping ('Required nullty)
+  -> [Expression params tables grouping ('Required nullty)]
   -> Expression params table grouping ('Required nullty)
-greatest xs = UnsafeExpression $ "GREATEST("
-  <> commaSeparated (renderExpression <$> xs) <> ")"
+greatest x xs = UnsafeExpression $ "GREATEST("
+  <> commaSeparated (renderExpression <$> (x:xs)) <> ")"
 
+-- | >>> renderExpression $ least currentTimestamp [null_]
+-- "LEAST(CURRENT_TIMESTAMP, NULL)"
 least
-  :: [Expression params tables grouping ('Required nullty)]
+  :: Expression params tables grouping ('Required nullty)
+  -> [Expression params tables grouping ('Required nullty)]
   -> Expression params table grouping ('Required nullty)
-least xs = UnsafeExpression $ "LEAST("
-  <> commaSeparated (renderExpression <$> xs) <> ")"
+least x xs = UnsafeExpression $ "LEAST("
+  <> commaSeparated (renderExpression <$> (x:xs)) <> ")"
 
 unsafeBinaryOp
   :: ByteString
@@ -198,16 +454,15 @@ instance PGNum ty
     signum = unsafeFunction "sign"
     fromInteger
       = UnsafeExpression
-      . (<> if decimal (Proxy :: Proxy ty) then "." else "")
       . fromString
       . show
 
-instance PGFloating ty => Fractional
+instance (PGNum ty, PGFloating ty) => Fractional
   (Expression params tables grouping ('Required (nullity ty))) where
     (/) = unsafeBinaryOp "/"
     fromRational x = fromInteger (numerator x) / fromInteger (denominator x)
 
-instance (PGFloating ty, PGTyped ty) => Floating
+instance (PGNum ty, PGFloating ty) => Floating
   (Expression params tables grouping ('Required (nullity ty))) where
     pi = UnsafeExpression "pi()"
     exp = unsafeFunction "exp"
@@ -215,19 +470,7 @@ instance (PGFloating ty, PGTyped ty) => Floating
     sqrt = unsafeFunction "sqrt"
     b ** x = UnsafeExpression $
       "power(" <> renderExpression b <> ", " <> renderExpression x <> ")"
-    logBase b y = cast pgtype $ logBaseNumeric b y
-      where
-        logBaseNumeric
-          :: Expression params tables grouping ('Required (nullity ty))
-          -> Expression params tables grouping ('Required (nullity ty))
-          -> Expression params tables grouping ('Required (nullity 'PGnumeric))
-        logBaseNumeric b' y' = UnsafeExpression $ mconcat
-          [ "log("
-          , renderExpression (cast numeric b')
-          , ", "
-          , renderExpression (cast numeric y')
-          , ")"
-          ]
+    logBase b y = log y / log b
     sin = unsafeFunction "sin"
     cos = unsafeFunction "cos"
     tan = unsafeFunction "tan"
@@ -241,12 +484,12 @@ instance (PGFloating ty, PGTyped ty) => Floating
     acosh x = log (x + sqrt (x*x - 1))
     atanh x = log ((1 + x) / (1 - x)) / 2
 
-atan2
+atan2_
   :: PGFloating float
   => Expression params tables grouping ('Required (nullity float))
   -> Expression params tables grouping ('Required (nullity float))
   -> Expression params tables grouping ('Required (nullity float))
-atan2 y x = UnsafeExpression $
+atan2_ y x = UnsafeExpression $
   "atan2(" <> renderExpression y <> ", " <> renderExpression x <> ")"
 
 cast
@@ -256,19 +499,19 @@ cast
 cast ty x = UnsafeExpression $ parenthesized $
   renderExpression x <+> "::" <+> renderTypeExpression ty
 
-div
+div_
   :: PGIntegral int
   => Expression params tables grouping ('Required (nullity int))
   -> Expression params tables grouping ('Required (nullity int))
   -> Expression params tables grouping ('Required (nullity int))
-div = unsafeBinaryOp "/"
+div_ = unsafeBinaryOp "/"
 
-mod
+mod_
   :: PGIntegral int
   => Expression params tables grouping ('Required (nullity int))
   -> Expression params tables grouping ('Required (nullity int))
   -> Expression params tables grouping ('Required (nullity int))
-mod = unsafeBinaryOp "%"
+mod_ = unsafeBinaryOp "%"
 
 trunc
   :: PGFloating frac
@@ -377,19 +620,19 @@ infix 4 /=*
 (>=*) = unsafeBinaryOp ">="
 infix 4 >=*
 
-(<*)
+(*<)
   :: Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
-(<*) = unsafeBinaryOp "<"
-infix 4 <*
+(*<) = unsafeBinaryOp "<"
+infix 4 *<
 
-(<=*)
+(*<=)
   :: Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity ty))
   -> Expression params tables grouping ('Required (nullity 'PGbool))
-(<=*) = unsafeBinaryOp "<="
-infix 4 <=*
+(*<=) = unsafeBinaryOp "<="
+infix 4 *<=
 
 (>*)
   :: Expression params tables grouping ('Required (nullity ty))
@@ -456,7 +699,7 @@ aggregation
 -----------------------------------------}
 
 data By
-  (tables :: [(Symbol,[(Symbol,ColumnType)])])
+  (tables :: TablesType)
   (by :: (Symbol,Symbol)) where
   By
     :: (tables ~ '[table ::: columns], HasColumn column columns ty)
@@ -527,7 +770,7 @@ instance {-# OVERLAPPABLE #-}
   ) => GroupedBy table column (tabcol ': bys)
 
 instance
-  ( tables ~ '[table ::: columns]
+  ( HasUnique table tables columns
   , HasColumn column columns ty
   , GroupedBy table column bys
   ) => IsLabel column
@@ -541,97 +784,80 @@ instance
   ) => IsTableColumn table column
     (Expression params tables ('Grouped bys) ty) where (!) = getGroup2
 
-data AllOrDistinct = All | Distinct
-  deriving (GHC.Generic,Show,Eq,Ord,Data)
-instance NFData AllOrDistinct
+-- data AllOrDistinct = All | Distinct
+--   deriving (GHC.Generic,Show,Eq,Ord,Data)
+-- instance NFData AllOrDistinct
 
-renderAllOrDistinct :: AllOrDistinct -> ByteString
-renderAllOrDistinct = \case
-  All -> "ALL"
-  Distinct -> "DISTINCT"
+-- renderAllOrDistinct :: AllOrDistinct -> ByteString
+-- renderAllOrDistinct = \case
+--   All -> "ALL"
+--   Distinct -> "DISTINCT"
 
-unsafeAggregate
+unsafeAggregate, unsafeAggregateDistinct
   :: ByteString
-  -> AllOrDistinct
   -> Expression params tables 'Ungrouped ('Required xty)
   -> Expression params tables ('Grouped bys) ('Required yty)
-unsafeAggregate fun allOrDistinct x = UnsafeExpression $ mconcat
-  [fun, "(", renderAllOrDistinct allOrDistinct <+> renderExpression x, ")"]
+unsafeAggregate fun x = UnsafeExpression $ mconcat
+  [fun, "(", renderExpression x, ")"]
+unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
+  [fun, "(DISTINCT ", renderExpression x, ")"]
 
-sum_
+sum_, sumDistinct
   :: PGNum ty
-  => AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required (nullity ty))
+  => Expression params tables 'Ungrouped ('Required (nullity ty))
   -> Expression params tables ('Grouped bys) ('Required (nullity ty))
 sum_ = unsafeAggregate "sum"
+sumDistinct = unsafeAggregateDistinct "sum"
 
-avgInt
+class PGAvg ty avg | ty -> avg where
+  avg, avgDistinct
+    :: Expression params tables 'Ungrouped ('Required (nullity ty))
+    -> Expression params tables ('Grouped bys) ('Required (nullity avg))
+  avg = unsafeAggregate "avg"
+  avgDistinct = unsafeAggregateDistinct "avg"
+instance PGAvg 'PGint2 'PGnumeric
+instance PGAvg 'PGint4 'PGnumeric
+instance PGAvg 'PGint8 'PGnumeric
+instance PGAvg 'PGnumeric 'PGnumeric
+instance PGAvg 'PGfloat4 'PGfloat8
+instance PGAvg 'PGfloat8 'PGfloat8
+instance PGAvg 'PGinterval 'PGinterval
+
+bitAnd, bitOr
   :: PGIntegral int
-  => AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required (nullity int))
-  -> Expression params tables ('Grouped bys) ('Required (nullity 'PGnumeric))
-avgInt = unsafeAggregate "avg"
-
-avgFloat
-  :: PGFloating float
-  => AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required (nullity float))
-  -> Expression params tables ('Grouped bys) ('Required (nullity 'PGfloat8))
-avgFloat = unsafeAggregate "avg"
-
-bitAnd
-  :: PGIntegral int
-  => AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required (nullity int))
+  => Expression params tables 'Ungrouped ('Required (nullity int))
   -> Expression params tables ('Grouped bys) ('Required (nullity int))
 bitAnd = unsafeAggregate "bit_and"
-
-bitOr
-  :: PGIntegral int
-  => AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required (nullity int))
-  -> Expression params tables ('Grouped bys) ('Required (nullity int))
 bitOr = unsafeAggregate "bit_or"
 
-boolAnd
-  :: AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
+boolAnd, boolOr
+  :: Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
   -> Expression params tables ('Grouped bys) ('Required (nullity 'PGbool))
 boolAnd = unsafeAggregate "bool_and"
-
-boolOr
-  :: AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
-  -> Expression params tables ('Grouped bys) ('Required (nullity 'PGbool))
 boolOr = unsafeAggregate "bool_or"
 
-countStar
-  :: AllOrDistinct
-  -> Expression params table ('Grouped bys) ('Required ('NotNull 'PGint8))
-countStar allOrDistinct = UnsafeExpression $
-  "count(" <> renderAllOrDistinct allOrDistinct <+> "*)"
+countStar, countDistinctStar
+  :: Expression params table ('Grouped bys) ('Required ('NotNull 'PGint8))
+countStar = UnsafeExpression $ "count(*)"
+countDistinctStar = UnsafeExpression $ "count(DISTINCT *)"
 
 count
-  :: AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required ty)
+  :: Expression params tables 'Ungrouped ('Required ty)
   -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGint8))
 count = unsafeAggregate "count"
   
 every
-  :: AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
+  :: Expression params tables 'Ungrouped ('Required (nullity 'PGbool))
   -> Expression params tables ('Grouped bys) ('Required (nullity 'PGbool))
 every = unsafeAggregate "every"
 
 jsonAgg
-  :: AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required ty)
+  :: Expression params tables 'Ungrouped ('Required ty)
   -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGjson))
 jsonAgg = unsafeAggregate "json_agg"
 
 jsonbAgg
-  :: AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required ty)
+  :: Expression params tables 'Ungrouped ('Required ty)
   -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGjsonb))
 jsonbAgg = unsafeAggregate "jsonb_agg"
 
@@ -644,24 +870,17 @@ jsonObjectAgg k v = UnsafeExpression $
     <> ", " <> renderExpression v <> ")"
 
 jsonbObjectAgg
-  :: AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required ('NotNull keyty))
+  :: Expression params tables 'Ungrouped ('Required ('NotNull keyty))
   -> Expression params tables 'Ungrouped ('Required valty)
   -> Expression params tables ('Grouped bys) ('Required ('NotNull 'PGjsonb))
-jsonbObjectAgg allOrDistinct k v = UnsafeExpression $
-  "jsonb_object_agg(" <> renderAllOrDistinct allOrDistinct
-    <+> renderExpression k <> ", " <> renderExpression v <> ")"
+jsonbObjectAgg k v = UnsafeExpression $
+  "jsonb_object_agg("
+    <> renderExpression k <> ", " <> renderExpression v <> ")"
 
-max_
-  :: AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required (nullity ty))
+max_, min_
+  :: Expression params tables 'Ungrouped ('Required (nullity ty))
   -> Expression params tables ('Grouped bys) ('Required (nullity ty))
 max_ = unsafeAggregate "max"
-
-min_
-  :: AllOrDistinct
-  -> Expression params tables 'Ungrouped ('Required (nullity ty))
-  -> Expression params tables ('Grouped bys) ('Required (nullity ty))
 min_ = unsafeAggregate "min"
 
 {-----------------------------------------
@@ -669,8 +888,8 @@ tables
 -----------------------------------------}
 
 newtype Table
-  (schema :: [(Symbol,[(Symbol,ColumnType)])])
-  (columns :: [(Symbol,ColumnType)])
+  (schema :: TablesType)
+  (columns :: ColumnsType)
     = UnsafeTable { renderTable :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
@@ -738,8 +957,8 @@ renderFromClause = \case
 
 data TableExpression
   (params :: [ColumnType])
-  (schema :: [(Symbol,[(Symbol,ColumnType)])])
-  (tables :: [(Symbol,[(Symbol,ColumnType)])])
+  (schema :: TablesType)
+  (tables :: TablesType)
   (grouping :: Grouping)
     = TableExpression
     { fromClause :: FromClause params schema tables
@@ -960,8 +1179,8 @@ statements
 -----------------------------------------}
 
 newtype Definition
-  (schema0 :: [(Symbol,[(Symbol,ColumnType)])])
-  (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
+  (schema0 :: TablesType)
+  (schema1 :: TablesType)
   = UnsafeDefinition { renderDefinition :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
@@ -971,16 +1190,16 @@ instance Category Definition where
     renderDefinition ddl0 <+> renderDefinition ddl1
 
 newtype Manipulation
-  (schema :: [(Symbol,[(Symbol,ColumnType)])])
+  (schema :: TablesType)
   (params :: [ColumnType])
-  (columns :: [(Symbol,ColumnType)])
+  (columns :: ColumnsType)
     = UnsafeManipulation { renderManipulation :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
 newtype Query
-  (schema :: [(Symbol,[(Symbol,ColumnType)])])
+  (schema :: TablesType)
   (params :: [ColumnType])
-  (columns :: [(Symbol,ColumnType)])
+  (columns :: ColumnsType)
     = UnsafeQuery { renderQuery :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
@@ -1098,8 +1317,8 @@ createTable table columns constraints = UnsafeDefinition $
       _ -> ", " <> commaSeparated (renderTableConstraint <$> constraints)
 
 newtype TableConstraint
-  (schema :: [(Symbol,[(Symbol,ColumnType)])])
-  (columns :: [(Symbol,ColumnType)])
+  (schema :: TablesType)
+  (columns :: ColumnsType)
     = UnsafeTableConstraint { renderTableConstraint :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
@@ -1224,7 +1443,7 @@ addColumnNull
   :: KnownSymbol column
   => Alias column
   -> TypeExpression ('Required ('Null ty))
-  -> AlterTable columns ((column ::: 'Required ('Null ty)) ': columns)
+  -> AlterTable columns (Create column ('Required ('Null ty)) columns)
 addColumnNull column ty = UnsafeAlterTable $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
@@ -1295,9 +1514,9 @@ insertInto table insert conflict returning = UnsafeManipulation $
   <> renderReturningClause returning
 
 data ValuesClause
-  (schema :: [(Symbol,[(Symbol,ColumnType)])])
+  (schema :: TablesType)
   (params :: [ColumnType])
-  (columns :: [(Symbol,ColumnType)])
+  (columns :: ColumnsType)
     = Values
         (NP (Aliased (Expression params '[] 'Ungrouped)) columns)
         [NP (Aliased (Expression params '[] 'Ungrouped)) columns]
@@ -1322,8 +1541,8 @@ renderValuesClause = \case
 
 data ReturningClause
   (params :: [ColumnType])
-  (columns :: [(Symbol,ColumnType)])
-  (results :: [(Symbol,ColumnType)])
+  (columns :: ColumnsType)
+  (results :: ColumnsType)
   where
     ReturningStar :: ReturningClause params columns columns
     Returning

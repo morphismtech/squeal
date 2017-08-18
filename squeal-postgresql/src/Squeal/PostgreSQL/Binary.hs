@@ -1,5 +1,16 @@
+{-|
+Module: Squeel.PostgreSQL.Binary
+Description: Binary encoding and decoding
+Copyright: (c) Eitan Chatav, 2017
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Binary encoding and decoding between Haskell and PostgreSQL types.
+-}
+
 {-# LANGUAGE
-    DataKinds
+    ConstraintKinds
+  , DataKinds
   , DefaultSignatures
   , DeriveFoldable
   , DeriveFunctor
@@ -14,34 +25,62 @@
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
+  , TypeInType
   , TypeOperators
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.Binary where
+module Squeal.PostgreSQL.Binary
+  ( -- * Encoding
+    ToParam (..)
+  , ToColumnParam (..)
+  , ToParams (..)
+    -- * Decoding
+  , FromValue (..)
+  , FromColumnValue (..)
+  , FromRow (..)
+    -- * Only
+  , Only (..)
+  ) where
 
 import Data.Aeson hiding (Null)
-import Data.Bits
 import Data.Int
+import Data.Kind
 import Data.Scientific
 import Data.Time
-import Data.Word
 import Data.UUID
+import Data.Word
 import Generics.SOP
+import GHC.TypeLits
 import Network.IP.Addr
 
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict hiding (unpack)
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text as Strict
-import qualified Generics.SOP.Type.Metadata as Type
 import qualified GHC.Generics as GHC
 import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
 
 import Squeal.PostgreSQL.Schema
 
-class ToParam x (pg :: PGType) where toParam :: x -> K Encoding.Encoding pg
+-- | A `ToParam` constraint gives an encoding of a Haskell `Type` into
+-- into the binary format of a PostgreSQL `PGType`.
+class ToParam (x :: Type) (pg :: PGType) where
+  -- | >>> toParam @Bool @'PGbool False
+  -- K "\NUL"
+  --
+  -- >>> toParam @Int16 @'PGint2 0
+  -- K "\NUL\NUL"
+  --
+  -- >>> toParam @Int32 @'PGint4 0
+  -- K "\NUL\NUL\NUL\NUL"
+  --
+  -- >>> data Id = Id { getId :: Int16 } deriving Show
+  -- >>> instance ToParam Id 'PGint2 where toParam = toParam . getId
+  -- >>> toParam @Id @'PGint2 (Id 1)
+  -- K "\NUL\SOH"
+  toParam :: x -> K Encoding.Encoding pg
 instance ToParam Bool 'PGbool where toParam = K . Encoding.bool
 instance ToParam Int16 'PGint2 where toParam = K . Encoding.int2_int16
 instance ToParam Word16 'PGint2 where toParam = K . Encoding.int2_word16
@@ -73,14 +112,34 @@ instance ToParam DiffTime 'PGinterval where toParam = K . Encoding.interval_int
 instance ToParam Value 'PGjson where toParam = K . Encoding.json_ast
 instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
 
-class ToColumnParam x (ty :: ColumnType) where
+-- | A `ToColumnParam` constraint lifts the `ToParam` encoding 
+-- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s.
+class ToColumnParam (x :: Type) (ty :: ColumnType) where
+  -- | >>> toColumnParam @Int16 @('Required ('NotNull 'PGint2)) 0
+  -- K (Just "\NUL\NUL")
+  --
+  -- >>> toColumnParam @(Maybe Int16) @('Required ('Null 'PGint2)) (Just 0)
+  -- K (Just "\NUL\NUL")
+  --
+  -- >>> toColumnParam @(Maybe Int16) @('Required ('Null 'PGint2)) Nothing
+  -- K Nothing
   toColumnParam :: x -> K (Maybe Strict.ByteString) ty
 instance ToParam x pg => ToColumnParam x (optionality ('NotNull pg)) where
   toColumnParam = K . Just . Encoding.encodingBytes . unK . toParam @x @pg
 instance ToParam x pg => ToColumnParam (Maybe x) (optionality ('Null pg)) where
   toColumnParam = K . fmap (Encoding.encodingBytes . unK . toParam @x @pg)
 
-class SListI tys => ToParams x (tys :: [ColumnType]) where
+-- | A `ToParams` constraint generically sequences the encodings of `Type`s
+-- of the fields of a tuple or record to a row of `ColumnType`s.
+class SListI tys => ToParams (x :: Type) (tys :: [ColumnType]) where
+  -- | >>> type PGparams = '[ 'Required ('NotNull 'PGbool), 'Required ('Null 'PGint2)]
+  -- >>> toParams @(Bool, Maybe Int16) @PGparams (False, Just 0)
+  -- K (Just "\NUL") :* (K (Just "\NUL\NUL") :* Nil)
+  --
+  -- >>> data Hparams = Hparams { col1 :: Bool, col2 :: Maybe Int16} deriving GHC.Generic
+  -- >>> instance SOP.Generic Hparams
+  -- >>> toParams @Hparams @PGparams (Hparams False (Just 0))
+  -- K (Just "\NUL") :* (K (Just "\NUL\NUL") :* Nil)
   toParams :: x -> NP (K (Maybe Strict.ByteString)) tys
 instance (SListI tys, IsProductType x xs, AllZip ToColumnParam xs tys)
   => ToParams x tys where
@@ -88,15 +147,15 @@ instance (SListI tys, IsProductType x xs, AllZip ToColumnParam xs tys)
         = htrans (Proxy @ToColumnParam) (toColumnParam . unI)
         . unZ . unSOP . from
 
-class FromValue (pg :: PGType) y where
+-- | A `FromValue` constraint gives a parser from the binary format of
+-- a PostgreSQL `PGType` into a Haskell `Type`.
+class FromValue (pg :: PGType) (y :: Type) where
+  -- | >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
   fromValue :: proxy pg -> Decoding.Value y
 instance FromValue 'PGbool Bool where fromValue _ = Decoding.bool
-instance (Integral int, Bits int) => FromValue 'PGint2 int where
-  fromValue _ = Decoding.int
-instance (Integral int, Bits int) => FromValue 'PGint4 int where
-  fromValue _ = Decoding.int
-instance (Integral int, Bits int) => FromValue 'PGint8 int where
-  fromValue _ = Decoding.int
+instance FromValue 'PGint2 Int16 where fromValue _ = Decoding.int
+instance FromValue 'PGint4 Int32 where fromValue _ = Decoding.int
+instance FromValue 'PGint8 Int64 where fromValue _ = Decoding.int
 instance FromValue 'PGfloat4 Float where fromValue _ = Decoding.float4
 instance FromValue 'PGfloat8 Double where fromValue _ = Decoding.float8
 instance FromValue 'PGnumeric Scientific where fromValue _ = Decoding.numeric
@@ -122,7 +181,15 @@ instance FromValue 'PGinterval DiffTime where
 instance FromValue 'PGjson Value where fromValue _ = Decoding.json_ast
 instance FromValue 'PGjsonb Value where fromValue _ = Decoding.jsonb_ast
 
-class FromColumnValue (colty :: (Symbol,ColumnType)) y where
+-- | A `FromColumnValue` constraint lifts the `FromValue` parser
+-- to a decoding of a `(Symbol,ColumnType)` to a `Type`,
+-- decoding `Null`s to `Maybe`s.
+class FromColumnValue (colty :: (Symbol,ColumnType)) (y :: Type) where
+  -- | >>> fromColumnValue @("col" ::: 'Required ('NotNull 'PGint2)) @Id (K (Just "\NUL\SOH"))
+  -- Id {getId = 1}
+  --
+  -- >>> fromColumnValue @("col" ::: 'Required ('Null 'PGint2)) @(Maybe Id) (K (Just "\NUL\SOH"))
+  -- Just (Id {getId = 1})
   fromColumnValue :: K (Maybe Strict.ByteString) colty -> y
 instance FromValue pg y
   => FromColumnValue (column ::: ('Required ('NotNull pg))) y where
@@ -144,32 +211,35 @@ instance FromValue pg y
       where
         err str = error $ "fromColumnValue: " ++ Strict.unpack str
 
-class SListI columns => FromRow (columns :: [(Symbol,ColumnType)]) y where
-  fromRow :: NP (K (Maybe Strict.ByteString)) columns -> y
+-- | A `FromRow` constraint generically sequences the parsings of the columns
+-- of a `ColumnsType` into the fields of a record `Type` provided they have
+-- the same field names.
+class SListI results => FromRow (results :: ColumnsType) y where
+  -- | >>> data Hrow = Hrow { userId :: Id, userName :: Maybe Text } deriving (Show, GHC.Generic)
+  -- >>> instance SOP.Generic Hrow
+  -- >>> instance SOP.HasDatatypeInfo Hrow
+  -- >>> type PGrow = '["userId" ::: 'Required ('NotNull 'PGint2), "userName" ::: 'Required ('Null 'PGtext)]
+  -- >>> fromRow @PGrow @Hrow (K (Just "\NUL\SOH") :* K (Just "bloodninja") :* Nil)
+  -- Hrow {userId = Id {getId = 1}, userName = Just "bloodninja"}
+  fromRow :: NP (K (Maybe Strict.ByteString)) results -> y
 instance
-  ( SListI columns, IsProductType y ys
-  , AllZip FromColumnValue columns ys
-  , HasDatatypeInfo y
-  , SameFields (DatatypeInfoOf y) columns
-  ) => FromRow columns y where
+  ( SListI results
+  , IsProductType y ys
+  , AllZip FromColumnValue results ys
+  , SameFields (DatatypeInfoOf y) results
+  ) => FromRow results y where
     fromRow
       = to . SOP . Z . htrans (Proxy @FromColumnValue) (I . fromColumnValue)
 
-class SameField
-  (fieldInfo :: Type.FieldInfo) (columnty :: (Symbol,ColumnType)) where
-instance field ~ column => SameField ('Type.FieldInfo field) (column ::: ty)
-
-type family SameFields
-  (datatypeInfo :: Type.DatatypeInfo) (columns :: [(Symbol,ColumnType)]) where
-    SameFields
-      ('Type.ADT _module _datatype '[ 'Type.Record _constructor fields])
-      columns
-        = AllZip SameField fields columns
-    SameFields
-      ('Type.Newtype _module _datatype ('Type.Record _constructor '[field]))
-      '[column]
-        = SameField field column
-
+-- | `Only` is a 1-tuple type, useful for encoding a single parameter with
+-- `toParams` or decoding a single value with `fromRow`.
+--
+-- >>> toParams @(Only (Maybe Text)) @'[ 'Required ('Null 'PGtext)] (Only (Just "foo"))
+-- K (Just "foo") :* Nil
+--
+-- >>> type PGShortRow = '["only" ::: 'Required ('Null 'PGtext)]
+-- >>> fromRow @PGShortRow @(Only (Maybe Text)) (K (Just "bar") :* Nil)
+-- Only {only = Just "bar"}
 newtype Only x = Only { only :: x }
   deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
 instance Generic (Only x)
