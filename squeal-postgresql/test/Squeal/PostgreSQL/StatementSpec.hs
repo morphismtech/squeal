@@ -69,7 +69,7 @@ spec = do
     let
       statement :: Query Tables '[ 'Required ('NotNull 'PGbool)] Columns
       statement = selectStar
-        (from (Table (#table1 `As` #table1)) & where_ (param (Proxy @1)))
+        (from (Table (#table1 `As` #table1)) & where_ (param @1))
     statement `queryRenders`
       "SELECT * FROM table1 AS table1 WHERE ($1 :: bool);"
   it "does OFFSET clauses" $ do

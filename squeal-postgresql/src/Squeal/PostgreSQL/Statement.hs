@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE
-    DataKinds
+    AllowAmbiguousTypes
+  , DataKinds
   , DeriveGeneric
   , DeriveDataTypeable
   , FlexibleContexts
@@ -269,8 +270,8 @@ refer to the out-of-line data values.
 -}
 class (PGTyped (BaseType ty), KnownNat n)
   => HasParameter (n :: Nat) params ty | n params -> ty where
-    param :: proxy n -> Expression params tables grouping ty
-    param _ = UnsafeExpression $ parenthesized $
+    param :: Expression params tables grouping ty
+    param = UnsafeExpression $ parenthesized $
       "$" <> renderNat (Proxy @n) <+> "::"
         <+> renderTypeExpression (pgtype @(BaseType ty))
 instance {-# OVERLAPPING #-} PGTyped (BaseType ty1)
@@ -1099,22 +1100,22 @@ bigserial = UnsafeTypeExpression "bigserial"
 text :: TypeExpression ('Required ('Null 'PGtext))
 text = UnsafeTypeExpression "text"
 char
-  :: KnownNat n
+  :: (KnownNat n, 1 <= n)
   => proxy n
   -> TypeExpression ('Required ('Null ('PGchar n)))
 char p = UnsafeTypeExpression $ "char(" <> renderNat p <> ")"
 character
-  :: KnownNat n
+  :: (KnownNat n, 1 <= n)
   => proxy n
   -> TypeExpression ('Required ('Null ('PGchar n)))
 character p = UnsafeTypeExpression $  "character(" <> renderNat p <> ")"
 varchar
-  :: KnownNat n
+  :: (KnownNat n, 1 <= n)
   => proxy n
   -> TypeExpression ('Required ('Null ('PGvarchar n)))
 varchar p = UnsafeTypeExpression $ "varchar(" <> renderNat p <> ")"
 characterVarying
-  :: KnownNat n
+  :: (KnownNat n, 1 <= n)
   => proxy n
   -> TypeExpression ('Required ('Null ('PGvarchar n)))
 characterVarying p = UnsafeTypeExpression $
@@ -1161,8 +1162,10 @@ instance PGTyped 'PGnumeric where pgtype = numeric
 instance PGTyped 'PGfloat4 where pgtype = float4
 instance PGTyped 'PGfloat8 where pgtype = float8
 instance PGTyped 'PGtext where pgtype = text
-instance KnownNat n => PGTyped ('PGchar n) where pgtype = char (Proxy @n)
-instance KnownNat n => PGTyped ('PGvarchar n) where pgtype = varchar (Proxy @n)
+instance (KnownNat n, 1 <= n)
+  => PGTyped ('PGchar n) where pgtype = char (Proxy @n)
+instance (KnownNat n, 1 <= n)
+  => PGTyped ('PGvarchar n) where pgtype = varchar (Proxy @n)
 instance PGTyped 'PGbytea where pgtype = bytea
 instance PGTyped 'PGtimestamp where pgtype = timestamp
 instance PGTyped 'PGtimestamptz where pgtype = timestampWithTimeZone

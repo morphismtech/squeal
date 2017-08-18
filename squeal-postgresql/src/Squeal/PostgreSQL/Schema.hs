@@ -115,8 +115,8 @@ data NullityType
 
 -- | `ColumnType` encodes the allowance of @DEFAULT@ and the only way
 -- to generate an `Optional` `Squeel.PostgreSQL.Statement.Expression`
--- is to use `Squeel.PostgreSQL.Statement.def`
--- or `Squeel.PostgreSQL.Statement.unDef`.
+-- is to use `Squeel.PostgreSQL.Statement.def`,
+-- `Squeel.PostgreSQL.Statement.unDef` or `Squeel.PostgreSQL.Statement.param`.
 data ColumnType
   = Optional NullityType
   -- ^ @DEFAULT@ is an allowed `Squeel.PostgreSQL.Statement.Expression`
