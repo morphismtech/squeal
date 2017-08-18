@@ -76,7 +76,8 @@ class ToParam (x :: Type) (pg :: PGType) where
   -- >>> toParam @Int32 @'PGint4 0
   -- K "\NUL\NUL\NUL\NUL"
   --
-  -- >>> data Id = Id { getId :: Int16 } deriving Show
+  -- >>> :set -XMultiParamTypeClasses
+  -- >>> newtype Id = Id { getId :: Int16 } deriving Show
   -- >>> instance ToParam Id 'PGint2 where toParam = toParam . getId
   -- >>> toParam @Id @'PGint2 (Id 1)
   -- K "\NUL\SOH"
@@ -136,8 +137,9 @@ class SListI tys => ToParams (x :: Type) (tys :: [ColumnType]) where
   -- >>> toParams @(Bool, Maybe Int16) @PGparams (False, Just 0)
   -- K (Just "\NUL") :* (K (Just "\NUL\NUL") :* Nil)
   --
+  -- >>> :set -XDeriveGeneric
   -- >>> data Hparams = Hparams { col1 :: Bool, col2 :: Maybe Int16} deriving GHC.Generic
-  -- >>> instance SOP.Generic Hparams
+  -- >>> instance Generic Hparams
   -- >>> toParams @Hparams @PGparams (Hparams False (Just 0))
   -- K (Just "\NUL") :* (K (Just "\NUL\NUL") :* Nil)
   toParams :: x -> NP (K (Maybe Strict.ByteString)) tys
@@ -150,7 +152,8 @@ instance (SListI tys, IsProductType x xs, AllZip ToColumnParam xs tys)
 -- | A `FromValue` constraint gives a parser from the binary format of
 -- a PostgreSQL `PGType` into a Haskell `Type`.
 class FromValue (pg :: PGType) (y :: Type) where
-  -- | >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
+  -- | >>> newtype Id = Id { getId :: Int16 } deriving Show
+  -- >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
   fromValue :: proxy pg -> Decoding.Value y
 instance FromValue 'PGbool Bool where fromValue _ = Decoding.bool
 instance FromValue 'PGint2 Int16 where fromValue _ = Decoding.int
@@ -185,7 +188,10 @@ instance FromValue 'PGjsonb Value where fromValue _ = Decoding.jsonb_ast
 -- to a decoding of a `(Symbol,ColumnType)` to a `Type`,
 -- decoding `Null`s to `Maybe`s.
 class FromColumnValue (colty :: (Symbol,ColumnType)) (y :: Type) where
-  -- | >>> fromColumnValue @("col" ::: 'Required ('NotNull 'PGint2)) @Id (K (Just "\NUL\SOH"))
+  -- | >>> :set -XTypeOperators -XOverloadedStrings
+  -- >>> newtype Id = Id { getId :: Int16 } deriving Show
+  -- >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
+  -- >>> fromColumnValue @("col" ::: 'Required ('NotNull 'PGint2)) @Id (K (Just "\NUL\SOH"))
   -- Id {getId = 1}
   --
   -- >>> fromColumnValue @("col" ::: 'Required ('Null 'PGint2)) @(Maybe Id) (K (Just "\NUL\SOH"))
@@ -215,9 +221,13 @@ instance FromValue pg y
 -- of a `ColumnsType` into the fields of a record `Type` provided they have
 -- the same field names.
 class SListI results => FromRow (results :: ColumnsType) y where
-  -- | >>> data Hrow = Hrow { userId :: Id, userName :: Maybe Text } deriving (Show, GHC.Generic)
-  -- >>> instance SOP.Generic Hrow
-  -- >>> instance SOP.HasDatatypeInfo Hrow
+  -- | :set -XOverloadedStrings
+  -- >>> import Data.Text
+  -- >>> newtype Id = Id { getId :: Int16 } deriving Show
+  -- >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
+  -- >>> data Hrow = Hrow { userId :: Id, userName :: Maybe Text } deriving (Show, GHC.Generic)
+  -- >>> instance Generic Hrow
+  -- >>> instance HasDatatypeInfo Hrow
   -- >>> type PGrow = '["userId" ::: 'Required ('NotNull 'PGint2), "userName" ::: 'Required ('Null 'PGtext)]
   -- >>> fromRow @PGrow @Hrow (K (Just "\NUL\SOH") :* K (Just "bloodninja") :* Nil)
   -- Hrow {userId = Id {getId = 1}, userName = Just "bloodninja"}
@@ -234,6 +244,7 @@ instance
 -- | `Only` is a 1-tuple type, useful for encoding a single parameter with
 -- `toParams` or decoding a single value with `fromRow`.
 --
+-- >>> import Data.Text
 -- >>> toParams @(Only (Maybe Text)) @'[ 'Required ('Null 'PGtext)] (Only (Just "foo"))
 -- K (Just "foo") :* Nil
 --

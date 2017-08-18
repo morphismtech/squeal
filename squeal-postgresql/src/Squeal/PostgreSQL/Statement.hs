@@ -216,6 +216,9 @@ module Squeal.PostgreSQL.Statement
   , renderUpdateExpression
   , update
   , deleteFrom
+    -- * Re-export
+  , (&)
+  , NP ((:*), Nil)
   ) where
 
 import Control.Category
@@ -223,6 +226,7 @@ import Control.DeepSeq
 import Data.ByteString (ByteString)
 import Data.Data (Data)
 import Data.Foldable
+import Data.Function ((&))
 import Data.Maybe
 import Data.Monoid hiding (All)
 import Data.Ratio
@@ -384,7 +388,7 @@ isn'tNull x = UnsafeExpression $ renderExpression x <+> "IS NOT NULL"
 
 -- | analagous to `maybe` using @IS NULL@
 --
--- >>> renderExpression $ matchNull true not null_
+-- >>> renderExpression $ matchNull true not_ null_
 -- "CASE WHEN NULL IS NULL THEN TRUE ELSE (NOT TRUE) END"
 matchNull
   :: Expression params tables grouping ('Required nullty)
@@ -395,10 +399,11 @@ matchNull
 matchNull y f x = ifThenElse (isNull x) y
   (f (UnsafeExpression (renderExpression y)))
 
--- | left inverse to `fromNull`
+-- | right inverse to `fromNull`
 --
--- >>> renderExpression $ nullIf false (fromNull false null_)
--- "NULL IF (FALSE, COALESCE(NULL, FALSE))"
+-- >>> :set -XTypeApplications -XDataKinds
+-- >>> renderExpression @'[_] $ fromNull false (nullIf false (param @1))
+-- "COALESCE(NULL IF (FALSE, ($1 :: bool)), FALSE)"
 nullIf
   :: Expression params tables grouping ('Required ('NotNull ty))
   -> Expression params tables grouping ('Required ('NotNull ty))
@@ -406,7 +411,7 @@ nullIf
 nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
   (renderExpression x <> ", " <> renderExpression y)
 
--- | >>> renderExpression $ greatest @'[_] currentTimestamp [param (Proxy @1)]
+-- | >>> renderExpression @'[_] $ greatest currentTimestamp [param @1]
 -- "GREATEST(CURRENT_TIMESTAMP, ($1 :: timestamp with time zone))"
 greatest
   :: Expression params tables grouping ('Required nullty)

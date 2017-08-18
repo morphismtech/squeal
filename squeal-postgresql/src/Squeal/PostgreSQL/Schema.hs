@@ -162,6 +162,7 @@ type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
 -- | `Alias`es are proxies for a type level string or `Symbol`
 -- and have an `IsLabel` instance so that with @-XOverloadedLabels@
 --
+-- >>> :set -XOverloadedLabels
 -- >>> #foobar :: Alias "foobar"
 -- Alias
 data Alias (alias :: Symbol) = Alias
