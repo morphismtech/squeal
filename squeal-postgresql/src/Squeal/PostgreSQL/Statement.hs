@@ -389,7 +389,7 @@ isn'tNull x = UnsafeExpression $ renderExpression x <+> "IS NOT NULL"
 -- | analagous to `maybe` using @IS NULL@
 --
 -- >>> renderExpression $ matchNull true not_ null_
--- "CASE WHEN NULL IS NULL THEN TRUE ELSE (NOT TRUE) END"
+-- "CASE WHEN NULL IS NULL THEN TRUE ELSE (NOT NULL) END"
 matchNull
   :: Expression params tables grouping ('Required nullty)
   -> ( Expression params tables grouping ('Required ('NotNull ty))
@@ -397,7 +397,7 @@ matchNull
   -> Expression params tables grouping ('Required ('Null ty))
   -> Expression params tables grouping ('Required nullty)
 matchNull y f x = ifThenElse (isNull x) y
-  (f (UnsafeExpression (renderExpression y)))
+  (f (UnsafeExpression (renderExpression x)))
 
 -- | right inverse to `fromNull`
 --
@@ -708,7 +708,7 @@ data By
   (tables :: TablesType)
   (by :: (Symbol,Symbol)) where
   By
-    :: (tables ~ '[table ::: columns], HasColumn column columns ty)
+    :: (HasUnique table tables columns, HasColumn column columns ty)
     => Alias column
     -> By tables '(table, column)
   By2
@@ -756,7 +756,7 @@ renderHavingClause = \case
 class (KnownSymbol table, KnownSymbol column)
   => GroupedBy table column bys where
     getGroup1
-      :: (tables ~ '[table ::: columns], HasColumn column columns ty)
+      :: (HasUnique table tables columns, HasColumn column columns ty)
       => Alias column
       -> Expression params tables ('Grouped bys) ty
     getGroup1 column = UnsafeExpression $ renderAlias column
@@ -1270,13 +1270,13 @@ selectDistinct list tabs = UnsafeQuery $
   <+> renderTableExpression tabs
 
 selectStar
-  :: tables ~ '[table ::: columns]
+  :: HasUnique table tables columns
   => TableExpression params schema tables 'Ungrouped
   -> Query schema params columns
 selectStar tabs = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression tabs
 
 selectDistinctStar
-  :: tables ~ '[table ::: columns]
+  :: HasUnique table tables columns
   => TableExpression params schema tables 'Ungrouped
   -> Query schema params columns
 selectDistinctStar tabs = UnsafeQuery $
@@ -1434,8 +1434,8 @@ alterTableRename table0 table1 = UnsafeDefinition $
   <+> "RENAME TO" <+> renderAlias table1 <> ";"
 
 newtype AlterTable
-  (columns0 :: [(Symbol, ColumnType)])
-  (columns1 :: [(Symbol, ColumnType)]) =
+  (columns0 :: ColumnsType)
+  (columns1 :: ColumnsType) =
     UnsafeAlterTable {renderAlterTable :: ByteString}
   deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 

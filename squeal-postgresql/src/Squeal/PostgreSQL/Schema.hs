@@ -1,5 +1,5 @@
 {-|
-Module: Squeel.PostgreSQL.Schema
+Module: Squeal.PostgreSQL.Schema
 Description: Embedding of PostgreSQL type and alias system
 Copyright: (c) Eitan Chatav, 2017
 Maintainer: eitan@morphism.tech
@@ -114,12 +114,12 @@ data NullityType
   | NotNull PGType -- ^ @NULL@ is absent
 
 -- | `ColumnType` encodes the allowance of @DEFAULT@ and the only way
--- to generate an `Optional` `Squeel.PostgreSQL.Statement.Expression`
--- is to use `Squeel.PostgreSQL.Statement.def`,
--- `Squeel.PostgreSQL.Statement.unDef` or `Squeel.PostgreSQL.Statement.param`.
+-- to generate an `Optional` `Squeal.PostgreSQL.Statement.Expression`
+-- is to use `Squeal.PostgreSQL.Statement.def`,
+-- `Squeal.PostgreSQL.Statement.unDef` or `Squeal.PostgreSQL.Statement.param`.
 data ColumnType
   = Optional NullityType
-  -- ^ @DEFAULT@ is an allowed `Squeel.PostgreSQL.Statement.Expression`
+  -- ^ @DEFAULT@ is an allowed `Squeal.PostgreSQL.Statement.Expression`
   | Required NullityType
   -- ^ @DEFAULT@ is not allowed
 
@@ -132,26 +132,26 @@ type ColumnsType = [(Symbol,ColumnType)]
 type TablesType = [(Symbol,ColumnsType)]
 
 -- | `Grouping` is an auxiliary namespace, created by
--- @GROUP BY@ clauses (`Squeel.PostgreSQL.Statement.group`), and used by
+-- @GROUP BY@ clauses (`Squeal.PostgreSQL.Statement.group`), and used
 -- for typesafe aggregation
 data Grouping
   = Ungrouped
   | Grouped [(Symbol,Symbol)]
 
 -- | `PGNum` is a constraint on `PGType` whose
--- `Squeel.PostgreSQL.Statement.Expression`s have a `Num` constraint.
+-- `Squeal.PostgreSQL.Statement.Expression`s have a `Num` constraint.
 type PGNum ty =
   In ty '[ 'PGint2, 'PGint4, 'PGint8, 'PGnumeric, 'PGfloat4, 'PGfloat8]
 
 -- | `PGFloating` is a constraint on `PGType` whose
--- `Squeel.PostgreSQL.Statement.Expression`s
+-- `Squeal.PostgreSQL.Statement.Expression`s
 -- have `Fractional` and `Floating` constraints.
 type PGFloating ty = In ty '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 
 -- | `PGIntegral` is a constraint on `PGType` whose
--- `Squeel.PostgreSQL.Statement.Expression`s
--- have `Squeel.PostgreSQL.Statement.div_` and
--- `Squeel.PostgreSQL.Statement.mod_` functions.
+-- `Squeal.PostgreSQL.Statement.Expression`s
+-- have `Squeal.PostgreSQL.Statement.div_` and
+-- `Squeal.PostgreSQL.Statement.mod_` functions.
 type PGIntegral ty = In ty '[ 'PGint2, 'PGint4, 'PGint8]
 
 -- | `:::` is the promoted version of `As`, a type level pair between
@@ -259,43 +259,43 @@ type family NullifyColumns (columns :: ColumnsType) :: ColumnsType where
 
 -- | `NullifyTables` is an idempotent that nullifies a `TablesType`
 -- used to nullify the left or right hand side of an outer join
--- in a `Squeel.PostgreSQL.Statement.FromClause`
+-- in a `Squeal.PostgreSQL.Statement.FromClause`
 type family NullifyTables (tables :: TablesType) :: TablesType where
   NullifyTables '[] = '[]
   NullifyTables ((table ::: columns) ': tables) =
     (table ::: NullifyColumns columns) ': NullifyTables tables
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
--- `Squeel.PostgreSQL.Statement.FromClause`s.
+-- `Squeal.PostgreSQL.Statement.FromClause`s.
 type family Join xs ys where
   Join '[] ys = ys
   Join (x ': xs) ys = x ': Join xs ys
 
 -- | `Create alias x xs` adds `alias ::: x` to the end of `xs` and is used in
--- `Squeel.PostgreSQL.Statement.createTable` statements and in @ALTER TABLE@
--- `Squeel.PostgreSQL.Statement.addColumnDefault` and
--- `Squeel.PostgreSQL.Statement.addColumnNull` statements
+-- `Squeal.PostgreSQL.Statement.createTable` statements and in @ALTER TABLE@
+-- `Squeal.PostgreSQL.Statement.addColumnDefault` and
+-- `Squeal.PostgreSQL.Statement.addColumnNull` statements
 type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
   Create alias y (x ': xs) = x ': Create alias y xs
 
 -- | `Drop alias xs` removes the type associated with `alias` in `xs`
--- and is used in `Squeel.PostgreSQL.Statement.dropTable` statements
--- and in @ALTER TABLE@ `Squeel.PostgreSQL.Statement.dropColumn` statements
+-- and is used in `Squeal.PostgreSQL.Statement.dropTable` statements
+-- and in @ALTER TABLE@ `Squeal.PostgreSQL.Statement.dropColumn` statements
 type family Drop alias xs where
   Drop alias ((alias ::: x) ': xs) = xs
   Drop alias (x ': xs) = x ': Drop alias xs
 
 -- | `Alter alias xs x` replaces the type associated with an `alias` in `xs`
--- with the type `x` and is used in `Squeel.PostgreSQL.Statement.alterTable`
--- and `Squeel.PostgreSQL.Statement.alterColumn`.
+-- with the type `x` and is used in `Squeal.PostgreSQL.Statement.alterTable`
+-- and `Squeal.PostgreSQL.Statement.alterColumn`.
 type family Alter alias xs x where
   Alter alias ((alias ::: x0) ': xs) x1 = (alias ::: x1) ': xs
   Alter alias (x0 ': xs) x1 = x0 ': Alter alias xs x1
 
 -- | `Rename alias0 alias1 xs` replaces the alias `alias0` by `alias1` in `xs`
--- and is used in `Squeel.PostgreSQL.Statement.alterTableRename` and
--- `Squeel.PostgreSQL.Statement.renameColumn`
+-- and is used in `Squeal.PostgreSQL.Statement.alterTableRename` and
+-- `Squeal.PostgreSQL.Statement.renameColumn`
 type family Rename alias0 alias1 xs where
   Rename alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
   Rename alias0 alias1 (x ': xs) = x ': Rename alias0 alias1 xs

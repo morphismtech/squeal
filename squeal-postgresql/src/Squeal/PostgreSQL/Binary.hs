@@ -1,5 +1,5 @@
 {-|
-Module: Squeel.PostgreSQL.Binary
+Module: Squeal.PostgreSQL.Binary
 Description: Binary encoding and decoding
 Copyright: (c) Eitan Chatav, 2017
 Maintainer: eitan@morphism.tech
@@ -221,7 +221,7 @@ instance FromValue pg y
 -- of a `ColumnsType` into the fields of a record `Type` provided they have
 -- the same field names.
 class SListI results => FromRow (results :: ColumnsType) y where
-  -- | :set -XOverloadedStrings
+  -- | >>> :set -XOverloadedStrings
   -- >>> import Data.Text
   -- >>> newtype Id = Id { getId :: Int16 } deriving Show
   -- >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
