@@ -116,8 +116,8 @@ SELECT queries
 
 select
   :: SListI columns
-  => NP (Aliased (Expression params tables grouping)) (column ': columns)
-  -> TableExpression params schema tables grouping
+  => NP (Aliased (Expression tables grouping params)) (column ': columns)
+  -> TableExpression schema params tables grouping
   -> Query schema params (column ': columns)
 select list tabs = UnsafeQuery $
   "SELECT"
@@ -126,40 +126,29 @@ select list tabs = UnsafeQuery $
 
 selectDistinct
   :: SListI columns
-  => NP (Aliased (Expression params tables grouping)) (column ': columns)
-  -> TableExpression params schema tables grouping
+  => NP (Aliased (Expression tables 'Ungrouped params)) (column ': columns)
+  -> TableExpression schema params tables 'Ungrouped
   -> Query schema params (column ': columns)
 selectDistinct list tabs = UnsafeQuery $
   "SELECT DISTINCT"
   <+> renderCommaSeparated (renderAliased renderExpression) list
   <+> renderTableExpression tabs
 
-selectStar
+selectStar, selectDistinctStar
   :: HasUnique table tables columns
-  => TableExpression params schema tables 'Ungrouped
+  => TableExpression schema params tables 'Ungrouped
   -> Query schema params columns
 selectStar tabs = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression tabs
-
-selectDistinctStar
-  :: HasUnique table tables columns
-  => TableExpression params schema tables 'Ungrouped
-  -> Query schema params columns
 selectDistinctStar tabs = UnsafeQuery $
   "SELECT DISTINCT" <+> "*" <+> renderTableExpression tabs
 
-selectDotStar
+selectDotStar, selectDistinctDotStar
   :: HasTable table tables columns
   => Alias table
-  -> TableExpression params schema tables 'Ungrouped
+  -> TableExpression schema params tables 'Ungrouped
   -> Query schema params columns
 selectDotStar table tables = UnsafeQuery $
   "SELECT" <+> renderAlias table <> ".*" <+> renderTableExpression tables
-
-selectDistinctDotStar
-  :: HasTable table tables columns
-  => Alias table
-  -> TableExpression params schema tables 'Ungrouped
-  -> Query schema params columns
 selectDistinctDotStar table tables = UnsafeQuery $
   "SELECT DISTINCT" <+> renderAlias table <> ".*"
   <+> renderTableExpression tables
@@ -168,40 +157,40 @@ selectDistinctDotStar table tables = UnsafeQuery $
 FROM clauses
 -----------------------------------------}
 
-data FromClause params schema tables where
+data FromClause schema params tables where
   Table
     :: Aliased (Table schema) table
-    -> FromClause params schema '[table]
+    -> FromClause schema params '[table]
   Subquery
     :: Aliased (Query schema params) table
-    -> FromClause params schema '[table]
+    -> FromClause schema params '[table]
   CrossJoin
-    :: FromClause params schema right
-    -> FromClause params schema left
-    -> FromClause params schema (Join left right)
+    :: FromClause schema params right
+    -> FromClause schema params left
+    -> FromClause schema params (Join left right)
   InnerJoin
-    :: FromClause params schema right
-    -> Condition params (Join left right) 'Ungrouped
-    -> FromClause params schema left
-    -> FromClause params schema (Join left right)
+    :: FromClause schema params right
+    -> Condition (Join left right) 'Ungrouped params
+    -> FromClause schema params left
+    -> FromClause schema params (Join left right)
   LeftOuterJoin
-    :: FromClause params schema right
-    -> Condition params (Join left right) 'Ungrouped
-    -> FromClause params schema left
-    -> FromClause params schema (Join left (NullifyTables right))
+    :: FromClause schema params right
+    -> Condition (Join left right) 'Ungrouped params
+    -> FromClause schema params left
+    -> FromClause schema params (Join left (NullifyTables right))
   RightOuterJoin
-    :: FromClause params schema right
-    -> Condition params (Join left right) 'Ungrouped
-    -> FromClause params schema left
-    -> FromClause params schema (Join (NullifyTables left) right)
+    :: FromClause schema params right
+    -> Condition (Join left right) 'Ungrouped params
+    -> FromClause schema params left
+    -> FromClause schema params (Join (NullifyTables left) right)
   FullOuterJoin
-    :: FromClause params schema right
-    -> Condition params (Join left right) 'Ungrouped
-    -> FromClause params schema left
-    -> FromClause params schema
+    :: FromClause schema params right
+    -> Condition (Join left right) 'Ungrouped params
+    -> FromClause schema params left
+    -> FromClause schema params
         (Join (NullifyTables left) (NullifyTables right))
 
-renderFromClause :: FromClause params schema tables -> ByteString
+renderFromClause :: FromClause schema params tables -> ByteString
 renderFromClause = \case
   Table table -> renderAliased renderTable table
   Subquery selection -> renderAliased (parenthesized . renderQuery) selection
@@ -221,22 +210,22 @@ Table Expressions
 -----------------------------------------}
 
 data TableExpression
-  (params :: [ColumnType])
   (schema :: TablesType)
+  (params :: [ColumnType])
   (tables :: TablesType)
   (grouping :: Grouping)
     = TableExpression
-    { fromClause :: FromClause params schema tables
-    , whereClause :: [Condition params tables 'Ungrouped]
+    { fromClause :: FromClause schema params tables
+    , whereClause :: [Condition tables 'Ungrouped params]
     , groupByClause :: GroupByClause tables grouping
     , havingClause :: HavingClause params tables grouping
-    , orderByClause :: [SortExpression params tables grouping]
+    , orderByClause :: [SortExpression tables grouping params]
     , limitClause :: [Word64]
     , offsetClause :: [Word64]
     }
 
 renderTableExpression
-  :: TableExpression params schema tables grouping
+  :: TableExpression schema params tables grouping
   -> ByteString
 renderTableExpression
   (TableExpression tables whs' grps' hvs' srts' lims' offs') = mconcat
@@ -265,21 +254,21 @@ renderTableExpression
         offs -> " OFFSET" <+> fromString (show (sum offs))
 
 from
-  :: FromClause params schema tables
-  -> TableExpression params schema tables 'Ungrouped
+  :: FromClause schema params tables
+  -> TableExpression schema params tables 'Ungrouped
 from tables = TableExpression tables [] NoGroups NoHaving [] [] []
 
 where_
-  :: Condition params tables 'Ungrouped
-  -> TableExpression params schema tables grouping
-  -> TableExpression params schema tables grouping
+  :: Condition tables 'Ungrouped params
+  -> TableExpression schema params tables grouping
+  -> TableExpression schema params tables grouping
 where_ wh tables = tables {whereClause = wh : whereClause tables}
 
 group
   :: SListI bys
   => NP (By tables) bys
-  -> TableExpression params schema tables 'Ungrouped 
-  -> TableExpression params schema tables ('Grouped bys)
+  -> TableExpression schema params tables 'Ungrouped 
+  -> TableExpression schema params tables ('Grouped bys)
 group bys tables = TableExpression
   { fromClause = fromClause tables
   , whereClause = whereClause tables
@@ -291,28 +280,28 @@ group bys tables = TableExpression
   }
 
 having
-  :: Condition params tables ('Grouped bys)
-  -> TableExpression params schema tables ('Grouped bys)
-  -> TableExpression params schema tables ('Grouped bys)
+  :: Condition tables ('Grouped bys) params
+  -> TableExpression schema params tables ('Grouped bys)
+  -> TableExpression schema params tables ('Grouped bys)
 having hv tables = tables
   { havingClause = case havingClause tables of Having hvs -> Having (hv:hvs) }
 
 orderBy
-  :: [SortExpression params tables grouping]
-  -> TableExpression params schema tables grouping
-  -> TableExpression params schema tables grouping
+  :: [SortExpression tables grouping params]
+  -> TableExpression schema params tables grouping
+  -> TableExpression schema params tables grouping
 orderBy srts tables = tables {orderByClause = orderByClause tables ++ srts}
 
 limit
   :: Word64
-  -> TableExpression params schema tables grouping
-  -> TableExpression params schema tables grouping
+  -> TableExpression schema params tables grouping
+  -> TableExpression schema params tables grouping
 limit lim tables = tables {limitClause = lim : limitClause tables}
 
 offset
   :: Word64
-  -> TableExpression params schema tables grouping
-  -> TableExpression params schema tables grouping
+  -> TableExpression schema params tables grouping
+  -> TableExpression schema params tables grouping
 offset off tables = tables {offsetClause = off : offsetClause tables}
 
 {-----------------------------------------
@@ -355,7 +344,7 @@ renderGroupByClause = \case
 data HavingClause params tables grouping where
   NoHaving :: HavingClause params tables 'Ungrouped
   Having
-    :: [Condition params tables ('Grouped bys)]
+    :: [Condition tables ('Grouped bys) params]
     -> HavingClause params tables ('Grouped bys)
 deriving instance Show (HavingClause params tables grouping)
 deriving instance Eq (HavingClause params tables grouping)
@@ -372,28 +361,28 @@ renderHavingClause = \case
 Sorting
 -----------------------------------------}
 
-data SortExpression params tables grouping where
+data SortExpression tables grouping params where
     Asc
-      :: Expression params tables grouping ('Required ('NotNull ty))
-      -> SortExpression params tables grouping
+      :: Expression tables grouping params ('Required ('NotNull ty))
+      -> SortExpression tables grouping params
     Desc
-      :: Expression params tables grouping ('Required ('NotNull ty))
-      -> SortExpression params tables grouping
+      :: Expression tables grouping params ('Required ('NotNull ty))
+      -> SortExpression tables grouping params
     AscNullsFirst
-      :: Expression params tables grouping ('Required ('Null ty))
-      -> SortExpression params tables grouping
+      :: Expression tables grouping params ('Required ('Null ty))
+      -> SortExpression tables grouping params
     AscNullsLast
-      :: Expression params tables grouping ('Required ('Null ty))
-      -> SortExpression params tables grouping
+      :: Expression tables grouping params ('Required ('Null ty))
+      -> SortExpression tables grouping params
     DescNullsFirst
-      :: Expression params tables grouping ('Required ('Null ty))
-      -> SortExpression params tables grouping
+      :: Expression tables grouping params ('Required ('Null ty))
+      -> SortExpression tables grouping params
     DescNullsLast
-      :: Expression params tables grouping ('Required ('Null ty))
-      -> SortExpression params tables grouping
-deriving instance Show (SortExpression params tables grouping)
+      :: Expression tables grouping params ('Required ('Null ty))
+      -> SortExpression tables grouping params
+deriving instance Show (SortExpression tables grouping params)
   
-renderSortExpression :: SortExpression params tables grouping -> ByteString
+renderSortExpression :: SortExpression tables grouping params -> ByteString
 renderSortExpression = \case
   Asc expression -> renderExpression expression <+> "ASC"
   Desc expression -> renderExpression expression <+> "DESC"

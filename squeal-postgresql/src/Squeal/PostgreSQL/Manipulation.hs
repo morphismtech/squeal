@@ -66,8 +66,8 @@ insertInto
   :: (SListI columns, SListI results, HasTable table schema columns)
   => Alias table
   -> ValuesClause schema params columns
-  -> ConflictClause params columns
-  -> ReturningClause params columns results
+  -> ConflictClause columns params
+  -> ReturningClause columns params results
   -> Manipulation schema params results
 insertInto table insert conflict returning = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderAlias table
@@ -80,8 +80,8 @@ data ValuesClause
   (params :: [ColumnType])
   (columns :: ColumnsType)
     = Values
-        (NP (Aliased (Expression params '[] 'Ungrouped)) columns)
-        [NP (Aliased (Expression params '[] 'Ungrouped)) columns]
+        (NP (Aliased (Expression '[] 'Ungrouped params)) columns)
+        [NP (Aliased (Expression '[] 'Ungrouped params)) columns]
     | ValuesQuery (Query schema params columns)
 
 renderValuesClause
@@ -96,22 +96,22 @@ renderValuesClause = \case
       (parenthesized . renderCommaSeparated renderValuePart <$> row:rows)
     where
       renderAliasPart, renderValuePart
-        :: Aliased (Expression params '[] 'Ungrouped) ty -> ByteString
+        :: Aliased (Expression '[] 'Ungrouped params) ty -> ByteString
       renderAliasPart (_ `As` name) = renderAlias name
       renderValuePart (value `As` _) = renderExpression value
   ValuesQuery q -> renderQuery q
 
 data ReturningClause
-  (params :: [ColumnType])
   (columns :: ColumnsType)
+  (params :: [ColumnType])
   (results :: ColumnsType)
   where
-    ReturningStar :: ReturningClause params columns columns
+    ReturningStar :: ReturningClause columns params columns
     Returning
       :: NP
-          (Aliased (Expression params '[table ::: columns] 'Ungrouped))
+          (Aliased (Expression '[table ::: columns] 'Ungrouped params))
           results
-      -> ReturningClause params columns results
+      -> ReturningClause columns params results
 
 renderReturningClause
   :: SListI results
@@ -123,17 +123,17 @@ renderReturningClause = \case
   Returning results -> " RETURNING"
     <+> renderCommaSeparated (renderAliased renderExpression) results <> ";"
 
-data ConflictClause params columns where
-  Conflict :: ConflictClause params columns
-  OnConflictDoNothing :: ConflictClause params columns
+data ConflictClause columns params where
+  Conflict :: ConflictClause columns params
+  OnConflictDoNothing :: ConflictClause columns params
   OnConflictDoUpdate
-    :: NP (Aliased (UpdateExpression params columns)) columns
-    -> Maybe (Condition params '[table ::: columns] 'Ungrouped)
-    -> ConflictClause params columns
+    :: NP (Aliased (UpdateExpression columns params)) columns
+    -> Maybe (Condition '[table ::: columns] 'Ungrouped params)
+    -> ConflictClause columns params
 
 renderConflictClause
   :: SListI columns
-  => ConflictClause params columns
+  => ConflictClause columns params
   -> ByteString
 renderConflictClause = \case
   Conflict -> ""
@@ -149,12 +149,12 @@ renderConflictClause = \case
 UPDATE statements
 -----------------------------------------}
 
-data UpdateExpression params columns ty
+data UpdateExpression columns params ty
   = Same
-  | Set (forall table. Expression params '[table ::: columns] 'Ungrouped ty)
-deriving instance Show (UpdateExpression params columns ty)
-deriving instance Eq (UpdateExpression params columns ty)
-deriving instance Ord (UpdateExpression params columns ty)
+  | Set (forall table. Expression '[table ::: columns] 'Ungrouped params ty)
+deriving instance Show (UpdateExpression columns params ty)
+deriving instance Eq (UpdateExpression columns params ty)
+deriving instance Ord (UpdateExpression columns params ty)
 
 renderUpdateExpression
   :: Aliased (UpdateExpression params columns) column
@@ -167,9 +167,9 @@ renderUpdateExpression = \case
 update
   :: (HasTable table schema columns, SListI columns, SListI results)
   => Alias table
-  -> NP (Aliased (UpdateExpression params columns)) columns
-  -> Condition params '[tab ::: columns] 'Ungrouped
-  -> ReturningClause params columns results
+  -> NP (Aliased (UpdateExpression columns params)) columns
+  -> Condition '[tab ::: columns] 'Ungrouped params
+  -> ReturningClause columns params results
   -> Manipulation schema params results
 update table columns wh returning = UnsafeManipulation $
   "UPDATE"
@@ -186,7 +186,7 @@ DELETE statements
 deleteFrom
   :: HasTable table schema columns
   => Alias table
-  -> Condition params '[table ::: columns] 'Ungrouped
+  -> Condition '[table ::: columns] 'Ungrouped params
   -> Manipulation schema params '[]
 deleteFrom table wh = UnsafeManipulation $
   "DELETE FROM" <+> renderAlias table

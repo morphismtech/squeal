@@ -105,7 +105,7 @@ newtype TableConstraint
     deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
 check
-  :: Condition '[] '[table ::: columns] 'Ungrouped
+  :: Condition '[table ::: columns] 'Ungrouped '[]
   -> TableConstraint schema columns
 check condition = UnsafeTableConstraint $
   "CHECK" <+> parenthesized (renderExpression condition)
@@ -254,7 +254,7 @@ newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
   deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
 
 setDefault
-  :: Expression '[] '[] 'Ungrouped ('Required ty)
+  :: Expression '[] 'Ungrouped '[] ('Required ty)
   -> AlterColumn ('Required ty) ('Optional ty)
 setDefault expression = UnsafeAlterColumn $
   "SET DEFAULT" <+> renderExpression expression
