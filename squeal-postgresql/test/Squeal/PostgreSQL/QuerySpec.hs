@@ -7,24 +7,19 @@
   , TypeOperators
 #-}
 
-module Squeal.PostgreSQL.StatementSpec where
+module Squeal.PostgreSQL.QuerySpec where
 
-import Control.Category ((>>>))
 import Data.Function
 import Generics.SOP hiding (from)
 import Test.Hspec
 
-import Squeal.PostgreSQL.Statement
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL
 
 spec :: Spec
 spec = do
   let
-    qry `queryRenders` str = queryStatement qry `manipulationRenders` str
-    definition `definitionRenders` str =
-      renderDefinition definition `shouldBe` str
-    manipulation `manipulationRenders` str =
-      renderManipulation manipulation `shouldBe` str
+    qry `queryRenders` str =
+      renderManipulation (queryStatement qry) `shouldBe` str
   it "correctly renders a simple SELECT query" $ do
     let
       statement :: Query Tables '[] SumAndCol1
@@ -97,85 +92,6 @@ spec = do
       \ FROM table1 AS table1\
       \ GROUP BY col1\
       \ HAVING ((col1 + sum(col2)) > 1);"
-  it "correctly renders simple INSERTs" $ do
-    let
-      statement :: Manipulation Tables '[] '[]
-      statement =
-        insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
-          Conflict (Returning Nil)
-    statement `manipulationRenders`
-      "INSERT INTO table1 (col1, col2) VALUES (2, 4);"
-  it "correctly renders returning INSERTs" $ do
-    let
-      statement :: Manipulation Tables '[] SumAndCol1
-      statement =
-        insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
-          Conflict
-          (Returning $ (#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
-    statement `manipulationRenders`
-      "INSERT INTO table1 (col1, col2) VALUES (2, 4)\
-      \ RETURNING (col1 + col2) AS sum, col1 AS col1;"
-  it "correctly renders simple UPDATEs" $ do
-    let
-      statement :: Manipulation Tables '[] '[]
-      statement =
-        update #table1 (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-          (#col1 /=* #col2) (Returning Nil)
-    statement `manipulationRenders`
-      "UPDATE table1 SET col1 = 2\
-      \ WHERE (col1 <> col2);"
-  it "correctly renders returning UPDATEs" $ do
-    let
-      statement :: Manipulation Tables '[] SumAndCol1
-      statement =
-        update #table1 (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-          (#col1 /=* #col2)
-          (Returning $ (#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
-    statement `manipulationRenders`
-      "UPDATE table1 SET col1 = 2\
-      \ WHERE (col1 <> col2)\
-      \ RETURNING (col1 + col2) AS sum, col1 AS col1;"
-  it "correctly renders upsert INSERTs" $ do
-    let
-      statement :: Manipulation Tables '[] '[]
-      statement =
-        insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
-          (OnConflictDoUpdate
-            (Set 2 `As` #col1 :* Same `As` #col2 :* Nil) Nothing)
-          (Returning Nil)
-    statement `manipulationRenders`
-      "INSERT INTO table1 (col1, col2) VALUES (2, 4)\
-      \ ON CONFLICT DO UPDATE\
-      \ SET col1 = 2;"
-  it "correctly renders returning upsert INSERTs" $ do
-    let
-      statement :: Manipulation Tables '[] SumAndCol1
-      statement =
-        insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
-          (OnConflictDoUpdate
-            (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-            (Just (#col1 /=* #col2)))
-          (Returning $ (#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
-    statement `manipulationRenders`
-      "INSERT INTO table1 (col1, col2) VALUES (2, 4)\
-      \ ON CONFLICT DO UPDATE\
-      \ SET col1 = 2\
-      \ WHERE (col1 <> col2)\
-      \ RETURNING (col1 + col2) AS sum, col1 AS col1;"
-  it "correctly renders DELETEs" $ do
-    let
-      statement :: Manipulation Tables '[] '[]
-      statement = deleteFrom #table1 (#col1 ==* #col2)
-    statement `manipulationRenders`
-      "DELETE FROM table1 WHERE (col1 = col2);"
-  it "should be safe against SQL injection in literal text" $ do
-    let
-      statement :: Manipulation StudentsTable '[] '[]
-      statement = insertInto #students
-        (Values ("Robert'); DROP TABLE students;" `As` #name :* Nil) [])
-        Conflict (Returning Nil)
-    statement `manipulationRenders`
-      "INSERT INTO students (name) VALUES (E'Robert''); DROP TABLE students;');"
   describe "JOINs" $ do
     it "should render CROSS JOINs" $ do
       let
@@ -227,71 +143,6 @@ spec = do
         "SELECT orders1.*\
         \ FROM orders AS orders1\
         \ CROSS JOIN orders AS orders2;"
-  it "should render CREATE TABLE statements" $ do
-    createTable #table1
-      ((int4 & notNull) `As` #col1 :* (int4 & notNull) `As` #col2 :* Nil)
-      [primaryKey (Column #col1 :* Column #col2 :* Nil)]
-      `definitionRenders`
-      "CREATE TABLE table1\
-      \ (col1 int4 NOT NULL, col2 int4 NOT NULL,\
-      \ PRIMARY KEY (col1, col2));"
-    createTable #table2
-      ( serial `As` #col1 :*
-        text `As` #col2 :*
-        (int8 & notNull & default_ 8) `As` #col3 :* Nil )
-        [check (#col3 >* 0)]
-      `definitionRenders`
-      "CREATE TABLE table2\
-      \ (col1 serial,\
-      \ col2 text,\
-      \ col3 int8 NOT NULL DEFAULT 8,\
-      \ CHECK ((col3 > 0)));"
-    let
-      statement :: Definition '[]
-        '[ "users" :::
-           '[ "id" ::: 'Optional ('NotNull 'PGint4)
-            , "username" ::: 'Required ('NotNull 'PGtext)
-            ]
-         , "emails" :::
-           '[ "id" ::: 'Optional ('NotNull 'PGint4)
-            , "userid" ::: 'Required ('NotNull 'PGint4)
-            , "email" ::: 'Required ('NotNull 'PGtext)
-            ]
-         ]
-      statement =
-        createTable #users
-          (serial `As` #id :* (text & notNull) `As` #username :* Nil)
-          [primaryKey (Column #id :* Nil)]
-        >>>
-        createTable #emails
-          ( serial `As` #id :*
-            (integer & notNull) `As` #userid :*
-            (text & notNull) `As` #email :* Nil )
-          [ primaryKey (Column #id :* Nil)
-          , foreignKey (Column #userid :* Nil) #users (Column #id :* Nil)
-            OnDeleteCascade OnUpdateRestrict
-          , unique (Column #email :* Nil)
-          , check (#email /=* "")
-          ]
-    statement `definitionRenders`
-      "CREATE TABLE users\
-      \ (id serial, username text NOT NULL,\
-      \ PRIMARY KEY (id));\
-      \ \
-      \CREATE TABLE emails\
-      \ (id serial,\
-      \ userid integer NOT NULL,\
-      \ email text NOT NULL,\
-      \ PRIMARY KEY (id),\
-      \ FOREIGN KEY (userid) REFERENCES users (id)\
-      \ ON DELETE CASCADE ON UPDATE RESTRICT,\
-      \ UNIQUE (email),\
-      \ CHECK ((email <> E'')));"
-  it "should render DROP TABLE statements" $ do
-    let
-      statement :: Definition Tables '[]
-      statement = dropTable #table1
-    statement `definitionRenders` "DROP TABLE table1;"
 
 type Columns =
   '[ "col1" ::: 'Required ('NotNull 'PGint4)

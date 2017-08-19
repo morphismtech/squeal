@@ -38,7 +38,9 @@ import GHC.TypeLits
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Squeal.PostgreSQL.Binary
-import Squeal.PostgreSQL.Statement
+import Squeal.PostgreSQL.Definition
+import Squeal.PostgreSQL.Manipulation
+import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
 
 -- | A `Connection` consists of a `Database.PastgreSQL.LibPQ.Connection`
