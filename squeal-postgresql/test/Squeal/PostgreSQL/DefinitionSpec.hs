@@ -33,7 +33,7 @@ spec = do
       ( serial `As` #col1 :*
         text `As` #col2 :*
         (int8 & notNull & default_ 8) `As` #col3 :* Nil )
-        [check (#col3 >* 0)]
+        [check (#col3 .> 0)]
       `definitionRenders`
       "CREATE TABLE table2\
       \ (col1 serial,\
@@ -65,7 +65,7 @@ spec = do
           , foreignKey (Column #userid :* Nil) #users (Column #id :* Nil)
             OnDeleteCascade OnUpdateRestrict
           , unique (Column #email :* Nil)
-          , check (#email /=* "")
+          , check (#email ./= "")
           ]
     statement `definitionRenders`
       "CREATE TABLE users\

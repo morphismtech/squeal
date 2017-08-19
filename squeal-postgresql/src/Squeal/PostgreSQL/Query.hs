@@ -46,9 +46,9 @@ module Squeal.PostgreSQL.Query
   , orderBy
   , limit
   , offset
+    -- * Grouping
   , By (By, By2)
   , renderBy
-    -- * Grouping
   , GroupByClause (NoGroups, Group)
   , renderGroupByClause
   , HavingClause (NoHaving, Having)
@@ -218,7 +218,7 @@ data TableExpression
     { fromClause :: FromClause schema params tables
     , whereClause :: [Condition tables 'Ungrouped params]
     , groupByClause :: GroupByClause tables grouping
-    , havingClause :: HavingClause params tables grouping
+    , havingClause :: HavingClause tables grouping params
     , orderByClause :: [SortExpression tables grouping params]
     , limitClause :: [Word64]
     , offsetClause :: [Word64]
@@ -241,7 +241,7 @@ renderTableExpression
       renderWheres = \case
         [] -> ""
         wh:[] -> " WHERE" <+> renderExpression wh
-        wh:whs -> " WHERE" <+> renderExpression (foldr (&&*) wh whs)
+        wh:whs -> " WHERE" <+> renderExpression (foldr (.&&) wh whs)
       renderSorts = \case
         [] -> ""
         srts -> " SORT BY"
@@ -341,16 +341,16 @@ renderGroupByClause = \case
   Group Nil -> ""
   Group bys -> " GROUP BY" <+> renderCommaSeparated renderBy bys
   
-data HavingClause params tables grouping where
-  NoHaving :: HavingClause params tables 'Ungrouped
+data HavingClause tables grouping params where
+  NoHaving :: HavingClause tables 'Ungrouped params
   Having
     :: [Condition tables ('Grouped bys) params]
-    -> HavingClause params tables ('Grouped bys)
-deriving instance Show (HavingClause params tables grouping)
-deriving instance Eq (HavingClause params tables grouping)
-deriving instance Ord (HavingClause params tables grouping)
+    -> HavingClause tables ('Grouped bys) params
+deriving instance Show (HavingClause tables grouping params)
+deriving instance Eq (HavingClause tables grouping params)
+deriving instance Ord (HavingClause tables grouping params)
   
-renderHavingClause :: HavingClause params tables grouping -> ByteString
+renderHavingClause :: HavingClause tables grouping params -> ByteString
 renderHavingClause = \case
   NoHaving -> ""
   Having [] -> ""

@@ -34,7 +34,7 @@ spec = do
       statement :: Manipulation Tables '[] '[]
       statement =
         update #table1 (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-          (#col1 /=* #col2) (Returning Nil)
+          (#col1 ./= #col2) (Returning Nil)
     statement `manipulationRenders`
       "UPDATE table1 SET col1 = 2\
       \ WHERE (col1 <> col2);"
@@ -43,7 +43,7 @@ spec = do
       statement :: Manipulation Tables '[] SumAndCol1
       statement =
         update #table1 (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-          (#col1 /=* #col2)
+          (#col1 ./= #col2)
           (Returning $ (#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
     statement `manipulationRenders`
       "UPDATE table1 SET col1 = 2\
@@ -68,7 +68,7 @@ spec = do
         insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
           (OnConflictDoUpdate
             (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
-            (Just (#col1 /=* #col2)))
+            (Just (#col1 ./= #col2)))
           (Returning $ (#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
     statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4)\
@@ -79,7 +79,7 @@ spec = do
   it "correctly renders DELETEs" $ do
     let
       statement :: Manipulation Tables '[] '[]
-      statement = deleteFrom #table1 (#col1 ==* #col2)
+      statement = deleteFrom #table1 (#col1 .== #col2)
     statement `manipulationRenders`
       "DELETE FROM table1 WHERE (col1 = col2);"
   it "should be safe against SQL injection in literal text" $ do

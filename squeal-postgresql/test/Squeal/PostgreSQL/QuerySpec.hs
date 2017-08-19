@@ -25,7 +25,7 @@ spec = do
       statement :: Query Tables '[] SumAndCol1
       statement =
         select ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
-        (from (Table (#table1 `As` #table1)) & where_ (#col1 >* #col2))
+        (from (Table (#table1 `As` #table1)) & where_ (#col1 .> #col2))
     statement `queryRenders`
       "SELECT (col1 + col2) AS sum, col1 AS col1\
       \ FROM table1 AS table1 WHERE (col1 > col2);"
@@ -86,7 +86,7 @@ spec = do
         select (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
         ( from (Table (#table1 `As` #table1))
           & group (By #col1 :* Nil) 
-          & having (#col1 + sum_ #col2 >* 1) )
+          & having (#col1 + sum_ #col2 .> 1) )
     statement `queryRenders`
       "SELECT sum(col2) AS sum, col1 AS col1\
       \ FROM table1 AS table1\
@@ -120,9 +120,9 @@ spec = do
             :* (#shippers ! #shipperVal) `As` #shipperVal :* Nil)
           ( from (Table (#orders `As` #orders)
             & InnerJoin (Table (#customers `As` #customers))
-              ((#orders ! #customerID) ==* (#customers ! #customerID))
+              ((#orders ! #customerID) .== (#customers ! #customerID))
             & InnerJoin (Table (#shippers `As` #shippers))
-              ((#orders ! #shipperID) ==* (#shippers ! #shipperID))))
+              ((#orders ! #shipperID) .== (#shippers ! #shipperID))))
       statement `queryRenders`
         "SELECT\
         \ orders.orderVal AS orderVal,\

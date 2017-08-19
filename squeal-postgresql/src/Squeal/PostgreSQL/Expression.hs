@@ -61,16 +61,16 @@ module Squeal.PostgreSQL.Expression
   , true
   , false
   , not_
-  , (&&*)
-  , (||*)
+  , (.&&)
+  , (.||)
   , caseWhenThenElse
   , ifThenElse
-  , (==*)
-  , (/=*)
-  , (>=*)
-  , (*<)
-  , (*<=)
-  , (>*)
+  , (.==)
+  , (./=)
+  , (.>=)
+  , (.<)
+  , (.<=)
+  , (.>)
     -- ** Time
   , currentDate
   , currentTime
@@ -362,7 +362,7 @@ matchNull y f x = ifThenElse (isNull x) y
 --
 -- >>> :set -XTypeApplications -XDataKinds
 -- >>> renderExpression @_ @_ @'[_] $ fromNull false (nullIf false (param @1))
--- "COALESCE(NULL IF (FALSE, FALSE), FALSE)"
+-- "COALESCE(NULL IF (FALSE, ($1 :: bool)), FALSE)"
 nullIf
   :: Expression tables grouping params ('Required ('NotNull ty))
   -> Expression tables grouping params ('Required ('NotNull ty))
@@ -526,17 +526,17 @@ not_
   -> Condition tables grouping params
 not_ = unsafeUnaryOp "NOT"
 
-(&&*)
+(.&&)
   :: Condition tables grouping params
   -> Condition tables grouping params
   -> Condition tables grouping params
-(&&*) = unsafeBinaryOp "AND"
+(.&&) = unsafeBinaryOp "AND"
 
-(||*)
+(.||)
   :: Condition tables grouping params
   -> Condition tables grouping params
   -> Condition tables grouping params
-(||*) = unsafeBinaryOp "OR"
+(.||) = unsafeBinaryOp "OR"
 
 caseWhenThenElse
   :: [ ( Condition tables grouping params
@@ -564,47 +564,47 @@ ifThenElse
   -> Expression tables grouping params ('Required ty)
 ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 
-(==*)
+(.==)
   :: Expression tables grouping params ('Required (nullity ty))
   -> Expression tables grouping params ('Required (nullity ty))
   -> Expression tables grouping params ('Required (nullity 'PGbool))
-(==*) = unsafeBinaryOp "="
-infix 4 ==*
+(.==) = unsafeBinaryOp "="
+infix 4 .==
 
-(/=*)
+(./=)
   :: Expression tables grouping params ('Required (nullity ty))
   -> Expression tables grouping params ('Required (nullity ty))
   -> Expression tables grouping params ('Required (nullity 'PGbool))
-(/=*) = unsafeBinaryOp "<>"
-infix 4 /=*
+(./=) = unsafeBinaryOp "<>"
+infix 4 ./=
 
-(>=*)
+(.>=)
   :: Expression tables grouping params ('Required (nullity ty))
   -> Expression tables grouping params ('Required (nullity ty))
   -> Expression tables grouping params ('Required (nullity 'PGbool))
-(>=*) = unsafeBinaryOp ">="
-infix 4 >=*
+(.>=) = unsafeBinaryOp ">="
+infix 4 .>=
 
-(*<)
+(.<)
   :: Expression tables grouping params ('Required (nullity ty))
   -> Expression tables grouping params ('Required (nullity ty))
   -> Expression tables grouping params ('Required (nullity 'PGbool))
-(*<) = unsafeBinaryOp "<"
-infix 4 *<
+(.<) = unsafeBinaryOp "<"
+infix 4 .<
 
-(*<=)
+(.<=)
   :: Expression tables grouping params ('Required (nullity ty))
   -> Expression tables grouping params ('Required (nullity ty))
   -> Expression tables grouping params ('Required (nullity 'PGbool))
-(*<=) = unsafeBinaryOp "<="
-infix 4 *<=
+(.<=) = unsafeBinaryOp "<="
+infix 4 .<=
 
-(>*)
+(.>)
   :: Expression tables grouping params ('Required (nullity ty))
   -> Expression tables grouping params ('Required (nullity ty))
   -> Expression tables grouping params ('Required (nullity 'PGbool))
-(>*) = unsafeBinaryOp ">"
-infix 4 >*
+(.>) = unsafeBinaryOp ">"
+infix 4 .>
 
 currentDate
   :: Expression tables grouping params ('Required (nullity 'PGdate))
