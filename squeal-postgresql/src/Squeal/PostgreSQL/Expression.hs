@@ -77,6 +77,11 @@ module Squeal.PostgreSQL.Expression
   , currentTimestamp
   , localTime
   , localTimestamp
+    -- ** Text
+  , lower
+  , upper
+  , charLength
+  , like
     -- ** Aggregation
   , unsafeAggregate
   , unsafeAggregateDistinct
@@ -496,22 +501,6 @@ ceiling_
   -> Expression tables grouping params ('Required (nullity frac))
 ceiling_ = unsafeFunction "ceiling"
 
-instance IsString
-  (Expression tables grouping params ('Required (nullity 'PGtext))) where
-    fromString str = UnsafeExpression $
-      "E\'" <> fromString (escape =<< str) <> "\'"
-      where
-        escape = \case
-          '\NUL' -> "\\0"
-          '\'' -> "''"
-          '"' -> "\\\""
-          '\b' -> "\\b"
-          '\n' -> "\\n"
-          '\r' -> "\\r"
-          '\t' -> "\\t"
-          '\\' -> "\\\\"
-          c -> [c]
-
 type Condition tables grouping params =
   Expression tables grouping params ('Required ('NotNull 'PGbool))
 
@@ -625,6 +614,52 @@ localTime = UnsafeExpression "LOCALTIME"
 localTimestamp
   :: Expression tables grouping params ('Required (nullity 'PGtimestamp))
 localTimestamp = UnsafeExpression "LOCALTIMESTAMP"
+
+{-----------------------------------------
+text
+-----------------------------------------}
+
+instance IsString
+  (Expression tables grouping params ('Required (nullity 'PGtext))) where
+    fromString str = UnsafeExpression $
+      "E\'" <> fromString (escape =<< str) <> "\'"
+      where
+        escape = \case
+          '\NUL' -> "\\0"
+          '\'' -> "''"
+          '"' -> "\\\""
+          '\b' -> "\\b"
+          '\n' -> "\\n"
+          '\r' -> "\\r"
+          '\t' -> "\\t"
+          '\\' -> "\\\\"
+          c -> [c]
+
+instance Monoid
+  (Expression tables grouping params ('Required (nullity 'PGtext))) where
+    mempty = fromString ""
+    mappend = unsafeBinaryOp "||"
+
+lower
+  :: Expression tables grouping params ('Required (nullity 'PGtext))
+  -> Expression tables grouping params ('Required (nullity 'PGtext))
+lower = unsafeFunction "lower"
+
+upper
+  :: Expression tables grouping params ('Required (nullity 'PGtext))
+  -> Expression tables grouping params ('Required (nullity 'PGtext))
+upper = unsafeFunction "upper"
+
+charLength
+  :: Expression tables grouping params ('Required (nullity 'PGtext))
+  -> Expression tables grouping params ('Required (nullity 'PGint4))
+charLength = unsafeFunction "char_length"
+
+like
+  :: Expression tables grouping params ('Required (nullity 'PGtext))
+  -> Expression tables grouping params ('Required (nullity 'PGtext))
+  -> Expression tables grouping params ('Required (nullity 'PGbool))
+like = unsafeBinaryOp "LIKE"
 
 {-----------------------------------------
 aggregation
