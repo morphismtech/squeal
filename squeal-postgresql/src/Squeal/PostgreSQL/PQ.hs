@@ -14,6 +14,7 @@
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
+  , TypeInType
   , TypeOperators
   , UndecidableInstances
 #-}
@@ -27,6 +28,7 @@ import Control.Monad.Trans.Control
 import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Function ((&))
+import Data.Kind
 import Data.Monoid
 import Data.Traversable
 import Generics.SOP
@@ -36,17 +38,23 @@ import GHC.TypeLits
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Squeal.PostgreSQL.Binary
-import Squeal.PostgreSQL.Statement
+import Squeal.PostgreSQL.Definition
+import Squeal.PostgreSQL.Manipulation
+import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
 
-newtype Connection (schema :: [(Symbol,[(Symbol,ColumnType)])]) =
+-- | A `Connection` consists of a `Database.PastgreSQL.LibPQ.Connection`
+-- and a phantom `Squeal.PostgreSQL.TablesType`
+newtype Connection (schema :: TablesType) =
   Connection { unConnection :: LibPQ.Connection }
 
+-- | We keep track of the schema via an Atkey indexed state monad transformer,
+-- `PQ`.
 newtype PQ
-  (schema0 :: [(Symbol,[(Symbol,ColumnType)])])
-  (schema1 :: [(Symbol,[(Symbol,ColumnType)])])
-  (m :: * -> *)
-  (x :: *) =
+  (schema0 :: TablesType)
+  (schema1 :: TablesType)
+  (m :: Type -> Type)
+  (x :: Type) =
     PQ { runPQ :: Connection schema0 -> m (x, Connection schema1) }
     deriving Functor
 
@@ -60,6 +68,7 @@ execPQ
   -> m (Connection schema1)
 execPQ (PQ pq) = fmap snd . pq
 
+-- | indexed analog of `<*>`
 pqAp
   :: Monad m
   => PQ schema0 schema1 m (x -> y)
@@ -70,6 +79,7 @@ pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
   (x', conn'') <- x conn'
   return (f' x', conn'')
 
+-- | indexed analog of `=<<`
 pqBind
   :: Monad m
   => (x -> PQ schema1 schema2 m y)
@@ -79,6 +89,7 @@ pqBind f (PQ x) = PQ $ \ conn -> do
   (x', conn') <- x conn
   runPQ (f x') conn'
 
+-- | indexed analog of `>>`
 pqThen
   :: Monad m
   => PQ schema1 schema2 m y
@@ -86,6 +97,9 @@ pqThen
   -> PQ schema0 schema2 m y
 pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 
+-- | Run a `Definition` with `LibPQ.exec`, we expect that libpq obeys the law
+--
+-- prop> then (define statement2) statement1 = define (statement2 . statement1) 
 define
   :: MonadBase IO io
   => Definition schema0 schema1
@@ -104,8 +118,10 @@ pqThenDefine
   -> PQ schema0 schema2 io (Result '[])
 pqThenDefine = pqThen . define
 
+-- | `MonadPQ` is an `mtl` style constraint, similar to `MonadState`.
 class Monad pq => MonadPQ schema pq | pq -> schema where
-
+  -- | `manipulateParams` runs a `Manipulation` with params from a type
+  -- with a `ToParams` constraint
   manipulateParams
     :: ToParams x params
     => Manipulation schema params ys -> x -> pq (Result ys)
@@ -280,7 +296,7 @@ withConnection
   -> io x
 withConnection connString = bracket (connectdb connString) finish
 
-newtype Result (xs :: [(Symbol,ColumnType)])
+newtype Result (xs :: ColumnsType)
   = Result { unResult :: LibPQ.Result }
 
 newtype RowNumber = RowNumber { unRowNumber :: LibPQ.Row }

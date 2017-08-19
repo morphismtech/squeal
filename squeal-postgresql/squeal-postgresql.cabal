@@ -15,8 +15,12 @@ library
   exposed-modules:
     Squeal.PostgreSQL
     Squeal.PostgreSQL.Binary
+    Squeal.PostgreSQL.Definition
+    Squeal.PostgreSQL.Expression
+    Squeal.PostgreSQL.Manipulation
     Squeal.PostgreSQL.PQ
-    Squeal.PostgreSQL.Statement
+    Squeal.PostgreSQL.Prettyprint
+    Squeal.PostgreSQL.Query
     Squeal.PostgreSQL.Schema
   default-language: Haskell2010
   ghc-options: -Wall -Werror -fprint-explicit-kinds
@@ -46,12 +50,24 @@ test-suite squeal-postgresql-test
   ghc-options: -Wall -Werror
   main-is: Spec.hs
   other-modules:
-    Squeal.PostgreSQL.StatementSpec
+    Squeal.PostgreSQL.DefinitionSpec
+    Squeal.PostgreSQL.ManipulationSpec
+    Squeal.PostgreSQL.QuerySpec
   build-depends:
       base
     , generics-sop
     , hspec
     , squeal-postgresql
+
+test-suite squeal-postgresql-doctest
+  default-language: Haskell2010
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  ghc-options: -Wall -Werror
+  main-is: DocTest.hs
+  build-depends:
+      base
+    , doctest
 
 executable squeal-postgresql-example
   default-language: Haskell2010

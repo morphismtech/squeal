@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
+{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 {-# LANGUAGE
     DataKinds
   , DeriveGeneric
@@ -6,6 +6,7 @@
   , MultiParamTypeClasses
   , OverloadedLabels
   , OverloadedStrings
+  , PartialTypeSignatures
   , TypeApplications
   , TypeOperators
   , TypeSynonymInstances
@@ -32,10 +33,10 @@ type Schema =
         ]
    ]
 
-data Table1Row = Table1Row { col1 :: Int32, col2 :: Int32 }
+data Row = Row { col1 :: Int32, col2 :: Int32 }
   deriving (Show, GHC.Generic)
-instance Generic Table1Row
-instance HasDatatypeInfo Table1Row
+instance Generic Row
+instance HasDatatypeInfo Row
 
 main :: IO ()
 main = do
@@ -52,17 +53,12 @@ main = do
       ((int4 & notNull) `As` #col1 :* (int4 & notNull) `As` #col2 :* Nil) []
   connection2 <- flip execPQ (connection1 :: Connection Schema) $ do
     let
-      insert :: Manipulation Schema
-        '[ 'Required ('NotNull 'PGint4)
-         , 'Required ('NotNull 'PGint4)
-         , 'Required ('NotNull 'PGint4)
-         , 'Required ('NotNull 'PGint4)
-         ] '[]
+      insert :: Manipulation Schema '[_,_,_,_] '[]
       insert =
         insertInto #table1
           ( Values
-            (param (Proxy @1) `As` #col1 :* param (Proxy @2) `As` #col2 :* Nil)
-            [param (Proxy @3) `As` #col1 :* param (Proxy @4) `As` #col2 :* Nil]
+            (param @1 `As` #col1 :* param @2 `As` #col2 :* Nil)
+            [param @3 `As` #col1 :* param @4 `As` #col2 :* Nil]
           ) Conflict (Returning Nil)
     liftBase $ Char8.putStrLn "manipulating"
     _insertResult <- manipulateParams insert
@@ -82,9 +78,9 @@ main = do
       print (value01 :: Int32)
       print (value10 :: Int32)
       print (value11 :: Int32)
-      print (row0 :: Table1Row)
-      print (row1 :: Table1Row)
-      print (rows :: [Table1Row])
+      print (row0 :: Row)
+      print (row1 :: Row)
+      print (rows :: [Row])
   Char8.putStrLn "tearing down schema"
   connection3 <- flip execPQ (connection2 :: Connection Schema) $ define $
     dropTable #table1 >>> dropTable #students
