@@ -67,7 +67,8 @@ import Squeal.PostgreSQL.Schema
 -- | A `ToParam` constraint gives an encoding of a Haskell `Type` into
 -- into the binary format of a PostgreSQL `PGType`.
 class ToParam (x :: Type) (pg :: PGType) where
-  -- | >>> toParam @Bool @'PGbool False
+  -- | >>> :set -XTypeApplications -XDataKinds
+  -- >>> toParam @Bool @'PGbool False
   -- K "\NUL"
   --
   -- >>> toParam @Int16 @'PGint2 0
