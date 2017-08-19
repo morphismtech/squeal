@@ -61,7 +61,6 @@ module Squeal.PostgreSQL.Query
 
 import Control.DeepSeq
 import Data.ByteString (ByteString)
-import Data.Data
 import Data.Monoid
 import Data.String
 import Data.Word
@@ -79,7 +78,7 @@ newtype Query
   (params :: [ColumnType])
   (columns :: ColumnsType)
     = UnsafeQuery { renderQuery :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
+    deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 union, unionAll, intersect, intersectAll, except, exceptAll
   :: Query schema params columns

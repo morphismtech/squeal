@@ -46,7 +46,6 @@ module Squeal.PostgreSQL.Definition
 import Control.Category
 import Control.DeepSeq
 import Data.ByteString
-import Data.Data
 import Data.Monoid
 import Generics.SOP
 import GHC.TypeLits
@@ -66,7 +65,7 @@ newtype Definition
   (schema0 :: TablesType)
   (schema1 :: TablesType)
   = UnsafeDefinition { renderDefinition :: ByteString }
-  deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
+  deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 instance Category Definition where
   id = UnsafeDefinition ";"
@@ -102,7 +101,7 @@ newtype TableConstraint
   (schema :: TablesType)
   (columns :: ColumnsType)
     = UnsafeTableConstraint { renderTableConstraint :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
+    deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 check
   :: Condition '[table ::: columns] 'Ungrouped '[]
@@ -148,7 +147,7 @@ data OnDelete
   = OnDeleteNoAction
   | OnDeleteRestrict
   | OnDeleteCascade
-  deriving (GHC.Generic,Show,Eq,Ord,Data)
+  deriving (GHC.Generic,Show,Eq,Ord)
 instance NFData OnDelete
 
 renderOnDelete :: OnDelete -> ByteString
@@ -161,7 +160,7 @@ data OnUpdate
   = OnUpdateNoAction
   | OnUpdateRestrict
   | OnUpdateCascade
-  deriving (GHC.Generic,Show,Eq,Ord,Data)
+  deriving (GHC.Generic,Show,Eq,Ord)
 instance NFData OnUpdate
 
 renderOnUpdate :: OnUpdate -> ByteString
@@ -208,7 +207,7 @@ newtype AlterTable
   (columns0 :: ColumnsType)
   (columns1 :: ColumnsType) =
     UnsafeAlterTable {renderAlterTable :: ByteString}
-  deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
+  deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 addColumnDefault
   :: KnownSymbol column
@@ -251,7 +250,7 @@ alterColumn column alteration = UnsafeAlterTable $
 
 newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
   UnsafeAlterColumn {renderAlterColumn :: ByteString}
-  deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
+  deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 setDefault
   :: Expression '[] 'Ungrouped '[] ('Required ty)

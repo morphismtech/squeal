@@ -72,7 +72,6 @@ module Squeal.PostgreSQL.Schema
 
 import Control.DeepSeq
 import Data.ByteString
-import Data.Data (Data)
 import Data.Monoid
 import Data.String
 import Generics.SOP (AllZip)
@@ -167,7 +166,7 @@ type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
 -- >>> #foobar :: Alias "foobar"
 -- Alias
 data Alias (alias :: Symbol) = Alias
-  deriving (Eq,Generic,Data,Ord,Show,NFData)
+  deriving (Eq,Generic,Ord,Show,NFData)
 instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
 

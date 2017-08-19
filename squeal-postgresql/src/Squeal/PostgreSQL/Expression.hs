@@ -152,7 +152,6 @@ module Squeal.PostgreSQL.Expression
 import Control.Category
 import Control.DeepSeq
 import Data.ByteString (ByteString)
-import Data.Data (Data)
 import Data.Function ((&))
 import Data.Monoid hiding (All)
 import Data.Ratio
@@ -186,7 +185,7 @@ newtype Expression
   (params :: [ColumnType])
   (ty :: ColumnType)
     = UnsafeExpression { renderExpression :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
+    deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 {- | A `HasParameter` constraint is used to indicate a value that is
 supplied externally to a SQL statement.
@@ -763,7 +762,7 @@ newtype Table
   (schema :: TablesType)
   (columns :: ColumnsType)
     = UnsafeTable { renderTable :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
+    deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 class KnownSymbol table => HasTable table tables columns
   | table tables -> columns where
@@ -785,7 +784,7 @@ type expressions
 
 newtype TypeExpression (ty :: ColumnType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
-  deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
+  deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 bool :: TypeExpression ('Required ('Null 'PGbool))
 bool = UnsafeTypeExpression "bool"

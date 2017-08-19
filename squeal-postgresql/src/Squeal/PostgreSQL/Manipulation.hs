@@ -30,14 +30,10 @@ module Squeal.PostgreSQL.Manipulation
   , deleteFrom
   ) where
 
--- import Control.Category
 import Control.DeepSeq
 import Data.ByteString
-import Data.Data
 import Data.Monoid
 import Generics.SOP
--- import GHC.TypeLits
--- import Prelude hiding ((.), id)
 
 import qualified GHC.Generics as GHC
 
@@ -51,7 +47,7 @@ newtype Manipulation
   (params :: [ColumnType])
   (columns :: ColumnsType)
     = UnsafeManipulation { renderManipulation :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,Data,NFData)
+    deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 queryStatement
   :: Query schema params columns
