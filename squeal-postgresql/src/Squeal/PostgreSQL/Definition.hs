@@ -85,7 +85,7 @@ CREATE statements
 
 -- | `createTable` adds a table to the schema.
 --
--- >>> :set -XOverloadedLabels -XDataKinds
+-- >>> :set -XOverloadedLabels
 -- >>> :{
 -- renderDefinition $
 --   createTable #tab (int `As` #a :* real `As` #b :* Nil) []
@@ -136,7 +136,6 @@ newtype TableConstraint
 -- It allows you to specify that the value in a certain column must satisfy
 -- a Boolean (truth-value) expression.
 --
--- >>> :set -XOverloadedLabels -XDataKinds
 -- >>> :{
 -- renderDefinition $
 --   createTable #tab
@@ -154,7 +153,6 @@ check condition = UnsafeTableConstraint $
 -- | `unique` constraints ensure that the data contained in a column,
 -- or a group of columns, is unique among all the rows in the table.
 --
--- >>> :set -XOverloadedLabels -XDataKinds
 -- >>> :{
 -- renderDefinition $
 --   createTable #tab
@@ -174,7 +172,6 @@ unique columns = UnsafeTableConstraint $
 -- can be used as a unique identifier for rows in the table.
 -- This requires that the values be both unique and not null.
 --
--- >>> :set -XOverloadedLabels -XDataKinds
 -- >>> :{
 -- renderDefinition $
 --   createTable #tab
@@ -195,7 +192,6 @@ primaryKey columns = UnsafeTableConstraint $
 -- another table. We say this maintains the referential integrity
 -- between two related tables.
 --
--- >>> :set -XOverloadedLabels -XDataKinds
 -- >>> :{
 -- let
 --   definition :: Definition '[]
@@ -285,6 +281,10 @@ renderOnUpdate = \case
 DROP statements
 -----------------------------------------}
 
+-- | `dropTable` removes a table from the schema.
+--
+-- >>> renderDefinition $ dropTable #muh_table
+-- "DROP TABLE muh_table;"
 dropTable
   :: KnownSymbol table
   => Alias table
@@ -295,6 +295,7 @@ dropTable table = UnsafeDefinition $ "DROP TABLE" <+> renderAlias table <> ";"
 ALTER statements
 -----------------------------------------}
 
+-- | `alterTable` changes the definition of a table from the schema.
 alterTable
   :: HasTable table schema columns0
   => Alias table
@@ -306,6 +307,10 @@ alterTable table alteration = UnsafeDefinition $
   <+> renderAlterTable alteration
   <> ";"
 
+-- | `alterTable` changes the name of a table from the schema.
+--
+-- >>> renderDefinition $ alterTableRename #foo #bar
+-- "ALTER TABLE foo RENAME TO bar;"
 alterTableRename
   :: (KnownSymbol table0, KnownSymbol table1)
   => Alias table0
