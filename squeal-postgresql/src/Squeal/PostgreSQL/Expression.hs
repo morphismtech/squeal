@@ -83,25 +83,18 @@ module Squeal.PostgreSQL.Expression
   , charLength
   , like
     -- ** Aggregation
-  , unsafeAggregate
-  , unsafeAggregateDistinct
-  , sum_
-  , sumDistinct
+  , unsafeAggregate, unsafeAggregateDistinct
+  , sum_, sumDistinct
   , PGAvg (avg, avgDistinct)
-  , bitAnd
-  , bitOr
-  , boolAnd
-  , boolOr
+  , bitAnd, bitOr, boolAnd, boolOr
   , countStar
-  , countDistinctStar
-  , count
-  , every
-  , jsonAgg
-  , jsonbAgg
+  , count, countDistinct
+  , every, everyDistinct
+  , jsonAgg, jsonAggDistinct
+  , jsonbAgg, jsonbAggDistinct
   , jsonObjectAgg
   , jsonbObjectAgg
-  , max_
-  , min_
+  , max_, maxDistinct, min_, minDistinct
     -- * Tables
   , Table (UnsafeTable, renderTable)
   , HasTable (getTable)
@@ -707,30 +700,33 @@ boolAnd, boolOr
 boolAnd = unsafeAggregate "bool_and"
 boolOr = unsafeAggregate "bool_or"
 
-countStar, countDistinctStar
+countStar
   :: Expression tables ('Grouped bys) params ('Required ('NotNull 'PGint8))
 countStar = UnsafeExpression $ "count(*)"
-countDistinctStar = UnsafeExpression $ "count(DISTINCT *)"
 
-count
+count, countDistinct
   :: Expression tables 'Ungrouped params ('Required ty)
   -> Expression tables ('Grouped bys) params ('Required ('NotNull 'PGint8))
 count = unsafeAggregate "count"
+countDistinct = unsafeAggregateDistinct "count"
   
-every
+every, everyDistinct
   :: Expression tables 'Ungrouped params ('Required (nullity 'PGbool))
   -> Expression tables ('Grouped bys) params ('Required (nullity 'PGbool))
 every = unsafeAggregate "every"
+everyDistinct = unsafeAggregateDistinct "every"
 
-jsonAgg
+jsonAgg, jsonAggDistinct
   :: Expression tables 'Ungrouped params ('Required ty)
   -> Expression tables ('Grouped bys) params ('Required ('NotNull 'PGjson))
 jsonAgg = unsafeAggregate "json_agg"
+jsonAggDistinct = unsafeAggregateDistinct "json_agg"
 
-jsonbAgg
+jsonbAgg, jsonbAggDistinct
   :: Expression tables 'Ungrouped params ('Required ty)
   -> Expression tables ('Grouped bys) params ('Required ('NotNull 'PGjsonb))
 jsonbAgg = unsafeAggregate "jsonb_agg"
+jsonbAggDistinct = unsafeAggregateDistinct "jsonb_agg"
 
 jsonObjectAgg
   :: Expression tables 'Ungrouped params ('Required ('NotNull keyty))
@@ -748,11 +744,13 @@ jsonbObjectAgg k v = UnsafeExpression $
   "jsonb_object_agg("
     <> renderExpression k <> ", " <> renderExpression v <> ")"
 
-max_, min_
+max_, min_, maxDistinct, minDistinct
   :: Expression tables 'Ungrouped params ('Required (nullity ty))
   -> Expression tables ('Grouped bys) params ('Required (nullity ty))
 max_ = unsafeAggregate "max"
 min_ = unsafeAggregate "min"
+maxDistinct = unsafeAggregateDistinct "max"
+minDistinct = unsafeAggregateDistinct "min"
 
 {-----------------------------------------
 tables
