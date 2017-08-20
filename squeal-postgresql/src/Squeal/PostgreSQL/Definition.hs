@@ -32,7 +32,7 @@ module Squeal.PostgreSQL.Definition
     -- * Alter
   , alterTable
   , alterTableRename
-  , AlterTable (UnsafeAlterTable, renderAlterTable)
+  , AlterColumns (UnsafeAlterColumns, renderAlterColumns)
   , addColumnDefault
   , addColumnNull
   , dropColumn
@@ -305,12 +305,12 @@ ALTER statements
 alterTable
   :: HasTable table schema columns0
   => Alias table
-  -> AlterTable columns0 columns1
+  -> AlterColumns columns0 columns1
   -> Definition schema (Alter table schema columns1)
 alterTable table alteration = UnsafeDefinition $
   "ALTER TABLE"
   <+> renderAlias table
-  <+> renderAlterTable alteration
+  <+> renderAlterColumns alteration
   <> ";"
 
 -- | `alterTable` changes the name of a table from the schema.
@@ -326,49 +326,49 @@ alterTableRename table0 table1 = UnsafeDefinition $
   "ALTER TABLE" <+> renderAlias table0
   <+> "RENAME TO" <+> renderAlias table1 <> ";"
 
-newtype AlterTable
+newtype AlterColumns
   (columns0 :: ColumnsType)
   (columns1 :: ColumnsType) =
-    UnsafeAlterTable {renderAlterTable :: ByteString}
+    UnsafeAlterColumns {renderAlterColumns :: ByteString}
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 addColumnDefault
   :: KnownSymbol column
   => Alias column
   -> TypeExpression ('Optional ty)
-  -> AlterTable columns (Create column ('Optional ty) columns)
-addColumnDefault column ty = UnsafeAlterTable $
+  -> AlterColumns columns (Create column ('Optional ty) columns)
+addColumnDefault column ty = UnsafeAlterColumns $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
 addColumnNull
   :: KnownSymbol column
   => Alias column
   -> TypeExpression ('Required ('Null ty))
-  -> AlterTable columns (Create column ('Required ('Null ty)) columns)
-addColumnNull column ty = UnsafeAlterTable $
+  -> AlterColumns columns (Create column ('Required ('Null ty)) columns)
+addColumnNull column ty = UnsafeAlterColumns $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
 dropColumn
   :: KnownSymbol column
   => Alias column
-  -> AlterTable columns (Drop column columns)
-dropColumn column = UnsafeAlterTable $
+  -> AlterColumns columns (Drop column columns)
+dropColumn column = UnsafeAlterColumns $
   "DROP COLUMN" <+> renderAlias column
 
 renameColumn
   :: (KnownSymbol column0, KnownSymbol column1)
   => Alias column0
   -> Alias column1
-  -> AlterTable columns (Rename column0 column1 columns)
-renameColumn column0 column1 = UnsafeAlterTable $
+  -> AlterColumns columns (Rename column0 column1 columns)
+renameColumn column0 column1 = UnsafeAlterColumns $
   "RENAME COLUMN" <+> renderAlias column0  <+> "TO" <+> renderAlias column1
 
 alterColumn
   :: (KnownSymbol column, HasColumn column columns ty0)
   => Alias column
   -> AlterColumn ty0 ty1
-  -> AlterTable columns (Alter column columns ty1)
-alterColumn column alteration = UnsafeAlterTable $
+  -> AlterColumns columns (Alter column columns ty1)
+alterColumn column alteration = UnsafeAlterColumns $
   "ALTER COLUMN" <+> renderAlias column <+> renderAlterColumn alteration
 
 newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
