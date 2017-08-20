@@ -183,6 +183,7 @@ unique columns = UnsafeTableConstraint $
 primaryKey
   :: (SListI subcolumns, AllNotNull subcolumns)
   => NP (Column columns) subcolumns
+  -- ^ identifying column or group of columns
   -> TableConstraint schema columns
 primaryKey columns = UnsafeTableConstraint $
   "PRIMARY KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
@@ -227,10 +228,15 @@ foreignKey
      , SListI subcolumns
      , SListI refsubcolumns)
   => NP (Column columns) subcolumns
+  -- ^ column or columns in the table
   -> Alias reftable
+  -- ^ reference table
   -> NP (Column refcolumns) refsubcolumns
+  -- ^ reference column or columns in the reference table
   -> OnDelete
+  -- ^ what to do when reference is deleted
   -> OnUpdate
+  -- ^ what to do when reference is updated
   -> TableConstraint schema columns
 foreignKey columns reftable refcolumns onDelete onUpdate =
   UnsafeTableConstraint $
