@@ -32,10 +32,12 @@ module Squeal.PostgreSQL.Definition
     -- * Alter
   , alterTable
   , alterTableRename
+  , alterTableAddConstraint
   , AlterColumns (UnsafeAlterColumns, renderAlterColumns)
   , addColumnDefault
   , addColumnNull
   , dropColumn
+  , dropColumnCascade
   , renameColumn
   , alterColumn
   , AlterColumn (UnsafeAlterColumn, renderAlterColumn)
@@ -150,7 +152,7 @@ check
 check condition = UnsafeTableConstraint $
   "CHECK" <+> parenthesized (renderExpression condition)
 
--- | `unique` constraints ensure that the data contained in a column,
+-- | A `unique` constraint ensure that the data contained in a column,
 -- or a group of columns, is unique among all the rows in the table.
 --
 -- >>> :{
@@ -304,8 +306,8 @@ ALTER statements
 -- | `alterTable` changes the definition of a table from the schema.
 alterTable
   :: HasTable table schema columns0
-  => Alias table
-  -> AlterColumns columns0 columns1
+  => Alias table -- ^ table to alter
+  -> AlterColumns columns0 columns1 -- ^ alteration to perform
   -> Definition schema (Alter table schema columns1)
 alterTable table alteration = UnsafeDefinition $
   "ALTER TABLE"
@@ -313,7 +315,7 @@ alterTable table alteration = UnsafeDefinition $
   <+> renderAlterColumns alteration
   <> ";"
 
--- | `alterTable` changes the name of a table from the schema.
+-- | `alterTableRename` changes the name of a table from the schema.
 --
 -- >>> renderDefinition $ alterTableRename #foo #bar
 -- "ALTER TABLE foo RENAME TO bar;"
@@ -326,20 +328,71 @@ alterTableRename table0 table1 = UnsafeDefinition $
   "ALTER TABLE" <+> renderAlias table0
   <+> "RENAME TO" <+> renderAlias table1 <> ";"
 
+-- | An `alterTableAddConstraint` adds a table constraint.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
+--     '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
+--   definition = alterTableAddConstraint #tab (check (#col .> 0))
+-- in renderDefinition definition
+-- :}
+-- "ALTER TABLE tab ADD check ((col > 0));"
+alterTableAddConstraint
+  :: HasTable table schema columns
+  => Alias table
+  -> TableConstraint schema columns
+  -> Definition schema schema
+alterTableAddConstraint table constraint = UnsafeDefinition $
+  "ALTER TABLE" <+> renderAlias table
+  <+> "ADD" <+> renderTableConstraint constraint <> ";"
+
+-- | An `AlterColumns` describes the alteration to perform on the columns
+-- of a table.
 newtype AlterColumns
   (columns0 :: ColumnsType)
   (columns1 :: ColumnsType) =
     UnsafeAlterColumns {renderAlterColumns :: ByteString}
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
+-- | An `addColumnDefault` adds a new `Optional` column. The new column is
+-- initially filled with whatever default value is given.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '["tab" ::: '["col1" ::: 'Required ('Null 'PGint4)]]
+--     '["tab" :::
+--        '[ "col1" ::: 'Required ('Null 'PGint4)
+--         , "col2" ::: 'Optional ('Null 'PGtext) ]]
+--   definition = alterTable #tab
+--     (addColumnDefault #col2 (text & default_ "foo"))
+-- in renderDefinition definition
+-- :}
+-- "ALTER TABLE tab ADD COLUMN col2 text DEFAULT E'foo';"
 addColumnDefault
   :: KnownSymbol column
-  => Alias column
-  -> TypeExpression ('Optional ty)
+  => Alias column -- ^ column to add
+  -> TypeExpression ('Optional ty) -- ^ type of the new column
   -> AlterColumns columns (Create column ('Optional ty) columns)
 addColumnDefault column ty = UnsafeAlterColumns $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
+-- | An `addColumnDefault` adds a new `Null` column. The new column is
+-- initially filled with %NULL%s.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '["tab" ::: '["col1" ::: 'Required ('Null 'PGint4)]]
+--     '["tab" :::
+--        '[ "col1" ::: 'Required ('Null 'PGint4)
+--         , "col2" ::: 'Required ('Null 'PGtext) ]]
+--   definition = alterTable #tab (addColumnNull #col2 text)
+-- in renderDefinition definition
+-- :}
+-- "ALTER TABLE tab ADD COLUMN col2 text;"
 addColumnNull
   :: KnownSymbol column
   => Alias column
@@ -348,6 +401,22 @@ addColumnNull
 addColumnNull column ty = UnsafeAlterColumns $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
+-- | A `dropColumn` removes a column. Whatever data was in the column
+-- disappears. Table constraints involving the column are dropped, too.
+-- However, if the column is referenced by a foreign key constraint of
+-- another table, PostgreSQL will not silently drop that constraint.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '["tab" :::
+--        '[ "col1" ::: 'Required ('Null 'PGint4)
+--         , "col2" ::: 'Required ('Null 'PGtext) ]]
+--     '["tab" ::: '["col1" ::: 'Required ('Null 'PGint4)]]
+--   definition = alterTable #tab (dropColumn #col2)
+-- in renderDefinition definition
+-- :}
+-- "ALTER TABLE tab DROP COLUMN col2;"
 dropColumn
   :: KnownSymbol column
   => Alias column
@@ -355,6 +424,38 @@ dropColumn
 dropColumn column = UnsafeAlterColumns $
   "DROP COLUMN" <+> renderAlias column
 
+-- | Like `dropColumn` but authorizes dropping everything that depends
+-- on the column.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '["tab" :::
+--        '[ "col1" ::: 'Required ('Null 'PGint4)
+--         , "col2" ::: 'Required ('Null 'PGtext) ]]
+--     '["tab" ::: '["col1" ::: 'Required ('Null 'PGint4)]]
+--   definition = alterTable #tab (dropColumnCascade #col2)
+-- in renderDefinition definition
+-- :}
+-- "ALTER TABLE tab DROP COLUMN col2 CASCADE;"
+dropColumnCascade
+  :: KnownSymbol column
+  => Alias column
+  -> AlterColumns columns (Drop column columns)
+dropColumnCascade column = UnsafeAlterColumns $
+  "DROP COLUMN" <+> renderAlias column <+> "CASCADE"
+
+-- | A `renameColumn` renames a column.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '["tab" ::: '["foo" ::: 'Required ('Null 'PGint4)]]
+--     '["tab" ::: '["bar" ::: 'Required ('Null 'PGint4)]]
+--   definition = alterTable #tab (renameColumn #foo #bar)
+-- in renderDefinition definition
+-- :}
+-- "ALTER TABLE tab RENAME COLUMN foo TO bar;"
 renameColumn
   :: (KnownSymbol column0, KnownSymbol column1)
   => Alias column0
@@ -363,6 +464,7 @@ renameColumn
 renameColumn column0 column1 = UnsafeAlterColumns $
   "RENAME COLUMN" <+> renderAlias column0  <+> "TO" <+> renderAlias column1
 
+-- | An `alterColumn` alters a single column.
 alterColumn
   :: (KnownSymbol column, HasColumn column columns ty0)
   => Alias column
@@ -371,28 +473,89 @@ alterColumn
 alterColumn column alteration = UnsafeAlterColumns $
   "ALTER COLUMN" <+> renderAlias column <+> renderAlterColumn alteration
 
+-- | An `AlterColumn` describes the alteration to perform on a single column.
 newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
   UnsafeAlterColumn {renderAlterColumn :: ByteString}
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
+-- | A `setDefault` sets a new default for a column. Note that this doesn't
+-- affect any existing rows in the table, it just changes the default for
+-- future `insertTable` and `updateTable` commands.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
+--     '["tab" ::: '["col" ::: 'Optional ('Null 'PGint4)]]
+--   definition = alterTable #tab (alterColumn #col (setDefault 5))
+-- in renderDefinition definition
+-- :}
+-- "ALTER TABLE tab ALTER COLUMN col SET DEFAULT 5;"
 setDefault
   :: Expression '[] 'Ungrouped '[] ('Required ty)
-  -> AlterColumn ('Required ty) ('Optional ty)
+  -> AlterColumn (optionality ty) ('Optional ty)
 setDefault expression = UnsafeAlterColumn $
   "SET DEFAULT" <+> renderExpression expression
 
-dropDefault :: AlterColumn ('Optional ty) ('Required ty)
+-- | A `dropDefault` removes any default value for a column.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '["tab" ::: '["col" ::: 'Optional ('Null 'PGint4)]]
+--     '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
+--   definition = alterTable #tab (alterColumn #col dropDefault)
+-- in renderDefinition definition
+-- :}
+-- "ALTER TABLE tab ALTER COLUMN col DROP DEFAULT;"
+dropDefault :: AlterColumn (optionality ty) ('Required ty)
 dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 
+-- | A `setNotNull` adds a @NOT NULL@ constraint to a column.
+-- The constraint will be checked immediately, so the table data must satisfy
+-- the constraint before it can be added.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
+--     '["tab" ::: '["col" ::: 'Required ('NotNull 'PGint4)]]
+--   definition = alterTable #tab (alterColumn #col setNotNull)
+-- in renderDefinition definition
+-- :}
+-- "ALTER TABLE tab ALTER COLUMN col SET NOT NULL;"
 setNotNull
   :: AlterColumn (optionality ('Null ty)) (optionality ('NotNull ty))
 setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 
+-- | A `dropNotNull` drops a @NOT NULL@ constraint from a column.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '["tab" ::: '["col" ::: 'Required ('NotNull 'PGint4)]]
+--     '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
+--   definition = alterTable #tab (alterColumn #col dropNotNull)
+-- in renderDefinition definition
+-- :}
+-- "ALTER TABLE tab ALTER COLUMN col DROP NOT NULL;"
 dropNotNull
   :: AlterColumn (optionality ('NotNull ty)) (optionality ('Null ty))
 dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 
-alterType
-  :: TypeExpression (optionality (nullity ty1))
-  -> AlterColumn (optionality (nullity ty0)) (optionality (nullity ty1))
+-- | An `alterType` converts a column to a different data type.
+-- This will succeed only if each existing entry in the column can be
+-- converted to the new type by an implicit cast.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '["tab" ::: '["col" ::: 'Required ('NotNull 'PGint4)]]
+--     '["tab" ::: '["col" ::: 'Required ('NotNull 'PGnumeric)]]
+--   definition =
+--     alterTable #tab (alterColumn #col (alterType (numeric & notNull)))
+-- in renderDefinition definition
+-- :}
+-- "ALTER TABLE tab ALTER COLUMN col TYPE numeric;"
+alterType :: TypeExpression ty -> AlterColumn ty0 ty1
 alterType ty = UnsafeAlterColumn $ "TYPE " <> renderTypeExpression ty
