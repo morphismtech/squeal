@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Definition
+Description: Squeal data definition language
+Copyright: (c) Eitan Chatav, 2017
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Squeal data definition language.
+-}
+
 {-# LANGUAGE
     DataKinds
   , DeriveDataTypeable
@@ -23,10 +33,10 @@ module Squeal.PostgreSQL.Definition
   , unique
   , primaryKey
   , foreignKey
-  , OnDelete (OnDeleteNoAction, OnDeleteRestrict, OnDeleteCascade)
-  , renderOnDelete
-  , OnUpdate (OnUpdateNoAction, OnUpdateRestrict, OnUpdateCascade)
-  , renderOnUpdate
+  , OnDeleteClause (OnDeleteNoAction, OnDeleteRestrict, OnDeleteCascade)
+  , renderOnDeleteClause
+  , OnUpdateClause (OnUpdateNoAction, OnUpdateRestrict, OnUpdateCascade)
+  , renderOnUpdateClause
     -- * Drop
   , dropTable
     -- * Alter
@@ -235,9 +245,9 @@ foreignKey
   -- ^ reference table
   -> NP (Column refcolumns) refsubcolumns
   -- ^ reference column or columns in the reference table
-  -> OnDelete
+  -> OnDeleteClause
   -- ^ what to do when reference is deleted
-  -> OnUpdate
+  -> OnUpdateClause
   -- ^ what to do when reference is updated
   -> TableConstraint schema columns
 foreignKey columns reftable refcolumns onDelete onUpdate =
@@ -245,11 +255,11 @@ foreignKey columns reftable refcolumns onDelete onUpdate =
     "FOREIGN KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
     <+> "REFERENCES" <+> renderAlias reftable
     <+> parenthesized (renderCommaSeparated renderColumn refcolumns)
-    <+> renderOnDelete onDelete
-    <+> renderOnUpdate onUpdate
+    <+> renderOnDeleteClause onDelete
+    <+> renderOnUpdateClause onUpdate
 
 -- | `OnDelete` indicates what to do with rows that reference a deleted row.
-data OnDelete
+data OnDeleteClause
   = OnDeleteNoAction
     -- ^ if any referencing rows still exist when the constraint is checked,
     -- an error is raised
@@ -258,17 +268,18 @@ data OnDelete
     -- ^ specifies that when a referenced row is deleted,
     -- row(s) referencing it should be automatically deleted as well
   deriving (GHC.Generic,Show,Eq,Ord)
-instance NFData OnDelete
+instance NFData OnDeleteClause
 
-renderOnDelete :: OnDelete -> ByteString
-renderOnDelete = \case
+-- | Render `OnDeleteClause`.
+renderOnDeleteClause :: OnDeleteClause -> ByteString
+renderOnDeleteClause = \case
   OnDeleteNoAction -> "ON DELETE NO ACTION"
   OnDeleteRestrict -> "ON DELETE RESTRICT"
   OnDeleteCascade -> "ON DELETE CASCADE"
 
 -- | Analagous to `OnDelete` there is also `OnUpdate` which is invoked
 -- when a referenced column is changed (updated).
-data OnUpdate
+data OnUpdateClause
   = OnUpdateNoAction
   -- ^ if any referencing rows has not changed when the constraint is checked,
   -- an error is raised
@@ -277,10 +288,11 @@ data OnUpdate
     -- ^ the updated values of the referenced column(s) should be copied
     -- into the referencing row(s)
   deriving (GHC.Generic,Show,Eq,Ord)
-instance NFData OnUpdate
+instance NFData OnUpdateClause
 
-renderOnUpdate :: OnUpdate -> ByteString
-renderOnUpdate = \case
+-- | Render `OnUpdateClause`.
+renderOnUpdateClause :: OnUpdateClause -> ByteString
+renderOnUpdateClause = \case
   OnUpdateNoAction -> "ON UPDATE NO ACTION"
   OnUpdateRestrict -> "ON UPDATE RESTRICT"
   OnUpdateCascade -> "ON UPDATE CASCADE"
