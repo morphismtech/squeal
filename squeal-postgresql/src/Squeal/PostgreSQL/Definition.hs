@@ -333,12 +333,12 @@ alterTableRename table0 table1 = UnsafeDefinition $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
---     '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
+--     '["tab" ::: '["col" ::: 'Required ('NotNull 'PGint4)]]
+--     '["tab" ::: '["col" ::: 'Required ('NotNull 'PGint4)]]
 --   definition = alterTableAddConstraint #tab (check (#col .> 0))
 -- in renderDefinition definition
 -- :}
--- "ALTER TABLE tab ADD check ((col > 0));"
+-- "ALTER TABLE tab ADD CHECK ((col > 0));"
 alterTableAddConstraint
   :: HasTable table schema columns
   => Alias table
@@ -556,6 +556,6 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 --     alterTable #tab (alterColumn #col (alterType (numeric & notNull)))
 -- in renderDefinition definition
 -- :}
--- "ALTER TABLE tab ALTER COLUMN col TYPE numeric;"
+-- "ALTER TABLE tab ALTER COLUMN col TYPE numeric NOT NULL;"
 alterType :: TypeExpression ty -> AlterColumn ty0 ty1
-alterType ty = UnsafeAlterColumn $ "TYPE " <> renderTypeExpression ty
+alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderTypeExpression ty
