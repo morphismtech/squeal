@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Query
+Description: Squeal queries
+Copyright: (c) Eitan Chatav, 2017
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Squeal queries.
+-}
+
 {-# LANGUAGE
     DataKinds
   , DeriveDataTypeable
@@ -73,6 +83,8 @@ import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Prettyprint
 import Squeal.PostgreSQL.Schema
 
+-- | The process of retrieving or the command to retrieve data from a database
+-- is called a `Query`. The `select` command is used to specify queries.
 newtype Query
   (schema :: TablesType)
   (params :: [ColumnType])
@@ -80,6 +92,9 @@ newtype Query
     = UnsafeQuery { renderQuery :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
+-- | The results of two queries can be combined using the set operations
+-- `union`, `intersect`, and `except` (set difference). Duplicates are
+-- eliminated unless `unionAll`, `intersectAll` or `exceptAll` are used.
 union, unionAll, intersect, intersectAll, except, exceptAll
   :: Query schema params columns
   -> Query schema params columns
