@@ -158,6 +158,7 @@ newtype TableConstraint
 -- "CREATE TABLE tab (a int NOT NULL, b int NOT NULL, CHECK ((a > b)));"
 check
   :: Condition '[table ::: columns] 'Ungrouped '[]
+  -- ^ condition to check
   -> TableConstraint schema columns
 check condition = UnsafeTableConstraint $
   "CHECK" <+> parenthesized (renderExpression condition)
@@ -176,6 +177,7 @@ check condition = UnsafeTableConstraint $
 unique
   :: SListI subcolumns
   => NP (Column columns) subcolumns
+  -- ^ unique column or group of columns
   -> TableConstraint schema columns
 unique columns = UnsafeTableConstraint $
   "UNIQUE" <+> parenthesized (renderCommaSeparated renderColumn columns)
@@ -307,7 +309,7 @@ DROP statements
 -- "DROP TABLE muh_table;"
 dropTable
   :: KnownSymbol table
-  => Alias table
+  => Alias table -- ^ table to remove
   -> Definition schema (Drop table schema)
 dropTable table = UnsafeDefinition $ "DROP TABLE" <+> renderAlias table <> ";"
 
@@ -333,8 +335,8 @@ alterTable table alteration = UnsafeDefinition $
 -- "ALTER TABLE foo RENAME TO bar;"
 alterTableRename
   :: (KnownSymbol table0, KnownSymbol table1)
-  => Alias table0
-  -> Alias table1
+  => Alias table0 -- ^ table to rename
+  -> Alias table1 -- ^ what to rename it
   -> Definition schema (Rename table0 table1 schema)
 alterTableRename table0 table1 = UnsafeDefinition $
   "ALTER TABLE" <+> renderAlias table0
@@ -353,8 +355,8 @@ alterTableRename table0 table1 = UnsafeDefinition $
 -- "ALTER TABLE tab ADD CHECK ((col > 0));"
 alterTableAddConstraint
   :: HasTable table schema columns
-  => Alias table
-  -> TableConstraint schema columns
+  => Alias table -- ^ table to constrain
+  -> TableConstraint schema columns -- ^ what constraint to add
   -> Definition schema schema
 alterTableAddConstraint table constraint = UnsafeDefinition $
   "ALTER TABLE" <+> renderAlias table
@@ -407,8 +409,8 @@ addColumnDefault column ty = UnsafeAlterColumns $
 -- "ALTER TABLE tab ADD COLUMN col2 text;"
 addColumnNull
   :: KnownSymbol column
-  => Alias column
-  -> TypeExpression ('Required ('Null ty))
+  => Alias column -- ^ column to add
+  -> TypeExpression ('Required ('Null ty)) -- ^ type of the new column
   -> AlterColumns columns (Create column ('Required ('Null ty)) columns)
 addColumnNull column ty = UnsafeAlterColumns $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
@@ -431,7 +433,7 @@ addColumnNull column ty = UnsafeAlterColumns $
 -- "ALTER TABLE tab DROP COLUMN col2;"
 dropColumn
   :: KnownSymbol column
-  => Alias column
+  => Alias column -- ^ column to remove
   -> AlterColumns columns (Drop column columns)
 dropColumn column = UnsafeAlterColumns $
   "DROP COLUMN" <+> renderAlias column
@@ -452,7 +454,7 @@ dropColumn column = UnsafeAlterColumns $
 -- "ALTER TABLE tab DROP COLUMN col2 CASCADE;"
 dropColumnCascade
   :: KnownSymbol column
-  => Alias column
+  => Alias column -- ^ column to remove
   -> AlterColumns columns (Drop column columns)
 dropColumnCascade column = UnsafeAlterColumns $
   "DROP COLUMN" <+> renderAlias column <+> "CASCADE"
@@ -479,8 +481,8 @@ renameColumn column0 column1 = UnsafeAlterColumns $
 -- | An `alterColumn` alters a single column.
 alterColumn
   :: (KnownSymbol column, HasColumn column columns ty0)
-  => Alias column
-  -> AlterColumn ty0 ty1
+  => Alias column -- ^ column to alter
+  -> AlterColumn ty0 ty1 -- ^ alteration to perform
   -> AlterColumns columns (Alter column columns ty1)
 alterColumn column alteration = UnsafeAlterColumns $
   "ALTER COLUMN" <+> renderAlias column <+> renderAlterColumn alteration
@@ -504,7 +506,7 @@ newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
 -- :}
 -- "ALTER TABLE tab ALTER COLUMN col SET DEFAULT 5;"
 setDefault
-  :: Expression '[] 'Ungrouped '[] ('Required ty)
+  :: Expression '[] 'Ungrouped '[] ('Required ty) -- ^ default value to set
   -> AlterColumn (optionality ty) ('Optional ty)
 setDefault expression = UnsafeAlterColumn $
   "SET DEFAULT" <+> renderExpression expression
@@ -536,8 +538,7 @@ dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 -- in renderDefinition definition
 -- :}
 -- "ALTER TABLE tab ALTER COLUMN col SET NOT NULL;"
-setNotNull
-  :: AlterColumn (optionality ('Null ty)) (optionality ('NotNull ty))
+setNotNull :: AlterColumn (optionality ('Null ty)) (optionality ('NotNull ty))
 setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 
 -- | A `dropNotNull` drops a @NOT NULL@ constraint from a column.
@@ -551,8 +552,7 @@ setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 -- in renderDefinition definition
 -- :}
 -- "ALTER TABLE tab ALTER COLUMN col DROP NOT NULL;"
-dropNotNull
-  :: AlterColumn (optionality ('NotNull ty)) (optionality ('Null ty))
+dropNotNull :: AlterColumn (optionality ('NotNull ty)) (optionality ('Null ty))
 dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 
 -- | An `alterType` converts a column to a different data type.
