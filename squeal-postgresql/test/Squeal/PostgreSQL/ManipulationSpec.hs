@@ -24,7 +24,7 @@ spec = do
       statement :: Manipulation Tables '[] SumAndCol1
       statement =
         insertInto #table1 (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
-          Conflict
+          OnConflictDoRaise
           (Returning $ (#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
     statement `manipulationRenders`
       "INSERT INTO table1 (col1, col2) VALUES (2, 4)\
@@ -79,7 +79,7 @@ spec = do
   it "correctly renders DELETEs" $ do
     let
       statement :: Manipulation Tables '[] '[]
-      statement = deleteFrom #table1 (#col1 .== #col2)
+      statement = deleteFrom #table1 (#col1 .== #col2) (Returning Nil)
     statement `manipulationRenders`
       "DELETE FROM table1 WHERE (col1 = col2);"
   it "should be safe against SQL injection in literal text" $ do
@@ -87,7 +87,7 @@ spec = do
       statement :: Manipulation StudentsTable '[] '[]
       statement = insertInto #students
         (Values ("Robert'); DROP TABLE students;" `As` #name :* Nil) [])
-        Conflict (Returning Nil)
+        OnConflictDoRaise (Returning Nil)
     statement `manipulationRenders`
       "INSERT INTO students (name) VALUES (E'Robert''); DROP TABLE students;');"
 
