@@ -78,8 +78,7 @@ statements
 
 -- | A `Definition` is a statement that changes the schema of the
 -- database, like a `createTable`, `dropTable`, or `alterTable` command.
--- `Definition`s may be composed using the `>>>` operator from the
--- `Category` typeclass.
+-- `Definition`s may be composed using the `>>>` operator.
 newtype Definition
   (schema0 :: TablesType)
   (schema1 :: TablesType)

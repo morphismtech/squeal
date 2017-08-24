@@ -54,9 +54,9 @@ import Squeal.PostgreSQL.Prettyprint
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
 
--- | A manipulation is a statement which may modify data in the database,
+-- | A `Manipulation` is a statement which may modify data in the database,
 -- but does not alter the schema. Examples are `insertInto`, `update` and
--- `deleteFrom`. A `Query` is also considered a manipulation even though
+-- `deleteFrom`. A `Query` is also considered a `Manipulation` even though
 -- it does not modify data.
 newtype Manipulation
   (schema :: TablesType)
