@@ -62,10 +62,10 @@ import Control.Category
 import Control.DeepSeq
 import Data.ByteString
 import Data.Monoid
-import Generics.SOP
 import GHC.TypeLits
 import Prelude hiding ((.), id)
 
+import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Expression
@@ -104,7 +104,7 @@ CREATE statements
 -- :}
 -- "CREATE TABLE tab (a int, b real);"
 createTable
-  :: (KnownSymbol table, SListI columns)
+  :: (KnownSymbol table, SOP.SListI columns)
   => Alias table -- ^ the name of the table to add
   -> NP (Aliased TypeExpression) (column ': columns)
     -- ^ the names and datatype of each column
@@ -175,7 +175,7 @@ check condition = UnsafeTableConstraint $
 -- :}
 -- "CREATE TABLE tab (a int, b int, UNIQUE (a, b));"
 unique
-  :: SListI subcolumns
+  :: SOP.SListI subcolumns
   => NP (Column columns) subcolumns
   -- ^ unique column or group of columns
   -> TableConstraint schema columns
@@ -195,7 +195,7 @@ unique columns = UnsafeTableConstraint $
 -- :}
 -- "CREATE TABLE tab (id serial, name text NOT NULL, PRIMARY KEY (id));"
 primaryKey
-  :: (SListI subcolumns, AllNotNull subcolumns)
+  :: (SOP.SListI subcolumns, AllNotNull subcolumns)
   => NP (Column columns) subcolumns
   -- ^ identifying column or group of columns
   -> TableConstraint schema columns
@@ -239,8 +239,8 @@ foreignKey
   :: ( HasTable reftable schema refcolumns
      , SameTypes subcolumns refsubcolumns
      , NotAllNull subcolumns
-     , SListI subcolumns
-     , SListI refsubcolumns)
+     , SOP.SListI subcolumns
+     , SOP.SListI refsubcolumns)
   => NP (Column columns) subcolumns
   -- ^ column or columns in the table
   -> Alias reftable

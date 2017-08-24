@@ -45,8 +45,8 @@ module Squeal.PostgreSQL.Manipulation
 import Control.DeepSeq
 import Data.ByteString
 import Data.Monoid
-import Generics.SOP
 
+import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Expression
@@ -75,46 +75,109 @@ queryStatement q = UnsafeManipulation $ renderQuery q <> ";"
 INSERT statements
 -----------------------------------------}
 
--- | When a table is created, it contains no data. The first thing to do
--- before a database can be of much use is to insert data. Data is
--- conceptually inserted one row at a time. Of course you can also insert
--- more than one row, but there is no way to insert less than one row.
--- Even if you know only some column values, a complete row must be created.
---
--- >>> :{
--- let
---   manipulation :: Manipulation
---     '[ "tab" :::
---       '[ "col1" ::: 'Required ('NotNull 'PGint4)
---        , "col2" ::: 'Required ('NotNull 'PGint4) ]] '[] '[]
---   manipulation =
---     insertInto #tab (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
---       OnConflictDoRaise (Returning Nil)
--- in renderManipulation manipulation
--- :}
--- "INSERT INTO tab (col1, col2) VALUES (2, 4);"
---
--- >>> :{
--- let
---   manipulation :: Manipulation
---     '[ "tab" :::
---       '[ "col1" ::: 'Required ('NotNull 'PGint4)
---        , "col2" ::: 'Required ('NotNull 'PGint4) ]]
---     '[] '[ "sum" ::: 'Required ('NotNull 'PGint4)]
---   manipulation =
---     insertInto #tab
---       (Values
---         (2 `As` #col1 :* 4 `As` #col2 :* Nil)
---         [6 `As` #col1 :* 8 `As` #col2 :* Nil])
---       (OnConflictDoUpdate
---         (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
---         (Just (#col1 .== #col2)))
---       (Returning $ (#col1 + #col2) `As` #sum :* Nil)
--- in renderManipulation manipulation
--- :}
--- "INSERT INTO tab (col1, col2) VALUES (2, 4), (6, 8) ON CONFLICT DO UPDATE SET col1 = 2 WHERE (col1 = col2) RETURNING (col1 + col2) AS sum;"
+{- |
+When a table is created, it contains no data. The first thing to do
+before a database can be of much use is to insert data. Data is
+conceptually inserted one row at a time. Of course you can also insert
+more than one row, but there is no way to insert less than one row.
+Even if you know only some column values, a complete row must be created.
+
+simple insert:
+
+>>> :{
+let
+  manipulation :: Manipulation
+    '[ "tab" :::
+      '[ "col1" ::: 'Required ('NotNull 'PGint4)
+       , "col2" ::: 'Required ('NotNull 'PGint4) ]] '[] '[]
+  manipulation =
+    insertInto #tab (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
+      OnConflictDoRaise (Returning Nil)
+in renderManipulation manipulation
+:}
+"INSERT INTO tab (col1, col2) VALUES (2, 4);"
+
+parameterized insert:
+
+>>> :{
+let
+  manipulation :: Manipulation
+    '[ "tab" :::
+      '[ "col1" ::: 'Required ('NotNull 'PGint4)
+       , "col2" ::: 'Required ('NotNull 'PGint4) ]]
+    '[ 'Required ('NotNull 'PGint4)
+     , 'Required ('NotNull 'PGint4) ] '[]
+  manipulation =
+    insertInto #tab
+      (Values (param @1 `As` #col1 :* param @2 `As` #col2 :* Nil) [])
+      OnConflictDoRaise (Returning Nil)
+in renderManipulation manipulation
+:}
+"INSERT INTO tab (col1, col2) VALUES (($1 :: int4), ($2 :: int4));"
+
+returning insert:
+
+>>> :{
+let
+  manipulation :: Manipulation
+    '[ "tab" :::
+      '[ "col1" ::: 'Required ('NotNull 'PGint4)
+       , "col2" ::: 'Required ('NotNull 'PGint4) ]] '[]
+    '["fromOnly" ::: 'Required ('NotNull 'PGint4)]
+  manipulation =
+    insertInto #tab (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
+      OnConflictDoRaise (Returning (#col1 `As` #fromOnly :* Nil))
+in renderManipulation manipulation
+:}
+"INSERT INTO tab (col1, col2) VALUES (2, 4) RETURNING col1 AS fromOnly;"
+
+query insert:
+
+>>> :{
+let
+  manipulation :: Manipulation
+    '[ "tab" :::
+      '[ "col1" ::: 'Required ('NotNull 'PGint4)
+       , "col2" ::: 'Required ('NotNull 'PGint4)
+       ]
+     , "other_tab" :::
+      '[ "col1" ::: 'Required ('NotNull 'PGint4)
+       , "col2" ::: 'Required ('NotNull 'PGint4)
+       ]
+     ] '[] '[]
+  manipulation = 
+    insertInto #tab
+      ( ValuesQuery $
+        selectStar (from (Table (#other_tab `As` #t))) )
+      OnConflictDoRaise (Returning Nil)
+in renderManipulation manipulation
+:}
+"INSERT INTO tab SELECT * FROM other_tab AS t;"
+
+upsert:
+
+>>> :{
+let
+  manipulation :: Manipulation
+    '[ "tab" :::
+      '[ "col1" ::: 'Required ('NotNull 'PGint4)
+       , "col2" ::: 'Required ('NotNull 'PGint4) ]]
+    '[] '[ "sum" ::: 'Required ('NotNull 'PGint4)]
+  manipulation =
+    insertInto #tab
+      (Values
+        (2 `As` #col1 :* 4 `As` #col2 :* Nil)
+        [6 `As` #col1 :* 8 `As` #col2 :* Nil])
+      (OnConflictDoUpdate
+        (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
+        (Just (#col1 .== #col2)))
+      (Returning $ (#col1 + #col2) `As` #sum :* Nil)
+in renderManipulation manipulation
+:}
+"INSERT INTO tab (col1, col2) VALUES (2, 4), (6, 8) ON CONFLICT DO UPDATE SET col1 = 2 WHERE (col1 = col2) RETURNING (col1 + col2) AS sum;"
+-}
 insertInto
-  :: (SListI columns, SListI results, HasTable table schema columns)
+  :: (SOP.SListI columns, SOP.SListI results, HasTable table schema columns)
   => Alias table -- ^ table to insert into
   -> ValuesClause schema params columns -- ^ values to insert
   -> ConflictClause columns params
@@ -141,7 +204,7 @@ data ValuesClause
 
 -- | Render a `ValuesClause`.
 renderValuesClause
-  :: SListI columns
+  :: SOP.SListI columns
   => ValuesClause schema params columns
   -> ByteString
 renderValuesClause = \case
@@ -181,7 +244,7 @@ data ReturningClause
 
 -- | Render a `ReturningClause`.
 renderReturningClause
-  :: SListI results
+  :: SOP.SListI results
   => ReturningClause params columns results
   -> ByteString
 renderReturningClause = \case
@@ -205,7 +268,7 @@ data ConflictClause columns params where
 
 -- | Render a `ConflictClause`.
 renderConflictClause
-  :: SListI columns
+  :: SOP.SListI columns
   => ConflictClause columns params
   -> ByteString
 renderConflictClause = \case
@@ -238,7 +301,7 @@ UPDATE statements
 -- :}
 -- "UPDATE tab SET col1 = 2 WHERE (col1 <> col2);"
 update
-  :: (HasTable table schema columns, SListI columns, SListI results)
+  :: (HasTable table schema columns, SOP.SListI columns, SOP.SListI results)
   => Alias table -- ^ table to update
   -> NP (Aliased (UpdateExpression columns params)) columns
   -- ^ modified values to replace old values
@@ -293,7 +356,7 @@ DELETE statements
 -- :}
 -- "DELETE FROM tab WHERE (col1 = col2) RETURNING *;"
 deleteFrom
-  :: (SListI results, HasTable table schema columns)
+  :: (SOP.SListI results, HasTable table schema columns)
   => Alias table -- ^ table to delete from
   -> Condition '[table ::: columns] 'Ungrouped params
   -- ^ condition under which to delete a row

@@ -82,10 +82,192 @@ import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Prettyprint
 import Squeal.PostgreSQL.Schema
 
--- | The process of retrieving or the command to retrieve data from a database
--- is called a `Query`. The `select`, `selectStar`, `selectDotStar`,
--- `selectDistinct`, `selectDistinctStar` and `selectDistinctDotStar` commands
--- are used to specify queries.
+{- |
+The process of retrieving or the command to retrieve data from a database
+is called a `Query`. The `select`, `selectStar`, `selectDotStar`,
+`selectDistinct`, `selectDistinctStar` and `selectDistinctDotStar` commands
+are used to specify queries.
+
+simple query:
+
+>>> :{
+let
+  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
+    '["col" ::: 'Required ('Null 'PGint4)]
+  query = selectStar (from (Table (#tab `As` #t)))
+in renderQuery query
+:}
+"SELECT * FROM tab AS t"
+
+restricted query:
+
+>>> :{
+let
+  query :: Query
+    '[ "tab" :::
+       '[ "col1" ::: 'Required ('NotNull 'PGint4)
+        , "col2" ::: 'Required ('NotNull 'PGint4) ]]
+    '[]
+    '[ "sum" ::: 'Required ('NotNull 'PGint4)
+     , "col1" ::: 'Required ('NotNull 'PGint4) ]
+  query = 
+    select
+      ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+      ( from (Table (#tab `As` #t))
+        & where_ (#col1 .> #col2)
+        & where_ (#col2 .> 0) )
+in renderQuery query
+:}
+"SELECT (col1 + col2) AS sum, col1 AS col1 FROM tab AS t WHERE ((col1 > col2) AND (col2 > 0))"
+
+subquery:
+
+>>> :{
+let
+  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
+    '["col" ::: 'Required ('Null 'PGint4)]
+  query =
+    selectStar
+      (from (Subquery (selectStar (from (Table (#tab `As` #t))) `As` #sub)))
+in renderQuery query
+:}
+"SELECT * FROM (SELECT * FROM tab AS t) AS sub"
+
+limits and offsets:
+
+>>> :{
+let
+  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
+    '["col" ::: 'Required ('Null 'PGint4)]
+  query = selectStar
+    ( from (Table (#tab `As` #t))
+      & limit 100
+      & offset 2
+      & limit 50
+      & offset 2 )
+in renderQuery query
+:}
+"SELECT * FROM tab AS t LIMIT 50 OFFSET 4"
+
+parameterized query:
+
+>>> :{
+let
+  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
+    '[ 'Required ('NotNull 'PGbool)]
+    '["col" ::: 'Required ('Null 'PGint4)]
+  query = selectStar
+    (from (Table (#tab `As` #t)) & where_ (param @1))
+in renderQuery query
+:}
+"SELECT * FROM tab AS t WHERE ($1 :: bool)"
+
+aggregation query:
+
+>>> :{
+let
+  query :: Query
+    '[ "tab" :::
+       '[ "col1" ::: 'Required ('NotNull 'PGint4)
+        , "col2" ::: 'Required ('NotNull 'PGint4) ]]
+    '[]
+    '[ "sum" ::: 'Required ('NotNull 'PGint4)
+     , "col1" ::: 'Required ('NotNull 'PGint4) ]
+  query =
+    select (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
+    ( from (Table (#tab `As` #table1))
+      & group (By #col1 :* Nil) 
+      & having (#col1 + sum_ #col2 .> 1) )
+in renderQuery query
+:}
+"SELECT sum(col2) AS sum, col1 AS col1 FROM tab AS table1 GROUP BY col1 HAVING ((col1 + sum(col2)) > 1)"
+
+sorted query:
+
+>>> :{
+let
+  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
+    '["col" ::: 'Required ('Null 'PGint4)]
+  query = selectStar
+    (from (Table (#tab `As` #t)) & orderBy [#col & AscNullsFirst])
+in renderQuery query
+:}
+"SELECT * FROM tab AS t ORDER BY col ASC NULLS FIRST"
+
+joins:
+
+>>> :set -XFlexibleContexts
+>>> :{
+let
+  query1, query2 :: Query
+    '[ "orders" :::
+         '[ "id"    ::: 'Required ('NotNull 'PGint4)
+          , "order_price"   ::: 'Required ('NotNull 'PGfloat4)
+          , "customer_id" ::: 'Required ('NotNull 'PGint4)
+          , "shipper_id"  ::: 'Required ('NotNull 'PGint4)
+          ]
+     , "customers" :::
+         '[ "id" ::: 'Required ('NotNull 'PGint4)
+          , "name" ::: 'Required ('NotNull 'PGtext)
+          ]
+     , "shippers" :::
+         '[ "id" ::: 'Required ('NotNull 'PGint4)
+          , "name" ::: 'Required ('NotNull 'PGtext)
+          ]
+     ]
+    '[]
+    '[ "order_price" ::: 'Required ('NotNull 'PGfloat4)
+     , "customer_name" ::: 'Required ('NotNull 'PGtext)
+     , "shipper_name" ::: 'Required ('NotNull 'PGtext)
+     ]
+  query1 = select
+    ( #orders ! #order_price `As` #order_price :*
+      #customers ! #name `As` #customer_name :*
+      #shippers ! #name `As` #shipper_name :* Nil )
+    ( from (Table (#orders `As` #orders)
+      & CrossJoin (Table (#customers `As` #customers))
+      & CrossJoin (Table (#shippers `As` #shippers))) )
+  query2 = select
+    ( #orders ! #order_price `As` #order_price :*
+      #customers ! #name `As` #customer_name :*
+      #shippers ! #name `As` #shipper_name :* Nil )
+    ( from (Table (#orders `As` #orders)
+      & InnerJoin (Table (#customers `As` #customers))
+        (#orders ! #customer_id .== #customers ! #id)
+      & InnerJoin (Table (#shippers `As` #shippers))
+        (#orders ! #shipper_id .== #shippers ! #id)) )
+in do print (renderQuery query1); print (renderQuery query2)
+:}
+"SELECT orders.order_price AS order_price, customers.name AS customer_name, shippers.name AS shipper_name FROM orders AS orders CROSS JOIN customers AS customers CROSS JOIN shippers AS shippers"
+"SELECT orders.order_price AS order_price, customers.name AS customer_name, shippers.name AS shipper_name FROM orders AS orders INNER JOIN customers AS customers ON (orders.customer_id = customers.id) INNER JOIN shippers AS shippers ON (orders.shipper_id = shippers.id)"
+
+self-join:
+
+>>> :{
+let
+  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
+    '["col" ::: 'Required ('Null 'PGint4)]
+  query = selectDotStar #t1
+    (from (Table (#tab `As` #t1) & CrossJoin (Table (#tab `As` #t2))))
+in renderQuery query
+:}
+"SELECT t1.* FROM tab AS t1 CROSS JOIN tab AS t2"
+
+set operations:
+
+>>> :{
+let
+  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
+    '["col" ::: 'Required ('Null 'PGint4)]
+  query =
+    selectStar (from (Table (#tab `As` #t)))
+    `unionAll`
+    selectStar (from (Table (#tab `As` #t)))
+in renderQuery query
+:}
+"(SELECT * FROM tab AS t) UNION ALL (SELECT * FROM tab AS t)"
+-}
+
 newtype Query
   (schema :: TablesType)
   (params :: [ColumnType])
@@ -305,7 +487,7 @@ renderTableExpression
     , renderWheres whs'
     , renderGroupByClause grps'
     , renderHavingClause hvs'
-    , renderSorts srts'
+    , renderOrderByClause srts'
     , renderLimits lims'
     , renderOffsets offs'
     ]
@@ -314,9 +496,9 @@ renderTableExpression
         [] -> ""
         wh:[] -> " WHERE" <+> renderExpression wh
         wh:whs -> " WHERE" <+> renderExpression (foldr (.&&) wh whs)
-      renderSorts = \case
+      renderOrderByClause = \case
         [] -> ""
-        srts -> " SORT BY"
+        srts -> " ORDER BY"
           <+> commaSeparated (renderSortExpression <$> srts)
       renderLimits = \case
         [] -> ""
