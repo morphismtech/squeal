@@ -105,6 +105,7 @@ data PGType
   | PGinet -- ^ IPv4 or IPv6 host address
   | PGjson -- ^	textual JSON data
   | PGjsonb -- ^ binary JSON data, decomposed
+  | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
 -- | `NullityType` encodes the potential presence or definite absence of a
 -- @NULL@ allowing operations which are sensitive to such to be well typed.
