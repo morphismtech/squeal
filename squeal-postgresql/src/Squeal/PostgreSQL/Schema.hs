@@ -105,6 +105,7 @@ data PGType
   | PGinet -- ^ IPv4 or IPv6 host address
   | PGjson -- ^	textual JSON data
   | PGjsonb -- ^ binary JSON data, decomposed
+  | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
 -- | `NullityType` encodes the potential presence or definite absence of a
 -- @NULL@ allowing operations which are sensitive to such to be well typed.
@@ -128,7 +129,8 @@ type ColumnsType = [(Symbol,ColumnType)]
 
 -- | `TablesType` is a kind synonym for a row of `ColumnsType`s.
 -- It is used as a kind for both a schema, a disjoint union of tables,
--- and a joined table `Squeal.Query.FromClause`, a product of tables.
+-- and a joined table `Squeal.PostgreSQL.Query.FromClause`,
+-- a product of tables.
 type TablesType = [(Symbol,ColumnsType)]
 
 -- | `Grouping` is an auxiliary namespace, created by
@@ -154,7 +156,7 @@ type PGFloating ty = In ty '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 -- `Squeal.PostgreSQL.Expression.mod_` functions.
 type PGIntegral ty = In ty '[ 'PGint2, 'PGint4, 'PGint8]
 
--- | `:::` is the promoted version of `As`, a type level pair between
+-- | `:::` is like a promoted version of `As`, a type level pair between
 -- an alias and some type, usually a column alias and a `ColumnType` or
 -- a table alias and a `ColumnsType`.
 type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
@@ -175,7 +177,7 @@ instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
 renderAlias :: KnownSymbol alias => Alias alias -> ByteString
 renderAlias = fromString . symbolVal
 
--- | The `As` operator is used to name an expression. `As` is the demoted
+-- | The `As` operator is used to name an expression. `As` is like a demoted
 -- version of `:::`.
 --
 -- >>> Just "hello" `As` #hi :: Aliased Maybe ("hi" ::: String)
@@ -211,13 +213,13 @@ class IsTableColumn table column expression where
   infixl 9 !
 instance IsTableColumn table column (Alias table, Alias column) where (!) = (,)
 
--- | `In x xs` is a constraint that proves that `x` is in `xs.
+-- | @In x xs@ is a constraint that proves that @x@ is in @xs@.
 type family In x xs :: Constraint where
   In x (x ': xs) = ()
   In x (y ': xs) = In x xs
 
--- | `HasUnique alias xs x` is a constraint that proves that xs is a singleton
--- of `alias ::: x`.
+-- | @HasUnique alias xs x@ is a constraint that proves that @xs@ is a singleton
+-- of @alias ::: x@.
 type HasUnique alias xs x = xs ~ '[alias ::: x]
 
 -- | `BaseType` forgets about @NULL@ and @DEFAULT@
@@ -259,7 +261,7 @@ type family NullifyColumns (columns :: ColumnsType) :: ColumnsType where
 
 -- | `NullifyTables` is an idempotent that nullifies a `TablesType`
 -- used to nullify the left or right hand side of an outer join
--- in a `Squeal.PostgreSQL.Query.FromClause`
+-- in a `Squeal.PostgreSQL.Query.FromClause`.
 type family NullifyTables (tables :: TablesType) :: TablesType where
   NullifyTables '[] = '[]
   NullifyTables ((table ::: columns) ': tables) =

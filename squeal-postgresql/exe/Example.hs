@@ -59,12 +59,12 @@ main = do
           ( Values
             (param @1 `As` #col1 :* param @2 `As` #col2 :* Nil)
             [param @3 `As` #col1 :* param @4 `As` #col2 :* Nil]
-          ) Conflict (Returning Nil)
+          ) OnConflictDoNothing (Returning Nil)
     liftBase $ Char8.putStrLn "manipulating"
     _insertResult <- manipulateParams insert
       (1::Int32,2::Int32,3::Int32,4::Int32)
     liftBase $ Char8.putStrLn "querying"
-    result <- query $
+    result <- runQuery $
       selectStar (from (Table (#table1 `As` #table1)))
     value00 <- getValue (RowNumber 0) (columnNumber @0) result
     value01 <- getValue (RowNumber 0) (columnNumber @1) result

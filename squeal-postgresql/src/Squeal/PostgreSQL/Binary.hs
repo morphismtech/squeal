@@ -249,10 +249,10 @@ instance
 -- >>> toParams @(Only (Maybe Text)) @'[ 'Required ('Null 'PGtext)] (Only (Just "foo"))
 -- K (Just "foo") :* Nil
 --
--- >>> type PGShortRow = '["only" ::: 'Required ('Null 'PGtext)]
+-- >>> type PGShortRow = '["fromOnly" ::: 'Required ('Null 'PGtext)]
 -- >>> fromRow @PGShortRow @(Only (Maybe Text)) (K (Just "bar") :* Nil)
--- Only {only = Just "bar"}
-newtype Only x = Only { only :: x }
+-- Only {fromOnly = Just "bar"}
+newtype Only x = Only { fromOnly :: x }
   deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
 instance Generic (Only x)
 instance HasDatatypeInfo (Only x)
