@@ -670,7 +670,7 @@ Grouping
 -- | `By`s are used in `group` to reference a list of columns which are then
 -- used to group together those rows in a table that have the same values
 -- in all the columns listed. @By \#col@ will reference an unambiguous
--- column @col@; otherwise @By2 \#tab \! \#col@ will reference a table
+-- column @col@; otherwise @By2 (\#tab \! \#col)@ will reference a table
 -- qualified column @tab.col@.
 data By
     (tables :: TablesType)
