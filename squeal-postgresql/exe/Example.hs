@@ -64,7 +64,7 @@ main = do
     _insertResult <- manipulateParams insert
       (1::Int32,2::Int32,3::Int32,4::Int32)
     liftBase $ Char8.putStrLn "querying"
-    result <- query $
+    result <- runQuery $
       selectStar (from (Table (#table1 `As` #table1)))
     value00 <- getValue (RowNumber 0) (columnNumber @0) result
     value01 <- getValue (RowNumber 0) (columnNumber @1) result

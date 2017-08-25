@@ -135,13 +135,13 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
   manipulate :: Manipulation schema '[] ys -> pq (Result ys)
   manipulate statement = manipulateParams statement ()
 
-  queryParams
+  runQueryParams
     :: ToParams x params
     => Query schema params ys -> x -> pq (Result ys)
-  queryParams = manipulateParams . queryStatement
+  runQueryParams = manipulateParams . queryStatement
 
-  query :: Query schema '[] ys -> pq (Result ys)
-  query q = queryParams q ()
+  runQuery :: Query schema '[] ys -> pq (Result ys)
+  runQuery q = runQueryParams q ()
 
   traversePrepared
     :: (ToParams x params, Traversable list)
