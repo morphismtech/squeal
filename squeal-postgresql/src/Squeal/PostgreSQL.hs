@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL
+Description: Squeel export module
+Copyright: (c) Eitan Chatav, 2017
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+`Squeal.PostgreSQL` re-exports @squeel-postgresql@'s main modules.
+-}
+
 module Squeal.PostgreSQL
   ( module Squeal.PostgreSQL.Binary
   , module Squeal.PostgreSQL.Definition

@@ -199,7 +199,7 @@ joins:
 >>> :set -XFlexibleContexts
 >>> :{
 let
-  query1, query2 :: Query
+  query :: Query
     '[ "orders" :::
          '[ "id"    ::: 'Required ('NotNull 'PGint4)
           , "order_price"   ::: 'Required ('NotNull 'PGfloat4)
@@ -220,26 +220,18 @@ let
      , "customer_name" ::: 'Required ('NotNull 'PGtext)
      , "shipper_name" ::: 'Required ('NotNull 'PGtext)
      ]
-  query1 = select
-    ( #orders ! #order_price `As` #order_price :*
-      #customers ! #name `As` #customer_name :*
-      #shippers ! #name `As` #shipper_name :* Nil )
-    ( from (Table (#orders `As` #orders)
-      & CrossJoin (Table (#customers `As` #customers))
-      & CrossJoin (Table (#shippers `As` #shippers))) )
-  query2 = select
-    ( #orders ! #order_price `As` #order_price :*
-      #customers ! #name `As` #customer_name :*
-      #shippers ! #name `As` #shipper_name :* Nil )
-    ( from (Table (#orders `As` #orders)
-      & InnerJoin (Table (#customers `As` #customers))
-        (#orders ! #customer_id .== #customers ! #id)
-      & InnerJoin (Table (#shippers `As` #shippers))
-        (#orders ! #shipper_id .== #shippers ! #id)) )
-in do print (renderQuery query1); print (renderQuery query2)
+  query = select
+    ( #o ! #order_price `As` #order_price :*
+      #c ! #name `As` #customer_name :*
+      #s ! #name `As` #shipper_name :* Nil )
+    ( from (Table (#orders `As` #o)
+      & InnerJoin (Table (#customers `As` #c))
+        (#o ! #customer_id .== #c ! #id)
+      & InnerJoin (Table (#shippers `As` #s))
+        (#o ! #shipper_id .== #s ! #id)) )
+in renderQuery query
 :}
-"SELECT orders.order_price AS order_price, customers.name AS customer_name, shippers.name AS shipper_name FROM orders AS orders CROSS JOIN customers AS customers CROSS JOIN shippers AS shippers"
-"SELECT orders.order_price AS order_price, customers.name AS customer_name, shippers.name AS shipper_name FROM orders AS orders INNER JOIN customers AS customers ON (orders.customer_id = customers.id) INNER JOIN shippers AS shippers ON (orders.shipper_id = shippers.id)"
+"SELECT o.order_price AS order_price, c.name AS customer_name, s.name AS shipper_name FROM orders AS o INNER JOIN customers AS c ON (o.customer_id = c.id) INNER JOIN shippers AS s ON (o.shipper_id = s.id)"
 
 self-join:
 
@@ -601,22 +593,22 @@ their placement in SQL.
     have @n * m@ rows.
 
     * @t1 & InnerJoin t2 on@. For each row @r1@ of @t1@, the joined
-    table has a row for each row in @t2@ that satisfies the on @condition@
+    table has a row for each row in @t2@ that satisfies the @on@ condition
     with @r1@
 
     * @t1 & LeftOuterJoin t2 on@. First, an inner join is performed.
-    Then, for each row in @t1@ that does not satisfy the on @condition@ with
+    Then, for each row in @t1@ that does not satisfy the @on@ condition with
     any row in @t2@, a joined row is added with null values in columns of @t2@.
     Thus, the joined table always has at least one row for each row in @t1@.
 
     * @t1 & RightOuterJoin t2 on@. First, an inner join is performed.
-    Then, for each row in @t2@ that does not satisfy the on condition with
+    Then, for each row in @t2@ that does not satisfy the @on@ condition with
     any row in @t1@, a joined row is added with null values in columns of @t1@.
     This is the converse of a left join: the result table will always
     have a row for each row in @t2@.
 
     * @t1 & FullOuterJoin t2 on@. First, an inner join is performed.
-    Then, for each row in @t1@ that does not satisfy the on condition with
+    Then, for each row in @t1@ that does not satisfy the @on@ condition with
     any row in @t2@, a joined row is added with null values in columns of @t2@.
     Also, for each row of @t2@ that does not satisfy the join condition
     with any row in @t1@, a joined row with null values in the columns of @t1@
