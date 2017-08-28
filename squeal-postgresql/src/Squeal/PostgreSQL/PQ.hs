@@ -298,13 +298,13 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
 
   traversePrepared_
     :: (ToParams x params, Foldable list)
-    => Manipulation schema params ys
+    => Manipulation schema params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> list x -> pq ()
   default traversePrepared_
     :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
     => (ToParams x params, Foldable list)
-    => Manipulation schema params ys
+    => Manipulation schema params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> list x -> pq ()
   traversePrepared_ manipulation params = lift $
@@ -313,7 +313,7 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
   forPrepared_
     :: (ToParams x params, Traversable list)
     => list x
-    -> Manipulation schema params ys
+    -> Manipulation schema params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> pq ()
   forPrepared_ = flip traversePrepared_
@@ -370,7 +370,7 @@ instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
         return (results, Connection conn)
 
   traversePrepared_
-    (UnsafeManipulation q :: Manipulation schema xs ys) (list :: list x) =
+    (UnsafeManipulation q :: Manipulation schema xs '[]) (list :: list x) =
       PQ $ \ (Connection conn) -> liftBase $ do
         let temp = "temporary_statement"
         prepResultMaybe <- LibPQ.prepare conn temp q Nothing

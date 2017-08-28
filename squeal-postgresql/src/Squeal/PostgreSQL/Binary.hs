@@ -115,7 +115,8 @@ instance ToParam Value 'PGjson where toParam = K . Encoding.json_ast
 instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
 
 -- | A `ToColumnParam` constraint lifts the `ToParam` encoding 
--- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s.
+-- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s. You should
+-- not define instances of `ToColumnParam`, just use the provided instances.
 class ToColumnParam (x :: Type) (ty :: ColumnType) where
   -- | >>> toColumnParam @Int16 @('Required ('NotNull 'PGint2)) 0
   -- K (Just "\NUL\NUL")
@@ -132,7 +133,9 @@ instance ToParam x pg => ToColumnParam (Maybe x) (optionality ('Null pg)) where
   toColumnParam = K . fmap (Encoding.encodingBytes . unK . toParam @x @pg)
 
 -- | A `ToParams` constraint generically sequences the encodings of `Type`s
--- of the fields of a tuple or record to a row of `ColumnType`s.
+-- of the fields of a tuple or record to a row of `ColumnType`s. You should
+-- not define instances of `ToParams`. Instead define `Generic` instances
+-- which in turn provide `ToParams` instances.
 class SListI tys => ToParams (x :: Type) (tys :: [ColumnType]) where
   -- | >>> type PGparams = '[ 'Required ('NotNull 'PGbool), 'Required ('Null 'PGint2)]
   -- >>> toParams @(Bool, Maybe Int16) @PGparams (False, Just 0)
@@ -187,7 +190,8 @@ instance FromValue 'PGjsonb Value where fromValue _ = Decoding.jsonb_ast
 
 -- | A `FromColumnValue` constraint lifts the `FromValue` parser
 -- to a decoding of a `(Symbol,ColumnType)` to a `Type`,
--- decoding `Null`s to `Maybe`s.
+-- decoding `Null`s to `Maybe`s. You should not define instances for
+-- `FromColumnValue`, just use the provided instances.
 class FromColumnValue (colty :: (Symbol,ColumnType)) (y :: Type) where
   -- | >>> :set -XTypeOperators -XOverloadedStrings
   -- >>> newtype Id = Id { getId :: Int16 } deriving Show
@@ -220,7 +224,9 @@ instance FromValue pg y
 
 -- | A `FromRow` constraint generically sequences the parsings of the columns
 -- of a `ColumnsType` into the fields of a record `Type` provided they have
--- the same field names.
+-- the same field names. You should not define instances of `FromRow`.
+-- Instead define `Generic` and `HasDatatypeInfo` instances which in turn
+-- provide `FromRow` instances.
 class SListI results => FromRow (results :: ColumnsType) y where
   -- | >>> :set -XOverloadedStrings
   -- >>> import Data.Text

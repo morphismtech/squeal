@@ -237,7 +237,7 @@ primaryKey columns = UnsafeTableConstraint $
 foreignKey
   :: ( HasTable reftable schema refcolumns
      , SameTypes subcolumns refsubcolumns
-     , NotAllNull subcolumns
+     , AllNotNull subcolumns
      , SOP.SListI subcolumns
      , SOP.SListI refsubcolumns)
   => NP (Column columns) subcolumns

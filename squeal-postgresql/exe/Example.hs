@@ -12,31 +12,85 @@
   , TypeSynonymInstances
 #-}
 
-module Main (main,col1,col2) where
+module Main (main) where
 
 import Control.Category ((>>>))
 import Control.Monad.Base
 import Data.Function ((&))
 import Data.Int
 import Data.Monoid
-import Generics.SOP hiding (from)
+import Data.Text hiding (zip)
 import Squeal.PostgreSQL
 
 import qualified Data.ByteString.Char8 as Char8
+import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
 type Schema =
-  '[ "students" ::: '["name" ::: 'Required ('NotNull 'PGtext)]
-   , "table1" :::
-       '[ "col1" ::: 'Required ('NotNull 'PGint4)
-        , "col2" ::: 'Required ('NotNull 'PGint4)
+  '[ "users" :::
+       '[ "id" ::: 'Optional ('NotNull 'PGint4)
+        , "name" ::: 'Required ('NotNull 'PGtext)
+        ]
+   , "emails" :::
+       '[ "id" ::: 'Optional ('NotNull 'PGint4)
+        , "user_id" ::: 'Required ('NotNull 'PGint4)
+        , "email" ::: 'Required ('Null 'PGtext)
         ]
    ]
 
-data Row = Row { col1 :: Int32, col2 :: Int32 }
+setup :: Definition '[] Schema
+setup = 
+  createTable #users
+    ( serial `As` #id :*
+      (text & notNull) `As` #name :* Nil )
+    [ primaryKey (Column #id :* Nil) ]
+  >>>
+  createTable #emails
+    ( serial `As` #id :*
+      (int & notNull) `As` #user_id :*
+      text `As` #email :* Nil )
+    [ primaryKey (Column #id :* Nil)
+    , foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
+      OnDeleteCascade OnUpdateCascade ]
+
+teardown :: Definition Schema '[]
+teardown = dropTable #emails >>> dropTable #users
+
+insertUser :: Manipulation Schema
+  '[ 'Required ('NotNull 'PGtext)]
+  '[ "fromOnly" ::: 'Required ('NotNull 'PGint4) ]
+insertUser = insertInto #users
+  ( Values (def `As` #id :* param @1 `As` #name :* Nil) [] )
+  OnConflictDoNothing (Returning (#id `As` #fromOnly :* Nil))
+
+insertEmail :: Manipulation Schema
+  '[ 'Required ('NotNull 'PGint4), 'Required ('Null 'PGtext)] '[]
+insertEmail = insertInto #emails ( Values
+  ( def `As` #id :*
+    param @1 `As` #user_id :*
+    param @2 `As` #email :* Nil) [] )
+  OnConflictDoNothing (Returning Nil)
+
+getUsers :: Query Schema '[]
+  '[ "userName" ::: 'Required ('NotNull 'PGtext)
+   , "userEmail" ::: 'Required ('Null 'PGtext) ]
+getUsers = select
+  (#u ! #name `As` #userName :* #e ! #email `As` #userEmail :* Nil)
+  ( from (Table (#users `As` #u)
+    & InnerJoin (Table (#emails `As` #e))
+      (#u ! #id .== #e ! #user_id)) )
+
+data User = User { userName :: Text, userEmail :: Maybe Text }
   deriving (Show, GHC.Generic)
-instance Generic Row
-instance HasDatatypeInfo Row
+instance SOP.Generic User
+instance SOP.HasDatatypeInfo User
+
+users :: [User]
+users = 
+  [ User "Alice" (Just "alice@gmail.com")
+  , User "Bob" Nothing
+  , User "Carole" (Just "carole@hotmail.com")
+  ]
 
 main :: IO ()
 main = do
@@ -46,42 +100,16 @@ main = do
   Char8.putStrLn $ "connecting to " <> connectionString
   connection0 <- connectdb connectionString
   Char8.putStrLn "setting up schema"
-  connection1 <- flip execPQ (connection0 :: Connection '[]) $ define $
-    createTable #students ((text & notNull) `As` #name :* Nil ) []
-    >>>
-    createTable #table1
-      ((int4 & notNull) `As` #col1 :* (int4 & notNull) `As` #col2 :* Nil) []
-  connection2 <- flip execPQ (connection1 :: Connection Schema) $ do
-    let
-      insert :: Manipulation Schema '[_,_,_,_] '[]
-      insert =
-        insertInto #table1
-          ( Values
-            (param @1 `As` #col1 :* param @2 `As` #col2 :* Nil)
-            [param @3 `As` #col1 :* param @4 `As` #col2 :* Nil]
-          ) OnConflictDoNothing (Returning Nil)
+  connection1 <- execPQ (define setup) connection0
+  connection2 <- flip execPQ connection1 $ do
     liftBase $ Char8.putStrLn "manipulating"
-    _insertResult <- manipulateParams insert
-      (1::Int32,2::Int32,3::Int32,4::Int32)
+    idResults <- traversePrepared insertUser (Only . userName <$> users)
+    ids <- traverse (fmap fromOnly . getRow (RowNumber 0)) idResults
+    traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
     liftBase $ Char8.putStrLn "querying"
-    result <- runQuery $
-      selectStar (from (Table (#table1 `As` #table1)))
-    value00 <- getValue (RowNumber 0) (columnNumber @0) result
-    value01 <- getValue (RowNumber 0) (columnNumber @1) result
-    value10 <- getValue (RowNumber 1) (columnNumber @0) result
-    value11 <- getValue (RowNumber 1) (columnNumber @1) result
-    row0 <- getRow (RowNumber 0) result
-    row1 <- getRow (RowNumber 1) result
-    rows <- getRows result
-    liftBase $ do
-      print (value00 :: Int32)
-      print (value01 :: Int32)
-      print (value10 :: Int32)
-      print (value11 :: Int32)
-      print (row0 :: Row)
-      print (row1 :: Row)
-      print (rows :: [Row])
+    usersResult <- runQuery getUsers
+    usersRows <- getRows usersResult
+    liftBase $ print (usersRows :: [User])
   Char8.putStrLn "tearing down schema"
-  connection3 <- flip execPQ (connection2 :: Connection Schema) $ define $
-    dropTable #table1 >>> dropTable #students
-  finish (connection3 :: Connection '[])
+  connection3 <- execPQ (define teardown) connection2
+  finish connection3
