@@ -1,14 +1,20 @@
 name: squeal-postgresql
-version: 0.0.0.1
+version: 0.1.0.0
 synopsis: Squeal PostgreSQL Library
-description: Squeal is a type-safe embedding of PostgreSQL and libpq in Haskell
-homepage: https://github.com/echatav/squeal
+description: Squeal is a type-safe embedding of PostgreSQL in Haskell
+homepage: https://github.com/morphismtech/squeal
+bug-reports: https://github.com/morphismtech/squeal/issues
 author: Eitan Chatav
 maintainer: eitan.chatav@gmail.com
-copyright: 2017 Morphism, LLC
+copyright: Copyright (c) 2017 Morphism, LLC
 category: Database
 build-type: Simple
 cabal-version: >=1.10
+extra-doc-files: README.md
+
+source-repository head
+  type: git
+  location: https://github.com/morphismtech/squeal.git
 
 library
   hs-source-dirs: src
@@ -25,25 +31,25 @@ library
   default-language: Haskell2010
   ghc-options: -Wall -Werror -fprint-explicit-kinds
   build-depends:
-      aeson
-    , base
-    , bytestring
-    , deepseq
-    , generics-sop
-    , lifted-base
-    , monad-control
-    , mtl
-    , network-ip
-    , postgresql-binary
-    , postgresql-libpq
-    , scientific
-    , text
-    , time
-    , transformers
-    , transformers-base
-    , uuid
+      aeson >= 1.2.1.0 && < 2
+    , base >= 4.10.0.0 && < 5
+    , bytestring >= 0.10.8.2 && < 1
+    , deepseq >= 1.4.3.0 && < 2
+    , generics-sop >= 0.3.1.0 && < 1
+    , lifted-base >= 0.2.3.11 && < 1
+    , monad-control >= 1.0.2.2 && < 2
+    , mtl >= 2.2.1 && < 3
+    , network-ip >= 0.3.0.2 && < 1
+    , postgresql-binary >= 0.12.1 && < 1
+    , postgresql-libpq >= 0.9.3.1 && < 1
+    , scientific >= 0.3.5.1 && < 1
+    , text >= 1.2.2.2 && < 2
+    , time >= 1.8.0.2 && < 2
+    , transformers >= 0.5.2.0 && < 1
+    , transformers-base >= 0.4.4 && < 1
+    , uuid >= 1.3.13 && < 2
 
-test-suite squeal-postgresql-test
+test-suite squeal-postgresql-spec
   default-language: Haskell2010
   type: exitcode-stdio-1.0
   hs-source-dirs: test
@@ -54,9 +60,9 @@ test-suite squeal-postgresql-test
     Squeal.PostgreSQL.ManipulationSpec
     Squeal.PostgreSQL.QuerySpec
   build-depends:
-      base
-    , generics-sop
-    , hspec
+      base >= 4.10.0.0 && < 5
+    , generics-sop >= 0.3.1.0 && < 1
+    , hspec >= 2.4.4 && < 3
     , squeal-postgresql
 
 test-suite squeal-postgresql-doctest
@@ -66,8 +72,8 @@ test-suite squeal-postgresql-doctest
   ghc-options: -Wall -Werror
   main-is: DocTest.hs
   build-depends:
-      base
-    , doctest
+      base >= 4.10.0.0 && < 5
+    , doctest >= 0.11.4 && < 1
 
 executable squeal-postgresql-example
   default-language: Haskell2010
@@ -75,14 +81,10 @@ executable squeal-postgresql-example
   ghc-options: -Wall -Werror
   main-is: Example.hs
   build-depends:
-      base
-    , bytestring
-    , generics-sop
-    , mtl
+      base >= 4.10.0.0 && < 5
+    , bytestring >= 0.10.8.2 && < 1
+    , generics-sop >= 0.3.1.0 && < 1
+    , mtl >= 2.2.1 && < 3
     , squeal-postgresql
-    , transformers
-    , transformers-base
-
-source-repository head
-  type: git
-  location: https://github.com/echatav/squeal
+    , transformers >= 0.5.2.0 && < 1
+    , transformers-base >= 0.4.4 && < 1
