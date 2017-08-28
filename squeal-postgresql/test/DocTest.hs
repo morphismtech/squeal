@@ -9,4 +9,6 @@ main = doctest
   , "src/Squeal/PostgreSQL/Definition.hs"
   , "src/Squeal/PostgreSQL/Manipulation.hs"
   , "src/Squeal/PostgreSQL/Query.hs"
+  , "src/Squeal/PostgreSQL/Expression.hs"
+  , "src/Squeal/PostgreSQL/PQ.hs"
   ]

@@ -117,8 +117,12 @@ backslashes within the value must be escaped with a backslash, i.e., ' and \.
 
 To specify the schema you wish to connect with, use type application.
 
->>> :set -XTypeApplication
->>> conn <- connectdb @MySchema "host=localhost port=5432 dbname=exampledb"
+>>> :set -XDataKinds
+>>> :set -XTypeOperators
+>>> type Schema = '["tab" ::: '["col" ::: 'Required ('Null 'PGint2)]]
+>>> :set -XTypeApplications
+>>> :set -XOverloadedStrings
+>>> conn <- connectdb @Schema "host=localhost port=5432 dbname=exampledb"
 
 Note that, for now, squeal doesn't offer any protection from connecting
 with the wrong schema!
@@ -193,7 +197,7 @@ pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 
 -- | Run a `Definition` with `LibPQ.exec`, we expect that libpq obeys the law
 --
--- prop> pqThen (define statement2) statement1 = define (statement2 . statement1)
+-- @pqThen (define statement2) statement1 = define (statement2 . statement1)@
 define
   :: MonadBase IO io
   => Definition schema0 schema1
@@ -462,8 +466,8 @@ newtype RowNumber = RowNumber { unRowNumber :: LibPQ.Row }
 newtype ColumnNumber (n :: Nat) (cs :: [k]) (c :: k) =
   UnsafeColumnNumber { getColumnNumber :: LibPQ.Column }
 
--- | >>> getColumnNumber (columnNumber @5)
--- 5
+-- | >>> getColumnNumber (columnNumber @5 @'[_,_,_,_,_,_])
+-- Col 5
 class KnownNat n => HasColumnNumber n columns column
   | n columns -> column where
   columnNumber :: ColumnNumber n columns column
