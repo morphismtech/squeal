@@ -4,6 +4,8 @@ synopsis: Squeal PostgreSQL Library
 description: Squeal is a type-safe embedding of PostgreSQL in Haskell
 homepage: https://github.com/morphismtech/squeal
 bug-reports: https://github.com/morphismtech/squeal/issues
+license: BSD3
+license-file: LICENSE
 author: Eitan Chatav
 maintainer: eitan.chatav@gmail.com
 copyright: Copyright (c) 2017 Morphism, LLC
