@@ -84,6 +84,20 @@ import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
 
+-- For `MonadPQ` transformer instances
+import Control.Monad.Trans.Identity
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Cont
+import Control.Monad.Trans.List
+
+import qualified Control.Monad.Trans.State.Lazy as Lazy
+import qualified Control.Monad.Trans.State.Strict as Strict
+import qualified Control.Monad.Trans.Writer.Lazy as Lazy
+import qualified Control.Monad.Trans.Writer.Strict as Strict
+import qualified Control.Monad.Trans.RWS.Lazy as Lazy
+import qualified Control.Monad.Trans.RWS.Strict as Strict
+
 -- | A `Connection` consists of a `Database.PostgreSQL.LibPQ`
 -- `Database.PastgreSQL.LibPQ.Connection` and a phantom `TablesType`
 newtype Connection (schema :: TablesType) =
@@ -389,6 +403,19 @@ instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
   liftPQ pq = PQ $ \ (Connection conn) -> do
     y <- liftBase $ pq conn
     return (y, Connection conn)
+
+instance MonadPQ schema m => MonadPQ schema (IdentityT m)
+instance MonadPQ schema m => MonadPQ schema (ReaderT r m)
+instance MonadPQ schema m => MonadPQ schema (Strict.StateT s m)
+instance MonadPQ schema m => MonadPQ schema (Lazy.StateT s m)
+instance (Monoid w, MonadPQ schema m) => MonadPQ schema (Strict.WriterT w m)
+instance (Monoid w, MonadPQ schema m) => MonadPQ schema (Lazy.WriterT w m)
+instance MonadPQ schema m => MonadPQ schema (MaybeT m)
+instance MonadPQ schema m => MonadPQ schema (ExceptT e m)
+instance (Monoid w, MonadPQ schema m) => MonadPQ schema (Strict.RWST r w s m)
+instance (Monoid w, MonadPQ schema m) => MonadPQ schema (Lazy.RWST r w s m)
+instance MonadPQ schema m => MonadPQ schema (ContT r m)
+instance MonadPQ schema m => MonadPQ schema (ListT m)
 
 instance Monad m => Applicative (PQ schema schema m) where
   pure x = PQ $ \ conn -> pure (x, conn)
