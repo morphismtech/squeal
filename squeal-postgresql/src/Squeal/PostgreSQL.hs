@@ -28,7 +28,7 @@
 -- >
 -- > import Squeal.PostgreSQL
 --
--- We'll use generics to easily convert between Haskell of PostgreSQL values.
+-- We'll use generics to easily convert between Haskell and PostgreSQL values.
 --
 -- > import qualified Generics.SOP as SOP
 -- > import qualified GHC.Generics as GHC
@@ -89,10 +89,11 @@
 -- has three type parameters, the schema it refers to, a list of parameters
 -- it can take as input, and a list of columns it produces as output. When
 -- we insert into the users table, we will need a parameter for the @name@
--- field but not for the @id@ field since it's optional, we can use a default
+-- field but not for the @id@ field. Since it's optional, we can use a default
 -- value. However, since the emails table refers to the users table, we will
--- need to retrieve the user id and insert it into the emails table. Take
--- a careful look at the type and definition of both of our inserts.
+-- need to retrieve the user id that the insert generates and insert it into
+-- the emails table. Take a careful look at the type and definition of both
+-- of our inserts.
 --
 -- > insertUser :: Manipulation Schema
 -- >   '[ 'Required ('NotNull 'PGtext)]

@@ -140,11 +140,7 @@ let
   query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
     '["col" ::: 'Required ('Null 'PGint4)]
   query = selectStar
-    ( from (Table (#tab `As` #t))
-      & limit 100
-      & offset 2
-      & limit 50
-      & offset 2 )
+    (from (Table (#tab `As` #t)) & limit 100 & offset 2 & limit 50 & offset 2)
 in renderQuery query
 :}
 "SELECT * FROM tab AS t LIMIT 50 OFFSET 4"
@@ -153,14 +149,14 @@ parameterized query:
 
 >>> :{
 let
-  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
-    '[ 'Required ('NotNull 'PGbool)]
-    '["col" ::: 'Required ('Null 'PGint4)]
+  query :: Query '["tab" ::: '["col" ::: 'Required ('NotNull 'PGfloat8)]]
+    '[ 'Required ('NotNull 'PGfloat8)]
+    '["col" ::: 'Required ('NotNull 'PGfloat8)]
   query = selectStar
-    (from (Table (#tab `As` #t)) & where_ (param @1))
+    (from (Table (#tab `As` #t)) & where_ (#col .> param @1))
 in renderQuery query
 :}
-"SELECT * FROM tab AS t WHERE ($1 :: bool)"
+"SELECT * FROM tab AS t WHERE (col > ($1 :: float8))"
 
 aggregation query:
 
@@ -202,7 +198,7 @@ let
   query :: Query
     '[ "orders" :::
          '[ "id"    ::: 'Required ('NotNull 'PGint4)
-          , "order_price"   ::: 'Required ('NotNull 'PGfloat4)
+          , "price"   ::: 'Required ('NotNull 'PGfloat4)
           , "customer_id" ::: 'Required ('NotNull 'PGint4)
           , "shipper_id"  ::: 'Required ('NotNull 'PGint4)
           ]
@@ -221,7 +217,7 @@ let
      , "shipper_name" ::: 'Required ('NotNull 'PGtext)
      ]
   query = select
-    ( #o ! #order_price `As` #order_price :*
+    ( #o ! #price `As` #order_price :*
       #c ! #name `As` #customer_name :*
       #s ! #name `As` #shipper_name :* Nil )
     ( from (Table (#orders `As` #o)
@@ -231,7 +227,7 @@ let
         (#o ! #shipper_id .== #s ! #id)) )
 in renderQuery query
 :}
-"SELECT o.order_price AS order_price, c.name AS customer_name, s.name AS shipper_name FROM orders AS o INNER JOIN customers AS c ON (o.customer_id = c.id) INNER JOIN shippers AS s ON (o.shipper_id = s.id)"
+"SELECT o.price AS order_price, c.name AS customer_name, s.name AS shipper_name FROM orders AS o INNER JOIN customers AS c ON (o.customer_id = c.id) INNER JOIN shippers AS s ON (o.shipper_id = s.id)"
 
 self-join:
 
