@@ -57,6 +57,7 @@ module Squeal.PostgreSQL.PQ
   , getValue
   , getRow
   , getRows
+  , ntuples
   , nextRow
   , firstRow
   , liftResult
@@ -505,7 +506,7 @@ getRow
   -> Result columns
   -- ^ result
   -> io y
-getRow (RowNumber r) (Result result :: Result columns) = liftBase $do
+getRow (RowNumber r) (Result result :: Result columns) = liftBase $ do
   numRows <- LibPQ.ntuples result
   when (numRows < r) $ error $
     "getRow: expected at least " <> show r <> "rows but only saw "
@@ -516,8 +517,12 @@ getRow (RowNumber r) (Result result :: Result columns) = liftBase $do
     Nothing -> error "getRow: found unexpected length"
     Just row -> return $ fromRow @columns row
 
+-- | Returns the number of rows (tuples) in the query result.
+ntuples :: MonadBase IO io => Result columns -> io RowNumber
+ntuples (Result result) = liftBase $ RowNumber <$> LibPQ.ntuples result
+
 -- | Intended to be used for unfolding in streaming libraries, `nextRow`
--- takes a total number of rows (which can be found with `LibPQ.ntuples`)
+-- takes a total number of rows (which can be found with `ntuples`)
 -- and a `Result` and given a row number if it's too large returns `Nothing`,
 -- otherwise returning the row along with the next row number.
 nextRow
