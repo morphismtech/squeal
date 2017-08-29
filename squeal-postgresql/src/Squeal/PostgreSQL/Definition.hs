@@ -26,6 +26,7 @@ Squeal data definition language.
 module Squeal.PostgreSQL.Definition
   (  -- * Definition
     Definition (UnsafeDefinition, renderDefinition)
+  , (>>>)
     -- * Create
   , createTable
   , TableConstraint (UnsafeTableConstraint, renderTableConstraint)

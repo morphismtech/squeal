@@ -1,25 +1,19 @@
-{-# OPTIONS_GHC -fno-warn-partial-type-signatures #-}
 {-# LANGUAGE
     DataKinds
   , DeriveGeneric
-  , FlexibleInstances
-  , MultiParamTypeClasses
   , OverloadedLabels
   , OverloadedStrings
-  , PartialTypeSignatures
   , TypeApplications
   , TypeOperators
-  , TypeSynonymInstances
 #-}
 
 module Main (main) where
 
-import Control.Category ((>>>))
-import Control.Monad.Base
-import Data.Function ((&))
-import Data.Int
-import Data.Monoid
-import Data.Text hiding (zip)
+import Control.Monad.Base (liftBase)
+import Data.Int (Int32)
+import Data.Monoid ((<>))
+import Data.Text (Text)
+
 import Squeal.PostgreSQL
 
 import qualified Data.ByteString.Char8 as Char8
