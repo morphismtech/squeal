@@ -58,7 +58,8 @@
 -- Squeal, a `Definition` is a `createTable`, `alterTable` or `dropTable`
 -- command and has two type parameters, corresponding to the schema
 -- before being run and the schema after. We can compose definitions using
--- `>>>`. 
+-- `>>>`. Here and in the rest of our commands we make use of overloaded
+-- labels to refer to named tables and columns in our schema.
 --
 -- > setup :: Definition '[] Schema
 -- > setup = 
