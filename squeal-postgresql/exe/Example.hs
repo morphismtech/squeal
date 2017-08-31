@@ -1,15 +1,17 @@
 {-# LANGUAGE
     DataKinds
   , DeriveGeneric
+  , FlexibleContexts
   , OverloadedLabels
   , OverloadedStrings
   , TypeApplications
   , TypeOperators
 #-}
 
-module Main (main) where
+module Main (main, main2) where
 
-import Control.Monad.Base (liftBase)
+import Control.Monad (void)
+import Control.Monad.Base (liftBase, MonadBase)
 import Data.Int (Int32)
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -86,6 +88,17 @@ users =
   , User "Carole" (Just "carole@hotmail.com")
   ]
 
+session :: (MonadBase IO pq, MonadPQ Schema pq) => pq ()
+session = do
+  liftBase $ Char8.putStrLn "manipulating"
+  idResults <- traversePrepared insertUser (Only . userName <$> users)
+  ids <- traverse (fmap fromOnly . getRow (RowNumber 0)) idResults
+  traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
+  liftBase $ Char8.putStrLn "querying"
+  usersResult <- runQuery getUsers
+  usersRows <- getRows usersResult
+  liftBase $ print (usersRows :: [User])
+
 main :: IO ()
 main = do
   Char8.putStrLn "squeal"
@@ -95,15 +108,14 @@ main = do
   connection0 <- connectdb connectionString
   Char8.putStrLn "setting up schema"
   connection1 <- execPQ (define setup) connection0
-  connection2 <- flip execPQ connection1 $ do
-    liftBase $ Char8.putStrLn "manipulating"
-    idResults <- traversePrepared insertUser (Only . userName <$> users)
-    ids <- traverse (fmap fromOnly . getRow (RowNumber 0)) idResults
-    traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
-    liftBase $ Char8.putStrLn "querying"
-    usersResult <- runQuery getUsers
-    usersRows <- getRows usersResult
-    liftBase $ print (usersRows :: [User])
+  connection2 <- execPQ session connection1
   Char8.putStrLn "tearing down schema"
   connection3 <- execPQ (define teardown) connection2
   finish connection3
+
+main2 :: IO ()
+main2 = void $
+  withConnection "host=localhost port=5432 dbname=exampledb" . runPQ $
+    define setup
+    & pqThen session
+    & thenDefine teardown

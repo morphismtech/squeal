@@ -141,13 +141,14 @@ finish = liftBase . LibPQ.finish . unConnection
 
 -- | Do `connectdb` and `finish` before and after a computation.
 withConnection
-  :: forall schema io x
+  :: forall schema0 schema1 io x
    . MonadBaseControl IO io
   => ByteString
-  -> (Connection schema -> io x)
+  -> (Connection schema0 -> io (x, Connection schema1))
   -> io x
-withConnection connString = bracket (connectdb connString) finish
-
+withConnection connString action = do
+  (x, _conn) <- bracket (connectdb connString) finish action
+  return x
 
 -- | We keep track of the schema via an Atkey indexed state monad transformer,
 -- `PQ`.
