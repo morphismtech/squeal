@@ -1,6 +1,7 @@
 {-# LANGUAGE
     DataKinds
   , DeriveGeneric
+  , FlexibleContexts
   , OverloadedLabels
   , OverloadedStrings
   , TypeApplications
@@ -10,7 +11,7 @@
 module Main (main, main2) where
 
 import Control.Monad (void)
-import Control.Monad.Base (liftBase)
+import Control.Monad.Base (liftBase, MonadBase)
 import Data.Int (Int32)
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -87,7 +88,7 @@ users =
   , User "Carole" (Just "carole@hotmail.com")
   ]
 
-session :: PQ Schema Schema IO ()
+session :: (MonadBase IO pq, MonadPQ Schema pq) => pq ()
 session = do
   liftBase $ Char8.putStrLn "manipulating"
   idResults <- traversePrepared insertUser (Only . userName <$> users)
