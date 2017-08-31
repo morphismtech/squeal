@@ -569,5 +569,5 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 -- in renderDefinition definition
 -- :}
 -- "ALTER TABLE tab ALTER COLUMN col TYPE numeric NOT NULL;"
-alterType :: TypeExpression ty -> AlterColumn ty0 ty1
+alterType :: TypeExpression ty -> AlterColumn ty0 ty
 alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderTypeExpression ty
