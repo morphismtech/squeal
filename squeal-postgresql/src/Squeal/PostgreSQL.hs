@@ -147,23 +147,25 @@
 -- Now we can put together all the pieces into a program. The program
 -- connects to the database, sets up the schema, inserts the user data
 -- (using prepared statements as an optimization), queries the user
--- data and prints it out and finally closes the connection. Since the
--- `Connection` tracks the schema of the database, we get a new one
--- when we execute our statements.
+-- data and prints it out and finally closes the connection. We can thread
+-- the changing schema information through by using the indexed `PQ` monad
+-- transformer and when the schema doesn't change we can use `Monad` and
+-- `MonadPQ` functionality.
 -- 
 -- > main :: IO ()
--- > main = do
--- >   connection0 <- connectdb "host=localhost port=5432 dbname=exampledb"
--- >   connection1 <- execPQ (define setup) connection0
--- >   connection2 <- flip execPQ connection1 $ do
--- >     idResults <- traversePrepared insertUser (Only . userName <$> users)
--- >     ids <- traverse (fmap fromOnly . getRow (RowNumber 0)) idResults
--- >     traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
--- >     usersResult <- runQuery getUsers
--- >     usersRows <- getRows usersResult
--- >     liftBase $ print (usersRows :: [User])
--- >   connection3 <- execPQ (define teardown) connection2
--- >   finish connection3
+-- > main = void $
+-- >   withConnection "host=localhost port=5432 dbname=exampledb" . runPQ $
+-- >     define setup
+-- >     & pqThen session
+-- >     & thenDefine teardown
+-- >   where
+-- >     session = do
+-- >       idResults <- traversePrepared insertUser (Only . userName <$> users)
+-- >       ids <- traverse (fmap fromOnly . getRow (RowNumber 0)) idResults
+-- >       traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
+-- >       usersResult <- runQuery getUsers
+-- >       usersRows <- getRows usersResult
+-- >       liftBase $ print (usersRows :: [User])
 
 module Squeal.PostgreSQL
   ( module Squeal.PostgreSQL.Binary
