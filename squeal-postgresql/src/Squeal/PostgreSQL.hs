@@ -36,8 +36,8 @@
 -- The first step is to define the schema of our database. This is where
 -- we use @DataKinds@ and @TypeOperators@. The schema consists of a type-level
 -- list of tables, a `:::` pairing of a type level string or
--- `Data.TypeLit.Symbol` and a list a columns, itself a `:::` pairing of a
--- `Data.TypeLit.Symbol` and a `ColumnType`. The `ColumnType` describes the
+-- @Symbol@ and a list a columns, itself a `:::` pairing of a
+-- @Symbol@ and a `ColumnType`. The `ColumnType` describes the
 -- PostgreSQL type of the column as well as whether or not it may contain
 -- @NULL@ and whether or not inserts and updates can use a @DEFAULT@. For our
 -- schema, we'll define two tables, a users table and an emails table.

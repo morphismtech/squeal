@@ -394,7 +394,7 @@ addColumnDefault column ty = UnsafeAlterColumns $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
 -- | An `addColumnDefault` adds a new `Null` column. The new column is
--- initially filled with %NULL%s.
+-- initially filled with @NULL@s.
 --
 -- >>> :{
 -- let
