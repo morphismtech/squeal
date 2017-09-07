@@ -199,7 +199,7 @@ pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 
 -- | Run a `Definition` with `LibPQ.exec`, we expect that libpq obeys the law
 --
--- @pqThen (define statement2) statement1 = define (statement2 . statement1)@
+-- @define statement1 & thenDefine statement2 = define (statement1 >>> statement2)@
 define
   :: MonadBase IO io
   => Definition schema0 schema1
@@ -317,7 +317,7 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
     traversePrepared_ manipulation params
 
   forPrepared_
-    :: (ToParams x params, Traversable list)
+    :: (ToParams x params, Foldable list)
     => list x
     -> Manipulation schema params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
