@@ -122,7 +122,7 @@ getUsers = select
       (#u ! #id .== #e ! #user_id)) )
 ```
 
-Now that we've defined the SQL side of things, we'll need a Haskell type for users. We give the type `Generic` and `HasDatatypeInfo` instances so that we can decode the rows we receive when we run getUsers. Notice that the record fields of the `User` type match the column names of getUsers.
+Now that we've defined the SQL side of things, we'll need a Haskell type for users. We give the type `Generic` and `HasDatatypeInfo` instances so that we can decode the rows we receive when we run getUsers. Notice that the record fields of the `User` type match the column names of `getUsers`.
 
 ```haskell
 data User = User { userName :: Text, userEmail :: Maybe Text }
