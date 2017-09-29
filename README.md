@@ -8,9 +8,7 @@ Main repository for the squeal database library.
 
 ## installation
 
-The easiest way to install `squeal-postgresql` is to use the haskell [stack](https://docs.haskellstack.org/en/stable/README/) tool.
-
-Use `resolver: nightly-2017-08-25`. We're stuck with nightlies until an lts supports GHC-8.2. Do a `stack upgrade && stack update` to make sure you get GHC-8.2 and the nightly. Then add `squeal-postgresql-0.1.1.2` as an extra dependency in your `stack.yaml` and you should be good to go.
+`stack install squeal-postgresql`
 
 ## usage
 
