@@ -33,7 +33,7 @@ a `MonadPQ` constraint for running a `Manipulation` or `Query`.
 
 module Squeal.PostgreSQL.PQ
   ( -- * Connection
-    Connection (unConnection)
+    Connection (Connection, unConnection)
   , connectdb
   , finish
   , withConnection
