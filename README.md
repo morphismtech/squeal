@@ -4,7 +4,9 @@
 
 [![CircleCI](https://circleci.com/gh/echatav/squeal.svg?style=svg&circle-token=a699a654ef50db2c3744fb039cf2087c484d1226)](https://circleci.com/gh/echatav/squeal)
 
-Main repository for the squeal database library.
+[Github](https://github.com/morphismtech/squeal)
+[Hackage](https://hackage.haskell.org/package/squeal-postgresql)
+[Stackage](https://www.stackage.org/package/squeal-postgresql)
 
 ## installation
 
