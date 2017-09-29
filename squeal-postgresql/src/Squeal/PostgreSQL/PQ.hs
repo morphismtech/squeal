@@ -38,7 +38,7 @@ module Squeal.PostgreSQL.PQ
   , finish
   , withConnection
     -- * PQ
-  , PQ (runPQ)
+  , PQ (PQ, runPQ)
   , execPQ
   , pqAp
   , pqBind
