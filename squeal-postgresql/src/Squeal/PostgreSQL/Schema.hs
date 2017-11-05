@@ -68,12 +68,16 @@ module Squeal.PostgreSQL.Schema
     -- * Generics
   , SameField
   , SameFields
+    -- * PostgreSQL Constraints
+  , (:=>)
+  , ColumnConstraint (..)
   ) where
 
 import Control.DeepSeq
 import Data.ByteString
 import Data.Monoid
 import Data.String
+import Data.Type.Set
 import Generics.SOP (AllZip)
 import GHC.Generics (Generic)
 import GHC.Exts
@@ -322,3 +326,10 @@ type family SameFields
     ('Type.Newtype _module _datatype ('Type.Record _constructor fields))
     columns
       = AllZip SameField fields columns
+
+type (:=>) constraints ty = '(AsSet constraints,ty)
+
+data ColumnConstraint
+  = Default
+  | Unique
+  | References Symbol Symbol
