@@ -34,7 +34,7 @@ module Squeal.PostgreSQL.Schema
   ( -- * Kinds
     PGType (..)
   , NullityType (..)
-  , ColumnType (..)
+  , ColumnType
   , ColumnsType
   , TablesType
   , Grouping (..)
@@ -53,7 +53,7 @@ module Squeal.PostgreSQL.Schema
     -- * Type Families
   , In
   , HasUnique
-  , BaseType
+  , PGTypeOf
   , SameTypes
   , AllNotNull
   , NotAllNull
@@ -71,6 +71,8 @@ module Squeal.PostgreSQL.Schema
     -- * PostgreSQL Constraints
   , (:=>)
   , ColumnConstraint (..)
+  , DropDefault
+  , DropDefaultList
   ) where
 
 import Control.DeepSeq
@@ -122,11 +124,7 @@ data NullityType
 -- is to use `Squeal.PostgreSQL.Expression.def`,
 -- `Squeal.PostgreSQL.Expression.unDef` or
 -- `Squeal.PostgreSQL.Expression.param`.
-data ColumnType
-  = Optional NullityType
-  -- ^ @DEFAULT@ is allowed
-  | Required NullityType
-  -- ^ @DEFAULT@ is not allowed
+type ColumnType = ([ColumnConstraint],NullityType)
 
 -- | `ColumnsType` is a kind synonym for a row of `ColumnType`s.
 type ColumnsType = [(Symbol,ColumnType)]
@@ -226,9 +224,9 @@ type family In x xs :: Constraint where
 -- of @alias ::: x@.
 type HasUnique alias xs x = xs ~ '[alias ::: x]
 
--- | `BaseType` forgets about @NULL@ and @DEFAULT@
-type family BaseType (ty :: ColumnType) :: PGType where
-  BaseType (optionality (nullity pg)) = pg
+-- | `PGTypeOf` forgets about @NULL@ and any column constraints.
+type family PGTypeOf (ty :: ColumnType) :: PGType where
+  PGTypeOf '(constraints, nullity pg) = pg
 
 -- | `SameTypes` is a constraint that proves two `ColumnsType`s have the same
 -- length and the same `ColumnType`s.
@@ -242,14 +240,14 @@ type family SameTypes
 -- | `AllNotNull` is a constraint that proves a `ColumnsType` has no @NULL@s.
 type family AllNotNull (columns :: ColumnsType) :: Constraint where
   AllNotNull '[] = ()
-  AllNotNull ((column ::: (optionality ('NotNull ty))) ': columns)
+  AllNotNull ((column ::: '(constraints, ('NotNull ty))) ': columns)
     = AllNotNull columns
 
 -- | `NotAllNull` is a constraint that proves a `ColumnsType` has some
 -- @NOT NULL@.
 type family NotAllNull columns :: Constraint where
-  NotAllNull ((column ::: (optionality ('NotNull ty))) ': columns) = ()
-  NotAllNull ((column ::: (optionality ('Null ty))) ': columns)
+  NotAllNull ((column ::: '(constraints, ('NotNull ty))) ': columns) = ()
+  NotAllNull ((column ::: '(constraints, ('Null ty))) ': columns)
     = NotAllNull columns
 
 -- | `NullifyType` is an idempotent that nullifies a `ColumnType`.
@@ -333,3 +331,11 @@ data ColumnConstraint
   = Default
   | Unique
   | References Symbol Symbol
+
+type DropDefault constraints = AsSet (DropDefaultList constraints)
+
+type family DropDefaultList constraints where
+  DropDefaultList '[] = '[]
+  DropDefaultList ( 'Default ': constraints) = constraints
+  DropDefaultList (constraint ': constraints) =
+    constraint ': DropDefaultList constraints

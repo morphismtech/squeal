@@ -743,22 +743,22 @@ Sorting
 -- ordering of a `Null` result column.
 data SortExpression tables grouping params where
     Asc
-      :: Expression tables grouping params ('Required ('NotNull ty))
+      :: Expression tables grouping params '( '[], ('NotNull ty))
       -> SortExpression tables grouping params
     Desc
-      :: Expression tables grouping params ('Required ('NotNull ty))
+      :: Expression tables grouping params '( '[], ('NotNull ty))
       -> SortExpression tables grouping params
     AscNullsFirst
-      :: Expression tables grouping params ('Required ('Null ty))
+      :: Expression tables grouping params '( '[], ('Null ty))
       -> SortExpression tables grouping params
     AscNullsLast
-      :: Expression tables grouping params ('Required ('Null ty))
+      :: Expression tables grouping params '( '[], ('Null ty))
       -> SortExpression tables grouping params
     DescNullsFirst
-      :: Expression tables grouping params ('Required ('Null ty))
+      :: Expression tables grouping params '( '[], ('Null ty))
       -> SortExpression tables grouping params
     DescNullsLast
-      :: Expression tables grouping params ('Required ('Null ty))
+      :: Expression tables grouping params '( '[], ('Null ty))
       -> SortExpression tables grouping params
 deriving instance Show (SortExpression tables grouping params)
 

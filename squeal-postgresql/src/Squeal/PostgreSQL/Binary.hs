@@ -118,13 +118,13 @@ instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
 -- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s. You should
 -- not define instances of `ToColumnParam`, just use the provided instances.
 class ToColumnParam (x :: Type) (ty :: ColumnType) where
-  -- | >>> toColumnParam @Int16 @('Required ('NotNull 'PGint2)) 0
+  -- | >>> toColumnParam @Int16 @'( '[], ('NotNull 'PGint2)) 0
   -- K (Just "\NUL\NUL")
   --
-  -- >>> toColumnParam @(Maybe Int16) @('Required ('Null 'PGint2)) (Just 0)
+  -- >>> toColumnParam @(Maybe Int16) @'( '[], ('Null 'PGint2)) (Just 0)
   -- K (Just "\NUL\NUL")
   --
-  -- >>> toColumnParam @(Maybe Int16) @('Required ('Null 'PGint2)) Nothing
+  -- >>> toColumnParam @(Maybe Int16) @'( '[], ('Null 'PGint2)) Nothing
   -- K Nothing
   toColumnParam :: x -> K (Maybe Strict.ByteString) ty
 instance ToParam x pg => ToColumnParam x (optionality ('NotNull pg)) where
@@ -203,7 +203,7 @@ class FromColumnValue (colty :: (Symbol,ColumnType)) (y :: Type) where
   -- Just (Id {getId = 1})
   fromColumnValue :: K (Maybe Strict.ByteString) colty -> y
 instance FromValue pg y
-  => FromColumnValue (column ::: ('Required ('NotNull pg))) y where
+  => FromColumnValue (column ::: '( '[], ('NotNull pg))) y where
     fromColumnValue = \case
       K Nothing -> error "fromColumnValue: saw NULL when expecting NOT NULL"
       K (Just bytes) ->
@@ -214,7 +214,7 @@ instance FromValue pg y
         in
           either err id errOrValue
 instance FromValue pg y
-  => FromColumnValue (column ::: ('Required ('Null pg))) (Maybe y) where
+  => FromColumnValue (column ::: '( '[], ('Null pg))) (Maybe y) where
     fromColumnValue (K nullOrBytes)
       = either err id
       . Decoding.valueParser (fromValue @pg @y Proxy)

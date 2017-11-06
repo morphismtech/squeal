@@ -63,6 +63,7 @@ import Control.Category
 import Control.DeepSeq
 import Data.ByteString
 import Data.Monoid
+import Data.Type.Set
 import GHC.TypeLits
 import Prelude hiding ((.), id)
 
@@ -386,10 +387,10 @@ newtype AlterColumns
 -- :}
 -- "ALTER TABLE tab ADD COLUMN col2 text DEFAULT E'foo';"
 addColumnDefault
-  :: KnownSymbol column
+  :: (KnownSymbol column, 'Default `In` constraints)
   => Alias column -- ^ column to add
-  -> TypeExpression ('Optional ty) -- ^ type of the new column
-  -> AlterColumns columns (Create column ('Optional ty) columns)
+  -> TypeExpression '(constraints, ty) -- ^ type of the new column
+  -> AlterColumns columns (Create column '(constraints, ty) columns)
 addColumnDefault column ty = UnsafeAlterColumns $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
@@ -410,8 +411,8 @@ addColumnDefault column ty = UnsafeAlterColumns $
 addColumnNull
   :: KnownSymbol column
   => Alias column -- ^ column to add
-  -> TypeExpression ('Required ('Null ty)) -- ^ type of the new column
-  -> AlterColumns columns (Create column ('Required ('Null ty)) columns)
+  -> TypeExpression '( '[], ('Null ty)) -- ^ type of the new column
+  -> AlterColumns columns (Create column '( '[], ('Null ty)) columns)
 addColumnNull column ty = UnsafeAlterColumns $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
@@ -506,8 +507,8 @@ newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
 -- :}
 -- "ALTER TABLE tab ALTER COLUMN col SET DEFAULT 5;"
 setDefault
-  :: Expression '[] 'Ungrouped '[] ('Required ty) -- ^ default value to set
-  -> AlterColumn (optionality ty) ('Optional ty)
+  :: Expression '[] 'Ungrouped '[] '( constraints, ty) -- ^ default value to set
+  -> AlterColumn (optionality ty) '( '[ 'Default] `Union` constraints, ty)
 setDefault expression = UnsafeAlterColumn $
   "SET DEFAULT" <+> renderExpression expression
 
@@ -522,7 +523,7 @@ setDefault expression = UnsafeAlterColumn $
 -- in renderDefinition definition
 -- :}
 -- "ALTER TABLE tab ALTER COLUMN col DROP DEFAULT;"
-dropDefault :: AlterColumn (optionality ty) ('Required ty)
+dropDefault :: AlterColumn '(constraints, ty) '(DropDefault constraints, ty)
 dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 
 -- | A `setNotNull` adds a @NOT NULL@ constraint to a column.
