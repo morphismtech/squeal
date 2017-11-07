@@ -36,6 +36,7 @@ module Squeal.PostgreSQL.Schema
   , NullityType (..)
   , ColumnType
   , ColumnsType
+  , TableType
   , TablesType
   , Grouping (..)
     -- * Constraints
@@ -73,6 +74,7 @@ module Squeal.PostgreSQL.Schema
   , ColumnConstraint (..)
   , DropDefault
   , DropDefaultList
+  , TableConstraint' (..)
   ) where
 
 import Control.DeepSeq
@@ -129,11 +131,13 @@ type ColumnType = ([ColumnConstraint],NullityType)
 -- | `ColumnsType` is a kind synonym for a row of `ColumnType`s.
 type ColumnsType = [(Symbol,ColumnType)]
 
+type TableType = ([TableConstraint'],ColumnsType)
+
 -- | `TablesType` is a kind synonym for a row of `ColumnsType`s.
 -- It is used as a kind for both a schema, a disjoint union of tables,
 -- and a joined table `Squeal.PostgreSQL.Query.FromClause`,
 -- a product of tables.
-type TablesType = [(Symbol,ColumnsType)]
+type TablesType = [(Symbol,TableType)]
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
@@ -261,13 +265,16 @@ type family NullifyColumns (columns :: ColumnsType) :: ColumnsType where
   NullifyColumns ((column ::: ty) ': columns) =
     (column ::: NullifyType ty) ': NullifyColumns columns
 
+type family NullifyTable (table :: TableType) :: TableType where
+  NullifyTable '( '[], columns) = '( '[], NullifyColumns columns)
+
 -- | `NullifyTables` is an idempotent that nullifies a `TablesType`
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
 type family NullifyTables (tables :: TablesType) :: TablesType where
   NullifyTables '[] = '[]
-  NullifyTables ((table ::: columns) ': tables) =
-    (table ::: NullifyColumns columns) ': NullifyTables tables
+  NullifyTables ((tab ::: table) ': tables) =
+    (tab ::: NullifyTable table) ': NullifyTables tables
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.
@@ -339,3 +346,8 @@ type family DropDefaultList constraints where
   DropDefaultList ( 'Default ': constraints) = constraints
   DropDefaultList (constraint ': constraints) =
     constraint ': DropDefaultList constraints
+
+data TableConstraint'
+  = Check [Symbol]
+  | Uniques [Symbol]
+  | ForeignKey [Symbol] Symbol [Symbol]
