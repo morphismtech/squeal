@@ -71,6 +71,7 @@ module Squeal.PostgreSQL.Schema
   , SameFields
     -- * PostgreSQL Constraints
   , (:=>)
+  , Unconstrain
   , ColumnConstraint (..)
   , DropDefault
   , DropDefaultList
@@ -333,6 +334,9 @@ type family SameFields
       = AllZip SameField fields columns
 
 type (:=>) constraints ty = '(AsSet constraints,ty)
+
+type family Unconstrain constrained where
+  Unconstrain '(constraints, ty) = '( '[], ty)
 
 data ColumnConstraint
   = Default
