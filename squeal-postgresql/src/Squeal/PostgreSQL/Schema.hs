@@ -71,6 +71,7 @@ module Squeal.PostgreSQL.Schema
   , SameFields
     -- * PostgreSQL Constraints
   , (:=>)
+  , (::=>)
   , Unconstrain
   , ColumnConstraint (..)
   , DropDefault
@@ -138,7 +139,7 @@ type TableType = ([TableConstraint'],ColumnsType)
 -- It is used as a kind for both a schema, a disjoint union of tables,
 -- and a joined table `Squeal.PostgreSQL.Query.FromClause`,
 -- a product of tables.
-type TablesType = [(Symbol,TableType)]
+type TablesType = [(Symbol,ColumnsType)]
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
@@ -274,8 +275,8 @@ type family NullifyTable (table :: TableType) :: TableType where
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
 type family NullifyTables (tables :: TablesType) :: TablesType where
   NullifyTables '[] = '[]
-  NullifyTables ((tab ::: table) ': tables) =
-    (tab ::: NullifyTable table) ': NullifyTables tables
+  NullifyTables ((tab ::: columns) ': tables) =
+    (tab ::: NullifyColumns columns) ': NullifyTables tables
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.
@@ -333,7 +334,8 @@ type family SameFields
     columns
       = AllZip SameField fields columns
 
-type (:=>) constraints ty = '(AsSet constraints,ty)
+type (:=>) constraints ty = '(constraints,ty)
+type (::=>) constraints ty = '(AsSet constraints,ty)
 
 type family Unconstrain constrained where
   Unconstrain '(constraints, ty) = '( '[], ty)

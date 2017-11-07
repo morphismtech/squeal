@@ -24,11 +24,11 @@ import qualified GHC.Generics as GHC
 
 type Schema =
   '[ "users" :::
-       '[ "id" ::: ('[ 'Default] :=> 'NotNull 'PGint4)
+       '[ "id" ::: ('[ 'Default, 'Unique] :=> 'NotNull 'PGint4)
         , "name" ::: ('[] :=> 'NotNull 'PGtext)
         ]
    , "emails" :::
-       '[ "id" ::: ('[ 'Default] :=> 'NotNull 'PGint4)
+       '[ "id" ::: ('[ 'Default, 'Unique] :=> 'NotNull 'PGint4)
         , "user_id" ::: ('[] :=> 'NotNull 'PGint4)
         , "email" ::: ('[] :=> 'Null 'PGtext)
         ]
@@ -53,14 +53,14 @@ teardown :: Definition Schema '[]
 teardown = dropTable #emails >>> dropTable #users
 
 insertUser :: Manipulation Schema
-  '[ '[] :=> 'NotNull 'PGtext]
-  '[ "fromOnly" ::: ('[] :=> 'NotNull 'PGint4) ]
+  '[ '[] ::=> 'NotNull 'PGtext]
+  '[ "fromOnly" ::: ('[] ::=> 'NotNull 'PGint4) ]
 insertUser = insertInto #users
   ( Values (def `As` #id :* param @1 `As` #name :* Nil) [] )
   OnConflictDoNothing (Returning (#id `As` #fromOnly :* Nil))
 
 insertEmail :: Manipulation Schema
-  '[ '[] :=> 'NotNull 'PGint4, '[] :=> 'Null 'PGtext] '[]
+  '[ '[] ::=> 'NotNull 'PGint4, '[] ::=> 'Null 'PGtext] '[]
 insertEmail = insertInto #emails ( Values
   ( def `As` #id :*
     param @1 `As` #user_id :*
@@ -68,8 +68,8 @@ insertEmail = insertInto #emails ( Values
   OnConflictDoNothing (Returning Nil)
 
 getUsers :: Query Schema '[]
-  '[ "userName" ::: ('[] :=> 'NotNull 'PGtext)
-   , "userEmail" ::: ('[] :=> 'Null 'PGtext) ]
+  '[ "userName" ::: ('[] ::=> 'NotNull 'PGtext)
+   , "userEmail" ::: ('[] ::=> 'Null 'PGtext) ]
 getUsers = select
   (#u ! #name `As` #userName :* #e ! #email `As` #userEmail :* Nil)
   ( from (Table (#users `As` #u)
