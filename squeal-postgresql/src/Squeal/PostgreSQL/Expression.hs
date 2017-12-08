@@ -105,6 +105,7 @@ module Squeal.PostgreSQL.Expression
     -- * Tables
   , Table (UnsafeTable, renderTable)
   , HasTable (getTable)
+  , SchemaHasTable
     -- * TypeExpression
   , TypeExpression (UnsafeTypeExpression, renderTypeExpression)
   , PGTyped (pgtype)
@@ -997,6 +998,14 @@ instance {-# OVERLAPPABLE #-}
 instance HasTable table schema columns
   => IsLabel table (Table schema columns) where
     fromLabel = getTable (Alias @table)
+
+type family SchemaHasTable
+  (table :: Symbol)
+  (schema :: SchemaType)
+  (columns :: ColumnsType)
+  where
+    SchemaHasTable table schema columns =
+      HasTable table (UnconstrainOver schema) columns
 
 {-----------------------------------------
 type expressions

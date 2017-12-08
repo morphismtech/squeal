@@ -178,7 +178,8 @@ in renderManipulation manipulation
 "INSERT INTO tab (col1, col2) VALUES (2, 4), (6, 8) ON CONFLICT DO UPDATE SET col1 = 2 WHERE (col1 = col2) RETURNING (col1 + col2) AS sum;"
 -}
 insertInto
-  :: (SOP.SListI columns, SOP.SListI results, HasTable table (UnconstrainOver schema) columns)
+  :: ( SOP.SListI columns, SOP.SListI results
+     , SchemaHasTable table schema columns )
   => Alias table -- ^ table to insert into
   -> ValuesClause schema params columns -- ^ values to insert
   -> ConflictClause columns params
@@ -302,7 +303,9 @@ UPDATE statements
 -- :}
 -- "UPDATE tab SET col1 = 2 WHERE (col1 <> col2);"
 update
-  :: (HasTable table (UnconstrainOver schema) columns, SOP.SListI columns, SOP.SListI results)
+  :: ( SchemaHasTable table schema columns
+     , SOP.SListI columns
+     , SOP.SListI results )
   => Alias table -- ^ table to update
   -> NP (Aliased (UpdateExpression columns params)) columns
   -- ^ modified values to replace old values
@@ -357,7 +360,7 @@ DELETE statements
 -- :}
 -- "DELETE FROM tab WHERE (col1 = col2) RETURNING *;"
 deleteFrom
-  :: (SOP.SListI results, HasTable table (UnconstrainOver schema) columns)
+  :: (SOP.SListI results, SchemaHasTable table schema columns)
   => Alias table -- ^ table to delete from
   -> Condition '[table ::: columns] 'Ungrouped params
   -- ^ condition under which to delete a row

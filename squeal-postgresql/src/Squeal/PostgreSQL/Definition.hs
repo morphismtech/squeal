@@ -238,7 +238,7 @@ primaryKey columns = UnsafeTableConstraint $
 -- :}
 -- "CREATE TABLE users (id serial, username text NOT NULL, PRIMARY KEY (id)); CREATE TABLE emails (id serial, userid integer NOT NULL, email text NOT NULL, PRIMARY KEY (id), FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE ON UPDATE RESTRICT);"
 foreignKey
-  :: ( HasTable tab (UnconstrainOver schema) refcolumns  
+  :: ( SchemaHasTable tab schema refcolumns  
      , SameTypes subcolumns refsubcolumns
      , AllNotNull subcolumns
      , SOP.SListI subcolumns
