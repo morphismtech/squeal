@@ -100,8 +100,8 @@ import qualified Control.Monad.Trans.RWS.Lazy as Lazy
 import qualified Control.Monad.Trans.RWS.Strict as Strict
 
 -- | A `Connection` consists of a `Database.PostgreSQL.LibPQ`
--- `Database.PastgreSQL.LibPQ.Connection` and a phantom `TablesType`
-newtype Connection (schema :: TablesType) =
+-- `Database.PastgreSQL.LibPQ.Connection` and a phantom `RelationType`
+newtype Connection (schema :: RelationType) =
   Connection { unConnection :: LibPQ.Connection }
 
 {- | Makes a new connection to the database server.
@@ -153,8 +153,8 @@ withConnection connString action = do
 -- | We keep track of the schema via an Atkey indexed state monad transformer,
 -- `PQ`.
 newtype PQ
-  (schema0 :: TablesType)
-  (schema1 :: TablesType)
+  (schema0 :: RelationType)
+  (schema1 :: RelationType)
   (m :: Type -> Type)
   (x :: Type) =
     PQ { runPQ :: Connection schema0 -> m (x, Connection schema1) }

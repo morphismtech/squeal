@@ -181,7 +181,7 @@ values from primitive expression using arithmetic, logical,
 and other operations.
 -}
 newtype Expression
-  (tables :: TablesType)
+  (tables :: RelationType)
   (grouping :: Grouping)
   (params :: [ColumnType])
   (ty :: ColumnType)
@@ -978,7 +978,7 @@ tables
 -- | A `Table` from a schema without its alias with an `IsLabel` instance
 -- to call a table reference by its alias.
 newtype Table
-  (schema :: TablesType)
+  (schema :: RelationType)
   (columns :: ColumnsType)
     = UnsafeTable { renderTable :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
@@ -1043,7 +1043,7 @@ smallserial = UnsafeTypeExpression "smallserial"
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `'PGint4`
 serial4, serial
-  :: TypeExpression ( '[Default, 'Unique] :=> 'NotNull 'PGint4)
+  :: TypeExpression ( '[ 'Default, 'Unique] :=> 'NotNull 'PGint4)
 serial4 = UnsafeTypeExpression "serial4"
 serial = UnsafeTypeExpression "serial"
 -- | not a true type, but merely a notational convenience for creating

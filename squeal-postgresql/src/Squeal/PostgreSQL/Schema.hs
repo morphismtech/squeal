@@ -28,6 +28,7 @@ Embedding of PostgreSQL type and alias system
   , TypeFamilies
   , TypeInType
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Schema
@@ -36,8 +37,9 @@ module Squeal.PostgreSQL.Schema
   , NullityType (..)
   , ColumnType
   , ColumnsType
+  , RelationType
   , TableType
-  , TablesType
+  , SchemaType
   , Grouping (..)
     -- * Constraints
   , PGNum
@@ -71,11 +73,12 @@ module Squeal.PostgreSQL.Schema
   , SameFields
     -- * PostgreSQL Constraints
   , (:=>)
-  , (::=>)
   , Unconstrain
   , ColumnConstraint (..)
-  , DropDefault
-  , DropDefaultList
+  -- , DropDefault
+  -- , DropDefaultList
+  , AddConstraint
+  , DropConstraint
   , TableConstraint' (..)
   ) where
 
@@ -133,13 +136,17 @@ type ColumnType = ([ColumnConstraint],NullityType)
 -- | `ColumnsType` is a kind synonym for a row of `ColumnType`s.
 type ColumnsType = [(Symbol,ColumnType)]
 
-type TableType = ([TableConstraint'],ColumnsType)
-
--- | `TablesType` is a kind synonym for a row of `ColumnsType`s.
+-- | `RelationType` is a kind synonym for a row of `ColumnsType`s.
 -- It is used as a kind for both a schema, a disjoint union of tables,
 -- and a joined table `Squeal.PostgreSQL.Query.FromClause`,
 -- a product of tables.
-type TablesType = [(Symbol,ColumnsType)]
+type RelationType = [(Symbol,ColumnsType)]
+
+type TableType = ([TableConstraint'],ColumnsType)
+type SchemaType = [(Symbol,TableType)]
+
+type family Unconstrain (ty :: ([constraint],kind)) :: kind where
+  Unconstrain '(constraints,ty) = ty
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
@@ -270,10 +277,10 @@ type family NullifyColumns (columns :: ColumnsType) :: ColumnsType where
 type family NullifyTable (table :: TableType) :: TableType where
   NullifyTable '( '[], columns) = '( '[], NullifyColumns columns)
 
--- | `NullifyTables` is an idempotent that nullifies a `TablesType`
+-- | `NullifyTables` is an idempotent that nullifies a `RelationType`
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
-type family NullifyTables (tables :: TablesType) :: TablesType where
+type family NullifyTables (tables :: RelationType) :: RelationType where
   NullifyTables '[] = '[]
   NullifyTables ((tab ::: columns) ': tables) =
     (tab ::: NullifyColumns columns) ': NullifyTables tables
@@ -335,25 +342,29 @@ type family SameFields
       = AllZip SameField fields columns
 
 type (:=>) constraints ty = '(constraints,ty)
-type (::=>) constraints ty = '(AsSet constraints,ty)
-
-type family Unconstrain constrained where
-  Unconstrain '(constraints, ty) = '( '[], ty)
 
 data ColumnConstraint
   = Default
   | Unique
   | References Symbol Symbol
 
-type DropDefault constraints = AsSet (DropDefaultList constraints)
+type family AddConstraint constraint constraints ty where
+  AddConstraint constraint constraints ty
+    = '(AsSet (constraint ': constraints),ty)
 
-type family DropDefaultList constraints where
-  DropDefaultList '[] = '[]
-  DropDefaultList ( 'Default ': constraints) = constraints
-  DropDefaultList (constraint ': constraints) =
-    constraint ': DropDefaultList constraints
+type family DropConstraint constraint ty where
+  DropConstraint constraint '(constraints,ty)
+    = '(Delete constraint constraints,ty)
+
+-- type DropDefault constraints = AsSet (DropDefaultList constraints)
+
+-- type family DropDefaultList constraints where
+--   DropDefaultList '[] = '[]
+--   DropDefaultList ( 'Default ': constraints) = constraints
+--   DropDefaultList (constraint ': constraints) =
+--     constraint ': DropDefaultList constraints
 
 data TableConstraint'
-  = Check [Symbol]
-  | Uniques [Symbol]
-  | ForeignKey [Symbol] Symbol [Symbol]
+  = Check
+  | Uniques [(Symbol, ColumnType)]
+  | ForeignKey ColumnsType Symbol ColumnsType

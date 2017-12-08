@@ -59,7 +59,7 @@ import Squeal.PostgreSQL.Schema
 -- `deleteFrom`. A `Query` is also considered a `Manipulation` even though
 -- it does not modify data.
 newtype Manipulation
-  (schema :: TablesType)
+  (schema :: RelationType)
   (params :: [ColumnType])
   (columns :: ColumnsType)
     = UnsafeManipulation { renderManipulation :: ByteString }
@@ -193,7 +193,7 @@ insertInto table insert conflict returning = UnsafeManipulation $
 -- | A `ValuesClause` lets you insert either values, free `Expression`s,
 -- or the result of a `Query`.
 data ValuesClause
-  (schema :: TablesType)
+  (schema :: RelationType)
   (params :: [ColumnType])
   (columns :: ColumnsType)
     = Values
