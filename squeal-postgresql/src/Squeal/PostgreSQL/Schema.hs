@@ -65,6 +65,7 @@ module Squeal.PostgreSQL.Schema
   , NullifyTables
   , Join
   , Create
+  , Add
   , Drop
   , Alter
   , Rename
@@ -74,6 +75,7 @@ module Squeal.PostgreSQL.Schema
     -- * PostgreSQL Constraints
   , (:=>)
   , Unconstrain
+  , UnconstrainOver
   , ColumnConstraint (..)
   -- , DropDefault
   -- , DropDefaultList
@@ -86,6 +88,8 @@ import Control.DeepSeq
 import Data.ByteString
 import Data.Monoid
 import Data.String
+import Data.Type.Bool
+import Data.Type.Equality
 import Data.Type.Set
 import Generics.SOP (AllZip)
 import GHC.Generics (Generic)
@@ -147,6 +151,11 @@ type SchemaType = [(Symbol,TableType)]
 
 type family Unconstrain (ty :: ([constraint],kind)) :: kind where
   Unconstrain '(constraints,ty) = ty
+
+type family UnconstrainOver (tys :: SchemaType) :: RelationType where
+  UnconstrainOver '[] = '[]
+  UnconstrainOver ((alias ::: x) ': xs) =
+    (alias ::: Unconstrain x) ': UnconstrainOver xs
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
@@ -299,6 +308,9 @@ type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
   Create alias y (x ': xs) = x ': Create alias y xs
 
+type family Add alias x y where
+  Add alias x (constraints :=> xs) = constraints :=> Create alias x xs
+
 -- | @Drop alias xs@ removes the type associated with @alias@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.dropTable` statements
 -- and in @ALTER TABLE@ `Squeal.PostgreSQL.Definition.dropColumn` statements.
@@ -312,6 +324,19 @@ type family Drop alias xs where
 type family Alter alias xs x where
   Alter alias ((alias ::: x0) ': xs) x1 = (alias ::: x1) ': xs
   Alter alias (x0 ': xs) x1 = x0 ': Alter alias xs x1
+
+type family AddConstraint constraint ty where
+  AddConstraint constraint (constraints :=> ty)
+    = AsSet (constraint ': constraints) :=> ty
+
+type family DeleteFromList (e :: elem) (list :: [elem]) where
+  DeleteFromList elem '[] = '[]
+  DeleteFromList elem (x ': xs) =
+    If (Cmp elem x == 'EQ) xs (x ': DeleteFromList elem xs)
+
+type family DropConstraint constraint ty where
+  DropConstraint constraint (constraints :=> ty)
+    = (AsSet (DeleteFromList constraint constraints)) :=> ty
 
 -- | @Rename alias0 alias1 xs@ replaces the alias @alias0@ by @alias1@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.alterTableRename` and
@@ -341,20 +366,12 @@ type family SameFields
     columns
       = AllZip SameField fields columns
 
-type (:=>) constraints ty = '(constraints,ty)
+type (:=>) (constraints :: [constraint]) ty = '(constraints,ty)
 
 data ColumnConstraint
   = Default
   | Unique
   | References Symbol Symbol
-
-type family AddConstraint constraint constraints ty where
-  AddConstraint constraint constraints ty
-    = '(AsSet (constraint ': constraints),ty)
-
-type family DropConstraint constraint ty where
-  DropConstraint constraint '(constraints,ty)
-    = '(Delete constraint constraints,ty)
 
 -- type DropDefault constraints = AsSet (DropDefaultList constraints)
 

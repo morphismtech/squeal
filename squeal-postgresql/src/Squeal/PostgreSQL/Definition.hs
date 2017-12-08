@@ -12,6 +12,7 @@ Squeal data definition language.
     DataKinds
   , DeriveDataTypeable
   , DeriveGeneric
+  , FlexibleContexts
   , GADTs
   , GeneralizedNewtypeDeriving
   , KindSignatures
@@ -43,12 +44,12 @@ module Squeal.PostgreSQL.Definition
     -- * Alter
   , alterTable
   , alterTableRename
-  , alterTableAddConstraint
+  , addConstraint
   , AlterTable (UnsafeAlterTable, renderAlterTable)
   , addColumnDefault
   , addColumnNull
   , dropColumn
-  , dropColumnCascade
+  -- , dropColumnCascade
   , renameColumn
   , alterColumn
   , AlterColumn (UnsafeAlterColumn, renderAlterColumn)
@@ -107,6 +108,7 @@ CREATE statements
 createTable
   :: ( KnownSymbol tab
      , SOP.SListI columns
+     , SOP.SListI constraints
      , table ~ (constraints :=> (column ': columns)))
   => Alias tab -- ^ the name of the table to add
   -> NP (Aliased TypeExpression) (column ': columns)
@@ -118,16 +120,12 @@ createTable table columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderAlias table
   <+> parenthesized
     ( renderCommaSeparated renderColumnDef columns
-      <> renderConstraints constraints )
+      <> renderCommaSeparated renderTableConstraint constraints )
   <> ";"
   where
     renderColumnDef :: Aliased TypeExpression x -> ByteString
     renderColumnDef (ty `As` column) =
       renderAlias column <+> renderTypeExpression ty
-    renderConstraints :: [TableConstraint schema columns] -> ByteString
-    renderConstraints = \case
-      [] -> ""
-      _ -> ", " <> commaSeparated (renderTableConstraint <$> constraints)
 
 -- | Data types are a way to limit the kind of data that can be stored in a
 -- table. For many applications, however, the constraint they provide is
@@ -240,14 +238,14 @@ primaryKey columns = UnsafeTableConstraint $
 -- :}
 -- "CREATE TABLE users (id serial, username text NOT NULL, PRIMARY KEY (id)); CREATE TABLE emails (id serial, userid integer NOT NULL, email text NOT NULL, PRIMARY KEY (id), FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE ON UPDATE RESTRICT);"
 foreignKey
-  :: ( {-(reftable ::: refcolumns) `In` schema
-     , -}SameTypes subcolumns refsubcolumns
+  :: ( HasTable tab (UnconstrainOver schema) refcolumns  
+     , SameTypes subcolumns refsubcolumns
      , AllNotNull subcolumns
      , SOP.SListI subcolumns
      , SOP.SListI refsubcolumns)
   => NP (Column columns) subcolumns
   -- ^ column or columns in the table
-  -> Alias reftable
+  -> Alias tab
   -- ^ reference table
   -> NP (Column refcolumns) refsubcolumns
   -- ^ reference column or columns in the reference table
@@ -256,7 +254,7 @@ foreignKey
   -> OnUpdateClause
   -- ^ what to do when reference is updated
   -> TableConstraint schema columns
-      ('ForeignKey subcolumns reftable refsubcolumns)
+      ('ForeignKey subcolumns tab refsubcolumns)
 foreignKey columns reftable refcolumns onDelete onUpdate =
   UnsafeTableConstraint $
     "FOREIGN KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
@@ -324,7 +322,7 @@ ALTER statements
 
 -- | `alterTable` changes the definition of a table from the schema.
 alterTable
-  :: (tab ::: table0) `In` schema
+  :: (KnownSymbol tab, (tab ::: table0) `In` schema)
   => Alias tab -- ^ table to alter
   -> AlterTable schema table0 table1 -- ^ alteration to perform
   -> Definition schema (Alter tab schema table1)
@@ -368,11 +366,10 @@ alterTableRename table0 table1 = UnsafeDefinition $
 --   <+> "ADD" <+> renderTableConstraint constraint <> ";"
 
 addConstraint
-  :: ( table `In` schema
-     , table ~ (tab ::: (constraints :=> columns)))
+  :: (tab ::: table) `In` schema
   => Alias tab
   -> TableConstraint schema columns constraint
-  -> AlterTable table (tab ::: AddConstraint constraint constraints columns)
+  -> AlterTable schema table (AddConstraint constraint table)
 addConstraint = undefined
 
 -- | An `AlterTable` describes the alteration to perform on the columns
@@ -402,8 +399,8 @@ newtype AlterTable
 addColumnDefault
   :: (KnownSymbol column, 'Default `In` constraints)
   => Alias column -- ^ column to add
-  -> TypeExpression '(constraints, ty) -- ^ type of the new column
-  -> AlterTable schema columns (Create column '(constraints, ty) columns)
+  -> TypeExpression (constraints :=> ty) -- ^ type of the new column
+  -> AlterTable schema table (Add column (constraints :=> ty) table)
 addColumnDefault column ty = UnsafeAlterTable $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
@@ -424,8 +421,8 @@ addColumnDefault column ty = UnsafeAlterTable $
 addColumnNull
   :: KnownSymbol column
   => Alias column -- ^ column to add
-  -> TypeExpression '( '[], ('Null ty)) -- ^ type of the new column
-  -> AlterTable schema columns (Create column '( '[], ('Null ty)) columns)
+  -> TypeExpression ( '[] :=> 'Null ty) -- ^ type of the new column
+  -> AlterTable schema table (Add column ( '[] :=> 'Null ty) table)
 addColumnNull column ty = UnsafeAlterTable $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
@@ -448,7 +445,7 @@ addColumnNull column ty = UnsafeAlterTable $
 dropColumn
   :: KnownSymbol column
   => Alias column -- ^ column to remove
-  -> AlterTable schema columns (Drop column columns)
+  -> AlterTable schema ('[] :=> columns) ('[] :=> Drop column columns)
 dropColumn column = UnsafeAlterTable $
   "DROP COLUMN" <+> renderAlias column
 
@@ -466,12 +463,12 @@ dropColumn column = UnsafeAlterTable $
 -- in renderDefinition definition
 -- :}
 -- "ALTER TABLE tab DROP COLUMN col2 CASCADE;"
-dropColumnCascade
-  :: KnownSymbol column
-  => Alias column -- ^ column to remove
-  -> AlterTable schema columns (Drop column columns)
-dropColumnCascade column = UnsafeAlterTable $
-  "DROP COLUMN" <+> renderAlias column <+> "CASCADE"
+-- dropColumnCascade
+--   :: KnownSymbol column
+--   => Alias column -- ^ column to remove
+--   -> AlterTable schema columns (Drop column columns)
+-- dropColumnCascade column = UnsafeAlterTable $
+--   "DROP COLUMN" <+> renderAlias column <+> "CASCADE"
 
 -- | A `renameColumn` renames a column.
 --
@@ -488,7 +485,8 @@ renameColumn
   :: (KnownSymbol column0, KnownSymbol column1)
   => Alias column0
   -> Alias column1
-  -> AlterTable schema columns (Rename column0 column1 columns)
+  -> AlterTable schema ('[] :=> columns)
+      ('[] :=> Rename column0 column1 columns)
 renameColumn column0 column1 = UnsafeAlterTable $
   "RENAME COLUMN" <+> renderAlias column0  <+> "TO" <+> renderAlias column1
 
@@ -497,7 +495,7 @@ alterColumn
   :: (KnownSymbol column, HasColumn column columns ty0)
   => Alias column -- ^ column to alter
   -> AlterColumn ty0 ty1 -- ^ alteration to perform
-  -> AlterTable schema columns (Alter column columns ty1)
+  -> AlterTable schema ('[] :=> columns) ('[] :=> Alter column columns ty1)
 alterColumn column alteration = UnsafeAlterTable $
   "ALTER COLUMN" <+> renderAlias column <+> renderAlterColumn alteration
 

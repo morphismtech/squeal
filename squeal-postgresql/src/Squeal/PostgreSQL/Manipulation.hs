@@ -12,6 +12,7 @@ Squeal data manipulation language.
     DataKinds
   , DeriveDataTypeable
   , DeriveGeneric
+  , FlexibleContexts
   , GADTs
   , GeneralizedNewtypeDeriving
   , KindSignatures
@@ -59,7 +60,7 @@ import Squeal.PostgreSQL.Schema
 -- `deleteFrom`. A `Query` is also considered a `Manipulation` even though
 -- it does not modify data.
 newtype Manipulation
-  (schema :: RelationType)
+  (schema :: SchemaType)
   (params :: [ColumnType])
   (columns :: ColumnsType)
     = UnsafeManipulation { renderManipulation :: ByteString }
@@ -177,7 +178,7 @@ in renderManipulation manipulation
 "INSERT INTO tab (col1, col2) VALUES (2, 4), (6, 8) ON CONFLICT DO UPDATE SET col1 = 2 WHERE (col1 = col2) RETURNING (col1 + col2) AS sum;"
 -}
 insertInto
-  :: (SOP.SListI columns, SOP.SListI results, HasTable table schema columns)
+  :: (SOP.SListI columns, SOP.SListI results, HasTable table (UnconstrainOver schema) columns)
   => Alias table -- ^ table to insert into
   -> ValuesClause schema params columns -- ^ values to insert
   -> ConflictClause columns params
@@ -193,7 +194,7 @@ insertInto table insert conflict returning = UnsafeManipulation $
 -- | A `ValuesClause` lets you insert either values, free `Expression`s,
 -- or the result of a `Query`.
 data ValuesClause
-  (schema :: RelationType)
+  (schema :: SchemaType)
   (params :: [ColumnType])
   (columns :: ColumnsType)
     = Values
@@ -301,7 +302,7 @@ UPDATE statements
 -- :}
 -- "UPDATE tab SET col1 = 2 WHERE (col1 <> col2);"
 update
-  :: (HasTable table schema columns, SOP.SListI columns, SOP.SListI results)
+  :: (HasTable table (UnconstrainOver schema) columns, SOP.SListI columns, SOP.SListI results)
   => Alias table -- ^ table to update
   -> NP (Aliased (UpdateExpression columns params)) columns
   -- ^ modified values to replace old values
@@ -356,7 +357,7 @@ DELETE statements
 -- :}
 -- "DELETE FROM tab WHERE (col1 = col2) RETURNING *;"
 deleteFrom
-  :: (SOP.SListI results, HasTable table schema columns)
+  :: (SOP.SListI results, HasTable table (UnconstrainOver schema) columns)
   => Alias table -- ^ table to delete from
   -> Condition '[table ::: columns] 'Ungrouped params
   -- ^ condition under which to delete a row
