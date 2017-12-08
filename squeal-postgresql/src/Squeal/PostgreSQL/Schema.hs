@@ -82,6 +82,8 @@ module Squeal.PostgreSQL.Schema
   , AddConstraint
   , DropConstraint
   , TableConstraint' (..)
+  , AsSet
+  , Aliases
   ) where
 
 import Control.DeepSeq
@@ -184,6 +186,7 @@ type PGIntegral ty = In ty '[ 'PGint2, 'PGint4, 'PGint8]
 -- an alias and some type, usually a column alias and a `ColumnType` or
 -- a table alias and a `ColumnsType`.
 type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
+infixr 6 :::
 
 -- | `Alias`es are proxies for a type level string or `Symbol`
 -- and have an `IsLabel` instance so that with @-XOverloadedLabels@
@@ -367,21 +370,29 @@ type family SameFields
       = AllZip SameField fields columns
 
 type (:=>) (constraints :: [constraint]) ty = '(constraints,ty)
+infixr 7 :=>
 
 data ColumnConstraint
   = Default
   | Unique
   | References Symbol Symbol
 
--- type DropDefault constraints = AsSet (DropDefaultList constraints)
-
--- type family DropDefaultList constraints where
---   DropDefaultList '[] = '[]
---   DropDefaultList ( 'Default ': constraints) = constraints
---   DropDefaultList (constraint ': constraints) =
---     constraint ': DropDefaultList constraints
+type instance Cmp 'Default 'Default = 'EQ
+type instance Cmp 'Unique 'Unique = 'EQ
+type instance Cmp ('References tab0 col0) ('References tab1 col1) =
+  If (Cmp tab0 tab1 == 'EQ) (Cmp col0 col1) (Cmp tab0 tab1)
+type instance Cmp 'Default 'Unique = 'LT
+type instance Cmp 'Unique 'Default = 'GT
+type instance Cmp 'Default ('References tab col) = 'LT
+type instance Cmp ('References tab col) 'Default = 'GT
+type instance Cmp 'Unique ('References tab col) = 'LT
+type instance Cmp ('References tab col) 'Unique = 'GT
 
 data TableConstraint'
   = Check
-  | Uniques [(Symbol, ColumnType)]
-  | ForeignKey ColumnsType Symbol ColumnsType
+  | Uniques [Symbol]
+  | ForeignKey [Symbol] Symbol [Symbol]
+
+type family Aliases xs where
+  Aliases '[] = '[]
+  Aliases ((alias ::: x) ': xs) = alias ': Aliases xs

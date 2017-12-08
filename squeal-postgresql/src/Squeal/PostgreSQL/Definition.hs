@@ -180,7 +180,7 @@ unique
   :: SOP.SListI subcolumns
   => NP (Column columns) subcolumns
   -- ^ unique column or group of columns
-  -> TableConstraint schema columns ( 'Uniques subcolumns)
+  -> TableConstraint schema columns ( 'Uniques (Aliases subcolumns))
 unique columns = UnsafeTableConstraint $
   "UNIQUE" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
@@ -197,10 +197,10 @@ unique columns = UnsafeTableConstraint $
 -- :}
 -- "CREATE TABLE tab (id serial, name text NOT NULL, PRIMARY KEY (id));"
 primaryKey
-  :: (SOP.SListI subcolumns, AllNotNull subcolumns)
+  :: (SOP.SListI subcolumns, NotAllNull subcolumns)
   => NP (Column columns) subcolumns
   -- ^ identifying column or group of columns
-  -> TableConstraint schema columns ('Uniques subcolumns)
+  -> TableConstraint schema columns ('Uniques (Aliases subcolumns))
 primaryKey columns = UnsafeTableConstraint $
   "PRIMARY KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
@@ -254,7 +254,7 @@ foreignKey
   -> OnUpdateClause
   -- ^ what to do when reference is updated
   -> TableConstraint schema columns
-      ('ForeignKey subcolumns tab refsubcolumns)
+      ('ForeignKey (Aliases subcolumns) tab (Aliases refsubcolumns))
 foreignKey columns reftable refcolumns onDelete onUpdate =
   UnsafeTableConstraint $
     "FOREIGN KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)

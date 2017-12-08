@@ -1046,19 +1046,19 @@ doublePrecision = UnsafeTypeExpression "double precision"
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `'PGint2`
 serial2, smallserial
-  :: TypeExpression ( '[ 'Default, 'Unique] :=> 'NotNull 'PGint2)
+  :: TypeExpression ( AsSet '[ 'Default, 'Unique] :=> 'NotNull 'PGint2)
 serial2 = UnsafeTypeExpression "serial2"
 smallserial = UnsafeTypeExpression "smallserial"
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `'PGint4`
 serial4, serial
-  :: TypeExpression ( '[ 'Default, 'Unique] :=> 'NotNull 'PGint4)
+  :: TypeExpression ( AsSet '[ 'Default, 'Unique] :=> 'NotNull 'PGint4)
 serial4 = UnsafeTypeExpression "serial4"
 serial = UnsafeTypeExpression "serial"
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `'PGint8`
 serial8, bigserial
-  :: TypeExpression ( '[ 'Default, 'Unique] :=> 'NotNull 'PGint8)
+  :: TypeExpression ( AsSet '[ 'Default, 'Unique] :=> 'NotNull 'PGint8)
 serial8 = UnsafeTypeExpression "serial8"
 bigserial = UnsafeTypeExpression "bigserial"
 -- | variable-length character string
