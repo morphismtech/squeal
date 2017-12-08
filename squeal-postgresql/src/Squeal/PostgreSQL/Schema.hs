@@ -28,6 +28,7 @@ Embedding of PostgreSQL type and alias system
   , TypeFamilies
   , TypeInType
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Schema
@@ -36,8 +37,9 @@ module Squeal.PostgreSQL.Schema
   , NullityType (..)
   , ColumnType
   , ColumnsType
+  , RelationType
   , TableType
-  , TablesType
+  , SchemaType
   , Grouping (..)
     -- * Constraints
   , PGNum
@@ -63,6 +65,7 @@ module Squeal.PostgreSQL.Schema
   , NullifyTables
   , Join
   , Create
+  , Add
   , Drop
   , Alter
   , Rename
@@ -71,18 +74,24 @@ module Squeal.PostgreSQL.Schema
   , SameFields
     -- * PostgreSQL Constraints
   , (:=>)
-  , (::=>)
   , Unconstrain
+  , UnconstrainOver
   , ColumnConstraint (..)
-  , DropDefault
-  , DropDefaultList
-  , TableConstraint' (..)
+  -- , DropDefault
+  -- , DropDefaultList
+  , AddConstraint
+  , DropConstraint
+  , TableConstraint (..)
+  , AsSet
+  , Aliases
   ) where
 
 import Control.DeepSeq
 import Data.ByteString
 import Data.Monoid
 import Data.String
+import Data.Type.Bool
+import Data.Type.Equality
 import Data.Type.Set
 import Generics.SOP (AllZip)
 import GHC.Generics (Generic)
@@ -133,13 +142,22 @@ type ColumnType = ([ColumnConstraint],NullityType)
 -- | `ColumnsType` is a kind synonym for a row of `ColumnType`s.
 type ColumnsType = [(Symbol,ColumnType)]
 
-type TableType = ([TableConstraint'],ColumnsType)
-
--- | `TablesType` is a kind synonym for a row of `ColumnsType`s.
+-- | `RelationType` is a kind synonym for a row of `ColumnsType`s.
 -- It is used as a kind for both a schema, a disjoint union of tables,
 -- and a joined table `Squeal.PostgreSQL.Query.FromClause`,
 -- a product of tables.
-type TablesType = [(Symbol,ColumnsType)]
+type RelationType = [(Symbol,ColumnsType)]
+
+type TableType = ([TableConstraint],ColumnsType)
+type SchemaType = [(Symbol,TableType)]
+
+type family Unconstrain (ty :: ([constraint],kind)) :: kind where
+  Unconstrain '(constraints,ty) = ty
+
+type family UnconstrainOver (tys :: SchemaType) :: RelationType where
+  UnconstrainOver '[] = '[]
+  UnconstrainOver ((alias ::: x) ': xs) =
+    (alias ::: Unconstrain x) ': UnconstrainOver xs
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
@@ -168,6 +186,7 @@ type PGIntegral ty = In ty '[ 'PGint2, 'PGint4, 'PGint8]
 -- an alias and some type, usually a column alias and a `ColumnType` or
 -- a table alias and a `ColumnsType`.
 type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
+infixr 6 :::
 
 -- | `Alias`es are proxies for a type level string or `Symbol`
 -- and have an `IsLabel` instance so that with @-XOverloadedLabels@
@@ -270,10 +289,10 @@ type family NullifyColumns (columns :: ColumnsType) :: ColumnsType where
 type family NullifyTable (table :: TableType) :: TableType where
   NullifyTable '( '[], columns) = '( '[], NullifyColumns columns)
 
--- | `NullifyTables` is an idempotent that nullifies a `TablesType`
+-- | `NullifyTables` is an idempotent that nullifies a `RelationType`
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
-type family NullifyTables (tables :: TablesType) :: TablesType where
+type family NullifyTables (tables :: RelationType) :: RelationType where
   NullifyTables '[] = '[]
   NullifyTables ((tab ::: columns) ': tables) =
     (tab ::: NullifyColumns columns) ': NullifyTables tables
@@ -292,6 +311,9 @@ type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
   Create alias y (x ': xs) = x ': Create alias y xs
 
+type family Add alias x y where
+  Add alias x (constraints :=> xs) = constraints :=> Create alias x xs
+
 -- | @Drop alias xs@ removes the type associated with @alias@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.dropTable` statements
 -- and in @ALTER TABLE@ `Squeal.PostgreSQL.Definition.dropColumn` statements.
@@ -305,6 +327,19 @@ type family Drop alias xs where
 type family Alter alias xs x where
   Alter alias ((alias ::: x0) ': xs) x1 = (alias ::: x1) ': xs
   Alter alias (x0 ': xs) x1 = x0 ': Alter alias xs x1
+
+type family AddConstraint constraint ty where
+  AddConstraint constraint (constraints :=> ty)
+    = AsSet (constraint ': constraints) :=> ty
+
+type family DeleteFromList (e :: elem) (list :: [elem]) where
+  DeleteFromList elem '[] = '[]
+  DeleteFromList elem (x ': xs) =
+    If (Cmp elem x == 'EQ) xs (x ': DeleteFromList elem xs)
+
+type family DropConstraint constraint ty where
+  DropConstraint constraint (constraints :=> ty)
+    = (AsSet (DeleteFromList constraint constraints)) :=> ty
 
 -- | @Rename alias0 alias1 xs@ replaces the alias @alias0@ by @alias1@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.alterTableRename` and
@@ -334,26 +369,30 @@ type family SameFields
     columns
       = AllZip SameField fields columns
 
-type (:=>) constraints ty = '(constraints,ty)
-type (::=>) constraints ty = '(AsSet constraints,ty)
-
-type family Unconstrain constrained where
-  Unconstrain '(constraints, ty) = '( '[], ty)
+type (:=>) (constraints :: [constraint]) ty = '(constraints,ty)
+infixr 7 :=>
 
 data ColumnConstraint
   = Default
   | Unique
   | References Symbol Symbol
 
-type DropDefault constraints = AsSet (DropDefaultList constraints)
+type instance Cmp 'Default 'Default = 'EQ
+type instance Cmp 'Unique 'Unique = 'EQ
+type instance Cmp ('References tab0 col0) ('References tab1 col1) =
+  If (Cmp tab0 tab1 == 'EQ) (Cmp col0 col1) (Cmp tab0 tab1)
+type instance Cmp 'Default 'Unique = 'LT
+type instance Cmp 'Unique 'Default = 'GT
+type instance Cmp 'Default ('References tab col) = 'LT
+type instance Cmp ('References tab col) 'Default = 'GT
+type instance Cmp 'Unique ('References tab col) = 'LT
+type instance Cmp ('References tab col) 'Unique = 'GT
 
-type family DropDefaultList constraints where
-  DropDefaultList '[] = '[]
-  DropDefaultList ( 'Default ': constraints) = constraints
-  DropDefaultList (constraint ': constraints) =
-    constraint ': DropDefaultList constraints
-
-data TableConstraint'
-  = Check [Symbol]
+data TableConstraint
+  = Check
   | Uniques [Symbol]
   | ForeignKey [Symbol] Symbol [Symbol]
+
+type family Aliases xs where
+  Aliases '[] = '[]
+  Aliases ((alias ::: x) ': xs) = alias ': Aliases xs

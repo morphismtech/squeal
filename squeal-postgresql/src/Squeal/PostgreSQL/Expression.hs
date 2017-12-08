@@ -105,6 +105,7 @@ module Squeal.PostgreSQL.Expression
     -- * Tables
   , Table (UnsafeTable, renderTable)
   , HasTable (getTable)
+  , SchemaHasTable
     -- * TypeExpression
   , TypeExpression (UnsafeTypeExpression, renderTypeExpression)
   , PGTyped (pgtype)
@@ -181,7 +182,7 @@ values from primitive expression using arithmetic, logical,
 and other operations.
 -}
 newtype Expression
-  (tables :: TablesType)
+  (tables :: RelationType)
   (grouping :: Grouping)
   (params :: [ColumnType])
   (ty :: ColumnType)
@@ -978,7 +979,7 @@ tables
 -- | A `Table` from a schema without its alias with an `IsLabel` instance
 -- to call a table reference by its alias.
 newtype Table
-  (schema :: TablesType)
+  (schema :: RelationType)
   (columns :: ColumnsType)
     = UnsafeTable { renderTable :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
@@ -997,6 +998,14 @@ instance {-# OVERLAPPABLE #-}
 instance HasTable table schema columns
   => IsLabel table (Table schema columns) where
     fromLabel = getTable (Alias @table)
+
+type family SchemaHasTable
+  (table :: Symbol)
+  (schema :: SchemaType)
+  (columns :: ColumnsType)
+  where
+    SchemaHasTable table schema columns =
+      HasTable table (UnconstrainOver schema) columns
 
 {-----------------------------------------
 type expressions
@@ -1037,19 +1046,19 @@ doublePrecision = UnsafeTypeExpression "double precision"
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `'PGint2`
 serial2, smallserial
-  :: TypeExpression ( '[ 'Default, 'Unique] :=> 'NotNull 'PGint2)
+  :: TypeExpression ( AsSet '[ 'Default, 'Unique] :=> 'NotNull 'PGint2)
 serial2 = UnsafeTypeExpression "serial2"
 smallserial = UnsafeTypeExpression "smallserial"
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `'PGint4`
 serial4, serial
-  :: TypeExpression ( '[Default, 'Unique] :=> 'NotNull 'PGint4)
+  :: TypeExpression ( AsSet '[ 'Default, 'Unique] :=> 'NotNull 'PGint4)
 serial4 = UnsafeTypeExpression "serial4"
 serial = UnsafeTypeExpression "serial"
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `'PGint8`
 serial8, bigserial
-  :: TypeExpression ( '[ 'Default, 'Unique] :=> 'NotNull 'PGint8)
+  :: TypeExpression ( AsSet '[ 'Default, 'Unique] :=> 'NotNull 'PGint8)
 serial8 = UnsafeTypeExpression "serial8"
 bigserial = UnsafeTypeExpression "bigserial"
 -- | variable-length character string
