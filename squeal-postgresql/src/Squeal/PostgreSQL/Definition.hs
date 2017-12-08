@@ -30,7 +30,7 @@ module Squeal.PostgreSQL.Definition
   , (>>>)
     -- * Create
   , createTable
-  , TableConstraint (UnsafeTableConstraint, renderTableConstraint)
+  , TableConstraintExpression (..)
   , check
   , unique
   , primaryKey
@@ -113,14 +113,14 @@ createTable
   => Alias tab -- ^ the name of the table to add
   -> NP (Aliased TypeExpression) (column ': columns)
     -- ^ the names and datatype of each column
-  -> NP (TableConstraint schema (column ': columns)) constraints
+  -> NP (TableConstraintExpression schema (column ': columns)) constraints
     -- ^ constraints that must hold for the table
   -> Definition schema (Create tab table schema)
 createTable table columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderAlias table
   <+> parenthesized
     ( renderCommaSeparated renderColumnDef columns
-      <> renderCommaSeparated renderTableConstraint constraints )
+      <> renderCommaSeparated renderTableConstraintExpression constraints )
   <> ";"
   where
     renderColumnDef :: Aliased TypeExpression x -> ByteString
@@ -139,11 +139,12 @@ createTable table columns constraints = UnsafeDefinition $
 -- as you wish. If a user attempts to store data in a column that would
 -- violate a constraint, an error is raised. This applies
 -- even if the value came from the default value definition.
-newtype TableConstraint
+newtype TableConstraintExpression
   (schema :: SchemaType)
   (columns :: ColumnsType)
-  (tableConstraint :: TableConstraint')
-    = UnsafeTableConstraint { renderTableConstraint :: ByteString }
+  (tableConstraint :: TableConstraint)
+    = UnsafeTableConstraintExpression
+    { renderTableConstraintExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 -- | A `check` constraint is the most generic `TableConstraint` type.
@@ -161,8 +162,8 @@ newtype TableConstraint
 check
   :: Condition '[table ::: columns] 'Ungrouped '[]
   -- ^ condition to check
-  -> TableConstraint schema columns 'Check
-check condition = UnsafeTableConstraint $
+  -> TableConstraintExpression schema columns 'Check
+check condition = UnsafeTableConstraintExpression $
   "CHECK" <+> parenthesized (renderExpression condition)
 
 -- | A `unique` constraint ensure that the data contained in a column,
@@ -180,8 +181,8 @@ unique
   :: SOP.SListI subcolumns
   => NP (Column columns) subcolumns
   -- ^ unique column or group of columns
-  -> TableConstraint schema columns ( 'Uniques (Aliases subcolumns))
-unique columns = UnsafeTableConstraint $
+  -> TableConstraintExpression schema columns ( 'Uniques (Aliases subcolumns))
+unique columns = UnsafeTableConstraintExpression $
   "UNIQUE" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
 -- | A `primaryKey` constraint indicates that a column, or group of columns,
@@ -200,8 +201,8 @@ primaryKey
   :: (SOP.SListI subcolumns, NotAllNull subcolumns)
   => NP (Column columns) subcolumns
   -- ^ identifying column or group of columns
-  -> TableConstraint schema columns ('Uniques (Aliases subcolumns))
-primaryKey columns = UnsafeTableConstraint $
+  -> TableConstraintExpression schema columns ('Uniques (Aliases subcolumns))
+primaryKey columns = UnsafeTableConstraintExpression $
   "PRIMARY KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
 -- | A `foreignKey` specifies that the values in a column
@@ -253,10 +254,10 @@ foreignKey
   -- ^ what to do when reference is deleted
   -> OnUpdateClause
   -- ^ what to do when reference is updated
-  -> TableConstraint schema columns
+  -> TableConstraintExpression schema columns
       ('ForeignKey (Aliases subcolumns) tab (Aliases refsubcolumns))
 foreignKey columns reftable refcolumns onDelete onUpdate =
-  UnsafeTableConstraint $
+  UnsafeTableConstraintExpression $
     "FOREIGN KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
     <+> "REFERENCES" <+> renderAlias reftable
     <+> parenthesized (renderCommaSeparated renderColumn refcolumns)
@@ -359,16 +360,16 @@ alterTableRename table0 table1 = UnsafeDefinition $
 -- alterTableAddConstraint
 --   :: (HasTable table schema columns, (table ::: table0) `In` schema)
 --   => Alias table -- ^ table to constrain
---   -> TableConstraint schema columns constraint -- ^ what constraint to add
+--   -> TableConstraintExpression schema columns constraint -- ^ what constraint to add
 --   -> Definition schema (Alter table schema (AddConstraint constraint table0))
 -- alterTableAddConstraint table constraint = UnsafeDefinition $
 --   "ALTER TABLE" <+> renderAlias table
---   <+> "ADD" <+> renderTableConstraint constraint <> ";"
+--   <+> "ADD" <+> renderTableConstraintExpression constraint <> ";"
 
 addConstraint
   :: (tab ::: table) `In` schema
   => Alias tab
-  -> TableConstraint schema columns constraint
+  -> TableConstraintExpression schema columns constraint
   -> AlterTable schema table (AddConstraint constraint table)
 addConstraint = undefined
 

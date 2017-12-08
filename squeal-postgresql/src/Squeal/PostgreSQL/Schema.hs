@@ -81,7 +81,7 @@ module Squeal.PostgreSQL.Schema
   -- , DropDefaultList
   , AddConstraint
   , DropConstraint
-  , TableConstraint' (..)
+  , TableConstraint (..)
   , AsSet
   , Aliases
   ) where
@@ -148,7 +148,7 @@ type ColumnsType = [(Symbol,ColumnType)]
 -- a product of tables.
 type RelationType = [(Symbol,ColumnsType)]
 
-type TableType = ([TableConstraint'],ColumnsType)
+type TableType = ([TableConstraint],ColumnsType)
 type SchemaType = [(Symbol,TableType)]
 
 type family Unconstrain (ty :: ([constraint],kind)) :: kind where
@@ -388,7 +388,7 @@ type instance Cmp ('References tab col) 'Default = 'GT
 type instance Cmp 'Unique ('References tab col) = 'LT
 type instance Cmp ('References tab col) 'Unique = 'GT
 
-data TableConstraint'
+data TableConstraint
   = Check
   | Uniques [Symbol]
   | ForeignKey [Symbol] Symbol [Symbol]
