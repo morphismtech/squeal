@@ -457,7 +457,7 @@ instance MonadBaseControl b m => MonadBaseControl b (PQ schema schema m) where
 -- | Encapsulates the result of a squeal command run by @LibPQ@.
 -- `Result`s are parameterized by a `ColumnsType` describing the column names
 -- and their types.
-newtype Result (columns :: ColumnsType)
+newtype Result (columns :: RelationType)
   = Result { unResult :: LibPQ.Result }
 
 -- | Just newtypes around a `CInt`

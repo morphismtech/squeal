@@ -16,6 +16,7 @@ Embedding of PostgreSQL type and alias system
   , DeriveGeneric
   , FlexibleContexts
   , FlexibleInstances
+  , FunctionalDependencies
   , GADTs
   , MagicHash
   , MultiParamTypeClasses
@@ -38,6 +39,7 @@ module Squeal.PostgreSQL.Schema
   , ColumnType
   , ColumnsType
   , RelationType
+  , RelationsType
   , TableType
   , SchemaType
   , Grouping (..)
@@ -74,8 +76,10 @@ module Squeal.PostgreSQL.Schema
   , SameFields
     -- * PostgreSQL Constraints
   , (:=>)
-  , Unconstrain
-  , UnconstrainOver
+  , UnconstrainColumn
+  , UnconstrainColumns
+  , UnconstrainTable
+  , UnconstrainSchema
   , ColumnConstraint (..)
   -- , DropDefault
   -- , DropDefaultList
@@ -84,6 +88,7 @@ module Squeal.PostgreSQL.Schema
   , TableConstraint (..)
   , AsSet
   , Aliases
+  , Has
   ) where
 
 import Control.DeepSeq
@@ -142,22 +147,27 @@ type ColumnType = ([ColumnConstraint],NullityType)
 -- | `ColumnsType` is a kind synonym for a row of `ColumnType`s.
 type ColumnsType = [(Symbol,ColumnType)]
 
--- | `RelationType` is a kind synonym for a row of `ColumnsType`s.
--- It is used as a kind for both a schema, a disjoint union of tables,
--- and a joined table `Squeal.PostgreSQL.Query.FromClause`,
--- a product of tables.
-type RelationType = [(Symbol,ColumnsType)]
+type RelationType = [(Symbol,NullityType)]
+type RelationsType = [(Symbol,RelationType)]
 
 type TableType = ([TableConstraint],ColumnsType)
 type SchemaType = [(Symbol,TableType)]
 
-type family Unconstrain (ty :: ([constraint],kind)) :: kind where
-  Unconstrain '(constraints,ty) = ty
+type family UnconstrainColumn (ty :: ColumnType) :: NullityType where
+  UnconstrainColumn (constraints :=> ty) = ty
 
-type family UnconstrainOver (tys :: SchemaType) :: RelationType where
-  UnconstrainOver '[] = '[]
-  UnconstrainOver ((alias ::: x) ': xs) =
-    (alias ::: Unconstrain x) ': UnconstrainOver xs
+type family UnconstrainColumns (columns :: ColumnsType) :: RelationType where
+  UnconstrainColumns '[] = '[]
+  UnconstrainColumns (column ::: ty ': columns) =
+    column ::: UnconstrainColumn ty ': UnconstrainColumns columns
+
+type family UnconstrainTable (table :: TableType) :: ColumnsType where
+  UnconstrainTable (constraints :=> columns) = columns
+
+type family UnconstrainSchema (schema :: SchemaType) :: RelationsType where
+  UnconstrainSchema '[] = '[]
+  UnconstrainSchema (tab ::: constraints :=> columns ': tables) =
+    tab ::: UnconstrainColumns columns ': UnconstrainSchema tables
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
@@ -250,52 +260,46 @@ type family In x xs :: Constraint where
 type HasUnique alias xs x = xs ~ '[alias ::: x]
 
 -- | `PGTypeOf` forgets about @NULL@ and any column constraints.
-type family PGTypeOf (ty :: ColumnType) :: PGType where
-  PGTypeOf '(constraints, nullity pg) = pg
+type family PGTypeOf (ty :: NullityType) :: PGType where
+  PGTypeOf (nullity pg) = pg
 
 -- | `SameTypes` is a constraint that proves two `ColumnsType`s have the same
 -- length and the same `ColumnType`s.
-type family SameTypes
-  (columns0 :: ColumnsType) (columns1 :: ColumnsType)
-    :: Constraint where
+type family SameTypes (columns0 :: RelationType) (columns1 :: RelationType)
+  :: Constraint where
   SameTypes '[] '[] = ()
-  SameTypes ((column0 ::: ty0) ': columns0) ((column1 ::: ty1) ': columns1)
+  SameTypes (column0 ::: ty0 ': columns0) (column1 ::: ty1 ': columns1)
     = (ty0 ~ ty1, SameTypes columns0 columns1)
 
 -- | `AllNotNull` is a constraint that proves a `ColumnsType` has no @NULL@s.
-type family AllNotNull (columns :: ColumnsType) :: Constraint where
+type family AllNotNull (columns :: RelationType) :: Constraint where
   AllNotNull '[] = ()
-  AllNotNull ((column ::: '(constraints, ('NotNull ty))) ': columns)
-    = AllNotNull columns
+  AllNotNull (column ::: 'NotNull ty ': columns) = AllNotNull columns
 
 -- | `NotAllNull` is a constraint that proves a `ColumnsType` has some
 -- @NOT NULL@.
-type family NotAllNull columns :: Constraint where
-  NotAllNull ((column ::: '(constraints, ('NotNull ty))) ': columns) = ()
-  NotAllNull ((column ::: '(constraints, ('Null ty))) ': columns)
-    = NotAllNull columns
+type family NotAllNull (columns :: RelationType) :: Constraint where
+  NotAllNull (column ::: 'NotNull ty ': columns) = ()
+  NotAllNull (column ::: 'Null ty ': columns) = NotAllNull columns
 
 -- | `NullifyType` is an idempotent that nullifies a `ColumnType`.
-type family NullifyType (ty :: ColumnType) :: ColumnType where
-  NullifyType (optionality ('Null ty)) = optionality ('Null ty)
-  NullifyType (optionality ('NotNull ty)) = optionality ('Null ty)
+type family NullifyType (ty :: NullityType) :: NullityType where
+  NullifyType ('Null ty) = 'Null ty
+  NullifyType ('NotNull ty) = 'Null ty
 
 -- | `NullifyColumns` is an idempotent that nullifies a `ColumnsType`.
-type family NullifyColumns (columns :: ColumnsType) :: ColumnsType where
+type family NullifyColumns (columns :: RelationType) :: RelationType where
   NullifyColumns '[] = '[]
-  NullifyColumns ((column ::: ty) ': columns) =
-    (column ::: NullifyType ty) ': NullifyColumns columns
+  NullifyColumns (column ::: ty ': columns) =
+    column ::: NullifyType ty ': NullifyColumns columns
 
-type family NullifyTable (table :: TableType) :: TableType where
-  NullifyTable '( '[], columns) = '( '[], NullifyColumns columns)
-
--- | `NullifyTables` is an idempotent that nullifies a `RelationType`
+-- | `NullifyTables` is an idempotent that nullifies a `RelationsType`
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
-type family NullifyTables (tables :: RelationType) :: RelationType where
+type family NullifyTables (tables :: RelationsType) :: RelationsType where
   NullifyTables '[] = '[]
-  NullifyTables ((tab ::: columns) ': tables) =
-    (tab ::: NullifyColumns columns) ': NullifyTables tables
+  NullifyTables (table ::: columns ': tables) =
+    table ::: NullifyColumns columns ': NullifyTables tables
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.
@@ -351,14 +355,14 @@ type family Rename alias0 alias1 xs where
 -- | A `SameField` constraint is an equality constraint on a
 -- `Generics.SOP.Type.Metadata.FieldInfo` and the column alias in a `:::` pair.
 class SameField
-  (fieldInfo :: Type.FieldInfo) (fieldty :: (Symbol,ColumnType)) where
+  (fieldInfo :: Type.FieldInfo) (fieldty :: (Symbol,NullityType)) where
 instance field ~ column => SameField ('Type.FieldInfo field) (column ::: ty)
 
 -- | A `SameFields` constraint proves that a
 -- `Generics.SOP.Type.Metadata.DatatypeInfo` of a record type has the same
 -- field names as the column aliases of a `ColumnsType`.
 type family SameFields
-  (datatypeInfo :: Type.DatatypeInfo) (columns :: ColumnsType)
+  (datatypeInfo :: Type.DatatypeInfo) (columns :: RelationType)
     :: Constraint where
   SameFields
     ('Type.ADT _module _datatype '[ 'Type.Record _constructor fields])
@@ -396,3 +400,11 @@ data TableConstraint
 type family Aliases xs where
   Aliases '[] = '[]
   Aliases ((alias ::: x) ': xs) = alias ': Aliases xs
+
+class KnownSymbol alias =>
+  Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
+  | alias fields -> field where
+instance {-# OVERLAPPING #-} KnownSymbol alias
+  => Has alias (alias ::: field ': fields) field
+instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
+  => Has alias (field' ': fields) field
