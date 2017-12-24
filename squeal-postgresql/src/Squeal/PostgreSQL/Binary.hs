@@ -118,13 +118,13 @@ instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
 -- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s. You should
 -- not define instances of `ToColumnParam`, just use the provided instances.
 class ToColumnParam (x :: Type) (ty :: NullityType) where
-  -- | >>> toColumnParam @Int16 @'( '[], ('NotNull 'PGint2)) 0
+  -- | >>> toColumnParam @Int16 @('NotNull 'PGint2) 0
   -- K (Just "\NUL\NUL")
   --
-  -- >>> toColumnParam @(Maybe Int16) @'( '[], ('Null 'PGint2)) (Just 0)
+  -- >>> toColumnParam @(Maybe Int16) @('Null 'PGint2) (Just 0)
   -- K (Just "\NUL\NUL")
   --
-  -- >>> toColumnParam @(Maybe Int16) @'( '[], ('Null 'PGint2)) Nothing
+  -- >>> toColumnParam @(Maybe Int16) @('Null 'PGint2) Nothing
   -- K Nothing
   toColumnParam :: x -> K (Maybe Strict.ByteString) ty
 instance ToParam x pg => ToColumnParam x ('NotNull pg) where
@@ -137,14 +137,14 @@ instance ToParam x pg => ToColumnParam (Maybe x) ('Null pg) where
 -- not define instances of `ToParams`. Instead define `Generic` instances
 -- which in turn provide `ToParams` instances.
 class SListI tys => ToParams (x :: Type) (tys :: [NullityType]) where
-  -- | >>> type PGparams = '[ 'Required ('NotNull 'PGbool), 'Required ('Null 'PGint2)]
-  -- >>> toParams @(Bool, Maybe Int16) @PGparams (False, Just 0)
+  -- | >>> type Params = '[ 'NotNull 'PGbool, 'Null 'PGint2]
+  -- >>> toParams @(Bool, Maybe Int16) @'[ 'NotNull 'PGbool, 'Null 'PGint2] (False, Just 0)
   -- K (Just "\NUL") :* (K (Just "\NUL\NUL") :* Nil)
   --
   -- >>> :set -XDeriveGeneric
-  -- >>> data Hparams = Hparams { col1 :: Bool, col2 :: Maybe Int16} deriving GHC.Generic
-  -- >>> instance Generic Hparams
-  -- >>> toParams @Hparams @PGparams (Hparams False (Just 0))
+  -- >>> data Tuple = Tuple { p1 :: Bool, p2 :: Maybe Int16} deriving GHC.Generic
+  -- >>> instance Generic Tuple
+  -- >>> toParams @Tuple @Params (Tuple False (Just 0))
   -- K (Just "\NUL") :* (K (Just "\NUL\NUL") :* Nil)
   toParams :: x -> NP (K (Maybe Strict.ByteString)) tys
 instance (SListI tys, IsProductType x xs, AllZip ToColumnParam xs tys)
@@ -196,10 +196,10 @@ class FromColumnValue (colty :: (Symbol,NullityType)) (y :: Type) where
   -- | >>> :set -XTypeOperators -XOverloadedStrings
   -- >>> newtype Id = Id { getId :: Int16 } deriving Show
   -- >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
-  -- >>> fromColumnValue @("col" ::: 'Required ('NotNull 'PGint2)) @Id (K (Just "\NUL\SOH"))
+  -- >>> fromColumnValue @("col" ::: 'NotNull 'PGint2) @Id (K (Just "\NUL\SOH"))
   -- Id {getId = 1}
   --
-  -- >>> fromColumnValue @("col" ::: 'Required ('Null 'PGint2)) @(Maybe Id) (K (Just "\NUL\SOH"))
+  -- >>> fromColumnValue @("col" ::: 'Null 'PGint2) @(Maybe Id) (K (Just "\NUL\SOH"))
   -- Just (Id {getId = 1})
   fromColumnValue :: K (Maybe Strict.ByteString) colty -> y
 instance FromValue pg y
@@ -230,14 +230,14 @@ instance FromValue pg y
 class SListI results => FromRow (results :: RelationType) y where
   -- | >>> :set -XOverloadedStrings
   -- >>> import Data.Text
-  -- >>> newtype Id = Id { getId :: Int16 } deriving Show
-  -- >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
-  -- >>> data Hrow = Hrow { userId :: Id, userName :: Maybe Text } deriving (Show, GHC.Generic)
-  -- >>> instance Generic Hrow
-  -- >>> instance HasDatatypeInfo Hrow
-  -- >>> type PGrow = '["userId" ::: 'Required ('NotNull 'PGint2), "userName" ::: 'Required ('Null 'PGtext)]
-  -- >>> fromRow @PGrow @Hrow (K (Just "\NUL\SOH") :* K (Just "bloodninja") :* Nil)
-  -- Hrow {userId = Id {getId = 1}, userName = Just "bloodninja"}
+  -- >>> newtype UserId = UserId { getUserId :: Int16 } deriving Show
+  -- >>> instance FromValue 'PGint2 UserId where fromValue = fmap UserId . fromValue
+  -- >>> data UserRow = UserRow { userId :: UserId, userName :: Maybe Text } deriving (Show, GHC.Generic)
+  -- >>> instance Generic UserRow
+  -- >>> instance HasDatatypeInfo UserRow
+  -- >>> type User = '["userId" ::: 'NotNull 'PGint2, "userName" ::: 'Null 'PGtext]
+  -- >>> fromRow @User @UserRow (K (Just "\NUL\SOH") :* K (Just "bloodninja") :* Nil)
+  -- UserRow {userId = UserId {getUserId = 1}, userName = Just "bloodninja"}
   fromRow :: NP (K (Maybe Strict.ByteString)) results -> y
 instance
   ( SListI results
@@ -252,11 +252,10 @@ instance
 -- `toParams` or decoding a single value with `fromRow`.
 --
 -- >>> import Data.Text
--- >>> toParams @(Only (Maybe Text)) @'[ 'Required ('Null 'PGtext)] (Only (Just "foo"))
+-- >>> toParams @(Only (Maybe Text)) @'[ 'Null 'PGtext] (Only (Just "foo"))
 -- K (Just "foo") :* Nil
 --
--- >>> type PGShortRow = '["fromOnly" ::: 'Required ('Null 'PGtext)]
--- >>> fromRow @PGShortRow @(Only (Maybe Text)) (K (Just "bar") :* Nil)
+-- >>> fromRow @'["fromOnly" ::: 'Null 'PGtext] @(Only (Maybe Text)) (K (Just "bar") :* Nil)
 -- Only {fromOnly = Just "bar"}
 newtype Only x = Only { fromOnly :: x }
   deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)

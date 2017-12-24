@@ -120,7 +120,7 @@ To specify the schema you wish to connect with, use type application.
 
 >>> :set -XDataKinds
 >>> :set -XTypeOperators
->>> type Schema = '["tab" ::: '["col" ::: 'Required ('Null 'PGint2)]]
+>>> type Schema = '["tab" ::: Unconstraint :=> '["col" ::: 'NoDef :=> 'Null 'PGint2]]
 >>> :set -XTypeApplications
 >>> :set -XOverloadedStrings
 >>> conn <- connectdb @Schema "host=localhost port=5432 dbname=exampledb"

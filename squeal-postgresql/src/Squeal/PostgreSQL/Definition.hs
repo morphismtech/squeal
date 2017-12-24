@@ -102,7 +102,7 @@ CREATE statements
 -- >>> :set -XOverloadedLabels
 -- >>> :{
 -- renderDefinition $
---   createTable #tab (int `As` #a :* real `As` #b :* Nil) []
+--   createTable #tab (int `As` #a :* real `As` #b :* Nil) Nil
 -- :}
 -- "CREATE TABLE tab (a int, b real);"
 createTable
@@ -122,7 +122,10 @@ createTable table columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderAlias table
   <+> parenthesized
     ( renderCommaSeparated renderColumnDef columns
-      <> renderCommaSeparated renderConstraint constraints )
+      <> ( case constraints of
+             Nil -> ""
+             _ -> ", " <>
+               renderCommaSeparated renderConstraint constraints ) )
   <> ";"
   where
     renderColumnDef :: Aliased TypeExpression x -> ByteString
@@ -163,9 +166,9 @@ newtype TableConstraintExpression
 --   createTable #tab
 --     ( (int & notNull) `As` #a :*
 --       (int & notNull) `As` #b :* Nil )
---     [ check (#a .> #b) ]
+--     ( check (#a .> #b) `As` #inequality :* Nil )
 -- :}
--- "CREATE TABLE tab (a int NOT NULL, b int NOT NULL, CHECK ((a > b)));"
+-- "CREATE TABLE tab (a int NOT NULL, b int NOT NULL, CONSTRAINT inequality CHECK ((a > b)));"
 check
   :: Condition '[table ::: columns] 'Ungrouped '[]
   -- ^ condition to check
@@ -181,14 +184,14 @@ check condition = UnsafeTableConstraintExpression $
 --   createTable #tab
 --     ( int `As` #a :*
 --       int `As` #b :* Nil )
---     [ unique (Column #a :* Column #b :* Nil) ]
+--     ( unique (Column #a :* Column #b :* Nil) `As` #uq_a_b :* Nil )
 -- :}
--- "CREATE TABLE tab (a int, b int, UNIQUE (a, b));"
+-- "CREATE TABLE tab (a int, b int, CONSTRAINT uq_a_b UNIQUE (a, b));"
 unique
   :: SOP.SListI subcolumns
   => NP (Column columns) subcolumns
   -- ^ unique column or group of columns
-  -> TableConstraintExpression schema columns ( 'Uniques (Aliases subcolumns))
+  -> TableConstraintExpression schema columns ('Unique (Aliases subcolumns))
 unique columns = UnsafeTableConstraintExpression $
   "UNIQUE" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
@@ -201,9 +204,9 @@ unique columns = UnsafeTableConstraintExpression $
 --   createTable #tab
 --     ( serial `As` #id :*
 --       (text & notNull) `As` #name :* Nil )
---     [ primaryKey (Column #id :* Nil) ]
+--     ( primaryKey (Column #id :* Nil) `As` #pk_id :* Nil )
 -- :}
--- "CREATE TABLE tab (id serial, name text NOT NULL, PRIMARY KEY (id));"
+-- "CREATE TABLE tab (id serial, name text NOT NULL, CONSTRAINT pk_id PRIMARY KEY (id));"
 primaryKey
   :: (SOP.SListI subcolumns, AllNotNull subcolumns)
   => NP (Column columns) subcolumns
@@ -218,33 +221,41 @@ primaryKey columns = UnsafeTableConstraintExpression $
 -- between two related tables.
 --
 -- >>> :{
--- let
---   definition :: Definition '[]
---     '[ "users" :::
---        '[ "id" ::: 'Optional ('NotNull 'PGint4)
---         , "username" ::: 'Required ('NotNull 'PGtext)
+-- type Schema =
+--   '[ "users" :::
+--        '[ "pk_id" ::: 'PrimaryKey '["id"] ] :=>
+--        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+--         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
 --         ]
---      , "emails" :::
---        '[ "id" ::: 'Optional ('NotNull 'PGint4)
---         , "userid" ::: 'Required ('NotNull 'PGint4)
---         , "email" ::: 'Required ('NotNull 'PGtext)
+--    , "emails" :::
+--        '[  "pk_id" ::: 'PrimaryKey '["id"]
+--         , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+--         ] :=>
+--        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+--         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
+--         , "email" ::: 'NoDef :=> 'Null 'PGtext
 --         ]
---      ]
---   definition =
---     createTable #users
---       (serial `As` #id :* (text & notNull) `As` #username :* Nil)
---       [primaryKey (Column #id :* Nil)] >>>
---     createTable #emails
---       ( serial `As` #id :*
---         (integer & notNull) `As` #userid :*
---         (text & notNull) `As` #email :* Nil )
---       [ primaryKey (Column #id :* Nil)
---       , foreignKey (Column #userid :* Nil) #users (Column #id :* Nil)
---         OnDeleteCascade OnUpdateRestrict
---       ]
--- in renderDefinition definition
+--    ]
 -- :}
--- "CREATE TABLE users (id serial, username text NOT NULL, PRIMARY KEY (id)); CREATE TABLE emails (id serial, userid integer NOT NULL, email text NOT NULL, PRIMARY KEY (id), FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE ON UPDATE RESTRICT);"
+--
+-- :{
+-- let
+--   setup :: Definition '[] Schema
+--   setup = 
+--     createTable #users
+--       ( #id serial :*
+--         #name (text & notNull) :* Nil )
+--       ( #pk_id (primaryKey (Column #id :* Nil)) :* Nil ) >>>
+--     createTable #emails
+--       ( #id serial :*
+--         #user_id (int & notNull) :*
+--         #email text :* Nil )
+--       ( #pk_id (primaryKey (Column #id :* Nil)) :*
+--         #fk_user_id (foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
+--           OnDeleteCascade OnUpdateCascade) :* Nil )
+-- in renderDefinition setup
+-- :}
+-- "CREATE TABLE users (id serial, username text NOT NULL, CONSTRAINT pk_id PRIMARY KEY (id)); CREATE TABLE emails (id serial, userid integer NOT NULL, email text NOT NULL, CONSTRAINT pk_id PRIMARY KEY (id), CONSTRAINT fk_user_id FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE ON UPDATE RESTRICT);"
 foreignKey
   :: ( HasTable tab (UnconstrainSchema schema) refcolumns  
      , SameTypes subcolumns refsubcolumns
@@ -353,33 +364,22 @@ alterTableRename table0 table1 = UnsafeDefinition $
   "ALTER TABLE" <+> renderAlias table0
   <+> "RENAME TO" <+> renderAlias table1 <> ";"
 
--- | An `alterTableAddConstraint` adds a table constraint.
+-- | An `addConstraint` adds a table constraint.
 --
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '["col" ::: 'Required ('NotNull 'PGint4)]]
---     '["tab" ::: '["col" ::: 'Required ('NotNull 'PGint4)]]
---   definition = alterTableAddConstraint #tab (check (#col .> 0))
+--     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
+--     '["tab" ::: '["positive" ::: Check ] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
+--   definition = alterTable #tab (addConstraint #positive (check (#col .> 0)))
 -- in renderDefinition definition
 -- :}
--- "ALTER TABLE tab ADD CHECK ((col > 0));"
--- alterTableAddConstraint
---   :: (HasTable table schema columns, (table ::: table0) `In` schema)
---   => Alias table -- ^ table to constrain
---   -> TableConstraintExpression schema columns constraint -- ^ what constraint to add
---   -> Definition schema (Alter table schema (AddConstraint constraint table0))
--- alterTableAddConstraint table constraint = UnsafeDefinition $
---   "ALTER TABLE" <+> renderAlias table
---   <+> "ADD" <+> renderTableConstraintExpression constraint <> ";"
-
+-- "ALTER TABLE tab ADD CONSTRAINT positive CHECK ((col > 0));"
 addConstraint
   :: KnownSymbol constraintName
   => Alias constraintName
-  -> TableConstraintExpression schema (UnconstrainColumns columns) constraint
-  -> AlterTable schema
-      (constraints :=> columns)
-      (Create constraintName constraint constraints :=> columns)
+  -> TableConstraintExpression schema (UnconstrainColumns (UnconstrainTable table)) constraint
+  -> AlterTable schema table (AddConstraint constraintName constraint table)
 addConstraint constraintName constraint = UnsafeAlterTable $
   "ADD" <+> "CONSTRAINT" <+> renderAlias constraintName
     <+> renderTableConstraintExpression constraint
@@ -421,7 +421,7 @@ addColumnDefault
   :: KnownSymbol column
   => Alias column -- ^ column to add
   -> TypeExpression ('Def :=> ty) -- ^ type of the new column
-  -> AlterTable schema table (Add column ('Def :=> ty) table)
+  -> AlterTable schema table (AddColumn column ('Def :=> ty) table)
 addColumnDefault column ty = UnsafeAlterTable $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
@@ -443,7 +443,7 @@ addColumnNull
   :: KnownSymbol column
   => Alias column -- ^ column to add
   -> TypeExpression ('NoDef :=> 'Null ty) -- ^ type of the new column
-  -> AlterTable schema table (Add column ('NoDef :=> 'Null ty) table)
+  -> AlterTable schema table (AddColumn column ('NoDef :=> 'Null ty) table)
 addColumnNull column ty = UnsafeAlterTable $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 

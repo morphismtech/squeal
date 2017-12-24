@@ -51,22 +51,6 @@ library
     , transformers-base >= 0.4.4 && < 1
     , uuid >= 1.3.13 && < 2
 
-test-suite squeal-postgresql-spec
-  default-language: Haskell2010
-  type: exitcode-stdio-1.0
-  hs-source-dirs: test
-  ghc-options: -Wall
-  main-is: Spec.hs
-  other-modules:
-    Squeal.PostgreSQL.DefinitionSpec
-    Squeal.PostgreSQL.ManipulationSpec
-    Squeal.PostgreSQL.QuerySpec
-  build-depends:
-      base >= 4.10.0.0 && < 5
-    , generics-sop >= 0.3.1.0 && < 1
-    , hspec >= 2.4.4 && < 3
-    , squeal-postgresql
-
 test-suite squeal-postgresql-doctest
   default-language: Haskell2010
   type: exitcode-stdio-1.0

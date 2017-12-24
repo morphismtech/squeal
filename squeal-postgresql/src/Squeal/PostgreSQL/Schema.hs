@@ -67,7 +67,8 @@ module Squeal.PostgreSQL.Schema
   , NullifyTables
   , Join
   , Create
-  , Add
+  , AddColumn
+  , AddConstraint
   , Drop
   , Alter
   , Rename
@@ -76,6 +77,7 @@ module Squeal.PostgreSQL.Schema
   , SameFields
     -- * PostgreSQL Constraints
   , (:=>)
+  , Unconstraint
   , UnconstrainColumn
   , UnconstrainColumns
   , UnconstrainTable
@@ -310,8 +312,11 @@ type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
   Create alias y (x ': xs) = x ': Create alias y xs
 
-type family Add alias x y where
-  Add alias x (constraints :=> xs) = constraints :=> Create alias x xs
+type family AddColumn alias x y where
+  AddColumn alias x (constraints :=> xs) = constraints :=> Create alias x xs
+
+type family AddConstraint alias x y where
+  AddConstraint alias x (constraints :=> xs) = Create alias x constraints :=> xs
 
 -- | @Drop alias xs@ removes the type associated with @alias@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.dropTable` statements
@@ -377,11 +382,12 @@ data ColumnConstraint
 
 data TableConstraint
   = Check
-  | Uniques [Symbol]
+  | Unique [Symbol]
   | PrimaryKey [Symbol]
   | ForeignKey [Symbol] Symbol [Symbol]
 
 type TableConstraints = [(Symbol,TableConstraint)]
+type Unconstraint = ('[] :: TableConstraints)
 
 type family Aliases xs where
   Aliases '[] = '[]
