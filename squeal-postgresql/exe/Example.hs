@@ -24,15 +24,16 @@ import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
 type Schema =
-  '[ "users" ::: '[] :=>
-       '[ "id" ::: AsSet '[ 'Default, 'Unique] :=> 'NotNull 'PGint4
-        , "name" ::: '[] :=> 'NotNull 'PGtext
+  '[ "users" :::
+       '[] :=>
+       '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+        , "name" ::: 'NoDef :=> 'NotNull 'PGtext
         ]
-   , "emails" ::: AsSet
-       '[ 'ForeignKey '["user_id"] "users" '["id"] ] :=>
-       '[ "id" ::: AsSet '[ 'Default, 'Unique] :=> 'NotNull 'PGint4
-        , "user_id" ::: '[] :=> 'NotNull 'PGint4
-        , "email" ::: '[] :=> 'Null 'PGtext
+   , "emails" :::
+       '[ "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"] ] :=>
+       '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+        , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
+        , "email" ::: 'NoDef :=> 'Null 'PGtext
         ]
    ]
 
@@ -46,8 +47,8 @@ setup =
     ( serial `As` #id :*
       (int & notNull) `As` #user_id :*
       text `As` #email :* Nil )
-    ( foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
-        OnDeleteCascade OnUpdateCascade :* Nil )
+    ( (foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
+        OnDeleteCascade OnUpdateCascade) `As` #fk_user_id :* Nil)
 
 teardown :: Definition Schema '[]
 teardown = dropTable #emails >>> dropTable #users
@@ -55,12 +56,12 @@ teardown = dropTable #emails >>> dropTable #users
 insertUser :: Manipulation Schema '[ 'NotNull 'PGtext]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
 insertUser = insertRows #users
-  (Def `As` #id :* Set (param @1) `As` #name :* Nil) []
+  (Default `As` #id :* Set (param @1) `As` #name :* Nil) []
   OnConflictDoNothing (Returning (#id `As` #fromOnly :* Nil))
 
 insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
 insertEmail = insertRows #emails
-  ( Def `As` #id :*
+  ( Default `As` #id :*
     Set (param @1) `As` #user_id :*
     Set (param @2) `As` #email :* Nil ) []
   OnConflictDoNothing (Returning Nil)

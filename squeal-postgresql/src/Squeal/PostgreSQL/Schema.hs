@@ -83,10 +83,10 @@ module Squeal.PostgreSQL.Schema
   , ColumnConstraint (..)
   -- , DropDefault
   -- , DropDefaultList
-  , AddConstraint
-  , DropConstraint
+  -- , AddConstraint
+  -- , DropConstraint
   , TableConstraint (..)
-  , AsSet
+  -- , AsSet
   , Aliases
   , Has
   ) where
@@ -95,9 +95,9 @@ import Control.DeepSeq
 import Data.ByteString
 import Data.Monoid
 import Data.String
-import Data.Type.Bool
-import Data.Type.Equality
-import Data.Type.Set
+-- import Data.Type.Bool
+-- import Data.Type.Equality
+-- import Data.Type.Set
 import Generics.SOP (AllZip)
 import GHC.Generics (Generic)
 import GHC.Exts
@@ -142,7 +142,7 @@ data NullityType
 -- is to use `Squeal.PostgreSQL.Expression.def`,
 -- `Squeal.PostgreSQL.Expression.unDef` or
 -- `Squeal.PostgreSQL.Expression.param`.
-type ColumnType = ([ColumnConstraint],NullityType)
+type ColumnType = (ColumnConstraint,NullityType)
 
 -- | `ColumnsType` is a kind synonym for a row of `ColumnType`s.
 type ColumnsType = [(Symbol,ColumnType)]
@@ -150,11 +150,11 @@ type ColumnsType = [(Symbol,ColumnType)]
 type RelationType = [(Symbol,NullityType)]
 type RelationsType = [(Symbol,RelationType)]
 
-type TableType = ([TableConstraint],ColumnsType)
+type TableType = (TableConstraints,ColumnsType)
 type SchemaType = [(Symbol,TableType)]
 
 type family UnconstrainColumn (ty :: ColumnType) :: NullityType where
-  UnconstrainColumn (constraints :=> ty) = ty
+  UnconstrainColumn (constraint :=> ty) = ty
 
 type family UnconstrainColumns (columns :: ColumnsType) :: RelationType where
   UnconstrainColumns '[] = '[]
@@ -332,18 +332,18 @@ type family Alter alias xs x where
   Alter alias ((alias ::: x0) ': xs) x1 = (alias ::: x1) ': xs
   Alter alias (x0 ': xs) x1 = x0 ': Alter alias xs x1
 
-type family AddConstraint constraint ty where
-  AddConstraint constraint (constraints :=> ty)
-    = AsSet (constraint ': constraints) :=> ty
+-- type family AddConstraint constraint ty where
+--   AddConstraint constraint (constraints :=> ty)
+--     = AsSet (constraint ': constraints) :=> ty
 
-type family DeleteFromList (e :: elem) (list :: [elem]) where
-  DeleteFromList elem '[] = '[]
-  DeleteFromList elem (x ': xs) =
-    If (Cmp elem x == 'EQ) xs (x ': DeleteFromList elem xs)
+-- type family DeleteFromList (e :: elem) (list :: [elem]) where
+--   DeleteFromList elem '[] = '[]
+--   DeleteFromList elem (x ': xs) =
+--     If (Cmp elem x == 'EQ) xs (x ': DeleteFromList elem xs)
 
-type family DropConstraint constraint ty where
-  DropConstraint constraint (constraints :=> ty)
-    = (AsSet (DeleteFromList constraint constraints)) :=> ty
+-- type family DropConstraint constraint ty where
+--   DropConstraint constraint (constraints :=> ty)
+--     = (AsSet (DeleteFromList constraint constraints)) :=> ty
 
 -- | @Rename alias0 alias1 xs@ replaces the alias @alias0@ by @alias1@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.alterTableRename` and
@@ -373,29 +373,20 @@ type family SameFields
     columns
       = AllZip SameField fields columns
 
-type (:=>) (constraints :: [constraint]) ty = '(constraints,ty)
+type (:=>) (constraints :: constraint) ty = '(constraints,ty)
 infixr 7 :=>
 
 data ColumnConstraint
-  = Default
-  | Unique
-  | References Symbol Symbol
-
-type instance Cmp 'Default 'Default = 'EQ
-type instance Cmp 'Unique 'Unique = 'EQ
-type instance Cmp ('References tab0 col0) ('References tab1 col1) =
-  If (Cmp tab0 tab1 == 'EQ) (Cmp col0 col1) (Cmp tab0 tab1)
-type instance Cmp 'Default 'Unique = 'LT
-type instance Cmp 'Unique 'Default = 'GT
-type instance Cmp 'Default ('References tab col) = 'LT
-type instance Cmp ('References tab col) 'Default = 'GT
-type instance Cmp 'Unique ('References tab col) = 'LT
-type instance Cmp ('References tab col) 'Unique = 'GT
+  = Def
+  | NoDef
 
 data TableConstraint
   = Check
   | Uniques [Symbol]
+  | PrimaryKey [Symbol]
   | ForeignKey [Symbol] Symbol [Symbol]
+
+type TableConstraints = [(Symbol,TableConstraint)]
 
 type family Aliases xs where
   Aliases '[] = '[]

@@ -32,8 +32,8 @@ module Squeal.PostgreSQL.Definition
   , createTable
   , TableConstraintExpression (..)
   , check
-  , uniques
-  , primaryKeys
+  , unique
+  , primaryKey
   , foreignKey
   , OnDeleteClause (OnDeleteNoAction, OnDeleteRestrict, OnDeleteCascade)
   , renderOnDeleteClause
@@ -64,7 +64,6 @@ import Control.Category
 import Control.DeepSeq
 import Data.ByteString
 import Data.Monoid
-import Data.Type.Set
 import GHC.TypeLits
 import Prelude hiding ((.), id)
 
@@ -114,7 +113,7 @@ createTable
   => Alias tab -- ^ the name of the table to add
   -> NP (Aliased TypeExpression) columns
     -- ^ the names and datatype of each column
-  -> NP (TableConstraintExpression schema (UnconstrainColumns columns))
+  -> NP (Aliased (TableConstraintExpression schema (UnconstrainColumns columns)))
        constraints
     -- ^ constraints that must hold for the table
   -> Definition schema (Create tab table schema)
@@ -122,12 +121,17 @@ createTable table columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderAlias table
   <+> parenthesized
     ( renderCommaSeparated renderColumnDef columns
-      <> renderCommaSeparated renderTableConstraintExpression constraints )
+      <> renderCommaSeparated renderConstraint constraints )
   <> ";"
   where
     renderColumnDef :: Aliased TypeExpression x -> ByteString
     renderColumnDef (ty `As` column) =
       renderAlias column <+> renderTypeExpression ty
+    renderConstraint
+      :: Aliased (TableConstraintExpression schema columns) constraint
+      -> ByteString
+    renderConstraint (constraint `As` alias) =
+      "CONSTRAINT" <+> renderAlias alias <+> renderTableConstraintExpression constraint
 
 -- | Data types are a way to limit the kind of data that can be stored in a
 -- table. For many applications, however, the constraint they provide is
@@ -179,12 +183,12 @@ check condition = UnsafeTableConstraintExpression $
 --     [ unique (Column #a :* Column #b :* Nil) ]
 -- :}
 -- "CREATE TABLE tab (a int, b int, UNIQUE (a, b));"
-uniques
+unique
   :: SOP.SListI subcolumns
   => NP (Column columns) subcolumns
   -- ^ unique column or group of columns
   -> TableConstraintExpression schema columns ( 'Uniques (Aliases subcolumns))
-uniques columns = UnsafeTableConstraintExpression $
+unique columns = UnsafeTableConstraintExpression $
   "UNIQUE" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
 -- | A `primaryKey` constraint indicates that a column, or group of columns,
@@ -199,12 +203,12 @@ uniques columns = UnsafeTableConstraintExpression $
 --     [ primaryKey (Column #id :* Nil) ]
 -- :}
 -- "CREATE TABLE tab (id serial, name text NOT NULL, PRIMARY KEY (id));"
-primaryKeys
+primaryKey
   :: (SOP.SListI subcolumns, AllNotNull subcolumns)
   => NP (Column columns) subcolumns
   -- ^ identifying column or group of columns
-  -> TableConstraintExpression schema columns ('Uniques (Aliases subcolumns))
-primaryKeys columns = UnsafeTableConstraintExpression $
+  -> TableConstraintExpression schema columns ('PrimaryKey (Aliases subcolumns))
+primaryKey columns = UnsafeTableConstraintExpression $
   "PRIMARY KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
 -- | A `foreignKey` specifies that the values in a column
@@ -369,11 +373,17 @@ alterTableRename table0 table1 = UnsafeDefinition $
 --   <+> "ADD" <+> renderTableConstraintExpression constraint <> ";"
 
 addConstraint
-  :: (tab ::: table) `In` schema
-  => Alias tab
-  -> TableConstraintExpression schema columns constraint
-  -> AlterTable schema table (AddConstraint constraint table)
-addConstraint = undefined
+  :: Aliased (TableConstraintExpression schema (UnconstrainColumns columns)) constraint
+  -> AlterTable schema (constraints :=> columns)
+      ((constraint ': constraints) :=> columns)
+addConstraint constraint = UnsafeAlterTable $
+  "ADD" <+> "CONSTRAINT" <+> renderConstraint constraint
+  where
+    renderConstraint
+      :: Aliased (TableConstraintExpression schema columns) constraint
+      -> ByteString
+    renderConstraint (constraint' `As` alias) =
+      "CONSTRAINT" <+> renderAlias alias <+> renderTableConstraintExpression constraint'
 
 -- | An `AlterTable` describes the alteration to perform on the columns
 -- of a table.
@@ -400,10 +410,10 @@ newtype AlterTable
 -- :}
 -- "ALTER TABLE tab ADD COLUMN col2 text DEFAULT E'foo';"
 addColumnDefault
-  :: (KnownSymbol column, 'Default `In` constraints)
+  :: KnownSymbol column
   => Alias column -- ^ column to add
-  -> TypeExpression (constraints :=> ty) -- ^ type of the new column
-  -> AlterTable schema table (Add column (constraints :=> ty) table)
+  -> TypeExpression ('Def :=> ty) -- ^ type of the new column
+  -> AlterTable schema table (Add column ('Def :=> ty) table)
 addColumnDefault column ty = UnsafeAlterTable $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
@@ -424,8 +434,8 @@ addColumnDefault column ty = UnsafeAlterTable $
 addColumnNull
   :: KnownSymbol column
   => Alias column -- ^ column to add
-  -> TypeExpression ( '[] :=> 'Null ty) -- ^ type of the new column
-  -> AlterTable schema table (Add column ( '[] :=> 'Null ty) table)
+  -> TypeExpression ('NoDef :=> 'Null ty) -- ^ type of the new column
+  -> AlterTable schema table (Add column ('NoDef :=> 'Null ty) table)
 addColumnNull column ty = UnsafeAlterTable $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
@@ -522,7 +532,7 @@ newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
 -- "ALTER TABLE tab ALTER COLUMN col SET DEFAULT 5;"
 setDefault
   :: Expression '[] 'Ungrouped '[] ty -- ^ default value to set
-  -> AlterColumn (constraints :=> ty) (AsSet ('Default ': constraints) :=> ty)
+  -> AlterColumn (constraints :=> ty) ('Def :=> ty)
 setDefault expression = UnsafeAlterColumn $
   "SET DEFAULT" <+> renderExpression expression
 
@@ -537,7 +547,7 @@ setDefault expression = UnsafeAlterColumn $
 -- in renderDefinition definition
 -- :}
 -- "ALTER TABLE tab ALTER COLUMN col DROP DEFAULT;"
-dropDefault :: AlterColumn ty (DropConstraint 'Default ty)
+dropDefault :: AlterColumn ('Def :=> ty) ('NoDef :=> ty)
 dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 
 -- | A `setNotNull` adds a @NOT NULL@ constraint to a column.

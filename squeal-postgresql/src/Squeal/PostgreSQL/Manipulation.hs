@@ -201,7 +201,7 @@ insertRows tab row rows conflict returning = UnsafeManipulation $
         :: Aliased (ColumnValue '[] params) ty -> ByteString
       renderAliasPart (_ `As` name) = renderAlias name
       renderColumnValuePart (value `As` _) = case value of
-        Def -> "DEFAULT"
+        Default -> "DEFAULT"
         Set expression -> renderExpression expression
 
 insertQuery
@@ -227,12 +227,10 @@ data ColumnValue
   (ty :: ColumnType)
   where
     Same :: ColumnValue (column ': columns) params ty
-    Def
-      :: 'Default `In` constraints
-      => ColumnValue columns params (constraints :=> ty)
+    Default :: ColumnValue columns params ('Def :=> ty)
     Set
       :: (forall table. Expression '[table ::: columns] 'Ungrouped params ty)
-      -> ColumnValue columns params (constraints :=> ty)
+      -> ColumnValue columns params (constraint :=> ty)
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
@@ -301,7 +299,7 @@ renderConflictClause = \case
           -> Maybe ByteString
         renderUpdate = \case
           Same `As` _ -> Nothing
-          Def `As` column -> Just $
+          Default `As` column -> Just $
             renderAlias column <+> "=" <+> "DEFAULT"
           Set expression `As` column -> Just $
             renderAlias column <+> "=" <+> renderExpression expression
@@ -350,7 +348,7 @@ update table columns wh returning = UnsafeManipulation $
       -> Maybe ByteString
     renderUpdate = \case
       Same `As` _ -> Nothing
-      Def `As` column -> Just $
+      Default `As` column -> Just $
         renderAlias column <+> "=" <+> "DEFAULT"
       Set expression `As` column -> Just $
         renderAlias column <+> "=" <+> renderExpression expression
