@@ -129,6 +129,9 @@ data NullityType
   = Null PGType -- ^ @NULL@ may be present
   | NotNull PGType -- ^ @NULL@ is absent
 
+type RelationType = [(Symbol,NullityType)]
+type RelationProduct = [(Symbol,RelationType)]
+
 -- | `ColumnType` encodes the allowance of @DEFAULT@ and the only way
 -- to generate an `Optional` `Squeal.PostgreSQL.Expression.Expression`
 -- is to use `Squeal.PostgreSQL.Expression.def`,
@@ -138,9 +141,6 @@ type ColumnType = (ColumnConstraint,NullityType)
 
 -- | `ColumnsType` is a kind synonym for a row of `ColumnType`s.
 type ColumnsType = [(Symbol,ColumnType)]
-
-type RelationType = [(Symbol,NullityType)]
-type RelationProduct = [(Symbol,RelationType)]
 
 type TableType = (TableConstraints,ColumnsType)
 type SchemaType = [(Symbol,TableType)]
