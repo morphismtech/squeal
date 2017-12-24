@@ -81,12 +81,7 @@ module Squeal.PostgreSQL.Schema
   , UnconstrainTable
   , UnconstrainSchema
   , ColumnConstraint (..)
-  -- , DropDefault
-  -- , DropDefaultList
-  -- , AddConstraint
-  -- , DropConstraint
   , TableConstraint (..)
-  -- , AsSet
   , Aliases
   , Has
   ) where
@@ -95,9 +90,6 @@ import Control.DeepSeq
 import Data.ByteString
 import Data.Monoid
 import Data.String
--- import Data.Type.Bool
--- import Data.Type.Equality
--- import Data.Type.Set
 import Generics.SOP (AllZip)
 import GHC.Generics (Generic)
 import GHC.Exts

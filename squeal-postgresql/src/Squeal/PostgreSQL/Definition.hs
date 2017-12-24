@@ -45,6 +45,7 @@ module Squeal.PostgreSQL.Definition
   , alterTable
   , alterTableRename
   , addConstraint
+  , dropConstraint
   , AlterTable (UnsafeAlterTable, renderAlterTable)
   , addColumnDefault
   , addColumnNull
@@ -373,17 +374,24 @@ alterTableRename table0 table1 = UnsafeDefinition $
 --   <+> "ADD" <+> renderTableConstraintExpression constraint <> ";"
 
 addConstraint
-  :: Aliased (TableConstraintExpression schema (UnconstrainColumns columns)) constraint
-  -> AlterTable schema (constraints :=> columns)
-      ((constraint ': constraints) :=> columns)
-addConstraint constraint = UnsafeAlterTable $
-  "ADD" <+> "CONSTRAINT" <+> renderConstraint constraint
-  where
-    renderConstraint
-      :: Aliased (TableConstraintExpression schema columns) constraint
-      -> ByteString
-    renderConstraint (constraint' `As` alias) =
-      "CONSTRAINT" <+> renderAlias alias <+> renderTableConstraintExpression constraint'
+  :: KnownSymbol constraintName
+  => Alias constraintName
+  -> TableConstraintExpression schema (UnconstrainColumns columns) constraint
+  -> AlterTable schema
+      (constraints :=> columns)
+      (Create constraintName constraint constraints :=> columns)
+addConstraint constraintName constraint = UnsafeAlterTable $
+  "ADD" <+> "CONSTRAINT" <+> renderAlias constraintName
+    <+> renderTableConstraintExpression constraint
+
+dropConstraint
+  :: KnownSymbol constraintName
+  => Alias constraintName
+  -> AlterTable schema
+      (constraints :=> columns)
+      (Drop constraintName constraints :=> columns)
+dropConstraint constraint = UnsafeAlterTable $
+  "DROP" <+> "CONSTRAINT" <+> renderAlias constraint
 
 -- | An `AlterTable` describes the alteration to perform on the columns
 -- of a table.
