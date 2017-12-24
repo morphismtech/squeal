@@ -106,18 +106,16 @@ CREATE statements
 -- :}
 -- "CREATE TABLE tab (a int, b real);"
 createTable
-  :: ( KnownSymbol tab
+  :: ( KnownSymbol table
      , columns ~ (col ': cols)
      , SOP.SListI columns
-     , SOP.SListI constraints
-     , table ~ (constraints :=> columns))
-  => Alias tab -- ^ the name of the table to add
+     , SOP.SListI constraints )
+  => Alias table -- ^ the name of the table to add
   -> NP (Aliased TypeExpression) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression schema (UnconstrainColumns columns)))
-       constraints
+  -> NP (Aliased (TableConstraintExpression schema columns)) constraints
     -- ^ constraints that must hold for the table
-  -> Definition schema (Create tab table schema)
+  -> Definition schema (Create table (constraints :=> columns) schema)
 createTable table columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderAlias table
   <+> parenthesized
@@ -151,11 +149,22 @@ createTable table columns constraints = UnsafeDefinition $
 -- even if the value came from the default value definition.
 newtype TableConstraintExpression
   (schema :: SchemaType)
-  (columns :: RelationType)
+  (columns :: ColumnsType)
   (tableConstraint :: TableConstraint)
     = UnsafeTableConstraintExpression
     { renderTableConstraintExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
+
+data Column
+  (columns :: ColumnsType)
+  (column :: (Symbol,ColumnType))
+    where
+      Column
+        :: Has column columns ty
+        => Column columns (column ::: ty)
+deriving instance Show (Column columns columnty)
+deriving instance Eq (Column columns columnty)
+deriving instance Ord (Column columns columnty)
 
 -- | A `check` constraint is the most generic `TableConstraint` type.
 -- It allows you to specify that the value in a certain column must satisfy
@@ -170,7 +179,7 @@ newtype TableConstraintExpression
 -- :}
 -- "CREATE TABLE tab (a int NOT NULL, b int NOT NULL, CONSTRAINT inequality CHECK ((a > b)));"
 check
-  :: Condition '[table ::: columns] 'Ungrouped '[]
+  :: Condition '[table ::: UnconstrainColumns columns] 'Ungrouped '[]
   -- ^ condition to check
   -> TableConstraintExpression schema columns 'Check
 check condition = UnsafeTableConstraintExpression $
@@ -257,14 +266,15 @@ primaryKey columns = UnsafeTableConstraintExpression $
 -- :}
 -- "CREATE TABLE users (id serial, username text NOT NULL, CONSTRAINT pk_id PRIMARY KEY (id)); CREATE TABLE emails (id serial, userid integer NOT NULL, email text NOT NULL, CONSTRAINT pk_id PRIMARY KEY (id), CONSTRAINT fk_user_id FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE ON UPDATE RESTRICT);"
 foreignKey
-  :: ( HasTable tab (UnconstrainSchema schema) refcolumns  
+  :: ( Has table schema reftable
+     , reftable ~ (constraints :=> refsubcolumns)
      , SameTypes subcolumns refsubcolumns
      , AllNotNull subcolumns
      , SOP.SListI subcolumns
      , SOP.SListI refsubcolumns)
   => NP (Column columns) subcolumns
   -- ^ column or columns in the table
-  -> Alias tab
+  -> Alias table
   -- ^ reference table
   -> NP (Column refcolumns) refsubcolumns
   -- ^ reference column or columns in the reference table
@@ -273,7 +283,7 @@ foreignKey
   -> OnUpdateClause
   -- ^ what to do when reference is updated
   -> TableConstraintExpression schema columns
-      ('ForeignKey (Aliases subcolumns) tab (Aliases refsubcolumns))
+      ('ForeignKey (Aliases subcolumns) table (Aliases refsubcolumns))
 foreignKey columns reftable refcolumns onDelete onUpdate =
   UnsafeTableConstraintExpression $
     "FOREIGN KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
@@ -378,7 +388,7 @@ alterTableRename table0 table1 = UnsafeDefinition $
 addConstraint
   :: KnownSymbol constraintName
   => Alias constraintName
-  -> TableConstraintExpression schema (UnconstrainColumns (UnconstrainTable table)) constraint
+  -> TableConstraintExpression schema table constraint
   -> AlterTable schema table (AddConstraint constraintName constraint table)
 addConstraint constraintName constraint = UnsafeAlterTable $
   "ADD" <+> "CONSTRAINT" <+> renderAlias constraintName

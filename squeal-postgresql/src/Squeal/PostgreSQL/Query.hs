@@ -45,7 +45,7 @@ module Squeal.PostgreSQL.Query
   , selectDistinctDotStar
     -- * Table Expressions
   , TableExpression (..)
-  , renderTableExpression
+  , renderSubtableExpression
   , from
   , where_
   , group
@@ -348,7 +348,7 @@ select
 select list tabs = UnsafeQuery $
   "SELECT"
   <+> renderCommaSeparated (renderAliasedAs renderExpression) list
-  <+> renderTableExpression tabs
+  <+> renderSubtableExpression tabs
 
 -- | After the select list has been processed, the result table can
 -- be subject to the elimination of duplicate rows using `selectDistinct`.
@@ -362,7 +362,7 @@ selectDistinct
 selectDistinct list tabs = UnsafeQuery $
   "SELECT DISTINCT"
   <+> renderCommaSeparated (renderAliasedAs renderExpression) list
-  <+> renderTableExpression tabs
+  <+> renderSubtableExpression tabs
 
 -- | The simplest kind of query is `selectStar` which emits all columns
 -- that the table expression produces.
@@ -371,7 +371,7 @@ selectStar
   => TableExpression schema params tables 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
-selectStar tabs = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression tabs
+selectStar tabs = UnsafeQuery $ "SELECT" <+> "*" <+> renderSubtableExpression tabs
 
 -- | A `selectDistinctStar` emits all columns that the table expression
 -- produces and eliminates duplicate rows.
@@ -381,24 +381,24 @@ selectDistinctStar
   -- ^ intermediate virtual table
   -> Query schema params columns
 selectDistinctStar tabs = UnsafeQuery $
-  "SELECT DISTINCT" <+> "*" <+> renderTableExpression tabs
+  "SELECT DISTINCT" <+> "*" <+> renderSubtableExpression tabs
 
 -- | When working with multiple tables, it can also be useful to ask
 -- for all the columns of a particular table, using `selectDotStar`.
 selectDotStar
-  :: HasTable table tables columns
+  :: Has table tables columns
   => Alias table
   -- ^ particular virtual subtable
   -> TableExpression schema params tables 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
 selectDotStar table tables = UnsafeQuery $
-  "SELECT" <+> renderAlias table <> ".*" <+> renderTableExpression tables
+  "SELECT" <+> renderAlias table <> ".*" <+> renderSubtableExpression tables
 
 -- | A `selectDistinctDotStar` asks for all the columns of a particular table, 
 -- and eliminates duplicate rows.
 selectDistinctDotStar
-  :: HasTable table tables columns
+  :: Has table tables columns
   => Alias table
   -- ^ particular virtual subtable
   -> TableExpression schema params tables 'Ungrouped
@@ -406,7 +406,7 @@ selectDistinctDotStar
   -> Query schema params columns
 selectDistinctDotStar table tables = UnsafeQuery $
   "SELECT DISTINCT" <+> renderAlias table <> ".*"
-  <+> renderTableExpression tables
+  <+> renderSubtableExpression tables
 
 {-----------------------------------------
 Table Expressions
@@ -466,10 +466,10 @@ data TableExpression
     }
 
 -- | Render a `TableExpression`
-renderTableExpression
+renderSubtableExpression
   :: TableExpression schema params tables grouping
   -> ByteString
-renderTableExpression
+renderSubtableExpression
   (TableExpression tables whs' grps' hvs' srts' lims' offs') = mconcat
     [ "FROM ", renderFromClause tables
     , renderWheres whs'
@@ -612,7 +612,7 @@ their placement in SQL.
 -}
 data FromClause schema params tables where
   Table
-    :: Aliased (Table (UnconstrainSchema schema)) table
+    :: Aliased (Subtable (UnconstrainSchema schema)) table
     -> FromClause schema params '[table]
   Subquery
     :: Aliased (Query schema params) table
@@ -646,7 +646,7 @@ data FromClause schema params tables where
 -- | Renders a `FromClause`.
 renderFromClause :: FromClause schema params tables -> ByteString
 renderFromClause = \case
-  Table table -> renderAliasedAs renderTable table
+  Table table -> renderAliasedAs renderSubtable table
   Subquery selection -> renderAliasedAs (parenthesized . renderQuery) selection
   CrossJoin right left ->
     renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
@@ -672,11 +672,11 @@ data By
     (tables :: RelationProduct)
     (by :: (Symbol,Symbol)) where
     By
-      :: (HasUnique table tables columns, HasColumn column columns ty)
+      :: (HasUnique table tables columns, Has column columns ty)
       => Alias column
       -> By tables '(table, column)
     By2
-      :: (HasTable table tables columns, HasColumn column columns ty)
+      :: (Has table tables columns, Has column columns ty)
       => (Alias table, Alias column)
       -> By tables '(table, column)
 deriving instance Show (By tables by)

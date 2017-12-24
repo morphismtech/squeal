@@ -262,22 +262,22 @@ type family PGTypeOf (ty :: NullityType) :: PGType where
 
 -- | `SameTypes` is a constraint that proves two `ColumnsType`s have the same
 -- length and the same `ColumnType`s.
-type family SameTypes (columns0 :: RelationType) (columns1 :: RelationType)
+type family SameTypes (columns0 :: ColumnsType) (columns1 :: ColumnsType)
   :: Constraint where
   SameTypes '[] '[] = ()
-  SameTypes (column0 ::: ty0 ': columns0) (column1 ::: ty1 ': columns1)
+  SameTypes (column0 ::: def0 :=> ty0 ': columns0) (column1 ::: def1 :=> ty1 ': columns1)
     = (ty0 ~ ty1, SameTypes columns0 columns1)
 
 -- | `AllNotNull` is a constraint that proves a `ColumnsType` has no @NULL@s.
-type family AllNotNull (columns :: RelationType) :: Constraint where
+type family AllNotNull (columns :: ColumnsType) :: Constraint where
   AllNotNull '[] = ()
-  AllNotNull (column ::: 'NotNull ty ': columns) = AllNotNull columns
+  AllNotNull (column ::: def :=> 'NotNull ty ': columns) = AllNotNull columns
 
 -- | `NotAllNull` is a constraint that proves a `ColumnsType` has some
 -- @NOT NULL@.
-type family NotAllNull (columns :: RelationType) :: Constraint where
-  NotAllNull (column ::: 'NotNull ty ': columns) = ()
-  NotAllNull (column ::: 'Null ty ': columns) = NotAllNull columns
+type family NotAllNull (columns :: ColumnsType) :: Constraint where
+  NotAllNull (column ::: def :=> 'NotNull ty ': columns) = ()
+  NotAllNull (column ::: def :=> 'Null ty ': columns) = NotAllNull columns
 
 -- | `NullifyType` is an idempotent that nullifies a `ColumnType`.
 type family NullifyType (ty :: NullityType) :: NullityType where

@@ -37,9 +37,8 @@ module Squeal.PostgreSQL.Expression
   ( -- * Expression
     Expression (UnsafeExpression, renderExpression)
   , HasParameter (param)
-  , HasColumn (getColumn)
-  , Column (Column)
-  , renderColumn
+  -- , Column (Column)
+  -- , renderColumn
   , GroupedBy (getGroup1, getGroup2)
     -- ** Null
   , null_
@@ -100,8 +99,7 @@ module Squeal.PostgreSQL.Expression
   , every, everyDistinct
   , max_, maxDistinct, min_, minDistinct
     -- * Tables
-  , Table (UnsafeTable, renderTable)
-  , HasTable (getTable)
+  , Subtable (UnsafeSubtable, renderSubtable)
   , TypeExpression (UnsafeTypeExpression, renderTypeExpression)
   , PGTyped (pgtype)
   , bool
@@ -206,32 +204,11 @@ instance {-# OVERLAPPING #-} PGTyped (PGTypeOf ty1)
 instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
   => HasParameter n (ty' : params) ty
 
-{- | A `HasColumn` constraint indicates an unqualified column reference.
-`getColumn` can only be unambiguous when the `TableExpression` the column
-references is unique, in which case the column may be referenced using
-@-XOverloadedLabels@. Otherwise, combined with a `HasTable` constraint, the
-qualified column reference operator `!` may be used.
--}
-class KnownSymbol column => HasColumn
-  (column :: Symbol)
-  (columns :: RelationType)
-  (ty :: NullityType)
-  | column columns -> ty where
-    getColumn
-      :: HasUnique table tables columns
-      => Alias column
-      -> Expression tables 'Ungrouped params ty
-    getColumn column = UnsafeExpression $ renderAlias column
-instance {-# OVERLAPPING #-} KnownSymbol column
-  => HasColumn column (column ::: ty ': tys) ty
-instance {-# OVERLAPPABLE #-} (KnownSymbol column, HasColumn column table ty)
-  => HasColumn column (ty' ': table) ty
-
-instance (HasColumn column columns ty, HasUnique table tables columns)
+instance (HasUnique table tables columns, Has column columns ty)
   => IsLabel column (Expression tables 'Ungrouped params ty) where
-    fromLabel = getColumn (Alias @column)
+    fromLabel = UnsafeExpression $ renderAlias (Alias @column)
 
-instance (HasTable table tables columns, HasColumn column columns ty)
+instance (Has table tables columns, Has column columns ty)
   => IsTableColumn table column (Expression tables 'Ungrouped params ty) where
     table ! column = UnsafeExpression $
       renderAlias table <> "." <> renderAlias column
@@ -240,21 +217,21 @@ instance (HasTable table tables columns, HasColumn column columns ty)
 -- in `Squeel.PostgreSQL.Definition.unique` and other
 -- `Squeel.PostgreSQL.Definition.TableConstraint`s to witness a
 -- subcolumns relationship.
-data Column
-  (columns :: RelationType)
-  (columnty :: (Symbol,NullityType))
-    where
-      Column
-        :: HasColumn column columns ty
-        => Alias column
-        -> Column columns (column ::: ty)
-deriving instance Show (Column columns columnty)
-deriving instance Eq (Column columns columnty)
-deriving instance Ord (Column columns columnty)
+-- data Column
+--   (columns :: RelationType)
+--   (columnty :: (Symbol,NullityType))
+--     where
+--       Column
+--         :: Has column columns ty
+--         => Alias column
+--         -> Column columns (column ::: ty)
+-- deriving instance Show (Column columns columnty)
+-- deriving instance Eq (Column columns columnty)
+-- deriving instance Ord (Column columns columnty)
 
--- | Render a `Column`.
-renderColumn :: Column columns columnty -> ByteString
-renderColumn (Column column) = renderAlias column
+-- -- | Render a `Column`.
+-- renderColumn :: Column columns columnty -> ByteString
+-- renderColumn (Column column) = renderAlias column
 
 {- | A `GroupedBy` constraint indicates that a table qualified column is
 a member of the auxiliary namespace created by @GROUP BY@ clauses and thus,
@@ -263,12 +240,12 @@ may be called in an output `Expression` without aggregating.
 class (KnownSymbol table, KnownSymbol column)
   => GroupedBy table column bys where
     getGroup1
-      :: (HasUnique table tables columns, HasColumn column columns ty)
+      :: (HasUnique table tables columns, Has column columns ty)
       => Alias column
       -> Expression tables ('Grouped bys) params ty
     getGroup1 column = UnsafeExpression $ renderAlias column
     getGroup2
-      :: (HasTable table tables columns, HasColumn column columns ty)
+      :: (Has table tables columns, Has column columns ty)
       => Alias table
       -> Alias column
       -> Expression tables ('Grouped bys) params ty
@@ -284,15 +261,15 @@ instance {-# OVERLAPPABLE #-}
   
 instance
   ( HasUnique table tables columns
-  , HasColumn column columns ty
+  , Has column columns ty
   , GroupedBy table column bys
   ) => IsLabel column
     (Expression tables ('Grouped bys) params ty) where
       fromLabel = getGroup1 (Alias @column)
   
 instance
-  ( HasTable table tables columns
-  , HasColumn column columns ty
+  ( Has table tables columns
+  , Has column columns ty
   , GroupedBy table column bys
   ) => IsTableColumn table column
     (Expression tables ('Grouped bys) params ty) where (!) = getGroup2
@@ -961,31 +938,19 @@ minDistinct = unsafeAggregateDistinct "min"
 tables
 -----------------------------------------}
 
--- | A `Table` from a schema without its alias with an `IsLabel` instance
+-- | A `Subtable` from a table expression is a way
 -- to call a table reference by its alias.
-newtype Table
-  (schema :: RelationProduct)
+newtype Subtable
+  (table :: RelationProduct)
   (columns :: RelationType)
-    = UnsafeTable { renderTable :: ByteString }
+    = UnsafeSubtable { renderSubtable :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
-
--- | A `HasTable` constraint indicates a table reference.
-class KnownSymbol table => HasTable
-  (table :: Symbol)
-  (tables :: RelationProduct)
+instance Has
+  (subtable :: Symbol)
+  (table :: RelationProduct)
   (columns :: RelationType)
-  | table tables -> columns where
-    getTable :: Alias table -> Table tables columns
-    getTable table = UnsafeTable $ renderAlias table
-instance {-# OVERLAPPING #-} KnownSymbol table
-  => HasTable table ((table ::: columns) ': tables) columns
-instance {-# OVERLAPPABLE #-}
-  (KnownSymbol table, HasTable table schema columns)
-    => HasTable table (table' ': schema) columns
-
-instance HasTable table schema columns
-  => IsLabel table (Table schema columns) where
-    fromLabel = getTable (Alias @table)
+  => IsLabel subtable (Subtable table columns) where
+    fromLabel = UnsafeSubtable $ renderAlias (Alias @subtable)
 
 {-----------------------------------------
 type expressions
