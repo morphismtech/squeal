@@ -264,7 +264,7 @@ renderReturningClause = \case
   ReturningStar -> " RETURNING *;"
   Returning Nil -> ";"
   Returning results -> " RETURNING"
-    <+> renderCommaSeparated (renderAliased renderExpression) results <> ";"
+    <+> renderCommaSeparated (renderAliasedAs renderExpression) results <> ";"
 
 -- | A `ConflictClause` specifies an action to perform upon a constraint
 -- violation. `OnConflictDoRaise` will raise an error.

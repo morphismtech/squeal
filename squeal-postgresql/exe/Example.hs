@@ -42,14 +42,14 @@ type Schema =
 setup :: Definition '[] Schema
 setup = 
   createTable #users
-    ( serial `As` #id :*
-      (text & notNull) `As` #name :* Nil )
+    ( #id serial :*
+      #name (text & notNull) :* Nil )
     ( primaryKey (Column #id :* Nil) `As` #pk_id :* Nil )
   >>>
   createTable #emails
-    ( serial `As` #id :*
-      (int & notNull) `As` #user_id :*
-      text `As` #email :* Nil )
+    ( #id serial :*
+      #user_id (int & notNull) :*
+      #email text :* Nil )
     ( primaryKey (Column #id :* Nil) `As` #pk_id :*
       foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
         OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )

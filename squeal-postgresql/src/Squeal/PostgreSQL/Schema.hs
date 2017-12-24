@@ -52,7 +52,7 @@ module Squeal.PostgreSQL.Schema
   , Alias (Alias)
   , renderAlias
   , Aliased (As)
-  , renderAliased
+  , renderAliasedAs
   , IsLabel (..)
   , IsTableColumn (..)
     -- * Type Families
@@ -223,15 +223,18 @@ deriving instance Eq (expression ty)
   => Eq (Aliased expression (alias ::: ty))
 deriving instance Ord (expression ty)
   => Ord (Aliased expression (alias ::: ty))
+instance KnownSymbol alias
+  => IsLabel alias (expression ty -> Aliased expression (alias ::: ty))
+  where fromLabel = \ expression -> expression `As` Alias @alias 
 
 -- | >>> let renderMaybe = fromString . maybe "Nothing" (const "Just")
--- >>> renderAliased renderMaybe (Just (3::Int) `As` #an_int)
+-- >>> renderAliasedAs renderMaybe (Just (3::Int) `As` #an_int)
 -- "Just AS an_int"
-renderAliased
+renderAliasedAs
   :: (forall ty. expression ty -> ByteString)
   -> Aliased expression aliased
   -> ByteString
-renderAliased render (expression `As` alias) =
+renderAliasedAs render (expression `As` alias) =
   render expression <> " AS " <> renderAlias alias
 
 -- | Analagous to `IsLabel`, the constraint

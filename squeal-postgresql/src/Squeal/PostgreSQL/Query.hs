@@ -347,7 +347,7 @@ select
   -> Query schema params (column ': columns)
 select list tabs = UnsafeQuery $
   "SELECT"
-  <+> renderCommaSeparated (renderAliased renderExpression) list
+  <+> renderCommaSeparated (renderAliasedAs renderExpression) list
   <+> renderTableExpression tabs
 
 -- | After the select list has been processed, the result table can
@@ -361,7 +361,7 @@ selectDistinct
   -> Query schema params (column ': columns)
 selectDistinct list tabs = UnsafeQuery $
   "SELECT DISTINCT"
-  <+> renderCommaSeparated (renderAliased renderExpression) list
+  <+> renderCommaSeparated (renderAliasedAs renderExpression) list
   <+> renderTableExpression tabs
 
 -- | The simplest kind of query is `selectStar` which emits all columns
@@ -646,8 +646,8 @@ data FromClause schema params tables where
 -- | Renders a `FromClause`.
 renderFromClause :: FromClause schema params tables -> ByteString
 renderFromClause = \case
-  Table table -> renderAliased renderTable table
-  Subquery selection -> renderAliased (parenthesized . renderQuery) selection
+  Table table -> renderAliasedAs renderTable table
+  Subquery selection -> renderAliasedAs (parenthesized . renderQuery) selection
   CrossJoin right left ->
     renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
   InnerJoin right on left -> renderJoin "INNER JOIN" right on left
