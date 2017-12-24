@@ -25,12 +25,14 @@ import qualified GHC.Generics as GHC
 
 type Schema =
   '[ "users" :::
-       '[] :=>
+       '[ "pk_id" ::: 'PrimaryKey '["id"] ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
         ]
    , "emails" :::
-       '[ "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"] ] :=>
+       '[  "pk_id" ::: 'PrimaryKey '["id"]
+        , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+        ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
         , "email" ::: 'NoDef :=> 'Null 'PGtext
@@ -41,14 +43,16 @@ setup :: Definition '[] Schema
 setup = 
   createTable #users
     ( serial `As` #id :*
-      (text & notNull) `As` #name :* Nil ) Nil
+      (text & notNull) `As` #name :* Nil )
+    ( primaryKey (Column #id :* Nil) `As` #pk_id :* Nil )
   >>>
   createTable #emails
     ( serial `As` #id :*
       (int & notNull) `As` #user_id :*
       text `As` #email :* Nil )
-    ( (foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
-        OnDeleteCascade OnUpdateCascade) `As` #fk_user_id :* Nil)
+    ( primaryKey (Column #id :* Nil) `As` #pk_id :*
+      foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
+        OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
 
 teardown :: Definition Schema '[]
 teardown = dropTable #emails >>> dropTable #users
