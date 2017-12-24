@@ -177,7 +177,7 @@ values from primitive expression using arithmetic, logical,
 and other operations.
 -}
 newtype Expression
-  (relation :: RelationsType)
+  (relation :: RelationProduct)
   (grouping :: Grouping)
   (params :: [NullityType])
   (ty :: NullityType)
@@ -964,7 +964,7 @@ tables
 -- | A `Table` from a schema without its alias with an `IsLabel` instance
 -- to call a table reference by its alias.
 newtype Table
-  (schema :: RelationsType)
+  (schema :: RelationProduct)
   (columns :: RelationType)
     = UnsafeTable { renderTable :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
@@ -972,7 +972,7 @@ newtype Table
 -- | A `HasTable` constraint indicates a table reference.
 class KnownSymbol table => HasTable
   (table :: Symbol)
-  (tables :: RelationsType)
+  (tables :: RelationProduct)
   (columns :: RelationType)
   | table tables -> columns where
     getTable :: Alias table -> Table tables columns

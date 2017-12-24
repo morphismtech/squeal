@@ -421,7 +421,7 @@ Table Expressions
 data TableExpression
   (schema :: SchemaType)
   (params :: [NullityType])
-  (tables :: RelationsType)
+  (tables :: RelationProduct)
   (grouping :: Grouping)
     = TableExpression
     { fromClause :: FromClause schema params tables
@@ -669,7 +669,7 @@ Grouping
 -- column @col@; otherwise @By2 (\#tab \! \#col)@ will reference a table
 -- qualified column @tab.col@.
 data By
-    (tables :: RelationsType)
+    (tables :: RelationProduct)
     (by :: (Symbol,Symbol)) where
     By
       :: (HasUnique table tables columns, HasColumn column columns ty)

@@ -39,7 +39,7 @@ module Squeal.PostgreSQL.Schema
   , ColumnType
   , ColumnsType
   , RelationType
-  , RelationsType
+  , RelationProduct
   , TableType
   , SchemaType
   , Grouping (..)
@@ -148,7 +148,7 @@ type ColumnType = (ColumnConstraint,NullityType)
 type ColumnsType = [(Symbol,ColumnType)]
 
 type RelationType = [(Symbol,NullityType)]
-type RelationsType = [(Symbol,RelationType)]
+type RelationProduct = [(Symbol,RelationType)]
 
 type TableType = (TableConstraints,ColumnsType)
 type SchemaType = [(Symbol,TableType)]
@@ -164,7 +164,7 @@ type family UnconstrainColumns (columns :: ColumnsType) :: RelationType where
 type family UnconstrainTable (table :: TableType) :: ColumnsType where
   UnconstrainTable (constraints :=> columns) = columns
 
-type family UnconstrainSchema (schema :: SchemaType) :: RelationsType where
+type family UnconstrainSchema (schema :: SchemaType) :: RelationProduct where
   UnconstrainSchema '[] = '[]
   UnconstrainSchema (tab ::: constraints :=> columns ': tables) =
     tab ::: UnconstrainColumns columns ': UnconstrainSchema tables
@@ -293,10 +293,10 @@ type family NullifyColumns (columns :: RelationType) :: RelationType where
   NullifyColumns (column ::: ty ': columns) =
     column ::: NullifyType ty ': NullifyColumns columns
 
--- | `NullifyTables` is an idempotent that nullifies a `RelationsType`
+-- | `NullifyTables` is an idempotent that nullifies a `RelationProduct`
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
-type family NullifyTables (tables :: RelationsType) :: RelationsType where
+type family NullifyTables (tables :: RelationProduct) :: RelationProduct where
   NullifyTables '[] = '[]
   NullifyTables (table ::: columns ': tables) =
     table ::: NullifyColumns columns ': NullifyTables tables
