@@ -64,7 +64,6 @@ import Control.Category
 import Control.DeepSeq
 import Data.ByteString
 import Data.Monoid
-import Data.Type.Set
 import GHC.TypeLits
 import Prelude hiding ((.), id)
 
@@ -107,25 +106,32 @@ CREATE statements
 -- "CREATE TABLE tab (a int, b real);"
 createTable
   :: ( KnownSymbol tab
+     , columns ~ (col ': cols)
      , SOP.SListI columns
      , SOP.SListI constraints
-     , table ~ (constraints :=> (column ': columns)))
+     , table ~ (constraints :=> columns))
   => Alias tab -- ^ the name of the table to add
-  -> NP (Aliased TypeExpression) (column ': columns)
+  -> NP (Aliased TypeExpression) columns
     -- ^ the names and datatype of each column
-  -> NP (TableConstraintExpression schema (column ': columns)) constraints
+  -> NP (Aliased (TableConstraintExpression schema (UnconstrainColumns columns)))
+       constraints
     -- ^ constraints that must hold for the table
   -> Definition schema (Create tab table schema)
 createTable table columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderAlias table
   <+> parenthesized
     ( renderCommaSeparated renderColumnDef columns
-      <> renderCommaSeparated renderTableConstraintExpression constraints )
+      <> renderCommaSeparated renderConstraint constraints )
   <> ";"
   where
     renderColumnDef :: Aliased TypeExpression x -> ByteString
     renderColumnDef (ty `As` column) =
       renderAlias column <+> renderTypeExpression ty
+    renderConstraint
+      :: Aliased (TableConstraintExpression schema columns) constraint
+      -> ByteString
+    renderConstraint (constraint `As` alias) =
+      "CONSTRAINT" <+> renderAlias alias <+> renderTableConstraintExpression constraint
 
 -- | Data types are a way to limit the kind of data that can be stored in a
 -- table. For many applications, however, the constraint they provide is
@@ -141,7 +147,7 @@ createTable table columns constraints = UnsafeDefinition $
 -- even if the value came from the default value definition.
 newtype TableConstraintExpression
   (schema :: SchemaType)
-  (columns :: ColumnsType)
+  (columns :: RelationType)
   (tableConstraint :: TableConstraint)
     = UnsafeTableConstraintExpression
     { renderTableConstraintExpression :: ByteString }
@@ -198,10 +204,10 @@ unique columns = UnsafeTableConstraintExpression $
 -- :}
 -- "CREATE TABLE tab (id serial, name text NOT NULL, PRIMARY KEY (id));"
 primaryKey
-  :: (SOP.SListI subcolumns, NotAllNull subcolumns)
+  :: (SOP.SListI subcolumns, AllNotNull subcolumns)
   => NP (Column columns) subcolumns
   -- ^ identifying column or group of columns
-  -> TableConstraintExpression schema columns ('Uniques (Aliases subcolumns))
+  -> TableConstraintExpression schema columns ('PrimaryKey (Aliases subcolumns))
 primaryKey columns = UnsafeTableConstraintExpression $
   "PRIMARY KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
@@ -239,7 +245,7 @@ primaryKey columns = UnsafeTableConstraintExpression $
 -- :}
 -- "CREATE TABLE users (id serial, username text NOT NULL, PRIMARY KEY (id)); CREATE TABLE emails (id serial, userid integer NOT NULL, email text NOT NULL, PRIMARY KEY (id), FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE ON UPDATE RESTRICT);"
 foreignKey
-  :: ( SchemaHasTable tab schema refcolumns  
+  :: ( HasTable tab (UnconstrainSchema schema) refcolumns  
      , SameTypes subcolumns refsubcolumns
      , AllNotNull subcolumns
      , SOP.SListI subcolumns
@@ -367,11 +373,17 @@ alterTableRename table0 table1 = UnsafeDefinition $
 --   <+> "ADD" <+> renderTableConstraintExpression constraint <> ";"
 
 addConstraint
-  :: (tab ::: table) `In` schema
-  => Alias tab
-  -> TableConstraintExpression schema columns constraint
-  -> AlterTable schema table (AddConstraint constraint table)
-addConstraint = undefined
+  :: Aliased (TableConstraintExpression schema (UnconstrainColumns columns)) constraint
+  -> AlterTable schema (constraints :=> columns)
+      ((constraint ': constraints) :=> columns)
+addConstraint constraint = UnsafeAlterTable $
+  "ADD" <+> "CONSTRAINT" <+> renderConstraint constraint
+  where
+    renderConstraint
+      :: Aliased (TableConstraintExpression schema columns) constraint
+      -> ByteString
+    renderConstraint (constraint' `As` alias) =
+      "CONSTRAINT" <+> renderAlias alias <+> renderTableConstraintExpression constraint'
 
 -- | An `AlterTable` describes the alteration to perform on the columns
 -- of a table.
@@ -398,10 +410,10 @@ newtype AlterTable
 -- :}
 -- "ALTER TABLE tab ADD COLUMN col2 text DEFAULT E'foo';"
 addColumnDefault
-  :: (KnownSymbol column, 'Default `In` constraints)
+  :: KnownSymbol column
   => Alias column -- ^ column to add
-  -> TypeExpression (constraints :=> ty) -- ^ type of the new column
-  -> AlterTable schema table (Add column (constraints :=> ty) table)
+  -> TypeExpression ('Def :=> ty) -- ^ type of the new column
+  -> AlterTable schema table (Add column ('Def :=> ty) table)
 addColumnDefault column ty = UnsafeAlterTable $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
@@ -422,8 +434,8 @@ addColumnDefault column ty = UnsafeAlterTable $
 addColumnNull
   :: KnownSymbol column
   => Alias column -- ^ column to add
-  -> TypeExpression ( '[] :=> 'Null ty) -- ^ type of the new column
-  -> AlterTable schema table (Add column ( '[] :=> 'Null ty) table)
+  -> TypeExpression ('NoDef :=> 'Null ty) -- ^ type of the new column
+  -> AlterTable schema table (Add column ('NoDef :=> 'Null ty) table)
 addColumnNull column ty = UnsafeAlterTable $
   "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 
@@ -493,7 +505,7 @@ renameColumn column0 column1 = UnsafeAlterTable $
 
 -- | An `alterColumn` alters a single column.
 alterColumn
-  :: (KnownSymbol column, HasColumn column columns ty0)
+  :: (KnownSymbol column, Has column columns ty0)
   => Alias column -- ^ column to alter
   -> AlterColumn ty0 ty1 -- ^ alteration to perform
   -> AlterTable schema ('[] :=> columns) ('[] :=> Alter column columns ty1)
@@ -519,8 +531,8 @@ newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
 -- :}
 -- "ALTER TABLE tab ALTER COLUMN col SET DEFAULT 5;"
 setDefault
-  :: Expression '[] 'Ungrouped '[] '( constraints, ty) -- ^ default value to set
-  -> AlterColumn (optionality ty) '( '[ 'Default] `Union` constraints, ty)
+  :: Expression '[] 'Ungrouped '[] ty -- ^ default value to set
+  -> AlterColumn (constraints :=> ty) ('Def :=> ty)
 setDefault expression = UnsafeAlterColumn $
   "SET DEFAULT" <+> renderExpression expression
 
@@ -535,7 +547,7 @@ setDefault expression = UnsafeAlterColumn $
 -- in renderDefinition definition
 -- :}
 -- "ALTER TABLE tab ALTER COLUMN col DROP DEFAULT;"
-dropDefault :: AlterColumn ty (DropConstraint 'Default ty)
+dropDefault :: AlterColumn ('Def :=> ty) ('NoDef :=> ty)
 dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 
 -- | A `setNotNull` adds a @NOT NULL@ constraint to a column.
