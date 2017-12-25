@@ -37,8 +37,6 @@ module Squeal.PostgreSQL.Expression
   ( -- * Expression
     Expression (UnsafeExpression, renderExpression)
   , HasParameter (param)
-  -- , Column (Column)
-  -- , renderColumn
   , GroupedBy (getGroup1, getGroup2)
     -- ** Null
   , null_

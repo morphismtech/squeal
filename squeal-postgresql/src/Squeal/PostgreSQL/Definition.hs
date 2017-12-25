@@ -13,13 +13,17 @@ Squeal data definition language.
   , DeriveDataTypeable
   , DeriveGeneric
   , FlexibleContexts
+  , FlexibleInstances
   , GADTs
   , GeneralizedNewtypeDeriving
   , KindSignatures
   , LambdaCase
+  , MultiParamTypeClasses
   , OverloadedStrings
   , RankNTypes
+  , ScopedTypeVariables
   , StandaloneDeriving
+  , TypeApplications
   , TypeInType
   , TypeOperators
 #-}
@@ -31,6 +35,7 @@ module Squeal.PostgreSQL.Definition
     -- * Create
   , createTable
   , TableConstraintExpression (..)
+  , Column (..)
   , check
   , unique
   , primaryKey
@@ -158,13 +163,14 @@ newtype TableConstraintExpression
 data Column
   (columns :: ColumnsType)
   (column :: (Symbol,ColumnType))
-    where
-      Column
-        :: Has column columns ty
-        => Column columns (column ::: ty)
-deriving instance Show (Column columns columnty)
-deriving instance Eq (Column columns columnty)
-deriving instance Ord (Column columns columnty)
+  where
+    Column
+      :: Has column columns ty
+      => Alias column
+      -> Column columns (column ::: ty)
+
+renderColumn :: Column columns column -> ByteString
+renderColumn (Column column) = renderAlias column
 
 -- | A `check` constraint is the most generic `TableConstraint` type.
 -- It allows you to specify that the value in a certain column must satisfy
@@ -267,7 +273,7 @@ primaryKey columns = UnsafeTableConstraintExpression $
 -- "CREATE TABLE users (id serial, username text NOT NULL, CONSTRAINT pk_id PRIMARY KEY (id)); CREATE TABLE emails (id serial, userid integer NOT NULL, email text NOT NULL, CONSTRAINT pk_id PRIMARY KEY (id), CONSTRAINT fk_user_id FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE ON UPDATE RESTRICT);"
 foreignKey
   :: ( Has table schema reftable
-     , reftable ~ (constraints :=> refsubcolumns)
+     , refcolumns ~ UnconstrainTable reftable
      , SameTypes subcolumns refsubcolumns
      , AllNotNull subcolumns
      , SOP.SListI subcolumns
@@ -388,7 +394,7 @@ alterTableRename table0 table1 = UnsafeDefinition $
 addConstraint
   :: KnownSymbol constraintName
   => Alias constraintName
-  -> TableConstraintExpression schema table constraint
+  -> TableConstraintExpression schema (UnconstrainTable table) constraint
   -> AlterTable schema table (AddConstraint constraintName constraint table)
 addConstraint constraintName constraint = UnsafeAlterTable $
   "ADD" <+> "CONSTRAINT" <+> renderAlias constraintName
