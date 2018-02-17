@@ -97,7 +97,7 @@ module Squeal.PostgreSQL.Expression
   , every, everyDistinct
   , max_, maxDistinct, min_, minDistinct
     -- * Tables
-  , Subtable (UnsafeSubtable, renderSubtable)
+  , Table (UnsafeTable, renderTable)
   , TypeExpression (UnsafeTypeExpression, renderTypeExpression)
   , PGTyped (pgtype)
   , bool
@@ -936,19 +936,18 @@ minDistinct = unsafeAggregateDistinct "min"
 tables
 -----------------------------------------}
 
--- | A `Subtable` from a table expression is a way
+-- | A `Table` from a table expression is a way
 -- to call a table reference by its alias.
-newtype Subtable
-  (table :: RelationsType)
+newtype Table
+  (schema :: TablesType)
   (columns :: RelationType)
-    = UnsafeSubtable { renderSubtable :: ByteString }
+    = UnsafeTable { renderTable :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance Has
-  (subtable :: Symbol)
-  (table :: RelationsType)
-  (columns :: RelationType)
-  => IsLabel subtable (Subtable table columns) where
-    fromLabel = UnsafeSubtable $ renderAlias (Alias @subtable)
+instance
+  ( Has alias schema table
+  , relation ~ ColumnsToRelation (TableToColumns table)
+  ) => IsLabel alias (Table schema relation) where
+    fromLabel = UnsafeTable $ renderAlias (Alias @alias)
 
 {-----------------------------------------
 type expressions

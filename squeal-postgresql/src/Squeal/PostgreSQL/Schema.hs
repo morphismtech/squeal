@@ -43,21 +43,29 @@ module Squeal.PostgreSQL.Schema
   , TableType
   , TablesType
   , Grouping (..)
-    -- * Constraints
-  , PGNum
-  , PGIntegral
-  , PGFloating
-    -- * Aliases
+    -- * PostgreSQL Constraints
+  , (:=>)
+  , ColumnsToRelation
+  , TableToColumns
+  , TablesToRelations
+  , ColumnConstraint (..)
+  , TableConstraint (..)
+    -- * AliasesOf
   , (:::)
   , Alias (Alias)
   , renderAlias
   , Aliased (As)
   , renderAliasedAs
+  , AliasesOf
+  , Has
+  , HasUnique
   , IsLabel (..)
   , IsTableColumn (..)
     -- * Type Families
   , In
-  , HasUnique
+  , PGNum
+  , PGIntegral
+  , PGFloating
   , PGTypeOf
   , SameTypes
   , AllNotNull
@@ -75,15 +83,6 @@ module Squeal.PostgreSQL.Schema
     -- * Generics
   , SameField
   , SameFields
-    -- * PostgreSQL Constraints
-  , (:=>)
-  , ColumnsToRelation
-  , TableToColumns
-  , TablesToRelations
-  , ColumnConstraint (..)
-  , TableConstraint (..)
-  , Aliases
-  , Has
   ) where
 
 import Control.DeepSeq
@@ -198,22 +197,6 @@ data Grouping
   = Ungrouped -- ^ no aggregation permitted
   | Grouped [(Symbol,Symbol)] -- ^ aggregation required for any column which is not grouped
 
--- | `PGNum` is a constraint on `PGType` whose
--- `Squeal.PostgreSQL.Expression.Expression`s have a `Num` constraint.
-type PGNum ty =
-  In ty '[ 'PGint2, 'PGint4, 'PGint8, 'PGnumeric, 'PGfloat4, 'PGfloat8]
-
--- | `PGFloating` is a constraint on `PGType` whose
--- `Squeal.PostgreSQL.Expression.Expression`s
--- have `Fractional` and `Floating` constraints.
-type PGFloating ty = In ty '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
-
--- | `PGIntegral` is a constraint on `PGType` whose
--- `Squeal.PostgreSQL.Expression.Expression`s
--- have `Squeal.PostgreSQL.Expression.div_` and
--- `Squeal.PostgreSQL.Expression.mod_` functions.
-type PGIntegral ty = In ty '[ 'PGint2, 'PGint4, 'PGint8]
-
 -- | `Alias`es are proxies for a type level string or `Symbol`
 -- and have an `IsLabel` instance so that with @-XOverloadedLabels@
 --
@@ -225,8 +208,8 @@ data Alias (alias :: Symbol) = Alias
 instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
 
--- | >>> renderAlias #alias
--- "alias"
+-- | >>> renderAlias #jimbob
+-- "jimbob"
 renderAlias :: KnownSymbol alias => Alias alias -> ByteString
 renderAlias = fromString . symbolVal
 
@@ -261,6 +244,25 @@ renderAliasedAs
 renderAliasedAs render (expression `As` alias) =
   render expression <> " AS " <> renderAlias alias
 
+-- | `AliasesOf` retains the AliasesOf in a row.
+type family AliasesOf aliaseds where
+  AliasesOf '[] = '[]
+  AliasesOf (alias ::: ty ': tys) = alias ': AliasesOf tys
+
+-- | @HasUnique alias xs x@ is a constraint that proves that @xs@ is a singleton
+-- of @alias ::: x@.
+type HasUnique alias xs x = xs ~ '[alias ::: x]
+
+-- | @Has alias xs x@ is a constraint that proves that @xs@ has a field
+-- of @alias ::: x@.
+class KnownSymbol alias =>
+  Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
+  | alias fields -> field where
+instance {-# OVERLAPPING #-} KnownSymbol alias
+  => Has alias (alias ::: field ': fields) field
+instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
+  => Has alias (field' ': fields) field
+
 -- | Analagous to `IsLabel`, the constraint
 -- `IsTableColumn` defines `!` for a column alias qualified
 -- by a table alias.
@@ -274,9 +276,21 @@ type family In x xs :: Constraint where
   In x (x ': xs) = ()
   In x (y ': xs) = In x xs
 
--- | @HasUnique alias xs x@ is a constraint that proves that @xs@ is a singleton
--- of @alias ::: x@.
-type HasUnique alias xs x = xs ~ '[alias ::: x]
+-- | `PGNum` is a constraint on `PGType` whose
+-- `Squeal.PostgreSQL.Expression.Expression`s have a `Num` constraint.
+type PGNum ty =
+  In ty '[ 'PGint2, 'PGint4, 'PGint8, 'PGnumeric, 'PGfloat4, 'PGfloat8]
+
+-- | `PGFloating` is a constraint on `PGType` whose
+-- `Squeal.PostgreSQL.Expression.Expression`s
+-- have `Fractional` and `Floating` constraints.
+type PGFloating ty = In ty '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
+
+-- | `PGIntegral` is a constraint on `PGType` whose
+-- `Squeal.PostgreSQL.Expression.Expression`s
+-- have `Squeal.PostgreSQL.Expression.div_` and
+-- `Squeal.PostgreSQL.Expression.mod_` functions.
+type PGIntegral ty = In ty '[ 'PGint2, 'PGint4, 'PGint8]
 
 -- | `PGTypeOf` forgets about @NULL@ and any column constraints.
 type family PGTypeOf (ty :: NullityType) :: PGType where
@@ -382,7 +396,7 @@ instance field ~ column => SameField ('Type.FieldInfo field) (column ::: ty)
 
 -- | A `SameFields` constraint proves that a
 -- `Generics.SOP.Type.Metadata.DatatypeInfo` of a record type has the same
--- field names as the column aliases of a `ColumnsType`.
+-- field names as the column AliasesOf of a `ColumnsType`.
 type family SameFields
   (datatypeInfo :: Type.DatatypeInfo) (columns :: RelationType)
     :: Constraint where
@@ -394,17 +408,3 @@ type family SameFields
     ('Type.Newtype _module _datatype ('Type.Record _constructor fields))
     columns
       = AllZip SameField fields columns
-
--- type Unconstraint = ('[] :: [(Symbol,TableConstraint)])
-
-type family Aliases xs where
-  Aliases '[] = '[]
-  Aliases ((alias ::: x) ': xs) = alias ': Aliases xs
-
-class KnownSymbol alias =>
-  Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
-  | alias fields -> field where
-instance {-# OVERLAPPING #-} KnownSymbol alias
-  => Has alias (alias ::: field ': fields) field
-instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
-  => Has alias (field' ': fields) field

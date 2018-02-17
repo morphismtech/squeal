@@ -206,7 +206,7 @@ unique
   :: SOP.SListI subcolumns
   => NP (Column columns) subcolumns
   -- ^ unique column or group of columns
-  -> TableConstraintExpression schema columns ('Unique (Aliases subcolumns))
+  -> TableConstraintExpression schema columns ('Unique (AliasesOf subcolumns))
 unique columns = UnsafeTableConstraintExpression $
   "UNIQUE" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
@@ -226,7 +226,7 @@ primaryKey
   :: (SOP.SListI subcolumns, AllNotNull subcolumns)
   => NP (Column columns) subcolumns
   -- ^ identifying column or group of columns
-  -> TableConstraintExpression schema columns ('PrimaryKey (Aliases subcolumns))
+  -> TableConstraintExpression schema columns ('PrimaryKey (AliasesOf subcolumns))
 primaryKey columns = UnsafeTableConstraintExpression $
   "PRIMARY KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
 
@@ -289,7 +289,7 @@ foreignKey
   -> OnUpdateClause
   -- ^ what to do when reference is updated
   -> TableConstraintExpression schema columns
-      ('ForeignKey (Aliases subcolumns) table (Aliases refsubcolumns))
+      ('ForeignKey (AliasesOf subcolumns) table (AliasesOf refsubcolumns))
 foreignKey columns reftable refcolumns onDelete onUpdate =
   UnsafeTableConstraintExpression $
     "FOREIGN KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)

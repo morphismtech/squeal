@@ -12,6 +12,7 @@ Squeal queries.
     DataKinds
   , DeriveDataTypeable
   , DeriveGeneric
+  , FlexibleContexts
   , FlexibleInstances
   , GADTs
   , GeneralizedNewtypeDeriving
@@ -45,7 +46,7 @@ module Squeal.PostgreSQL.Query
   , selectDistinctDotStar
     -- * Table Expressions
   , TableExpression (..)
-  , renderSubtableExpression
+  , renderTableExpression
   , from
   , where_
   , group
@@ -70,7 +71,7 @@ module Squeal.PostgreSQL.Query
 
 import Control.DeepSeq
 import Data.ByteString (ByteString)
-import Data.Monoid
+import Data.Monoid hiding (All)
 import Data.String
 import Data.Word
 import Generics.SOP hiding (from)
@@ -348,7 +349,7 @@ select
 select list tabs = UnsafeQuery $
   "SELECT"
   <+> renderCommaSeparated (renderAliasedAs renderExpression) list
-  <+> renderSubtableExpression tabs
+  <+> renderTableExpression tabs
 
 -- | After the select list has been processed, the result table can
 -- be subject to the elimination of duplicate rows using `selectDistinct`.
@@ -362,7 +363,7 @@ selectDistinct
 selectDistinct list tabs = UnsafeQuery $
   "SELECT DISTINCT"
   <+> renderCommaSeparated (renderAliasedAs renderExpression) list
-  <+> renderSubtableExpression tabs
+  <+> renderTableExpression tabs
 
 -- | The simplest kind of query is `selectStar` which emits all columns
 -- that the table expression produces.
@@ -371,7 +372,7 @@ selectStar
   => TableExpression schema params tables 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
-selectStar tabs = UnsafeQuery $ "SELECT" <+> "*" <+> renderSubtableExpression tabs
+selectStar tabs = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression tabs
 
 -- | A `selectDistinctStar` emits all columns that the table expression
 -- produces and eliminates duplicate rows.
@@ -381,32 +382,32 @@ selectDistinctStar
   -- ^ intermediate virtual table
   -> Query schema params columns
 selectDistinctStar tabs = UnsafeQuery $
-  "SELECT DISTINCT" <+> "*" <+> renderSubtableExpression tabs
+  "SELECT DISTINCT" <+> "*" <+> renderTableExpression tabs
 
 -- | When working with multiple tables, it can also be useful to ask
 -- for all the columns of a particular table, using `selectDotStar`.
 selectDotStar
   :: Has table tables columns
   => Alias table
-  -- ^ particular virtual subtable
+  -- ^ particular virtual Table
   -> TableExpression schema params tables 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
 selectDotStar table tables = UnsafeQuery $
-  "SELECT" <+> renderAlias table <> ".*" <+> renderSubtableExpression tables
+  "SELECT" <+> renderAlias table <> ".*" <+> renderTableExpression tables
 
 -- | A `selectDistinctDotStar` asks for all the columns of a particular table, 
 -- and eliminates duplicate rows.
 selectDistinctDotStar
   :: Has table tables columns
   => Alias table
-  -- ^ particular virtual subtable
+  -- ^ particular virtual Table
   -> TableExpression schema params tables 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
 selectDistinctDotStar table tables = UnsafeQuery $
   "SELECT DISTINCT" <+> renderAlias table <> ".*"
-  <+> renderSubtableExpression tables
+  <+> renderTableExpression tables
 
 {-----------------------------------------
 Table Expressions
@@ -466,10 +467,10 @@ data TableExpression
     }
 
 -- | Render a `TableExpression`
-renderSubtableExpression
+renderTableExpression
   :: TableExpression schema params tables grouping
   -> ByteString
-renderSubtableExpression
+renderTableExpression
   (TableExpression tables whs' grps' hvs' srts' lims' offs') = mconcat
     [ "FROM ", renderFromClause tables
     , renderWheres whs'
@@ -612,7 +613,7 @@ their placement in SQL.
 -}
 data FromClause schema params tables where
   Table
-    :: Aliased (Subtable (TablesToRelations schema)) table
+    :: Aliased (Table schema) table
     -> FromClause schema params '[table]
   Subquery
     :: Aliased (Query schema params) table
@@ -646,7 +647,7 @@ data FromClause schema params tables where
 -- | Renders a `FromClause`.
 renderFromClause :: FromClause schema params tables -> ByteString
 renderFromClause = \case
-  Table table -> renderAliasedAs renderSubtable table
+  Table table -> renderAliasedAs renderTable table
   Subquery selection -> renderAliasedAs (parenthesized . renderQuery) selection
   CrossJoin right left ->
     renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
