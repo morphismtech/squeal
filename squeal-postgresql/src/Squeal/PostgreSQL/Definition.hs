@@ -88,8 +88,8 @@ statements
 -- database, like a `createTable`, `dropTable`, or `alterTable` command.
 -- `Definition`s may be composed using the `>>>` operator.
 newtype Definition
-  (schema0 :: SchemaType)
-  (schema1 :: SchemaType)
+  (schema0 :: TablesType)
+  (schema1 :: TablesType)
   = UnsafeDefinition { renderDefinition :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
@@ -153,7 +153,7 @@ createTable table columns constraints = UnsafeDefinition $
 -- violate a constraint, an error is raised. This applies
 -- even if the value came from the default value definition.
 newtype TableConstraintExpression
-  (schema :: SchemaType)
+  (schema :: TablesType)
   (columns :: ColumnsType)
   (tableConstraint :: TableConstraint)
     = UnsafeTableConstraintExpression
@@ -185,7 +185,7 @@ renderColumn (Column column) = renderAlias column
 -- :}
 -- "CREATE TABLE tab (a int NOT NULL, b int NOT NULL, CONSTRAINT inequality CHECK ((a > b)));"
 check
-  :: Condition '[table ::: UnconstrainColumns columns] 'Ungrouped '[]
+  :: Condition '[table ::: ColumnsToRelation columns] 'Ungrouped '[]
   -- ^ condition to check
   -> TableConstraintExpression schema columns 'Check
 check condition = UnsafeTableConstraintExpression $
@@ -273,7 +273,7 @@ primaryKey columns = UnsafeTableConstraintExpression $
 -- "CREATE TABLE users (id serial, username text NOT NULL, CONSTRAINT pk_id PRIMARY KEY (id)); CREATE TABLE emails (id serial, userid integer NOT NULL, email text NOT NULL, CONSTRAINT pk_id PRIMARY KEY (id), CONSTRAINT fk_user_id FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE ON UPDATE RESTRICT);"
 foreignKey
   :: ( Has table schema reftable
-     , refcolumns ~ UnconstrainTable reftable
+     , refcolumns ~ TableToColumns reftable
      , SameTypes subcolumns refsubcolumns
      , AllNotNull subcolumns
      , SOP.SListI subcolumns
@@ -394,7 +394,7 @@ alterTableRename table0 table1 = UnsafeDefinition $
 addConstraint
   :: KnownSymbol constraintName
   => Alias constraintName
-  -> TableConstraintExpression schema (UnconstrainTable table) constraint
+  -> TableConstraintExpression schema (TableToColumns table) constraint
   -> AlterTable schema table (AddConstraint constraintName constraint table)
 addConstraint constraintName constraint = UnsafeAlterTable $
   "ADD" <+> "CONSTRAINT" <+> renderAlias constraintName
@@ -412,7 +412,7 @@ dropConstraint constraint = UnsafeAlterTable $
 -- | An `AlterTable` describes the alteration to perform on the columns
 -- of a table.
 newtype AlterTable
-  (schema :: SchemaType)
+  (schema :: TablesType)
   (table0 :: TableType)
   (table1 :: TableType) =
     UnsafeAlterTable {renderAlterTable :: ByteString}

@@ -257,7 +257,7 @@ in renderQuery query
 -}
 
 newtype Query
-  (schema :: SchemaType)
+  (schema :: TablesType)
   (params :: [NullityType])
   (columns :: RelationType)
     = UnsafeQuery { renderQuery :: ByteString }
@@ -419,9 +419,9 @@ Table Expressions
 -- to a table on disk, a so-called base table, but more complex expressions
 -- can be used to modify or combine base tables in various ways.
 data TableExpression
-  (schema :: SchemaType)
+  (schema :: TablesType)
   (params :: [NullityType])
-  (tables :: RelationProduct)
+  (tables :: RelationsType)
   (grouping :: Grouping)
     = TableExpression
     { fromClause :: FromClause schema params tables
@@ -612,7 +612,7 @@ their placement in SQL.
 -}
 data FromClause schema params tables where
   Table
-    :: Aliased (Subtable (UnconstrainSchema schema)) table
+    :: Aliased (Subtable (TablesToRelations schema)) table
     -> FromClause schema params '[table]
   Subquery
     :: Aliased (Query schema params) table
@@ -669,7 +669,7 @@ Grouping
 -- column @col@; otherwise @By2 (\#tab \! \#col)@ will reference a table
 -- qualified column @tab.col@.
 data By
-    (tables :: RelationProduct)
+    (tables :: RelationsType)
     (by :: (Symbol,Symbol)) where
     By
       :: (HasUnique table tables columns, Has column columns ty)

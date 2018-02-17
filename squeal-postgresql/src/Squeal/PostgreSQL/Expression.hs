@@ -173,7 +173,7 @@ values from primitive expression using arithmetic, logical,
 and other operations.
 -}
 newtype Expression
-  (relation :: RelationProduct)
+  (relation :: RelationsType)
   (grouping :: Grouping)
   (params :: [NullityType])
   (ty :: NullityType)
@@ -939,13 +939,13 @@ tables
 -- | A `Subtable` from a table expression is a way
 -- to call a table reference by its alias.
 newtype Subtable
-  (table :: RelationProduct)
+  (table :: RelationsType)
   (columns :: RelationType)
     = UnsafeSubtable { renderSubtable :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance Has
   (subtable :: Symbol)
-  (table :: RelationProduct)
+  (table :: RelationsType)
   (columns :: RelationType)
   => IsLabel subtable (Subtable table columns) where
     fromLabel = UnsafeSubtable $ renderAlias (Alias @subtable)

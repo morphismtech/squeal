@@ -58,7 +58,7 @@ import Squeal.PostgreSQL.Schema
 -- `deleteFrom`. A `Query` is also considered a `Manipulation` even though
 -- it does not modify data.
 newtype Manipulation
-  (schema :: SchemaType)
+  (schema :: TablesType)
   (params :: [NullityType])
   (columns :: RelationType)
     = UnsafeManipulation { renderManipulation :: ByteString }
@@ -179,7 +179,7 @@ insertRows
   :: ( SOP.SListI columns
      , SOP.SListI results
      , Has tab schema table
-     , columns ~ UnconstrainTable table )
+     , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
   -> NP (Aliased (ColumnValue '[] params)) columns
   -> [NP (Aliased (ColumnValue '[] params)) columns]
@@ -208,9 +208,9 @@ insertQuery
   :: ( SOP.SListI columns
      , SOP.SListI results
      , Has tab schema table
-     , columns ~ UnconstrainTable table )
+     , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> Query schema params (UnconstrainColumns columns)
+  -> Query schema params (ColumnsToRelation columns)
   -> ConflictClause columns params
   -- ^ what to do in case of constraint conflict
   -> ReturningClause columns params results -- ^ results to return
@@ -248,10 +248,10 @@ data ReturningClause
   (results :: RelationType)
   where
     ReturningStar
-      :: ReturningClause columns params (UnconstrainColumns columns)
+      :: ReturningClause columns params (ColumnsToRelation columns)
     Returning
       :: NP
-          (Aliased (Expression '[table ::: (UnconstrainColumns columns)] 'Ungrouped params))
+          (Aliased (Expression '[table ::: (ColumnsToRelation columns)] 'Ungrouped params))
           results
       -> ReturningClause columns params results
 
@@ -275,8 +275,8 @@ data ConflictClause (columns :: ColumnsType) params where
   OnConflictDoRaise :: ConflictClause columns params
   OnConflictDoNothing :: ConflictClause columns params
   OnConflictDoUpdate
-    :: NP (Aliased (ColumnValue (UnconstrainColumns columns) params)) columns
-    -> [Condition '[table ::: UnconstrainColumns columns] 'Ungrouped params]
+    :: NP (Aliased (ColumnValue (ColumnsToRelation columns) params)) columns
+    -> [Condition '[table ::: ColumnsToRelation columns] 'Ungrouped params]
     -> ConflictClause columns params
 
 -- | Render a `ConflictClause`.
@@ -327,11 +327,11 @@ update
   :: ( SOP.SListI columns
      , SOP.SListI results
      , Has tab schema table
-     , columns ~ UnconstrainTable table )
+     , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue (UnconstrainColumns columns) params)) columns
+  -> NP (Aliased (ColumnValue (ColumnsToRelation columns) params)) columns
   -- ^ modified values to replace old values
-  -> Condition '[tab ::: UnconstrainColumns columns] 'Ungrouped params
+  -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
   -- ^ condition under which to perform update on a row
   -> ReturningClause columns params results -- ^ results to return
   -> Manipulation schema params results
@@ -374,9 +374,9 @@ DELETE statements
 deleteFrom
   :: ( SOP.SListI results
      , Has tab schema table
-     , columns ~ UnconstrainTable table )
+     , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
-  -> Condition '[tab ::: UnconstrainColumns columns] 'Ungrouped params
+  -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
   -- ^ condition under which to delete a row
   -> ReturningClause columns params results -- ^ results to return
   -> Manipulation schema params results

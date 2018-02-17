@@ -39,9 +39,9 @@ module Squeal.PostgreSQL.Schema
   , ColumnType
   , ColumnsType
   , RelationType
-  , RelationProduct
+  , RelationsType
   , TableType
-  , SchemaType
+  , TablesType
   , Grouping (..)
     -- * Constraints
   , PGNum
@@ -77,11 +77,9 @@ module Squeal.PostgreSQL.Schema
   , SameFields
     -- * PostgreSQL Constraints
   , (:=>)
-  , Unconstraint
-  , UnconstrainColumn
-  , UnconstrainColumns
-  , UnconstrainTable
-  , UnconstrainSchema
+  , ColumnsToRelation
+  , TableToColumns
+  , TablesToRelations
   , ColumnConstraint (..)
   , TableConstraint (..)
   , Aliases
@@ -131,44 +129,74 @@ data NullityType
   = Null PGType -- ^ @NULL@ may be present
   | NotNull PGType -- ^ @NULL@ is absent
 
-type RelationType = [(Symbol,NullityType)]
-type RelationProduct = [(Symbol,RelationType)]
+-- | `:=>` is a type level pair between an "constraint" and some type,
+-- either a `ColumnConstraint` and a `NullityType` or a row of
+-- `TableConstraint`s and a `TableType`.
+type (:=>) constraint ty = '(constraint,ty)
+infixr 7 :=>
 
--- | `ColumnType` encodes the allowance of @DEFAULT@ and the only way
--- to generate an `Optional` `Squeal.PostgreSQL.Expression.Expression`
--- is to use `Squeal.PostgreSQL.Expression.def`,
--- `Squeal.PostgreSQL.Expression.unDef` or
--- `Squeal.PostgreSQL.Expression.param`.
+-- | `:::` is like a promoted version of `As`, a type level pair between
+-- an alias and some type, like a column alias and either a `ColumnType` or
+-- `NullityType` or a table alias and either a `TableType` or a `RelationType`
+-- or a constraint alias and a `TableConstraint`.
+type (:::) (alias :: Symbol) ty = '(alias,ty)
+infixr 6 :::
+
+-- | `ColumnConstraint` encodes the allowance of @DEFAULT@.
+data ColumnConstraint
+  = Def -- ^ @DEFAULT@ is available for inserts and updates
+  | NoDef -- ^ @DEFAULT@ is unavailable for inserts and updates
+
+-- | `ColumnType` encodes the allowance of @DEFAULT@ and @NULL@ and the
+-- base `PGType` for a column.
 type ColumnType = (ColumnConstraint,NullityType)
 
--- | `ColumnsType` is a kind synonym for a row of `ColumnType`s.
+-- | `ColumnsType` is a row of `ColumnType`s.
 type ColumnsType = [(Symbol,ColumnType)]
 
-type TableType = (TableConstraints,ColumnsType)
-type SchemaType = [(Symbol,TableType)]
+-- | `TableConstraint` encodes various forms of data constraints
+-- of columns in a table.
+data TableConstraint
+  = Check
+  | Unique [Symbol]
+  | PrimaryKey [Symbol]
+  | ForeignKey [Symbol] Symbol [Symbol]
 
-type family UnconstrainColumn (ty :: ColumnType) :: NullityType where
-  UnconstrainColumn (constraint :=> ty) = ty
+-- | `TableType` encodes a row of constraints on a table as well as the types
+-- of its columns.
+type TableType = ([(Symbol,TableConstraint)],ColumnsType)
 
-type family UnconstrainColumns (columns :: ColumnsType) :: RelationType where
-  UnconstrainColumns '[] = '[]
-  UnconstrainColumns (column ::: ty ': columns) =
-    column ::: UnconstrainColumn ty ': UnconstrainColumns columns
+-- | `TablesType` is a row of `TableType`s, thought of as a union.
+type TablesType = [(Symbol,TableType)]
 
-type family UnconstrainTable (table :: TableType) :: ColumnsType where
-  UnconstrainTable (constraints :=> columns) = columns
+-- | `RelationType` is a row of `NullityType`
+type RelationType = [(Symbol,NullityType)]
 
-type family UnconstrainSchema (schema :: SchemaType) :: RelationProduct where
-  UnconstrainSchema '[] = '[]
-  UnconstrainSchema (tab ::: constraints :=> columns ': tables) =
-    tab ::: UnconstrainColumns columns ': UnconstrainSchema tables
+-- | `RelationsType` is a row of `RelationType`s, thought of as a product.
+type RelationsType = [(Symbol,RelationType)]
+
+-- | `ColumnsToRelation` removes column constraints.
+type family ColumnsToRelation (columns :: ColumnsType) :: RelationType where
+  ColumnsToRelation '[] = '[]
+  ColumnsToRelation (column ::: constraint :=> ty ': columns) =
+    column ::: ty ': ColumnsToRelation columns
+
+-- | `TableToColumns` removes table constraints.
+type family TableToColumns (table :: TableType) :: ColumnsType where
+  TableToColumns (constraints :=> columns) = columns
+
+-- | `TablesToRelations` removes both table and column constraints.
+type family TablesToRelations (tables :: TablesType) :: RelationsType where
+  TablesToRelations '[] = '[]
+  TablesToRelations (alias ::: constraint :=> columns ': tables) =
+    alias ::: ColumnsToRelation columns ': TablesToRelations tables
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
 -- for typesafe aggregation
 data Grouping
-  = Ungrouped
-  | Grouped [(Symbol,Symbol)]
+  = Ungrouped -- ^ no aggregation permitted
+  | Grouped [(Symbol,Symbol)] -- ^ aggregation required for any column which is not grouped
 
 -- | `PGNum` is a constraint on `PGType` whose
 -- `Squeal.PostgreSQL.Expression.Expression`s have a `Num` constraint.
@@ -185,12 +213,6 @@ type PGFloating ty = In ty '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 -- have `Squeal.PostgreSQL.Expression.div_` and
 -- `Squeal.PostgreSQL.Expression.mod_` functions.
 type PGIntegral ty = In ty '[ 'PGint2, 'PGint4, 'PGint8]
-
--- | `:::` is like a promoted version of `As`, a type level pair between
--- an alias and some type, usually a column alias and a `ColumnType` or
--- a table alias and a `ColumnsType`.
-type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
-infixr 6 :::
 
 -- | `Alias`es are proxies for a type level string or `Symbol`
 -- and have an `IsLabel` instance so that with @-XOverloadedLabels@
@@ -227,7 +249,7 @@ deriving instance Ord (expression ty)
   => Ord (Aliased expression (alias ::: ty))
 instance KnownSymbol alias
   => IsLabel alias (expression ty -> Aliased expression (alias ::: ty))
-  where fromLabel = \ expression -> expression `As` Alias @alias 
+  where fromLabel expression = expression `As` Alias @alias 
 
 -- | >>> let renderMaybe = fromString . maybe "Nothing" (const "Just")
 -- >>> renderAliasedAs renderMaybe (Just (3::Int) `As` #an_int)
@@ -290,10 +312,10 @@ type family NullifyColumns (columns :: RelationType) :: RelationType where
   NullifyColumns (column ::: ty ': columns) =
     column ::: NullifyType ty ': NullifyColumns columns
 
--- | `NullifyTables` is an idempotent that nullifies a `RelationProduct`
+-- | `NullifyTables` is an idempotent that nullifies a `RelationsType`
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
-type family NullifyTables (tables :: RelationProduct) :: RelationProduct where
+type family NullifyTables (tables :: RelationsType) :: RelationsType where
   NullifyTables '[] = '[]
   NullifyTables (table ::: columns ': tables) =
     table ::: NullifyColumns columns ': NullifyTables tables
@@ -373,21 +395,7 @@ type family SameFields
     columns
       = AllZip SameField fields columns
 
-type (:=>) (constraints :: constraint) ty = '(constraints,ty)
-infixr 7 :=>
-
-data ColumnConstraint
-  = Def
-  | NoDef
-
-data TableConstraint
-  = Check
-  | Unique [Symbol]
-  | PrimaryKey [Symbol]
-  | ForeignKey [Symbol] Symbol [Symbol]
-
-type TableConstraints = [(Symbol,TableConstraint)]
-type Unconstraint = ('[] :: TableConstraints)
+-- type Unconstraint = ('[] :: [(Symbol,TableConstraint)])
 
 type family Aliases xs where
   Aliases '[] = '[]
