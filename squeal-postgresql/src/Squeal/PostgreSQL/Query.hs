@@ -660,6 +660,31 @@ renderFromClause = \case
       renderFromClause left <+> op <+> renderFromClause right
       <+> "ON" <+> renderExpression on
 
+-- joinRef
+--   :: ( Has lefttable schema (constraints :=> leftcolumns)
+--      , leftrel ~ ColumnsToRelation leftcolumns
+--      , Has righttable schema right
+--      , rightrel ~ ColumnsToRelation (TableToColumns right)
+--      , Has ref constraints ('ForeignKey keys reftable refs)
+--      , SListI keys, All KnownSymbol keys
+--      , SListI refs, All KnownSymbol refs
+--      , KnownSymbol leftalias, KnownSymbol rightalias
+--      )
+--   => Aliased Alias (rightalias ::: righttable)
+--   -> Alias ref
+--   -> Aliased Alias (leftalias ::: lefttable)
+--   -> FromClause schema params '[leftalias ::: leftrel, rightalias ::: rightrel]
+-- joinRef
+--   ((_ :: Alias righttable) `As` rightalias)
+--   ref
+--   ((_ :: Alias lefttable) `As` leftalias) =
+--   InnerJoin
+--     (Table (fromLabel @righttable `As` rightalias))
+--     refEq
+--     (Table (fromLabel @lefttable `As` leftalias))
+--   where
+--     refEq = undefined
+
 {-----------------------------------------
 Grouping
 -----------------------------------------}
