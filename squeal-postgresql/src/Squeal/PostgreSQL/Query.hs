@@ -77,6 +77,7 @@ import Data.Word
 import Generics.SOP hiding (from)
 import GHC.TypeLits
 
+import qualified Data.ByteString as ByteString
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Expression
@@ -618,6 +619,9 @@ data FromClause schema params tables where
   Subquery
     :: Aliased (Query schema params) table
     -> FromClause schema params '[table]
+  JoinRef
+    :: JoinRef schema tables
+    -> FromClause schema params tables
   CrossJoin
     :: FromClause schema params right
     -> FromClause schema params left
@@ -648,6 +652,7 @@ data FromClause schema params tables where
 renderFromClause :: FromClause schema params tables -> ByteString
 renderFromClause = \case
   Table table -> renderAliasedAs renderTable table
+  JoinRef joinRef -> renderJoinRef joinRef
   Subquery selection -> renderAliasedAs (parenthesized . renderQuery) selection
   CrossJoin right left ->
     renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
@@ -660,30 +665,35 @@ renderFromClause = \case
       renderFromClause left <+> op <+> renderFromClause right
       <+> "ON" <+> renderExpression on
 
--- joinRef
---   :: ( Has lefttable schema (constraints :=> leftcolumns)
---      , leftrel ~ ColumnsToRelation leftcolumns
---      , Has righttable schema right
---      , rightrel ~ ColumnsToRelation (TableToColumns right)
---      , Has ref constraints ('ForeignKey keys reftable refs)
---      , SListI keys, All KnownSymbol keys
---      , SListI refs, All KnownSymbol refs
---      , KnownSymbol leftalias, KnownSymbol rightalias
---      )
---   => Aliased Alias (rightalias ::: righttable)
---   -> Alias ref
---   -> Aliased Alias (leftalias ::: lefttable)
---   -> FromClause schema params '[leftalias ::: leftrel, rightalias ::: rightrel]
--- joinRef
---   ((_ :: Alias righttable) `As` rightalias)
---   ref
---   ((_ :: Alias lefttable) `As` leftalias) =
---   InnerJoin
---     (Table (fromLabel @righttable `As` rightalias))
---     refEq
---     (Table (fromLabel @lefttable `As` leftalias))
---   where
---     refEq = undefined
+newtype JoinRef (schema :: TablesType) (relations :: RelationsType)
+  = UnsafeJoinRef { renderJoinRef :: ByteString }
+  deriving (GHC.Generic,Show,Eq,Ord,NFData)
+
+utilizing
+  :: ( Has left schema (constraints :=> lcols)
+     , ColumnsToRelation lcols ~ lrel
+     , Has right (TablesToRelations schema) rrel
+     , Has ref constraints ('ForeignKey lnames right rnames)
+     , All KnownSymbol lnames
+     , All KnownSymbol rnames
+     )
+  => (Alias right, NP Alias rnames)
+  -> Alias ref
+  -> (Alias left, NP Alias lnames)
+  -> JoinRef schema '[left ::: lrel,right ::: rrel]
+utilizing (rtab,rcols) _ref (ltab,lcols) = UnsafeJoinRef $
+  lname <+> "JOIN" <+> rname <+> "ON" <+> refEq
+  where
+    lname = renderAlias ltab
+    rname = renderAlias rtab
+    eq1 lcol rcol = lname <> "." <> lcol <> " = " <> rname <> "." <> rcol
+    renderAliases :: All KnownSymbol names => NP Alias names -> [ByteString]
+    renderAliases = \case
+      Nil -> []
+      alias :* aliases -> renderAlias alias : renderAliases aliases
+    refEq = ByteString.intercalate " AND " $ zipWith eq1
+      (renderAliases lcols)
+      (renderAliases rcols)
 
 {-----------------------------------------
 Grouping
