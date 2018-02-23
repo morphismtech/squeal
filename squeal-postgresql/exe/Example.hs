@@ -4,7 +4,6 @@
   , FlexibleContexts
   , OverloadedLabels
   , OverloadedStrings
-  , PolyKinds
   , TypeApplications
   , TypeOperators
 #-}
