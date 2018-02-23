@@ -119,8 +119,9 @@ backslashes within the value must be escaped with a backslash, i.e., ' and \.
 To specify the schema you wish to connect with, use type application.
 
 >>> :set -XDataKinds
+>>> :set -XPolyKinds
 >>> :set -XTypeOperators
->>> type Schema = '["tab" ::: Unconstraint :=> '["col" ::: 'NoDef :=> 'Null 'PGint2]]
+>>> type Schema = '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint2]]
 >>> :set -XTypeApplications
 >>> :set -XOverloadedStrings
 >>> conn <- connectdb @Schema "host=localhost port=5432 dbname=exampledb"

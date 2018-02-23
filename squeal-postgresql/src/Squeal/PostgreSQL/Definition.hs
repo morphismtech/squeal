@@ -357,7 +357,7 @@ ALTER statements
 
 -- | `alterTable` changes the definition of a table from the schema.
 alterTable
-  :: (KnownSymbol tab, (tab ::: table0) `In` schema)
+  :: Has tab schema table0
   => Alias tab -- ^ table to alter
   -> AlterTable schema table0 table1 -- ^ alteration to perform
   -> Definition schema (Alter tab schema table1)
@@ -424,10 +424,10 @@ newtype AlterTable
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '["col1" ::: 'Required ('Null 'PGint4)]]
---     '["tab" :::
---        '[ "col1" ::: 'Required ('Null 'PGint4)
---         , "col2" ::: 'Optional ('Null 'PGtext) ]]
+--     '["tab" ::: '[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4]]
+--     '["tab" ::: '[] :=>
+--        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
+--         , "col2" ::: 'Def :=> 'Null 'PGtext ]]
 --   definition = alterTable #tab
 --     (addColumnDefault #col2 (text & default_ "foo"))
 -- in renderDefinition definition
@@ -447,10 +447,10 @@ addColumnDefault column ty = UnsafeAlterTable $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '["col1" ::: 'Required ('Null 'PGint4)]]
---     '["tab" :::
---        '[ "col1" ::: 'Required ('Null 'PGint4)
---         , "col2" ::: 'Required ('Null 'PGtext) ]]
+--     '["tab" ::: '[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4]]
+--     '["tab" ::: '[] :=>
+--        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
+--         , "col2" ::: 'NoDef :=> 'Null 'PGtext ]]
 --   definition = alterTable #tab (addColumnNull #col2 text)
 -- in renderDefinition definition
 -- :}
@@ -471,10 +471,10 @@ addColumnNull column ty = UnsafeAlterTable $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" :::
---        '[ "col1" ::: 'Required ('Null 'PGint4)
---         , "col2" ::: 'Required ('Null 'PGtext) ]]
---     '["tab" ::: '["col1" ::: 'Required ('Null 'PGint4)]]
+--     '["tab" ::: '[] :=>
+--        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
+--         , "col2" ::: 'NoDef :=> 'Null 'PGtext ]]
+--     '["tab" ::: '[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4]]
 --   definition = alterTable #tab (dropColumn #col2)
 -- in renderDefinition definition
 -- :}
@@ -488,18 +488,6 @@ dropColumn column = UnsafeAlterTable $
 
 -- | Like `dropColumn` but authorizes dropping everything that depends
 -- on the column.
---
--- >>> :{
--- let
---   definition :: Definition
---     '["tab" :::
---        '[ "col1" ::: 'Required ('Null 'PGint4)
---         , "col2" ::: 'Required ('Null 'PGtext) ]]
---     '["tab" ::: '["col1" ::: 'Required ('Null 'PGint4)]]
---   definition = alterTable #tab (dropColumnCascade #col2)
--- in renderDefinition definition
--- :}
--- "ALTER TABLE tab DROP COLUMN col2 CASCADE;"
 -- dropColumnCascade
 --   :: KnownSymbol column
 --   => Alias column -- ^ column to remove
@@ -512,8 +500,8 @@ dropColumn column = UnsafeAlterTable $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '["foo" ::: 'Required ('Null 'PGint4)]]
---     '["tab" ::: '["bar" ::: 'Required ('Null 'PGint4)]]
+--     '["tab" ::: '[] :=> '["foo" ::: 'NoDef :=> 'Null 'PGint4]]
+--     '["tab" ::: '[] :=> '["bar" ::: 'NoDef :=> 'Null 'PGint4]]
 --   definition = alterTable #tab (renameColumn #foo #bar)
 -- in renderDefinition definition
 -- :}
@@ -548,8 +536,8 @@ newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
---     '["tab" ::: '["col" ::: 'Optional ('Null 'PGint4)]]
+--     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+--     '["tab" ::: '[] :=> '["col" ::: 'Def :=> 'Null 'PGint4]]
 --   definition = alterTable #tab (alterColumn #col (setDefault 5))
 -- in renderDefinition definition
 -- :}
@@ -565,8 +553,8 @@ setDefault expression = UnsafeAlterColumn $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '["col" ::: 'Optional ('Null 'PGint4)]]
---     '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
+--     '["tab" ::: '[] :=> '["col" ::: 'Def :=> 'Null 'PGint4]]
+--     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
 --   definition = alterTable #tab (alterColumn #col dropDefault)
 -- in renderDefinition definition
 -- :}
@@ -581,8 +569,8 @@ dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
---     '["tab" ::: '["col" ::: 'Required ('NotNull 'PGint4)]]
+--     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+--     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
 --   definition = alterTable #tab (alterColumn #col setNotNull)
 -- in renderDefinition definition
 -- :}
@@ -595,8 +583,8 @@ setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '["col" ::: 'Required ('NotNull 'PGint4)]]
---     '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]]
+--     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
+--     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
 --   definition = alterTable #tab (alterColumn #col dropNotNull)
 -- in renderDefinition definition
 -- :}
@@ -611,8 +599,8 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '["col" ::: 'Required ('NotNull 'PGint4)]]
---     '["tab" ::: '["col" ::: 'Required ('NotNull 'PGnumeric)]]
+--     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
+--     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGnumeric]]
 --   definition =
 --     alterTable #tab (alterColumn #col (alterType (numeric & notNull)))
 -- in renderDefinition definition

@@ -77,7 +77,6 @@ import Data.Word
 import Generics.SOP hiding (from)
 import GHC.TypeLits
 
-import qualified Data.ByteString as ByteString
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Expression
@@ -94,8 +93,10 @@ simple query:
 
 >>> :{
 let
-  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
-    '["col" ::: 'Required ('Null 'PGint4)]
+  query :: Query
+    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '[]
+    '["col" ::: 'Null 'PGint4]
   query = selectStar (from (Table (#tab `As` #t)))
 in renderQuery query
 :}
@@ -106,12 +107,12 @@ restricted query:
 >>> :{
 let
   query :: Query
-    '[ "tab" :::
-       '[ "col1" ::: 'Required ('NotNull 'PGint4)
-        , "col2" ::: 'Required ('NotNull 'PGint4) ]]
+    '[ "tab" ::: '[] :=>
+       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
+        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]]
     '[]
-    '[ "sum" ::: 'Required ('NotNull 'PGint4)
-     , "col1" ::: 'Required ('NotNull 'PGint4) ]
+    '[ "sum" ::: 'NotNull 'PGint4
+     , "col1" ::: 'NotNull 'PGint4 ]
   query = 
     select
       ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
@@ -126,8 +127,10 @@ subquery:
 
 >>> :{
 let
-  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
-    '["col" ::: 'Required ('Null 'PGint4)]
+  query :: Query
+    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '[]
+    '["col" ::: 'Null 'PGint4]
   query =
     selectStar
       (from (Subquery (selectStar (from (Table (#tab `As` #t))) `As` #sub)))
@@ -139,8 +142,10 @@ limits and offsets:
 
 >>> :{
 let
-  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
-    '["col" ::: 'Required ('Null 'PGint4)]
+  query :: Query
+    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '[]
+    '["col" ::: 'Null 'PGint4]
   query = selectStar
     (from (Table (#tab `As` #t)) & limit 100 & offset 2 & limit 50 & offset 2)
 in renderQuery query
@@ -151,9 +156,10 @@ parameterized query:
 
 >>> :{
 let
-  query :: Query '["tab" ::: '["col" ::: 'Required ('NotNull 'PGfloat8)]]
-    '[ 'Required ('NotNull 'PGfloat8)]
-    '["col" ::: 'Required ('NotNull 'PGfloat8)]
+  query :: Query
+    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGfloat8]]
+    '[ 'NotNull 'PGfloat8]
+    '["col" ::: 'NotNull 'PGfloat8]
   query = selectStar
     (from (Table (#tab `As` #t)) & where_ (#col .> param @1))
 in renderQuery query
@@ -165,12 +171,12 @@ aggregation query:
 >>> :{
 let
   query :: Query
-    '[ "tab" :::
-       '[ "col1" ::: 'Required ('NotNull 'PGint4)
-        , "col2" ::: 'Required ('NotNull 'PGint4) ]]
+    '[ "tab" ::: '[] :=>
+       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
+        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]]
     '[]
-    '[ "sum" ::: 'Required ('NotNull 'PGint4)
-     , "col1" ::: 'Required ('NotNull 'PGint4) ]
+    '[ "sum" ::: 'NotNull 'PGint4
+     , "col1" ::: 'NotNull 'PGint4 ]
   query =
     select (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
     ( from (Table (#tab `As` #table1))
@@ -184,8 +190,10 @@ sorted query:
 
 >>> :{
 let
-  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
-    '["col" ::: 'Required ('Null 'PGint4)]
+  query :: Query
+    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '[]
+    '["col" ::: 'Null 'PGint4]
   query = selectStar
     (from (Table (#tab `As` #t)) & orderBy [#col & AscNullsFirst])
 in renderQuery query
@@ -199,24 +207,29 @@ joins:
 let
   query :: Query
     '[ "orders" :::
-         '[ "id"    ::: 'Required ('NotNull 'PGint4)
-          , "price"   ::: 'Required ('NotNull 'PGfloat4)
-          , "customer_id" ::: 'Required ('NotNull 'PGint4)
-          , "shipper_id"  ::: 'Required ('NotNull 'PGint4)
+         '["pk" ::: PrimaryKey '["id"]
+          ,"fk_customer" ::: ForeignKey '["customer_id"] "customers" '["id"]
+          ,"fk_shipper" ::: ForeignKey '["shipper_id"] "shippers" '["id"]] :=>
+         '[ "id"    ::: 'NoDef :=> 'NotNull 'PGint4
+          , "price"   ::: 'NoDef :=> 'NotNull 'PGfloat4
+          , "customer_id" ::: 'NoDef :=> 'NotNull 'PGint4
+          , "shipper_id"  ::: 'NoDef :=> 'NotNull 'PGint4
           ]
      , "customers" :::
-         '[ "id" ::: 'Required ('NotNull 'PGint4)
-          , "name" ::: 'Required ('NotNull 'PGtext)
+         '["pk" ::: PrimaryKey '["id"]] :=>
+         '[ "id" ::: 'NoDef :=> 'NotNull 'PGint4
+          , "name" ::: 'NoDef :=> 'NotNull 'PGtext
           ]
      , "shippers" :::
-         '[ "id" ::: 'Required ('NotNull 'PGint4)
-          , "name" ::: 'Required ('NotNull 'PGtext)
+         '["pk" ::: PrimaryKey '["id"]] :=>
+         '[ "id" ::: 'NoDef :=> 'NotNull 'PGint4
+          , "name" ::: 'NoDef :=> 'NotNull 'PGtext
           ]
      ]
     '[]
-    '[ "order_price" ::: 'Required ('NotNull 'PGfloat4)
-     , "customer_name" ::: 'Required ('NotNull 'PGtext)
-     , "shipper_name" ::: 'Required ('NotNull 'PGtext)
+    '[ "order_price" ::: 'NotNull 'PGfloat4
+     , "customer_name" ::: 'NotNull 'PGtext
+     , "shipper_name" ::: 'NotNull 'PGtext
      ]
   query = select
     ( #o ! #price `As` #order_price :*
@@ -235,8 +248,10 @@ self-join:
 
 >>> :{
 let
-  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
-    '["col" ::: 'Required ('Null 'PGint4)]
+  query :: Query
+    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '[]
+    '["col" ::: 'Null 'PGint4]
   query = selectDotStar #t1
     (from (Table (#tab `As` #t1) & CrossJoin (Table (#tab `As` #t2))))
 in renderQuery query
@@ -247,8 +262,10 @@ set operations:
 
 >>> :{
 let
-  query :: Query '["tab" ::: '["col" ::: 'Required ('Null 'PGint4)]] '[]
-    '["col" ::: 'Required ('Null 'PGint4)]
+  query :: Query
+    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '[]
+    '["col" ::: 'Null 'PGint4]
   query =
     selectStar (from (Table (#tab `As` #t)))
     `unionAll`
@@ -619,9 +636,6 @@ data FromClause schema params tables where
   Subquery
     :: Aliased (Query schema params) table
     -> FromClause schema params '[table]
-  JoinRef
-    :: JoinRef schema tables
-    -> FromClause schema params tables
   CrossJoin
     :: FromClause schema params right
     -> FromClause schema params left
@@ -652,7 +666,6 @@ data FromClause schema params tables where
 renderFromClause :: FromClause schema params tables -> ByteString
 renderFromClause = \case
   Table table -> renderAliasedAs renderTable table
-  JoinRef joinRef -> renderJoinRef joinRef
   Subquery selection -> renderAliasedAs (parenthesized . renderQuery) selection
   CrossJoin right left ->
     renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
@@ -664,36 +677,6 @@ renderFromClause = \case
     renderJoin op right on left =
       renderFromClause left <+> op <+> renderFromClause right
       <+> "ON" <+> renderExpression on
-
-newtype JoinRef (schema :: TablesType) (relations :: RelationsType)
-  = UnsafeJoinRef { renderJoinRef :: ByteString }
-  deriving (GHC.Generic,Show,Eq,Ord,NFData)
-
-utilizing
-  :: ( Has left schema (constraints :=> lcols)
-     , ColumnsToRelation lcols ~ lrel
-     , Has right (TablesToRelations schema) rrel
-     , Has ref constraints ('ForeignKey lnames right rnames)
-     , All KnownSymbol lnames
-     , All KnownSymbol rnames
-     )
-  => (Alias right, NP Alias rnames)
-  -> Alias ref
-  -> (Alias left, NP Alias lnames)
-  -> JoinRef schema '[left ::: lrel,right ::: rrel]
-utilizing (rtab,rcols) _ref (ltab,lcols) = UnsafeJoinRef $
-  lname <+> "JOIN" <+> rname <+> "ON" <+> refEq
-  where
-    lname = renderAlias ltab
-    rname = renderAlias rtab
-    eq1 lcol rcol = lname <> "." <> lcol <> " = " <> rname <> "." <> rcol
-    renderAliases :: All KnownSymbol names => NP Alias names -> [ByteString]
-    renderAliases = \case
-      Nil -> []
-      alias :* aliases -> renderAlias alias : renderAliases aliases
-    refEq = ByteString.intercalate " AND " $ zipWith eq1
-      (renderAliases lcols)
-      (renderAliases rcols)
 
 {-----------------------------------------
 Grouping

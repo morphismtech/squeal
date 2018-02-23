@@ -452,7 +452,12 @@ instance (PGNum ty, PGFloating ty) => Floating
     acosh x = log (x + sqrt (x*x - 1))
     atanh x = log ((1 + x) / (1 - x)) / 2
 
--- | >>> renderExpression @_ @_ @_ @(_ (_ 'PGfloat4)) $ atan2_ pi 2
+-- | :{
+-- let
+--   expression :: Expression tables grouping params (nullity 'PGfloat4)
+--   expression = atan2_ pi 2
+-- in renderExpression expression
+-- :}
 -- "atan2(pi(), 2)"
 atan2_
   :: PGFloating float
@@ -480,8 +485,12 @@ cast ty x = UnsafeExpression $ parenthesized $
   renderExpression x <+> "::" <+> renderTypeExpression ty
 
 -- | integer division, truncates the result
---
--- >>> renderExpression @_ @_ @_ @(_(_ 'PGint2)) $ 5 `quot_` 2
+-- :{
+-- let
+--   expression :: Expression tables grouping params (nullity 'PGint2)
+--   expression = 5 `quot_` 2
+-- in renderExpression expression
+-- :}
 -- "(5 / 2)"
 quot_
   :: PGIntegral int
@@ -494,7 +503,12 @@ quot_ = unsafeBinaryOp "/"
 
 -- | remainder upon integer division
 --
--- >>> renderExpression @_ @_ @_ @(_ (_ 'PGint2)) $ 5 `rem_` 2
+-- :{
+-- let
+--   expression :: Expression tables grouping params (nullity 'PGint2)
+--   expression = 5 `rem_` 2
+-- in renderExpression expression
+-- :}
 -- "(5 % 2)"
 rem_
   :: PGIntegral int
@@ -505,7 +519,12 @@ rem_
   -> Expression tables grouping params (nullity int)
 rem_ = unsafeBinaryOp "%"
 
--- | >>> renderExpression @_ @_ @_ @(_ (_ 'PGfloat4)) $ trunc pi
+-- | :{
+-- let
+--   expression :: Expression tables grouping params (nullity 'PGfloat4)
+--   expression = trunc pi
+-- in renderExpression expression
+-- :}
 -- "trunc(pi())"
 trunc
   :: PGFloating frac
@@ -514,7 +533,12 @@ trunc
   -> Expression tables grouping params (nullity frac)
 trunc = unsafeFunction "trunc"
 
--- | >>> renderExpression @_ @_ @_ @(_ (_ 'PGfloat4)) $ round_ pi
+-- | :{
+-- let
+--   expression :: Expression tables grouping params (nullity 'PGfloat4)
+--   expression = round_ pi
+-- in renderExpression expression
+-- :}
 -- "round(pi())"
 round_
   :: PGFloating frac
@@ -523,7 +547,12 @@ round_
   -> Expression tables grouping params (nullity frac)
 round_ = unsafeFunction "round"
 
--- | >>> renderExpression @_ @_ @_ @(_ (_ 'PGfloat4)) $ ceiling_ pi
+-- | :{
+-- let
+--   expression :: Expression tables grouping params (nullity 'PGfloat4)
+--   expression = ceiling_ pi
+-- in renderExpression expression
+-- :}
 -- "ceiling(pi())"
 ceiling_
   :: PGFloating frac
@@ -572,7 +601,12 @@ not_ = unsafeUnaryOp "NOT"
   -> Condition tables grouping params
 (.||) = unsafeBinaryOp "OR"
 
--- | >>> renderExpression @_ @_ @_ @(_ (_ 'PGint2)) $ caseWhenThenElse [(true, 1), (false, 2)] 3
+-- | :{
+-- let
+--   expression :: Expression tables grouping params (nullity 'PGint2)
+--   expression = caseWhenThenElse [(true, 1), (false, 2)] 3
+-- in renderExpression expression
+-- :}
 -- "CASE WHEN TRUE THEN 1 WHEN FALSE THEN 2 ELSE 3 END"
 caseWhenThenElse
   :: [ ( Condition tables grouping params
@@ -593,7 +627,12 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   , " END"
   ]
 
--- | >>> renderExpression @_ @_ @_ @(_ (_ 'PGint2)) $ ifThenElse true 1 0
+-- | :{
+-- let
+--   expression :: Expression tables grouping params (nullity 'PGint2)
+--   expression = ifThenElse true 1 0
+-- in renderExpression expression
+-- :}
 -- "CASE WHEN TRUE THEN 1 ELSE 0 END"
 ifThenElse
   :: Condition tables grouping params
@@ -775,7 +814,12 @@ unsafeAggregateDistinct
 unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
   [fun, "(DISTINCT ", renderExpression x, ")"]
 
--- | >>> renderExpression @'[_ ::: '["col" ::: 'Required (_ 'PGnumeric)]] $ sum_ #col
+-- | :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity 'PGnumeric]] grouping params (nullity 'PGnumeric)
+--   expression = sum_ #col
+-- in renderExpression expression
+-- :}
 -- "sum(col)"
 sum_
   :: PGNum ty
@@ -784,7 +828,12 @@ sum_
   -> Expression tables ('Grouped bys) params (nullity ty)
 sum_ = unsafeAggregate "sum"
 
--- | >>> renderExpression @'[_ ::: '["col" ::: 'Required (_ 'PGnumeric)]] $ sumDistinct #col
+-- | :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity 'PGnumeric]] grouping params (nullity 'PGnumeric)
+--   expression = sumDistinct #col
+-- in renderExpression expression
+-- :}
 -- "sum(DISTINCT col)"
 sumDistinct
   :: PGNum ty
@@ -810,7 +859,12 @@ instance PGAvg 'PGfloat4 'PGfloat8
 instance PGAvg 'PGfloat8 'PGfloat8
 instance PGAvg 'PGinterval 'PGinterval
 
--- | >>> renderExpression @'[_ ::: '["col" ::: 'Required (_ 'PGint4)]] $ bitAnd #col
+-- | :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity 'PGint4]] grouping params (nullity 'PGint4)
+--   expression = bitAnd #col
+-- in renderExpression expression
+-- :}
 -- "bit_and(col)"
 bitAnd
   :: PGIntegral int
@@ -819,7 +873,12 @@ bitAnd
   -> Expression tables ('Grouped bys) params (nullity int)
 bitAnd = unsafeAggregate "bit_and"
 
--- | >>> renderExpression @'[_ ::: '["col" ::: 'Required (_ 'PGint4)]] $ bitOr #col
+-- | :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity 'PGint4]] grouping params (nullity 'PGint4)
+--   expression = bitOr #col
+-- in renderExpression expression
+-- :}
 -- "bit_or(col)"
 bitOr
   :: PGIntegral int
@@ -828,7 +887,12 @@ bitOr
   -> Expression tables ('Grouped bys) params (nullity int)
 bitOr = unsafeAggregate "bit_or"
 
--- | >>> renderExpression @'[_ ::: '["col" ::: 'Required (_ 'PGint4)]] $ bitAndDistinct #col
+-- | :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity 'PGint4]] grouping params (nullity 'PGint4)
+--   expression = bitAndDistinct #col
+-- in renderExpression expression
+-- :}
 -- "bit_and(DISTINCT col)"
 bitAndDistinct
   :: PGIntegral int
@@ -837,7 +901,12 @@ bitAndDistinct
   -> Expression tables ('Grouped bys) params (nullity int)
 bitAndDistinct = unsafeAggregateDistinct "bit_and"
 
--- | >>> renderExpression @'[_ ::: '["col" ::: 'Required (_ 'PGint4)]] $ bitOrDistinct #col
+-- | :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity 'PGint4]] grouping params (nullity 'PGint4)
+--   expression = bitOrDistinct #col
+-- in renderExpression expression
+-- :}
 -- "bit_or(DISTINCT col)"
 bitOrDistinct
   :: PGIntegral int
@@ -846,7 +915,12 @@ bitOrDistinct
   -> Expression tables ('Grouped bys) params (nullity int)
 bitOrDistinct = unsafeAggregateDistinct "bit_or"
 
--- | >>> renderExpression @'[_ ::: '["col" ::: 'Required (_ 'PGbool)]] $ boolAnd #col
+-- | :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity 'PGbool]] grouping params (nullity 'PGbool)
+--   expression = boolAnd #col
+-- in renderExpression expression
+-- :}
 -- "bool_and(col)"
 boolAnd
   :: Expression tables 'Ungrouped params (nullity 'PGbool)
@@ -854,7 +928,12 @@ boolAnd
   -> Expression tables ('Grouped bys) params (nullity 'PGbool)
 boolAnd = unsafeAggregate "bool_and"
 
--- | >>> renderExpression @'[_ ::: '["col" ::: 'Required (_ 'PGbool)]] $ boolOr #col
+-- | :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity 'PGbool]] grouping params (nullity 'PGbool)
+--   expression = boolOr #col
+-- in renderExpression expression
+-- :}
 -- "bool_or(col)"
 boolOr
   :: Expression tables 'Ungrouped params (nullity 'PGbool)
@@ -862,7 +941,12 @@ boolOr
   -> Expression tables ('Grouped bys) params (nullity 'PGbool)
 boolOr = unsafeAggregate "bool_or"
 
--- | >>> renderExpression @'[_ ::: '["col" ::: 'Required (_ 'PGbool)]] $ boolAndDistinct #col
+-- | :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity 'PGbool]] grouping params (nullity 'PGbool)
+--   expression = boolAndDistinct #col
+-- in renderExpression expression
+-- :}
 -- "bool_and(DISTINCT col)"
 boolAndDistinct
   :: Expression tables 'Ungrouped params (nullity 'PGbool)
@@ -870,7 +954,12 @@ boolAndDistinct
   -> Expression tables ('Grouped bys) params (nullity 'PGbool)
 boolAndDistinct = unsafeAggregateDistinct "bool_and"
 
--- | >>> renderExpression @'[_ ::: '["col" ::: 'Required (_ 'PGbool)]] $ boolOrDistinct #col
+-- | :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity 'PGbool]] grouping params (nullity 'PGbool)
+--   expression = boolOrDistinct #col
+-- in renderExpression expression
+-- :}
 -- "bool_or(DISTINCT col)"
 boolOrDistinct
   :: Expression tables 'Ungrouped params (nullity 'PGbool)
@@ -886,25 +975,40 @@ countStar
   :: Expression tables ('Grouped bys) params ('NotNull 'PGint8)
 countStar = UnsafeExpression $ "count(*)"
 
--- | >>> renderExpression @'[_ ::: '["col" ::: 'Optional _]] $ count #col
+-- | :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity ty]] grouping params (nullity 'PGbool)
+--   expression = count #col
+-- in renderExpression expression
+-- :}
 -- "count(col)"
 count
-  :: Expression tables 'Ungrouped params (ty)
+  :: Expression tables 'Ungrouped params ty
   -- ^ what to count
   -> Expression tables ('Grouped bys) params ('NotNull 'PGint8)
 count = unsafeAggregate "count"
 
--- | >>> renderExpression @'[_ ::: '["col" ::: 'Required _]] $ countDistinct #col
+-- | :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity ty]] grouping params (nullity 'PGbool)
+--   expression = countDistinct #col
+-- in renderExpression expression
+-- :}
 -- "count(DISTINCT col)"
 countDistinct
-  :: Expression tables 'Ungrouped params (ty)
+  :: Expression tables 'Ungrouped params ty
   -- ^ what to count
   -> Expression tables ('Grouped bys) params ('NotNull 'PGint8)
 countDistinct = unsafeAggregateDistinct "count"
 
 -- | synonym for `boolAnd`
 --
--- >>> renderExpression @'[_ ::: '["col" ::: 'Required (_ 'PGbool)]] $ every #col
+-- :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity 'PGbool]] grouping params (nullity 'PGbool)
+--   expression = every #col
+-- in renderExpression expression
+-- :}
 -- "every(col)"
 every
   :: Expression tables 'Ungrouped params (nullity 'PGbool)
@@ -914,7 +1018,12 @@ every = unsafeAggregate "every"
 
 -- | synonym for `boolAndDistinct`
 --
--- >>> renderExpression @'[_ ::: '["col" ::: 'Required (_ 'PGbool)]] $ everyDistinct #col
+-- :{
+-- let
+--   expression :: Expression [tab ::: ["col" ::: nullity 'PGbool]] grouping params (nullity 'PGbool)
+--   expression = everyDistinct #col
+-- in renderExpression expression
+-- :}
 -- "every(DISTINCT col)"
 everyDistinct
   :: Expression tables 'Ungrouped params (nullity 'PGbool)
