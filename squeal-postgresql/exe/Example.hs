@@ -24,12 +24,12 @@ import qualified GHC.Generics as GHC
 
 type Schema =
   '[ "users" :::
-       '[ "pk_id" ::: 'PrimaryKey '["id"] ] :=>
+       '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
         ]
    , "emails" :::
-       '[  "pk_id" ::: 'PrimaryKey '["id"]
+       '[  "pk_emails" ::: 'PrimaryKey '["id"]
         , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
         ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
@@ -43,13 +43,13 @@ setup =
   createTable #users
     ( serial `As` #id :*
       (text & notNull) `As` #name :* Nil )
-    ( primaryKey (Column #id :* Nil) `As` #pk_id :* Nil )
+    ( primaryKey (Column #id :* Nil) `As` #pk_users :* Nil )
   >>>
   createTable #emails
     ( serial `As` #id :*
       (int & notNull) `As` #user_id :*
       text `As` #email :* Nil )
-    ( primaryKey (Column #id :* Nil) `As` #pk_id :*
+    ( primaryKey (Column #id :* Nil) `As` #pk_emails :*
       foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
         OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
 
