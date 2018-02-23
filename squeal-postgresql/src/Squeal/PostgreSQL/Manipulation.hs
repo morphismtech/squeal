@@ -351,21 +351,6 @@ renderConflictClause = \case
 UPDATE statements
 -----------------------------------------}
 
--- | An `update` command changes the values of the specified columns
--- in all rows that satisfy the condition.
---
--- >>> :{
--- let
---   manipulation :: Manipulation
---     '[ "tab" ::: '[] :=>
---       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
---        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]] '[] '[]
---   manipulation =
---     update_ #tab (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
---       (#col1 ./= #col2)
--- in renderManipulation manipulation
--- :}
--- "UPDATE tab SET col1 = 2 WHERE (col1 <> col2);"
 update
   :: ( SOP.SListI columns
      , SOP.SListI results
@@ -396,6 +381,21 @@ update table columns wh returning = UnsafeManipulation $
       Set expression `As` column -> Just $
         renderAlias column <+> "=" <+> renderExpression expression
 
+-- | An `update` command changes the values of the specified columns
+-- in all rows that satisfy the condition.
+--
+-- >>> :{
+-- let
+--   manipulation :: Manipulation
+--     '[ "tab" ::: '[] :=>
+--       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
+--        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]] '[] '[]
+--   manipulation =
+--     update_ #tab (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
+--       (#col1 ./= #col2)
+-- in renderManipulation manipulation
+-- :}
+-- "UPDATE tab SET col1 = 2 WHERE (col1 <> col2);"
 update_
   :: ( SOP.SListI columns
      , Has tab schema table
