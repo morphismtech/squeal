@@ -1,5 +1,0 @@
-:{
-type Schema0 = '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
-type Schema1 = '["tab" ::: '["positive" ::: 'Check ] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
-let x = 'x'
-:}
