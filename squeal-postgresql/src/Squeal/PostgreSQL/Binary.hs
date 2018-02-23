@@ -49,6 +49,7 @@ import Data.Kind
 import Data.Scientific
 import Data.Time
 import Data.UUID
+import Data.Vector (Vector)
 import Data.Word
 import Generics.SOP
 import GHC.TypeLits
@@ -58,6 +59,7 @@ import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict hiding (unpack)
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text as Strict
+import qualified Data.Vector as Vector
 import qualified GHC.Generics as GHC
 import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
@@ -113,6 +115,10 @@ instance ToParam UTCTime 'PGtimestamptz where
 instance ToParam DiffTime 'PGinterval where toParam = K . Encoding.interval_int
 instance ToParam Value 'PGjson where toParam = K . Encoding.json_ast
 instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
+instance (Oid pg, ToParam x pg)
+  => ToParam (Vector (Maybe x)) ('PGarray pg) where
+    toParam = K . Encoding.nullableArray_vector
+      (oid (Proxy @pg)) (unK . toParam @x @pg)
 
 -- | A `ToColumnParam` constraint lifts the `ToParam` encoding 
 -- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s. You should
@@ -187,6 +193,14 @@ instance FromValue 'PGinterval DiffTime where
   fromValue _ = Decoding.interval_int
 instance FromValue 'PGjson Value where fromValue _ = Decoding.json_ast
 instance FromValue 'PGjsonb Value where fromValue _ = Decoding.jsonb_ast
+instance FromValue pg y => FromValue ('PGarray pg) (Vector (Maybe y)) where
+  fromValue _ = Decoding.array
+    (Decoding.dimensionArray Vector.replicateM
+      (Decoding.nullableValueArray (fromValue (Proxy @pg))))
+instance FromValue pg y => FromValue ('PGarrayN n pg) (Vector (Maybe y)) where
+  fromValue _ = Decoding.array
+    (Decoding.dimensionArray Vector.replicateM
+      (Decoding.nullableValueArray (fromValue (Proxy @pg))))
 
 -- | A `FromColumnValue` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, ColumnType)@ to a `Type`,

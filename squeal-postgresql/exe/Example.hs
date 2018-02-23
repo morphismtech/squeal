@@ -4,6 +4,7 @@
   , FlexibleContexts
   , OverloadedLabels
   , OverloadedStrings
+  , OverloadedLists
   , TypeApplications
   , TypeOperators
 #-}
@@ -12,9 +13,10 @@ module Main (main, main2) where
 
 import Control.Monad (void)
 import Control.Monad.Base (liftBase, MonadBase)
-import Data.Int (Int32)
+import Data.Int (Int16, Int32)
 import Data.Monoid ((<>))
 import Data.Text (Text)
+import Data.Vector (Vector)
 
 import Squeal.PostgreSQL
 
@@ -27,6 +29,7 @@ type Schema =
        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
+        , "vec" ::: 'NoDef :=> 'NotNull ('PGarray 'PGint2)
         ]
    , "emails" :::
        '[  "pk_emails" ::: 'PrimaryKey '["id"]
@@ -42,7 +45,8 @@ setup :: Definition '[] Schema
 setup = 
   createTable #users
     ( serial `As` #id :*
-      (text & notNull) `As` #name :* Nil )
+      (text & notNull) `As` #name :*
+      (array int2 & notNull) `As` #vec :* Nil )
     ( primaryKey (Column #id :* Nil) `As` #pk_users :* Nil )
   >>>
   createTable #emails
@@ -56,10 +60,10 @@ setup =
 teardown :: Definition Schema '[]
 teardown = dropTable #emails >>> dropTable #users
 
-insertUser :: Manipulation Schema '[ 'NotNull 'PGtext]
+insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'NotNull ('PGarray 'PGint2)]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
 insertUser = insertRows #users
-  (Default `As` #id :* Set (param @1) `As` #name :* Nil) []
+  (Default `As` #id :* Set (param @1) `As` #name :* Set (param @2) `As` #vec :* Nil) []
   OnConflictDoNothing (Returning (#id `As` #fromOnly :* Nil))
 
 insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
@@ -71,29 +75,30 @@ insertEmail = insertRows #emails
 
 getUsers :: Query Schema '[]
   '[ "userName" ::: 'NotNull 'PGtext
-   , "userEmail" ::: 'Null 'PGtext ]
+   , "userEmail" ::: 'Null 'PGtext
+   , "userVec" ::: 'NotNull ('PGarray 'PGint2)]
 getUsers = select
-  (#u ! #name `As` #userName :* #e ! #email `As` #userEmail :* Nil)
+  (#u ! #name `As` #userName :* #e ! #email `As` #userEmail :* #u ! #vec `As` #userVec :* Nil)
   ( from (Table (#users `As` #u)
     & InnerJoin (Table (#emails `As` #e))
       (#u ! #id .== #e ! #user_id)) )
 
-data User = User { userName :: Text, userEmail :: Maybe Text }
+data User = User { userName :: Text, userEmail :: Maybe Text, userVec :: Vector (Maybe Int16) }
   deriving (Show, GHC.Generic)
 instance SOP.Generic User
 instance SOP.HasDatatypeInfo User
 
 users :: [User]
 users = 
-  [ User "Alice" (Just "alice@gmail.com")
-  , User "Bob" Nothing
-  , User "Carole" (Just "carole@hotmail.com")
+  [ User "Alice" (Just "alice@gmail.com") [Nothing, Just 1]
+  , User "Bob" Nothing [Just 2, Nothing]
+  , User "Carole" (Just "carole@hotmail.com") [Just 3]
   ]
 
 session :: (MonadBase IO pq, MonadPQ Schema pq) => pq ()
 session = do
   liftBase $ Char8.putStrLn "manipulating"
-  idResults <- traversePrepared insertUser (Only . userName <$> users)
+  idResults <- traversePrepared insertUser ([(userName user, userVec user) | user <- users])
   ids <- traverse (fmap fromOnly . getRow (RowNumber 0)) idResults
   traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
   liftBase $ Char8.putStrLn "querying"

@@ -35,6 +35,7 @@ Embedding of PostgreSQL type and alias system
 module Squeal.PostgreSQL.Schema
   ( -- * Kinds
     PGType (..)
+  , Oid (..)
   , NullityType (..)
   , ColumnType
   , ColumnsType
@@ -89,6 +90,7 @@ import Control.DeepSeq
 import Data.ByteString
 import Data.Monoid
 import Data.String
+import Data.Word
 import Generics.SOP (AllZip)
 import GHC.Generics (Generic)
 import GHC.Exts
@@ -120,7 +122,32 @@ data PGType
   | PGinet -- ^ IPv4 or IPv6 host address
   | PGjson -- ^	textual JSON data
   | PGjsonb -- ^ binary JSON data, decomposed
+  | PGarray PGType -- ^ variable length array
+  | PGarrayN Nat PGType -- ^ fixed length array
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
+
+class Oid (ty :: PGType) where oid :: proxy ty -> Word32
+instance Oid 'PGbool where oid _ = 16
+instance Oid 'PGint2 where oid _ = 21
+instance Oid 'PGint4 where oid _ = 23
+instance Oid 'PGint8 where oid _ = 20
+instance Oid 'PGnumeric where oid _ = 1700
+instance Oid 'PGfloat4 where oid _ = 700
+instance Oid 'PGfloat8 where oid _ = 701
+instance Oid ('PGchar n) where oid _ = 18
+instance Oid ('PGvarchar n) where oid _ = 1043
+instance Oid 'PGtext where oid _ = 25
+instance Oid 'PGbytea where oid _ = 17
+instance Oid 'PGtimestamp where oid _ = 1114
+instance Oid 'PGtimestamptz where oid _ = 1184
+instance Oid 'PGdate where oid _ = 1082
+instance Oid 'PGtime where oid _ = 1083
+instance Oid 'PGtimetz where oid _ = 1266
+instance Oid 'PGinterval where oid _ = 1186
+instance Oid 'PGuuid where oid _ = 2950
+instance Oid 'PGinet where oid _ = 869
+instance Oid 'PGjson where oid _ = 114
+instance Oid 'PGjsonb where oid _ = 3802
 
 -- | `NullityType` encodes the potential presence or definite absence of a
 -- @NULL@ allowing operations which are sensitive to such to be well typed.

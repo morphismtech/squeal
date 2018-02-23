@@ -47,7 +47,9 @@ module Squeal.PostgreSQL.Expression
   , isn'tNull
   , matchNull
   , nullIf
-  -- ** Functions
+    -- ** Arrays
+  , array
+    -- ** Functions
   , unsafeBinaryOp
   , unsafeUnaryOp
   , unsafeFunction
@@ -135,6 +137,8 @@ module Squeal.PostgreSQL.Expression
   , inet
   , json
   , jsonb
+  , vararray
+  , arrayN
   , notNull
   , default_
     -- * Re-export
@@ -210,26 +214,6 @@ instance (Has table tables columns, Has column columns ty)
   => IsTableColumn table column (Expression tables 'Ungrouped params ty) where
     table ! column = UnsafeExpression $
       renderAlias table <> "." <> renderAlias column
-
--- | A `Column` is a witness to a `HasColumn` constraint. It's used
--- in `Squeel.PostgreSQL.Definition.unique` and other
--- `Squeel.PostgreSQL.Definition.TableConstraint`s to witness a
--- subcolumns relationship.
--- data Column
---   (columns :: RelationType)
---   (columnty :: (Symbol,NullityType))
---     where
---       Column
---         :: Has column columns ty
---         => Alias column
---         -> Column columns (column ::: ty)
--- deriving instance Show (Column columns columnty)
--- deriving instance Eq (Column columns columnty)
--- deriving instance Ord (Column columns columnty)
-
--- -- | Render a `Column`.
--- renderColumn :: Column columns columnty -> ByteString
--- renderColumn (Column column) = renderAlias column
 
 {- | A `GroupedBy` constraint indicates that a table qualified column is
 a member of the auxiliary namespace created by @GROUP BY@ clauses and thus,
@@ -359,6 +343,17 @@ nullIf
   -> Expression tables grouping params ('Null ty)
 nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
   (renderExpression x <> ", " <> renderExpression y)
+
+array
+  :: [Expression tables grouping params ('Null ty)]
+  -> Expression tables grouping params (nullity ('PGarray ty))
+array xs = UnsafeExpression $
+  "ARRAY[" <> commaSeparated (renderExpression <$> xs) <> "]"
+
+instance Monoid
+  (Expression tables grouping params (nullity ('PGarray ty))) where
+    mempty = array []
+    mappend = unsafeBinaryOp "||"
 
 -- | >>> renderExpression @_ @_ @'[_] $ greatest currentTimestamp [param @1]
 -- "GREATEST(CURRENT_TIMESTAMP, ($1 :: timestamp with time zone))"
@@ -1163,6 +1158,19 @@ json = UnsafeTypeExpression "json"
 -- | binary JSON data, decomposed
 jsonb :: TypeExpression ('NoDef :=> 'Null 'PGjsonb)
 jsonb = UnsafeTypeExpression "jsonb"
+-- | variable length array
+vararray
+  :: TypeExpression ('NoDef :=> 'Null pg)
+  -> TypeExpression ('NoDef :=> 'Null ('PGarray pg))
+vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
+-- | fixed length array
+arrayN
+  :: KnownNat n
+  => proxy n
+  -> TypeExpression ('NoDef :=> 'Null pg)
+  -> TypeExpression ('NoDef :=> 'Null ('PGarrayN n pg))
+arrayN p ty = UnsafeTypeExpression $
+  renderTypeExpression ty <> "[" <> renderNat p <> "]"
 
 -- | used in `createTable` commands as a column constraint to ensure
 -- @NULL@ is not present
@@ -1204,3 +1212,7 @@ instance PGTyped 'PGinterval where pgtype = interval
 instance PGTyped 'PGuuid where pgtype = uuid
 instance PGTyped 'PGjson where pgtype = json
 instance PGTyped 'PGjsonb where pgtype = jsonb
+instance PGTyped ty => PGTyped ('PGarray ty) where
+  pgtype = vararray (pgtype @ty)
+instance (KnownNat n, PGTyped ty) => PGTyped ('PGarrayN n ty) where
+  pgtype = arrayN (Proxy @n) (pgtype @ty)
