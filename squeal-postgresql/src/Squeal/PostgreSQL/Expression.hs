@@ -138,7 +138,7 @@ module Squeal.PostgreSQL.Expression
   , json
   , jsonb
   , vararray
-  , arrayN
+  , fixarray
   , notNull
   , default_
     -- * Re-export
@@ -1164,12 +1164,12 @@ vararray
   -> TypeExpression ('NoDef :=> 'Null ('PGarray pg))
 vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
 -- | fixed length array
-arrayN
+fixarray
   :: KnownNat n
   => proxy n
   -> TypeExpression ('NoDef :=> 'Null pg)
   -> TypeExpression ('NoDef :=> 'Null ('PGarrayN n pg))
-arrayN p ty = UnsafeTypeExpression $
+fixarray p ty = UnsafeTypeExpression $
   renderTypeExpression ty <> "[" <> renderNat p <> "]"
 
 -- | used in `createTable` commands as a column constraint to ensure
@@ -1215,4 +1215,4 @@ instance PGTyped 'PGjsonb where pgtype = jsonb
 instance PGTyped ty => PGTyped ('PGarray ty) where
   pgtype = vararray (pgtype @ty)
 instance (KnownNat n, PGTyped ty) => PGTyped ('PGarrayN n ty) where
-  pgtype = arrayN (Proxy @n) (pgtype @ty)
+  pgtype = fixarray (Proxy @n) (pgtype @ty)

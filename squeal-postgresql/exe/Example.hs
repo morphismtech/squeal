@@ -46,7 +46,7 @@ setup =
   createTable #users
     ( serial `As` #id :*
       (text & notNull) `As` #name :*
-      (array int2 & notNull) `As` #vec :* Nil )
+      (vararray int2 & notNull) `As` #vec :* Nil )
     ( primaryKey (Column #id :* Nil) `As` #pk_users :* Nil )
   >>>
   createTable #emails
