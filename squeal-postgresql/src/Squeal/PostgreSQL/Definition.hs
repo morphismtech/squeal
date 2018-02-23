@@ -482,7 +482,9 @@ addColumnNull column ty = UnsafeAlterTable $
 dropColumn
   :: KnownSymbol column
   => Alias column -- ^ column to remove
-  -> AlterTable schema (constraints :=> columns) (constraints :=> Drop column columns)
+  -> AlterTable schema
+      (constraints :=> columns)
+      (constraints :=> Drop column columns)
 dropColumn column = UnsafeAlterTable $
   "DROP COLUMN" <+> renderAlias column
 
