@@ -482,18 +482,9 @@ addColumnNull column ty = UnsafeAlterTable $
 dropColumn
   :: KnownSymbol column
   => Alias column -- ^ column to remove
-  -> AlterTable schema ('[] :=> columns) ('[] :=> Drop column columns)
+  -> AlterTable schema (constraints :=> columns) (constraints :=> Drop column columns)
 dropColumn column = UnsafeAlterTable $
   "DROP COLUMN" <+> renderAlias column
-
--- | Like `dropColumn` but authorizes dropping everything that depends
--- on the column.
--- dropColumnCascade
---   :: KnownSymbol column
---   => Alias column -- ^ column to remove
---   -> AlterTable schema columns (Drop column columns)
--- dropColumnCascade column = UnsafeAlterTable $
---   "DROP COLUMN" <+> renderAlias column <+> "CASCADE"
 
 -- | A `renameColumn` renames a column.
 --
