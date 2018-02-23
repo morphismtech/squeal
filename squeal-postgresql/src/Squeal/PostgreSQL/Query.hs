@@ -257,9 +257,9 @@ in renderQuery query
 -}
 
 newtype Query
-  (schema :: TablesType)
-  (params :: [ColumnType])
-  (columns :: ColumnsType)
+  (schema :: SchemaType)
+  (params :: [NullityType])
+  (columns :: RelationType)
     = UnsafeQuery { renderQuery :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
@@ -419,9 +419,9 @@ Table Expressions
 -- to a table on disk, a so-called base table, but more complex expressions
 -- can be used to modify or combine base tables in various ways.
 data TableExpression
-  (schema :: TablesType)
-  (params :: [ColumnType])
-  (tables :: TablesType)
+  (schema :: SchemaType)
+  (params :: [NullityType])
+  (tables :: RelationsType)
   (grouping :: Grouping)
     = TableExpression
     { fromClause :: FromClause schema params tables
@@ -612,7 +612,7 @@ their placement in SQL.
 -}
 data FromClause schema params tables where
   Table
-    :: Aliased (Table schema) table
+    :: Aliased (Table (UnconstrainSchema schema)) table
     -> FromClause schema params '[table]
   Subquery
     :: Aliased (Query schema params) table
@@ -669,7 +669,7 @@ Grouping
 -- column @col@; otherwise @By2 (\#tab \! \#col)@ will reference a table
 -- qualified column @tab.col@.
 data By
-    (tables :: TablesType)
+    (tables :: RelationsType)
     (by :: (Symbol,Symbol)) where
     By
       :: (HasUnique table tables columns, HasColumn column columns ty)
@@ -743,22 +743,22 @@ Sorting
 -- ordering of a `Null` result column.
 data SortExpression tables grouping params where
     Asc
-      :: Expression tables grouping params ('Required ('NotNull ty))
+      :: Expression tables grouping params ('NotNull ty)
       -> SortExpression tables grouping params
     Desc
-      :: Expression tables grouping params ('Required ('NotNull ty))
+      :: Expression tables grouping params ('NotNull ty)
       -> SortExpression tables grouping params
     AscNullsFirst
-      :: Expression tables grouping params ('Required ('Null ty))
+      :: Expression tables grouping params  ('Null ty)
       -> SortExpression tables grouping params
     AscNullsLast
-      :: Expression tables grouping params ('Required ('Null ty))
+      :: Expression tables grouping params  ('Null ty)
       -> SortExpression tables grouping params
     DescNullsFirst
-      :: Expression tables grouping params ('Required ('Null ty))
+      :: Expression tables grouping params  ('Null ty)
       -> SortExpression tables grouping params
     DescNullsLast
-      :: Expression tables grouping params ('Required ('Null ty))
+      :: Expression tables grouping params  ('Null ty)
       -> SortExpression tables grouping params
 deriving instance Show (SortExpression tables grouping params)
 

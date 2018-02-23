@@ -100,8 +100,8 @@ import qualified Control.Monad.Trans.RWS.Lazy as Lazy
 import qualified Control.Monad.Trans.RWS.Strict as Strict
 
 -- | A `Connection` consists of a `Database.PostgreSQL.LibPQ`
--- `Database.PastgreSQL.LibPQ.Connection` and a phantom `TablesType`
-newtype Connection (schema :: TablesType) =
+-- `Database.PastgreSQL.LibPQ.Connection` and a phantom `SchemaType`
+newtype Connection (schema :: SchemaType) =
   Connection { unConnection :: LibPQ.Connection }
 
 {- | Makes a new connection to the database server.
@@ -153,8 +153,8 @@ withConnection connString action = do
 -- | We keep track of the schema via an Atkey indexed state monad transformer,
 -- `PQ`.
 newtype PQ
-  (schema0 :: TablesType)
-  (schema1 :: TablesType)
+  (schema0 :: SchemaType)
+  (schema1 :: SchemaType)
   (m :: Type -> Type)
   (x :: Type) =
     PQ { runPQ :: Connection schema0 -> m (x, Connection schema1) }
@@ -457,7 +457,7 @@ instance MonadBaseControl b m => MonadBaseControl b (PQ schema schema m) where
 -- | Encapsulates the result of a squeal command run by @LibPQ@.
 -- `Result`s are parameterized by a `ColumnsType` describing the column names
 -- and their types.
-newtype Result (columns :: ColumnsType)
+newtype Result (columns :: RelationType)
   = Result { unResult :: LibPQ.Result }
 
 -- | Just newtypes around a `CInt`

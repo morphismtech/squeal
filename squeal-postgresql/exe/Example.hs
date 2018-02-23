@@ -4,6 +4,7 @@
   , FlexibleContexts
   , OverloadedLabels
   , OverloadedStrings
+  , PolyKinds
   , TypeApplications
   , TypeOperators
 #-}
@@ -24,13 +25,17 @@ import qualified GHC.Generics as GHC
 
 type Schema =
   '[ "users" :::
-       '[ "id" ::: 'Optional ('NotNull 'PGint4)
-        , "name" ::: 'Required ('NotNull 'PGtext)
+       '[ "pk_id" ::: 'PrimaryKey '["id"] ] :=>
+       '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+        , "name" ::: 'NoDef :=> 'NotNull 'PGtext
         ]
    , "emails" :::
-       '[ "id" ::: 'Optional ('NotNull 'PGint4)
-        , "user_id" ::: 'Required ('NotNull 'PGint4)
-        , "email" ::: 'Required ('Null 'PGtext)
+       '[  "pk_id" ::: 'PrimaryKey '["id"]
+        , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+        ] :=>
+       '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+        , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
+        , "email" ::: 'NoDef :=> 'Null 'PGtext
         ]
    ]
 
@@ -39,37 +44,35 @@ setup =
   createTable #users
     ( serial `As` #id :*
       (text & notNull) `As` #name :* Nil )
-    [ primaryKey (Column #id :* Nil) ]
+    ( primaryKey (Column #id :* Nil) `As` #pk_id :* Nil )
   >>>
   createTable #emails
     ( serial `As` #id :*
       (int & notNull) `As` #user_id :*
       text `As` #email :* Nil )
-    [ primaryKey (Column #id :* Nil)
-    , foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
-      OnDeleteCascade OnUpdateCascade ]
+    ( primaryKey (Column #id :* Nil) `As` #pk_id :*
+      foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
+        OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
 
 teardown :: Definition Schema '[]
 teardown = dropTable #emails >>> dropTable #users
 
-insertUser :: Manipulation Schema
-  '[ 'Required ('NotNull 'PGtext)]
-  '[ "fromOnly" ::: 'Required ('NotNull 'PGint4) ]
-insertUser = insertInto #users
-  ( Values (def `As` #id :* param @1 `As` #name :* Nil) [] )
+insertUser :: Manipulation Schema '[ 'NotNull 'PGtext]
+  '[ "fromOnly" ::: 'NotNull 'PGint4 ]
+insertUser = insertRows #users
+  (Default `As` #id :* Set (param @1) `As` #name :* Nil) []
   OnConflictDoNothing (Returning (#id `As` #fromOnly :* Nil))
 
-insertEmail :: Manipulation Schema
-  '[ 'Required ('NotNull 'PGint4), 'Required ('Null 'PGtext)] '[]
-insertEmail = insertInto #emails ( Values
-  ( def `As` #id :*
-    param @1 `As` #user_id :*
-    param @2 `As` #email :* Nil) [] )
+insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
+insertEmail = insertRows #emails
+  ( Default `As` #id :*
+    Set (param @1) `As` #user_id :*
+    Set (param @2) `As` #email :* Nil ) []
   OnConflictDoNothing (Returning Nil)
 
 getUsers :: Query Schema '[]
-  '[ "userName" ::: 'Required ('NotNull 'PGtext)
-   , "userEmail" ::: 'Required ('Null 'PGtext) ]
+  '[ "userName" ::: 'NotNull 'PGtext
+   , "userEmail" ::: 'Null 'PGtext ]
 getUsers = select
   (#u ! #name `As` #userName :* #e ! #email `As` #userEmail :* Nil)
   ( from (Table (#users `As` #u)

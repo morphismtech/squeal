@@ -16,6 +16,7 @@ Embedding of PostgreSQL type and alias system
   , DeriveGeneric
   , FlexibleContexts
   , FlexibleInstances
+  , FunctionalDependencies
   , GADTs
   , MagicHash
   , MultiParamTypeClasses
@@ -28,15 +29,19 @@ Embedding of PostgreSQL type and alias system
   , TypeFamilies
   , TypeInType
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Schema
   ( -- * Kinds
     PGType (..)
   , NullityType (..)
-  , ColumnType (..)
+  , ColumnType
   , ColumnsType
-  , TablesType
+  , RelationType
+  , RelationsType
+  , TableType
+  , SchemaType
   , Grouping (..)
     -- * Constraints
   , PGNum
@@ -53,7 +58,7 @@ module Squeal.PostgreSQL.Schema
     -- * Type Families
   , In
   , HasUnique
-  , BaseType
+  , PGTypeOf
   , SameTypes
   , AllNotNull
   , NotAllNull
@@ -62,18 +67,37 @@ module Squeal.PostgreSQL.Schema
   , NullifyTables
   , Join
   , Create
+  , Add
   , Drop
   , Alter
   , Rename
     -- * Generics
   , SameField
   , SameFields
+    -- * PostgreSQL Constraints
+  , (:=>)
+  , UnconstrainColumn
+  , UnconstrainColumns
+  , UnconstrainTable
+  , UnconstrainSchema
+  , ColumnConstraint (..)
+  -- , DropDefault
+  -- , DropDefaultList
+  -- , AddConstraint
+  -- , DropConstraint
+  , TableConstraint (..)
+  -- , AsSet
+  , Aliases
+  , Has
   ) where
 
 import Control.DeepSeq
 import Data.ByteString
 import Data.Monoid
 import Data.String
+-- import Data.Type.Bool
+-- import Data.Type.Equality
+-- import Data.Type.Set
 import Generics.SOP (AllZip)
 import GHC.Generics (Generic)
 import GHC.Exts
@@ -118,20 +142,32 @@ data NullityType
 -- is to use `Squeal.PostgreSQL.Expression.def`,
 -- `Squeal.PostgreSQL.Expression.unDef` or
 -- `Squeal.PostgreSQL.Expression.param`.
-data ColumnType
-  = Optional NullityType
-  -- ^ @DEFAULT@ is allowed
-  | Required NullityType
-  -- ^ @DEFAULT@ is not allowed
+type ColumnType = (ColumnConstraint,NullityType)
 
 -- | `ColumnsType` is a kind synonym for a row of `ColumnType`s.
 type ColumnsType = [(Symbol,ColumnType)]
 
--- | `TablesType` is a kind synonym for a row of `ColumnsType`s.
--- It is used as a kind for both a schema, a disjoint union of tables,
--- and a joined table `Squeal.PostgreSQL.Query.FromClause`,
--- a product of tables.
-type TablesType = [(Symbol,ColumnsType)]
+type RelationType = [(Symbol,NullityType)]
+type RelationsType = [(Symbol,RelationType)]
+
+type TableType = (TableConstraints,ColumnsType)
+type SchemaType = [(Symbol,TableType)]
+
+type family UnconstrainColumn (ty :: ColumnType) :: NullityType where
+  UnconstrainColumn (constraint :=> ty) = ty
+
+type family UnconstrainColumns (columns :: ColumnsType) :: RelationType where
+  UnconstrainColumns '[] = '[]
+  UnconstrainColumns (column ::: ty ': columns) =
+    column ::: UnconstrainColumn ty ': UnconstrainColumns columns
+
+type family UnconstrainTable (table :: TableType) :: ColumnsType where
+  UnconstrainTable (constraints :=> columns) = columns
+
+type family UnconstrainSchema (schema :: SchemaType) :: RelationsType where
+  UnconstrainSchema '[] = '[]
+  UnconstrainSchema (tab ::: constraints :=> columns ': tables) =
+    tab ::: UnconstrainColumns columns ': UnconstrainSchema tables
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
@@ -160,6 +196,7 @@ type PGIntegral ty = In ty '[ 'PGint2, 'PGint4, 'PGint8]
 -- an alias and some type, usually a column alias and a `ColumnType` or
 -- a table alias and a `ColumnsType`.
 type (:::) (alias :: Symbol) (ty :: polykind) = '(alias,ty)
+infixr 6 :::
 
 -- | `Alias`es are proxies for a type level string or `Symbol`
 -- and have an `IsLabel` instance so that with @-XOverloadedLabels@
@@ -222,50 +259,47 @@ type family In x xs :: Constraint where
 -- of @alias ::: x@.
 type HasUnique alias xs x = xs ~ '[alias ::: x]
 
--- | `BaseType` forgets about @NULL@ and @DEFAULT@
-type family BaseType (ty :: ColumnType) :: PGType where
-  BaseType (optionality (nullity pg)) = pg
+-- | `PGTypeOf` forgets about @NULL@ and any column constraints.
+type family PGTypeOf (ty :: NullityType) :: PGType where
+  PGTypeOf (nullity pg) = pg
 
 -- | `SameTypes` is a constraint that proves two `ColumnsType`s have the same
 -- length and the same `ColumnType`s.
-type family SameTypes
-  (columns0 :: ColumnsType) (columns1 :: ColumnsType)
-    :: Constraint where
+type family SameTypes (columns0 :: RelationType) (columns1 :: RelationType)
+  :: Constraint where
   SameTypes '[] '[] = ()
-  SameTypes ((column0 ::: ty0) ': columns0) ((column1 ::: ty1) ': columns1)
+  SameTypes (column0 ::: ty0 ': columns0) (column1 ::: ty1 ': columns1)
     = (ty0 ~ ty1, SameTypes columns0 columns1)
 
 -- | `AllNotNull` is a constraint that proves a `ColumnsType` has no @NULL@s.
-type family AllNotNull (columns :: ColumnsType) :: Constraint where
+type family AllNotNull (columns :: RelationType) :: Constraint where
   AllNotNull '[] = ()
-  AllNotNull ((column ::: (optionality ('NotNull ty))) ': columns)
-    = AllNotNull columns
+  AllNotNull (column ::: 'NotNull ty ': columns) = AllNotNull columns
 
 -- | `NotAllNull` is a constraint that proves a `ColumnsType` has some
 -- @NOT NULL@.
-type family NotAllNull columns :: Constraint where
-  NotAllNull ((column ::: (optionality ('NotNull ty))) ': columns) = ()
-  NotAllNull ((column ::: (optionality ('Null ty))) ': columns)
-    = NotAllNull columns
+type family NotAllNull (columns :: RelationType) :: Constraint where
+  NotAllNull (column ::: 'NotNull ty ': columns) = ()
+  NotAllNull (column ::: 'Null ty ': columns) = NotAllNull columns
 
 -- | `NullifyType` is an idempotent that nullifies a `ColumnType`.
-type family NullifyType (ty :: ColumnType) :: ColumnType where
-  NullifyType (optionality ('Null ty)) = optionality ('Null ty)
-  NullifyType (optionality ('NotNull ty)) = optionality ('Null ty)
+type family NullifyType (ty :: NullityType) :: NullityType where
+  NullifyType ('Null ty) = 'Null ty
+  NullifyType ('NotNull ty) = 'Null ty
 
 -- | `NullifyColumns` is an idempotent that nullifies a `ColumnsType`.
-type family NullifyColumns (columns :: ColumnsType) :: ColumnsType where
+type family NullifyColumns (columns :: RelationType) :: RelationType where
   NullifyColumns '[] = '[]
-  NullifyColumns ((column ::: ty) ': columns) =
-    (column ::: NullifyType ty) ': NullifyColumns columns
+  NullifyColumns (column ::: ty ': columns) =
+    column ::: NullifyType ty ': NullifyColumns columns
 
--- | `NullifyTables` is an idempotent that nullifies a `TablesType`
+-- | `NullifyTables` is an idempotent that nullifies a `RelationsType`
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
-type family NullifyTables (tables :: TablesType) :: TablesType where
+type family NullifyTables (tables :: RelationsType) :: RelationsType where
   NullifyTables '[] = '[]
-  NullifyTables ((table ::: columns) ': tables) =
-    (table ::: NullifyColumns columns) ': NullifyTables tables
+  NullifyTables (table ::: columns ': tables) =
+    table ::: NullifyColumns columns ': NullifyTables tables
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.
@@ -281,6 +315,9 @@ type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
   Create alias y (x ': xs) = x ': Create alias y xs
 
+type family Add alias x y where
+  Add alias x (constraints :=> xs) = constraints :=> Create alias x xs
+
 -- | @Drop alias xs@ removes the type associated with @alias@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.dropTable` statements
 -- and in @ALTER TABLE@ `Squeal.PostgreSQL.Definition.dropColumn` statements.
@@ -295,6 +332,19 @@ type family Alter alias xs x where
   Alter alias ((alias ::: x0) ': xs) x1 = (alias ::: x1) ': xs
   Alter alias (x0 ': xs) x1 = x0 ': Alter alias xs x1
 
+-- type family AddConstraint constraint ty where
+--   AddConstraint constraint (constraints :=> ty)
+--     = AsSet (constraint ': constraints) :=> ty
+
+-- type family DeleteFromList (e :: elem) (list :: [elem]) where
+--   DeleteFromList elem '[] = '[]
+--   DeleteFromList elem (x ': xs) =
+--     If (Cmp elem x == 'EQ) xs (x ': DeleteFromList elem xs)
+
+-- type family DropConstraint constraint ty where
+--   DropConstraint constraint (constraints :=> ty)
+--     = (AsSet (DeleteFromList constraint constraints)) :=> ty
+
 -- | @Rename alias0 alias1 xs@ replaces the alias @alias0@ by @alias1@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.alterTableRename` and
 -- `Squeal.PostgreSQL.Definition.renameColumn`.
@@ -305,14 +355,14 @@ type family Rename alias0 alias1 xs where
 -- | A `SameField` constraint is an equality constraint on a
 -- `Generics.SOP.Type.Metadata.FieldInfo` and the column alias in a `:::` pair.
 class SameField
-  (fieldInfo :: Type.FieldInfo) (fieldty :: (Symbol,ColumnType)) where
+  (fieldInfo :: Type.FieldInfo) (fieldty :: (Symbol,NullityType)) where
 instance field ~ column => SameField ('Type.FieldInfo field) (column ::: ty)
 
 -- | A `SameFields` constraint proves that a
 -- `Generics.SOP.Type.Metadata.DatatypeInfo` of a record type has the same
 -- field names as the column aliases of a `ColumnsType`.
 type family SameFields
-  (datatypeInfo :: Type.DatatypeInfo) (columns :: ColumnsType)
+  (datatypeInfo :: Type.DatatypeInfo) (columns :: RelationType)
     :: Constraint where
   SameFields
     ('Type.ADT _module _datatype '[ 'Type.Record _constructor fields])
@@ -322,3 +372,30 @@ type family SameFields
     ('Type.Newtype _module _datatype ('Type.Record _constructor fields))
     columns
       = AllZip SameField fields columns
+
+type (:=>) (constraints :: constraint) ty = '(constraints,ty)
+infixr 7 :=>
+
+data ColumnConstraint
+  = Def
+  | NoDef
+
+data TableConstraint
+  = Check
+  | Uniques [Symbol]
+  | PrimaryKey [Symbol]
+  | ForeignKey [Symbol] Symbol [Symbol]
+
+type TableConstraints = [(Symbol,TableConstraint)]
+
+type family Aliases xs where
+  Aliases '[] = '[]
+  Aliases ((alias ::: x) ': xs) = alias ': Aliases xs
+
+class KnownSymbol alias =>
+  Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
+  | alias fields -> field where
+instance {-# OVERLAPPING #-} KnownSymbol alias
+  => Has alias (alias ::: field ': fields) field
+instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
+  => Has alias (field' ': fields) field

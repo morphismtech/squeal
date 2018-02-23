@@ -12,6 +12,7 @@ Squeal data manipulation language.
     DataKinds
   , DeriveDataTypeable
   , DeriveGeneric
+  , FlexibleContexts
   , GADTs
   , GeneralizedNewtypeDeriving
   , KindSignatures
@@ -28,22 +29,20 @@ module Squeal.PostgreSQL.Manipulation
     Manipulation (UnsafeManipulation, renderManipulation)
   , queryStatement
     -- * Insert
-  , insertInto
-  , ValuesClause (Values, ValuesQuery)
-  , renderValuesClause
+  , insertRows
+  , insertQuery
   , ReturningClause (ReturningStar, Returning)
   , renderReturningClause
   , ConflictClause (OnConflictDoRaise, OnConflictDoNothing, OnConflictDoUpdate)
   , renderConflictClause
     -- * Update
   , update
-  , UpdateExpression (Same, Set)
-  , renderUpdateExpression
   , deleteFrom
+  , ColumnValue (..)
   ) where
 
 import Control.DeepSeq
-import Data.ByteString
+import Data.ByteString hiding (foldr)
 import Data.Monoid
 
 import qualified Generics.SOP as SOP
@@ -59,9 +58,9 @@ import Squeal.PostgreSQL.Schema
 -- `deleteFrom`. A `Query` is also considered a `Manipulation` even though
 -- it does not modify data.
 newtype Manipulation
-  (schema :: TablesType)
-  (params :: [ColumnType])
-  (columns :: ColumnsType)
+  (schema :: SchemaType)
+  (params :: [NullityType])
+  (columns :: RelationType)
     = UnsafeManipulation { renderManipulation :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
@@ -91,7 +90,7 @@ let
       '[ "col1" ::: 'Required ('NotNull 'PGint4)
        , "col2" ::: 'Required ('NotNull 'PGint4) ]] '[] '[]
   manipulation =
-    insertInto #tab (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
+    insertInto #tab (ColumnValues (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
       OnConflictDoRaise (Returning Nil)
 in renderManipulation manipulation
 :}
@@ -109,7 +108,7 @@ let
      , 'Required ('NotNull 'PGint4) ] '[]
   manipulation =
     insertInto #tab
-      (Values (param @1 `As` #col1 :* param @2 `As` #col2 :* Nil) [])
+      (ColumnValues (param @1 `As` #col1 :* param @2 `As` #col2 :* Nil) [])
       OnConflictDoRaise (Returning Nil)
 in renderManipulation manipulation
 :}
@@ -125,7 +124,7 @@ let
        , "col2" ::: 'Required ('NotNull 'PGint4) ]] '[]
     '["fromOnly" ::: 'Required ('NotNull 'PGint4)]
   manipulation =
-    insertInto #tab (Values (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
+    insertInto #tab (ColumnValues (2 `As` #col1 :* 4 `As` #col2 :* Nil) [])
       OnConflictDoRaise (Returning (#col1 `As` #fromOnly :* Nil))
 in renderManipulation manipulation
 :}
@@ -147,7 +146,7 @@ let
      ] '[] '[]
   manipulation = 
     insertInto #tab
-      ( ValuesQuery $
+      ( ColumnValuesQuery $
         selectStar (from (Table (#other_tab `As` #t))) )
       OnConflictDoRaise (Returning Nil)
 in renderManipulation manipulation
@@ -165,7 +164,7 @@ let
     '[] '[ "sum" ::: 'Required ('NotNull 'PGint4)]
   manipulation =
     insertInto #tab
-      (Values
+      (ColumnValues
         (2 `As` #col1 :* 4 `As` #col2 :* Nil)
         [6 `As` #col1 :* 8 `As` #col2 :* Nil])
       (OnConflictDoUpdate
@@ -176,49 +175,62 @@ in renderManipulation manipulation
 :}
 "INSERT INTO tab (col1, col2) VALUES (2, 4), (6, 8) ON CONFLICT DO UPDATE SET col1 = 2 WHERE (col1 = col2) RETURNING (col1 + col2) AS sum;"
 -}
-insertInto
-  :: (SOP.SListI columns, SOP.SListI results, HasTable table schema columns)
-  => Alias table -- ^ table to insert into
-  -> ValuesClause schema params columns -- ^ values to insert
+insertRows
+  :: ( SOP.SListI columns
+     , SOP.SListI results
+     , Has tab schema table
+     , columns ~ UnconstrainTable table )
+  => Alias tab -- ^ table to insert into
+  -> NP (Aliased (ColumnValue '[] params)) columns
+  -> [NP (Aliased (ColumnValue '[] params)) columns]
   -> ConflictClause columns params
   -- ^ what to do in case of constraint conflict
   -> ReturningClause columns params results -- ^ results to return
   -> Manipulation schema params results
-insertInto table insert conflict returning = UnsafeManipulation $
-  "INSERT" <+> "INTO" <+> renderAlias table
-  <+> renderValuesClause insert
-  <> renderConflictClause conflict
-  <> renderReturningClause returning
-
--- | A `ValuesClause` lets you insert either values, free `Expression`s,
--- or the result of a `Query`.
-data ValuesClause
-  (schema :: TablesType)
-  (params :: [ColumnType])
-  (columns :: ColumnsType)
-    = Values
-        (NP (Aliased (Expression '[] 'Ungrouped params)) columns)
-        [NP (Aliased (Expression '[] 'Ungrouped params)) columns]
-    -- ^ at least one row of values
-    | ValuesQuery (Query schema params columns)
-
--- | Render a `ValuesClause`.
-renderValuesClause
-  :: SOP.SListI columns
-  => ValuesClause schema params columns
-  -> ByteString
-renderValuesClause = \case
-  Values row rows ->
-    parenthesized (renderCommaSeparated renderAliasPart row)
+insertRows tab row rows conflict returning = UnsafeManipulation $
+  "INSERT" <+> "INTO" <+> renderAlias tab
+    <+> parenthesized (renderCommaSeparated renderAliasPart row)
     <+> "VALUES"
     <+> commaSeparated
-      (parenthesized . renderCommaSeparated renderValuePart <$> row:rows)
+          ( parenthesized
+          . renderCommaSeparated renderColumnValuePart <$> row:rows )
+    <> renderConflictClause conflict
+    <> renderReturningClause returning
     where
-      renderAliasPart, renderValuePart
-        :: Aliased (Expression '[] 'Ungrouped params) ty -> ByteString
+      renderAliasPart, renderColumnValuePart
+        :: Aliased (ColumnValue '[] params) ty -> ByteString
       renderAliasPart (_ `As` name) = renderAlias name
-      renderValuePart (value `As` _) = renderExpression value
-  ValuesQuery q -> renderQuery q
+      renderColumnValuePart (value `As` _) = case value of
+        Default -> "DEFAULT"
+        Set expression -> renderExpression expression
+
+insertQuery
+  :: ( SOP.SListI columns
+     , SOP.SListI results
+     , Has tab schema table
+     , columns ~ UnconstrainTable table )
+  => Alias tab -- ^ table to insert into
+  -> Query schema params (UnconstrainColumns columns)
+  -> ConflictClause columns params
+  -- ^ what to do in case of constraint conflict
+  -> ReturningClause columns params results -- ^ results to return
+  -> Manipulation schema params results
+insertQuery tab query conflict returning = UnsafeManipulation $
+  "INSERT" <+> "INTO" <+> renderAlias tab
+    <+> renderQuery query
+    <> renderConflictClause conflict
+    <> renderReturningClause returning
+
+data ColumnValue
+  (columns :: RelationType)
+  (params :: [NullityType])
+  (ty :: ColumnType)
+  where
+    Same :: ColumnValue (column ': columns) params ty
+    Default :: ColumnValue columns params ('Def :=> ty)
+    Set
+      :: (forall table. Expression '[table ::: columns] 'Ungrouped params ty)
+      -> ColumnValue columns params (constraint :=> ty)
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
@@ -232,13 +244,14 @@ renderValuesClause = \case
 -- values are desired.
 data ReturningClause
   (columns :: ColumnsType)
-  (params :: [ColumnType])
-  (results :: ColumnsType)
+  (params :: [NullityType])
+  (results :: RelationType)
   where
-    ReturningStar :: ReturningClause columns params columns
+    ReturningStar
+      :: ReturningClause columns params (UnconstrainColumns columns)
     Returning
       :: NP
-          (Aliased (Expression '[table ::: columns] 'Ungrouped params))
+          (Aliased (Expression '[table ::: (UnconstrainColumns columns)] 'Ungrouped params))
           results
       -> ReturningClause columns params results
 
@@ -258,12 +271,12 @@ renderReturningClause = \case
 -- `OnConflictDoNothing` simply avoids inserting a row.
 -- `OnConflictDoUpdate` updates the existing row that conflicts with the row
 -- proposed for insertion.
-data ConflictClause columns params where
+data ConflictClause (columns :: ColumnsType) params where
   OnConflictDoRaise :: ConflictClause columns params
   OnConflictDoNothing :: ConflictClause columns params
   OnConflictDoUpdate
-    :: NP (Aliased (UpdateExpression columns params)) columns
-    -> Maybe (Condition '[table ::: columns] 'Ungrouped params)
+    :: NP (Aliased (ColumnValue (UnconstrainColumns columns) params)) columns
+    -> [Condition '[table ::: UnconstrainColumns columns] 'Ungrouped params]
     -> ConflictClause columns params
 
 -- | Render a `ConflictClause`.
@@ -274,12 +287,22 @@ renderConflictClause
 renderConflictClause = \case
   OnConflictDoRaise -> ""
   OnConflictDoNothing -> " ON CONFLICT DO NOTHING"
-  OnConflictDoUpdate updates whMaybe
+  OnConflictDoUpdate updates whs'
     -> " ON CONFLICT DO UPDATE SET"
-      <+> renderCommaSeparatedMaybe renderUpdateExpression updates
-      <> case whMaybe of
-        Nothing -> ""
-        Just wh -> " WHERE" <+> renderExpression wh
+      <+> renderCommaSeparatedMaybe renderUpdate updates
+      <> case whs' of
+        [] -> ""
+        wh:whs -> " WHERE" <+> renderExpression (foldr (.&&) wh whs)
+      where
+        renderUpdate
+          :: Aliased (ColumnValue columns params) column
+          -> Maybe ByteString
+        renderUpdate = \case
+          Same `As` _ -> Nothing
+          Default `As` column -> Just $
+            renderAlias column <+> "=" <+> "DEFAULT"
+          Set expression `As` column -> Just $
+            renderAlias column <+> "=" <+> renderExpression expression
 
 {-----------------------------------------
 UPDATE statements
@@ -301,11 +324,14 @@ UPDATE statements
 -- :}
 -- "UPDATE tab SET col1 = 2 WHERE (col1 <> col2);"
 update
-  :: (HasTable table schema columns, SOP.SListI columns, SOP.SListI results)
-  => Alias table -- ^ table to update
-  -> NP (Aliased (UpdateExpression columns params)) columns
+  :: ( SOP.SListI columns
+     , SOP.SListI results
+     , Has tab schema table
+     , columns ~ UnconstrainTable table )
+  => Alias tab -- ^ table to update
+  -> NP (Aliased (ColumnValue (UnconstrainColumns columns) params)) columns
   -- ^ modified values to replace old values
-  -> Condition '[tab ::: columns] 'Ungrouped params
+  -> Condition '[tab ::: UnconstrainColumns columns] 'Ungrouped params
   -- ^ condition under which to perform update on a row
   -> ReturningClause columns params results -- ^ results to return
   -> Manipulation schema params results
@@ -313,29 +339,19 @@ update table columns wh returning = UnsafeManipulation $
   "UPDATE"
   <+> renderAlias table
   <+> "SET"
-  <+> renderCommaSeparatedMaybe renderUpdateExpression columns
+  <+> renderCommaSeparatedMaybe renderUpdate columns
   <+> "WHERE" <+> renderExpression wh
   <> renderReturningClause returning
-
--- | Columns to be updated are mentioned with `Set`; columns which are to
--- remain the same are mentioned with `Same`.
-data UpdateExpression columns params ty
-  = Same
-  -- ^ column to remain the same upon update
-  | Set (forall table. Expression '[table ::: columns] 'Ungrouped params ty)
-  -- ^ column to be updated
-deriving instance Show (UpdateExpression columns params ty)
-deriving instance Eq (UpdateExpression columns params ty)
-deriving instance Ord (UpdateExpression columns params ty)
-
--- | Render an `UpdateExpression`.
-renderUpdateExpression
-  :: Aliased (UpdateExpression params columns) column
-  -> Maybe ByteString
-renderUpdateExpression = \case
-  Same `As` _ -> Nothing
-  Set expression `As` column -> Just $
-    renderAlias column <+> "=" <+> renderExpression expression
+  where
+    renderUpdate
+      :: Aliased (ColumnValue columns params) column
+      -> Maybe ByteString
+    renderUpdate = \case
+      Same `As` _ -> Nothing
+      Default `As` column -> Just $
+        renderAlias column <+> "=" <+> "DEFAULT"
+      Set expression `As` column -> Just $
+        renderAlias column <+> "=" <+> renderExpression expression
 
 {-----------------------------------------
 DELETE statements
@@ -356,9 +372,11 @@ DELETE statements
 -- :}
 -- "DELETE FROM tab WHERE (col1 = col2) RETURNING *;"
 deleteFrom
-  :: (SOP.SListI results, HasTable table schema columns)
-  => Alias table -- ^ table to delete from
-  -> Condition '[table ::: columns] 'Ungrouped params
+  :: ( SOP.SListI results
+     , Has tab schema table
+     , columns ~ UnconstrainTable table )
+  => Alias tab -- ^ table to delete from
+  -> Condition '[tab ::: UnconstrainColumns columns] 'Ungrouped params
   -- ^ condition under which to delete a row
   -> ReturningClause columns params results -- ^ results to return
   -> Manipulation schema params results
