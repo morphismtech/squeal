@@ -532,7 +532,7 @@ from tables = TableExpression tables [] NoGroups NoHaving [] [] []
 -- | A `where_` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `whereClause`.
 where_
-  :: Condition tables 'Ungrouped params
+  :: Condition tables 'Ungrouped params -- ^ filtering condition
   -> TableExpression schema params tables grouping
   -> TableExpression schema params tables grouping
 where_ wh tables = tables {whereClause = wh : whereClause tables}
@@ -542,7 +542,7 @@ where_ wh tables = tables {whereClause = wh : whereClause tables}
 -- a "grand total" aggregation query.
 group
   :: SListI bys
-  => NP (By tables) bys
+  => NP (By tables) bys -- ^ grouped columns
   -> TableExpression schema params tables 'Ungrouped 
   -> TableExpression schema params tables ('Grouped bys)
 group bys tables = TableExpression
@@ -558,7 +558,7 @@ group bys tables = TableExpression
 -- | A `having` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `havingClause`.
 having
-  :: Condition tables ('Grouped bys) params
+  :: Condition tables ('Grouped bys) params -- ^ having condition
   -> TableExpression schema params tables ('Grouped bys)
   -> TableExpression schema params tables ('Grouped bys)
 having hv tables = tables
@@ -567,7 +567,7 @@ having hv tables = tables
 -- | An `orderBy` is an endomorphism of `TableExpression`s which appends an
 -- ordering to the right of the `orderByClause`.
 orderBy
-  :: [SortExpression tables grouping params]
+  :: [SortExpression tables grouping params] -- ^ sort expressions
   -> TableExpression schema params tables grouping
   -> TableExpression schema params tables grouping
 orderBy srts tables = tables {orderByClause = orderByClause tables ++ srts}
@@ -575,7 +575,7 @@ orderBy srts tables = tables {orderByClause = orderByClause tables ++ srts}
 -- | A `limit` is an endomorphism of `TableExpression`s which adds to the
 -- `limitClause`.
 limit
-  :: Word64
+  :: Word64 -- ^ limit parameter
   -> TableExpression schema params tables grouping
   -> TableExpression schema params tables grouping
 limit lim tables = tables {limitClause = lim : limitClause tables}
@@ -583,7 +583,7 @@ limit lim tables = tables {limitClause = lim : limitClause tables}
 -- | An `offset` is an endomorphism of `TableExpression`s which adds to the
 -- `offsetClause`.
 offset
-  :: Word64
+  :: Word64 -- ^ offset parameter
   -> TableExpression schema params tables grouping
   -> TableExpression schema params tables grouping
 offset off tables = tables {offsetClause = off : offsetClause tables}
