@@ -160,18 +160,6 @@ newtype TableConstraintExpression
     { renderTableConstraintExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
-data Column
-  (columns :: ColumnsType)
-  (column :: (Symbol,ColumnType))
-  where
-    Column
-      :: Has column columns ty
-      => Alias column
-      -> Column columns (column ::: ty)
-
-renderColumn :: Column columns column -> ByteString
-renderColumn (Column column) = renderAlias column
-
 -- | A `check` constraint is the most generic `TableConstraint` type.
 -- It allows you to specify that the value in a certain column must satisfy
 -- a Boolean (truth-value) expression.
@@ -190,6 +178,20 @@ check
   -> TableConstraintExpression schema columns 'Check
 check condition = UnsafeTableConstraintExpression $
   "CHECK" <+> parenthesized (renderExpression condition)
+
+-- | @Column columns column@ is a witness that `column` is in `columns`. 
+data Column
+  (columns :: ColumnsType)
+  (column :: (Symbol,ColumnType))
+  where
+    Column
+      :: Has column columns ty
+      => Alias column
+      -> Column columns (column ::: ty)
+
+-- | Render a `Column`.
+renderColumn :: Column columns column -> ByteString
+renderColumn (Column column) = renderAlias column
 
 -- | A `unique` constraint ensure that the data contained in a column,
 -- or a group of columns, is unique among all the rows in the table.
@@ -400,6 +402,17 @@ addConstraint constraintName constraint = UnsafeAlterTable $
   "ADD" <+> "CONSTRAINT" <+> renderAlias constraintName
     <+> renderTableConstraintExpression constraint
 
+-- | A `dropConstraint` drops a table constraint.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '["tab" ::: '["positive" ::: Check ] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
+--     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
+--   definition = alterTable #tab (dropConstraint #positive)
+-- in renderDefinition definition
+-- :}
+-- "ALTER TABLE tab DROP CONSTRAINT positive;"
 dropConstraint
   :: KnownSymbol constraintName
   => Alias constraintName

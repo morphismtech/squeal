@@ -76,3 +76,4 @@ executable squeal-postgresql-example
     , text >= 1.2.2.2 && < 2
     , transformers >= 0.5.2.0 && < 1
     , transformers-base >= 0.4.4 && < 1
+    , vector

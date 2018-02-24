@@ -344,8 +344,11 @@ nullIf
 nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
   (renderExpression x <> ", " <> renderExpression y)
 
+-- | >>> renderExpression $ array [null_, unNull false, unNull true]
+-- "ARRAY[NULL, FALSE, TRUE]"
 array
   :: [Expression tables grouping params ('Null ty)]
+  -- ^ array elements
   -> Expression tables grouping params (nullity ('PGarray ty))
 array xs = UnsafeExpression $
   "ARRAY[" <> commaSeparated (renderExpression <$> xs) <> "]"

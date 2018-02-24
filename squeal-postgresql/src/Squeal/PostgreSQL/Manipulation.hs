@@ -133,27 +133,6 @@ in renderManipulation manipulation
 :}
 "INSERT INTO tab (col1, col2) VALUES (2, DEFAULT) RETURNING col1 AS fromOnly;"
 
-query insert:
-
->>> :{
-let
-  manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
-      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
-       ]
-     , "other_tab" ::: '[] :=>
-      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
-       ]
-     ] '[] '[]
-  manipulation = 
-    insertQuery_ #tab
-      (selectStar (from (Table (#other_tab `As` #t))))
-in renderManipulation manipulation
-:}
-"INSERT INTO tab SELECT * FROM other_tab AS t;"
-
 upsert:
 
 >>> :{
@@ -204,6 +183,7 @@ insertRows tab row rows conflict returning = UnsafeManipulation $
         Default -> "DEFAULT"
         Set expression -> renderExpression expression
 
+-- | Insert a single row.
 insertRow
   :: ( SOP.SListI columns
      , SOP.SListI results
@@ -217,6 +197,7 @@ insertRow
   -> Manipulation schema params results
 insertRow tab row = insertRows tab row []
 
+-- | Insert multiple rows returning `Nil` and raising an error on conflicts.
 insertRows_
   :: ( SOP.SListI columns
      , Has tab schema table
@@ -228,6 +209,7 @@ insertRows_
 insertRows_ tab row rows =
   insertRows tab row rows OnConflictDoRaise (Returning Nil)
 
+-- | Insert a single row returning `Nil` and raising an error on conflicts.
 insertRow_
   :: ( SOP.SListI columns
      , Has tab schema table
@@ -237,6 +219,27 @@ insertRow_
   -> Manipulation schema params '[]
 insertRow_ tab row = insertRow tab row OnConflictDoRaise (Returning Nil)
 
+{- | Insert a query.
+
+>>> :{
+let
+  manipulation :: Manipulation
+    '[ "tab" ::: '[] :=>
+      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
+       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
+       ]
+     , "other_tab" ::: '[] :=>
+      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
+       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
+       ]
+     ] '[] '[]
+  manipulation = 
+    insertQuery_ #tab
+      (selectStar (from (table (#other_tab `As` #t))))
+in renderManipulation manipulation
+:}
+"INSERT INTO tab SELECT * FROM other_tab AS t;"
+-}
 insertQuery
   :: ( SOP.SListI columns
      , SOP.SListI results
@@ -254,6 +257,7 @@ insertQuery tab query conflict returning = UnsafeManipulation $
     <> renderConflictClause conflict
     <> renderReturningClause returning
 
+-- | Insert a query returning `Nil` and raising an error on conflicts.
 insertQuery_
   :: ( SOP.SListI columns
      , Has tab schema table
@@ -264,6 +268,11 @@ insertQuery_
 insertQuery_ tab query =
   insertQuery tab query OnConflictDoRaise (Returning Nil)
 
+-- | `ColumnValue`s are values to insert or update in a row
+-- `Same` updates with the same value.
+-- `Default` inserts or updates with the @DEFAULT@ value
+-- `Set` a value to be an `Expression`, relative to the given
+-- row for an update, and closed for an insert.
 data ColumnValue
   (columns :: RelationType)
   (params :: [NullityType])
@@ -351,6 +360,9 @@ renderConflictClause = \case
 UPDATE statements
 -----------------------------------------}
 
+-- | An `update` command changes the values of the specified columns
+-- in all rows that satisfy the condition.
+--
 update
   :: ( SOP.SListI columns
      , SOP.SListI results
@@ -363,9 +375,9 @@ update
   -- ^ condition under which to perform update on a row
   -> ReturningClause columns params results -- ^ results to return
   -> Manipulation schema params results
-update table columns wh returning = UnsafeManipulation $
+update tab columns wh returning = UnsafeManipulation $
   "UPDATE"
-  <+> renderAlias table
+  <+> renderAlias tab
   <+> "SET"
   <+> renderCommaSeparatedMaybe renderUpdate columns
   <+> "WHERE" <+> renderExpression wh
@@ -381,9 +393,7 @@ update table columns wh returning = UnsafeManipulation $
       Set expression `As` column -> Just $
         renderAlias column <+> "=" <+> renderExpression expression
 
--- | An `update` command changes the values of the specified columns
--- in all rows that satisfy the condition.
---
+-- | Update a row returning `Nil`.
 -- >>> :{
 -- let
 --   manipulation :: Manipulation
@@ -406,7 +416,7 @@ update_
   -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
   -- ^ condition under which to perform update on a row
   -> Manipulation schema params '[]
-update_ table columns wh = update table columns wh (Returning Nil)
+update_ tab columns wh = update tab columns wh (Returning Nil)
 
 {-----------------------------------------
 DELETE statements
@@ -435,11 +445,12 @@ deleteFrom
   -- ^ condition under which to delete a row
   -> ReturningClause columns params results -- ^ results to return
   -> Manipulation schema params results
-deleteFrom table wh returning = UnsafeManipulation $
-  "DELETE FROM" <+> renderAlias table
+deleteFrom tab wh returning = UnsafeManipulation $
+  "DELETE FROM" <+> renderAlias tab
   <+> "WHERE" <+> renderExpression wh
   <> renderReturningClause returning
 
+-- | Delete rows returning `Nil`.
 deleteFrom_
   :: ( Has tab schema table
      , columns ~ TableToColumns table )

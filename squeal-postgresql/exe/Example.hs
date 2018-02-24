@@ -79,8 +79,8 @@ getUsers :: Query Schema '[]
    , "userVec" ::: 'NotNull ('PGarray 'PGint2)]
 getUsers = select
   (#u ! #name `As` #userName :* #e ! #email `As` #userEmail :* #u ! #vec `As` #userVec :* Nil)
-  ( from (Table (#users `As` #u)
-    & InnerJoin (Table (#emails `As` #e))
+  ( from (table (#users `As` #u)
+    & innerJoin (table (#emails `As` #e))
       (#u ! #id .== #e ! #user_id)) )
 
 data User = User { userName :: Text, userEmail :: Maybe Text, userVec :: Vector (Maybe Int16) }

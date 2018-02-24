@@ -126,6 +126,7 @@ data PGType
   | PGarrayN Nat PGType -- ^ fixed length array
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
+-- | The object identifier of a `PGType`.
 class Oid (ty :: PGType) where oid :: proxy ty -> Word32
 instance Oid 'PGbool where oid _ = 16
 instance Oid 'PGint2 where oid _ = 21
@@ -372,9 +373,13 @@ type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
   Create alias y (x ': xs) = x ': Create alias y xs
 
+-- | Add a column to a `TableType` with
+-- `Squeal.PostgreSQL.Definition.addColumn`.
 type family AddColumn alias x y where
   AddColumn alias x (constraints :=> xs) = constraints :=> Create alias x xs
 
+-- | Add a constraint to a `TableType` with
+-- `Squeal.PostgreSQL.Definition.addConstraint`.
 type family AddConstraint alias x y where
   AddConstraint alias x (constraints :=> xs) = Create alias x constraints :=> xs
 

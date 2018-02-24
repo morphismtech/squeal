@@ -56,7 +56,13 @@ module Squeal.PostgreSQL.Query
   , offset
     -- * From
   , FromClause (..)
-  , renderFromClause
+  , table
+  , subquery
+  , crossJoin
+  , innerJoin
+  , leftOuterJoin
+  , rightOuterJoin
+  , fullOuterJoin
     -- * Grouping
   , By (By, By2)
   , renderBy
@@ -97,7 +103,7 @@ let
     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
     '[]
     '["col" ::: 'Null 'PGint4]
-  query = selectStar (from (Table (#tab `As` #t)))
+  query = selectStar (from (table (#tab `As` #t)))
 in renderQuery query
 :}
 "SELECT * FROM tab AS t"
@@ -116,7 +122,7 @@ let
   query = 
     select
       ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
-      ( from (Table (#tab `As` #t))
+      ( from (table (#tab `As` #t))
         & where_ (#col1 .> #col2)
         & where_ (#col2 .> 0) )
 in renderQuery query
@@ -133,7 +139,7 @@ let
     '["col" ::: 'Null 'PGint4]
   query =
     selectStar
-      (from (Subquery (selectStar (from (Table (#tab `As` #t))) `As` #sub)))
+      (from (subquery (selectStar (from (table (#tab `As` #t))) `As` #sub)))
 in renderQuery query
 :}
 "SELECT * FROM (SELECT * FROM tab AS t) AS sub"
@@ -147,7 +153,7 @@ let
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar
-    (from (Table (#tab `As` #t)) & limit 100 & offset 2 & limit 50 & offset 2)
+    (from (table (#tab `As` #t)) & limit 100 & offset 2 & limit 50 & offset 2)
 in renderQuery query
 :}
 "SELECT * FROM tab AS t LIMIT 50 OFFSET 4"
@@ -161,7 +167,7 @@ let
     '[ 'NotNull 'PGfloat8]
     '["col" ::: 'NotNull 'PGfloat8]
   query = selectStar
-    (from (Table (#tab `As` #t)) & where_ (#col .> param @1))
+    (from (table (#tab `As` #t)) & where_ (#col .> param @1))
 in renderQuery query
 :}
 "SELECT * FROM tab AS t WHERE (col > ($1 :: float8))"
@@ -179,7 +185,7 @@ let
      , "col1" ::: 'NotNull 'PGint4 ]
   query =
     select (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
-    ( from (Table (#tab `As` #table1))
+    ( from (table (#tab `As` #table1))
       & group (By #col1 :* Nil) 
       & having (#col1 + sum_ #col2 .> 1) )
 in renderQuery query
@@ -195,7 +201,7 @@ let
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar
-    (from (Table (#tab `As` #t)) & orderBy [#col & AscNullsFirst])
+    (from (table (#tab `As` #t)) & orderBy [#col & AscNullsFirst])
 in renderQuery query
 :}
 "SELECT * FROM tab AS t ORDER BY col ASC NULLS FIRST"
@@ -235,10 +241,10 @@ let
     ( #o ! #price `As` #order_price :*
       #c ! #name `As` #customer_name :*
       #s ! #name `As` #shipper_name :* Nil )
-    ( from (Table (#orders `As` #o)
-      & InnerJoin (Table (#customers `As` #c))
+    ( from (table (#orders `As` #o)
+      & innerJoin (table (#customers `As` #c))
         (#o ! #customer_id .== #c ! #id)
-      & InnerJoin (Table (#shippers `As` #s))
+      & innerJoin (table (#shippers `As` #s))
         (#o ! #shipper_id .== #s ! #id)) )
 in renderQuery query
 :}
@@ -253,7 +259,7 @@ let
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectDotStar #t1
-    (from (Table (#tab `As` #t1) & CrossJoin (Table (#tab `As` #t2))))
+    (from (table (#tab `As` #t1) & crossJoin (table (#tab `As` #t2))))
 in renderQuery query
 :}
 "SELECT t1.* FROM tab AS t1 CROSS JOIN tab AS t2"
@@ -267,14 +273,13 @@ let
     '[]
     '["col" ::: 'Null 'PGint4]
   query =
-    selectStar (from (Table (#tab `As` #t)))
+    selectStar (from (table (#tab `As` #t)))
     `unionAll`
-    selectStar (from (Table (#tab `As` #t)))
+    selectStar (from (table (#tab `As` #t)))
 in renderQuery query
 :}
 "(SELECT * FROM tab AS t) UNION ALL (SELECT * FROM tab AS t)"
 -}
-
 newtype Query
   (schema :: TablesType)
   (params :: [NullityType])
@@ -411,8 +416,8 @@ selectDotStar
   -> TableExpression schema params tables 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
-selectDotStar table tables = UnsafeQuery $
-  "SELECT" <+> renderAlias table <> ".*" <+> renderTableExpression tables
+selectDotStar tab tables = UnsafeQuery $
+  "SELECT" <+> renderAlias tab <> ".*" <+> renderTableExpression tables
 
 -- | A `selectDistinctDotStar` asks for all the columns of a particular table, 
 -- and eliminates duplicate rows.
@@ -423,8 +428,8 @@ selectDistinctDotStar
   -> TableExpression schema params tables 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
-selectDistinctDotStar table tables = UnsafeQuery $
-  "SELECT DISTINCT" <+> renderAlias table <> ".*"
+selectDistinctDotStar tab tables = UnsafeQuery $
+  "SELECT DISTINCT" <+> renderAlias tab <> ".*"
   <+> renderTableExpression tables
 
 {-----------------------------------------
@@ -590,93 +595,108 @@ FROM clauses
 {- |
 A `FromClause` can be a table name, or a derived table such
 as a subquery, a @JOIN@ construct, or complex combinations of these.
+-}
+newtype FromClause schema params tables
+  = UnsafeFromClause { renderFromClause :: ByteString }
+  deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
-* A real `Table` is a table from the schema.
+-- | A real `table` is a table from the schema.
+table
+  :: Aliased (Table schema) table
+  -> FromClause schema params '[table]
+table = UnsafeFromClause . renderAliasedAs renderTable
 
-* `Subquery` derives a table from a `Query`.
+-- | `subquery` derives a table from a `Query`.
+subquery
+  :: Aliased (Query schema params) table
+  -> FromClause schema params '[table]
+subquery = UnsafeFromClause . renderAliasedAs (parenthesized . renderQuery)
 
-* A joined table is a table derived from two other (real or derived) tables
-according to the rules of the particular join type. `CrossJoin`, `InnerJoin`,
-`LeftOuterJoin`, `RightOuterJoin` and `FullOuterJoin` are available and can
-be nested using the `&` operator to match the left-to-right sequencing of
-their placement in SQL.
-
-    * @t1 & CrossJoin t2@. For every possible combination of rows from
+{- | @t1 & crossJoin t2@. For every possible combination of rows from
     @t1@ and @t2@ (i.e., a Cartesian product), the joined table will contain
     a row consisting of all columns in @t1@ followed by all columns in @t2@.
     If the tables have @n@ and @m@ rows respectively, the joined table will
     have @n * m@ rows.
+-}
+crossJoin
+  :: FromClause schema params right
+  -- ^ right
+  -> FromClause schema params left
+  -- ^ left
+  -> FromClause schema params (Join left right)
+crossJoin right left = UnsafeFromClause $
+  renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
 
-    * @t1 & InnerJoin t2 on@. For each row @r1@ of @t1@, the joined
+{- | @t1 & InnerJoin t2 on@. For each row @r1@ of @t1@, the joined
     table has a row for each row in @t2@ that satisfies the @on@ condition
     with @r1@
+-}
+innerJoin
+  :: FromClause schema params right
+  -- ^ right
+  -> Condition (Join left right) 'Ungrouped params
+  -- ^ @ON@ condition
+  -> FromClause schema params left
+  -- ^ left
+  -> FromClause schema params (Join left right)
+innerJoin right on left = UnsafeFromClause $
+  renderFromClause left <+> "INNER JOIN" <+> renderFromClause right
+  <+> "ON" <+> renderExpression on
 
-    * @t1 & LeftOuterJoin t2 on@. First, an inner join is performed.
+{- | @t1 & LeftOuterJoin t2 on@. First, an inner join is performed.
     Then, for each row in @t1@ that does not satisfy the @on@ condition with
     any row in @t2@, a joined row is added with null values in columns of @t2@.
     Thus, the joined table always has at least one row for each row in @t1@.
+-}
+leftOuterJoin
+  :: FromClause schema params right
+  -- ^ right
+  -> Condition (Join left right) 'Ungrouped params
+  -- ^ @ON@ condition
+  -> FromClause schema params left
+  -- ^ left
+  -> FromClause schema params (Join left (NullifyTables right))
+leftOuterJoin right on left = UnsafeFromClause $
+  renderFromClause left <+> "LEFT OUTER JOIN" <+> renderFromClause right
+  <+> "ON" <+> renderExpression on
 
-    * @t1 & RightOuterJoin t2 on@. First, an inner join is performed.
+{- | @t1 & RightOuterJoin t2 on@. First, an inner join is performed.
     Then, for each row in @t2@ that does not satisfy the @on@ condition with
     any row in @t1@, a joined row is added with null values in columns of @t1@.
     This is the converse of a left join: the result table will always
     have a row for each row in @t2@.
+-}
+rightOuterJoin
+  :: FromClause schema params right
+  -- ^ right
+  -> Condition (Join left right) 'Ungrouped params
+  -- ^ @ON@ condition
+  -> FromClause schema params left
+  -- ^ left
+  -> FromClause schema params (Join (NullifyTables left) right)
+rightOuterJoin right on left = UnsafeFromClause $
+  renderFromClause left <+> "RIGHT OUTER JOIN" <+> renderFromClause right
+  <+> "ON" <+> renderExpression on
 
-    * @t1 & FullOuterJoin t2 on@. First, an inner join is performed.
+{- | @t1 & FullOuterJoin t2 on@. First, an inner join is performed.
     Then, for each row in @t1@ that does not satisfy the @on@ condition with
     any row in @t2@, a joined row is added with null values in columns of @t2@.
     Also, for each row of @t2@ that does not satisfy the join condition
     with any row in @t1@, a joined row with null values in the columns of @t1@
     is added.
 -}
-data FromClause schema params tables where
-  Table
-    :: Aliased (Table schema) table
-    -> FromClause schema params '[table]
-  Subquery
-    :: Aliased (Query schema params) table
-    -> FromClause schema params '[table]
-  CrossJoin
-    :: FromClause schema params right
-    -> FromClause schema params left
-    -> FromClause schema params (Join left right)
-  InnerJoin
-    :: FromClause schema params right
-    -> Condition (Join left right) 'Ungrouped params
-    -> FromClause schema params left
-    -> FromClause schema params (Join left right)
-  LeftOuterJoin
-    :: FromClause schema params right
-    -> Condition (Join left right) 'Ungrouped params
-    -> FromClause schema params left
-    -> FromClause schema params (Join left (NullifyTables right))
-  RightOuterJoin
-    :: FromClause schema params right
-    -> Condition (Join left right) 'Ungrouped params
-    -> FromClause schema params left
-    -> FromClause schema params (Join (NullifyTables left) right)
-  FullOuterJoin
-    :: FromClause schema params right
-    -> Condition (Join left right) 'Ungrouped params
-    -> FromClause schema params left
-    -> FromClause schema params
-        (Join (NullifyTables left) (NullifyTables right))
-
--- | Renders a `FromClause`.
-renderFromClause :: FromClause schema params tables -> ByteString
-renderFromClause = \case
-  Table table -> renderAliasedAs renderTable table
-  Subquery selection -> renderAliasedAs (parenthesized . renderQuery) selection
-  CrossJoin right left ->
-    renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
-  InnerJoin right on left -> renderJoin "INNER JOIN" right on left
-  LeftOuterJoin right on left -> renderJoin "LEFT OUTER JOIN" right on left
-  RightOuterJoin right on left -> renderJoin "RIGHT OUTER JOIN" right on left
-  FullOuterJoin right on left -> renderJoin "FULL OUTER JOIN" right on left
-  where
-    renderJoin op right on left =
-      renderFromClause left <+> op <+> renderFromClause right
-      <+> "ON" <+> renderExpression on
+fullOuterJoin
+  :: FromClause schema params right
+  -- ^ right
+  -> Condition (Join left right) 'Ungrouped params
+  -- ^ @ON@ condition
+  -> FromClause schema params left
+  -- ^ left
+  -> FromClause schema params
+      (Join (NullifyTables left) (NullifyTables right))
+fullOuterJoin right on left = UnsafeFromClause $
+  renderFromClause left <+> "FULL OUTER JOIN" <+> renderFromClause right
+  <+> "ON" <+> renderExpression on
 
 {-----------------------------------------
 Grouping
@@ -706,7 +726,7 @@ deriving instance Ord (By tables by)
 renderBy :: By tables tabcolty -> ByteString
 renderBy = \case
   By column -> renderAlias column
-  By2 (table, column) -> renderAlias table <> "." <> renderAlias column
+  By2 (tab, column) -> renderAlias tab <> "." <> renderAlias column
 
 -- | A `GroupByClause` indicates the `Grouping` of a `TableExpression`.
 -- A `NoGroups` indicates `Ungrouped` while a `Group` indicates `Grouped`.
