@@ -5,7 +5,7 @@ Copyright: (c) Eitan Chatav, 2017
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Embedding of PostgreSQL type and alias system
+A type-level DSL for kinds of PostgreSQL types, constraints, and aliases.
 -}
 
 {-# LANGUAGE
@@ -33,9 +33,9 @@ Embedding of PostgreSQL type and alias system
 #-}
 
 module Squeal.PostgreSQL.Schema
-  ( -- * Kinds
+  ( -- * Types
     PGType (..)
-  , Oid (..)
+  , HasOid (..)
   , NullityType (..)
   , ColumnType
   , ColumnsType
@@ -44,14 +44,14 @@ module Squeal.PostgreSQL.Schema
   , TableType
   , TablesType
   , Grouping (..)
-    -- * PostgreSQL Constraints
+    -- * Constraints
   , (:=>)
   , ColumnsToRelation
   , TableToColumns
   , TablesToRelations
   , ColumnConstraint (..)
   , TableConstraint (..)
-    -- * AliasesOf
+    -- * Aliases
   , (:::)
   , Alias (Alias)
   , renderAlias
@@ -100,6 +100,10 @@ import GHC.TypeLits
 import qualified Generics.SOP.Type.Metadata as Type
 
 -- | `PGType` is the promoted datakind of PostgreSQL types.
+--
+-- >>> import Squeal.PostgreSQL.Schema
+-- >>> :kind 'PGbool
+-- 'PGbool :: PGType
 data PGType
   = PGbool -- ^ logical Boolean (true/false)
   | PGint2 -- ^ signed two-byte integer
@@ -127,42 +131,54 @@ data PGType
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
 -- | The object identifier of a `PGType`.
-class Oid (ty :: PGType) where oid :: proxy ty -> Word32
-instance Oid 'PGbool where oid _ = 16
-instance Oid 'PGint2 where oid _ = 21
-instance Oid 'PGint4 where oid _ = 23
-instance Oid 'PGint8 where oid _ = 20
-instance Oid 'PGnumeric where oid _ = 1700
-instance Oid 'PGfloat4 where oid _ = 700
-instance Oid 'PGfloat8 where oid _ = 701
-instance Oid ('PGchar n) where oid _ = 18
-instance Oid ('PGvarchar n) where oid _ = 1043
-instance Oid 'PGtext where oid _ = 25
-instance Oid 'PGbytea where oid _ = 17
-instance Oid 'PGtimestamp where oid _ = 1114
-instance Oid 'PGtimestamptz where oid _ = 1184
-instance Oid 'PGdate where oid _ = 1082
-instance Oid 'PGtime where oid _ = 1083
-instance Oid 'PGtimetz where oid _ = 1266
-instance Oid 'PGinterval where oid _ = 1186
-instance Oid 'PGuuid where oid _ = 2950
-instance Oid 'PGinet where oid _ = 869
-instance Oid 'PGjson where oid _ = 114
-instance Oid 'PGjsonb where oid _ = 3802
+--
+-- >>> :set -XTypeApplications
+-- >>> import Data.Proxy
+-- >>> oid (Proxy @'PGbool)
+-- 16
+class HasOid (ty :: PGType) where oid :: proxy ty -> Word32
+instance HasOid 'PGbool where oid _ = 16
+instance HasOid 'PGint2 where oid _ = 21
+instance HasOid 'PGint4 where oid _ = 23
+instance HasOid 'PGint8 where oid _ = 20
+instance HasOid 'PGnumeric where oid _ = 1700
+instance HasOid 'PGfloat4 where oid _ = 700
+instance HasOid 'PGfloat8 where oid _ = 701
+instance HasOid ('PGchar n) where oid _ = 18
+instance HasOid ('PGvarchar n) where oid _ = 1043
+instance HasOid 'PGtext where oid _ = 25
+instance HasOid 'PGbytea where oid _ = 17
+instance HasOid 'PGtimestamp where oid _ = 1114
+instance HasOid 'PGtimestamptz where oid _ = 1184
+instance HasOid 'PGdate where oid _ = 1082
+instance HasOid 'PGtime where oid _ = 1083
+instance HasOid 'PGtimetz where oid _ = 1266
+instance HasOid 'PGinterval where oid _ = 1186
+instance HasOid 'PGuuid where oid _ = 2950
+instance HasOid 'PGinet where oid _ = 869
+instance HasOid 'PGjson where oid _ = 114
+instance HasOid 'PGjsonb where oid _ = 3802
 
 -- | `NullityType` encodes the potential presence or definite absence of a
 -- @NULL@ allowing operations which are sensitive to such to be well typed.
+--
+-- >>> :kind 'Null 'PGint4
+-- 'Null 'PGint4 :: NullityType
+-- >>> :kind 'NotNull ('PGvarchar 50)
+-- 'NotNull ('PGvarchar 50) :: NullityType
 data NullityType
   = Null PGType -- ^ @NULL@ may be present
   | NotNull PGType -- ^ @NULL@ is absent
 
--- | `:=>` is a type level pair between an "constraint" and some type,
+-- | The constraint  operator, `:=>` is a type level pair
+-- between an "constraint" and some type,
 -- either a `ColumnConstraint` and a `NullityType` or a row of
 -- `TableConstraint`s and a `TableType`.
 type (:=>) constraint ty = '(constraint,ty)
 infixr 7 :=>
 
--- | `:::` is like a promoted version of `As`, a type level pair between
+-- | The alias operator `:::` is like a promoted version of `As`,
+-- a type level pair between
 -- an alias and some type, like a column alias and either a `ColumnType` or
 -- `NullityType` or a table alias and either a `TableType` or a `RelationType`
 -- or a constraint alias and a `TableConstraint`.
@@ -176,9 +192,31 @@ data ColumnConstraint
 
 -- | `ColumnType` encodes the allowance of @DEFAULT@ and @NULL@ and the
 -- base `PGType` for a column.
+--
+-- >>> :kind 'NoDef :=> 'NotNull 'PGint4
+-- 'NoDef :=> 'NotNull 'PGint4 :: (ColumnConstraint, NullityType)
+-- >>> :kind 'NoDef :=> 'NotNull 'PGtext
+-- 'NoDef :=> 'NotNull 'PGtext :: (ColumnConstraint, NullityType)
+-- >>> import Data.Type.Equality
+-- >>> Refl :: ColumnType :~: (ColumnConstraint, NullityType)
+-- Refl
 type ColumnType = (ColumnConstraint,NullityType)
 
 -- | `ColumnsType` is a row of `ColumnType`s.
+--
+-- >>> import GHC.TypeLits
+-- >>> :{
+-- type Columns =
+--   '[ "name" ::: 'NoDef :=> 'NotNull 'PGtext
+--    , "id"   :::   'Def :=> 'NotNull 'PGint4
+--    ]
+-- :}
+--
+-- >>> :kind Columns
+-- Columns :: [(Symbol, (ColumnConstraint, NullityType))]
+-- >>> import Data.Type.Equality
+-- >>> Refl :: ColumnsType :~: [(Symbol, (ColumnConstraint, NullityType))]
+-- Refl
 type ColumnsType = [(Symbol,ColumnType)]
 
 -- | `TableConstraint` encodes various forms of data constraints
@@ -191,18 +229,64 @@ data TableConstraint
 
 -- | `TableType` encodes a row of constraints on a table as well as the types
 -- of its columns.
+--
+-- >>> :{
+-- type UsersTable =
+--   '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
+--   '[ "id"       :::   'Def :=> 'NotNull 'PGint4
+--    , "name"     ::: 'NoDef :=> 'NotNull 'PGtext
+--    ]
+-- :}
+--
+-- >>> :kind UsersTable
+-- UsersTable :: ([(Symbol, TableConstraint)],
+--                [(Symbol, (ColumnConstraint, NullityType))])
 type TableType = ([(Symbol,TableConstraint)],ColumnsType)
 
 -- | `TablesType` is a row of `TableType`s, thought of as a union.
+--
+-- >>> :set -XTypeFamilies -XTypeInType
+-- >>> :{
+-- type family Schema :: TablesType where
+--   Schema =
+--     '[ "users" :::
+--          '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
+--          '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+--           , "name" ::: 'NoDef :=> 'NotNull 'PGtext
+--           , "vec" ::: 'NoDef :=> 'NotNull ('PGarray 'PGint2)
+--           ]
+--      , "emails" :::
+--          '[  "pk_emails" ::: 'PrimaryKey '["id"]
+--           , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+--           ] :=>
+--          '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+--           , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
+--           , "email" ::: 'NoDef :=> 'Null 'PGtext
+--           ]
+--      ]
+-- :}
+--
 type TablesType = [(Symbol,TableType)]
 
 -- | `RelationType` is a row of `NullityType`
+--
+-- >>> :{
+-- type Relation =
+--   '[ "name"        ::: 'NotNull 'PGtext
+--    , "age"         ::: 'NotNull 'PGint4
+--    , "dateOfBirth" :::    'Null 'PGdate
+--    ]
+-- :}
+--
+-- >>> :kind Relation
+-- Relation :: [(Symbol, NullityType)]
 type RelationType = [(Symbol,NullityType)]
 
 -- | `RelationsType` is a row of `RelationType`s, thought of as a product.
 type RelationsType = [(Symbol,RelationType)]
 
 -- | `ColumnsToRelation` removes column constraints.
+--
 type family ColumnsToRelation (columns :: ColumnsType) :: RelationType where
   ColumnsToRelation '[] = '[]
   ColumnsToRelation (column ::: constraint :=> ty ': columns) =

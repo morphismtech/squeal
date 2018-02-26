@@ -5,6 +5,7 @@
 -- Stability: experimental
 --
 -- Squeal is a deep embedding of PostgreSQL in Haskell. Let's see an example!
+-- FIX DOCS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 --
 -- First, we need some language extensions because Squeal uses modern GHC
 -- features.

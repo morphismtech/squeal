@@ -115,7 +115,7 @@ instance ToParam UTCTime 'PGtimestamptz where
 instance ToParam DiffTime 'PGinterval where toParam = K . Encoding.interval_int
 instance ToParam Value 'PGjson where toParam = K . Encoding.json_ast
 instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
-instance (Oid pg, ToParam x pg)
+instance (HasOid pg, ToParam x pg)
   => ToParam (Vector (Maybe x)) ('PGarray pg) where
     toParam = K . Encoding.nullableArray_vector
       (oid (Proxy @pg)) (unK . toParam @x @pg)
@@ -237,7 +237,7 @@ instance FromValue pg y
         err str = error $ "fromColumnValue: " ++ Strict.unpack str
 
 -- | A `FromRow` constraint generically sequences the parsings of the columns
--- of a `ColumnsType` into the fields of a record `Type` provided they have
+-- of a `RelationType` into the fields of a record `Type` provided they have
 -- the same field names. You should not define instances of `FromRow`.
 -- Instead define `Generic` and `HasDatatypeInfo` instances which in turn
 -- provide `FromRow` instances.
