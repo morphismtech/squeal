@@ -9,7 +9,8 @@ A type-level DSL for kinds of PostgreSQL types, constraints, and aliases.
 -}
 
 {-# LANGUAGE
-    ConstraintKinds
+    AllowAmbiguousTypes
+  , ConstraintKinds
   , DataKinds
   , DeriveAnyClass
   , DeriveDataTypeable
@@ -133,31 +134,30 @@ data PGType
 -- | The object identifier of a `PGType`.
 --
 -- >>> :set -XTypeApplications
--- >>> import Data.Proxy
--- >>> oid (Proxy @'PGbool)
+-- >>> oid  @'PGbool
 -- 16
-class HasOid (ty :: PGType) where oid :: proxy ty -> Word32
-instance HasOid 'PGbool where oid _ = 16
-instance HasOid 'PGint2 where oid _ = 21
-instance HasOid 'PGint4 where oid _ = 23
-instance HasOid 'PGint8 where oid _ = 20
-instance HasOid 'PGnumeric where oid _ = 1700
-instance HasOid 'PGfloat4 where oid _ = 700
-instance HasOid 'PGfloat8 where oid _ = 701
-instance HasOid ('PGchar n) where oid _ = 18
-instance HasOid ('PGvarchar n) where oid _ = 1043
-instance HasOid 'PGtext where oid _ = 25
-instance HasOid 'PGbytea where oid _ = 17
-instance HasOid 'PGtimestamp where oid _ = 1114
-instance HasOid 'PGtimestamptz where oid _ = 1184
-instance HasOid 'PGdate where oid _ = 1082
-instance HasOid 'PGtime where oid _ = 1083
-instance HasOid 'PGtimetz where oid _ = 1266
-instance HasOid 'PGinterval where oid _ = 1186
-instance HasOid 'PGuuid where oid _ = 2950
-instance HasOid 'PGinet where oid _ = 869
-instance HasOid 'PGjson where oid _ = 114
-instance HasOid 'PGjsonb where oid _ = 3802
+class HasOid (ty :: PGType) where oid :: Word32
+instance HasOid 'PGbool where oid = 16
+instance HasOid 'PGint2 where oid = 21
+instance HasOid 'PGint4 where oid = 23
+instance HasOid 'PGint8 where oid = 20
+instance HasOid 'PGnumeric where oid = 1700
+instance HasOid 'PGfloat4 where oid = 700
+instance HasOid 'PGfloat8 where oid = 701
+instance HasOid ('PGchar n) where oid = 18
+instance HasOid ('PGvarchar n) where oid = 1043
+instance HasOid 'PGtext where oid = 25
+instance HasOid 'PGbytea where oid = 17
+instance HasOid 'PGtimestamp where oid = 1114
+instance HasOid 'PGtimestamptz where oid = 1184
+instance HasOid 'PGdate where oid = 1082
+instance HasOid 'PGtime where oid = 1083
+instance HasOid 'PGtimetz where oid = 1266
+instance HasOid 'PGinterval where oid = 1186
+instance HasOid 'PGuuid where oid = 2950
+instance HasOid 'PGinet where oid = 869
+instance HasOid 'PGjson where oid = 114
+instance HasOid 'PGjsonb where oid = 3802
 
 -- | `NullityType` encodes the potential presence or definite absence of a
 -- @NULL@ allowing operations which are sensitive to such to be well typed.

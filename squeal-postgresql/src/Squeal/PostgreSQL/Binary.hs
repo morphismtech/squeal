@@ -118,7 +118,7 @@ instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
 instance (HasOid pg, ToParam x pg)
   => ToParam (Vector (Maybe x)) ('PGarray pg) where
     toParam = K . Encoding.nullableArray_vector
-      (oid (Proxy @pg)) (unK . toParam @x @pg)
+      (oid @pg) (unK . toParam @x @pg)
 
 -- | A `ToColumnParam` constraint lifts the `ToParam` encoding 
 -- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s. You should
