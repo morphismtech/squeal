@@ -286,7 +286,6 @@ type RelationType = [(Symbol,NullityType)]
 type RelationsType = [(Symbol,RelationType)]
 
 -- | `ColumnsToRelation` removes column constraints.
---
 type family ColumnsToRelation (columns :: ColumnsType) :: RelationType where
   ColumnsToRelation '[] = '[]
   ColumnsToRelation (column ::: constraint :=> ty ': columns) =

@@ -5,7 +5,6 @@
 -- Stability: experimental
 --
 -- Squeal is a deep embedding of PostgreSQL in Haskell. Let's see an example!
--- FIX DOCS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 --
 -- First, we need some language extensions because Squeal uses modern GHC
 -- features.
@@ -45,13 +44,13 @@
 --
 -- > type Schema =
 -- >   '[ "users"  :::
--- >        '[ "id"   ::: 'Optional ('NotNull 'PGint4)
--- >         , "name" ::: 'Required ('NotNull 'PGtext)
+-- >        '[ "id"   :::   'Def :=> 'NotNull 'PGint4
+-- >         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
 -- >         ]
 -- >    , "emails" :::
--- >        '[ "id"      ::: 'Optional ('NotNull 'PGint4)
--- >         , "user_id" ::: 'Required ('NotNull 'PGint4)
--- >         , "email"   ::: 'Required ('Null 'PGtext)
+-- >        '[ "id"      :::   'Def :=> 'NotNull 'PGint4
+-- >         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
+-- >         , "email"   ::: 'NoDef :=>    'Null 'PGtext
 -- >         ]
 -- >    ]
 --
@@ -64,18 +63,19 @@
 --
 -- > setup :: Definition '[] Schema
 -- > setup = 
--- >   createTable #users
--- >     ( serial `As` #id :*
--- >       (text & notNull) `As` #name :* Nil )
--- >     [ primaryKey (Column #id :* Nil) ]
--- >   >>>
--- >   createTable #emails
--- >     ( serial `As` #id :*
--- >       (int & notNull) `As` #user_id :*
--- >       text `As` #email :* Nil )
--- >     [ primaryKey (Column #id :* Nil)
--- >     , foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
--- >       OnDeleteCascade OnUpdateCascade ]
+-- >  createTable #users
+-- >    ( serial `As` #id :*
+-- >      (text & notNull) `As` #name :*
+-- >      (vararray int2 & notNull) `As` #vec :* Nil )
+-- >    ( primaryKey (Column #id :* Nil) `As` #pk_users :* Nil )
+-- >  >>>
+-- >  createTable #emails
+-- >    ( serial `As` #id :*
+-- >      (int & notNull) `As` #user_id :*
+-- >      text `As` #email :* Nil )
+-- >    ( primaryKey (Column #id :* Nil) `As` #pk_emails :*
+-- >      foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
+-- >        OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
 --
 -- Notice that @setup@ starts with an empty schema @'[]@ and produces @Schema@.
 -- In our `createTable` commands we included `TableConstraint`s to define
@@ -97,14 +97,12 @@
 -- of our inserts.
 --
 -- > insertUser :: Manipulation Schema
--- >   '[ 'Required ('NotNull 'PGtext)]
--- >   '[ "fromOnly" ::: 'Required ('NotNull 'PGint4) ]
+-- >   '[ 'NotNull 'PGtext] '[ "fromOnly" ::: 'NotNull 'PGint4 ]
 -- > insertUser = insertInto #users
 -- >   ( Values (def `As` #id :* param @1 `As` #name :* Nil) [] )
 -- >   OnConflictDoNothing (Returning (#id `As` #fromOnly :* Nil))
 -- > 
--- > insertEmail :: Manipulation Schema
--- >   '[ 'Required ('NotNull 'PGint4), 'Required ('Null 'PGtext)] '[]
+-- > insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
 -- > insertEmail = insertInto #emails ( Values
 -- >   ( def `As` #id :*
 -- >     param @1 `As` #user_id :*
@@ -117,8 +115,7 @@
 -- `Manipulation` with the same kind of type parameters.
 --
 -- > getUsers :: Query Schema '[]
--- >   '[ "userName" ::: 'Required ('NotNull 'PGtext)
--- >    , "userEmail" ::: 'Required ('Null 'PGtext) ]
+-- >   '["userName" ::: 'NotNull 'PGtext, "userEmail" ::: 'Null 'PGtext]
 -- > getUsers = select
 -- >   (#u ! #name `As` #userName :* #e ! #email `As` #userEmail :* Nil)
 -- >   ( from (Table (#users `As` #u)
