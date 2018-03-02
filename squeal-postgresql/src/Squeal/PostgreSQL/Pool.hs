@@ -3,7 +3,9 @@
   , FlexibleContexts
   , FlexibleInstances
   , MultiParamTypeClasses
+  , RankNTypes
   , ScopedTypeVariables
+  , TypeFamilies
   , UndecidableInstances
 #-}
 
@@ -59,3 +61,18 @@ instance MonadBaseControl IO io => MonadPQ schema (PoolPQ schema io) where
       (result, _ :: Connection schema) <- flip runPQ conn $
         liftPQ m
       return result
+
+-- | A snapshot of the state of a `PoolPQ` computation.
+type PoolPQRun schema =
+  forall m x. Monad m => PoolPQ schema m x -> m x
+
+-- | Helper function in defining `MonadBaseControl` instance for `PoolPQ`.
+poolpqliftWith :: Functor m => (PoolPQRun schema -> m a) -> PoolPQ schema m a
+poolpqliftWith f = PoolPQ $ \ pool ->
+  (f $ \ pq -> runPoolPQ pq pool)
+
+instance MonadBaseControl b m => MonadBaseControl b (PoolPQ schema m) where
+  type StM (PoolPQ schema m) x = StM m x
+  liftBaseWith f =
+    poolpqliftWith $ \ run -> liftBaseWith $ \ runInBase -> f $ runInBase . run
+  restoreM = PoolPQ . const . restoreM
