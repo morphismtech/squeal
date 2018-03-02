@@ -30,6 +30,7 @@ library
     Squeal.PostgreSQL.Prettyprint
     Squeal.PostgreSQL.Query
     Squeal.PostgreSQL.Schema
+    Squeal.PostgreSQL.Transaction
   default-language: Haskell2010
   ghc-options: -Wall -fprint-explicit-kinds
   build-depends:
