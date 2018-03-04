@@ -42,6 +42,7 @@ module Squeal.PostgreSQL.PQ
   , execPQ
   , pqAp
   , pqBind
+  , pqJoin
   , pqThen
   , define
   , thenDefine
@@ -180,7 +181,13 @@ pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
   (x', conn'') <- x conn'
   return (f' x', conn'')
 
--- | indexed analog of `=<<`
+-- | indexed analog of `join`
+pqJoin
+  :: Monad m
+  => PQ schema0 schema1 m (PQ schema1 schema2 m y)
+  -> PQ schema0 schema2 m y
+pqJoin pq = pq & pqBind id
+
 pqBind
   :: Monad m
   => (x -> PQ schema1 schema2 m y)
