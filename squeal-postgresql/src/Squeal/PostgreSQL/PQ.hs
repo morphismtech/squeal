@@ -50,7 +50,6 @@ module Squeal.PostgreSQL.PQ
   , PQRun
   , pqliftWith
     -- * Result
-  , Result (Result, unResult)
   , RowNumber (RowNumber, unRowNumber)
   , ColumnNumber (UnsafeColumnNumber, getColumnNumber)
   , HasColumnNumber (columnNumber)
@@ -211,20 +210,20 @@ pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 define
   :: MonadBase IO io
   => Definition schema0 schema1
-  -> PQ schema0 schema1 io (Result '[])
+  -> PQ schema0 schema1 io (K LibPQ.Result '[])
 define (UnsafeDefinition q) = PQ $ \ (K conn) -> do
   resultMaybe <- liftBase $ LibPQ.exec conn q
   case resultMaybe of
     Nothing -> error
       "define: LibPQ.exec returned no results"
-    Just result -> return $ K (Result result)
+    Just result -> return $ K (K result)
 
 -- | Chain together `define` actions.
 thenDefine
   :: MonadBase IO io
   => Definition schema1 schema2
   -> PQ schema0 schema1 io x
-  -> PQ schema0 schema2 io (Result '[])
+  -> PQ schema0 schema2 io (K LibPQ.Result '[])
 thenDefine = pqThen . define
 
 {- | `MonadPQ` is an `mtl` style constraint, similar to
@@ -264,41 +263,41 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
     :: ToParams x params
     => Manipulation schema params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
-    -> x -> pq (Result ys)
+    -> x -> pq (K LibPQ.Result ys)
   default manipulateParams
     :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
     => ToParams x params
     => Manipulation schema params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
-    -> x -> pq (Result ys)
+    -> x -> pq (K LibPQ.Result ys)
   manipulateParams manipulation params = lift $
     manipulateParams manipulation params
 
-  manipulate :: Manipulation schema '[] ys -> pq (Result ys)
+  manipulate :: Manipulation schema '[] ys -> pq (K LibPQ.Result ys)
   manipulate statement = manipulateParams statement ()
 
   runQueryParams
     :: ToParams x params
     => Query schema params ys
     -- ^ `select` and friends
-    -> x -> pq (Result ys)
+    -> x -> pq (K LibPQ.Result ys)
   runQueryParams = manipulateParams . queryStatement
 
   runQuery
     :: Query schema '[] ys
     -- ^ `select` and friends
-    -> pq (Result ys)
+    -> pq (K LibPQ.Result ys)
   runQuery q = runQueryParams q ()
 
   traversePrepared
     :: (ToParams x params, Traversable list)
     => Manipulation schema params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
-    -> list x -> pq (list (Result ys))
+    -> list x -> pq (list (K LibPQ.Result ys))
   default traversePrepared
     :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
     => (ToParams x params, Traversable list)
-    => Manipulation schema params ys -> list x -> pq (list (Result ys))
+    => Manipulation schema params ys -> list x -> pq (list (K LibPQ.Result ys))
   traversePrepared manipulation params = lift $
     traversePrepared manipulation params
 
@@ -307,7 +306,7 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
     => list x
     -> Manipulation schema params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
-    -> pq (list (Result ys))
+    -> pq (list (K LibPQ.Result ys))
   forPrepared = flip traversePrepared
 
   traversePrepared_
@@ -350,7 +349,7 @@ instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
         case resultMaybe of
           Nothing -> error
             "manipulateParams: LibPQ.execParams returned no results"
-          Just result -> return $ K (Result result)
+          Just result -> return $ K (K result)
 
   traversePrepared
     (UnsafeManipulation q :: Manipulation schema xs ys) (list :: list x) =
@@ -372,7 +371,7 @@ instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
           case resultMaybe of
             Nothing -> error
               "traversePrepared: LibPQ.execParams returned no results"
-            Just result -> return $ Result result
+            Just result -> return $ K result
         deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
         case deallocResultMaybe of
           Nothing -> error
@@ -462,12 +461,6 @@ instance MonadBaseControl b m => MonadBaseControl b (PQ schema schema m) where
     pqliftWith $ \ run -> liftBaseWith $ \ runInBase -> f $ runInBase . run
   restoreM = PQ . const . restoreM
 
--- | Encapsulates the result of a squeal command run by @LibPQ@.
--- `Result`s are parameterized by a `ColumnsType` describing the column names
--- and their types.
-newtype Result (columns :: RelationType)
-  = Result { unResult :: LibPQ.Result }
-
 -- | Just newtypes around a `CInt`
 newtype RowNumber = RowNumber { unRowNumber :: LibPQ.Row }
 
@@ -494,12 +487,12 @@ getValue
   :: (FromColumnValue colty y, MonadBase IO io)
   => RowNumber -- ^ row
   -> ColumnNumber n columns colty -- ^ col
-  -> Result columns -- ^ result
+  -> K LibPQ.Result columns -- ^ result
   -> io y
 getValue
   (RowNumber r)
   (UnsafeColumnNumber c :: ColumnNumber n columns colty)
-  (Result result)
+  (K result)
    = fmap (fromColumnValue @colty . K) $ liftBase $ do
       numRows <- LibPQ.ntuples result
       when (numRows < r) $ error $
@@ -512,10 +505,10 @@ getRow
   :: (FromRow columns y, MonadBase IO io)
   => RowNumber
   -- ^ row
-  -> Result columns
+  -> K LibPQ.Result columns
   -- ^ result
   -> io y
-getRow (RowNumber r) (Result result :: Result columns) = liftBase $ do
+getRow (RowNumber r) (K result :: K LibPQ.Result columns) = liftBase $ do
   numRows <- LibPQ.ntuples result
   when (numRows < r) $ error $
     "getRow: expected at least " <> show r <> "rows but only saw "
@@ -527,8 +520,8 @@ getRow (RowNumber r) (Result result :: Result columns) = liftBase $ do
     Just row -> return $ fromRow @columns row
 
 -- | Returns the number of rows (tuples) in the query result.
-ntuples :: MonadBase IO io => Result columns -> io RowNumber
-ntuples (Result result) = liftBase $ RowNumber <$> LibPQ.ntuples result
+ntuples :: MonadBase IO io => K LibPQ.Result columns -> io RowNumber
+ntuples (K result) = liftBase $ RowNumber <$> LibPQ.ntuples result
 
 -- | Intended to be used for unfolding in streaming libraries, `nextRow`
 -- takes a total number of rows (which can be found with `ntuples`)
@@ -537,10 +530,10 @@ ntuples (Result result) = liftBase $ RowNumber <$> LibPQ.ntuples result
 nextRow
   :: (FromRow columns y, MonadBase IO io)
   => RowNumber -- ^ total number of rows
-  -> Result columns -- ^ result
+  -> K LibPQ.Result columns -- ^ result
   -> RowNumber -- ^ row number
   -> io (Maybe (RowNumber,y))
-nextRow (RowNumber total) (Result result :: Result columns) (RowNumber r)
+nextRow (RowNumber total) (K result :: K LibPQ.Result columns) (RowNumber r)
   = liftBase $ if r >= total then return Nothing else do
     let len = fromIntegral (lengthSList (Proxy @columns))
     row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
@@ -551,9 +544,9 @@ nextRow (RowNumber total) (Result result :: Result columns) (RowNumber r)
 -- | Get all rows from a `Result`.
 getRows
   :: (FromRow columns y, MonadBase IO io)
-  => Result columns -- ^ result
+  => K LibPQ.Result columns -- ^ result
   -> io [y]
-getRows (Result result :: Result columns) = liftBase $ do
+getRows (K result :: K LibPQ.Result columns) = liftBase $ do
   let len = fromIntegral (lengthSList (Proxy @columns))
   numRows <- LibPQ.ntuples result
   for [0 .. numRows - 1] $ \ r -> do
@@ -565,9 +558,9 @@ getRows (Result result :: Result columns) = liftBase $ do
 -- | Get the first row if possible from a `Result`.
 firstRow
   :: (FromRow columns y, MonadBase IO io)
-  => Result columns -- ^ result
+  => K LibPQ.Result columns -- ^ result
   -> io (Maybe y)
-firstRow (Result result :: Result columns) = liftBase $ do
+firstRow (K result :: K LibPQ.Result columns) = liftBase $ do
   numRows <- LibPQ.ntuples result
   if numRows <= 0 then return Nothing else do
     let len = fromIntegral (lengthSList (Proxy @columns))
@@ -580,5 +573,5 @@ firstRow (Result result :: Result columns) = liftBase $ do
 liftResult
   :: MonadBase IO io
   => (LibPQ.Result -> IO x)
-  -> Result results -> io x
-liftResult f (Result result) = liftBase $ f result
+  -> K LibPQ.Result results -> io x
+liftResult f (K result) = liftBase $ f result
