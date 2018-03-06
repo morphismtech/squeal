@@ -62,6 +62,7 @@ module Squeal.PostgreSQL.PQ
   , liftResult
   -- * Re-export
   , LibPQ.Connection
+  , LibPQ.Result
   ) where
 
 import Control.Exception.Lifted
