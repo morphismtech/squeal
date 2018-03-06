@@ -1,5 +1,6 @@
 {-# LANGUAGE
     ScopedTypeVariables
+  , OverloadedStrings
 #-}
 
 module Squeal.PostgreSQL.Migration
@@ -9,9 +10,13 @@ module Squeal.PostgreSQL.Migration
   ) where
 
 import Control.Category
--- import Control.Exception.Lifted
+import Control.Exception.Lifted
+import Control.Monad
 import Data.Function ((&))
 import Generics.SOP
+import Prelude hiding (id, (.))
+
+import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Transaction
@@ -34,10 +39,13 @@ up
   -> IO (K MigrationResult schema1)
 up (Migration mUp _) = runPQ $
   begin (TransactionMode RepeatableRead ReadWrite)
-  & pqThen mUp
-  & pqBind ( \ result -> do
+  & pqThen (restorably mUp)
+  & pqBind ( \ result ->
     commit >> return result
   )
+  where
+    restorably u = PQ $ \ conn -> mask $ \ restore ->
+      restore (runPQ u conn) `onException` LibPQ.exec (unK conn) "ROLLBACK"
 
 data MigrationResult
   = MigrationSuccess

@@ -47,8 +47,6 @@ transactionally_
   => tx x -> tx x
 transactionally_ = transactionally (TransactionMode ReadCommitted ReadWrite)
 
-type family NilRelation :: RelationType where NilRelation = '[]
-
 begin :: MonadPQ schema tx => TransactionMode -> tx (K Result NilRelation)
 begin mode = manipulate . UnsafeManipulation $
   "BEGIN" <+> renderTransactionMode mode <> ";"

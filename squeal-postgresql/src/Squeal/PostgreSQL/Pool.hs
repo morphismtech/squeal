@@ -48,22 +48,22 @@ instance MonadBase b m => MonadBase b (PoolPQ schema m) where
 instance MonadBaseControl IO io => MonadPQ schema (PoolPQ schema io) where
   manipulateParams manipulation params = PoolPQ $ \ pool -> do
     withResource pool $ \ conn -> do
-      (result, _ :: K Connection schema) <- flip runPQ conn $
+      (K result :: K Result schema) <- flip runPQ conn $
         manipulateParams manipulation params
       return result
   traversePrepared manipulation params = PoolPQ $ \ pool ->
     withResource pool $ \ conn -> do
-      (result, _ :: K Connection schema) <- flip runPQ conn $
+      (result :: K Result schema) <- flip runPQ conn $
         traversePrepared manipulation params
       return result
   traversePrepared_ manipulation params = PoolPQ $ \ pool -> do
     withResource pool $ \ conn -> do
-      (_, _ :: K Connection schema) <- flip runPQ conn $
+      (_ :: K Result schema) <- flip runPQ conn $
         traversePrepared_ manipulation params
       return ()
   liftPQ m = PoolPQ $ \ pool -> 
     withResource pool $ \ conn -> do
-      (result, _ :: K Connection schema) <- flip runPQ conn $
+      (result :: K Result schema) <- flip runPQ conn $
         liftPQ m
       return result
 
