@@ -1,15 +1,20 @@
+{-# LANGUAGE
+    ScopedTypeVariables
+#-}
+
 module Squeal.PostgreSQL.Migration
   ( Migration
---   , up
+  , up
   , MigrationResult
   ) where
 
 import Control.Category
 -- import Control.Exception.Lifted
 import Data.Function ((&))
+import Generics.SOP
 
 import Squeal.PostgreSQL.PQ
--- import Squeal.PostgreSQL.Transaction
+import Squeal.PostgreSQL.Transaction
 
 data Migration schema0 schema1 = Migration
   { migrateUp :: PQ schema0 schema1 IO MigrationResult
@@ -23,15 +28,16 @@ instance Category Migration where
     , migrateDown = migrateDown migration1 & pqThen (migrateDown migration0)
     }
 
--- up
---   :: Migration schema0 schema1
---   -> Connection schema0
---   -> IO (MigrationResult, Connection schema1)
--- up (Migration mUp _) conn0 = do
---   (begin _conn0) <- runPQ (begin (TransactionMode ReadCommitted ReadWrite)) conn0
---   & pqThen (Prelude.id mUp `onException` rollback)
---   & pqBind (\ result ->
---     commit & pqThen (return result))
+up
+  :: Migration schema0 schema1
+  -> K Connection schema0
+  -> IO (K MigrationResult schema1)
+up (Migration mUp _) = runPQ $
+  begin (TransactionMode RepeatableRead ReadWrite)
+  & pqThen mUp
+  & pqBind ( \ result -> do
+    commit >> return result
+  )
 
 data MigrationResult
   = MigrationSuccess

@@ -6,6 +6,8 @@
   , LambdaCase
   , OverloadedStrings
   , MultiParamTypeClasses
+  , TypeFamilies
+  , TypeInType
 #-}
 
 module Squeal.PostgreSQL.Transaction
@@ -23,10 +25,12 @@ import Control.Exception.Lifted
 import Control.Monad.Trans.Control
 import Data.ByteString
 import Data.Monoid
+import Generics.SOP
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Prettyprint
 import Squeal.PostgreSQL.PQ
+import Squeal.PostgreSQL.Schema
 
 transactionally
   :: (MonadBaseControl IO tx, MonadPQ schema tx)
@@ -43,14 +47,16 @@ transactionally_
   => tx x -> tx x
 transactionally_ = transactionally (TransactionMode ReadCommitted ReadWrite)
 
-begin :: MonadPQ schema tx => TransactionMode -> tx (Result '[])
+type family NilRelation :: RelationType where NilRelation = '[]
+
+begin :: MonadPQ schema tx => TransactionMode -> tx (K Result NilRelation)
 begin mode = manipulate . UnsafeManipulation $
   "BEGIN" <+> renderTransactionMode mode <> ";"
 
-commit :: MonadPQ schema tx => tx (Result '[])
+commit :: MonadPQ schema tx => tx (K Result NilRelation)
 commit = manipulate $ UnsafeManipulation "COMMIT;"
 
-rollback :: MonadPQ schema tx => tx (Result '[])
+rollback :: MonadPQ schema tx => tx (K Result NilRelation)
 rollback = manipulate $ UnsafeManipulation "ROLLBACK;"
 
 data TransactionMode = TransactionMode
