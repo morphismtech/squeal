@@ -5,11 +5,11 @@ module Squeal.PostgreSQL.Migration
   ) where
 
 import Control.Category
-import Control.Exception.Lifted
+-- import Control.Exception.Lifted
 import Data.Function ((&))
 
 import Squeal.PostgreSQL.PQ
-import Squeal.PostgreSQL.Transaction
+-- import Squeal.PostgreSQL.Transaction
 
 data Migration schema0 schema1 = Migration
   { migrateUp :: PQ schema0 schema1 IO MigrationResult
