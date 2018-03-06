@@ -15,6 +15,8 @@ module Squeal.PostgreSQL.Transaction
   , commit
   , rollback
   , TransactionMode (..)
+  , IsolationLevel (..)
+  , ReadWriteMode (..)
   ) where
 
 import Control.Exception.Lifted
