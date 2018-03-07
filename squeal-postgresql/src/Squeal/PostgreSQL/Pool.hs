@@ -17,7 +17,7 @@ import Control.Monad.Base
 import Control.Monad.Trans
 import Control.Monad.Trans.Control
 import Data.Pool
-import Generics.SOP (K)
+import Generics.SOP (K(..))
 
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Schema
@@ -48,22 +48,22 @@ instance MonadBase b m => MonadBase b (PoolPQ schema m) where
 instance MonadBaseControl IO io => MonadPQ schema (PoolPQ schema io) where
   manipulateParams manipulation params = PoolPQ $ \ pool -> do
     withResource pool $ \ conn -> do
-      (K result :: K Result schema) <- flip runPQ conn $
+      (K result :: K (K Result ys) schema) <- flip runPQ conn $
         manipulateParams manipulation params
       return result
   traversePrepared manipulation params = PoolPQ $ \ pool ->
     withResource pool $ \ conn -> do
-      (result :: K Result schema) <- flip runPQ conn $
+      (K result :: K (list (K Result ys)) schema) <- flip runPQ conn $
         traversePrepared manipulation params
       return result
   traversePrepared_ manipulation params = PoolPQ $ \ pool -> do
     withResource pool $ \ conn -> do
-      (_ :: K Result schema) <- flip runPQ conn $
+      (_ :: K () schema) <- flip runPQ conn $
         traversePrepared_ manipulation params
       return ()
   liftPQ m = PoolPQ $ \ pool -> 
     withResource pool $ \ conn -> do
-      (result :: K Result schema) <- flip runPQ conn $
+      (K result :: K result schema) <- flip runPQ conn $
         liftPQ m
       return result
 

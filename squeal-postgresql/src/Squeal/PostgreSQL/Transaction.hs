@@ -16,6 +16,7 @@ module Squeal.PostgreSQL.Transaction
   , begin
   , commit
   , rollback
+  , onExceptionRollback
   , TransactionMode (..)
   , IsolationLevel (..)
   , ReadWriteMode (..)
@@ -26,6 +27,8 @@ import Control.Monad.Trans.Control
 import Data.ByteString
 import Data.Monoid
 import Generics.SOP
+
+import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Prettyprint
@@ -56,6 +59,10 @@ commit = manipulate $ UnsafeManipulation "COMMIT;"
 
 rollback :: MonadPQ schema tx => tx (K Result NilRelation)
 rollback = manipulate $ UnsafeManipulation "ROLLBACK;"
+
+onExceptionRollback :: PQ schema0 schema1 IO x -> PQ schema0 schema1 IO x
+onExceptionRollback u = PQ $ \ conn -> mask $ \ restore ->
+  restore (runPQ u conn) `onException` LibPQ.exec (unK conn) "ROLLBACK"
 
 data TransactionMode = TransactionMode
   { isolationLevel :: IsolationLevel
