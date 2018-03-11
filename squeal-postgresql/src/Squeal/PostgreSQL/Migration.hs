@@ -26,11 +26,7 @@ import Control.Monad.Trans.Control
 import Data.Function ((&))
 import Prelude hiding (id, (.))
 
-import Squeal.PostgreSQL.Definition
-import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Manipulation
-import Squeal.PostgreSQL.PQ
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Transaction
 
 data Step io schema0 schema1 = Step
@@ -86,6 +82,13 @@ insertMigration = insertRow_ #schema_migrations
 
 deleteMigration :: Manipulation '[MigrationTable] '[ 'NotNull 'PGtext] '[]
 deleteMigration = deleteFrom_ #schema_migrations (#name .== param @1)
+
+selectMigration :: Query '[MigrationTable] '[ 'NotNull 'PGtext]
+  '["executed_at" ::: 'NotNull 'PGtimestamptz]
+selectMigration = select
+  (#executed_at `As` #executed_at :* Nil)
+  ( from (table (#schema_migrations `As` #m))
+    & where_ (#name .== param @1))
 
 start :: MonadBase IO io => PQ schema schema io ()
 start = define createMigrations_
