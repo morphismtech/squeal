@@ -23,6 +23,7 @@ module Squeal.PostgreSQL.Transaction
   ) where
 
 import Control.Exception.Lifted
+import Control.Monad.Base
 import Control.Monad.Trans.Control
 import Data.ByteString
 import Data.Monoid
@@ -60,9 +61,13 @@ commit = manipulate $ UnsafeManipulation "COMMIT;"
 rollback :: MonadPQ schema tx => tx (K Result NilRelation)
 rollback = manipulate $ UnsafeManipulation "ROLLBACK;"
 
-onExceptionRollback :: PQ schema0 schema1 IO x -> PQ schema0 schema1 IO x
+onExceptionRollback
+  :: MonadBaseControl IO io 
+  => PQ schema0 schema1 io x
+  -> PQ schema0 schema1 io x
 onExceptionRollback u = PQ $ \ conn -> mask $ \ restore ->
-  restore (runPQ u conn) `onException` LibPQ.exec (unK conn) "ROLLBACK"
+  restore (runPQ u conn) `onException`
+    liftBase (LibPQ.exec (unK conn) "ROLLBACK")
 
 data TransactionMode = TransactionMode
   { isolationLevel :: IsolationLevel
