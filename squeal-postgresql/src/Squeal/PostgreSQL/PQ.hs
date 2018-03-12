@@ -39,6 +39,7 @@ module Squeal.PostgreSQL.PQ
     -- * PQ
   , PQ (PQ, runPQ)
   , execPQ
+  , pqEmbed
   , pqAp
   , pqBind
   , pqJoin
@@ -169,6 +170,14 @@ execPQ
   -> K LibPQ.Connection schema0
   -> m (K LibPQ.Connection schema1)
 execPQ (PQ pq) conn = fmap (mapKK (\ _ -> unK conn)) $ pq conn
+
+pqEmbed
+  :: Monad m
+  => PQ schema0 schema1 m x
+  -> PQ (table ': schema0) (table : schema1) m x
+pqEmbed (PQ pq) = PQ $ \ (K conn) -> do
+  K x <- pq (K conn)
+  return $ K x
 
 -- | indexed analog of `<*>`
 pqAp
