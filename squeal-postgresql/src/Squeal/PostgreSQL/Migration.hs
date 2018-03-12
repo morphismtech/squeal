@@ -17,12 +17,17 @@ module Squeal.PostgreSQL.Migration
   , migrateUp
   , migrateDown
   , MigrationTable
+  , createMigration
+  , insertStep
+  , deleteStep
+  , selectStep
   ) where
 
 import Control.Category
 import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Trans.Control
+import Generics.SOP (K(..))
 import Data.Function ((&))
 import Prelude hiding (id, (.))
 
@@ -52,71 +57,93 @@ instance Category (Migration io) where
 
 migrateUp
   :: MonadBaseControl IO io
-  => Migration io schema0 schema1
-  -> PQ schema0 schema1 io ()
+  => Migration io schema0 schema1 -> PQ
+    ("migration" ::: MigrationTable ': schema0)
+    ("migration" ::: MigrationTable ': schema1)
+    io ()
 migrateUp migration = start & pqThen (upSteps migration & pqBind end)
 
 migrateDown
   :: MonadBaseControl IO io
-  => Migration io schema0 schema1
-  -> PQ schema1 schema0 io ()
+  => Migration io schema0 schema1 -> PQ
+  ("migration" ::: MigrationTable ': schema1)
+  ("migration" ::: MigrationTable ': schema0)
+  io ()
 migrateDown migration = start & pqThen (downSteps migration & pqBind end)
 
-type MigrationTable = "schema_migrations" :::
+type MigrationTable =
   '[ "unique_name" ::: 'Unique '["name"]] :=>
   '[ "name"        ::: 'NoDef :=> 'NotNull 'PGtext
    , "executed_at" :::   'Def :=> 'NotNull 'PGtimestamptz
    ]
 
-createMigrations :: Definition '[] '[MigrationTable]
-createMigrations = UnsafeDefinition $ renderDefinition $
-  createTableIfNotExists #schema_migrations
+createMigration
+  :: Has "migration" schema MigrationTable
+  => Definition schema schema
+createMigration =
+  createTableIfNotExists #migration
     ( (text & notNull) `As` #name :*
-      (timestampWithTimeZone & notNull) `As` #executed_at :* Nil )
+      (timestampWithTimeZone & notNull & default_ currentTimestamp)
+        `As` #executed_at :* Nil )
     ( unique (Column #name :* Nil) `As` #unique_name :* Nil )
 
-insertMigration :: Manipulation '[MigrationTable] '[ 'NotNull 'PGtext] '[]
-insertMigration = insertRow_ #schema_migrations
+insertStep
+  :: Has "migration" schema MigrationTable
+  => Manipulation schema '[ 'NotNull 'PGtext] '[]
+insertStep = insertRow_ #migration
   ( Set (param @1) `As` #name :*
     Default `As` #executed_at :* Nil )
 
-deleteMigration :: Manipulation '[MigrationTable] '[ 'NotNull 'PGtext] '[]
-deleteMigration = deleteFrom_ #schema_migrations (#name .== param @1)
+deleteStep
+  :: Has "migration" schema MigrationTable
+  => Manipulation schema '[ 'NotNull 'PGtext ] '[]
+deleteStep = deleteFrom_ #migration (#name .== param @1)
 
-selectMigration :: Query '[MigrationTable] '[ 'NotNull 'PGtext]
-  '["executed_at" ::: 'NotNull 'PGtimestamptz]
-selectMigration = select
+selectStep
+  :: Has "migration" schema MigrationTable
+  => Query schema '[ 'NotNull 'PGtext ]
+    '[ "executed_at" ::: 'NotNull 'PGtimestamptz ]
+selectStep = select
   (#executed_at `As` #executed_at :* Nil)
-  ( from (table (#schema_migrations `As` #m))
+  ( from (table (#migration `As` #m))
     & where_ (#name .== param @1))
 
-start :: MonadBase IO io => PQ schema schema io ()
-start = define createMigrations_
+start
+  :: MonadBase IO io => PQ
+    ("migration" ::: MigrationTable ': schema)
+    ("migration" ::: MigrationTable ': schema)
+    io ()
+start = define createMigration
   & pqThen (begin (TransactionMode RepeatableRead ReadWrite) & void)
-  where
-    createMigrations_ :: Definition schema schema
-    createMigrations_ = UnsafeDefinition $
-      renderDefinition createMigrations
 
 upSteps
   :: MonadBaseControl IO io
   => Migration io schema0 schema1
-  -> PQ schema0 schema1 io ()
+  -> PQ
+    ("migration" ::: MigrationTable ': schema0)
+    ("migration" ::: MigrationTable ': schema1)
+    io ()
 upSteps = \case
   Done -> return ()
-  step :>> steps ->
-    onExceptionRollback (up step)
-    & pqThen (upSteps steps)
+  step :>> steps -> onExceptionRollback $
+    pqEmbed (up step) & pqThen (upSteps steps)
 
 downSteps
   :: MonadBaseControl IO io
-  => Migration io schema0 schema1
-  -> PQ schema1 schema0 io ()
+  => Migration io schema0 schema1 -> PQ
+    ("migration" ::: MigrationTable ': schema1)
+    ("migration" ::: MigrationTable ': schema0)
+    io ()
 downSteps = \case
   Done -> return ()
-  step :>> steps ->
-    downSteps steps
-    & pqThen (onExceptionRollback (down step))
+  step :>> steps -> onExceptionRollback $
+    downSteps steps & pqThen (pqEmbed (down step))
 
-end :: MonadBase IO io => result -> PQ schema schema io result
+end :: MonadBase IO io => result -> PQ
+  ("migration" ::: MigrationTable ': schema)
+  ("migration" ::: MigrationTable ': schema)
+  io result
 end result = commit >> return result
+
+avoid :: Monad m => PQ schema0 schema1 m ()
+avoid = PQ $ \ _ -> return (K ())
