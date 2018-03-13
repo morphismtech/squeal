@@ -6,6 +6,8 @@
   , LambdaCase
   , OverloadedStrings
   , MultiParamTypeClasses
+  , TypeFamilies
+  , TypeInType
 #-}
 
 module Squeal.PostgreSQL.Transaction
@@ -14,19 +16,25 @@ module Squeal.PostgreSQL.Transaction
   , begin
   , commit
   , rollback
+  , onExceptionRollback
   , TransactionMode (..)
   , IsolationLevel (..)
   , ReadWriteMode (..)
   ) where
 
 import Control.Exception.Lifted
+import Control.Monad.Base
 import Control.Monad.Trans.Control
 import Data.ByteString
 import Data.Monoid
+import Generics.SOP
+
+import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Prettyprint
 import Squeal.PostgreSQL.PQ
+import Squeal.PostgreSQL.Schema
 
 transactionally
   :: (MonadBaseControl IO tx, MonadPQ schema tx)
@@ -43,15 +51,23 @@ transactionally_
   => tx x -> tx x
 transactionally_ = transactionally (TransactionMode ReadCommitted ReadWrite)
 
-begin :: MonadPQ schema tx => TransactionMode -> tx (Result '[])
+begin :: MonadPQ schema tx => TransactionMode -> tx (K Result NilRelation)
 begin mode = manipulate . UnsafeManipulation $
   "BEGIN" <+> renderTransactionMode mode <> ";"
 
-commit :: MonadPQ schema tx => tx (Result '[])
+commit :: MonadPQ schema tx => tx (K Result NilRelation)
 commit = manipulate $ UnsafeManipulation "COMMIT;"
 
-rollback :: MonadPQ schema tx => tx (Result '[])
+rollback :: MonadPQ schema tx => tx (K Result NilRelation)
 rollback = manipulate $ UnsafeManipulation "ROLLBACK;"
+
+onExceptionRollback
+  :: MonadBaseControl IO io 
+  => PQ schema0 schema1 io x
+  -> PQ schema0 schema1 io x
+onExceptionRollback u = PQ $ \ conn -> mask $ \ restore ->
+  restore (runPQ u conn) `onException`
+    liftBase (LibPQ.exec (unK conn) "ROLLBACK")
 
 data TransactionMode = TransactionMode
   { isolationLevel :: IsolationLevel

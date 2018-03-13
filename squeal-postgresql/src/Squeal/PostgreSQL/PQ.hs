@@ -33,13 +33,13 @@ a `MonadPQ` constraint for running a `Manipulation` or `Query`.
 
 module Squeal.PostgreSQL.PQ
   ( -- * Connection
-    Connection (Connection, unConnection)
-  , connectdb
+    connectdb
   , finish
   , withConnection
     -- * PQ
   , PQ (PQ, runPQ)
   , execPQ
+  , pqEmbed
   , pqAp
   , pqBind
   , pqJoin
@@ -51,7 +51,6 @@ module Squeal.PostgreSQL.PQ
   , PQRun
   , pqliftWith
     -- * Result
-  , Result (Result, unResult)
   , RowNumber (RowNumber, unRowNumber)
   , ColumnNumber (UnsafeColumnNumber, getColumnNumber)
   , HasColumnNumber (columnNumber)
@@ -62,6 +61,9 @@ module Squeal.PostgreSQL.PQ
   , nextRow
   , firstRow
   , liftResult
+  -- * Re-export
+  , LibPQ.Connection
+  , LibPQ.Result
   ) where
 
 import Control.Exception.Lifted
@@ -100,11 +102,6 @@ import qualified Control.Monad.Trans.Writer.Strict as Strict
 import qualified Control.Monad.Trans.RWS.Lazy as Lazy
 import qualified Control.Monad.Trans.RWS.Strict as Strict
 
--- | A `Connection` consists of a `Database.PostgreSQL.LibPQ`
--- `Database.PastgreSQL.LibPQ.Connection` and a phantom `TablesType`
-newtype Connection (schema :: TablesType) =
-  Connection { unConnection :: LibPQ.Connection }
-
 {- | Makes a new connection to the database server.
 
 This function opens a new database connection using the parameters taken
@@ -134,19 +131,19 @@ connectdb
   :: forall schema io
    . MonadBase IO io
   => ByteString -- ^ conninfo
-  -> io (Connection schema)
-connectdb = fmap Connection . liftBase . LibPQ.connectdb
+  -> io (K LibPQ.Connection schema)
+connectdb = fmap K . liftBase . LibPQ.connectdb
 
 -- | Closes the connection to the server.
-finish :: MonadBase IO io => Connection schema -> io ()
-finish = liftBase . LibPQ.finish . unConnection
+finish :: MonadBase IO io => K LibPQ.Connection schema -> io ()
+finish = liftBase . LibPQ.finish . unK
 
 -- | Do `connectdb` and `finish` before and after a computation.
 withConnection
   :: forall schema0 schema1 io x
    . MonadBaseControl IO io
   => ByteString
-  -> (Connection schema0 -> io (x, Connection schema1))
+  -> (K LibPQ.Connection schema0 -> io (x, K LibPQ.Connection schema1))
   -> io x
 withConnection connString action = do
   (x, _conn) <- bracket (connectdb connString) finish action
@@ -159,16 +156,28 @@ newtype PQ
   (schema1 :: TablesType)
   (m :: Type -> Type)
   (x :: Type) =
-    PQ { runPQ :: Connection schema0 -> m (x, Connection schema1) }
-    deriving Functor
+    PQ { runPQ :: K LibPQ.Connection schema0 -> m (K x schema1) }
+
+instance Monad m => Functor (PQ schema0 schema1 m) where
+  fmap f (PQ pq) = PQ $ \ conn -> do
+    K x <- pq conn
+    return $ K (f x)
 
 -- | Run a `PQ` and discard the result but keep the `Connection`. 
 execPQ
   :: Functor m
   => PQ schema0 schema1 m x
-  -> Connection schema0
-  -> m (Connection schema1)
-execPQ (PQ pq) = fmap snd . pq
+  -> K LibPQ.Connection schema0
+  -> m (K LibPQ.Connection schema1)
+execPQ (PQ pq) conn = fmap (mapKK (\ _ -> unK conn)) $ pq conn
+
+pqEmbed
+  :: Monad m
+  => PQ schema0 schema1 m x
+  -> PQ (table ': schema0) (table : schema1) m x
+pqEmbed (PQ pq) = PQ $ \ (K conn) -> do
+  K x <- pq (K conn)
+  return $ K x
 
 -- | indexed analog of `<*>`
 pqAp
@@ -177,9 +186,9 @@ pqAp
   -> PQ schema1 schema2 m x
   -> PQ schema0 schema2 m y
 pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
-  (f', conn') <- f conn
-  (x', conn'') <- x conn'
-  return (f' x', conn'')
+  K f' <- f conn
+  K x' <- x (K (unK conn))
+  return $ K (f' x')
 
 -- | indexed analog of `join`
 pqJoin
@@ -194,8 +203,8 @@ pqBind
   -> PQ schema0 schema1 m x
   -> PQ schema0 schema2 m y
 pqBind f (PQ x) = PQ $ \ conn -> do
-  (x', conn') <- x conn
-  runPQ (f x') conn'
+  K x' <- x conn
+  runPQ (f x') (K (unK conn))
 
 -- | indexed analog of flipped `>>`
 pqThen
@@ -211,20 +220,20 @@ pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 define
   :: MonadBase IO io
   => Definition schema0 schema1
-  -> PQ schema0 schema1 io (Result '[])
-define (UnsafeDefinition q) = PQ $ \ (Connection conn) -> do
+  -> PQ schema0 schema1 io (K LibPQ.Result '[])
+define (UnsafeDefinition q) = PQ $ \ (K conn) -> do
   resultMaybe <- liftBase $ LibPQ.exec conn q
   case resultMaybe of
     Nothing -> error
       "define: LibPQ.exec returned no results"
-    Just result -> return (Result result, Connection conn)
+    Just result -> return $ K (K result)
 
 -- | Chain together `define` actions.
 thenDefine
   :: MonadBase IO io
   => Definition schema1 schema2
   -> PQ schema0 schema1 io x
-  -> PQ schema0 schema2 io (Result '[])
+  -> PQ schema0 schema2 io (K LibPQ.Result '[])
 thenDefine = pqThen . define
 
 {- | `MonadPQ` is an `mtl` style constraint, similar to
@@ -264,41 +273,41 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
     :: ToParams x params
     => Manipulation schema params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
-    -> x -> pq (Result ys)
+    -> x -> pq (K LibPQ.Result ys)
   default manipulateParams
     :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
     => ToParams x params
     => Manipulation schema params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
-    -> x -> pq (Result ys)
+    -> x -> pq (K LibPQ.Result ys)
   manipulateParams manipulation params = lift $
     manipulateParams manipulation params
 
-  manipulate :: Manipulation schema '[] ys -> pq (Result ys)
+  manipulate :: Manipulation schema '[] ys -> pq (K LibPQ.Result ys)
   manipulate statement = manipulateParams statement ()
 
   runQueryParams
     :: ToParams x params
     => Query schema params ys
     -- ^ `select` and friends
-    -> x -> pq (Result ys)
+    -> x -> pq (K LibPQ.Result ys)
   runQueryParams = manipulateParams . queryStatement
 
   runQuery
     :: Query schema '[] ys
     -- ^ `select` and friends
-    -> pq (Result ys)
+    -> pq (K LibPQ.Result ys)
   runQuery q = runQueryParams q ()
 
   traversePrepared
     :: (ToParams x params, Traversable list)
     => Manipulation schema params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
-    -> list x -> pq (list (Result ys))
+    -> list x -> pq (list (K LibPQ.Result ys))
   default traversePrepared
     :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
     => (ToParams x params, Traversable list)
-    => Manipulation schema params ys -> list x -> pq (list (Result ys))
+    => Manipulation schema params ys -> list x -> pq (list (K LibPQ.Result ys))
   traversePrepared manipulation params = lift $
     traversePrepared manipulation params
 
@@ -307,7 +316,7 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
     => list x
     -> Manipulation schema params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
-    -> pq (list (Result ys))
+    -> pq (list (K LibPQ.Result ys))
   forPrepared = flip traversePrepared
 
   traversePrepared_
@@ -342,7 +351,7 @@ instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
 
   manipulateParams
     (UnsafeManipulation q :: Manipulation schema ps ys) (params :: x) =
-      PQ $ \ (Connection conn) -> do
+      PQ $ \ (K conn) -> do
         let
           toParam' bytes = (LibPQ.invalidOid,bytes,LibPQ.Binary)
           params' = fmap (fmap toParam') (hcollapse (toParams @x @ps params))
@@ -350,11 +359,11 @@ instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
         case resultMaybe of
           Nothing -> error
             "manipulateParams: LibPQ.execParams returned no results"
-          Just result -> return (Result result, Connection conn)
+          Just result -> return $ K (K result)
 
   traversePrepared
     (UnsafeManipulation q :: Manipulation schema xs ys) (list :: list x) =
-      PQ $ \ (Connection conn) -> liftBase $ do
+      PQ $ \ (K conn) -> liftBase $ do
         let temp = "temporary_statement"
         prepResultMaybe <- LibPQ.prepare conn temp q Nothing
         case prepResultMaybe of
@@ -372,7 +381,7 @@ instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
           case resultMaybe of
             Nothing -> error
               "traversePrepared: LibPQ.execParams returned no results"
-            Just result -> return $ Result result
+            Just result -> return $ K result
         deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
         case deallocResultMaybe of
           Nothing -> error
@@ -381,11 +390,11 @@ instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
             status <- LibPQ.resultStatus deallocResult
             unless (status == LibPQ.CommandOk) . error $
               "traversePrepared: DEALLOCATE status " <> show status
-        return (results, Connection conn)
+        return (K results)
 
   traversePrepared_
     (UnsafeManipulation q :: Manipulation schema xs '[]) (list :: list x) =
-      PQ $ \ (Connection conn) -> liftBase $ do
+      PQ $ \ (K conn) -> liftBase $ do
         let temp = "temporary_statement"
         prepResultMaybe <- LibPQ.prepare conn temp q Nothing
         case prepResultMaybe of
@@ -412,11 +421,11 @@ instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
             status <- LibPQ.resultStatus deallocResult
             unless (status == LibPQ.CommandOk) . error $
               "traversePrepared: DEALLOCATE status " <> show status
-        return ((), Connection conn)
+        return (K ())
 
-  liftPQ pq = PQ $ \ (Connection conn) -> do
+  liftPQ pq = PQ $ \ (K conn) -> do
     y <- liftBase $ pq conn
-    return (y, Connection conn)
+    return (K y)
 
 instance MonadPQ schema m => MonadPQ schema (IdentityT m)
 instance MonadPQ schema m => MonadPQ schema (ReaderT r m)
@@ -432,7 +441,7 @@ instance MonadPQ schema m => MonadPQ schema (ContT r m)
 instance MonadPQ schema m => MonadPQ schema (ListT m)
 
 instance Monad m => Applicative (PQ schema schema m) where
-  pure x = PQ $ \ conn -> pure (x, conn)
+  pure x = PQ $ \ _conn -> pure (K x)
   (<*>) = pqAp
 
 instance Monad m => Monad (PQ schema schema m) where
@@ -440,33 +449,27 @@ instance Monad m => Monad (PQ schema schema m) where
   (>>=) = flip pqBind
 
 instance MonadTrans (PQ schema schema) where
-  lift m = PQ $ \ conn -> do
+  lift m = PQ $ \ _conn -> do
     x <- m
-    return (x, conn)
+    return (K x)
 
 instance MonadBase b m => MonadBase b (PQ schema schema m) where
   liftBase = lift . liftBase
 
 -- | A snapshot of the state of a `PQ` computation.
 type PQRun schema =
-  forall m x. Monad m => PQ schema schema m x -> m (x, Connection schema)
+  forall m x. Monad m => PQ schema schema m x -> m (K x schema)
 
 -- | Helper function in defining `MonadBaseControl` instance for `PQ`.
 pqliftWith :: Functor m => (PQRun schema -> m a) -> PQ schema schema m a
 pqliftWith f = PQ $ \ conn ->
-  fmap (\ x -> (x, conn)) (f $ \ pq -> runPQ pq conn)
+  fmap K (f $ \ pq -> runPQ pq conn)
 
 instance MonadBaseControl b m => MonadBaseControl b (PQ schema schema m) where
-  type StM (PQ schema schema m) x = StM m (x, Connection schema)
+  type StM (PQ schema schema m) x = StM m (K x schema)
   liftBaseWith f =
     pqliftWith $ \ run -> liftBaseWith $ \ runInBase -> f $ runInBase . run
   restoreM = PQ . const . restoreM
-
--- | Encapsulates the result of a squeal command run by @LibPQ@.
--- `Result`s are parameterized by a `ColumnsType` describing the column names
--- and their types.
-newtype Result (columns :: RelationType)
-  = Result { unResult :: LibPQ.Result }
 
 -- | Just newtypes around a `CInt`
 newtype RowNumber = RowNumber { unRowNumber :: LibPQ.Row }
@@ -494,12 +497,12 @@ getValue
   :: (FromColumnValue colty y, MonadBase IO io)
   => RowNumber -- ^ row
   -> ColumnNumber n columns colty -- ^ col
-  -> Result columns -- ^ result
+  -> K LibPQ.Result columns -- ^ result
   -> io y
 getValue
   (RowNumber r)
   (UnsafeColumnNumber c :: ColumnNumber n columns colty)
-  (Result result)
+  (K result)
    = fmap (fromColumnValue @colty . K) $ liftBase $ do
       numRows <- LibPQ.ntuples result
       when (numRows < r) $ error $
@@ -512,10 +515,10 @@ getRow
   :: (FromRow columns y, MonadBase IO io)
   => RowNumber
   -- ^ row
-  -> Result columns
+  -> K LibPQ.Result columns
   -- ^ result
   -> io y
-getRow (RowNumber r) (Result result :: Result columns) = liftBase $ do
+getRow (RowNumber r) (K result :: K LibPQ.Result columns) = liftBase $ do
   numRows <- LibPQ.ntuples result
   when (numRows < r) $ error $
     "getRow: expected at least " <> show r <> "rows but only saw "
@@ -527,8 +530,8 @@ getRow (RowNumber r) (Result result :: Result columns) = liftBase $ do
     Just row -> return $ fromRow @columns row
 
 -- | Returns the number of rows (tuples) in the query result.
-ntuples :: MonadBase IO io => Result columns -> io RowNumber
-ntuples (Result result) = liftBase $ RowNumber <$> LibPQ.ntuples result
+ntuples :: MonadBase IO io => K LibPQ.Result columns -> io RowNumber
+ntuples (K result) = liftBase $ RowNumber <$> LibPQ.ntuples result
 
 -- | Intended to be used for unfolding in streaming libraries, `nextRow`
 -- takes a total number of rows (which can be found with `ntuples`)
@@ -537,10 +540,10 @@ ntuples (Result result) = liftBase $ RowNumber <$> LibPQ.ntuples result
 nextRow
   :: (FromRow columns y, MonadBase IO io)
   => RowNumber -- ^ total number of rows
-  -> Result columns -- ^ result
+  -> K LibPQ.Result columns -- ^ result
   -> RowNumber -- ^ row number
   -> io (Maybe (RowNumber,y))
-nextRow (RowNumber total) (Result result :: Result columns) (RowNumber r)
+nextRow (RowNumber total) (K result :: K LibPQ.Result columns) (RowNumber r)
   = liftBase $ if r >= total then return Nothing else do
     let len = fromIntegral (lengthSList (Proxy @columns))
     row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
@@ -551,9 +554,9 @@ nextRow (RowNumber total) (Result result :: Result columns) (RowNumber r)
 -- | Get all rows from a `Result`.
 getRows
   :: (FromRow columns y, MonadBase IO io)
-  => Result columns -- ^ result
+  => K LibPQ.Result columns -- ^ result
   -> io [y]
-getRows (Result result :: Result columns) = liftBase $ do
+getRows (K result :: K LibPQ.Result columns) = liftBase $ do
   let len = fromIntegral (lengthSList (Proxy @columns))
   numRows <- LibPQ.ntuples result
   for [0 .. numRows - 1] $ \ r -> do
@@ -565,9 +568,9 @@ getRows (Result result :: Result columns) = liftBase $ do
 -- | Get the first row if possible from a `Result`.
 firstRow
   :: (FromRow columns y, MonadBase IO io)
-  => Result columns -- ^ result
+  => K LibPQ.Result columns -- ^ result
   -> io (Maybe y)
-firstRow (Result result :: Result columns) = liftBase $ do
+firstRow (K result :: K LibPQ.Result columns) = liftBase $ do
   numRows <- LibPQ.ntuples result
   if numRows <= 0 then return Nothing else do
     let len = fromIntegral (lengthSList (Proxy @columns))
@@ -580,5 +583,5 @@ firstRow (Result result :: Result columns) = liftBase $ do
 liftResult
   :: MonadBase IO io
   => (LibPQ.Result -> IO x)
-  -> Result results -> io x
-liftResult f (Result result) = liftBase $ f result
+  -> K LibPQ.Result results -> io x
+liftResult f (K result) = liftBase $ f result

@@ -41,6 +41,7 @@ module Squeal.PostgreSQL.Schema
   , ColumnType
   , ColumnsType
   , RelationType
+  , NilRelation
   , RelationsType
   , TableType
   , TablesType
@@ -281,6 +282,7 @@ type TablesType = [(Symbol,TableType)]
 -- >>> :kind Relation
 -- Relation :: [(Symbol, NullityType)]
 type RelationType = [(Symbol,NullityType)]
+type family NilRelation :: RelationType where NilRelation = '[]
 
 -- | `RelationsType` is a row of `RelationType`s, thought of as a product.
 type RelationsType = [(Symbol,RelationType)]

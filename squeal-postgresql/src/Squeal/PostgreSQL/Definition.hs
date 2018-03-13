@@ -34,6 +34,7 @@ module Squeal.PostgreSQL.Definition
   , (>>>)
     -- * Create
   , createTable
+  , createTableIfNotExists
   , TableConstraintExpression (..)
   , Column (..)
   , check
@@ -122,7 +123,42 @@ createTable
     -- ^ constraints that must hold for the table
   -> Definition schema (Create table (constraints :=> columns) schema)
 createTable table columns constraints = UnsafeDefinition $
-  "CREATE TABLE" <+> renderAlias table
+  "CREATE TABLE" <+> renderCreation table columns constraints
+
+-- | `createTable` adds a table to the schema.
+--
+-- >>> :set -XOverloadedLabels
+-- >>> :{
+-- renderDefinition $
+--   createTable #tab (int `As` #a :* real `As` #b :* Nil) Nil
+-- :}
+-- "CREATE TABLE tab (a int, b real);"
+createTableIfNotExists
+  :: ( Has table schema (constraints :=> columns)
+     , SOP.SListI columns
+     , SOP.SListI constraints )
+  => Alias table -- ^ the name of the table to add
+  -> NP (Aliased TypeExpression) columns
+    -- ^ the names and datatype of each column
+  -> NP (Aliased (TableConstraintExpression schema columns)) constraints
+    -- ^ constraints that must hold for the table
+  -> Definition schema schema
+createTableIfNotExists table columns constraints = UnsafeDefinition $
+  "CREATE TABLE IF NOT EXISTS"
+  <+> renderCreation table columns constraints
+
+-- helper function for `createTable` and `createTableIfNotExists`
+renderCreation
+  :: ( KnownSymbol table
+     , SOP.SListI columns
+     , SOP.SListI constraints )
+  => Alias table -- ^ the name of the table to add
+  -> NP (Aliased TypeExpression) columns
+    -- ^ the names and datatype of each column
+  -> NP (Aliased (TableConstraintExpression schema columns)) constraints
+    -- ^ constraints that must hold for the table
+  -> ByteString
+renderCreation table columns constraints = renderAlias table
   <+> parenthesized
     ( renderCommaSeparated renderColumnDef columns
       <> ( case constraints of
