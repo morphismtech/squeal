@@ -13,10 +13,9 @@
 module Squeal.PostgreSQL.Migration
   ( -- * Migration
     Migration (..)
+  , Step (..)
   , migrateUp
   , migrateDown
-    -- * Step
-  , Step (..)
     -- * MigrationTable
   , MigrationTable
   , createMigration
@@ -37,16 +36,7 @@ import Prelude hiding (id, (.))
 import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Transaction
 
--- | A `Step` of a `Migration`, should contain an inverse pair of
--- `up` and `down` instructions.
-data Step io schema0 schema1 = Step
-  { name :: Text -- ^ The `name` of a `Step`.
-    -- Each `name` in a `Migration` should be unique.
-  , up :: PQ schema0 schema1 io () -- ^ The `up` instruction of a `Step`.
-  , down :: PQ schema1 schema0 io () -- ^ The `down` instruction of a `Step`.
-  }
-
--- | A `Migration` is a chain of `Step`s
+-- | A `Migration` is a schema-aligned sequence of `Step`s.
 data Migration io schema0 schema1 where
   Done :: Migration io schema schema
   (:>>)
@@ -60,9 +50,18 @@ instance Category (Migration io) where
     Done -> migration
     step :>> steps -> step :>> (steps >>> migration)
 
+-- | A `Step` of a `Migration`, should contain an inverse pair of
+-- `up` and `down` instructions and a unique `name`.
+data Step io schema0 schema1 = Step
+  { name :: Text -- ^ The `name` of a `Step`.
+    -- Each `name` in a `Migration` should be unique.
+  , up :: PQ schema0 schema1 io () -- ^ The `up` instruction of a `Step`.
+  , down :: PQ schema1 schema0 io () -- ^ The `down` instruction of a `Step`.
+  }
+
 
 -- | Run a `Migration` by creating the `MigrationTable`
--- if it does not exist and then for each each `Step`
+-- if it does not exist and then in a transaction, for each each `Step`
 -- query to see if the `Step` is executed. If not, then
 -- execute the `Step` and insert its row in `MigrationTable`.
 migrateUp
@@ -74,7 +73,7 @@ migrateUp
     io ()
 migrateUp migration =
   define createMigration
-  & pqThen (begin (TransactionMode RepeatableRead ReadWrite))
+  & pqThen (begin defaultMode)
   & pqThen (upSteps migration)
   & pqThen (void commit)
   where
@@ -118,7 +117,7 @@ migrateUp migration =
             -- insert up step execution record
 
 -- | Rewind a `Migration` by creating the `MigrationTable`
--- if it does not exist and then for each each `Step`
+-- if it does not exist and then in a transaction, for each each `Step`
 -- query to see if the `Step` is executed. If it is, then
 -- rewind the `Step` and delete its row in `MigrationTable`.
 migrateDown
@@ -130,7 +129,7 @@ migrateDown
     io ()
 migrateDown migration =
   define createMigration
-  & pqThen (begin (TransactionMode RepeatableRead ReadWrite) & void)
+  & pqThen (begin defaultMode)
   & pqThen (downSteps migration)
   & pqThen (void commit)
   where
