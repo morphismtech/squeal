@@ -120,25 +120,18 @@ renderTransactionMode mode =
 -- between concurrent transactions, which must not occur at each level.
 -- The phenomena which are prohibited at various levels are:
 --
--- __Dirty read__
+-- __Dirty read__: A transaction reads data written by a concurrent uncommitted transaction.
 --
--- A transaction reads data written by a concurrent uncommitted transaction.
---
--- __Nonrepeatable read__
---
--- A transaction re-reads data it has previously read and finds that data
+-- __Nonrepeatable read__: A transaction re-reads data it has previously read and finds that data
 -- has been modified by another transaction (that committed since the initial read).
 --
--- __Phantom read__
---
--- A transaction re-executes a query returning a set of rows that satisfy
+-- __Phantom read__: A transaction re-executes a query returning a set of rows that satisfy
 -- a search condition and finds that the set of rows satisfying the condition
 -- has changed due to another recently-committed transaction.
 --
--- __Serialization anomaly__
---
--- The result of successfully committing a group of transactions is inconsistent
+-- __Serialization anomaly__: The result of successfully committing a group of transactions is inconsistent
 -- with all possible orderings of running those transactions one at a time.
+--
 -- In PostgreSQL, you can request any of the four standard transaction
 -- isolation levels, but internally only three distinct isolation levels are implemented,
 -- i.e. PostgreSQL's `ReadUncommitted` mode behaves like `ReadCommitted`.
@@ -202,7 +195,7 @@ renderAccessMode = \case
 -- after which it is able to run without the normal overhead of a
 -- `Serializable` transaction and without any risk of contributing
 -- to or being canceled by a serialization failure.
--- This mode is well suited for long-running reports or backups.
+-- This `longRunningMode` is well suited for long-running reports or backups.
 data DeferrableMode
   = Deferrable
   | NotDeferrable
