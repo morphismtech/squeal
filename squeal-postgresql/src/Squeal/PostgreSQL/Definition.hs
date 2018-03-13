@@ -56,7 +56,6 @@ module Squeal.PostgreSQL.Definition
   , addColumnDefault
   , addColumnNull
   , dropColumn
-  -- , dropColumnCascade
   , renameColumn
   , alterColumn
   , AlterColumn (UnsafeAlterColumn, renderAlterColumn)
@@ -130,9 +129,9 @@ createTable table columns constraints = UnsafeDefinition $
 -- >>> :set -XOverloadedLabels
 -- >>> :{
 -- renderDefinition $
---   createTable #tab (int `As` #a :* real `As` #b :* Nil) Nil
+--   createTableIfNotExists #tab (int `As` #a :* real `As` #b :* Nil) Nil
 -- :}
--- "CREATE TABLE tab (a int, b real);"
+-- "CREATE TABLE IF NOT EXISTS tab (a int, b real);"
 createTableIfNotExists
   :: ( Has table schema (constraints :=> columns)
      , SOP.SListI columns
