@@ -126,10 +126,12 @@ createTable table columns constraints = UnsafeDefinition $
 
 -- | `createTable` adds a table to the schema.
 --
--- >>> :set -XOverloadedLabels
+-- >>> :set -XOverloadedLabels -XTypeApplications
+-- >>> type Table = '[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGfloat4]
+-- >>> type Schema = '["tab" ::: Table]
 -- >>> :{
--- renderDefinition $
---   createTableIfNotExists #tab (int `As` #a :* real `As` #b :* Nil) Nil
+-- renderDefinition
+--   (createTableIfNotExists #tab (int `As` #a :* real `As` #b :* Nil) Nil :: Definition Schema Schema)
 -- :}
 -- "CREATE TABLE IF NOT EXISTS tab (a int, b real);"
 createTableIfNotExists
