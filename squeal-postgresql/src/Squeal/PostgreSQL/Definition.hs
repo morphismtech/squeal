@@ -9,7 +9,8 @@ Squeal data definition language.
 -}
 
 {-# LANGUAGE
-    DataKinds
+    ConstraintKinds
+  , DataKinds
   , DeriveDataTypeable
   , DeriveGeneric
   , FlexibleContexts
@@ -41,6 +42,7 @@ module Squeal.PostgreSQL.Definition
   , unique
   , primaryKey
   , foreignKey
+  , ForeignKeyed
   , OnDeleteClause (OnDeleteNoAction, OnDeleteRestrict, OnDeleteCascade)
   , renderOnDeleteClause
   , OnUpdateClause (OnUpdateNoAction, OnUpdateRestrict, OnUpdateCascade)
@@ -124,7 +126,9 @@ createTable
 createTable table columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderCreation table columns constraints
 
--- | `createTable` adds a table to the schema.
+-- | `createTableIfNotExists` creates a table if it doesn't exist, but does not add it to the schema.
+-- Instead, the schema already has the table so if the table did not yet exist, the schema was wrong.
+-- `createTableIfNotExists` fixes this. Interestingly, this property makes it an idempotent in the `Category` `Definition`.
 --
 -- >>> :set -XOverloadedLabels -XTypeApplications
 -- >>> type Table = '[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGfloat4]
@@ -277,12 +281,12 @@ primaryKey columns = UnsafeTableConstraintExpression $
 -- >>> :{
 -- type Schema =
 --   '[ "users" :::
---        '[ "pk_id" ::: 'PrimaryKey '["id"] ] :=>
+--        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
 --        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
 --         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
 --         ]
 --    , "emails" :::
---        '[  "pk_id" ::: 'PrimaryKey '["id"]
+--        '[  "pk_emails" ::: 'PrimaryKey '["id"]
 --         , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
 --         ] :=>
 --        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
@@ -292,36 +296,31 @@ primaryKey columns = UnsafeTableConstraintExpression $
 --    ]
 -- :}
 --
--- :{
+-- >>> :{
 -- let
 --   setup :: Definition '[] Schema
 --   setup = 
---     createTable #users
---       ( #id serial :*
---         #name (text & notNull) :* Nil )
---       ( #pk_id (primaryKey (Column #id :* Nil)) :* Nil ) >>>
---     createTable #emails
---       ( #id serial :*
---         #user_id (int & notNull) :*
---         #email text :* Nil )
---       ( #pk_id (primaryKey (Column #id :* Nil)) :*
---         #fk_user_id (foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
---           OnDeleteCascade OnUpdateCascade) :* Nil )
+--    createTable #users
+--      ( serial `As` #id :*
+--        (text & notNull) `As` #name :* Nil )
+--      ( primaryKey (Column #id :* Nil) `As` #pk_users :* Nil ) >>>
+--    createTable #emails
+--      ( serial `As` #id :*
+--        (int & notNull) `As` #user_id :*
+--        text `As` #email :* Nil )
+--      ( primaryKey (Column #id :* Nil) `As` #pk_emails :*
+--        foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
+--          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
 -- in renderDefinition setup
 -- :}
--- "CREATE TABLE users (id serial, username text NOT NULL, CONSTRAINT pk_id PRIMARY KEY (id)); CREATE TABLE emails (id serial, userid integer NOT NULL, email text NOT NULL, CONSTRAINT pk_id PRIMARY KEY (id), CONSTRAINT fk_user_id FOREIGN KEY (userid) REFERENCES users (id) ON DELETE CASCADE ON UPDATE RESTRICT);"
+-- "CREATE TABLE users (id serial, name text NOT NULL, CONSTRAINT pk_users PRIMARY KEY (id)); CREATE TABLE emails (id serial, user_id int NOT NULL, email text, CONSTRAINT pk_emails PRIMARY KEY (id), CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE);"
 foreignKey
-  :: ( Has table schema reftable
-     , refcolumns ~ TableToColumns reftable
-     , SameTypes subcolumns refsubcolumns
-     , AllNotNull subcolumns
-     , SOP.SListI subcolumns
-     , SOP.SListI refsubcolumns)
+  :: ForeignKeyed schema table reftable subcolumns refsubcolumns
   => NP (Column columns) subcolumns
   -- ^ column or columns in the table
   -> Alias table
   -- ^ reference table
-  -> NP (Column refcolumns) refsubcolumns
+  -> NP (Column (TableToColumns reftable)) refsubcolumns
   -- ^ reference column or columns in the reference table
   -> OnDeleteClause
   -- ^ what to do when reference is deleted
@@ -336,6 +335,13 @@ foreignKey columns reftable refcolumns onDelete onUpdate =
     <+> parenthesized (renderCommaSeparated renderColumn refcolumns)
     <+> renderOnDeleteClause onDelete
     <+> renderOnUpdateClause onUpdate
+
+type ForeignKeyed schema table reftable subcolumns refsubcolumns
+  = ( Has table schema reftable
+    , SameTypes subcolumns refsubcolumns
+    , AllNotNull subcolumns
+    , SOP.SListI subcolumns
+    , SOP.SListI refsubcolumns )
 
 -- | `OnDelete` indicates what to do with rows that reference a deleted row.
 data OnDeleteClause
