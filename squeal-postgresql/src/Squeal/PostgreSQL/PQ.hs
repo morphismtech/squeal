@@ -143,10 +143,11 @@ withConnection
   :: forall schema0 schema1 io x
    . MonadBaseControl IO io
   => ByteString
-  -> (K LibPQ.Connection schema0 -> io (x, K LibPQ.Connection schema1))
+  -- -> (K LibPQ.Connection schema0 -> io (x, K LibPQ.Connection schema1))
+  -> PQ schema0 schema1 io x
   -> io x
 withConnection connString action = do
-  (x, _conn) <- bracket (connectdb connString) finish action
+  K x <- bracket (connectdb connString) finish (runPQ action)
   return x
 
 -- | We keep track of the schema via an Atkey indexed state monad transformer,
