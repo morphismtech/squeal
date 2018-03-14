@@ -121,12 +121,8 @@ main = do
   finish connection3
 
 main2 :: IO ()
-main2 = void $
-  withConnection "host=localhost port=5432 dbname=exampledb" . goPQ $
+main2 =
+  void . withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
     & pqThen session
     & thenDefine teardown
-  where
-    goPQ pq conn = do
-      SOP.K x <- runPQ pq conn
-      return (x, SOP.K (SOP.unK conn))
