@@ -1,3 +1,14 @@
+{-|
+Module: Squeal.PostgreSQL.Migration
+Description: Squeal migrations
+Copyright: (c) Eitan Chatav, 2017
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+`Squeal.PostgreSQL.Migration` defines a `Migration` type to safely
+change the schema of your database over time.
+-}
+
 {-# LANGUAGE
     ScopedTypeVariables
   , OverloadedStrings
@@ -34,7 +45,6 @@ import Data.Text (Text)
 import Prelude hiding (id, (.))
 
 import Squeal.PostgreSQL
-import Squeal.PostgreSQL.Transaction
 
 -- | A `Migration` is a schema-aligned sequence of `Step`s.
 data Migration io schema0 schema1 where

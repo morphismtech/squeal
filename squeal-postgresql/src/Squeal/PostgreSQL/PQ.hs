@@ -171,6 +171,7 @@ execPQ
   -> m (K LibPQ.Connection schema1)
 execPQ (PQ pq) conn = fmap (mapKK (\ _ -> unK conn)) $ pq conn
 
+-- | Safely embed a `PQ` computation in a larger schema.
 pqEmbed
   :: Monad m
   => PQ schema0 schema1 m x
@@ -197,6 +198,7 @@ pqJoin
   -> PQ schema0 schema2 m y
 pqJoin pq = pq & pqBind id
 
+-- | indexed analog of `=<<`
 pqBind
   :: Monad m
   => (x -> PQ schema1 schema2 m y)

@@ -173,6 +173,7 @@ module Squeal.PostgreSQL
   , module Squeal.PostgreSQL.PQ
   , module Squeal.PostgreSQL.Query
   , module Squeal.PostgreSQL.Schema
+  , module Squeal.PostgreSQL.Transaction
   ) where
 
 import Squeal.PostgreSQL.Binary
@@ -182,3 +183,4 @@ import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Transaction

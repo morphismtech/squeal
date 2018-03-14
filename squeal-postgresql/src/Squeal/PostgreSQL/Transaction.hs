@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Transaction
+Description: Squeal transaction control language
+Copyright: (c) Eitan Chatav, 2017
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Squeal transaction control language.
+-}
+
 {-# LANGUAGE
     DataKinds
   , EmptyCase

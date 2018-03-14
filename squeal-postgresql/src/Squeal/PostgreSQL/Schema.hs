@@ -45,6 +45,7 @@ module Squeal.PostgreSQL.Schema
   , RelationsType
   , TableType
   , TablesType
+  , NilTables
   , Grouping (..)
     -- * Constraints
   , (:=>)
@@ -135,7 +136,7 @@ data PGType
 -- | The object identifier of a `PGType`.
 --
 -- >>> :set -XTypeApplications
--- >>> oid  @'PGbool
+-- >>> oid @'PGbool
 -- 16
 class HasOid (ty :: PGType) where oid :: Word32
 instance HasOid 'PGbool where oid = 16
@@ -268,6 +269,8 @@ type TableType = ([(Symbol,TableConstraint)],ColumnsType)
 -- :}
 --
 type TablesType = [(Symbol,TableType)]
+-- | A monokinded `'[]` of `TablesType`.
+type family NilTables :: TablesType where NilTables = '[]
 
 -- | `RelationType` is a row of `NullityType`
 --
@@ -282,6 +285,7 @@ type TablesType = [(Symbol,TableType)]
 -- >>> :kind Relation
 -- Relation :: [(Symbol, NullityType)]
 type RelationType = [(Symbol,NullityType)]
+-- | A monokinded `'[]` of `RelationType`.
 type family NilRelation :: RelationType where NilRelation = '[]
 
 -- | `RelationsType` is a row of `RelationType`s, thought of as a product.
