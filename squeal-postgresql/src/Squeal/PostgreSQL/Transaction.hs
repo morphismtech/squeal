@@ -16,6 +16,7 @@ Squeal transaction control language.
   , LambdaCase
   , OverloadedStrings
   , MultiParamTypeClasses
+  , ScopedTypeVariables
   , TypeFamilies
   , TypeInType
 #-}
@@ -27,7 +28,7 @@ module Squeal.PostgreSQL.Transaction
   , begin
   , commit
   , rollback
-  , onExceptionRollback
+  , rollbackOrCommit
     -- * Transaction Mode
   , TransactionMode (..)
   , defaultMode
@@ -54,7 +55,7 @@ import Squeal.PostgreSQL.Prettyprint
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Schema
 
--- | Run a query or manipulation `transactionally`.
+-- | Run a schema invariant computation `transactionally`.
 transactionally
   :: (MonadBaseControl IO tx, MonadPQ schema tx)
   => TransactionMode
@@ -66,7 +67,7 @@ transactionally mode tx = mask $ \restore -> do
   _ <- commit
   return result
 
--- | Run a query or manipulation `transactionally_` in `defaultMode`.
+-- | Run a schema invariant computation `transactionally_` in `defaultMode`.
 transactionally_
   :: (MonadBaseControl IO tx, MonadPQ schema tx)
   => tx x -- ^ run inside a transaction
@@ -78,22 +79,24 @@ begin :: MonadPQ schema tx => TransactionMode -> tx (K Result NilRelation)
 begin mode = manipulate . UnsafeManipulation $
   "BEGIN" <+> renderTransactionMode mode <> ";"
 
--- | @COMMIT@ a transaction.
+-- | @COMMIT@ a schema invariant transaction.
 commit :: MonadPQ schema tx => tx (K Result NilRelation)
 commit = manipulate $ UnsafeManipulation "COMMIT;"
 
--- | @ROLLBACK@ a query or manipulation transaction.
+-- | @ROLLBACK@ a schema invariant transaction.
 rollback :: MonadPQ schema tx => tx (K Result NilRelation)
 rollback = manipulate $ UnsafeManipulation "ROLLBACK;"
 
--- | @ROLLBACK@ a transaction upon exception.
-onExceptionRollback
+-- | @ROLLBACK@ a transaction upon `Exception`, otherwise @COMMIT@.
+rollbackOrCommit
   :: MonadBaseControl IO io 
   => PQ schema0 schema1 io x
   -> PQ schema0 schema1 io x
-onExceptionRollback u = PQ $ \ conn -> mask $ \ restore ->
-  restore (runPQ u conn) `onException`
-    liftBase (LibPQ.exec (unK conn) "ROLLBACK")
+rollbackOrCommit u = PQ $ \ conn -> mask $ \ restore -> do
+  x <- restore (runPQ u conn)
+    `onException` (liftBase (LibPQ.exec (unK conn) "ROLLBACK"))
+  _ <- liftBase (LibPQ.exec (unK conn) "COMMIT")
+  return x
 
 -- | The available transaction characteristics are the transaction `IsolationLevel`,
 -- the transaction access mode (`ReadWrite` or `ReadOnly`), and the `DeferrableMode`.
