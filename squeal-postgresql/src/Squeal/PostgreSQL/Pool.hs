@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Definition
+Description: Pooled connections
+Copyright: (c) Eitan Chatav, 2017
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+A `MonadPQ` for pooled connections.
+-}
+
 {-# LANGUAGE
     DataKinds
   , DeriveFunctor
@@ -22,6 +32,8 @@ import Generics.SOP (K(..))
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Schema
 
+-- | `PoolPQ` @schema@ should be a drop-in replacement for
+-- `PQ schema schema`.
 newtype PoolPQ (schema :: TablesType) m x =
   PoolPQ { runPoolPQ :: Pool (K Connection schema) -> m x }
   deriving Functor

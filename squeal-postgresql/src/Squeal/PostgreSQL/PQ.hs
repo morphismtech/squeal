@@ -146,7 +146,6 @@ withConnection
   :: forall schema0 schema1 io x
    . MonadBaseControl IO io
   => ByteString
-  -- -> (K LibPQ.Connection schema0 -> io (x, K LibPQ.Connection schema1))
   -> PQ schema0 schema1 io x
   -> io x
 withConnection connString action = do
