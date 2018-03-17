@@ -38,6 +38,7 @@ newtype PoolPQ (schema :: TablesType) m x =
   PoolPQ { runPoolPQ :: Pool (K Connection schema) -> m x }
   deriving Functor
 
+-- | `Applicative` instance for `PoolPQ`.
 instance Monad m => Applicative (PoolPQ schema m) where
   pure x = PoolPQ $ \ _ -> pure x
   PoolPQ f <*> PoolPQ x = PoolPQ $ \ pool -> do
@@ -45,18 +46,22 @@ instance Monad m => Applicative (PoolPQ schema m) where
     x' <- x pool
     return $ f' x'
 
+-- | `Monad` instance for `PoolPQ`.
 instance Monad m => Monad (PoolPQ schema m) where
   return = pure
   PoolPQ x >>= f = PoolPQ $ \ pool -> do
     x' <- x pool
     runPoolPQ (f x') pool
 
+-- | `MonadTrans` instance for `PoolPQ`.
 instance MonadTrans (PoolPQ schema) where
   lift m = PoolPQ $ \ _pool -> m
 
+-- | `MonadBase` instance for `PoolPQ`.
 instance MonadBase b m => MonadBase b (PoolPQ schema m) where
   liftBase = lift . liftBase
 
+-- | `MonadPQ` instance for `PoolPQ`.
 instance MonadBaseControl IO io => MonadPQ schema (PoolPQ schema io) where
   manipulateParams manipulation params = PoolPQ $ \ pool -> do
     withResource pool $ \ conn -> do
@@ -88,6 +93,7 @@ poolpqliftWith :: Functor m => (PoolPQRun schema -> m a) -> PoolPQ schema m a
 poolpqliftWith f = PoolPQ $ \ pool ->
   (f $ \ pq -> runPoolPQ pq pool)
 
+-- | `MonadBaseControl` instance for `PoolPQ`.
 instance MonadBaseControl b m => MonadBaseControl b (PoolPQ schema m) where
   type StM (PoolPQ schema m) x = StM m x
   liftBaseWith f =

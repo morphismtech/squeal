@@ -336,6 +336,7 @@ foreignKey columns reftable refcolumns onDelete onUpdate =
     <+> renderOnDeleteClause onDelete
     <+> renderOnUpdateClause onUpdate
 
+-- | A type synonym for constraints on a table with a foreign key.
 type ForeignKeyed schema table reftable subcolumns refsubcolumns
   = ( Has table schema reftable
     , SameTypes subcolumns refsubcolumns
