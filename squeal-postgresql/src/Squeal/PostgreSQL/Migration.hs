@@ -8,8 +8,8 @@ Stability: experimental
 This module defines a `Migration` type to safely
 change the schema of your database over time. Let's see an example!
 
->>> :set -XDataKinds -XDeriveGeneric -XOverloadedLabels
->>> :set -XOverloadedStrings -XTypeApplications -XTypeOperators
+>>> :set -XDataKinds -XOverloadedLabels
+>>> :set -XOverloadedStrings -XFlexibleContexts -XTypeOperators
 >>> :{
 type UsersTable =
   '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
@@ -61,10 +61,26 @@ let
     }
 :}
 
+>>> :{
+let
+  numSteps
+    :: Has "migration" schema MigrationTable
+    => PQ schema schema IO ()
+  numSteps = do
+    result <- runQuery (selectStar (from (table (#migration `As` #m))))
+    RowNumber num <- ntuples result
+    liftBase $ print num
+:}
+
 >>> let migration = makeUsers :>> makeEmails :>> Done
->>> withConnection "host=localhost port=5432 dbname=exampledb" (migrateUp migration)
+>>> :{
+withConnection "host=localhost port=5432 dbname=exampledb" $
+  migrateUp migration
+  & pqThen numSteps
+  & pqThen (migrateDown migration)
+:}
 NOTICE:  relation "migration" already exists, skipping
->>> withConnection "host=localhost port=5432 dbname=exampledb" (migrateDown migration)
+Row 2
 NOTICE:  relation "migration" already exists, skipping
 -}
 
