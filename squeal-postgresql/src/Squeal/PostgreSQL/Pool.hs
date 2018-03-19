@@ -21,12 +21,22 @@ A `MonadPQ` for pooled connections.
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.Pool where
+module Squeal.PostgreSQL.Pool
+  ( -- * Pools
+    PoolPQ (..)
+  , createConnectionPool
+  , Pool
+  , destroyAllResources
+  , PoolPQRun
+  , poolpqliftWith
+  ) where
 
 import Control.Monad.Base
 import Control.Monad.Trans
 import Control.Monad.Trans.Control
+import Data.ByteString
 import Data.Pool
+import Data.Time
 import Generics.SOP (K(..))
 
 import Squeal.PostgreSQL.PQ
@@ -37,6 +47,23 @@ import Squeal.PostgreSQL.Schema
 newtype PoolPQ (schema :: TablesType) m x =
   PoolPQ { runPoolPQ :: Pool (K Connection schema) -> m x }
   deriving Functor
+
+createConnectionPool
+  -- ^ Create a striped pool of connections.
+  -- Although the garbage collector will destroy all idle connections when the pool is garbage collected it's recommended to manually destroyAllResources when you're done with the pool so that the connections are freed up as soon as possible.
+  :: MonadBase IO io
+  => ByteString -- ^ conninfo
+  -> Int
+  -- ^ The number of stripes (distinct sub-pools) to maintain. The smallest acceptable value is 1.
+  -> NominalDiffTime
+  -- ^ Amount of time for which an unused connection is kept open. The smallest acceptable value is 0.5 seconds.
+  -- The elapsed time before destroying a connection may be a little longer than requested, as the reaper thread wakes at 1-second intervals.
+  -> Int
+  -- ^ Maximum number of connections to keep open per stripe. The smallest acceptable value is 1.
+  -- Requests for connections will block if this limit is reached on a single stripe, even if other stripes have idle connections available.
+  -> io (Pool (K Connection schema))
+createConnectionPool conninfo stripes idle maxResrc = liftBase $
+  createPool (connectdb conninfo) finish stripes idle maxResrc
 
 -- | `Applicative` instance for `PoolPQ`.
 instance Monad m => Applicative (PoolPQ schema m) where
@@ -65,22 +92,22 @@ instance MonadBase b m => MonadBase b (PoolPQ schema m) where
 instance MonadBaseControl IO io => MonadPQ schema (PoolPQ schema io) where
   manipulateParams manipulation params = PoolPQ $ \ pool -> do
     withResource pool $ \ conn -> do
-      (K result :: K (K Result ys) schema) <- flip runPQ conn $
+      (K result :: K (K Result ys) schema) <- flip unPQ conn $
         manipulateParams manipulation params
       return result
   traversePrepared manipulation params = PoolPQ $ \ pool ->
     withResource pool $ \ conn -> do
-      (K result :: K (list (K Result ys)) schema) <- flip runPQ conn $
+      (K result :: K (list (K Result ys)) schema) <- flip unPQ conn $
         traversePrepared manipulation params
       return result
   traversePrepared_ manipulation params = PoolPQ $ \ pool -> do
     withResource pool $ \ conn -> do
-      (_ :: K () schema) <- flip runPQ conn $
+      (_ :: K () schema) <- flip unPQ conn $
         traversePrepared_ manipulation params
       return ()
   liftPQ m = PoolPQ $ \ pool -> 
     withResource pool $ \ conn -> do
-      (K result :: K result schema) <- flip runPQ conn $
+      (K result :: K result schema) <- flip unPQ conn $
         liftPQ m
       return result
 
