@@ -36,17 +36,13 @@ module Squeal.PostgreSQL.PQ
     connectdb
   , finish
   , withConnection
+  , lowerConnection
     -- * PQ
-  , PQ (PQ, runPQ)
+  , PQ (PQ, unPQ)
+  , runPQ
   , execPQ
-  , pqEmbed
-  , pqAp
-  , pqBind
-  , pqJoin
-  , pqThen
-  , define
-  , thenDefine
-    -- * MonadPQ
+  , evalPQ
+  , IndexedMonadTransPQ (..)
   , MonadPQ (..)
   , PQRun
   , pqliftWith
@@ -149,8 +145,14 @@ withConnection
   -> PQ schema0 schema1 io x
   -> io x
 withConnection connString action = do
-  K x <- bracket (connectdb connString) finish (runPQ action)
+  K x <- bracket (connectdb connString) finish (unPQ action)
   return x
+
+-- | Safely `lowerConnection` to a smaller schema.
+lowerConnection
+  :: K LibPQ.Connection (table ': schema)
+  -> K LibPQ.Connection schema
+lowerConnection (K conn) = K conn
 
 -- | We keep track of the schema via an Atkey indexed state monad transformer,
 -- `PQ`.
@@ -159,87 +161,113 @@ newtype PQ
   (schema1 :: TablesType)
   (m :: Type -> Type)
   (x :: Type) =
-    PQ { runPQ :: K LibPQ.Connection schema0 -> m (K x schema1) }
+    PQ { unPQ :: K LibPQ.Connection schema0 -> m (K x schema1) }
 
 instance Monad m => Functor (PQ schema0 schema1 m) where
   fmap f (PQ pq) = PQ $ \ conn -> do
     K x <- pq conn
     return $ K (f x)
 
--- | Run a `PQ` and discard the result but keep the `Connection`. 
+-- | Run a `PQ` and keep the result and the `Connection`. 
+runPQ
+  :: Functor m
+  => PQ schema0 schema1 m x
+  -> K LibPQ.Connection schema0
+  -> m (x, K LibPQ.Connection schema1)
+runPQ (PQ pq) conn = (\ x -> (unK x, K (unK conn))) <$> pq conn
+  -- K x <- pq conn
+  -- return (x, K (unK conn))
+
+-- | Execute a `PQ` and discard the result but keep the `Connection`. 
 execPQ
   :: Functor m
   => PQ schema0 schema1 m x
   -> K LibPQ.Connection schema0
   -> m (K LibPQ.Connection schema1)
-execPQ (PQ pq) conn = fmap (mapKK (\ _ -> unK conn)) $ pq conn
+execPQ (PQ pq) conn = mapKK (\ _ -> unK conn) <$> pq conn
 
--- | Safely embed a `PQ` computation in a larger schema.
-pqEmbed
-  :: Monad m
+-- | Evaluate a `PQ` and discard the `Connection` but keep the result.
+evalPQ
+  :: Functor m
   => PQ schema0 schema1 m x
-  -> PQ (table ': schema0) (table : schema1) m x
-pqEmbed (PQ pq) = PQ $ \ (K conn) -> do
-  K x <- pq (K conn)
-  return $ K x
+  -> K LibPQ.Connection schema0
+  -> m x
+evalPQ (PQ pq) conn = unK <$> pq conn
 
--- | indexed analog of `<*>`
-pqAp
-  :: Monad m
-  => PQ schema0 schema1 m (x -> y)
-  -> PQ schema1 schema2 m x
-  -> PQ schema0 schema2 m y
-pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
-  K f' <- f conn
-  K x' <- x (K (unK conn))
-  return $ K (f' x')
+-- | An [Atkey indexed monad](https://bentnib.org/paramnotions-jfp.pdf) is a `Functor`
+-- [enriched category](https://ncatlab.org/nlab/show/enriched+category).
+-- An indexed monad transformer transforms a `Monad` into an indexed monad.
+-- And, `IndexedMonadTransPQ` is a class for indexed monad transformers that
+-- support running `Definition`s using `define` and embedding a computation
+-- in a larger schema using `pqEmbed`.
+class IndexedMonadTransPQ pq where
 
--- | indexed analog of `join`
-pqJoin
-  :: Monad m
-  => PQ schema0 schema1 m (PQ schema1 schema2 m y)
-  -> PQ schema0 schema2 m y
-pqJoin pq = pq & pqBind id
+  -- | Safely embed a computation in a larger schema.
+  pqEmbed
+    :: Monad m
+    => pq schema0 schema1 m x
+    -> pq (table ': schema0) (table : schema1) m x
 
--- | indexed analog of `=<<`
-pqBind
-  :: Monad m
-  => (x -> PQ schema1 schema2 m y)
-  -> PQ schema0 schema1 m x
-  -> PQ schema0 schema2 m y
-pqBind f (PQ x) = PQ $ \ conn -> do
-  K x' <- x conn
-  runPQ (f x') (K (unK conn))
+  -- | indexed analog of `<*>`
+  pqAp
+    :: Monad m
+    => pq schema0 schema1 m (x -> y)
+    -> pq schema1 schema2 m x
+    -> pq schema0 schema2 m y
 
--- | indexed analog of flipped `>>`
-pqThen
-  :: Monad m
-  => PQ schema1 schema2 m y
-  -> PQ schema0 schema1 m x
-  -> PQ schema0 schema2 m y
-pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
+  -- | indexed analog of `join`
+  pqJoin
+    :: Monad m
+    => pq schema0 schema1 m (pq schema1 schema2 m y)
+    -> pq schema0 schema2 m y
 
--- | Run a `Definition` with `LibPQ.exec`, we expect that libpq obeys the law
---
--- @define statement1 & thenDefine statement2 = define (statement1 >>> statement2)@
-define
-  :: MonadBase IO io
-  => Definition schema0 schema1
-  -> PQ schema0 schema1 io (K LibPQ.Result '[])
-define (UnsafeDefinition q) = PQ $ \ (K conn) -> do
-  resultMaybe <- liftBase $ LibPQ.exec conn q
-  case resultMaybe of
-    Nothing -> error
-      "define: LibPQ.exec returned no results"
-    Just result -> return $ K (K result)
+  -- | indexed analog of `=<<`
+  pqBind
+    :: Monad m
+    => (x -> pq schema1 schema2 m y)
+    -> pq schema0 schema1 m x
+    -> pq schema0 schema2 m y
 
--- | Chain together `define` actions.
-thenDefine
-  :: MonadBase IO io
-  => Definition schema1 schema2
-  -> PQ schema0 schema1 io x
-  -> PQ schema0 schema2 io (K LibPQ.Result '[])
-thenDefine = pqThen . define
+  -- | indexed analog of flipped `>>`
+  pqThen
+    :: Monad m
+    => pq schema1 schema2 m y
+    -> pq schema0 schema1 m x
+    -> pq schema0 schema2 m y
+
+  -- | Run a `Definition` with `LibPQ.exec`, we expect that libpq obeys the law
+  --
+  -- @define statement1 & pqThen (define statement2) = define (statement1 >>> statement2)@
+  define
+    :: MonadBase IO io
+    => Definition schema0 schema1
+    -> pq schema0 schema1 io (K LibPQ.Result '[])
+
+instance IndexedMonadTransPQ PQ where
+
+  pqEmbed (PQ pq) = PQ $ \ (K conn) -> do
+    K x <- pq (K conn)
+    return $ K x
+
+  pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
+    K f' <- f conn
+    K x' <- x (K (unK conn))
+    return $ K (f' x')
+
+  pqJoin pq = pq & pqBind id
+
+  pqBind f (PQ x) = PQ $ \ conn -> do
+    K x' <- x conn
+    unPQ (f x') (K (unK conn))
+
+  pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
+
+  define (UnsafeDefinition q) = PQ $ \ (K conn) -> do
+    resultMaybe <- liftBase $ LibPQ.exec conn q
+    case resultMaybe of
+      Nothing -> error
+        "define: LibPQ.exec returned no results"
+      Just result -> return $ K (K result)
 
 {- | `MonadPQ` is an `mtl` style constraint, similar to
 `Control.Monad.State.Class.MonadState`, for using `LibPQ` to
@@ -468,7 +496,7 @@ type PQRun schema =
 -- | Helper function in defining `MonadBaseControl` instance for `PQ`.
 pqliftWith :: Functor m => (PQRun schema -> m a) -> PQ schema schema m a
 pqliftWith f = PQ $ \ conn ->
-  fmap K (f $ \ pq -> runPQ pq conn)
+  fmap K (f $ \ pq -> unPQ pq conn)
 
 instance MonadBaseControl b m => MonadBaseControl b (PQ schema schema m) where
   type StM (PQ schema schema m) x = StM m (K x schema)

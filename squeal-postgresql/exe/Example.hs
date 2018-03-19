@@ -125,4 +125,4 @@ main2 =
   void . withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
     & pqThen session
-    & thenDefine teardown
+    & pqThen (define teardown)
