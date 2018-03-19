@@ -42,12 +42,12 @@ We'll use generics to easily convert between Haskell and PostgreSQL values.
 ```
 
 The first step is to define the schema of our database. This is where
-we use @DataKinds@ and @TypeOperators@. The schema consists of a type-level
+we use `DataKinds` and `TypeOperators`. The schema consists of a type-level
 list of tables, a `:::` pairing of a type level string or
-@Symbol@ and a list a columns, itself a `:::` pairing of a
-@Symbol@ and a `ColumnType`. The `ColumnType` describes the
+`Symbol` and a list a columns, itself a `:::` pairing of a
+`Symbol` and a `ColumnType`. The `ColumnType` describes the
 PostgreSQL type of the column as well as whether or not it may contain
-@NULL@ and whether or not inserts and updates can use a @DEFAULT@. For our
+`NULL` and whether or not inserts and updates can use a `DEFAULT`. For our
 schema, we'll define two tables, a users table and an emails table.
 
 ```haskell
@@ -103,7 +103,7 @@ We can easily see the generated SQL is unsuprising looking.
 "CREATE TABLE users (id serial, name text NOT NULL, CONSTRAINT pk_users PRIMARY KEY (id)); CREATE TABLE emails (id serial, user_id int NOT NULL, email text, CONSTRAINT pk_emails PRIMARY KEY (id), CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES rs (id) ON DELETE CASCADE ON UPDATE CASCADE);"
 ```
 
-Notice that @setup@ starts with an empty schema @'[]@ and produces @Schema@.
+Notice that `setup` starts with an empty schema `'[]` and produces `Schema`.
 In our `createTable` commands we included `TableConstraint`s to define
 primary and foreign keys, making them somewhat complex. Our tear down
 `Definition` is simpler.
@@ -122,8 +122,8 @@ Next, we'll write `Manipulation`s to insert data into our two tables.
 A `Manipulation` is a `insertInto`, `update` or `deleteFrom` command and
 has three type parameters, the schema it refers to, a list of parameters
 it can take as input, and a list of columns it produces as output. When
-we insert into the users table, we will need a parameter for the @name@
-field but not for the @id@ field. Since it's optional, we can use a default
+we insert into the users table, we will need a parameter for the `name`
+field but not for the `id` field. Since it's optional, we can use a default
 value. However, since the emails table refers to the users table, we will
 need to retrieve the user id that the insert generates and insert it into
 the emails table. Take a careful look at the type and definition of both
@@ -135,7 +135,7 @@ let
   insertUser :: Manipulation Schema '[ 'NotNull 'PGtext ]
     '[ "fromOnly" ::: 'NotNull 'PGint4 ]
   insertUser = insertRow #users
-    (Default `As` #id :* Set (param @1) `As` #name :* Nil)
+    (Default `As` #id :* Set (param `1) `As` #name :* Nil)
     OnConflictDoNothing (Returning (#id `As` #fromOnly :* Nil))
 :}
 >>> :{
@@ -143,8 +143,8 @@ let
   insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
   insertEmail = insertRow #emails
     ( Default `As` #id :*
-      Set (param @1) `As` #user_id :*
-      Set (param @2) `As` #email :* Nil )
+      Set (param `1) `As` #user_id :*
+      Set (param `2) `As` #email :* Nil )
     OnConflictDoNothing (Returning Nil)
 :}
 >>> renderManipulation insertUser
@@ -176,8 +176,8 @@ let
 Now that we've defined the SQL side of things, we'll need a Haskell type
 for users. We give the type `Generics.SOP.Generic` and
 `Generics.SOP.HasDatatypeInfo` instances so that we can decode the rows
-we receive when we run @getUsers@. Notice that the record fields of the
-@User@ type match the column names of @getUsers@.
+we receive when we run `getUsers`. Notice that the record fields of the
+`User` type match the column names of `getUsers`.
 
 ```haskell
 >>> data User = User { userName :: Text, userEmail :: Maybe Text } deriving (Show, .Generic)
@@ -192,9 +192,9 @@ Let's also create some users to add to the database.
 let
   users :: [User]
   users = 
-    [ User "Alice" (Just "alice@gmail.com")
+    [ User "Alice" (Just "alice`gmail.com")
     , User "Bob" Nothing
-    , User "Carole" (Just "carole@hotmail.com")
+    , User "Carole" (Just "carole`hotmail.com")
     ]
 :}
 ```
@@ -225,5 +225,5 @@ void . withConnection "host=localhost port=5432 dbname=exampledb" $
   & pqThen session
   & thenDefine teardown
 :}
-[User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just role@hotmail.com"}]
+[User {userName = "Alice", userEmail = Just "alice`gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just role`hotmail.com"}]
 ```
