@@ -100,8 +100,6 @@ We can easily see the generated SQL is unsuprising looking.
 
 ```haskell
 >>> renderDefinition setup
-```
-```sql
 "CREATE TABLE users (id serial, name text NOT NULL, CONSTRAINT pk_users PRIMARY KEY (id)); CREATE TABLE emails (id serial, user_id int NOT NULL, email text, CONSTRAINT pk_emails PRIMARY KEY (id), CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES rs (id) ON DELETE CASCADE ON UPDATE CASCADE);"
 ```
 
@@ -117,8 +115,6 @@ let
   teardown = dropTable #emails >>> dropTable #users
 :}
 >>> renderDefinition teardown
-```
-```sql
 "DROP TABLE emails; DROP TABLE users;"
 ```
 
@@ -154,8 +150,6 @@ let
 >>> renderManipulation insertUser
 "INSERT INTO users (id, name) VALUES (DEFAULT, ($1 :: text)) ON CONFLICT DO NOTHING URNING id AS fromOnly;"
 >>> renderManipulation insertEmail
-```
-```sql
 "INSERT INTO emails (id, user_id, email) VALUES (DEFAULT, ($1 :: int4), ($2 :: text)N CONFLICT DO NOTHING;"
 ```
 
@@ -177,8 +171,6 @@ let
         (#u ! #id .== #e ! #user_id)) )
 :}
 >>> renderQuery getUsers
-```
-```sql
 "SELECT u.name AS userName, e.email AS userEmail FROM users AS u INNER JOIN emails e ON (u.id = e.user_id)"
 ```
 Now that we've defined the SQL side of things, we'll need a Haskell type
@@ -233,7 +225,5 @@ void . withConnection "host=localhost port=5432 dbname=exampledb" $
   & pqThen session
   & thenDefine teardown
 :}
-```
-```sql
 [User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just role@hotmail.com"}]
 ```
