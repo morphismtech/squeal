@@ -93,7 +93,7 @@ rollbackOrCommit
   => PQ schema0 schema1 io x
   -> PQ schema0 schema1 io x
 rollbackOrCommit u = PQ $ \ conn -> mask $ \ restore -> do
-  x <- restore (runPQ u conn)
+  x <- restore (unPQ u conn)
     `onException` (liftBase (LibPQ.exec (unK conn) "ROLLBACK"))
   _ <- liftBase (LibPQ.exec (unK conn) "COMMIT")
   return x
