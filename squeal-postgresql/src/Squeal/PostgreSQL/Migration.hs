@@ -31,8 +31,8 @@ type EmailsTable =
 
 >>> :{
 let
-  makeUsers :: Step IO '[] '["users" ::: UsersTable]
-  makeUsers = Step
+  makeUsers :: Migration IO '[] '["users" ::: UsersTable]
+  makeUsers = Migration
     { name = "make users table"
     , up = void . define $
         createTable #users
@@ -45,9 +45,9 @@ let
 
 >>> :{
 let
-  makeEmails :: Step IO '["users" ::: UsersTable]
+  makeEmails :: Migration IO '["users" ::: UsersTable]
     '["users" ::: UsersTable, "emails" ::: EmailsTable]
-  makeEmails = Step
+  makeEmails = Migration
     { name = "make emails table"
     , up = void . define $
         createTable #emails
@@ -61,27 +61,30 @@ let
     }
 :}
 
+Now that we have a couple migrations we can chain them together.
+
+>>> let migrations = makeUsers :>> makeEmails :>> Done
+
 >>> :{
 let
-  numSteps
-    :: Has "migration" schema MigrationTable
+  numMigrations
+    :: Has "schema_migrations" schema MigrationsTable
     => PQ schema schema IO ()
-  numSteps = do
-    result <- runQuery (selectStar (from (table (#migration `As` #m))))
+  numMigrations = do
+    result <- runQuery (selectStar (from (table (#schema_migrations `As` #m))))
     RowNumber num <- ntuples result
     liftBase $ print num
 :}
 
->>> let migration = makeUsers :>> makeEmails :>> Done
 >>> :{
 withConnection "host=localhost port=5432 dbname=exampledb" $
-  migrateUp migration
-  & pqThen numSteps
-  & pqThen (migrateDown migration)
+  migrateUp migrations
+  & pqThen numMigrations
+  & pqThen (migrateDown migrations)
 :}
-NOTICE:  relation "migration" already exists, skipping
+NOTICE:  relation "schema_migrations" already exists, skipping
 Row 2
-NOTICE:  relation "migration" already exists, skipping
+NOTICE:  relation "schema_migrations" already exists, skipping
 -}
 
 {-# LANGUAGE
@@ -100,19 +103,20 @@ NOTICE:  relation "migration" already exists, skipping
 module Squeal.PostgreSQL.Migration
   ( -- * Migration
     Migration (..)
-  , Step (..)
   , migrateUp
   , migrateDown
-    -- * MigrationTable
-  , MigrationTable
-  , createMigration
-  , insertStep
-  , deleteStep
-  , selectStep
+    -- * Aligned lists
+  , AlignedList (..)
+  , single
+    -- * Migration table
+  , MigrationsTable
+  , createMigrations
+  , insertMigration
+  , deleteMigration
+  , selectMigration
   ) where
 
 import Control.Category
--- import Control.Exception.Lifted
 import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Trans.Control
@@ -124,141 +128,141 @@ import Prelude hiding (id, (.))
 
 import Squeal.PostgreSQL
 
--- | A `Migration` is a schema-aligned sequence of `Step`s.
-data Migration io schema0 schema1 where
-  Done :: Migration io schema schema
-  (:>>)
-    :: Step io schema0 schema1
-    -> Migration io schema1 schema2
-    -> Migration io schema0 schema2
-infixr 7 :>>
-instance Category (Migration io) where
-  id = Done
-  (.) migration = \case
-    Done -> migration
-    step :>> steps -> step :>> (steps >>> migration)
-
--- | A `Step` of a `Migration`, should contain an inverse pair of
+-- | A `Migration` of a `Migrations`, should contain an inverse pair of
 -- `up` and `down` instructions and a unique `name`.
-data Step io schema0 schema1 = Step
-  { name :: Text -- ^ The `name` of a `Step`.
+data Migration io schema0 schema1 = Migration
+  { name :: Text -- ^ The `name` of a `Migration`.
     -- Each `name` in a `Migration` should be unique.
-  , up :: PQ schema0 schema1 io () -- ^ The `up` instruction of a `Step`.
-  , down :: PQ schema1 schema0 io () -- ^ The `down` instruction of a `Step`.
+  , up :: PQ schema0 schema1 io () -- ^ The `up` instruction of a `Migration`.
+  , down :: PQ schema1 schema0 io () -- ^ The `down` instruction of a `Migration`.
   }
 
--- | Run a `Migration` by creating the `MigrationTable`
--- if it does not exist and then in a transaction, for each each `Step`
--- query to see if the `Step` is executed. If not, then
--- execute the `Step` and insert its row in `MigrationTable`.
+-- | An `AlignedList` is a type-aligned list or free category.
+data AlignedList p x0 x1 where
+  Done :: AlignedList p x x
+  (:>>) :: p x0 x1 -> AlignedList p x1 x2 -> AlignedList p x0 x2
+infixr 7 :>>
+instance Category (AlignedList p) where
+  id = Done
+  (.) list = \case
+    Done -> list
+    step :>> steps -> step :>> (steps >>> list)
+
+single :: p x0 x1 -> AlignedList p x0 x1
+single step = step :>> Done
+
+-- | Run a `Migration` by creating the `MigrationsTable`
+-- if it does not exist and then in a transaction, for each each `Migration`
+-- query to see if the `Migration` is executed. If not, then
+-- execute the `Migration` and insert its row in `MigrationsTable`.
 migrateUp
   :: MonadBaseControl IO io
-  => Migration io schema0 schema1 -- ^ migration to run
+  => AlignedList (Migration io) schema0 schema1 -- ^ migrations to run
   -> PQ
-    ("migration" ::: MigrationTable ': schema0)
-    ("migration" ::: MigrationTable ': schema1)
+    ("schema_migrations" ::: MigrationsTable ': schema0)
+    ("schema_migrations" ::: MigrationsTable ': schema1)
     io ()
 migrateUp migration =
-  define createMigration
+  define createMigrations
   & pqBind okResult
   & pqThen (begin defaultMode)
   & pqBind okResult
-  & pqThen (upSteps migration & rollbackOrCommit)
+  & pqThen (upMigrations migration & rollbackOrCommit)
   where
 
-    upSteps
+    upMigrations
       :: MonadBaseControl IO io
-      => Migration io schema0 schema1
+      => AlignedList (Migration io) schema0 schema1
       -> PQ
-        ("migration" ::: MigrationTable ': schema0)
-        ("migration" ::: MigrationTable ': schema1)
+        ("schema_migrations" ::: MigrationsTable ': schema0)
+        ("schema_migrations" ::: MigrationsTable ': schema1)
         io ()
-    upSteps = \case
+    upMigrations = \case
       Done -> return ()
-      step :>> steps -> upStep step & pqThen (upSteps steps)
+      step :>> steps -> upMigration step & pqThen (upMigrations steps)
 
-    upStep
+    upMigration
       :: MonadBase IO io
-      => Step io schema0 schema1 -> PQ
-        ("migration" ::: MigrationTable ': schema0)
-        ("migration" ::: MigrationTable ': schema1)
+      => Migration io schema0 schema1 -> PQ
+        ("schema_migrations" ::: MigrationsTable ': schema0)
+        ("schema_migrations" ::: MigrationsTable ': schema1)
         io ()
-    upStep step =
+    upMigration step =
       queryExecuted step
       & pqBind (\ (RowNumber executed) ->
         if executed == 1 -- up step has already been executed
           then PQ (\ _ -> return (K ())) -- unsafely switch schemas
           else
             pqEmbed (up step) -- safely switch schemas
-            & pqThen (manipulateParams insertStep (Only (name step)))
-            & pqBind okResult)
+            & pqThen (manipulateParams insertMigration (Only (name step)))
             -- insert execution record
+            & pqBind okResult)
 
     queryExecuted
       :: MonadBase IO io
-      => Step io schema0 schema1 -> PQ
-        ("migration" ::: MigrationTable ': schema0)
-        ("migration" ::: MigrationTable ': schema0)
+      => Migration io schema0 schema1 -> PQ
+        ("schema_migrations" ::: MigrationsTable ': schema0)
+        ("schema_migrations" ::: MigrationsTable ': schema0)
         io RowNumber
     queryExecuted step = do
-      result <- runQueryParams selectStep (Only (name step))
+      result <- runQueryParams selectMigration (Only (name step))
       okResult result
       ntuples result
 
--- | Rewind a `Migration` by creating the `MigrationTable`
--- if it does not exist and then in a transaction, for each each `Step`
--- query to see if the `Step` is executed. If it is, then
--- rewind the `Step` and delete its row in `MigrationTable`.
+-- | Rewind a `Migration` by creating the `MigrationsTable`
+-- if it does not exist and then in a transaction, for each each `Migration`
+-- query to see if the `Migration` is executed. If it is, then
+-- rewind the `Migration` and delete its row in `MigrationsTable`.
 migrateDown
   :: MonadBaseControl IO io
-  => Migration io schema0 schema1 -- ^ migration to rewind
+  => AlignedList (Migration io) schema0 schema1 -- ^ migration to rewind
   -> PQ
-    ("migration" ::: MigrationTable ': schema1)
-    ("migration" ::: MigrationTable ': schema0)
+    ("schema_migrations" ::: MigrationsTable ': schema1)
+    ("schema_migrations" ::: MigrationsTable ': schema0)
     io ()
 migrateDown migration =
-  define createMigration
+  define createMigrations
   & pqBind okResult
   & pqThen (begin defaultMode)
   & pqBind okResult
-  & pqThen (downSteps migration & rollbackOrCommit)
+  & pqThen (downMigrations migration & rollbackOrCommit)
   where
 
-    downSteps
+    downMigrations
       :: MonadBaseControl IO io
-      => Migration io schema0 schema1 -> PQ
-        ("migration" ::: MigrationTable ': schema1)
-        ("migration" ::: MigrationTable ': schema0)
+      => AlignedList (Migration io) schema0 schema1 -> PQ
+        ("schema_migrations" ::: MigrationsTable ': schema1)
+        ("schema_migrations" ::: MigrationsTable ': schema0)
         io ()
-    downSteps = \case
+    downMigrations = \case
       Done -> return ()
-      step :>> steps -> downSteps steps & pqThen (downStep step)
+      step :>> steps -> downMigrations steps & pqThen (downMigration step)
 
-    downStep
+    downMigration
       :: MonadBase IO io
-      => Step io schema0 schema1 -> PQ
-        ("migration" ::: MigrationTable ': schema1)
-        ("migration" ::: MigrationTable ': schema0)
+      => Migration io schema0 schema1 -> PQ
+        ("schema_migrations" ::: MigrationsTable ': schema1)
+        ("schema_migrations" ::: MigrationsTable ': schema0)
         io ()
-    downStep step =
+    downMigration step =
       queryExecuted step
       & pqBind (\ (RowNumber executed) ->
         if executed == 0 -- up step has not been executed
           then PQ (\ _ -> return (K ())) -- unsafely switch schemas
           else
             pqEmbed (down step) -- safely switch schemas
-            & pqThen (manipulateParams deleteStep (Only (name step)))
+            & pqThen (manipulateParams deleteMigration (Only (name step)))
             -- delete execution record
             & pqBind okResult)
 
     queryExecuted
       :: MonadBase IO io
-      => Step io schema0 schema1 -> PQ
-        ("migration" ::: MigrationTable ': schema1)
-        ("migration" ::: MigrationTable ': schema1)
+      => Migration io schema0 schema1 -> PQ
+        ("schema_migrations" ::: MigrationsTable ': schema1)
+        ("schema_migrations" ::: MigrationsTable ': schema1)
         io RowNumber
     queryExecuted step = do
-      result <- runQueryParams selectStep (Only (name step))
+      result <- runQueryParams selectMigration (Only (name step))
       okResult result
       ntuples result
 
@@ -272,44 +276,44 @@ okResult result = do
       Just msg -> error ("migrationDown: " <> show msg)
 
 -- | The `TableType` for a Squeal migration.
-type MigrationTable =
-  '[ "unique_name" ::: 'Unique '["name"]] :=>
+type MigrationsTable =
+  '[ "migrations_unique_name" ::: 'Unique '["name"]] :=>
   '[ "name"        ::: 'NoDef :=> 'NotNull 'PGtext
    , "executed_at" :::   'Def :=> 'NotNull 'PGtimestamptz
    ]
 
--- | Creates a `MigrationTable` if it does not already exist.
-createMigration
-  :: Has "migration" schema MigrationTable
+-- | Creates a `MigrationsTable` if it does not already exist.
+createMigrations
+  :: Has "schema_migrations" schema MigrationsTable
   => Definition schema schema
-createMigration =
-  createTableIfNotExists #migration
+createMigrations =
+  createTableIfNotExists #schema_migrations
     ( (text & notNull) `As` #name :*
       (timestampWithTimeZone & notNull & default_ currentTimestamp)
         `As` #executed_at :* Nil )
-    ( unique (Column #name :* Nil) `As` #unique_name :* Nil )
+    ( unique (Column #name :* Nil) `As` #migrations_unique_name :* Nil )
 
--- | Inserts a `Step` into the `MigrationTable`
-insertStep
-  :: Has "migration" schema MigrationTable
+-- | Inserts a `Migration` into the `MigrationsTable`
+insertMigration
+  :: Has "schema_migrations" schema MigrationsTable
   => Manipulation schema '[ 'NotNull 'PGtext] '[]
-insertStep = insertRow_ #migration
+insertMigration = insertRow_ #schema_migrations
   ( Set (param @1) `As` #name :*
     Default `As` #executed_at :* Nil )
 
--- | Deletes a `Step` from the `MigrationTable`
-deleteStep
-  :: Has "migration" schema MigrationTable
+-- | Deletes a `Migration` from the `MigrationsTable`
+deleteMigration
+  :: Has "schema_migrations" schema MigrationsTable
   => Manipulation schema '[ 'NotNull 'PGtext ] '[]
-deleteStep = deleteFrom_ #migration (#name .== param @1)
+deleteMigration = deleteFrom_ #schema_migrations (#name .== param @1)
 
--- | Selects a `Step` from the `MigrationTable`, returning
+-- | Selects a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was executed.
-selectStep
-  :: Has "migration" schema MigrationTable
+selectMigration
+  :: Has "schema_migrations" schema MigrationsTable
   => Query schema '[ 'NotNull 'PGtext ]
     '[ "executed_at" ::: 'NotNull 'PGtimestamptz ]
-selectStep = select
+selectMigration = select
   (#executed_at `As` #executed_at :* Nil)
-  ( from (table (#migration `As` #m))
+  ( from (table (#schema_migrations `As` #m))
     & where_ (#name .== param @1))
