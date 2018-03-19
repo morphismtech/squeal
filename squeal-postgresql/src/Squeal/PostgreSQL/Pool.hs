@@ -42,17 +42,22 @@ import Generics.SOP (K(..))
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Schema
 
--- | `PoolPQ` @schema@ should be a drop-in replacement for
--- `PQ schema schema`.
+-- | `PoolPQ` @schema@ should be a drop-in replacement for `PQ` @schema schema@.
 newtype PoolPQ (schema :: TablesType) m x =
   PoolPQ { runPoolPQ :: Pool (K Connection schema) -> m x }
   deriving Functor
 
+-- | Create a striped pool of connections.
+-- Although the garbage collector will destroy all idle connections when the pool is garbage collected it's recommended to manually destroyAllResources when you're done with the pool so that the connections are freed up as soon as possible.
 createConnectionPool
-  -- ^ Create a striped pool of connections.
-  -- Although the garbage collector will destroy all idle connections when the pool is garbage collected it's recommended to manually destroyAllResources when you're done with the pool so that the connections are freed up as soon as possible.
   :: MonadBase IO io
-  => ByteString -- ^ conninfo
+  => ByteString
+  -- ^ The passed string can be empty to use all default parameters, or it can
+  -- contain one or more parameter settings separated by whitespace.
+  -- Each parameter setting is in the form keyword = value. Spaces around the equal
+  -- sign are optional. To write an empty value or a value containing spaces,
+  -- surround it with single quotes, e.g., keyword = 'a value'. Single quotes and
+  -- backslashes within the value must be escaped with a backslash, i.e., ' and \.
   -> Int
   -- ^ The number of stripes (distinct sub-pools) to maintain. The smallest acceptable value is 1.
   -> NominalDiffTime
