@@ -129,8 +129,8 @@ data PGType
   | PGinet -- ^ IPv4 or IPv6 host address
   | PGjson -- ^	textual JSON data
   | PGjsonb -- ^ binary JSON data, decomposed
-  | PGarray PGType -- ^ variable length array
-  | PGarrayN Nat PGType -- ^ fixed length array
+  | PGvararray PGType -- ^ variable length array
+  | PGfixarray Nat PGType -- ^ fixed length array
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
 -- | The object identifier of a `PGType`.
@@ -255,7 +255,7 @@ type TableType = ([(Symbol,TableConstraint)],ColumnsType)
 --          '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
 --          '[ "id" ::: 'Def :=> 'NotNull 'PGint4
 --           , "name" ::: 'NoDef :=> 'NotNull 'PGtext
---           , "vec" ::: 'NoDef :=> 'NotNull ('PGarray 'PGint2)
+--           , "vec" ::: 'NoDef :=> 'NotNull ('PGvararray 'PGint2)
 --           ]
 --      , "emails" :::
 --          '[  "pk_emails" ::: 'PrimaryKey '["id"]

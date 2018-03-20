@@ -29,7 +29,7 @@ type Schema =
        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
-        , "vec" ::: 'NoDef :=> 'NotNull ('PGarray 'PGint2)
+        , "vec" ::: 'NoDef :=> 'NotNull ('PGvararray 'PGint2)
         ]
    , "emails" :::
        '[  "pk_emails" ::: 'PrimaryKey '["id"]
@@ -60,7 +60,7 @@ setup =
 teardown :: Definition Schema '[]
 teardown = dropTable #emails >>> dropTable #users
 
-insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'NotNull ('PGarray 'PGint2)]
+insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'NotNull ('PGvararray 'PGint2)]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
 insertUser = insertRows #users
   (Default `As` #id :* Set (param @1) `As` #name :* Set (param @2) `As` #vec :* Nil) []
@@ -76,7 +76,7 @@ insertEmail = insertRows #emails
 getUsers :: Query Schema '[]
   '[ "userName" ::: 'NotNull 'PGtext
    , "userEmail" ::: 'Null 'PGtext
-   , "userVec" ::: 'NotNull ('PGarray 'PGint2)]
+   , "userVec" ::: 'NotNull ('PGvararray 'PGint2)]
 getUsers = select
   (#u ! #name `As` #userName :* #e ! #email `As` #userEmail :* #u ! #vec `As` #userVec :* Nil)
   ( from (table (#users `As` #u)

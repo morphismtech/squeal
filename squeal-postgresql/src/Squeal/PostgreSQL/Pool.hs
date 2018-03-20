@@ -48,7 +48,7 @@ newtype PoolPQ (schema :: TablesType) m x =
   deriving Functor
 
 -- | Create a striped pool of connections.
--- Although the garbage collector will destroy all idle connections when the pool is garbage collected it's recommended to manually destroyAllResources when you're done with the pool so that the connections are freed up as soon as possible.
+-- Although the garbage collector will destroy all idle connections when the pool is garbage collected it's recommended to manually `destroyAllResources` when you're done with the pool so that the connections are freed up as soon as possible.
 createConnectionPool
   :: MonadBase IO io
   => ByteString

@@ -100,6 +100,7 @@ module Squeal.PostgreSQL.Expression
   , max_, maxDistinct, min_, minDistinct
     -- * Tables
   , Table (UnsafeTable, renderTable)
+    -- * Types
   , TypeExpression (UnsafeTypeExpression, renderTypeExpression)
   , PGTyped (pgtype)
   , bool
@@ -349,12 +350,12 @@ nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
 array
   :: [Expression tables grouping params ('Null ty)]
   -- ^ array elements
-  -> Expression tables grouping params (nullity ('PGarray ty))
+  -> Expression tables grouping params (nullity ('PGvararray ty))
 array xs = UnsafeExpression $
   "ARRAY[" <> commaSeparated (renderExpression <$> xs) <> "]"
 
 instance Monoid
-  (Expression tables grouping params (nullity ('PGarray ty))) where
+  (Expression tables grouping params (nullity ('PGvararray ty))) where
     mempty = array []
     mappend = unsafeBinaryOp "||"
 
@@ -1165,14 +1166,14 @@ jsonb = UnsafeTypeExpression "jsonb"
 -- | variable length array
 vararray
   :: TypeExpression ('NoDef :=> 'Null pg)
-  -> TypeExpression ('NoDef :=> 'Null ('PGarray pg))
+  -> TypeExpression ('NoDef :=> 'Null ('PGvararray pg))
 vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
 -- | fixed length array
 fixarray
   :: KnownNat n
   => proxy n
   -> TypeExpression ('NoDef :=> 'Null pg)
-  -> TypeExpression ('NoDef :=> 'Null ('PGarrayN n pg))
+  -> TypeExpression ('NoDef :=> 'Null ('PGfixarray n pg))
 fixarray p ty = UnsafeTypeExpression $
   renderTypeExpression ty <> "[" <> renderNat p <> "]"
 
@@ -1216,7 +1217,7 @@ instance PGTyped 'PGinterval where pgtype = interval
 instance PGTyped 'PGuuid where pgtype = uuid
 instance PGTyped 'PGjson where pgtype = json
 instance PGTyped 'PGjsonb where pgtype = jsonb
-instance PGTyped ty => PGTyped ('PGarray ty) where
+instance PGTyped ty => PGTyped ('PGvararray ty) where
   pgtype = vararray (pgtype @ty)
-instance (KnownNat n, PGTyped ty) => PGTyped ('PGarrayN n ty) where
+instance (KnownNat n, PGTyped ty) => PGTyped ('PGfixarray n ty) where
   pgtype = fixarray (Proxy @n) (pgtype @ty)
