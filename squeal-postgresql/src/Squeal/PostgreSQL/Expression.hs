@@ -1183,8 +1183,8 @@ fixarray p ty = UnsafeTypeExpression $
 -- | used in `createTable` commands as a column constraint to ensure
 -- @NULL@ is not present
 notNull
-  :: TypeExpression (constraints :=> 'Null ty)
-  -> TypeExpression (constraints :=> 'NotNull ty)
+  :: TypeExpression (def :=> 'Null ty)
+  -> TypeExpression (def :=> 'NotNull ty)
 notNull ty = UnsafeTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
 
 -- | used in `createTable` commands as a column constraint to give a default
