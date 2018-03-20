@@ -46,13 +46,11 @@ import Control.Exception.Lifted
 import Control.Monad.Base
 import Control.Monad.Trans.Control
 import Data.ByteString
-import Data.Function
 import Data.Monoid
 import Generics.SOP
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
-import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Prettyprint
 import Squeal.PostgreSQL.PQ
@@ -97,10 +95,11 @@ transactionallySchema
   -> PQ schema0 schema1 io x
   -> PQ schema0 schema1 io x
 transactionallySchema mode u = PQ $ \ conn -> mask $ \ restore -> do
-  liftBase (LibPQ.exec (unK conn) ("BEGIN" <+> renderTransactionMode mode <> ";"))
+  _ <- liftBase . LibPQ.exec (unK conn) $
+    "BEGIN" <+> renderTransactionMode mode <> ";"
   x <- restore (unPQ u conn)
     `onException` (liftBase (LibPQ.exec (unK conn) "ROLLBACK"))
-  _ <- liftBase (LibPQ.exec (unK conn) "COMMIT")
+  _ <- liftBase $ LibPQ.exec (unK conn) "COMMIT"
   return x
 
 -- | Run a schema changing computation `transactionallySchema_` in `DefaultMode`.
