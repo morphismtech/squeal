@@ -165,9 +165,7 @@ migrateUp
 migrateUp migration =
   define createMigrations
   & pqBind okResult
-  & pqThen (begin defaultMode)
-  & pqBind okResult
-  & pqThen (upMigrations migration & rollbackOrCommit)
+  & pqThen (transactionallySchema_ (upMigrations migration))
   where
 
     upMigrations
@@ -220,12 +218,10 @@ migrateDown
     ("schema_migrations" ::: MigrationsTable ': schema1)
     ("schema_migrations" ::: MigrationsTable ': schema0)
     io ()
-migrateDown migration =
+migrateDown migrations =
   define createMigrations
   & pqBind okResult
-  & pqThen (begin defaultMode)
-  & pqBind okResult
-  & pqThen (downMigrations migration & rollbackOrCommit)
+  & pqThen (transactionallySchema_ (downMigrations migrations))
   where
 
     downMigrations

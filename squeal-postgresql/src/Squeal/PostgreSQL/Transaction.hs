@@ -28,7 +28,8 @@ module Squeal.PostgreSQL.Transaction
   , begin
   , commit
   , rollback
-  , rollbackOrCommit
+  , transactionallySchema
+  , transactionallySchema_
     -- * Transaction Mode
   , TransactionMode (..)
   , defaultMode
@@ -45,11 +46,13 @@ import Control.Exception.Lifted
 import Control.Monad.Base
 import Control.Monad.Trans.Control
 import Data.ByteString
+import Data.Function
 import Data.Monoid
 import Generics.SOP
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
+import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Prettyprint
 import Squeal.PostgreSQL.PQ
@@ -87,16 +90,25 @@ commit = manipulate $ UnsafeManipulation "COMMIT;"
 rollback :: MonadPQ schema tx => tx (K Result NilRelation)
 rollback = manipulate $ UnsafeManipulation "ROLLBACK;"
 
--- | @ROLLBACK@ a transaction upon `Exception`, otherwise @COMMIT@.
-rollbackOrCommit
-  :: MonadBaseControl IO io 
-  => PQ schema0 schema1 io x
+-- | Run a schema changing computation `transactionallySchema`.
+transactionallySchema
+  :: MonadBaseControl IO io
+  => TransactionMode
   -> PQ schema0 schema1 io x
-rollbackOrCommit u = PQ $ \ conn -> mask $ \ restore -> do
+  -> PQ schema0 schema1 io x
+transactionallySchema mode u = PQ $ \ conn -> mask $ \ restore -> do
+  liftBase (LibPQ.exec (unK conn) ("BEGIN" <+> renderTransactionMode mode <> ";"))
   x <- restore (unPQ u conn)
     `onException` (liftBase (LibPQ.exec (unK conn) "ROLLBACK"))
   _ <- liftBase (LibPQ.exec (unK conn) "COMMIT")
   return x
+
+-- | Run a schema changing computation `transactionallySchema_` in `DefaultMode`.
+transactionallySchema_
+  :: MonadBaseControl IO io
+  => PQ schema0 schema1 io x
+  -> PQ schema0 schema1 io x
+transactionallySchema_ = transactionallySchema defaultMode
 
 -- | The available transaction characteristics are the transaction `IsolationLevel`,
 -- the transaction access mode (`ReadWrite` or `ReadOnly`), and the `DeferrableMode`.
