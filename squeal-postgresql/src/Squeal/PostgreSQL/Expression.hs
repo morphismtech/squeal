@@ -816,7 +816,7 @@ unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
 
 -- | >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity 'PGnumeric]] grouping params (nullity 'PGnumeric)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGnumeric]] ('Grouped bys) params (nullity 'PGnumeric)
 --   expression = sum_ #col
 -- in renderExpression expression
 -- :}
@@ -830,7 +830,7 @@ sum_ = unsafeAggregate "sum"
 
 -- | >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity 'PGnumeric]] grouping params (nullity 'PGnumeric)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGnumeric]] (Grouped bys) params (nullity 'PGnumeric)
 --   expression = sumDistinct #col
 -- in renderExpression expression
 -- :}
@@ -861,7 +861,7 @@ instance PGAvg 'PGinterval 'PGinterval
 
 -- | >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity 'PGint4]] grouping params (nullity 'PGint4)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
 --   expression = bitAnd #col
 -- in renderExpression expression
 -- :}
@@ -875,7 +875,7 @@ bitAnd = unsafeAggregate "bit_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity 'PGint4]] grouping params (nullity 'PGint4)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
 --   expression = bitOr #col
 -- in renderExpression expression
 -- :}
@@ -889,7 +889,7 @@ bitOr = unsafeAggregate "bit_or"
 
 -- | >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity 'PGint4]] grouping params (nullity 'PGint4)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
 --   expression = bitAndDistinct #col
 -- in renderExpression expression
 -- :}
@@ -903,7 +903,7 @@ bitAndDistinct = unsafeAggregateDistinct "bit_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity 'PGint4]] grouping params (nullity 'PGint4)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
 --   expression = bitOrDistinct #col
 -- in renderExpression expression
 -- :}
@@ -917,7 +917,7 @@ bitOrDistinct = unsafeAggregateDistinct "bit_or"
 
 -- | >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity 'PGbool]] grouping params (nullity 'PGbool)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
 --   expression = boolAnd #col
 -- in renderExpression expression
 -- :}
@@ -930,7 +930,7 @@ boolAnd = unsafeAggregate "bool_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity 'PGbool]] grouping params (nullity 'PGbool)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
 --   expression = boolOr #col
 -- in renderExpression expression
 -- :}
@@ -943,7 +943,7 @@ boolOr = unsafeAggregate "bool_or"
 
 -- | >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity 'PGbool]] grouping params (nullity 'PGbool)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
 --   expression = boolAndDistinct #col
 -- in renderExpression expression
 -- :}
@@ -956,7 +956,7 @@ boolAndDistinct = unsafeAggregateDistinct "bool_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity 'PGbool]] grouping params (nullity 'PGbool)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
 --   expression = boolOrDistinct #col
 -- in renderExpression expression
 -- :}
@@ -977,7 +977,7 @@ countStar = UnsafeExpression $ "count(*)"
 
 -- | >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity ty]] grouping params (nullity 'PGbool)
+--   expression :: Expression '[tab ::: '["col" ::: nullity ty]] (Grouped bys) params ('NotNull 'PGint8)
 --   expression = count #col
 -- in renderExpression expression
 -- :}
@@ -990,7 +990,7 @@ count = unsafeAggregate "count"
 
 -- | >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity ty]] grouping params (nullity 'PGbool)
+--   expression :: Expression '[tab ::: '["col" ::: nullity ty]] (Grouped bys) params ('NotNull 'PGint8)
 --   expression = countDistinct #col
 -- in renderExpression expression
 -- :}
@@ -1005,7 +1005,7 @@ countDistinct = unsafeAggregateDistinct "count"
 --
 -- >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity 'PGbool]] grouping params (nullity 'PGbool)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
 --   expression = every #col
 -- in renderExpression expression
 -- :}
@@ -1020,7 +1020,7 @@ every = unsafeAggregate "every"
 --
 -- >>> :{
 -- let
---   expression :: Expression [tab ::: ["col" ::: nullity 'PGbool]] grouping params (nullity 'PGbool)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
 --   expression = everyDistinct #col
 -- in renderExpression expression
 -- :}
@@ -1169,6 +1169,9 @@ vararray
   -> TypeExpression ('NoDef :=> 'Null ('PGvararray pg))
 vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
 -- | fixed length array
+--
+-- >>> renderTypeExpression (fixarray (Proxy @2) json)
+-- "json[2]"
 fixarray
   :: KnownNat n
   => proxy n

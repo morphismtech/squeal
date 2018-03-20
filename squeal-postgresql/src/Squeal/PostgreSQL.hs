@@ -196,7 +196,7 @@
 -- void . withConnection "host=localhost port=5432 dbname=exampledb" $
 --   define setup
 --   & pqThen session
---   & thenDefine teardown
+--   & pqThen (define teardown)
 -- :}
 -- [User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole@hotmail.com"}]
 
