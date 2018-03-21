@@ -72,7 +72,7 @@ let
     => PQ schema schema IO ()
   numMigrations = do
     result <- runQuery (selectStar (from (table (#schema_migrations `As` #m))))
-    RowNumber num <- ntuples result
+    num <- ntuples result
     liftBase $ print num
 :}
 
@@ -187,7 +187,7 @@ migrateUp migration =
         io ()
     upMigration step =
       queryExecuted step
-      & pqBind (\ (RowNumber executed) ->
+      & pqBind (\ executed ->
         if executed == 1 -- up step has already been executed
           then PQ (\ _ -> return (K ())) -- unsafely switch schemas
           else
@@ -201,7 +201,7 @@ migrateUp migration =
       => Migration io schema0 schema1 -> PQ
         ("schema_migrations" ::: MigrationsTable ': schema0)
         ("schema_migrations" ::: MigrationsTable ': schema0)
-        io RowNumber
+        io Row
     queryExecuted step = do
       result <- runQueryParams selectMigration (Only (name step))
       okResult result
@@ -242,7 +242,7 @@ migrateDown migrations =
         io ()
     downMigration step =
       queryExecuted step
-      & pqBind (\ (RowNumber executed) ->
+      & pqBind (\ executed ->
         if executed == 0 -- up step has not been executed
           then PQ (\ _ -> return (K ())) -- unsafely switch schemas
           else
@@ -256,7 +256,7 @@ migrateDown migrations =
       => Migration io schema0 schema1 -> PQ
         ("schema_migrations" ::: MigrationsTable ': schema1)
         ("schema_migrations" ::: MigrationsTable ': schema1)
-        io RowNumber
+        io Row
     queryExecuted step = do
       result <- runQueryParams selectMigration (Only (name step))
       okResult result

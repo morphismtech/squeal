@@ -22,7 +22,7 @@ Squeal transaction control language.
 #-}
 
 module Squeal.PostgreSQL.Transaction
-  ( -- * Transactions
+  ( -- * Transaction
     transactionally
   , transactionally_
   , begin

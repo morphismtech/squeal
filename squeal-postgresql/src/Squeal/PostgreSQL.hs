@@ -185,7 +185,7 @@
 --   session :: PQ Schema Schema IO ()
 --   session = do
 --     idResults <- traversePrepared insertUser (Only . userName <$> users)
---     ids <- traverse (fmap fromOnly . getRow (RowNumber 0)) idResults
+--     ids <- traverse (fmap fromOnly . getRow 0) idResults
 --     traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
 --     usersResult <- runQuery getUsers
 --     usersRows <- getRows usersResult

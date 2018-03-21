@@ -33,7 +33,8 @@ a `MonadPQ` constraint for running a `Manipulation` or `Query`.
 
 module Squeal.PostgreSQL.PQ
   ( -- * Connection
-    connectdb
+    LibPQ.Connection
+  , connectdb
   , finish
   , withConnection
   , lowerConnection
@@ -47,22 +48,17 @@ module Squeal.PostgreSQL.PQ
   , PQRun
   , pqliftWith
     -- * Result
-  , RowNumber (RowNumber, unRowNumber)
-  , ColumnNumber (UnsafeColumnNumber, getColumnNumber)
-  , HasColumnNumber (columnNumber)
-  , getValue
+  , LibPQ.Result
+  , LibPQ.Row
   , getRow
   , getRows
-  , ntuples
   , nextRow
   , firstRow
   , liftResult
+  , ntuples
+  , LibPQ.ExecStatus (..)
   , resultStatus
   , resultErrorMessage
-  -- * Re-export
-  , LibPQ.Connection
-  , LibPQ.Result
-  , LibPQ.ExecStatus (..)
   ) where
 
 import Control.Exception.Lifted
@@ -76,8 +72,6 @@ import Data.Kind
 import Data.Monoid
 import Data.Traversable
 import Generics.SOP
-import GHC.Exts hiding (fromList)
-import GHC.TypeLits
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
@@ -504,54 +498,15 @@ instance MonadBaseControl b m => MonadBaseControl b (PQ schema schema m) where
     pqliftWith $ \ run -> liftBaseWith $ \ runInBase -> f $ runInBase . run
   restoreM = PQ . const . restoreM
 
--- | Just newtypes around a `CInt`
-newtype RowNumber = RowNumber { unRowNumber :: LibPQ.Row }
-
--- | In addition to being newtypes around a `CInt`, a `ColumnNumber` is
--- parameterized by a `Nat`ural number and acts as an index into a row.
-newtype ColumnNumber (n :: Nat) (cs :: [k]) (c :: k) =
-  UnsafeColumnNumber { getColumnNumber :: LibPQ.Column }
-
--- | >>> getColumnNumber (columnNumber @5 @'[_,_,_,_,_,_])
--- Col 5
-class KnownNat n => HasColumnNumber n columns column
-  | n columns -> column where
-  columnNumber :: ColumnNumber n columns column
-  columnNumber =
-    UnsafeColumnNumber . fromIntegral $ natVal' (proxy# :: Proxy# n)
-instance {-# OVERLAPPING #-} HasColumnNumber 0 (column1:columns) column1
-instance {-# OVERLAPPABLE #-}
-  (KnownNat n, HasColumnNumber (n-1) columns column)
-    => HasColumnNumber n (column' : columns) column
-
--- | Get a single value corresponding to a given row and column number
--- from a `Result`.
-getValue
-  :: (FromColumnValue colty y, MonadBase IO io)
-  => RowNumber -- ^ row
-  -> ColumnNumber n columns colty -- ^ col
-  -> K LibPQ.Result columns -- ^ result
-  -> io y
-getValue
-  (RowNumber r)
-  (UnsafeColumnNumber c :: ColumnNumber n columns colty)
-  (K result)
-   = fmap (fromColumnValue @colty . K) $ liftBase $ do
-      numRows <- LibPQ.ntuples result
-      when (numRows < r) $ error $
-        "getValue: expected at least " <> show r <> "rows but only saw "
-        <> show numRows
-      LibPQ.getvalue result r c
-
 -- | Get a row corresponding to a given row number from a `Result`.
 getRow
   :: (FromRow columns y, MonadBase IO io)
-  => RowNumber
+  => LibPQ.Row
   -- ^ row
   -> K LibPQ.Result columns
   -- ^ result
   -> io y
-getRow (RowNumber r) (K result :: K LibPQ.Result columns) = liftBase $ do
+getRow r (K result :: K LibPQ.Result columns) = liftBase $ do
   numRows <- LibPQ.ntuples result
   when (numRows < r) $ error $
     "getRow: expected at least " <> show r <> "rows but only saw "
@@ -562,27 +517,23 @@ getRow (RowNumber r) (K result :: K LibPQ.Result columns) = liftBase $ do
     Nothing -> error "getRow: found unexpected length"
     Just row -> return $ fromRow @columns row
 
--- | Returns the number of rows (tuples) in the query result.
-ntuples :: MonadBase IO io => K LibPQ.Result columns -> io RowNumber
-ntuples (K result) = liftBase $ RowNumber <$> LibPQ.ntuples result
-
 -- | Intended to be used for unfolding in streaming libraries, `nextRow`
 -- takes a total number of rows (which can be found with `ntuples`)
 -- and a `Result` and given a row number if it's too large returns `Nothing`,
 -- otherwise returning the row along with the next row number.
 nextRow
   :: (FromRow columns y, MonadBase IO io)
-  => RowNumber -- ^ total number of rows
+  => LibPQ.Row -- ^ total number of rows
   -> K LibPQ.Result columns -- ^ result
-  -> RowNumber -- ^ row number
-  -> io (Maybe (RowNumber,y))
-nextRow (RowNumber total) (K result :: K LibPQ.Result columns) (RowNumber r)
+  -> LibPQ.Row -- ^ row number
+  -> io (Maybe (LibPQ.Row,y))
+nextRow total (K result :: K LibPQ.Result columns) r
   = liftBase $ if r >= total then return Nothing else do
     let len = fromIntegral (lengthSList (Proxy @columns))
     row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
     case fromList row' of
       Nothing -> error "nextRow: found unexpected length"
-      Just row -> return $ Just (RowNumber (r+1), fromRow @columns row)
+      Just row -> return $ Just (r+1, fromRow @columns row)
 
 -- | Get all rows from a `Result`.
 getRows
@@ -618,6 +569,10 @@ liftResult
   => (LibPQ.Result -> IO x)
   -> K LibPQ.Result results -> io x
 liftResult f (K result) = liftBase $ f result
+
+-- | Returns the number of rows (tuples) in the query result.
+ntuples :: MonadBase IO io => K LibPQ.Result columns -> io LibPQ.Row
+ntuples = liftResult LibPQ.ntuples
 
 -- | Returns the result status of the command.
 resultStatus :: MonadBase IO io => K LibPQ.Result results -> io LibPQ.ExecStatus

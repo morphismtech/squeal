@@ -99,7 +99,7 @@ session :: (MonadBase IO pq, MonadPQ Schema pq) => pq ()
 session = do
   liftBase $ Char8.putStrLn "manipulating"
   idResults <- traversePrepared insertUser ([(userName user, userVec user) | user <- users])
-  ids <- traverse (fmap fromOnly . getRow (RowNumber 0)) idResults
+  ids <- traverse (fmap fromOnly . getRow 0) idResults
   traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
   liftBase $ Char8.putStrLn "querying"
   usersResult <- runQuery getUsers
