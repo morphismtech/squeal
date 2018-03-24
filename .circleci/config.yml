@@ -2,9 +2,6 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/postgres:9.6
-        environment:
-          POSTGRES_DB: exampledb
       - image: haskell:latest
     steps:
       - checkout
