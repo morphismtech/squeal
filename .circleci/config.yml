@@ -15,6 +15,6 @@ jobs:
       - run: stack test
       - run: stack haddock
       - save_cache:
-        key: dependency-cache
-        paths:
-          - ".stack-work"
+          key: dependency-cache
+          paths:
+            - ".stack-work"
