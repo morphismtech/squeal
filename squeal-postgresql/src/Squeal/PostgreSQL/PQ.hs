@@ -196,12 +196,6 @@ evalPQ (PQ pq) conn = unK <$> pq conn
 -- in a larger schema using `pqEmbed`.
 class IndexedMonadTransPQ pq where
 
-  -- | Safely embed a computation in a larger schema.
-  pqEmbed
-    :: Monad m
-    => pq schema0 schema1 m x
-    -> pq (table ': schema0) (table : schema1) m x
-
   -- | indexed analog of `<*>`
   pqAp
     :: Monad m
@@ -229,6 +223,12 @@ class IndexedMonadTransPQ pq where
     -> pq schema0 schema1 m x
     -> pq schema0 schema2 m y
 
+  -- | Safely embed a computation in a larger schema.
+  pqEmbed
+    :: Monad m
+    => pq schema0 schema1 m x
+    -> pq (table ': schema0) (table : schema1) m x
+
   -- | Run a `Definition` with `LibPQ.exec`, we expect that libpq obeys the law
   --
   -- @define statement1 & pqThen (define statement2) = define (statement1 >>> statement2)@
@@ -238,10 +238,6 @@ class IndexedMonadTransPQ pq where
     -> pq schema0 schema1 io (K LibPQ.Result '[])
 
 instance IndexedMonadTransPQ PQ where
-
-  pqEmbed (PQ pq) = PQ $ \ (K conn) -> do
-    K x <- pq (K conn)
-    return $ K x
 
   pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
     K f' <- f conn
@@ -255,6 +251,10 @@ instance IndexedMonadTransPQ PQ where
     unPQ (f x') (K (unK conn))
 
   pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
+
+  pqEmbed (PQ pq) = PQ $ \ (K conn) -> do
+    K x <- pq (K conn)
+    return $ K x
 
   define (UnsafeDefinition q) = PQ $ \ (K conn) -> do
     resultMaybe <- liftBase $ LibPQ.exec conn q
