@@ -49,6 +49,7 @@ import Data.Kind
 import Data.Scientific
 import Data.Time
 import Data.UUID
+import Data.Vector (Vector)
 import Data.Word
 import Generics.SOP
 import GHC.TypeLits
@@ -58,6 +59,7 @@ import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict hiding (unpack)
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text as Strict
+import qualified Data.Vector as Vector
 import qualified GHC.Generics as GHC
 import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
@@ -113,38 +115,42 @@ instance ToParam UTCTime 'PGtimestamptz where
 instance ToParam DiffTime 'PGinterval where toParam = K . Encoding.interval_int
 instance ToParam Value 'PGjson where toParam = K . Encoding.json_ast
 instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
+instance (HasOid pg, ToParam x pg)
+  => ToParam (Vector (Maybe x)) ('PGvararray pg) where
+    toParam = K . Encoding.nullableArray_vector
+      (oid @pg) (unK . toParam @x @pg)
 
 -- | A `ToColumnParam` constraint lifts the `ToParam` encoding 
 -- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s. You should
 -- not define instances of `ToColumnParam`, just use the provided instances.
-class ToColumnParam (x :: Type) (ty :: ColumnType) where
-  -- | >>> toColumnParam @Int16 @('Required ('NotNull 'PGint2)) 0
+class ToColumnParam (x :: Type) (ty :: NullityType) where
+  -- | >>> toColumnParam @Int16 @('NotNull 'PGint2) 0
   -- K (Just "\NUL\NUL")
   --
-  -- >>> toColumnParam @(Maybe Int16) @('Required ('Null 'PGint2)) (Just 0)
+  -- >>> toColumnParam @(Maybe Int16) @('Null 'PGint2) (Just 0)
   -- K (Just "\NUL\NUL")
   --
-  -- >>> toColumnParam @(Maybe Int16) @('Required ('Null 'PGint2)) Nothing
+  -- >>> toColumnParam @(Maybe Int16) @('Null 'PGint2) Nothing
   -- K Nothing
   toColumnParam :: x -> K (Maybe Strict.ByteString) ty
-instance ToParam x pg => ToColumnParam x (optionality ('NotNull pg)) where
+instance ToParam x pg => ToColumnParam x ('NotNull pg) where
   toColumnParam = K . Just . Encoding.encodingBytes . unK . toParam @x @pg
-instance ToParam x pg => ToColumnParam (Maybe x) (optionality ('Null pg)) where
+instance ToParam x pg => ToColumnParam (Maybe x) ('Null pg) where
   toColumnParam = K . fmap (Encoding.encodingBytes . unK . toParam @x @pg)
 
 -- | A `ToParams` constraint generically sequences the encodings of `Type`s
 -- of the fields of a tuple or record to a row of `ColumnType`s. You should
 -- not define instances of `ToParams`. Instead define `Generic` instances
 -- which in turn provide `ToParams` instances.
-class SListI tys => ToParams (x :: Type) (tys :: [ColumnType]) where
-  -- | >>> type PGparams = '[ 'Required ('NotNull 'PGbool), 'Required ('Null 'PGint2)]
-  -- >>> toParams @(Bool, Maybe Int16) @PGparams (False, Just 0)
+class SListI tys => ToParams (x :: Type) (tys :: [NullityType]) where
+  -- | >>> type Params = '[ 'NotNull 'PGbool, 'Null 'PGint2]
+  -- >>> toParams @(Bool, Maybe Int16) @'[ 'NotNull 'PGbool, 'Null 'PGint2] (False, Just 0)
   -- K (Just "\NUL") :* (K (Just "\NUL\NUL") :* Nil)
   --
   -- >>> :set -XDeriveGeneric
-  -- >>> data Hparams = Hparams { col1 :: Bool, col2 :: Maybe Int16} deriving GHC.Generic
-  -- >>> instance Generic Hparams
-  -- >>> toParams @Hparams @PGparams (Hparams False (Just 0))
+  -- >>> data Tuple = Tuple { p1 :: Bool, p2 :: Maybe Int16} deriving GHC.Generic
+  -- >>> instance Generic Tuple
+  -- >>> toParams @Tuple @Params (Tuple False (Just 0))
   -- K (Just "\NUL") :* (K (Just "\NUL\NUL") :* Nil)
   toParams :: x -> NP (K (Maybe Strict.ByteString)) tys
 instance (SListI tys, IsProductType x xs, AllZip ToColumnParam xs tys)
@@ -187,23 +193,31 @@ instance FromValue 'PGinterval DiffTime where
   fromValue _ = Decoding.interval_int
 instance FromValue 'PGjson Value where fromValue _ = Decoding.json_ast
 instance FromValue 'PGjsonb Value where fromValue _ = Decoding.jsonb_ast
+instance FromValue pg y => FromValue ('PGvararray pg) (Vector (Maybe y)) where
+  fromValue _ = Decoding.array
+    (Decoding.dimensionArray Vector.replicateM
+      (Decoding.nullableValueArray (fromValue (Proxy @pg))))
+instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
+  fromValue _ = Decoding.array
+    (Decoding.dimensionArray Vector.replicateM
+      (Decoding.nullableValueArray (fromValue (Proxy @pg))))
 
 -- | A `FromColumnValue` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, ColumnType)@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromColumnValue`, just use the provided instances.
-class FromColumnValue (colty :: (Symbol,ColumnType)) (y :: Type) where
+class FromColumnValue (colty :: (Symbol,NullityType)) (y :: Type) where
   -- | >>> :set -XTypeOperators -XOverloadedStrings
   -- >>> newtype Id = Id { getId :: Int16 } deriving Show
   -- >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
-  -- >>> fromColumnValue @("col" ::: 'Required ('NotNull 'PGint2)) @Id (K (Just "\NUL\SOH"))
+  -- >>> fromColumnValue @("col" ::: 'NotNull 'PGint2) @Id (K (Just "\NUL\SOH"))
   -- Id {getId = 1}
   --
-  -- >>> fromColumnValue @("col" ::: 'Required ('Null 'PGint2)) @(Maybe Id) (K (Just "\NUL\SOH"))
+  -- >>> fromColumnValue @("col" ::: 'Null 'PGint2) @(Maybe Id) (K (Just "\NUL\SOH"))
   -- Just (Id {getId = 1})
   fromColumnValue :: K (Maybe Strict.ByteString) colty -> y
 instance FromValue pg y
-  => FromColumnValue (column ::: ('Required ('NotNull pg))) y where
+  => FromColumnValue (column ::: ('NotNull pg)) y where
     fromColumnValue = \case
       K Nothing -> error "fromColumnValue: saw NULL when expecting NOT NULL"
       K (Just bytes) ->
@@ -214,7 +228,7 @@ instance FromValue pg y
         in
           either err id errOrValue
 instance FromValue pg y
-  => FromColumnValue (column ::: ('Required ('Null pg))) (Maybe y) where
+  => FromColumnValue (column ::: ('Null pg)) (Maybe y) where
     fromColumnValue (K nullOrBytes)
       = either err id
       . Decoding.valueParser (fromValue @pg @y Proxy)
@@ -223,21 +237,21 @@ instance FromValue pg y
         err str = error $ "fromColumnValue: " ++ Strict.unpack str
 
 -- | A `FromRow` constraint generically sequences the parsings of the columns
--- of a `ColumnsType` into the fields of a record `Type` provided they have
+-- of a `RelationType` into the fields of a record `Type` provided they have
 -- the same field names. You should not define instances of `FromRow`.
 -- Instead define `Generic` and `HasDatatypeInfo` instances which in turn
 -- provide `FromRow` instances.
-class SListI results => FromRow (results :: ColumnsType) y where
+class SListI results => FromRow (results :: RelationType) y where
   -- | >>> :set -XOverloadedStrings
   -- >>> import Data.Text
-  -- >>> newtype Id = Id { getId :: Int16 } deriving Show
-  -- >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
-  -- >>> data Hrow = Hrow { userId :: Id, userName :: Maybe Text } deriving (Show, GHC.Generic)
-  -- >>> instance Generic Hrow
-  -- >>> instance HasDatatypeInfo Hrow
-  -- >>> type PGrow = '["userId" ::: 'Required ('NotNull 'PGint2), "userName" ::: 'Required ('Null 'PGtext)]
-  -- >>> fromRow @PGrow @Hrow (K (Just "\NUL\SOH") :* K (Just "bloodninja") :* Nil)
-  -- Hrow {userId = Id {getId = 1}, userName = Just "bloodninja"}
+  -- >>> newtype UserId = UserId { getUserId :: Int16 } deriving Show
+  -- >>> instance FromValue 'PGint2 UserId where fromValue = fmap UserId . fromValue
+  -- >>> data UserRow = UserRow { userId :: UserId, userName :: Maybe Text } deriving (Show, GHC.Generic)
+  -- >>> instance Generic UserRow
+  -- >>> instance HasDatatypeInfo UserRow
+  -- >>> type User = '["userId" ::: 'NotNull 'PGint2, "userName" ::: 'Null 'PGtext]
+  -- >>> fromRow @User @UserRow (K (Just "\NUL\SOH") :* K (Just "bloodninja") :* Nil)
+  -- UserRow {userId = UserId {getUserId = 1}, userName = Just "bloodninja"}
   fromRow :: NP (K (Maybe Strict.ByteString)) results -> y
 instance
   ( SListI results
@@ -252,11 +266,10 @@ instance
 -- `toParams` or decoding a single value with `fromRow`.
 --
 -- >>> import Data.Text
--- >>> toParams @(Only (Maybe Text)) @'[ 'Required ('Null 'PGtext)] (Only (Just "foo"))
+-- >>> toParams @(Only (Maybe Text)) @'[ 'Null 'PGtext] (Only (Just "foo"))
 -- K (Just "foo") :* Nil
 --
--- >>> type PGShortRow = '["fromOnly" ::: 'Required ('Null 'PGtext)]
--- >>> fromRow @PGShortRow @(Only (Maybe Text)) (K (Just "bar") :* Nil)
+-- >>> fromRow @'["fromOnly" ::: 'Null 'PGtext] @(Only (Maybe Text)) (K (Just "bar") :* Nil)
 -- Only {fromOnly = Just "bar"}
 newtype Only x = Only { fromOnly :: x }
   deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
