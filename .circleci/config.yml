@@ -9,8 +9,8 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-        keys:
-          - dependency-cache
+          keys:
+            - dependency-cache
       - run: stack build
       - run: stack test
       - run: stack haddock
