@@ -364,73 +364,73 @@ SELECT queries
 -- the intermediate table are actually output.
 select
   :: SListI columns
-  => NP (Aliased (Expression tables grouping params)) (column ': columns)
+  => NP (Aliased (Expression relations grouping params)) (column ': columns)
   -- ^ select list
-  -> TableExpression schema params tables grouping
+  -> TableExpression schema params relations grouping
   -- ^ intermediate virtual table
   -> Query schema params (column ': columns)
-select list tabs = UnsafeQuery $
+select list rels = UnsafeQuery $
   "SELECT"
   <+> renderCommaSeparated (renderAliasedAs renderExpression) list
-  <+> renderTableExpression tabs
+  <+> renderTableExpression rels
 
 -- | After the select list has been processed, the result table can
 -- be subject to the elimination of duplicate rows using `selectDistinct`.
 selectDistinct
   :: SListI columns
-  => NP (Aliased (Expression tables 'Ungrouped params)) (column ': columns)
+  => NP (Aliased (Expression relations 'Ungrouped params)) (column ': columns)
   -- ^ select list
-  -> TableExpression schema params tables 'Ungrouped
+  -> TableExpression schema params relations 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params (column ': columns)
-selectDistinct list tabs = UnsafeQuery $
+selectDistinct list rels = UnsafeQuery $
   "SELECT DISTINCT"
   <+> renderCommaSeparated (renderAliasedAs renderExpression) list
-  <+> renderTableExpression tabs
+  <+> renderTableExpression rels
 
 -- | The simplest kind of query is `selectStar` which emits all columns
 -- that the table expression produces.
 selectStar
-  :: HasUnique table tables columns
-  => TableExpression schema params tables 'Ungrouped
+  :: HasUnique relation relations columns
+  => TableExpression schema params relations 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
-selectStar tabs = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression tabs
+selectStar rels = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression rels
 
 -- | A `selectDistinctStar` emits all columns that the table expression
 -- produces and eliminates duplicate rows.
 selectDistinctStar
-  :: HasUnique table tables columns
-  => TableExpression schema params tables 'Ungrouped
+  :: HasUnique relation relations columns
+  => TableExpression schema params relations 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
-selectDistinctStar tabs = UnsafeQuery $
-  "SELECT DISTINCT" <+> "*" <+> renderTableExpression tabs
+selectDistinctStar rels = UnsafeQuery $
+  "SELECT DISTINCT" <+> "*" <+> renderTableExpression rels
 
 -- | When working with multiple tables, it can also be useful to ask
 -- for all the columns of a particular table, using `selectDotStar`.
 selectDotStar
-  :: Has table tables columns
-  => Alias table
+  :: Has relation relations columns
+  => Alias relation
   -- ^ particular virtual Table
-  -> TableExpression schema params tables 'Ungrouped
+  -> TableExpression schema params relations 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
-selectDotStar tab tables = UnsafeQuery $
-  "SELECT" <+> renderAlias tab <> ".*" <+> renderTableExpression tables
+selectDotStar rel relations = UnsafeQuery $
+  "SELECT" <+> renderAlias rel <> ".*" <+> renderTableExpression relations
 
 -- | A `selectDistinctDotStar` asks for all the columns of a particular table, 
 -- and eliminates duplicate rows.
 selectDistinctDotStar
-  :: Has table tables columns
-  => Alias table
+  :: Has relation relations columns
+  => Alias relation
   -- ^ particular virtual Table
-  -> TableExpression schema params tables 'Ungrouped
+  -> TableExpression schema params relations 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
-selectDistinctDotStar tab tables = UnsafeQuery $
-  "SELECT DISTINCT" <+> renderAlias tab <> ".*"
-  <+> renderTableExpression tables
+selectDistinctDotStar rel relations = UnsafeQuery $
+  "SELECT DISTINCT" <+> renderAlias rel <> ".*"
+  <+> renderTableExpression relations
 
 {-----------------------------------------
 Table Expressions
@@ -445,13 +445,13 @@ Table Expressions
 data TableExpression
   (schema :: TablesType)
   (params :: [NullityType])
-  (tables :: RelationsType)
+  (relations :: RelationsType)
   (grouping :: Grouping)
     = TableExpression
-    { fromClause :: FromClause schema params tables
+    { fromClause :: FromClause schema params relations
     -- ^ A table reference that can be a table name, or a derived table such
     -- as a subquery, a @JOIN@ construct, or complex combinations of these.
-    , whereClause :: [Condition tables 'Ungrouped params]
+    , whereClause :: [Condition relations 'Ungrouped params]
     -- ^ optional search coditions, combined with `.&&`. After the processing
     -- of the `fromClause` is done, each row of the derived virtual table
     -- is checked against the search condition. If the result of the
@@ -460,20 +460,20 @@ data TableExpression
     -- at least one column of the table generated in the `fromClause`;
     -- this is not required, but otherwise the WHERE clause will
     -- be fairly useless.
-    , groupByClause :: GroupByClause tables grouping
+    , groupByClause :: GroupByClause relations grouping
     -- ^ The `groupByClause` is used to group together those rows in a table
     -- that have the same values in all the columns listed. The order in which
     -- the columns are listed does not matter. The effect is to combine each
     -- set of rows having common values into one group row that represents all
     -- rows in the group. This is done to eliminate redundancy in the output
     -- and/or compute aggregates that apply to these groups.
-    , havingClause :: HavingClause tables grouping params
+    , havingClause :: HavingClause relations grouping params
     -- ^ If a table has been grouped using `groupBy`, but only certain groups
     -- are of interest, the `havingClause` can be used, much like a
     -- `whereClause`, to eliminate groups from the result. Expressions in the
     -- `havingClause` can refer both to grouped expressions and to ungrouped
     -- expressions (which necessarily involve an aggregate function).
-    , orderByClause :: [SortExpression tables grouping params]
+    , orderByClause :: [SortExpression relations grouping params]
     -- ^ The `orderByClause` is for optional sorting. When more than one
     -- `SortExpression` is specified, the later (right) values are used to sort
     -- rows that are equal according to the earlier (left) values.
@@ -491,11 +491,11 @@ data TableExpression
 
 -- | Render a `TableExpression`
 renderTableExpression
-  :: TableExpression schema params tables grouping
+  :: TableExpression schema params relations grouping
   -> ByteString
 renderTableExpression
-  (TableExpression tables whs' grps' hvs' srts' lims' offs') = mconcat
-    [ "FROM ", renderFromClause tables
+  (TableExpression frm' whs' grps' hvs' srts' lims' offs') = mconcat
+    [ "FROM ", renderFromClause frm'
     , renderWheres whs'
     , renderGroupByClause grps'
     , renderHavingClause hvs'
@@ -525,68 +525,68 @@ renderTableExpression
 -- `group`, `having`, `orderBy`, `limit` and `offset`, using the `&` operator
 -- to match the left-to-right sequencing of their placement in SQL.
 from
-  :: FromClause schema params tables -- ^ table reference
-  -> TableExpression schema params tables 'Ungrouped
-from tables = TableExpression tables [] NoGroups NoHaving [] [] []
+  :: FromClause schema params relations -- ^ table reference
+  -> TableExpression schema params relations 'Ungrouped
+from rels = TableExpression rels [] NoGroups NoHaving [] [] []
 
 -- | A `where_` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `whereClause`.
 where_
-  :: Condition tables 'Ungrouped params -- ^ filtering condition
-  -> TableExpression schema params tables grouping
-  -> TableExpression schema params tables grouping
-where_ wh tables = tables {whereClause = wh : whereClause tables}
+  :: Condition relations 'Ungrouped params -- ^ filtering condition
+  -> TableExpression schema params relations grouping
+  -> TableExpression schema params relations grouping
+where_ wh rels = rels {whereClause = wh : whereClause rels}
 
 -- | A `group` is a transformation of `TableExpression`s which switches
 -- its `Grouping` from `Ungrouped` to `Grouped`. Use @group Nil@ to perform
 -- a "grand total" aggregation query.
 group
   :: SListI bys
-  => NP (By tables) bys -- ^ grouped columns
-  -> TableExpression schema params tables 'Ungrouped 
-  -> TableExpression schema params tables ('Grouped bys)
-group bys tables = TableExpression
-  { fromClause = fromClause tables
-  , whereClause = whereClause tables
+  => NP (By relations) bys -- ^ grouped columns
+  -> TableExpression schema params relations 'Ungrouped 
+  -> TableExpression schema params relations ('Grouped bys)
+group bys rels = TableExpression
+  { fromClause = fromClause rels
+  , whereClause = whereClause rels
   , groupByClause = Group bys
   , havingClause = Having []
   , orderByClause = []
-  , limitClause = limitClause tables
-  , offsetClause = offsetClause tables
+  , limitClause = limitClause rels
+  , offsetClause = offsetClause rels
   }
 
 -- | A `having` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `havingClause`.
 having
-  :: Condition tables ('Grouped bys) params -- ^ having condition
-  -> TableExpression schema params tables ('Grouped bys)
-  -> TableExpression schema params tables ('Grouped bys)
-having hv tables = tables
-  { havingClause = case havingClause tables of Having hvs -> Having (hv:hvs) }
+  :: Condition relations ('Grouped bys) params -- ^ having condition
+  -> TableExpression schema params relations ('Grouped bys)
+  -> TableExpression schema params relations ('Grouped bys)
+having hv rels = rels
+  { havingClause = case havingClause rels of Having hvs -> Having (hv:hvs) }
 
 -- | An `orderBy` is an endomorphism of `TableExpression`s which appends an
 -- ordering to the right of the `orderByClause`.
 orderBy
-  :: [SortExpression tables grouping params] -- ^ sort expressions
-  -> TableExpression schema params tables grouping
-  -> TableExpression schema params tables grouping
-orderBy srts tables = tables {orderByClause = orderByClause tables ++ srts}
+  :: [SortExpression relations grouping params] -- ^ sort expressions
+  -> TableExpression schema params relations grouping
+  -> TableExpression schema params relations grouping
+orderBy srts rels = rels {orderByClause = orderByClause rels ++ srts}
 
 -- | A `limit` is an endomorphism of `TableExpression`s which adds to the
 -- `limitClause`.
 limit
   :: Word64 -- ^ limit parameter
-  -> TableExpression schema params tables grouping
-  -> TableExpression schema params tables grouping
-limit lim tables = tables {limitClause = lim : limitClause tables}
+  -> TableExpression schema params relations grouping
+  -> TableExpression schema params relations grouping
+limit lim rels = rels {limitClause = lim : limitClause rels}
 
 -- | An `offset` is an endomorphism of `TableExpression`s which adds to the
 -- `offsetClause`.
 offset
   :: Word64 -- ^ offset parameter
-  -> TableExpression schema params tables grouping
-  -> TableExpression schema params tables grouping
-offset off tables = tables {offsetClause = off : offsetClause tables}
+  -> TableExpression schema params relations grouping
+  -> TableExpression schema params relations grouping
+offset off rels = rels {offsetClause = off : offsetClause rels}
 
 {-----------------------------------------
 FROM clauses
@@ -596,7 +596,7 @@ FROM clauses
 A `FromClause` can be a table name, or a derived table such
 as a subquery, a @JOIN@ construct, or complex combinations of these.
 -}
-newtype FromClause schema params tables
+newtype FromClause schema params relations
   = UnsafeFromClause { renderFromClause :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
@@ -655,7 +655,7 @@ leftOuterJoin
   -- ^ @ON@ condition
   -> FromClause schema params left
   -- ^ left
-  -> FromClause schema params (Join left (NullifyTables right))
+  -> FromClause schema params (Join left (NullifyRelations right))
 leftOuterJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "LEFT OUTER JOIN" <+> renderFromClause right
   <+> "ON" <+> renderExpression on
@@ -673,7 +673,7 @@ rightOuterJoin
   -- ^ @ON@ condition
   -> FromClause schema params left
   -- ^ left
-  -> FromClause schema params (Join (NullifyTables left) right)
+  -> FromClause schema params (Join (NullifyRelations left) right)
 rightOuterJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "RIGHT OUTER JOIN" <+> renderFromClause right
   <+> "ON" <+> renderExpression on
@@ -693,7 +693,7 @@ fullOuterJoin
   -> FromClause schema params left
   -- ^ left
   -> FromClause schema params
-      (Join (NullifyTables left) (NullifyTables right))
+      (Join (NullifyRelations left) (NullifyRelations right))
 fullOuterJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "FULL OUTER JOIN" <+> renderFromClause right
   <+> "ON" <+> renderExpression on
@@ -708,40 +708,40 @@ Grouping
 -- column @col@; otherwise @By2 (\#tab \! \#col)@ will reference a table
 -- qualified column @tab.col@.
 data By
-    (tables :: RelationsType)
+    (relations :: RelationsType)
     (by :: (Symbol,Symbol)) where
     By
-      :: (HasUnique table tables columns, Has column columns ty)
+      :: (HasUnique relation relations columns, Has column columns ty)
       => Alias column
-      -> By tables '(table, column)
+      -> By relations '(relation, column)
     By2
-      :: (Has table tables columns, Has column columns ty)
-      => (Alias table, Alias column)
-      -> By tables '(table, column)
-deriving instance Show (By tables by)
-deriving instance Eq (By tables by)
-deriving instance Ord (By tables by)
+      :: (Has relation relations columns, Has column columns ty)
+      => (Alias relation, Alias column)
+      -> By relations '(relation, column)
+deriving instance Show (By relations by)
+deriving instance Eq (By relations by)
+deriving instance Ord (By relations by)
 
 -- | Renders a `By`.
-renderBy :: By tables tabcolty -> ByteString
+renderBy :: By relations by -> ByteString
 renderBy = \case
   By column -> renderAlias column
-  By2 (tab, column) -> renderAlias tab <> "." <> renderAlias column
+  By2 (rel, column) -> renderAlias rel <> "." <> renderAlias column
 
 -- | A `GroupByClause` indicates the `Grouping` of a `TableExpression`.
 -- A `NoGroups` indicates `Ungrouped` while a `Group` indicates `Grouped`.
 -- @NoGroups@ is distinguised from @Group Nil@ since no aggregation can be
 -- done on @NoGroups@ while all output `Expression`s must be aggregated
 -- in @Group Nil@.
-data GroupByClause tables grouping where
-  NoGroups :: GroupByClause tables 'Ungrouped
+data GroupByClause relations grouping where
+  NoGroups :: GroupByClause relations 'Ungrouped
   Group
     :: SListI bys
-    => NP (By tables) bys
-    -> GroupByClause tables ('Grouped bys)
+    => NP (By relations) bys
+    -> GroupByClause relations ('Grouped bys)
 
 -- | Renders a `GroupByClause`.
-renderGroupByClause :: GroupByClause tables grouping -> ByteString
+renderGroupByClause :: GroupByClause relations grouping -> ByteString
 renderGroupByClause = \case
   NoGroups -> ""
   Group Nil -> ""
@@ -751,17 +751,17 @@ renderGroupByClause = \case
 -- An `Ungrouped` `TableExpression` may only use `NoHaving` while a `Grouped`
 -- `TableExpression` must use `Having` whose conditions are combined with
 -- `.&&`.
-data HavingClause tables grouping params where
-  NoHaving :: HavingClause tables 'Ungrouped params
+data HavingClause relations grouping params where
+  NoHaving :: HavingClause relations 'Ungrouped params
   Having
-    :: [Condition tables ('Grouped bys) params]
-    -> HavingClause tables ('Grouped bys) params
-deriving instance Show (HavingClause tables grouping params)
-deriving instance Eq (HavingClause tables grouping params)
-deriving instance Ord (HavingClause tables grouping params)
+    :: [Condition relations ('Grouped bys) params]
+    -> HavingClause relations ('Grouped bys) params
+deriving instance Show (HavingClause relations grouping params)
+deriving instance Eq (HavingClause relations grouping params)
+deriving instance Ord (HavingClause relations grouping params)
 
 -- | Render a `HavingClause`.
-renderHavingClause :: HavingClause tables grouping params -> ByteString
+renderHavingClause :: HavingClause relations grouping params -> ByteString
 renderHavingClause = \case
   NoHaving -> ""
   Having [] -> ""
@@ -780,29 +780,29 @@ Sorting
 -- `AscNullsLast`, `DescNullsFirst` and `DescNullsLast` options are used to
 -- determine whether nulls appear before or after non-null values in the sort
 -- ordering of a `Null` result column.
-data SortExpression tables grouping params where
+data SortExpression relations grouping params where
     Asc
-      :: Expression tables grouping params ('NotNull ty)
-      -> SortExpression tables grouping params
+      :: Expression relations grouping params ('NotNull ty)
+      -> SortExpression relations grouping params
     Desc
-      :: Expression tables grouping params ('NotNull ty)
-      -> SortExpression tables grouping params
+      :: Expression relations grouping params ('NotNull ty)
+      -> SortExpression relations grouping params
     AscNullsFirst
-      :: Expression tables grouping params  ('Null ty)
-      -> SortExpression tables grouping params
+      :: Expression relations grouping params  ('Null ty)
+      -> SortExpression relations grouping params
     AscNullsLast
-      :: Expression tables grouping params  ('Null ty)
-      -> SortExpression tables grouping params
+      :: Expression relations grouping params  ('Null ty)
+      -> SortExpression relations grouping params
     DescNullsFirst
-      :: Expression tables grouping params  ('Null ty)
-      -> SortExpression tables grouping params
+      :: Expression relations grouping params  ('Null ty)
+      -> SortExpression relations grouping params
     DescNullsLast
-      :: Expression tables grouping params  ('Null ty)
-      -> SortExpression tables grouping params
-deriving instance Show (SortExpression tables grouping params)
+      :: Expression relations grouping params  ('Null ty)
+      -> SortExpression relations grouping params
+deriving instance Show (SortExpression relations grouping params)
 
 -- | Render a `SortExpression`.
-renderSortExpression :: SortExpression tables grouping params -> ByteString
+renderSortExpression :: SortExpression relations grouping params -> ByteString
 renderSortExpression = \case
   Asc expression -> renderExpression expression <+> "ASC"
   Desc expression -> renderExpression expression <+> "DESC"

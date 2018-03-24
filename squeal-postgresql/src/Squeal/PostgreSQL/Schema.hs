@@ -75,8 +75,8 @@ module Squeal.PostgreSQL.Schema
   , AllNotNull
   , NotAllNull
   , NullifyType
-  , NullifyColumns
-  , NullifyTables
+  , NullifyRelation
+  , NullifyRelations
   , Join
   , Create
   , AddColumn
@@ -434,19 +434,19 @@ type family NullifyType (ty :: NullityType) :: NullityType where
   NullifyType ('Null ty) = 'Null ty
   NullifyType ('NotNull ty) = 'Null ty
 
--- | `NullifyColumns` is an idempotent that nullifies a `ColumnsType`.
-type family NullifyColumns (columns :: RelationType) :: RelationType where
-  NullifyColumns '[] = '[]
-  NullifyColumns (column ::: ty ': columns) =
-    column ::: NullifyType ty ': NullifyColumns columns
+-- | `NullifyRelation` is an idempotent that nullifies a `ColumnsType`.
+type family NullifyRelation (columns :: RelationType) :: RelationType where
+  NullifyRelation '[] = '[]
+  NullifyRelation (column ::: ty ': columns) =
+    column ::: NullifyType ty ': NullifyRelation columns
 
--- | `NullifyTables` is an idempotent that nullifies a `RelationsType`
+-- | `NullifyRelations` is an idempotent that nullifies a `RelationsType`
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
-type family NullifyTables (tables :: RelationsType) :: RelationsType where
-  NullifyTables '[] = '[]
-  NullifyTables (table ::: columns ': tables) =
-    table ::: NullifyColumns columns ': NullifyTables tables
+type family NullifyRelations (tables :: RelationsType) :: RelationsType where
+  NullifyRelations '[] = '[]
+  NullifyRelations (table ::: columns ': tables) =
+    table ::: NullifyRelation columns ': NullifyRelations tables
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.

@@ -198,7 +198,7 @@ class (PGTyped (PGTypeOf ty), KnownNat n) => HasParameter
   (params :: [NullityType])
   (ty :: NullityType)
   | n params -> ty where
-    param :: Expression tables grouping params ty
+    param :: Expression relations grouping params ty
     param = UnsafeExpression $ parenthesized $
       "$" <> renderNat (Proxy @n) <+> "::"
         <+> renderTypeExpression (pgtype @(PGTypeOf ty))
@@ -207,61 +207,61 @@ instance {-# OVERLAPPING #-} PGTyped (PGTypeOf ty1)
 instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
   => HasParameter n (ty' : params) ty
 
-instance (HasUnique table tables columns, Has column columns ty)
-  => IsLabel column (Expression tables 'Ungrouped params ty) where
+instance (HasUnique relation relations columns, Has column columns ty)
+  => IsLabel column (Expression relations 'Ungrouped params ty) where
     fromLabel = UnsafeExpression $ renderAlias (Alias @column)
 
-instance (Has table tables columns, Has column columns ty)
-  => IsTableColumn table column (Expression tables 'Ungrouped params ty) where
-    table ! column = UnsafeExpression $
-      renderAlias table <> "." <> renderAlias column
+instance (Has relation relations columns, Has column columns ty)
+  => IsTableColumn relation column (Expression relations 'Ungrouped params ty) where
+    relation ! column = UnsafeExpression $
+      renderAlias relation <> "." <> renderAlias column
 
 {- | A `GroupedBy` constraint indicates that a table qualified column is
 a member of the auxiliary namespace created by @GROUP BY@ clauses and thus,
 may be called in an output `Expression` without aggregating.
 -}
-class (KnownSymbol table, KnownSymbol column)
-  => GroupedBy table column bys where
+class (KnownSymbol relation, KnownSymbol column)
+  => GroupedBy relation column bys where
     getGroup1
-      :: (HasUnique table tables columns, Has column columns ty)
+      :: (HasUnique relation relations columns, Has column columns ty)
       => Alias column
-      -> Expression tables ('Grouped bys) params ty
+      -> Expression relations ('Grouped bys) params ty
     getGroup1 column = UnsafeExpression $ renderAlias column
     getGroup2
-      :: (Has table tables columns, Has column columns ty)
-      => Alias table
+      :: (Has relation relations columns, Has column columns ty)
+      => Alias relation
       -> Alias column
-      -> Expression tables ('Grouped bys) params ty
-    getGroup2 table column = UnsafeExpression $
-      renderAlias table <> "." <> renderAlias column
-instance {-# OVERLAPPING #-} (KnownSymbol table, KnownSymbol column)
-  => GroupedBy table column ('(table,column) ': bys)
+      -> Expression relations ('Grouped bys) params ty
+    getGroup2 relation column = UnsafeExpression $
+      renderAlias relation <> "." <> renderAlias column
+instance {-# OVERLAPPING #-} (KnownSymbol relation, KnownSymbol column)
+  => GroupedBy relation column ('(table,column) ': bys)
 instance {-# OVERLAPPABLE #-}
-  ( KnownSymbol table
+  ( KnownSymbol relation
   , KnownSymbol column
-  , GroupedBy table column bys
-  ) => GroupedBy table column (tabcol ': bys)
+  , GroupedBy relation column bys
+  ) => GroupedBy relation column (tabcol ': bys)
   
 instance
-  ( HasUnique table tables columns
+  ( HasUnique relation relations columns
   , Has column columns ty
-  , GroupedBy table column bys
+  , GroupedBy relation column bys
   ) => IsLabel column
-    (Expression tables ('Grouped bys) params ty) where
+    (Expression relations ('Grouped bys) params ty) where
       fromLabel = getGroup1 (Alias @column)
   
 instance
-  ( Has table tables columns
+  ( Has relation relations columns
   , Has column columns ty
-  , GroupedBy table column bys
-  ) => IsTableColumn table column
-    (Expression tables ('Grouped bys) params ty) where (!) = getGroup2
+  , GroupedBy relation column bys
+  ) => IsTableColumn relation column
+    (Expression relations ('Grouped bys) params ty) where (!) = getGroup2
 
 -- | analagous to `Nothing`
 --
 -- >>> renderExpression $ null_
 -- "NULL"
-null_ :: Expression tables grouping params ('Null ty)
+null_ :: Expression relations grouping params ('Null ty)
 null_ = UnsafeExpression "NULL"
 
 -- | analagous to `Just`
@@ -269,9 +269,9 @@ null_ = UnsafeExpression "NULL"
 -- >>> renderExpression $ unNull true
 -- "TRUE"
 unNull
-  :: Expression tables grouping params ('NotNull ty)
+  :: Expression relations grouping params ('NotNull ty)
   -- ^ not @NULL@
-  -> Expression tables grouping params ('Null ty)
+  -> Expression relations grouping params ('Null ty)
 unNull = UnsafeExpression . renderExpression
 
 -- | return the leftmost value which is not NULL
@@ -279,11 +279,11 @@ unNull = UnsafeExpression . renderExpression
 -- >>> renderExpression $ coalesce [null_, unNull true] false
 -- "COALESCE(NULL, TRUE, FALSE)"
 coalesce
-  :: [Expression tables grouping params ('Null ty)]
+  :: [Expression relations grouping params ('Null ty)]
   -- ^ @NULL@s may be present
-  -> Expression tables grouping params ('NotNull ty)
+  -> Expression relations grouping params ('NotNull ty)
   -- ^ @NULL@ is absent
-  -> Expression tables grouping params ('NotNull ty)
+  -> Expression relations grouping params ('NotNull ty)
 coalesce nullxs notNullx = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
     ((renderExpression <$> nullxs) <> [renderExpression notNullx]))
@@ -293,26 +293,26 @@ coalesce nullxs notNullx = UnsafeExpression $
 -- >>> renderExpression $ fromNull true null_
 -- "COALESCE(NULL, TRUE)"
 fromNull
-  :: Expression tables grouping params ('NotNull ty)
+  :: Expression relations grouping params ('NotNull ty)
   -- ^ what to convert @NULL@ to
-  -> Expression tables grouping params ('Null ty)
-  -> Expression tables grouping params ('NotNull ty)
+  -> Expression relations grouping params ('Null ty)
+  -> Expression relations grouping params ('NotNull ty)
 fromNull notNullx nullx = coalesce [nullx] notNullx
 
 -- | >>> renderExpression $ null_ & isNull
 -- "NULL IS NULL"
 isNull
-  :: Expression tables grouping params ('Null ty)
+  :: Expression relations grouping params ('Null ty)
   -- ^ possibly @NULL@
-  -> Condition tables grouping params
+  -> Condition relations grouping params
 isNull x = UnsafeExpression $ renderExpression x <+> "IS NULL"
 
 -- | >>> renderExpression $ null_ & isn'tNull
 -- "NULL IS NOT NULL"
 isn'tNull
-  :: Expression tables grouping params ('Null ty)
+  :: Expression relations grouping params ('Null ty)
   -- ^ possibly @NULL@
-  -> Condition tables grouping params
+  -> Condition relations grouping params
 isn'tNull x = UnsafeExpression $ renderExpression x <+> "IS NOT NULL"
 
 -- | analagous to `maybe` using @IS NULL@
@@ -320,13 +320,13 @@ isn'tNull x = UnsafeExpression $ renderExpression x <+> "IS NOT NULL"
 -- >>> renderExpression $ matchNull true not_ null_
 -- "CASE WHEN NULL IS NULL THEN TRUE ELSE (NOT NULL) END"
 matchNull
-  :: Expression tables grouping params (nullty)
+  :: Expression relations grouping params (nullty)
   -- ^ what to convert @NULL@ to
-  -> ( Expression tables grouping params ('NotNull ty)
-       -> Expression tables grouping params (nullty) )
+  -> ( Expression relations grouping params ('NotNull ty)
+       -> Expression relations grouping params (nullty) )
   -- ^ function to perform when @NULL@ is absent
-  -> Expression tables grouping params ('Null ty)
-  -> Expression tables grouping params (nullty)
+  -> Expression relations grouping params ('Null ty)
+  -> Expression relations grouping params (nullty)
 matchNull y f x = ifThenElse (isNull x) y
   (f (UnsafeExpression (renderExpression x)))
 
@@ -337,47 +337,47 @@ matchNull y f x = ifThenElse (isNull x) y
 -- >>> renderExpression @_ @_ @'[_] $ fromNull false (nullIf false (param @1))
 -- "COALESCE(NULL IF (FALSE, ($1 :: bool)), FALSE)"
 nullIf
-  :: Expression tables grouping params ('NotNull ty)
+  :: Expression relations grouping params ('NotNull ty)
   -- ^ @NULL@ is absent
-  -> Expression tables grouping params ('NotNull ty)
+  -> Expression relations grouping params ('NotNull ty)
   -- ^ @NULL@ is absent
-  -> Expression tables grouping params ('Null ty)
+  -> Expression relations grouping params ('Null ty)
 nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
   (renderExpression x <> ", " <> renderExpression y)
 
 -- | >>> renderExpression $ array [null_, unNull false, unNull true]
 -- "ARRAY[NULL, FALSE, TRUE]"
 array
-  :: [Expression tables grouping params ('Null ty)]
+  :: [Expression relations grouping params ('Null ty)]
   -- ^ array elements
-  -> Expression tables grouping params (nullity ('PGvararray ty))
+  -> Expression relations grouping params (nullity ('PGvararray ty))
 array xs = UnsafeExpression $
   "ARRAY[" <> commaSeparated (renderExpression <$> xs) <> "]"
 
 instance Monoid
-  (Expression tables grouping params (nullity ('PGvararray ty))) where
+  (Expression relations grouping params (nullity ('PGvararray ty))) where
     mempty = array []
     mappend = unsafeBinaryOp "||"
 
 -- | >>> renderExpression @_ @_ @'[_] $ greatest currentTimestamp [param @1]
 -- "GREATEST(CURRENT_TIMESTAMP, ($1 :: timestamp with time zone))"
 greatest
-  :: Expression tables grouping params (nullty)
+  :: Expression relations grouping params (nullty)
   -- ^ needs at least 1 argument
-  -> [Expression tables grouping params (nullty)]
+  -> [Expression relations grouping params (nullty)]
   -- ^ or more
-  -> Expression tables grouping params (nullty)
+  -> Expression relations grouping params (nullty)
 greatest x xs = UnsafeExpression $ "GREATEST("
   <> commaSeparated (renderExpression <$> (x:xs)) <> ")"
 
 -- | >>> renderExpression $ least currentTimestamp [null_]
 -- "LEAST(CURRENT_TIMESTAMP, NULL)"
 least
-  :: Expression tables grouping params (nullty)
+  :: Expression relations grouping params (nullty)
   -- ^ needs at least 1 argument
-  -> [Expression tables grouping params (nullty)]
+  -> [Expression relations grouping params (nullty)]
   -- ^ or more
-  -> Expression tables grouping params (nullty)
+  -> Expression relations grouping params (nullty)
 least x xs = UnsafeExpression $ "LEAST("
   <> commaSeparated (renderExpression <$> (x:xs)) <> ")"
 
@@ -386,9 +386,9 @@ least x xs = UnsafeExpression $ "LEAST("
 unsafeBinaryOp
   :: ByteString
   -- ^ operator
-  -> Expression tables grouping params (ty0)
-  -> Expression tables grouping params (ty1)
-  -> Expression tables grouping params (ty2)
+  -> Expression relations grouping params (ty0)
+  -> Expression relations grouping params (ty1)
+  -> Expression relations grouping params (ty2)
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderExpression x <+> op <+> renderExpression y
 
@@ -397,8 +397,8 @@ unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
 unsafeUnaryOp
   :: ByteString
   -- ^ operator
-  -> Expression tables grouping params (ty0)
-  -> Expression tables grouping params (ty1)
+  -> Expression relations grouping params (ty0)
+  -> Expression relations grouping params (ty1)
 unsafeUnaryOp op x = UnsafeExpression $ parenthesized $
   op <+> renderExpression x
 
@@ -407,13 +407,13 @@ unsafeUnaryOp op x = UnsafeExpression $ parenthesized $
 unsafeFunction
   :: ByteString
   -- ^ function
-  -> Expression tables grouping params (xty)
-  -> Expression tables grouping params (yty)
+  -> Expression relations grouping params (xty)
+  -> Expression relations grouping params (yty)
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderExpression x)
 
 instance PGNum ty
-  => Num (Expression tables grouping params (nullity ty)) where
+  => Num (Expression relations grouping params (nullity ty)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
     (*) = unsafeBinaryOp "*"
@@ -425,12 +425,12 @@ instance PGNum ty
       . show
 
 instance (PGNum ty, PGFloating ty) => Fractional
-  (Expression tables grouping params (nullity ty)) where
+  (Expression relations grouping params (nullity ty)) where
     (/) = unsafeBinaryOp "/"
     fromRational x = fromInteger (numerator x) / fromInteger (denominator x)
 
 instance (PGNum ty, PGFloating ty) => Floating
-  (Expression tables grouping params (nullity ty)) where
+  (Expression relations grouping params (nullity ty)) where
     pi = UnsafeExpression "pi()"
     exp = unsafeFunction "exp"
     log = unsafeFunction "ln"
@@ -453,18 +453,18 @@ instance (PGNum ty, PGFloating ty) => Floating
 
 -- | >>> :{
 -- let
---   expression :: Expression tables grouping params (nullity 'PGfloat4)
+--   expression :: Expression relations grouping params (nullity 'PGfloat4)
 --   expression = atan2_ pi 2
 -- in renderExpression expression
 -- :}
 -- "atan2(pi(), 2)"
 atan2_
   :: PGFloating float
-  => Expression tables grouping params (nullity float)
+  => Expression relations grouping params (nullity float)
   -- ^ numerator
-  -> Expression tables grouping params (nullity float)
+  -> Expression relations grouping params (nullity float)
   -- ^ denominator
-  -> Expression tables grouping params (nullity float)
+  -> Expression relations grouping params (nullity float)
 atan2_ y x = UnsafeExpression $
   "atan2(" <> renderExpression y <> ", " <> renderExpression x <> ")"
 
@@ -477,9 +477,9 @@ atan2_ y x = UnsafeExpression $
 cast
   :: TypeExpression ('NoDef :=> 'Null ty1)
   -- ^ type to cast as
-  -> Expression tables grouping params (nullity ty0)
+  -> Expression relations grouping params (nullity ty0)
   -- ^ value to convert
-  -> Expression tables grouping params (nullity ty1)
+  -> Expression relations grouping params (nullity ty1)
 cast ty x = UnsafeExpression $ parenthesized $
   renderExpression x <+> "::" <+> renderTypeExpression ty
 
@@ -487,133 +487,133 @@ cast ty x = UnsafeExpression $ parenthesized $
 --
 -- >>> :{
 -- let
---   expression :: Expression tables grouping params (nullity 'PGint2)
+--   expression :: Expression relations grouping params (nullity 'PGint2)
 --   expression = 5 `quot_` 2
 -- in renderExpression expression
 -- :}
 -- "(5 / 2)"
 quot_
   :: PGIntegral int
-  => Expression tables grouping params (nullity int)
+  => Expression relations grouping params (nullity int)
   -- ^ numerator
-  -> Expression tables grouping params (nullity int)
+  -> Expression relations grouping params (nullity int)
   -- ^ denominator
-  -> Expression tables grouping params (nullity int)
+  -> Expression relations grouping params (nullity int)
 quot_ = unsafeBinaryOp "/"
 
 -- | remainder upon integer division
 --
 -- >>> :{
 -- let
---   expression :: Expression tables grouping params (nullity 'PGint2)
+--   expression :: Expression relations grouping params (nullity 'PGint2)
 --   expression = 5 `rem_` 2
 -- in renderExpression expression
 -- :}
 -- "(5 % 2)"
 rem_
   :: PGIntegral int
-  => Expression tables grouping params (nullity int)
+  => Expression relations grouping params (nullity int)
   -- ^ numerator
-  -> Expression tables grouping params (nullity int)
+  -> Expression relations grouping params (nullity int)
   -- ^ denominator
-  -> Expression tables grouping params (nullity int)
+  -> Expression relations grouping params (nullity int)
 rem_ = unsafeBinaryOp "%"
 
 -- | >>> :{
 -- let
---   expression :: Expression tables grouping params (nullity 'PGfloat4)
+--   expression :: Expression relations grouping params (nullity 'PGfloat4)
 --   expression = trunc pi
 -- in renderExpression expression
 -- :}
 -- "trunc(pi())"
 trunc
   :: PGFloating frac
-  => Expression tables grouping params (nullity frac)
+  => Expression relations grouping params (nullity frac)
   -- ^ fractional number
-  -> Expression tables grouping params (nullity frac)
+  -> Expression relations grouping params (nullity frac)
 trunc = unsafeFunction "trunc"
 
 -- | >>> :{
 -- let
---   expression :: Expression tables grouping params (nullity 'PGfloat4)
+--   expression :: Expression relations grouping params (nullity 'PGfloat4)
 --   expression = round_ pi
 -- in renderExpression expression
 -- :}
 -- "round(pi())"
 round_
   :: PGFloating frac
-  => Expression tables grouping params (nullity frac)
+  => Expression relations grouping params (nullity frac)
   -- ^ fractional number
-  -> Expression tables grouping params (nullity frac)
+  -> Expression relations grouping params (nullity frac)
 round_ = unsafeFunction "round"
 
 -- | >>> :{
 -- let
---   expression :: Expression tables grouping params (nullity 'PGfloat4)
+--   expression :: Expression relations grouping params (nullity 'PGfloat4)
 --   expression = ceiling_ pi
 -- in renderExpression expression
 -- :}
 -- "ceiling(pi())"
 ceiling_
   :: PGFloating frac
-  => Expression tables grouping params (nullity frac)
+  => Expression relations grouping params (nullity frac)
   -- ^ fractional number
-  -> Expression tables grouping params (nullity frac)
+  -> Expression relations grouping params (nullity frac)
 ceiling_ = unsafeFunction "ceiling"
 
 -- | A `Condition` is a boolean valued `Expression`. While SQL allows
 -- conditions to have @NULL@, squeal instead chooses to disallow @NULL@,
 -- forcing one to handle the case of @NULL@ explicitly to produce
 -- a `Condition`.
-type Condition tables grouping params =
-  Expression tables grouping params ('NotNull 'PGbool)
+type Condition relations grouping params =
+  Expression relations grouping params ('NotNull 'PGbool)
 
 -- | >>> renderExpression true
 -- "TRUE"
-true :: Condition tables grouping params
+true :: Condition relations grouping params
 true = UnsafeExpression "TRUE"
 
 -- | >>> renderExpression false
 -- "FALSE"
-false :: Condition tables grouping params
+false :: Condition relations grouping params
 false = UnsafeExpression "FALSE"
 
 -- | >>> renderExpression $ not_ true
 -- "(NOT TRUE)"
 not_
-  :: Condition tables grouping params
-  -> Condition tables grouping params
+  :: Condition relations grouping params
+  -> Condition relations grouping params
 not_ = unsafeUnaryOp "NOT"
 
 -- | >>> renderExpression $ true .&& false
 -- "(TRUE AND FALSE)"
 (.&&)
-  :: Condition tables grouping params
-  -> Condition tables grouping params
-  -> Condition tables grouping params
+  :: Condition relations grouping params
+  -> Condition relations grouping params
+  -> Condition relations grouping params
 (.&&) = unsafeBinaryOp "AND"
 
 -- | >>> renderExpression $ true .|| false
 -- "(TRUE OR FALSE)"
 (.||)
-  :: Condition tables grouping params
-  -> Condition tables grouping params
-  -> Condition tables grouping params
+  :: Condition relations grouping params
+  -> Condition relations grouping params
+  -> Condition relations grouping params
 (.||) = unsafeBinaryOp "OR"
 
 -- | >>> :{
 -- let
---   expression :: Expression tables grouping params (nullity 'PGint2)
+--   expression :: Expression relations grouping params (nullity 'PGint2)
 --   expression = caseWhenThenElse [(true, 1), (false, 2)] 3
 -- in renderExpression expression
 -- :}
 -- "CASE WHEN TRUE THEN 1 WHEN FALSE THEN 2 ELSE 3 END"
 caseWhenThenElse
-  :: [ ( Condition tables grouping params
-       , Expression tables grouping params (ty)
+  :: [ ( Condition relations grouping params
+       , Expression relations grouping params (ty)
      ) ]
-  -> Expression tables grouping params (ty)
-  -> Expression tables grouping params (ty)
+  -> Expression relations grouping params (ty)
+  -> Expression relations grouping params (ty)
 caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   [ "CASE"
   , mconcat
@@ -629,16 +629,16 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
 
 -- | >>> :{
 -- let
---   expression :: Expression tables grouping params (nullity 'PGint2)
+--   expression :: Expression relations grouping params (nullity 'PGint2)
 --   expression = ifThenElse true 1 0
 -- in renderExpression expression
 -- :}
 -- "CASE WHEN TRUE THEN 1 ELSE 0 END"
 ifThenElse
-  :: Condition tables grouping params
-  -> Expression tables grouping params (ty)
-  -> Expression tables grouping params (ty)
-  -> Expression tables grouping params (ty)
+  :: Condition relations grouping params
+  -> Expression relations grouping params (ty)
+  -> Expression relations grouping params (ty)
+  -> Expression relations grouping params (ty)
 ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 
 -- | Comparison operations like `.==`, `./=`, `.>`, `.>=`, `.<` and `.<=`
@@ -647,85 +647,85 @@ ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 -- >>> renderExpression $ unNull true .== null_
 -- "(TRUE = NULL)"
 (.==)
-  :: Expression tables grouping params (nullity ty) -- ^ lhs
-  -> Expression tables grouping params (nullity ty) -- ^ rhs
-  -> Expression tables grouping params (nullity 'PGbool)
+  :: Expression relations grouping params (nullity ty) -- ^ lhs
+  -> Expression relations grouping params (nullity ty) -- ^ rhs
+  -> Expression relations grouping params (nullity 'PGbool)
 (.==) = unsafeBinaryOp "="
 infix 4 .==
 
 -- | >>> renderExpression $ unNull true ./= null_
 -- "(TRUE <> NULL)"
 (./=)
-  :: Expression tables grouping params (nullity ty) -- ^ lhs
-  -> Expression tables grouping params (nullity ty) -- ^ rhs
-  -> Expression tables grouping params (nullity 'PGbool)
+  :: Expression relations grouping params (nullity ty) -- ^ lhs
+  -> Expression relations grouping params (nullity ty) -- ^ rhs
+  -> Expression relations grouping params (nullity 'PGbool)
 (./=) = unsafeBinaryOp "<>"
 infix 4 ./=
 
 -- | >>> renderExpression $ unNull true .>= null_
 -- "(TRUE >= NULL)"
 (.>=)
-  :: Expression tables grouping params (nullity ty) -- ^ lhs
-  -> Expression tables grouping params (nullity ty) -- ^ rhs
-  -> Expression tables grouping params (nullity 'PGbool)
+  :: Expression relations grouping params (nullity ty) -- ^ lhs
+  -> Expression relations grouping params (nullity ty) -- ^ rhs
+  -> Expression relations grouping params (nullity 'PGbool)
 (.>=) = unsafeBinaryOp ">="
 infix 4 .>=
 
 -- | >>> renderExpression $ unNull true .< null_
 -- "(TRUE < NULL)"
 (.<)
-  :: Expression tables grouping params (nullity ty) -- ^ lhs
-  -> Expression tables grouping params (nullity ty) -- ^ rhs
-  -> Expression tables grouping params (nullity 'PGbool)
+  :: Expression relations grouping params (nullity ty) -- ^ lhs
+  -> Expression relations grouping params (nullity ty) -- ^ rhs
+  -> Expression relations grouping params (nullity 'PGbool)
 (.<) = unsafeBinaryOp "<"
 infix 4 .<
 
 -- | >>> renderExpression $ unNull true .<= null_
 -- "(TRUE <= NULL)"
 (.<=)
-  :: Expression tables grouping params (nullity ty) -- ^ lhs
-  -> Expression tables grouping params (nullity ty) -- ^ rhs
-  -> Expression tables grouping params (nullity 'PGbool)
+  :: Expression relations grouping params (nullity ty) -- ^ lhs
+  -> Expression relations grouping params (nullity ty) -- ^ rhs
+  -> Expression relations grouping params (nullity 'PGbool)
 (.<=) = unsafeBinaryOp "<="
 infix 4 .<=
 
 -- | >>> renderExpression $ unNull true .> null_
 -- "(TRUE > NULL)"
 (.>)
-  :: Expression tables grouping params (nullity ty) -- ^ lhs
-  -> Expression tables grouping params (nullity ty) -- ^ rhs
-  -> Expression tables grouping params (nullity 'PGbool)
+  :: Expression relations grouping params (nullity ty) -- ^ lhs
+  -> Expression relations grouping params (nullity ty) -- ^ rhs
+  -> Expression relations grouping params (nullity 'PGbool)
 (.>) = unsafeBinaryOp ">"
 infix 4 .>
 
 -- | >>> renderExpression $ currentDate
 -- "CURRENT_DATE"
 currentDate
-  :: Expression tables grouping params (nullity 'PGdate)
+  :: Expression relations grouping params (nullity 'PGdate)
 currentDate = UnsafeExpression "CURRENT_DATE"
 
 -- | >>> renderExpression $ currentTime
 -- "CURRENT_TIME"
 currentTime
-  :: Expression tables grouping params (nullity 'PGtimetz)
+  :: Expression relations grouping params (nullity 'PGtimetz)
 currentTime = UnsafeExpression "CURRENT_TIME"
 
 -- | >>> renderExpression $ currentTimestamp
 -- "CURRENT_TIMESTAMP"
 currentTimestamp
-  :: Expression tables grouping params (nullity 'PGtimestamptz)
+  :: Expression relations grouping params (nullity 'PGtimestamptz)
 currentTimestamp = UnsafeExpression "CURRENT_TIMESTAMP"
 
 -- | >>> renderExpression $ localTime
 -- "LOCALTIME"
 localTime
-  :: Expression tables grouping params (nullity 'PGtime)
+  :: Expression relations grouping params (nullity 'PGtime)
 localTime = UnsafeExpression "LOCALTIME"
 
 -- | >>> renderExpression $ localTimestamp
 -- "LOCALTIMESTAMP"
 localTimestamp
-  :: Expression tables grouping params (nullity 'PGtimestamp)
+  :: Expression relations grouping params (nullity 'PGtimestamp)
 localTimestamp = UnsafeExpression "LOCALTIMESTAMP"
 
 {-----------------------------------------
@@ -733,7 +733,7 @@ text
 -----------------------------------------}
 
 instance IsString
-  (Expression tables grouping params (nullity 'PGtext)) where
+  (Expression relations grouping params (nullity 'PGtext)) where
     fromString str = UnsafeExpression $
       "E\'" <> fromString (escape =<< str) <> "\'"
       where
@@ -749,32 +749,32 @@ instance IsString
           c -> [c]
 
 instance Monoid
-  (Expression tables grouping params (nullity 'PGtext)) where
+  (Expression relations grouping params (nullity 'PGtext)) where
     mempty = fromString ""
     mappend = unsafeBinaryOp "||"
 
 -- | >>> renderExpression $ lower "ARRRGGG"
 -- "lower(E'ARRRGGG')"
 lower
-  :: Expression tables grouping params (nullity 'PGtext)
+  :: Expression relations grouping params (nullity 'PGtext)
   -- ^ string to lower case
-  -> Expression tables grouping params (nullity 'PGtext)
+  -> Expression relations grouping params (nullity 'PGtext)
 lower = unsafeFunction "lower"
 
 -- | >>> renderExpression $ upper "eeee"
 -- "upper(E'eeee')"
 upper
-  :: Expression tables grouping params (nullity 'PGtext)
+  :: Expression relations grouping params (nullity 'PGtext)
   -- ^ string to upper case
-  -> Expression tables grouping params (nullity 'PGtext)
+  -> Expression relations grouping params (nullity 'PGtext)
 upper = unsafeFunction "upper"
 
 -- | >>> renderExpression $ charLength "four"
 -- "char_length(E'four')"
 charLength
-  :: Expression tables grouping params (nullity 'PGtext)
+  :: Expression relations grouping params (nullity 'PGtext)
   -- ^ string to measure
-  -> Expression tables grouping params (nullity 'PGint4)
+  -> Expression relations grouping params (nullity 'PGint4)
 charLength = unsafeFunction "char_length"
 
 -- | The `like` expression returns true if the @string@ matches
@@ -787,11 +787,11 @@ charLength = unsafeFunction "char_length"
 -- >>> renderExpression $ "abc" `like` "a%"
 -- "(E'abc' LIKE E'a%')"
 like
-  :: Expression tables grouping params (nullity 'PGtext)
+  :: Expression relations grouping params (nullity 'PGtext)
   -- ^ string
-  -> Expression tables grouping params (nullity 'PGtext)
+  -> Expression relations grouping params (nullity 'PGtext)
   -- ^ pattern
-  -> Expression tables grouping params (nullity 'PGbool)
+  -> Expression relations grouping params (nullity 'PGbool)
 like = unsafeBinaryOp "LIKE"
 
 {-----------------------------------------
@@ -801,16 +801,16 @@ aggregation
 -- | escape hatch to define aggregate functions
 unsafeAggregate
   :: ByteString -- ^ aggregate function
-  -> Expression tables 'Ungrouped params (xty)
-  -> Expression tables ('Grouped bys) params (yty)
+  -> Expression relations 'Ungrouped params (xty)
+  -> Expression relations ('Grouped bys) params (yty)
 unsafeAggregate fun x = UnsafeExpression $ mconcat
   [fun, "(", renderExpression x, ")"]
 
 -- | escape hatch to define aggregate functions over distinct values
 unsafeAggregateDistinct
   :: ByteString -- ^ aggregate function
-  -> Expression tables 'Ungrouped params (xty)
-  -> Expression tables ('Grouped bys) params (yty)
+  -> Expression relations 'Ungrouped params (xty)
+  -> Expression relations ('Grouped bys) params (yty)
 unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
   [fun, "(DISTINCT ", renderExpression x, ")"]
 
@@ -823,9 +823,9 @@ unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
 -- "sum(col)"
 sum_
   :: PGNum ty
-  => Expression tables 'Ungrouped params (nullity ty)
+  => Expression relations 'Ungrouped params (nullity ty)
   -- ^ what to sum
-  -> Expression tables ('Grouped bys) params (nullity ty)
+  -> Expression relations ('Grouped bys) params (nullity ty)
 sum_ = unsafeAggregate "sum"
 
 -- | >>> :{
@@ -837,18 +837,18 @@ sum_ = unsafeAggregate "sum"
 -- "sum(DISTINCT col)"
 sumDistinct
   :: PGNum ty
-  => Expression tables 'Ungrouped params (nullity ty)
+  => Expression relations 'Ungrouped params (nullity ty)
   -- ^ what to sum
-  -> Expression tables ('Grouped bys) params (nullity ty)
+  -> Expression relations ('Grouped bys) params (nullity ty)
 sumDistinct = unsafeAggregateDistinct "sum"
 
 -- | A constraint for `PGType`s that you can take averages of and the resulting
 -- `PGType`.
 class PGAvg ty avg | ty -> avg where
   avg, avgDistinct
-    :: Expression tables 'Ungrouped params (nullity ty)
+    :: Expression relations 'Ungrouped params (nullity ty)
     -- ^ what to average
-    -> Expression tables ('Grouped bys) params (nullity avg)
+    -> Expression relations ('Grouped bys) params (nullity avg)
   avg = unsafeAggregate "avg"
   avgDistinct = unsafeAggregateDistinct "avg"
 instance PGAvg 'PGint2 'PGnumeric
@@ -868,9 +868,9 @@ instance PGAvg 'PGinterval 'PGinterval
 -- "bit_and(col)"
 bitAnd
   :: PGIntegral int
-  => Expression tables 'Ungrouped params (nullity int)
+  => Expression relations 'Ungrouped params (nullity int)
   -- ^ what to aggregate
-  -> Expression tables ('Grouped bys) params (nullity int)
+  -> Expression relations ('Grouped bys) params (nullity int)
 bitAnd = unsafeAggregate "bit_and"
 
 -- | >>> :{
@@ -882,9 +882,9 @@ bitAnd = unsafeAggregate "bit_and"
 -- "bit_or(col)"
 bitOr
   :: PGIntegral int
-  => Expression tables 'Ungrouped params (nullity int)
+  => Expression relations 'Ungrouped params (nullity int)
   -- ^ what to aggregate
-  -> Expression tables ('Grouped bys) params (nullity int)
+  -> Expression relations ('Grouped bys) params (nullity int)
 bitOr = unsafeAggregate "bit_or"
 
 -- | >>> :{
@@ -896,9 +896,9 @@ bitOr = unsafeAggregate "bit_or"
 -- "bit_and(DISTINCT col)"
 bitAndDistinct
   :: PGIntegral int
-  => Expression tables 'Ungrouped params (nullity int)
+  => Expression relations 'Ungrouped params (nullity int)
   -- ^ what to aggregate
-  -> Expression tables ('Grouped bys) params (nullity int)
+  -> Expression relations ('Grouped bys) params (nullity int)
 bitAndDistinct = unsafeAggregateDistinct "bit_and"
 
 -- | >>> :{
@@ -910,9 +910,9 @@ bitAndDistinct = unsafeAggregateDistinct "bit_and"
 -- "bit_or(DISTINCT col)"
 bitOrDistinct
   :: PGIntegral int
-  => Expression tables 'Ungrouped params (nullity int)
+  => Expression relations 'Ungrouped params (nullity int)
   -- ^ what to aggregate
-  -> Expression tables ('Grouped bys) params (nullity int)
+  -> Expression relations ('Grouped bys) params (nullity int)
 bitOrDistinct = unsafeAggregateDistinct "bit_or"
 
 -- | >>> :{
@@ -923,9 +923,9 @@ bitOrDistinct = unsafeAggregateDistinct "bit_or"
 -- :}
 -- "bool_and(col)"
 boolAnd
-  :: Expression tables 'Ungrouped params (nullity 'PGbool)
+  :: Expression relations 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
-  -> Expression tables ('Grouped bys) params (nullity 'PGbool)
+  -> Expression relations ('Grouped bys) params (nullity 'PGbool)
 boolAnd = unsafeAggregate "bool_and"
 
 -- | >>> :{
@@ -936,9 +936,9 @@ boolAnd = unsafeAggregate "bool_and"
 -- :}
 -- "bool_or(col)"
 boolOr
-  :: Expression tables 'Ungrouped params (nullity 'PGbool)
+  :: Expression relations 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
-  -> Expression tables ('Grouped bys) params (nullity 'PGbool)
+  -> Expression relations ('Grouped bys) params (nullity 'PGbool)
 boolOr = unsafeAggregate "bool_or"
 
 -- | >>> :{
@@ -949,9 +949,9 @@ boolOr = unsafeAggregate "bool_or"
 -- :}
 -- "bool_and(DISTINCT col)"
 boolAndDistinct
-  :: Expression tables 'Ungrouped params (nullity 'PGbool)
+  :: Expression relations 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
-  -> Expression tables ('Grouped bys) params (nullity 'PGbool)
+  -> Expression relations ('Grouped bys) params (nullity 'PGbool)
 boolAndDistinct = unsafeAggregateDistinct "bool_and"
 
 -- | >>> :{
@@ -962,9 +962,9 @@ boolAndDistinct = unsafeAggregateDistinct "bool_and"
 -- :}
 -- "bool_or(DISTINCT col)"
 boolOrDistinct
-  :: Expression tables 'Ungrouped params (nullity 'PGbool)
+  :: Expression relations 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
-  -> Expression tables ('Grouped bys) params (nullity 'PGbool)
+  -> Expression relations ('Grouped bys) params (nullity 'PGbool)
 boolOrDistinct = unsafeAggregateDistinct "bool_or"
 
 -- | A special aggregation that does not require an input
@@ -972,7 +972,7 @@ boolOrDistinct = unsafeAggregateDistinct "bool_or"
 -- >>> renderExpression countStar
 -- "count(*)"
 countStar
-  :: Expression tables ('Grouped bys) params ('NotNull 'PGint8)
+  :: Expression relations ('Grouped bys) params ('NotNull 'PGint8)
 countStar = UnsafeExpression $ "count(*)"
 
 -- | >>> :{
@@ -983,9 +983,9 @@ countStar = UnsafeExpression $ "count(*)"
 -- :}
 -- "count(col)"
 count
-  :: Expression tables 'Ungrouped params ty
+  :: Expression relations 'Ungrouped params ty
   -- ^ what to count
-  -> Expression tables ('Grouped bys) params ('NotNull 'PGint8)
+  -> Expression relations ('Grouped bys) params ('NotNull 'PGint8)
 count = unsafeAggregate "count"
 
 -- | >>> :{
@@ -996,9 +996,9 @@ count = unsafeAggregate "count"
 -- :}
 -- "count(DISTINCT col)"
 countDistinct
-  :: Expression tables 'Ungrouped params ty
+  :: Expression relations 'Ungrouped params ty
   -- ^ what to count
-  -> Expression tables ('Grouped bys) params ('NotNull 'PGint8)
+  -> Expression relations ('Grouped bys) params ('NotNull 'PGint8)
 countDistinct = unsafeAggregateDistinct "count"
 
 -- | synonym for `boolAnd`
@@ -1011,9 +1011,9 @@ countDistinct = unsafeAggregateDistinct "count"
 -- :}
 -- "every(col)"
 every
-  :: Expression tables 'Ungrouped params (nullity 'PGbool)
+  :: Expression relations 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
-  -> Expression tables ('Grouped bys) params (nullity 'PGbool)
+  -> Expression relations ('Grouped bys) params (nullity 'PGbool)
 every = unsafeAggregate "every"
 
 -- | synonym for `boolAndDistinct`
@@ -1026,16 +1026,16 @@ every = unsafeAggregate "every"
 -- :}
 -- "every(DISTINCT col)"
 everyDistinct
-  :: Expression tables 'Ungrouped params (nullity 'PGbool)
+  :: Expression relations 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
-  -> Expression tables ('Grouped bys) params (nullity 'PGbool)
+  -> Expression relations ('Grouped bys) params (nullity 'PGbool)
 everyDistinct = unsafeAggregateDistinct "every"
 
 -- | minimum and maximum aggregation
 max_, min_, maxDistinct, minDistinct
-  :: Expression tables 'Ungrouped params (nullity ty)
+  :: Expression relations 'Ungrouped params (nullity ty)
   -- ^ what to aggregate
-  -> Expression tables ('Grouped bys) params (nullity ty)
+  -> Expression relations ('Grouped bys) params (nullity ty)
 max_ = unsafeAggregate "max"
 min_ = unsafeAggregate "min"
 maxDistinct = unsafeAggregateDistinct "max"

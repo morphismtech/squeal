@@ -151,7 +151,7 @@ instance Category (AlignedList p) where
 single :: p x0 x1 -> AlignedList p x0 x1
 single step = step :>> Done
 
--- | Run a `Migration` by creating the `MigrationsTable`
+-- | Run `Migration`s by creating the `MigrationsTable`
 -- if it does not exist and then in a transaction, for each each `Migration`
 -- query to see if the `Migration` is executed. If not, then
 -- execute the `Migration` and insert its row in `MigrationsTable`.
@@ -207,13 +207,13 @@ migrateUp migration =
       okResult result
       ntuples result
 
--- | Rewind a `Migration` by creating the `MigrationsTable`
+-- | Rewind `Migration`s by creating the `MigrationsTable`
 -- if it does not exist and then in a transaction, for each each `Migration`
 -- query to see if the `Migration` is executed. If it is, then
 -- rewind the `Migration` and delete its row in `MigrationsTable`.
 migrateDown
   :: MonadBaseControl IO io
-  => AlignedList (Migration io) schema0 schema1 -- ^ migration to rewind
+  => AlignedList (Migration io) schema0 schema1 -- ^ migrations to rewind
   -> PQ
     ("schema_migrations" ::: MigrationsTable ': schema1)
     ("schema_migrations" ::: MigrationsTable ': schema0)
