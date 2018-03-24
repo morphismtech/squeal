@@ -2,10 +2,10 @@ version: 2
 jobs:
   build:
     docker:
-      - image: haskell:latest
       - image: circleci/postgres:9.6
         environment:
           POSTGRES_DB: exampledb
+      - image: haskell:latest
     steps:
       - checkout
       - restore_cache:
