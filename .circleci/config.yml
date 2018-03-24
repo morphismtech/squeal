@@ -1,0 +1,20 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: haskell:latest
+      - image: circleci/postgres:9.6
+        environment:
+          POSTGRES_DB: exampledb
+    steps:
+      - checkout
+      - restore_cache:
+        keys:
+          - dependency-cache
+      - run: stack build
+      - run: stack test
+      - run: stack haddock
+      - save_cache:
+        key: dependency-cache
+        paths:
+          - ".stack-work"
