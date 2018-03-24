@@ -8,7 +8,7 @@ jobs:
       - restore_cache:
           keys:
             - dependency-cache
-      - run: apt-get update && apt-get install -y postgres
+      - run: apt-get update && apt-get install -y postgresql
       - run: stack build
       - run: stack test
       - run: stack haddock
