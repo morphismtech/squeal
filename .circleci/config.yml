@@ -3,6 +3,9 @@ jobs:
   build:
     docker:
       - image: haskell:latest
+      - image: circleci/postgres:latest
+        environment:
+          POSTGRES_DB: exampledb
     steps:
       - checkout
       - restore_cache:
