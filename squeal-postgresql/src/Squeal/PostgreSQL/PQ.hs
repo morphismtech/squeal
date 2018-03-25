@@ -64,6 +64,7 @@ module Squeal.PostgreSQL.PQ
 import Control.Exception.Lifted
 import Control.Monad.Base
 import Control.Monad.Except
+import Control.Monad.Morph
 import Control.Monad.Trans.Control
 import Data.ByteString (ByteString)
 import Data.Foldable
@@ -475,10 +476,17 @@ instance Monad m => Monad (PQ schema schema m) where
   return = pure
   (>>=) = flip pqBind
 
+instance MFunctor (PQ schema schema) where
+  hoist f (PQ pq) = PQ (f . pq)
+
 instance MonadTrans (PQ schema schema) where
   lift m = PQ $ \ _conn -> do
     x <- m
     return (K x)
+
+instance MMonad (PQ schema schema) where
+  embed f (PQ pq) = PQ $ \ conn -> do
+    evalPQ (f (pq conn)) conn
 
 instance MonadBase b m => MonadBase b (PQ schema schema m) where
   liftBase = lift . liftBase

@@ -42,6 +42,7 @@ library
     , deepseq >= 1.4.3.0
     , generics-sop >= 0.3.2.0
     , lifted-base >= 0.2.3.12
+    , mmorph >= 1.1.1
     , monad-control >= 1.0.2.3
     , mtl >= 2.2.2
     , network-ip >= 0.3.0.2
