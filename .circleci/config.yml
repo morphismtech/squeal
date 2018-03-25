@@ -12,6 +12,7 @@ jobs:
           keys:
             - dependency-cache
       - run: apt-get update && apt-get install -y libpq-dev
+      - run: stack upgrade && stack update
       - run: stack build
       - run: stack test
       - run: stack haddock
