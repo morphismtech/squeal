@@ -79,8 +79,6 @@ module Squeal.PostgreSQL.Schema
   , NullifyRelations
   , Join
   , Create
-  , AddColumn
-  , AddConstraint
   , Drop
   , Alter
   , Rename
@@ -461,16 +459,6 @@ type family Join xs ys where
 type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
   Create alias y (x ': xs) = x ': Create alias y xs
-
--- | Add a column to a `TableType` with
--- `Squeal.PostgreSQL.Definition.addColumn`.
-type family AddColumn alias x y where
-  AddColumn alias x (constraints :=> xs) = constraints :=> Create alias x xs
-
--- | Add a constraint to a `TableType` with
--- `Squeal.PostgreSQL.Definition.addConstraint`.
-type family AddConstraint alias x y where
-  AddConstraint alias x (constraints :=> xs) = Create alias x constraints :=> xs
 
 -- | @Drop alias xs@ removes the type associated with @alias@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.dropTable` statements
