@@ -555,10 +555,10 @@ dropColumn column = UnsafeAlterTable $
 -- "ALTER TABLE tab RENAME COLUMN foo TO bar;"
 renameColumn
   :: (KnownSymbol column0, KnownSymbol column1)
-  => Alias column0
-  -> Alias column1
-  -> AlterTable schema ('[] :=> columns)
-      ('[] :=> Rename column0 column1 columns)
+  => Alias column0 -- ^ column to rename
+  -> Alias column1 -- ^ what to rename the column
+  -> AlterTable schema (constraints :=> columns)
+      (constraints :=> Rename column0 column1 columns)
 renameColumn column0 column1 = UnsafeAlterTable $
   "RENAME COLUMN" <+> renderAlias column0  <+> "TO" <+> renderAlias column1
 
