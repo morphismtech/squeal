@@ -46,7 +46,9 @@ module Squeal.PostgreSQL.Schema
   , TableType
   , TablesType
   , NilTables
+    -- * Grouping
   , Grouping (..)
+  , GroupedBy
     -- * Constraints
   , (:=>)
   , ColumnsToRelation
@@ -67,7 +69,7 @@ module Squeal.PostgreSQL.Schema
   , Has
   , HasUnique
   , IsLabel (..)
-  , IsTableColumn (..)
+  , IsQualified (..)
     -- * Type Families
   , In
   , PGNum
@@ -316,6 +318,20 @@ data Grouping
   = Ungrouped -- ^ no aggregation permitted
   | Grouped [(Symbol,Symbol)] -- ^ aggregation required for any column which is not grouped
 
+{- | A `GroupedBy` constraint indicates that a table qualified column is
+a member of the auxiliary namespace created by @GROUP BY@ clauses and thus,
+may be called in an output `Expression` without aggregating.
+-}
+class (KnownSymbol relation, KnownSymbol column)
+  => GroupedBy relation column bys where
+instance {-# OVERLAPPING #-} (KnownSymbol relation, KnownSymbol column)
+  => GroupedBy relation column ('(table,column) ': bys)
+instance {-# OVERLAPPABLE #-}
+  ( KnownSymbol relation
+  , KnownSymbol column
+  , GroupedBy relation column bys
+  ) => GroupedBy relation column (tabcol ': bys)
+
 -- | `Alias`es are proxies for a type level string or `Symbol`
 -- and have an `IsLabel` instance so that with @-XOverloadedLabels@
 --
@@ -380,12 +396,12 @@ instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
   => Has alias (field' ': fields) field
 
 -- | Analagous to `IsLabel`, the constraint
--- `IsTableColumn` defines `!` for a column alias qualified
+-- `IsQualified` defines `!` for a column alias qualified
 -- by a table alias.
-class IsTableColumn table column expression where
+class IsQualified table column expression where
   (!) :: Alias table -> Alias column -> expression
   infixl 9 !
-instance IsTableColumn table column (Alias table, Alias column) where (!) = (,)
+instance IsQualified table column (Alias table, Alias column) where (!) = (,)
 
 -- | @Elem@ is a promoted `elem`.
 type family Elem x xs where

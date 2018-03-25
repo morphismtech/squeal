@@ -37,7 +37,6 @@ module Squeal.PostgreSQL.Expression
   ( -- * Expression
     Expression (UnsafeExpression, renderExpression)
   , HasParameter (param)
-  , GroupedBy (getGroup1, getGroup2)
     -- ** Null
   , null_
   , unNull
@@ -178,7 +177,7 @@ values from primitive expression using arithmetic, logical,
 and other operations.
 -}
 newtype Expression
-  (relation :: RelationsType)
+  (relations :: RelationsType)
   (grouping :: Grouping)
   (params :: [NullityType])
   (ty :: NullityType)
@@ -212,35 +211,9 @@ instance (HasUnique relation relations columns, Has column columns ty)
     fromLabel = UnsafeExpression $ renderAlias (Alias @column)
 
 instance (Has relation relations columns, Has column columns ty)
-  => IsTableColumn relation column (Expression relations 'Ungrouped params ty) where
+  => IsQualified relation column (Expression relations 'Ungrouped params ty) where
     relation ! column = UnsafeExpression $
       renderAlias relation <> "." <> renderAlias column
-
-{- | A `GroupedBy` constraint indicates that a table qualified column is
-a member of the auxiliary namespace created by @GROUP BY@ clauses and thus,
-may be called in an output `Expression` without aggregating.
--}
-class (KnownSymbol relation, KnownSymbol column)
-  => GroupedBy relation column bys where
-    getGroup1
-      :: (HasUnique relation relations columns, Has column columns ty)
-      => Alias column
-      -> Expression relations ('Grouped bys) params ty
-    getGroup1 column = UnsafeExpression $ renderAlias column
-    getGroup2
-      :: (Has relation relations columns, Has column columns ty)
-      => Alias relation
-      -> Alias column
-      -> Expression relations ('Grouped bys) params ty
-    getGroup2 relation column = UnsafeExpression $
-      renderAlias relation <> "." <> renderAlias column
-instance {-# OVERLAPPING #-} (KnownSymbol relation, KnownSymbol column)
-  => GroupedBy relation column ('(table,column) ': bys)
-instance {-# OVERLAPPABLE #-}
-  ( KnownSymbol relation
-  , KnownSymbol column
-  , GroupedBy relation column bys
-  ) => GroupedBy relation column (tabcol ': bys)
   
 instance
   ( HasUnique relation relations columns
@@ -248,14 +221,16 @@ instance
   , GroupedBy relation column bys
   ) => IsLabel column
     (Expression relations ('Grouped bys) params ty) where
-      fromLabel = getGroup1 (Alias @column)
+      fromLabel = UnsafeExpression $ renderAlias (Alias @column)
   
 instance
   ( Has relation relations columns
   , Has column columns ty
   , GroupedBy relation column bys
-  ) => IsTableColumn relation column
-    (Expression relations ('Grouped bys) params ty) where (!) = getGroup2
+  ) => IsQualified relation column
+    (Expression relations ('Grouped bys) params ty) where
+      relation ! column = UnsafeExpression $
+        renderAlias relation <> "." <> renderAlias column
 
 -- | analagous to `Nothing`
 --
@@ -288,7 +263,7 @@ coalesce nullxs notNullx = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
     ((renderExpression <$> nullxs) <> [renderExpression notNullx]))
 
--- | analagous to `fromMaybe` using @COALESCE@
+-- | analagous to `Data.Maybe.fromMaybe` using @COALESCE@
 --
 -- >>> renderExpression $ fromNull true null_
 -- "COALESCE(NULL, TRUE)"
