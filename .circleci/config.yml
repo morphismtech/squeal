@@ -11,7 +11,7 @@ jobs:
       - restore_cache:
           keys:
             - dependency-cache
-      - run: apt-get update && apt-get install -y libpq-dev make
+      - run: apt-get update && apt-get install -y libpq-dev xz-utils make
       - run: stack upgrade && stack update
       - run: stack build
       - run: stack test
