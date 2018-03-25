@@ -48,7 +48,7 @@ import Data.Int
 import Data.Kind
 import Data.Scientific
 import Data.Time
-import Data.UUID
+import Data.UUID.Types
 import Data.Vector (Vector)
 import Data.Word
 import Generics.SOP
