@@ -375,7 +375,8 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
     => (LibPQ.Connection -> IO a) -> pq a
   liftPQ = lift . liftPQ
 
-instance MonadBase IO io => MonadPQ schema (PQ schema schema io) where
+instance (MonadBase IO io, schema1 ~ schema)
+  => MonadPQ schema (PQ schema schema1 io) where
 
   manipulateParams
     (UnsafeManipulation q :: Manipulation schema ps ys) (params :: x) =
