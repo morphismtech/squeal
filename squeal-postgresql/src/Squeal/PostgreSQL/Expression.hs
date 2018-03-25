@@ -587,7 +587,9 @@ caseWhenThenElse
   :: [ ( Condition relations grouping params
        , Expression relations grouping params (ty)
      ) ]
+  -- ^ whens and thens
   -> Expression relations grouping params (ty)
+  -- ^ else
   -> Expression relations grouping params (ty)
 caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   [ "CASE"
@@ -611,8 +613,8 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
 -- "CASE WHEN TRUE THEN 1 ELSE 0 END"
 ifThenElse
   :: Condition relations grouping params
-  -> Expression relations grouping params (ty)
-  -> Expression relations grouping params (ty)
+  -> Expression relations grouping params (ty) -- ^ then
+  -> Expression relations grouping params (ty) -- ^ else
   -> Expression relations grouping params (ty)
 ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 
@@ -673,31 +675,31 @@ infix 4 .<=
 (.>) = unsafeBinaryOp ">"
 infix 4 .>
 
--- | >>> renderExpression $ currentDate
+-- | >>> renderExpression currentDate
 -- "CURRENT_DATE"
 currentDate
   :: Expression relations grouping params (nullity 'PGdate)
 currentDate = UnsafeExpression "CURRENT_DATE"
 
--- | >>> renderExpression $ currentTime
+-- | >>> renderExpression currentTime
 -- "CURRENT_TIME"
 currentTime
   :: Expression relations grouping params (nullity 'PGtimetz)
 currentTime = UnsafeExpression "CURRENT_TIME"
 
--- | >>> renderExpression $ currentTimestamp
+-- | >>> renderExpression currentTimestamp
 -- "CURRENT_TIMESTAMP"
 currentTimestamp
   :: Expression relations grouping params (nullity 'PGtimestamptz)
 currentTimestamp = UnsafeExpression "CURRENT_TIMESTAMP"
 
--- | >>> renderExpression $ localTime
+-- | >>> renderExpression localTime
 -- "LOCALTIME"
 localTime
   :: Expression relations grouping params (nullity 'PGtime)
 localTime = UnsafeExpression "LOCALTIME"
 
--- | >>> renderExpression $ localTimestamp
+-- | >>> renderExpression localTimestamp
 -- "LOCALTIMESTAMP"
 localTimestamp
   :: Expression relations grouping params (nullity 'PGtimestamp)
@@ -793,7 +795,7 @@ unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
 -- let
 --   expression :: Expression '[tab ::: '["col" ::: nullity 'PGnumeric]] ('Grouped bys) params (nullity 'PGnumeric)
 --   expression = sum_ #col
--- in renderExpression expression
+-- in renderExpression $ sum_ #col
 -- :}
 -- "sum(col)"
 sum_
