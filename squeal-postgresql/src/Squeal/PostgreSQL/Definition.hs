@@ -200,25 +200,6 @@ newtype TableConstraintExpression
     { renderTableConstraintExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
--- | A `check` constraint is the most generic `TableConstraint` type.
--- It allows you to specify that the value in a certain column must satisfy
--- a Boolean (truth-value) expression.
---
--- >>> :{
--- renderDefinition $
---   createTable #tab
---     ( (int & notNull) `As` #a :*
---       (int & notNull) `As` #b :* Nil )
---     ( check (#a .> #b) `As` #inequality :* Nil )
--- :}
--- "CREATE TABLE tab (a int NOT NULL, b int NOT NULL, CONSTRAINT inequality CHECK ((a > b)));"
-check
-  :: Condition '[table ::: ColumnsToRelation columns] 'Ungrouped '[]
-  -- ^ condition to check
-  -> TableConstraintExpression schema columns 'Check
-check condition = UnsafeTableConstraintExpression $
-  "CHECK" <+> parenthesized (renderExpression condition)
-
 -- | @Column columns column@ is a witness that `column` is in `columns`. 
 data Column
   (columns :: ColumnsType)
@@ -232,6 +213,26 @@ data Column
 -- | Render a `Column`.
 renderColumn :: Column columns column -> ByteString
 renderColumn (Column column) = renderAlias column
+
+-- | A `check` constraint is the most generic `TableConstraint` type.
+-- It allows you to specify that the value in a certain column must satisfy
+-- a Boolean (truth-value) expression.
+--
+-- >>> :{
+-- renderDefinition $
+--   createTable #tab
+--     ( (int & notNull) `As` #a :*
+--       (int & notNull) `As` #b :* Nil )
+--     ( check (Column #a :* Column #b :* Nil) (#a .> #b) `As` #inequality :* Nil )
+-- :}
+-- "CREATE TABLE tab (a int NOT NULL, b int NOT NULL, CONSTRAINT inequality CHECK ((a > b)));"
+check
+  :: NP (Column columns) subcolumns
+  -> Condition '[table ::: ColumnsToRelation subcolumns] 'Ungrouped '[]
+  -- ^ condition to check
+  -> TableConstraintExpression schema columns ('Check (AliasesOf subcolumns))
+check _cols condition = UnsafeTableConstraintExpression $
+  "CHECK" <+> parenthesized (renderExpression condition)
 
 -- | A `unique` constraint ensure that the data contained in a column,
 -- or a group of columns, is unique among all the rows in the table.
@@ -440,8 +441,8 @@ newtype AlterTable
 -- let
 --   definition :: Definition
 --     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
---     '["tab" ::: '["positive" ::: Check ] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
---   definition = alterTable #tab (addConstraint #positive (check (#col .> 0)))
+--     '["tab" ::: '["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
+--   definition = alterTable #tab (addConstraint #positive (check (Column #col :* Nil) (#col .> 0)))
 -- in renderDefinition definition
 -- :}
 -- "ALTER TABLE tab ADD CONSTRAINT positive CHECK ((col > 0));"
@@ -461,7 +462,7 @@ addConstraint constraintName constraint = UnsafeAlterTable $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '["positive" ::: Check ] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
+--     '["tab" ::: '["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
 --     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
 --   definition = alterTable #tab (dropConstraint #positive)
 -- in renderDefinition definition
@@ -537,7 +538,7 @@ dropColumn
   => Alias column -- ^ column to remove
   -> AlterTable schema
       (constraints :=> columns)
-      (constraints :=> Drop column columns)
+      (DropIfConstraintsInvolve column constraints :=> Drop column columns)
 dropColumn column = UnsafeAlterTable $
   "DROP COLUMN" <+> renderAlias column
 

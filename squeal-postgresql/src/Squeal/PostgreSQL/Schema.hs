@@ -54,6 +54,9 @@ module Squeal.PostgreSQL.Schema
   , TablesToRelations
   , ColumnConstraint (..)
   , TableConstraint (..)
+  , Elem
+  , ConstraintInvolves
+  , DropIfConstraintsInvolve
     -- * Aliases
   , (:::)
   , Alias (Alias)
@@ -92,6 +95,7 @@ import Data.ByteString
 import Data.Monoid
 import Data.String
 import Data.Word
+import Data.Type.Bool
 import Generics.SOP (AllZip)
 import GHC.Generics (Generic)
 import GHC.Exts
@@ -222,7 +226,7 @@ type ColumnsType = [(Symbol,ColumnType)]
 -- | `TableConstraint` encodes various forms of data constraints
 -- of columns in a table.
 data TableConstraint
-  = Check
+  = Check [Symbol]
   | Unique [Symbol]
   | PrimaryKey [Symbol]
   | ForeignKey [Symbol] Symbol [Symbol]
@@ -383,10 +387,14 @@ class IsTableColumn table column expression where
   infixl 9 !
 instance IsTableColumn table column (Alias table, Alias column) where (!) = (,)
 
+-- | @Elem@ is a promoted `elem`.
+type family Elem x xs where
+  Elem x '[] = 'False
+  Elem x (x ': xs) = 'True
+  Elem x (_ ': xs) = Elem x xs
+
 -- | @In x xs@ is a constraint that proves that @x@ is in @xs@.
-type family In x xs :: Constraint where
-  In x (x ': xs) = ()
-  In x (y ': xs) = In x xs
+type family In x xs :: Constraint where In x xs = Elem x xs ~ 'True
 
 -- | `PGNum` is a constraint on `PGType` whose
 -- `Squeal.PostgreSQL.Expression.Expression`s have a `Num` constraint.
@@ -513,3 +521,19 @@ type family SameFields
     ('Type.Newtype _module _datatype ('Type.Record _constructor fields))
     columns
       = AllZip SameField fields columns
+
+-- | Check if a `TableConstraint` involves a column
+type family ConstraintInvolves column constraint where
+  ConstraintInvolves column ('Check columns) = column `Elem` columns
+  ConstraintInvolves column ('Unique columns) = column `Elem` columns
+  ConstraintInvolves column ('PrimaryKey columns) = column `Elem` columns
+  ConstraintInvolves column ('ForeignKey columns tab refcolumns)
+    = column `Elem` columns
+
+-- | Drop all `TableConstraint`s that involve a column
+type family DropIfConstraintsInvolve column constraints where
+  DropIfConstraintsInvolve column '[] = '[]
+  DropIfConstraintsInvolve column (alias ::: constraint ': constraints)
+    = If (ConstraintInvolves column constraint)
+        (DropIfConstraintsInvolve column constraints)
+        (alias ::: constraint ': DropIfConstraintsInvolve column constraints)
