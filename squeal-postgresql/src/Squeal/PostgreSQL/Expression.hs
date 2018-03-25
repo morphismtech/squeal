@@ -537,7 +537,7 @@ ceiling_
 ceiling_ = unsafeFunction "ceiling"
 
 -- | A `Condition` is a boolean valued `Expression`. While SQL allows
--- conditions to have @NULL@, squeal instead chooses to disallow @NULL@,
+-- conditions to have @NULL@, Squeal instead chooses to disallow @NULL@,
 -- forcing one to handle the case of @NULL@ explicitly to produce
 -- a `Condition`.
 type Condition relations grouping params =
