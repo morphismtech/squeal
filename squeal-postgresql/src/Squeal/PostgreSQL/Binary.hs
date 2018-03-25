@@ -145,13 +145,13 @@ instance ToParam x pg => ToColumnParam (Maybe x) ('Null pg) where
 class SListI tys => ToParams (x :: Type) (tys :: [NullityType]) where
   -- | >>> type Params = '[ 'NotNull 'PGbool, 'Null 'PGint2]
   -- >>> toParams @(Bool, Maybe Int16) @'[ 'NotNull 'PGbool, 'Null 'PGint2] (False, Just 0)
-  -- K (Just "\NUL") :* (K (Just "\NUL\NUL") :* Nil)
+  -- K (Just "\NUL") :* K (Just "\NUL\NUL") :* Nil
   --
   -- >>> :set -XDeriveGeneric
   -- >>> data Tuple = Tuple { p1 :: Bool, p2 :: Maybe Int16} deriving GHC.Generic
   -- >>> instance Generic Tuple
   -- >>> toParams @Tuple @Params (Tuple False (Just 0))
-  -- K (Just "\NUL") :* (K (Just "\NUL\NUL") :* Nil)
+  -- K (Just "\NUL") :* K (Just "\NUL\NUL") :* Nil
   toParams :: x -> NP (K (Maybe Strict.ByteString)) tys
 instance (SListI tys, IsProductType x xs, AllZip ToColumnParam xs tys)
   => ToParams x tys where
