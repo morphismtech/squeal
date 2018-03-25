@@ -375,8 +375,8 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
     => (LibPQ.Connection -> IO a) -> pq a
   liftPQ = lift . liftPQ
 
-instance (MonadBase IO io, schema1 ~ schema)
-  => MonadPQ schema (PQ schema schema1 io) where
+instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
+  => MonadPQ schema (PQ schema0 schema1 io) where
 
   manipulateParams
     (UnsafeManipulation q :: Manipulation schema ps ys) (params :: x) =
@@ -469,27 +469,30 @@ instance (Monoid w, MonadPQ schema m) => MonadPQ schema (Lazy.RWST r w s m)
 instance MonadPQ schema m => MonadPQ schema (ContT r m)
 instance MonadPQ schema m => MonadPQ schema (ListT m)
 
-instance Monad m => Applicative (PQ schema schema m) where
+instance (Monad m, schema0 ~ schema1)
+  => Applicative (PQ schema0 schema1 m) where
   pure x = PQ $ \ _conn -> pure (K x)
   (<*>) = pqAp
 
-instance Monad m => Monad (PQ schema schema m) where
+instance (Monad m, schema0 ~ schema1)
+  => Monad (PQ schema0 schema1 m) where
   return = pure
   (>>=) = flip pqBind
 
-instance MFunctor (PQ schema schema) where
+instance schema0 ~ schema1 => MFunctor (PQ schema0 schema1) where
   hoist f (PQ pq) = PQ (f . pq)
 
-instance MonadTrans (PQ schema schema) where
+instance schema0 ~ schema1 => MonadTrans (PQ schema0 schema1) where
   lift m = PQ $ \ _conn -> do
     x <- m
     return (K x)
 
-instance MMonad (PQ schema schema) where
+instance schema0 ~ schema1 => MMonad (PQ schema0 schema1) where
   embed f (PQ pq) = PQ $ \ conn -> do
     evalPQ (f (pq conn)) conn
 
-instance MonadBase b m => MonadBase b (PQ schema schema m) where
+instance (MonadBase b m, schema0 ~ schema1)
+  => MonadBase b (PQ schema0 schema1 m) where
   liftBase = lift . liftBase
 
 -- | A snapshot of the state of a `PQ` computation.
@@ -501,8 +504,9 @@ pqliftWith :: Functor m => (PQRun schema -> m a) -> PQ schema schema m a
 pqliftWith f = PQ $ \ conn ->
   fmap K (f $ \ pq -> unPQ pq conn)
 
-instance MonadBaseControl b m => MonadBaseControl b (PQ schema schema m) where
-  type StM (PQ schema schema m) x = StM m (K x schema)
+instance (MonadBaseControl b m, schema0 ~ schema1)
+  => MonadBaseControl b (PQ schema0 schema1 m) where
+  type StM (PQ schema0 schema1 m) x = StM m (K x schema0)
   liftBaseWith f =
     pqliftWith $ \ run -> liftBaseWith $ \ runInBase -> f $ runInBase . run
   restoreM = PQ . const . restoreM
