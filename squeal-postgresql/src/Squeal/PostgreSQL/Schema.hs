@@ -52,11 +52,12 @@ module Squeal.PostgreSQL.Schema
     -- * Constraints
   , (:=>)
   , ColumnsToRelation
+  , RelationToColumns
   , TableToColumns
   , TablesToRelations
+  , RelationsToTables
   , ColumnConstraint (..)
   , TableConstraint (..)
-  , Elem
   , ConstraintInvolves
   , DropIfConstraintsInvolve
     -- * Aliases
@@ -71,6 +72,7 @@ module Squeal.PostgreSQL.Schema
   , IsLabel (..)
   , IsQualified (..)
     -- * Type Families
+  , Elem
   , In
   , PGNum
   , PGIntegral
@@ -301,6 +303,12 @@ type family ColumnsToRelation (columns :: ColumnsType) :: RelationType where
   ColumnsToRelation (column ::: constraint :=> ty ': columns) =
     column ::: ty ': ColumnsToRelation columns
 
+-- | `RelationToColumns` adds `'NoDef` column constraints.
+type family RelationToColumns (relation :: RelationType) :: ColumnsType where
+  RelationToColumns '[] = '[]
+  RelationToColumns (column ::: ty ': columns) =
+    column ::: 'NoDef :=> ty ': RelationToColumns columns
+
 -- | `TableToColumns` removes table constraints.
 type family TableToColumns (table :: TableType) :: ColumnsType where
   TableToColumns (constraints :=> columns) = columns
@@ -310,6 +318,12 @@ type family TablesToRelations (tables :: TablesType) :: RelationsType where
   TablesToRelations '[] = '[]
   TablesToRelations (alias ::: constraint :=> columns ': tables) =
     alias ::: ColumnsToRelation columns ': TablesToRelations tables
+
+-- | `RelationsToTables` adds both trivial table and column constraints.
+type family RelationsToTables (tables :: RelationsType) :: TablesType where
+  RelationsToTables '[] = '[]
+  RelationsToTables (alias ::: columns ': relations) =
+    alias ::: '[] :=> RelationToColumns columns ': RelationsToTables relations
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
