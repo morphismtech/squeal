@@ -156,6 +156,7 @@ instance Category (AlignedList p) where
     Done -> list
     step :>> steps -> step :>> (steps >>> list)
 
+-- | A `single` step.
 single :: p x0 x1 -> AlignedList p x0 x1
 single step = step :>> Done
 

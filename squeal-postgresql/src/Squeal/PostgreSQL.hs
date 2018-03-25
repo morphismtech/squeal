@@ -4,7 +4,8 @@
 -- Maintainer: eitan@morphism.tech
 -- Stability: experimental
 --
--- Squeal is a deep embedding of PostgreSQL in Haskell. Let's see an example!
+-- Squeal is a deep embedding of [PostgreSQL](https://www.postgresql.org) in Haskell.
+-- Let's see an example!
 --
 -- First, we need some language extensions because Squeal uses modern GHC
 -- features.
@@ -26,31 +27,31 @@
 -- >>> import qualified GHC.Generics as GHC
 --
 -- The first step is to define the schema of our database. This is where
--- we use @DataKinds@ and @TypeOperators@. The schema consists of a type-level
--- list of tables, a `:::` pairing of a type level string or
--- @Symbol@ and a list a columns, itself a `:::` pairing of a
--- @Symbol@ and a `ColumnType`. The `ColumnType` describes the
--- PostgreSQL type of the column as well as whether or not it may contain
--- @NULL@ and whether or not inserts and updates can use a @DEFAULT@. For our
--- schema, we'll define two tables, a users table and an emails table.
+-- we use @DataKinds@ and @TypeOperators@.
 --
 -- >>> :{
 -- type Schema =
 --   '[ "users" :::
 --        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
---        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+--        '[ "id"   :::   'Def :=> 'NotNull 'PGint4
 --         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
 --         ]
 --    , "emails" :::
---        '[  "pk_emails" ::: 'PrimaryKey '["id"]
+--        '[ "pk_emails"  ::: 'PrimaryKey '["id"]
 --         , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
 --         ] :=>
---        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+--        '[ "id"      :::   'Def :=> 'NotNull 'PGint4
 --         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
---         , "email" ::: 'NoDef :=> 'Null 'PGtext
+--         , "email"   ::: 'NoDef :=>    'Null 'PGtext
 --         ]
 --    ]
 -- :}
+--
+-- Notice the use of type operators. `:::` is used
+-- to pair an alias `Symbol` with either a `TableType` or a `ColumnType`.
+-- `:=>` is used to pair a `TableConstraint`s with a `ColumnsType`,
+-- yielding a `TableType`, or to pair a `ColumnConstraint` with a `NullityType`,
+-- yielding a `ColumnType`.
 --
 -- Next, we'll write `Definition`s to set up and tear down the schema. In
 -- Squeal, a `Definition` is a `createTable`, `alterTable` or `dropTable`
@@ -96,7 +97,8 @@
 -- "DROP TABLE emails; DROP TABLE users;"
 --
 -- Next, we'll write `Manipulation`s to insert data into our two tables.
--- A `Manipulation` is a `insertInto`, `update` or `deleteFrom` command and
+-- A `Manipulation` is an `insertRow` (or other inserts), `update`
+-- or `deleteFrom` command and
 -- has three type parameters, the schema it refers to, a list of parameters
 -- it can take as input, and a list of columns it produces as output. When
 -- we insert into the users table, we will need a parameter for the @name@
@@ -108,8 +110,7 @@
 --
 -- >>> :{
 -- let
---   insertUser :: Manipulation Schema '[ 'NotNull 'PGtext ]
---     '[ "fromOnly" ::: 'NotNull 'PGint4 ]
+--   insertUser :: Manipulation Schema '[ 'NotNull 'PGtext ] '[ "fromOnly" ::: 'NotNull 'PGint4 ]
 --   insertUser = insertRow #users
 --     (Default `As` #id :* Set (param @1) `As` #name :* Nil)
 --     OnConflictDoNothing (Returning (#id `As` #fromOnly :* Nil))
@@ -138,8 +139,8 @@
 -- >>> :{
 -- let
 --   getUsers :: Query Schema '[]
---     '[ "userName" ::: 'NotNull 'PGtext
---      , "userEmail" ::: 'Null 'PGtext ]
+--     '[ "userName"  ::: 'NotNull 'PGtext
+--      , "userEmail" :::    'Null 'PGtext ]
 --   getUsers = select
 --     (#u ! #name `As` #userName :* #e ! #email `As` #userEmail :* Nil)
 --     ( from (table (#users `As` #u)
