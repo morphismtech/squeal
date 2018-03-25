@@ -19,3 +19,4 @@ jobs:
           key: dependency-cache
           paths:
             - ".stack-work"
+            - "/root/.stack/"
