@@ -793,9 +793,9 @@ unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGnumeric]] ('Grouped bys) params (nullity 'PGnumeric)
+--   expression :: Expression '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Grouped bys) params ('Null 'PGnumeric)
 --   expression = sum_ #col
--- in renderExpression $ sum_ #col
+-- in renderExpression expression
 -- :}
 -- "sum(col)"
 sum_
@@ -807,7 +807,7 @@ sum_ = unsafeAggregate "sum"
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGnumeric]] (Grouped bys) params (nullity 'PGnumeric)
+--   expression :: Expression '[tab ::: '["col" ::: nullity 'PGnumeric]] ('Grouped bys) params (nullity 'PGnumeric)
 --   expression = sumDistinct #col
 -- in renderExpression expression
 -- :}
