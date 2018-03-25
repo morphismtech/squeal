@@ -454,8 +454,7 @@ type family Join xs ys where
 
 -- | @Create alias x xs@ adds @alias ::: x@ to the end of @xs@ and is used in
 -- `Squeal.PostgreSQL.Definition.createTable` statements and in @ALTER TABLE@
--- `Squeal.PostgreSQL.Definition.addColumnDefault` and
--- `Squeal.PostgreSQL.Definition.addColumnNull` statements.
+-- `Squeal.PostgreSQL.Definition.addColumn`.
 type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
   Create alias y (x ': xs) = x ': Create alias y xs
