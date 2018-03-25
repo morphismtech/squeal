@@ -77,14 +77,22 @@ let
 :}
 
 >>> :{
+let
+  suppressNotices :: PQ schema schema IO ()
+  suppressNotices = void . manipulate $ UnsafeManipulation
+    "SET client_min_messages TO WARNING;"
+:}
+
+>>> :{
 withConnection "host=localhost port=5432 dbname=exampledb" $
-  migrateUp migrations
+  suppressNotices
+  & pqThen (migrateUp migrations)
   & pqThen numMigrations
   & pqThen (migrateDown migrations)
+  & pqThen numMigrations
 :}
-NOTICE:  relation "schema_migrations" already exists, skipping
 Row 2
-NOTICE:  relation "schema_migrations" already exists, skipping
+Row 0
 -}
 
 {-# LANGUAGE
