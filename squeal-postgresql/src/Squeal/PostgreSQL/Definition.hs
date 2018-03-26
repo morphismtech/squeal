@@ -452,9 +452,9 @@ addConstraint
   -> TableConstraintExpression schema columns constraint
   -- ^ constraint to add
   -> AlterTable schema (constraints :=> columns)
-      ((Create alias constraint constraints) :=> columns)
-addConstraint constraintName constraint = UnsafeAlterTable $
-  "ADD" <+> "CONSTRAINT" <+> renderAlias constraintName
+      (Create alias constraint constraints :=> columns)
+addConstraint alias constraint = UnsafeAlterTable $
+  "ADD" <+> "CONSTRAINT" <+> renderAlias alias
     <+> renderTableConstraintExpression constraint
 
 -- | A `dropConstraint` drops a table constraint.
@@ -469,12 +469,12 @@ addConstraint constraintName constraint = UnsafeAlterTable $
 -- :}
 -- "ALTER TABLE tab DROP CONSTRAINT positive;"
 dropConstraint
-  :: KnownSymbol constraintName
-  => Alias constraintName
+  :: KnownSymbol constraint
+  => Alias constraint
   -- ^ constraint to drop
   -> AlterTable schema
       (constraints :=> columns)
-      (Drop constraintName constraints :=> columns)
+      (Drop constraint constraints :=> columns)
 dropConstraint constraint = UnsafeAlterTable $
   "DROP" <+> "CONSTRAINT" <+> renderAlias constraint
 
