@@ -579,7 +579,7 @@ newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
 
 -- | A `setDefault` sets a new default for a column. Note that this doesn't
 -- affect any existing rows in the table, it just changes the default for
--- future `insertTable` and `updateTable` commands.
+-- future insert and update commands.
 --
 -- >>> :{
 -- let
