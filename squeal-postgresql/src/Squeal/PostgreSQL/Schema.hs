@@ -58,6 +58,8 @@ module Squeal.PostgreSQL.Schema
   , RelationsToTables
   , ColumnConstraint (..)
   , TableConstraint (..)
+  , TableConstraints
+  , NilTableConstraints
   , ConstraintInvolves
   , DropIfConstraintsInvolve
     -- * Aliases
@@ -201,30 +203,21 @@ data ColumnConstraint
 -- | `ColumnType` encodes the allowance of @DEFAULT@ and @NULL@ and the
 -- base `PGType` for a column.
 --
--- >>> :kind 'NoDef :=> 'NotNull 'PGint4
--- 'NoDef :=> 'NotNull 'PGint4 :: (ColumnConstraint, NullityType)
--- >>> :kind 'NoDef :=> 'NotNull 'PGtext
--- 'NoDef :=> 'NotNull 'PGtext :: (ColumnConstraint, NullityType)
--- >>> import Data.Type.Equality
--- >>> Refl :: ColumnType :~: (ColumnConstraint, NullityType)
--- Refl
+-- >>> :set -XTypeFamilies -XTypeInType
+-- >>> import GHC.TypeLits
+-- >>> type family IdColumn :: ColumnType where IdColumn = 'Def :=> 'NotNull 'PGint4
+-- >>> type family EmailColumn :: ColumnType where EmailColumn = 'NoDef :=> 'Null 'PGtext
 type ColumnType = (ColumnConstraint,NullityType)
 
 -- | `ColumnsType` is a row of `ColumnType`s.
 --
--- >>> import GHC.TypeLits
 -- >>> :{
--- type Columns =
---   '[ "name" ::: 'NoDef :=> 'NotNull 'PGtext
---    , "id"   :::   'Def :=> 'NotNull 'PGint4
---    ]
+-- type family UsersColumns :: ColumnsType where
+--   UsersColumns =
+--     '[ "name" ::: 'NoDef :=> 'NotNull 'PGtext
+--      , "id"   :::   'Def :=> 'NotNull 'PGint4
+--      ]
 -- :}
---
--- >>> :kind Columns
--- Columns :: [(Symbol, (ColumnConstraint, NullityType))]
--- >>> import Data.Type.Equality
--- >>> Refl :: ColumnsType :~: [(Symbol, (ColumnConstraint, NullityType))]
--- Refl
 type ColumnsType = [(Symbol,ColumnType)]
 
 -- | `TableConstraint` encodes various forms of data constraints
@@ -235,25 +228,27 @@ data TableConstraint
   | PrimaryKey [Symbol]
   | ForeignKey [Symbol] Symbol [Symbol]
 
+-- | A `TableConstraints` is a set of aliased `TableConstraint`s.
+type TableConstraints = [(Symbol,TableConstraint)]
+-- | A monokinded empty `TableConstraints`.
+type family NilTableConstraints :: TableConstraints where
+  NilTableConstraints = '[]
+
 -- | `TableType` encodes a row of constraints on a table as well as the types
 -- of its columns.
 --
 -- >>> :{
--- type UsersTable =
---   '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
---   '[ "id"       :::   'Def :=> 'NotNull 'PGint4
---    , "name"     ::: 'NoDef :=> 'NotNull 'PGtext
---    ]
+-- type family UsersTable :: TableType where
+--   UsersTable =
+--     '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
+--     '[ "id"       :::   'Def :=> 'NotNull 'PGint4
+--      , "name"     ::: 'NoDef :=> 'NotNull 'PGtext
+--      ]
 -- :}
---
--- >>> :kind UsersTable
--- UsersTable :: ([(Symbol, TableConstraint)],
---                [(Symbol, (ColumnConstraint, NullityType))])
-type TableType = ([(Symbol,TableConstraint)],ColumnsType)
+type TableType = (TableConstraints,ColumnsType)
 
 -- | `TablesType` is a row of `TableType`s, thought of as a union.
 --
--- >>> :set -XTypeFamilies -XTypeInType
 -- >>> :{
 -- type family Schema :: TablesType where
 --   Schema =
@@ -273,25 +268,22 @@ type TableType = ([(Symbol,TableConstraint)],ColumnsType)
 --           ]
 --      ]
 -- :}
---
 type TablesType = [(Symbol,TableType)]
--- | A monokinded `'[]` of `TablesType`.
+-- | A monokinded empty `TablesType`.
 type family NilTables :: TablesType where NilTables = '[]
 
 -- | `RelationType` is a row of `NullityType`
 --
 -- >>> :{
--- type Relation =
---   '[ "name"        ::: 'NotNull 'PGtext
---    , "age"         ::: 'NotNull 'PGint4
---    , "dateOfBirth" :::    'Null 'PGdate
---    ]
+-- type family PersonRelation :: RelationType where
+--   PersonRelation =
+--     '[ "name"        ::: 'NotNull 'PGtext
+--      , "age"         ::: 'NotNull 'PGint4
+--      , "dateOfBirth" :::    'Null 'PGdate
+--      ]
 -- :}
---
--- >>> :kind Relation
--- Relation :: [(Symbol, NullityType)]
 type RelationType = [(Symbol,NullityType)]
--- | A monokinded `'[]` of `RelationType`.
+-- | A monokinded empty `RelationType`.
 type family NilRelation :: RelationType where NilRelation = '[]
 
 -- | `RelationsType` is a row of `RelationType`s, thought of as a product.
