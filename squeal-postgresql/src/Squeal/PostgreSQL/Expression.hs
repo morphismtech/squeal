@@ -160,7 +160,7 @@ import Prelude hiding (id, (.))
 
 import qualified GHC.Generics as GHC
 
-import Squeal.PostgreSQL.Prettyprint
+import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
 {-----------------------------------------

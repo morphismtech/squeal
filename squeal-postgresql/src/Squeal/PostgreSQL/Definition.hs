@@ -78,7 +78,7 @@ import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Prettyprint
+import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
 {-----------------------------------------

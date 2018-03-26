@@ -52,7 +52,7 @@ import Generics.SOP
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Squeal.PostgreSQL.Manipulation
-import Squeal.PostgreSQL.Prettyprint
+import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Schema
 

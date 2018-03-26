@@ -29,7 +29,7 @@ library
     Squeal.PostgreSQL.Migration
     Squeal.PostgreSQL.Pool
     Squeal.PostgreSQL.PQ
-    Squeal.PostgreSQL.Prettyprint
+    Squeal.PostgreSQL.Render
     Squeal.PostgreSQL.Query
     Squeal.PostgreSQL.Schema
     Squeal.PostgreSQL.Transaction
