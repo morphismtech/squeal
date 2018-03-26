@@ -77,15 +77,9 @@ let
 :}
 
 >>> :{
-let
-  suppressNotices :: PQ schema schema IO ()
-  suppressNotices = void . manipulate $ UnsafeManipulation
-    "SET client_min_messages TO WARNING;"
-:}
-
->>> :{
 withConnection "host=localhost port=5432 dbname=exampledb" $
-  suppressNotices
+  manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
+    -- suppress notices
   & pqThen (migrateUp migrations)
   & pqThen numMigrations
   & pqThen (migrateDown migrations)
@@ -136,7 +130,7 @@ import Prelude hiding (id, (.))
 
 import Squeal.PostgreSQL
 
--- | A `Migration` of a `Migrations`, should contain an inverse pair of
+-- | A `Migration` should contain an inverse pair of
 -- `up` and `down` instructions and a unique `name`.
 data Migration io schema0 schema1 = Migration
   { name :: Text -- ^ The `name` of a `Migration`.
@@ -163,7 +157,7 @@ single step = step :>> Done
 -- | Run `Migration`s by creating the `MigrationsTable`
 -- if it does not exist and then in a transaction, for each each `Migration`
 -- query to see if the `Migration` is executed. If not, then
--- execute the `Migration` and insert its row in `MigrationsTable`.
+-- execute the `Migration` and insert its row in the `MigrationsTable`.
 migrateUp
   :: MonadBaseControl IO io
   => AlignedList (Migration io) schema0 schema1 -- ^ migrations to run
@@ -219,7 +213,7 @@ migrateUp migration =
 -- | Rewind `Migration`s by creating the `MigrationsTable`
 -- if it does not exist and then in a transaction, for each each `Migration`
 -- query to see if the `Migration` is executed. If it is, then
--- rewind the `Migration` and delete its row in `MigrationsTable`.
+-- rewind the `Migration` and delete its row in the `MigrationsTable`.
 migrateDown
   :: MonadBaseControl IO io
   => AlignedList (Migration io) schema0 schema1 -- ^ migrations to rewind

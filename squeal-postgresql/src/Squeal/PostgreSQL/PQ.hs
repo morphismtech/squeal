@@ -5,9 +5,17 @@ Copyright: (c) Eitan Chatav, 2017
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-`Squeal.PostgreSQL.PQ` is where Squeal statements come to actually get run by
-`LibPQ`. It contains a `PQ` indexed monad transformer to run `Definition`s and
-a `MonadPQ` constraint for running a `Manipulation` or `Query`.
+This module is where Squeal commands actually get executed by
+`LibPQ`. It containts two typeclasses, `IndexedMonadTransPQ` for executing
+a `Definition` and `MonadPQ` for executing a `Manipulation` or `Query`,
+and a `PQ` type with instances for them.
+
+Using Squeal in your application will come down to defining
+the @schema@ of your database and including @PQ schema schema@ in your
+application's monad transformer stack, giving it an instance of `MonadPQ`.
+
+This module also provides functions for retrieving rows from the `LibPQ.Result`
+of executing Squeal commands.
 -}
 
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
@@ -50,12 +58,12 @@ module Squeal.PostgreSQL.PQ
     -- * Result
   , LibPQ.Result
   , LibPQ.Row
+  , ntuples
   , getRow
   , getRows
   , nextRow
   , firstRow
   , liftResult
-  , ntuples
   , LibPQ.ExecStatus (..)
   , resultStatus
   , resultErrorMessage
@@ -275,6 +283,8 @@ instance IndexedMonadTransPQ PQ where
 
 * `runQueryParams` is like `manipulateParams` for query statements.
 
+* `runQuery` is like `runQueryParams` for a parameter-free statement.
+
 * `traversePrepared` has the same type signature as a composition of
   `traverse` and `manipulateParams` but provides an optimization by
   preparing the statement with `LibPQ.prepare` and then traversing a
@@ -300,13 +310,13 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
   manipulateParams
     :: ToParams x params
     => Manipulation schema params ys
-    -- ^ `insertInto`, `update` or `deleteFrom`
+    -- ^ `insertRows`, `update` or `deleteFrom`
     -> x -> pq (K LibPQ.Result ys)
   default manipulateParams
     :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
     => ToParams x params
     => Manipulation schema params ys
-    -- ^ `insertInto`, `update` or `deleteFrom`
+    -- ^ `insertRows`, `update` or `deleteFrom`
     -> x -> pq (K LibPQ.Result ys)
   manipulateParams manipulation params = lift $
     manipulateParams manipulation params
@@ -330,7 +340,7 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
   traversePrepared
     :: (ToParams x params, Traversable list)
     => Manipulation schema params ys
-    -- ^ `insertInto`, `update` or `deleteFrom`
+    -- ^ `insertRows`, `update`, or `deleteFrom`, and friends
     -> list x -> pq (list (K LibPQ.Result ys))
   default traversePrepared
     :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
@@ -343,20 +353,20 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
     :: (ToParams x params, Traversable list)
     => list x
     -> Manipulation schema params ys
-    -- ^ `insertInto`, `update` or `deleteFrom`
+    -- ^ `insertRows`, `update` or `deleteFrom`
     -> pq (list (K LibPQ.Result ys))
   forPrepared = flip traversePrepared
 
   traversePrepared_
     :: (ToParams x params, Foldable list)
     => Manipulation schema params '[]
-    -- ^ `insertInto`, `update` or `deleteFrom`
+    -- ^ `insertRows`, `update` or `deleteFrom`
     -> list x -> pq ()
   default traversePrepared_
     :: (MonadTrans t, MonadPQ schema pq1, pq ~ t pq1)
     => (ToParams x params, Foldable list)
     => Manipulation schema params '[]
-    -- ^ `insertInto`, `update` or `deleteFrom`
+    -- ^ `insertRows`, `update` or `deleteFrom`
     -> list x -> pq ()
   traversePrepared_ manipulation params = lift $
     traversePrepared_ manipulation params
@@ -365,7 +375,7 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
     :: (ToParams x params, Foldable list)
     => list x
     -> Manipulation schema params '[]
-    -- ^ `insertInto`, `update` or `deleteFrom`
+    -- ^ `insertRows`, `update` or `deleteFrom`
     -> pq ()
   forPrepared_ = flip traversePrepared_
 
@@ -511,11 +521,12 @@ instance (MonadBaseControl b m, schema0 ~ schema1)
     pqliftWith $ \ run -> liftBaseWith $ \ runInBase -> f $ runInBase . run
   restoreM = PQ . const . restoreM
 
--- | Get a row corresponding to a given row number from a `Result`.
+-- | Get a row corresponding to a given row number from a `LibPQ.Result`,
+-- throwing an exception if the row number is out of bounds.
 getRow
   :: (FromRow columns y, MonadBase IO io)
   => LibPQ.Row
-  -- ^ row
+  -- ^ row number
   -> K LibPQ.Result columns
   -- ^ result
   -> io y
@@ -532,7 +543,7 @@ getRow r (K result :: K LibPQ.Result columns) = liftBase $ do
 
 -- | Intended to be used for unfolding in streaming libraries, `nextRow`
 -- takes a total number of rows (which can be found with `ntuples`)
--- and a `Result` and given a row number if it's too large returns `Nothing`,
+-- and a `LibPQ.Result` and given a row number if it's too large returns `Nothing`,
 -- otherwise returning the row along with the next row number.
 nextRow
   :: (FromRow columns y, MonadBase IO io)
@@ -548,7 +559,7 @@ nextRow total (K result :: K LibPQ.Result columns) r
       Nothing -> error "nextRow: found unexpected length"
       Just row -> return $ Just (r+1, fromRow @columns row)
 
--- | Get all rows from a `Result`.
+-- | Get all rows from a `LibPQ.Result`.
 getRows
   :: (FromRow columns y, MonadBase IO io)
   => K LibPQ.Result columns -- ^ result
@@ -562,7 +573,7 @@ getRows (K result :: K LibPQ.Result columns) = liftBase $ do
       Nothing -> error "getRows: found unexpected length"
       Just row -> return $ fromRow @columns row
 
--- | Get the first row if possible from a `Result`.
+-- | Get the first row if possible from a `LibPQ.Result`.
 firstRow
   :: (FromRow columns y, MonadBase IO io)
   => K LibPQ.Result columns -- ^ result
@@ -576,7 +587,7 @@ firstRow (K result :: K LibPQ.Result columns) = liftBase $ do
       Nothing -> error "firstRow: found unexpected length"
       Just row -> return . Just $ fromRow @columns row
 
--- | Lifts actions on results from `LibPQ`.
+-- | Lifts actions on results from @LibPQ@.
 liftResult
   :: MonadBase IO io
   => (LibPQ.Result -> IO x)
