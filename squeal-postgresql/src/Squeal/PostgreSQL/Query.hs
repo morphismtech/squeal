@@ -213,21 +213,21 @@ joins:
 let
   query :: Query
     '[ "orders" :::
-         '["pk" ::: PrimaryKey '["id"]
-          ,"fk_customer" ::: ForeignKey '["customer_id"] "customers" '["id"]
-          ,"fk_shipper" ::: ForeignKey '["shipper_id"] "shippers" '["id"]] :=>
+         '["pk_orders" ::: PrimaryKey '["id"]
+          ,"fk_customers" ::: ForeignKey '["customer_id"] "customers" '["id"]
+          ,"fk_shippers" ::: ForeignKey '["shipper_id"] "shippers" '["id"]] :=>
          '[ "id"    ::: 'NoDef :=> 'NotNull 'PGint4
           , "price"   ::: 'NoDef :=> 'NotNull 'PGfloat4
           , "customer_id" ::: 'NoDef :=> 'NotNull 'PGint4
           , "shipper_id"  ::: 'NoDef :=> 'NotNull 'PGint4
           ]
      , "customers" :::
-         '["pk" ::: PrimaryKey '["id"]] :=>
+         '["pk_customers" ::: PrimaryKey '["id"]] :=>
          '[ "id" ::: 'NoDef :=> 'NotNull 'PGint4
           , "name" ::: 'NoDef :=> 'NotNull 'PGtext
           ]
      , "shippers" :::
-         '["pk" ::: PrimaryKey '["id"]] :=>
+         '["pk_shippers" ::: PrimaryKey '["id"]] :=>
          '[ "id" ::: 'NoDef :=> 'NotNull 'PGint4
           , "name" ::: 'NoDef :=> 'NotNull 'PGtext
           ]
@@ -412,7 +412,7 @@ selectDistinctStar rels = UnsafeQuery $
 selectDotStar
   :: Has relation relations columns
   => Alias relation
-  -- ^ particular virtual Table
+  -- ^ particular virtual subtable
   -> TableExpression schema params relations 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
@@ -424,7 +424,7 @@ selectDotStar rel relations = UnsafeQuery $
 selectDistinctDotStar
   :: Has relation relations columns
   => Alias relation
-  -- ^ particular virtual Table
+  -- ^ particular virtual table
   -> TableExpression schema params relations 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
@@ -612,9 +612,9 @@ subquery
   -> FromClause schema params '[table]
 subquery = UnsafeFromClause . renderAliasedAs (parenthesized . renderQuery)
 
-{- | @t1 & crossJoin t2@. For every possible combination of rows from
-    @t1@ and @t2@ (i.e., a Cartesian product), the joined table will contain
-    a row consisting of all columns in @t1@ followed by all columns in @t2@.
+{- | @left & crossJoin right@. For every possible combination of rows from
+    @left@ and @right@ (i.e., a Cartesian product), the joined table will contain
+    a row consisting of all columns in @left@ followed by all columns in @right@.
     If the tables have @n@ and @m@ rows respectively, the joined table will
     have @n * m@ rows.
 -}
@@ -627,15 +627,14 @@ crossJoin
 crossJoin right left = UnsafeFromClause $
   renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
 
-{- | @t1 & InnerJoin t2 on@. For each row @r1@ of @t1@, the joined
-    table has a row for each row in @t2@ that satisfies the @on@ condition
-    with @r1@
+{- | @left & innerJoin right on@. The joined table is filtered by
+the @on@ condition.
 -}
 innerJoin
   :: FromClause schema params right
   -- ^ right
   -> Condition (Join left right) 'Ungrouped params
-  -- ^ @ON@ condition
+  -- ^ @on@ condition
   -> FromClause schema params left
   -- ^ left
   -> FromClause schema params (Join left right)
@@ -643,16 +642,16 @@ innerJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "INNER JOIN" <+> renderFromClause right
   <+> "ON" <+> renderExpression on
 
-{- | @t1 & LeftOuterJoin t2 on@. First, an inner join is performed.
-    Then, for each row in @t1@ that does not satisfy the @on@ condition with
-    any row in @t2@, a joined row is added with null values in columns of @t2@.
-    Thus, the joined table always has at least one row for each row in @t1@.
+{- | @left & leftOuterJoin right on@. First, an inner join is performed.
+    Then, for each row in @left@ that does not satisfy the @on@ condition with
+    any row in @right@, a joined row is added with null values in columns of @right@.
+    Thus, the joined table always has at least one row for each row in @left@.
 -}
 leftOuterJoin
   :: FromClause schema params right
   -- ^ right
   -> Condition (Join left right) 'Ungrouped params
-  -- ^ @ON@ condition
+  -- ^ @on@ condition
   -> FromClause schema params left
   -- ^ left
   -> FromClause schema params (Join left (NullifyRelations right))
@@ -660,17 +659,17 @@ leftOuterJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "LEFT OUTER JOIN" <+> renderFromClause right
   <+> "ON" <+> renderExpression on
 
-{- | @t1 & RightOuterJoin t2 on@. First, an inner join is performed.
-    Then, for each row in @t2@ that does not satisfy the @on@ condition with
-    any row in @t1@, a joined row is added with null values in columns of @t1@.
+{- | @left & rightOuterJoin right on@. First, an inner join is performed.
+    Then, for each row in @right@ that does not satisfy the @on@ condition with
+    any row in @left@, a joined row is added with null values in columns of @left@.
     This is the converse of a left join: the result table will always
-    have a row for each row in @t2@.
+    have a row for each row in @right@.
 -}
 rightOuterJoin
   :: FromClause schema params right
   -- ^ right
   -> Condition (Join left right) 'Ungrouped params
-  -- ^ @ON@ condition
+  -- ^ @on@ condition
   -> FromClause schema params left
   -- ^ left
   -> FromClause schema params (Join (NullifyRelations left) right)
@@ -678,18 +677,18 @@ rightOuterJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "RIGHT OUTER JOIN" <+> renderFromClause right
   <+> "ON" <+> renderExpression on
 
-{- | @t1 & FullOuterJoin t2 on@. First, an inner join is performed.
-    Then, for each row in @t1@ that does not satisfy the @on@ condition with
-    any row in @t2@, a joined row is added with null values in columns of @t2@.
-    Also, for each row of @t2@ that does not satisfy the join condition
-    with any row in @t1@, a joined row with null values in the columns of @t1@
+{- | @left & fullOuterJoin right on@. First, an inner join is performed.
+    Then, for each row in @left@ that does not satisfy the @on@ condition with
+    any row in @right@, a joined row is added with null values in columns of @right@.
+    Also, for each row of @right@ that does not satisfy the join condition
+    with any row in @left@, a joined row with null values in the columns of @left@
     is added.
 -}
 fullOuterJoin
   :: FromClause schema params right
   -- ^ right
   -> Condition (Join left right) 'Ungrouped params
-  -- ^ @ON@ condition
+  -- ^ @on@ condition
   -> FromClause schema params left
   -- ^ left
   -> FromClause schema params
@@ -732,7 +731,8 @@ renderBy = \case
 -- A `NoGroups` indicates `Ungrouped` while a `Group` indicates `Grouped`.
 -- @NoGroups@ is distinguised from @Group Nil@ since no aggregation can be
 -- done on @NoGroups@ while all output `Expression`s must be aggregated
--- in @Group Nil@.
+-- in @Group Nil@. In general, all output `Expression`s in the
+-- complement of @bys@ must be aggregated in @Group bys@.
 data GroupByClause relations grouping where
   NoGroups :: GroupByClause relations 'Ungrouped
   Group
