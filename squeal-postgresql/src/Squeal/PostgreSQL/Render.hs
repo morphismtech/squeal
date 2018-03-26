@@ -17,7 +17,15 @@ Rendering helper functions.
   , TypeApplications
 #-}
 
-module Squeal.PostgreSQL.Render where
+module Squeal.PostgreSQL.Render
+  ( -- * Render
+    parenthesized
+  , (<+>)
+  , commaSeparated
+  , renderCommaSeparated
+  , renderCommaSeparatedMaybe
+  , renderNat
+  ) where
 
 import Data.ByteString (ByteString)
 import Data.Maybe
