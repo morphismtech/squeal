@@ -55,7 +55,7 @@ start postgres on localhost port `5432` and create a database named `exampledb`.
 
 ## usage
 
-Squeal is a deep embedding of PostgreSQL in Haskell. Let's see an example!
+Let's see an example!
 First, we need some language extensions because Squeal uses modern GHC
 features.
 
