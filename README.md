@@ -10,15 +10,55 @@
 
 [Stackage](https://www.stackage.org/package/squeal-postgresql)
 
+## introduction
+
+Squeal is a deep embedding of SQL into Haskell. By "deep embedding", I am abusing the
+term somewhat. What I mean is that Squeal embeds both SQL terms and SQL types
+into Haskell at the term and type levels respectively. This leads to a very high level
+of type-safety in Squeal.
+
+But Squeal embeds not just the structured query language of SQL but also the
+data manipulation language and the data definition language; that's `SELECT`,
+`INSERT`, `UPDATE`, `DELETE`, `WITH`, `CREATE`, `DROP`, and `ALTER` commands.
+
+Squeal expressions closely match their corresponding SQL expressions so that
+the SQL they actually generate is completely predictable. They are also highly
+composable and cover a large portion of SQL.
+
+## features
+
+* generic encoding of Haskell tuples and records into query parameters
+  and generic decoding of query results into Haskell records
+  using [`generics-sop`](https://hackage.haskell.org/package/generics-sop)
+* access to SQL alias system using the `OverloadedLabels` extension
+* type-safe `NULL` and `DEFAULT`
+* type-safe SQL constraints `CHECK`, `UNIQUE`, `PRIMARY KEY` and `FOREIGN KEY`
+* type-safe aggregation
+* escape hatches for writing raw SQL
+* [`mtl`](https://hackage.haskell.org/package/mtl) compatible monad transformer
+  for executing as well as preparing queries and manipulations
+  and [Atkey](https://bentnib.org/paramnotions-jfp.pdf) indexed monad transformer
+  for executing definitions.
+* migrations
+* connection pools
+* transactions
+
 ## installation
 
 `stack install squeal-postgresql`
+
+## testing
+
+start postgres on localhost port `5432` and create a database named `exampledb`.
+
+`stack test`
 
 ## usage
 
 Squeal is a deep embedding of PostgreSQL in Haskell. Let's see an example!
 First, we need some language extensions because Squeal uses modern GHC
 features.
+
 ```haskell
 >>> :set -XDataKinds -XDeriveGeneric -XOverloadedLabels
 >>> :set -XOverloadedStrings -XTypeApplications -XTypeOperators
