@@ -110,7 +110,7 @@ transactionallySchema_
 transactionallySchema_ = transactionallySchema defaultMode
 
 -- | The available transaction characteristics are the transaction `IsolationLevel`,
--- the transaction access mode (`ReadWrite` or `ReadOnly`), and the `DeferrableMode`.
+-- the transaction `AccessMode` (`ReadWrite` or `ReadOnly`), and the `DeferrableMode`.
 data TransactionMode = TransactionMode
   { isolationLevel :: IsolationLevel
   , accessMode  :: AccessMode

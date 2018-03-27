@@ -417,7 +417,7 @@ class IsQualified table column expression where
   infixl 9 !
 instance IsQualified table column (Alias table, Alias column) where (!) = (,)
 
--- | @Elem@ is a promoted `elem`.
+-- | @Elem@ is a promoted `Data.List.elem`.
 type family Elem x xs where
   Elem x '[] = 'False
   Elem x (x ': xs) = 'True
