@@ -1,6 +1,6 @@
 ## RELEASE NOTES
 
-### Version 0.2 - March 24, 2018
+### Version 0.2 - March 26, 2018
 
 **Changes**
 - **Constraints** - Type level table constraints like primary and foreign keys and column constraints like having `DEFAULT`.
