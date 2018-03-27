@@ -51,17 +51,10 @@ module Squeal.PostgreSQL.Schema
   , GroupedBy
     -- * Constraints
   , (:=>)
-  , ColumnsToRelation
-  , RelationToColumns
-  , TableToColumns
-  , TablesToRelations
-  , RelationsToTables
   , ColumnConstraint (..)
   , TableConstraint (..)
   , TableConstraints
   , NilTableConstraints
-  , ConstraintInvolves
-  , DropIfConstraintsInvolve
     -- * Aliases
   , (:::)
   , Alias (Alias)
@@ -74,6 +67,11 @@ module Squeal.PostgreSQL.Schema
   , IsLabel (..)
   , IsQualified (..)
     -- * Type Families
+  , Join
+  , Create
+  , Drop
+  , Alter
+  , Rename
   , Elem
   , In
   , PGNum
@@ -86,11 +84,13 @@ module Squeal.PostgreSQL.Schema
   , NullifyType
   , NullifyRelation
   , NullifyRelations
-  , Join
-  , Create
-  , Drop
-  , Alter
-  , Rename
+  , ColumnsToRelation
+  , RelationToColumns
+  , TableToColumns
+  , TablesToRelations
+  , RelationsToTables
+  , ConstraintInvolves
+  , DropIfConstraintsInvolve
     -- * Generics
   , SameField
   , SameFields
@@ -181,9 +181,9 @@ data NullityType
   | NotNull PGType -- ^ @NULL@ is absent
 
 -- | The constraint  operator, `:=>` is a type level pair
--- between an "constraint" and some type,
--- either a `ColumnConstraint` and a `NullityType` or a row of
--- `TableConstraint`s and a `TableType`.
+-- between a "constraint" and some type, for use in pairing
+-- a `ColumnConstraint` with a `NullityType` to produce a `ColumnType`
+-- or a `TableConstraints` and a `ColumnsType` to produce a `TableType`.
 type (:=>) constraint ty = '(constraint,ty)
 infixr 7 :=>
 
@@ -195,7 +195,11 @@ infixr 7 :=>
 type (:::) (alias :: Symbol) ty = '(alias,ty)
 infixr 6 :::
 
--- | `ColumnConstraint` encodes the allowance of @DEFAULT@.
+-- | `ColumnConstraint` encodes the availability of @DEFAULT@ for inserts and updates.
+-- A column can be assigned a default value.
+-- A data `Squeal.PostgreSQL.Manipulations.Manipulation` command can also
+-- request explicitly that a column be set to its default value,
+-- without having to know what that value is.
 data ColumnConstraint
   = Def -- ^ @DEFAULT@ is available for inserts and updates
   | NoDef -- ^ @DEFAULT@ is unavailable for inserts and updates
@@ -222,13 +226,17 @@ type ColumnsType = [(Symbol,ColumnType)]
 
 -- | `TableConstraint` encodes various forms of data constraints
 -- of columns in a table.
+-- `TableConstraint`s give you as much control over the data in your tables
+-- as you wish. If a user attempts to store data in a column that would
+-- violate a constraint, an error is raised. This applies
+-- even if the value came from the default value definition.
 data TableConstraint
   = Check [Symbol]
   | Unique [Symbol]
   | PrimaryKey [Symbol]
   | ForeignKey [Symbol] Symbol [Symbol]
 
--- | A `TableConstraints` is a set of aliased `TableConstraint`s.
+-- | A `TableConstraints` is a row of `TableConstraint`s.
 type TableConstraints = [(Symbol,TableConstraint)]
 -- | A monokinded empty `TableConstraints`.
 type family NilTableConstraints :: TableConstraints where
@@ -326,7 +334,7 @@ data Grouping
 
 {- | A `GroupedBy` constraint indicates that a table qualified column is
 a member of the auxiliary namespace created by @GROUP BY@ clauses and thus,
-may be called in an output `Expression` without aggregating.
+may be called in an output `Squeal.PostgreSQL.Expression.Expression` without aggregating.
 -}
 class (KnownSymbol relation, KnownSymbol column)
   => GroupedBy relation column bys where
@@ -387,12 +395,12 @@ type family AliasesOf aliaseds where
   AliasesOf '[] = '[]
   AliasesOf (alias ::: ty ': tys) = alias ': AliasesOf tys
 
--- | @HasUnique alias xs x@ is a constraint that proves that @xs@ is a singleton
--- of @alias ::: x@.
-type HasUnique alias xs x = xs ~ '[alias ::: x]
+-- | @HasUnique alias fields field@ is a constraint that proves that
+-- @fields@ is a singleton of @alias ::: field@.
+type HasUnique alias fields field = fields ~ '[alias ::: field]
 
--- | @Has alias xs x@ is a constraint that proves that @xs@ has a field
--- of @alias ::: x@.
+-- | @Has alias fields field@ is a constraint that proves that
+-- @fields@ has a field of @alias ::: field@.
 class KnownSymbol alias =>
   Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
   | alias fields -> field where
