@@ -1,11 +1,11 @@
 {-|
-Module: Squeal.PostgreSQL.PrettyPrint
-Description: Pretty print helper functions
+Module: Squeal.PostgreSQL.Render
+Description: Rendering helper functions
 Copyright: (c) Eitan Chatav, 2017
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Pretty print helper functions.
+Rendering helper functions.
 -}
 
 {-# LANGUAGE
@@ -17,7 +17,15 @@ Pretty print helper functions.
   , TypeApplications
 #-}
 
-module Squeal.PostgreSQL.Prettyprint where
+module Squeal.PostgreSQL.Render
+  ( -- * Render
+    parenthesized
+  , (<+>)
+  , commaSeparated
+  , renderCommaSeparated
+  , renderCommaSeparatedMaybe
+  , renderNat
+  ) where
 
 import Data.ByteString (ByteString)
 import Data.Maybe

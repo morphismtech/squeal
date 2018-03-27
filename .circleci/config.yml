@@ -1,0 +1,23 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: haskell:latest
+      - image: circleci/postgres:latest
+        environment:
+          POSTGRES_DB: exampledb
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - dependency-cache
+      - run: apt-get update && apt-get install -y libpq-dev xz-utils make
+      - run: stack upgrade && stack update
+      - run: stack build
+      - run: stack test
+      - run: stack haddock
+      - save_cache:
+          key: dependency-cache
+          paths:
+            - ".stack-work"
+            - "/root/.stack/"
