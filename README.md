@@ -39,7 +39,7 @@ composable and cover a large portion of SQL.
   for executing as well as preparing queries and manipulations
   and [Atkey](https://bentnib.org/paramnotions-jfp.pdf) indexed monad transformer
   for executing definitions.
-* migrations
+* linear, invertible migrations
 * connection pools
 * transactions
 
