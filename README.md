@@ -10,6 +10,8 @@
 
 [Stackage](https://www.stackage.org/package/squeal-postgresql)
 
+[YouTube](https://www.youtube.com/watch?v=rWfEQfAaNc4)
+
 ## introduction
 
 Squeal is a deep embedding of SQL into Haskell. By "deep embedding", I am abusing the
