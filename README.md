@@ -178,7 +178,7 @@ of our inserts.
 let
   insertUser :: Manipulation Schema '[ 'NotNull 'PGtext ] '[ "fromOnly" ::: 'NotNull 'PGint4 ]
   insertUser = insertRow #users
-    (Default `As` #id :* Set (param `1) `As` #name :* Nil)
+    (Default `As` #id :* Set (param @1) `As` #name :* Nil)
     OnConflictDoNothing (Returning (#id `As` #fromOnly :* Nil))
 :}
 >>> :{
@@ -186,8 +186,8 @@ let
   insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
   insertEmail = insertRow #emails
     ( Default `As` #id :*
-      Set (param `1) `As` #user_id :*
-      Set (param `2) `As` #email :* Nil )
+      Set (param @1) `As` #user_id :*
+      Set (param @2) `As` #email :* Nil )
     OnConflictDoNothing (Returning Nil)
 :}
 >>> renderManipulation insertUser
