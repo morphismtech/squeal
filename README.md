@@ -236,9 +236,9 @@ Let's also create some users to add to the database.
 let
   users :: [User]
   users = 
-    [ User "Alice" (Just "alice`gmail.com")
+    [ User "Alice" (Just "alice@gmail.com")
     , User "Bob" Nothing
-    , User "Carole" (Just "carole`hotmail.com")
+    , User "Carole" (Just "carole@hotmail.com")
     ]
 :}
 ```
@@ -269,5 +269,5 @@ void . withConnection "host=localhost port=5432 dbname=exampledb" $
   & pqThen session
   & pqThen (define teardown)
 :}
-[User {userName = "Alice", userEmail = Just "alice`gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole`hotmail.com"}]
+[User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole@hotmail.com"}]
 ```
