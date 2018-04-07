@@ -80,7 +80,7 @@
 -- We can easily see the generated SQL is unsuprising looking.
 --
 -- >>> renderDefinition setup
--- "CREATE TABLE users (id serial, name text NOT NULL, CONSTRAINT pk_users PRIMARY KEY (id)); CREATE TABLE emails (id serial, user_id int NOT NULL, email text, CONSTRAINT pk_emails PRIMARY KEY (id), CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE);"
+-- "CREATE TABLE \"users\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_users\" PRIMARY KEY (\"id\")); CREATE TABLE \"emails\" (\"id\" serial, \"user_id\" int NOT NULL, \"email\" text, CONSTRAINT \"pk_emails\" PRIMARY KEY (\"id\"), CONSTRAINT \"fk_user_id\" FOREIGN KEY (\"user_id\") REFERENCES \"users\" (\"id\") ON DELETE CASCADE ON UPDATE CASCADE);"
 --
 -- Notice that @setup@ starts with an empty schema @'[]@ and produces @Schema@.
 -- In our `createTable` commands we included `TableConstraint`s to define
@@ -94,7 +94,7 @@
 -- :}
 --
 -- >>> renderDefinition teardown
--- "DROP TABLE emails; DROP TABLE users;"
+-- "DROP TABLE \"emails\"; DROP TABLE \"users\";"
 --
 -- Next, we'll write `Manipulation`s to insert data into our two tables.
 -- A `Manipulation` is an `insertRow` (or other inserts), `update`
@@ -127,9 +127,9 @@
 -- :}
 --
 -- >>> renderManipulation insertUser
--- "INSERT INTO users (id, name) VALUES (DEFAULT, ($1 :: text)) ON CONFLICT DO NOTHING RETURNING id AS fromOnly;"
+-- "INSERT INTO \"users\" (\"id\", \"name\") VALUES (DEFAULT, ($1 :: text)) ON CONFLICT DO NOTHING RETURNING \"id\" AS \"fromOnly\";"
 -- >>> renderManipulation insertEmail
--- "INSERT INTO emails (id, user_id, email) VALUES (DEFAULT, ($1 :: int4), ($2 :: text)) ON CONFLICT DO NOTHING;"
+-- "INSERT INTO \"emails\" (\"id\", \"user_id\", \"email\") VALUES (DEFAULT, ($1 :: int4), ($2 :: text)) ON CONFLICT DO NOTHING;"
 --
 -- Next we write a `Query` to retrieve users from the database. We're not
 -- interested in the ids here, just the usernames and email addresses. We
@@ -149,7 +149,7 @@
 -- :}
 --
 -- >>> renderQuery getUsers
--- "SELECT u.name AS userName, e.email AS userEmail FROM users AS u INNER JOIN emails AS e ON (u.id = e.user_id)"
+-- "SELECT \"u\".\"name\" AS \"userName\", \"e\".\"email\" AS \"userEmail\" FROM \"users\" AS \"u\" INNER JOIN \"emails\" AS \"e\" ON (\"u\".\"id\" = \"e\".\"user_id\")"
 --
 -- Now that we've defined the SQL side of things, we'll need a Haskell type
 -- for users. We give the type `Generics.SOP.Generic` and

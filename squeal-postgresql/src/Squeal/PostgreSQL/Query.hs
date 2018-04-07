@@ -106,7 +106,7 @@ let
   query = selectStar (from (table (#tab `As` #t)))
 in renderQuery query
 :}
-"SELECT * FROM tab AS t"
+"SELECT * FROM \"tab\" AS \"t\""
 
 restricted query:
 
@@ -127,7 +127,7 @@ let
         & where_ (#col2 .> 0) )
 in renderQuery query
 :}
-"SELECT (col1 + col2) AS sum, col1 AS col1 FROM tab AS t WHERE ((col1 > col2) AND (col2 > 0))"
+"SELECT (\"col1\" + \"col2\") AS \"sum\", \"col1\" AS \"col1\" FROM \"tab\" AS \"t\" WHERE ((\"col1\" > \"col2\") AND (\"col2\" > 0))"
 
 subquery:
 
@@ -142,7 +142,7 @@ let
       (from (subquery (selectStar (from (table (#tab `As` #t))) `As` #sub)))
 in renderQuery query
 :}
-"SELECT * FROM (SELECT * FROM tab AS t) AS sub"
+"SELECT * FROM (SELECT * FROM \"tab\" AS \"t\") AS \"sub\""
 
 limits and offsets:
 
@@ -156,7 +156,7 @@ let
     (from (table (#tab `As` #t)) & limit 100 & offset 2 & limit 50 & offset 2)
 in renderQuery query
 :}
-"SELECT * FROM tab AS t LIMIT 50 OFFSET 4"
+"SELECT * FROM \"tab\" AS \"t\" LIMIT 50 OFFSET 4"
 
 parameterized query:
 
@@ -170,7 +170,7 @@ let
     (from (table (#tab `As` #t)) & where_ (#col .> param @1))
 in renderQuery query
 :}
-"SELECT * FROM tab AS t WHERE (col > ($1 :: float8))"
+"SELECT * FROM \"tab\" AS \"t\" WHERE (\"col\" > ($1 :: float8))"
 
 aggregation query:
 
@@ -190,7 +190,7 @@ let
       & having (#col1 + sum_ #col2 .> 1) )
 in renderQuery query
 :}
-"SELECT sum(col2) AS sum, col1 AS col1 FROM tab AS table1 GROUP BY col1 HAVING ((col1 + sum(col2)) > 1)"
+"SELECT sum(\"col2\") AS \"sum\", \"col1\" AS \"col1\" FROM \"tab\" AS \"table1\" GROUP BY \"col1\" HAVING ((\"col1\" + sum(\"col2\")) > 1)"
 
 sorted query:
 
@@ -204,7 +204,7 @@ let
     (from (table (#tab `As` #t)) & orderBy [#col & AscNullsFirst])
 in renderQuery query
 :}
-"SELECT * FROM tab AS t ORDER BY col ASC NULLS FIRST"
+"SELECT * FROM \"tab\" AS \"t\" ORDER BY \"col\" ASC NULLS FIRST"
 
 joins:
 
@@ -248,7 +248,7 @@ let
         (#o ! #shipper_id .== #s ! #id)) )
 in renderQuery query
 :}
-"SELECT o.price AS order_price, c.name AS customer_name, s.name AS shipper_name FROM orders AS o INNER JOIN customers AS c ON (o.customer_id = c.id) INNER JOIN shippers AS s ON (o.shipper_id = s.id)"
+"SELECT \"o\".\"price\" AS \"order_price\", \"c\".\"name\" AS \"customer_name\", \"s\".\"name\" AS \"shipper_name\" FROM \"orders\" AS \"o\" INNER JOIN \"customers\" AS \"c\" ON (\"o\".\"customer_id\" = \"c\".\"id\") INNER JOIN \"shippers\" AS \"s\" ON (\"o\".\"shipper_id\" = \"s\".\"id\")"
 
 self-join:
 
@@ -262,7 +262,7 @@ let
     (from (table (#tab `As` #t1) & crossJoin (table (#tab `As` #t2))))
 in renderQuery query
 :}
-"SELECT t1.* FROM tab AS t1 CROSS JOIN tab AS t2"
+"SELECT \"t1\".* FROM \"tab\" AS \"t1\" CROSS JOIN \"tab\" AS \"t2\""
 
 set operations:
 
@@ -278,7 +278,7 @@ let
     selectStar (from (table (#tab `As` #t)))
 in renderQuery query
 :}
-"(SELECT * FROM tab AS t) UNION ALL (SELECT * FROM tab AS t)"
+"(SELECT * FROM \"tab\" AS \"t\") UNION ALL (SELECT * FROM \"tab\" AS \"t\")"
 -}
 newtype Query
   (schema :: TablesType)

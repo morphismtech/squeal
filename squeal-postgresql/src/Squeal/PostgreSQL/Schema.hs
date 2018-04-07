@@ -110,6 +110,8 @@ import GHC.TypeLits
 
 import qualified Generics.SOP.Type.Metadata as Type
 
+import Squeal.PostgreSQL.Render
+
 -- | `PGType` is the promoted datakind of PostgreSQL types.
 --
 -- >>> import Squeal.PostgreSQL.Schema
@@ -358,9 +360,9 @@ instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
 
 -- | >>> renderAlias #jimbob
--- "jimbob"
+-- "\"jimbob\""
 renderAlias :: KnownSymbol alias => Alias alias -> ByteString
-renderAlias = fromString . symbolVal
+renderAlias = doubleQuoted . fromString . symbolVal
 
 -- | The `As` operator is used to name an expression. `As` is like a demoted
 -- version of `:::`.
@@ -382,7 +384,7 @@ deriving instance Ord (expression ty)
 
 -- | >>> let renderMaybe = fromString . maybe "Nothing" (const "Just")
 -- >>> renderAliasedAs renderMaybe (Just (3::Int) `As` #an_int)
--- "Just AS an_int"
+-- "Just AS \"an_int\""
 renderAliasedAs
   :: (forall ty. expression ty -> ByteString)
   -> Aliased expression aliased

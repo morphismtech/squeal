@@ -797,7 +797,7 @@ unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
 --   expression = sum_ #col
 -- in renderExpression expression
 -- :}
--- "sum(col)"
+-- "sum(\"col\")"
 sum_
   :: PGNum ty
   => Expression relations 'Ungrouped params (nullity ty)
@@ -811,7 +811,7 @@ sum_ = unsafeAggregate "sum"
 --   expression = sumDistinct #col
 -- in renderExpression expression
 -- :}
--- "sum(DISTINCT col)"
+-- "sum(DISTINCT \"col\")"
 sumDistinct
   :: PGNum ty
   => Expression relations 'Ungrouped params (nullity ty)
@@ -842,7 +842,7 @@ instance PGAvg 'PGinterval 'PGinterval
 --   expression = bitAnd #col
 -- in renderExpression expression
 -- :}
--- "bit_and(col)"
+-- "bit_and(\"col\")"
 bitAnd
   :: PGIntegral int
   => Expression relations 'Ungrouped params (nullity int)
@@ -856,7 +856,7 @@ bitAnd = unsafeAggregate "bit_and"
 --   expression = bitOr #col
 -- in renderExpression expression
 -- :}
--- "bit_or(col)"
+-- "bit_or(\"col\")"
 bitOr
   :: PGIntegral int
   => Expression relations 'Ungrouped params (nullity int)
@@ -870,7 +870,7 @@ bitOr = unsafeAggregate "bit_or"
 --   expression = bitAndDistinct #col
 -- in renderExpression expression
 -- :}
--- "bit_and(DISTINCT col)"
+-- "bit_and(DISTINCT \"col\")"
 bitAndDistinct
   :: PGIntegral int
   => Expression relations 'Ungrouped params (nullity int)
@@ -884,7 +884,7 @@ bitAndDistinct = unsafeAggregateDistinct "bit_and"
 --   expression = bitOrDistinct #col
 -- in renderExpression expression
 -- :}
--- "bit_or(DISTINCT col)"
+-- "bit_or(DISTINCT \"col\")"
 bitOrDistinct
   :: PGIntegral int
   => Expression relations 'Ungrouped params (nullity int)
@@ -898,7 +898,7 @@ bitOrDistinct = unsafeAggregateDistinct "bit_or"
 --   expression = boolAnd #col
 -- in renderExpression expression
 -- :}
--- "bool_and(col)"
+-- "bool_and(\"col\")"
 boolAnd
   :: Expression relations 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
@@ -911,7 +911,7 @@ boolAnd = unsafeAggregate "bool_and"
 --   expression = boolOr #col
 -- in renderExpression expression
 -- :}
--- "bool_or(col)"
+-- "bool_or(\"col\")"
 boolOr
   :: Expression relations 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
@@ -924,7 +924,7 @@ boolOr = unsafeAggregate "bool_or"
 --   expression = boolAndDistinct #col
 -- in renderExpression expression
 -- :}
--- "bool_and(DISTINCT col)"
+-- "bool_and(DISTINCT \"col\")"
 boolAndDistinct
   :: Expression relations 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
@@ -937,7 +937,7 @@ boolAndDistinct = unsafeAggregateDistinct "bool_and"
 --   expression = boolOrDistinct #col
 -- in renderExpression expression
 -- :}
--- "bool_or(DISTINCT col)"
+-- "bool_or(DISTINCT \"col\")"
 boolOrDistinct
   :: Expression relations 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
@@ -958,7 +958,7 @@ countStar = UnsafeExpression $ "count(*)"
 --   expression = count #col
 -- in renderExpression expression
 -- :}
--- "count(col)"
+-- "count(\"col\")"
 count
   :: Expression relations 'Ungrouped params ty
   -- ^ what to count
@@ -971,7 +971,7 @@ count = unsafeAggregate "count"
 --   expression = countDistinct #col
 -- in renderExpression expression
 -- :}
--- "count(DISTINCT col)"
+-- "count(DISTINCT \"col\")"
 countDistinct
   :: Expression relations 'Ungrouped params ty
   -- ^ what to count
@@ -986,7 +986,7 @@ countDistinct = unsafeAggregateDistinct "count"
 --   expression = every #col
 -- in renderExpression expression
 -- :}
--- "every(col)"
+-- "every(\"col\")"
 every
   :: Expression relations 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
@@ -1001,7 +1001,7 @@ every = unsafeAggregate "every"
 --   expression = everyDistinct #col
 -- in renderExpression expression
 -- :}
--- "every(DISTINCT col)"
+-- "every(DISTINCT \"col\")"
 everyDistinct
   :: Expression relations 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate

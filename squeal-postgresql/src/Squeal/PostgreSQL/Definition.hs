@@ -110,7 +110,7 @@ CREATE statements
 -- renderDefinition $
 --   createTable #tab (int `As` #a :* real `As` #b :* Nil) Nil
 -- :}
--- "CREATE TABLE tab (a int, b real);"
+-- "CREATE TABLE \"tab\" (\"a\" int, \"b\" real);"
 createTable
   :: ( KnownSymbol table
      , columns ~ (col ': cols)
@@ -136,7 +136,7 @@ createTable table columns constraints = UnsafeDefinition $
 -- renderDefinition
 --   (createTableIfNotExists #tab (int `As` #a :* real `As` #b :* Nil) Nil :: Definition Schema Schema)
 -- :}
--- "CREATE TABLE IF NOT EXISTS tab (a int, b real);"
+-- "CREATE TABLE IF NOT EXISTS \"tab\" (\"a\" int, \"b\" real);"
 createTableIfNotExists
   :: ( Has table schema (constraints :=> columns)
      , SOP.SListI columns
@@ -225,7 +225,7 @@ renderColumn (Column column) = renderAlias column
 --       (int & notNull) `As` #b :* Nil )
 --     ( check (Column #a :* Column #b :* Nil) (#a .> #b) `As` #inequality :* Nil )
 -- :}
--- "CREATE TABLE tab (a int NOT NULL, b int NOT NULL, CONSTRAINT inequality CHECK ((a > b)));"
+-- "CREATE TABLE \"tab\" (\"a\" int NOT NULL, \"b\" int NOT NULL, CONSTRAINT \"inequality\" CHECK ((\"a\" > \"b\")));"
 check
   :: NP (Column columns) subcolumns
   -> Condition '[table ::: ColumnsToRelation subcolumns] 'Ungrouped '[]
@@ -244,7 +244,7 @@ check _cols condition = UnsafeTableConstraintExpression $
 --       int `As` #b :* Nil )
 --     ( unique (Column #a :* Column #b :* Nil) `As` #uq_a_b :* Nil )
 -- :}
--- "CREATE TABLE tab (a int, b int, CONSTRAINT uq_a_b UNIQUE (a, b));"
+-- "CREATE TABLE \"tab\" (\"a\" int, \"b\" int, CONSTRAINT \"uq_a_b\" UNIQUE (\"a\", \"b\"));"
 unique
   :: SOP.SListI subcolumns
   => NP (Column columns) subcolumns
@@ -264,7 +264,7 @@ unique columns = UnsafeTableConstraintExpression $
 --       (text & notNull) `As` #name :* Nil )
 --     ( primaryKey (Column #id :* Nil) `As` #pk_id :* Nil )
 -- :}
--- "CREATE TABLE tab (id serial, name text NOT NULL, CONSTRAINT pk_id PRIMARY KEY (id));"
+-- "CREATE TABLE \"tab\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_id\" PRIMARY KEY (\"id\"));"
 primaryKey
   :: (SOP.SListI subcolumns, AllNotNull subcolumns)
   => NP (Column columns) subcolumns
@@ -313,7 +313,7 @@ primaryKey columns = UnsafeTableConstraintExpression $
 --          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
 -- in renderDefinition setup
 -- :}
--- "CREATE TABLE users (id serial, name text NOT NULL, CONSTRAINT pk_users PRIMARY KEY (id)); CREATE TABLE emails (id serial, user_id int NOT NULL, email text, CONSTRAINT pk_emails PRIMARY KEY (id), CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE);"
+-- "CREATE TABLE \"users\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_users\" PRIMARY KEY (\"id\")); CREATE TABLE \"emails\" (\"id\" serial, \"user_id\" int NOT NULL, \"email\" text, CONSTRAINT \"pk_emails\" PRIMARY KEY (\"id\"), CONSTRAINT \"fk_user_id\" FOREIGN KEY (\"user_id\") REFERENCES \"users\" (\"id\") ON DELETE CASCADE ON UPDATE CASCADE);"
 foreignKey
   :: ForeignKeyed schema table reftable subcolumns refsubcolumns
   => NP (Column columns) subcolumns
@@ -390,7 +390,7 @@ DROP statements
 -- | `dropTable` removes a table from the schema.
 --
 -- >>> renderDefinition $ dropTable #muh_table
--- "DROP TABLE muh_table;"
+-- "DROP TABLE \"muh_table\";"
 dropTable
   :: KnownSymbol table
   => Alias table -- ^ table to remove
@@ -416,7 +416,7 @@ alterTable table alteration = UnsafeDefinition $
 -- | `alterTableRename` changes the name of a table from the schema.
 --
 -- >>> renderDefinition $ alterTableRename #foo #bar
--- "ALTER TABLE foo RENAME TO bar;"
+-- "ALTER TABLE \"foo\" RENAME TO \"bar\";"
 alterTableRename
   :: (KnownSymbol table0, KnownSymbol table1)
   => Alias table0 -- ^ table to rename
@@ -445,7 +445,7 @@ newtype AlterTable
 --   definition = alterTable #tab (addConstraint #positive (check (Column #col :* Nil) (#col .> 0)))
 -- in renderDefinition definition
 -- :}
--- "ALTER TABLE tab ADD CONSTRAINT positive CHECK ((col > 0));"
+-- "ALTER TABLE \"tab\" ADD CONSTRAINT \"positive\" CHECK ((\"col\" > 0));"
 addConstraint
   :: KnownSymbol alias
   => Alias alias
@@ -467,7 +467,7 @@ addConstraint alias constraint = UnsafeAlterTable $
 --   definition = alterTable #tab (dropConstraint #positive)
 -- in renderDefinition definition
 -- :}
--- "ALTER TABLE tab DROP CONSTRAINT positive;"
+-- "ALTER TABLE \"tab\" DROP CONSTRAINT \"positive\";"
 dropConstraint
   :: KnownSymbol constraint
   => Alias constraint
@@ -493,7 +493,7 @@ class AddColumn ty where
   --   definition = alterTable #tab (addColumn #col2 (text & default_ "foo"))
   -- in renderDefinition definition
   -- :}
-  -- "ALTER TABLE tab ADD COLUMN col2 text DEFAULT E'foo';"
+  -- "ALTER TABLE \"tab\" ADD COLUMN \"col2\" text DEFAULT E'foo';"
   --
   -- >>> :{
   -- let
@@ -505,7 +505,7 @@ class AddColumn ty where
   --   definition = alterTable #tab (addColumn #col2 text)
   -- in renderDefinition definition
   -- :}
-  -- "ALTER TABLE tab ADD COLUMN col2 text;"
+  -- "ALTER TABLE \"tab\" ADD COLUMN \"col2\" text;"
   addColumn
     :: KnownSymbol column
     => Alias column -- ^ column to add
@@ -532,7 +532,7 @@ instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 --   definition = alterTable #tab (dropColumn #col2)
 -- in renderDefinition definition
 -- :}
--- "ALTER TABLE tab DROP COLUMN col2;"
+-- "ALTER TABLE \"tab\" DROP COLUMN \"col2\";"
 dropColumn
   :: KnownSymbol column
   => Alias column -- ^ column to remove
@@ -552,7 +552,7 @@ dropColumn column = UnsafeAlterTable $
 --   definition = alterTable #tab (renameColumn #foo #bar)
 -- in renderDefinition definition
 -- :}
--- "ALTER TABLE tab RENAME COLUMN foo TO bar;"
+-- "ALTER TABLE \"tab\" RENAME COLUMN \"foo\" TO \"bar\";"
 renameColumn
   :: (KnownSymbol column0, KnownSymbol column1)
   => Alias column0 -- ^ column to rename
@@ -589,7 +589,7 @@ newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
 --   definition = alterTable #tab (alterColumn #col (setDefault 5))
 -- in renderDefinition definition
 -- :}
--- "ALTER TABLE tab ALTER COLUMN col SET DEFAULT 5;"
+-- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" SET DEFAULT 5;"
 setDefault
   :: Expression '[] 'Ungrouped '[] ty -- ^ default value to set
   -> AlterColumn (constraint :=> ty) ('Def :=> ty)
@@ -606,7 +606,7 @@ setDefault expression = UnsafeAlterColumn $
 --   definition = alterTable #tab (alterColumn #col dropDefault)
 -- in renderDefinition definition
 -- :}
--- "ALTER TABLE tab ALTER COLUMN col DROP DEFAULT;"
+-- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" DROP DEFAULT;"
 dropDefault :: AlterColumn ('Def :=> ty) ('NoDef :=> ty)
 dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 
@@ -622,7 +622,7 @@ dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 --   definition = alterTable #tab (alterColumn #col setNotNull)
 -- in renderDefinition definition
 -- :}
--- "ALTER TABLE tab ALTER COLUMN col SET NOT NULL;"
+-- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" SET NOT NULL;"
 setNotNull
   :: AlterColumn (constraint :=> 'Null ty) (constraint :=> 'NotNull ty)
 setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
@@ -637,7 +637,7 @@ setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 --   definition = alterTable #tab (alterColumn #col dropNotNull)
 -- in renderDefinition definition
 -- :}
--- "ALTER TABLE tab ALTER COLUMN col DROP NOT NULL;"
+-- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" DROP NOT NULL;"
 dropNotNull
   :: AlterColumn (constraint :=> 'NotNull ty) (constraint :=> 'Null ty)
 dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
@@ -655,6 +655,6 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 --     alterTable #tab (alterColumn #col (alterType (numeric & notNull)))
 -- in renderDefinition definition
 -- :}
--- "ALTER TABLE tab ALTER COLUMN col TYPE numeric NOT NULL;"
+-- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" TYPE numeric NOT NULL;"
 alterType :: TypeExpression ty -> AlterColumn ty0 ty
 alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderTypeExpression ty

@@ -22,6 +22,7 @@ module Squeal.PostgreSQL.Render
     parenthesized
   , (<+>)
   , commaSeparated
+  , doubleQuoted
   , renderCommaSeparated
   , renderCommaSeparatedMaybe
   , renderNat
@@ -47,6 +48,10 @@ str1 <+> str2 = str1 <> " " <> str2
 -- | Comma separate a list of `ByteString`s.
 commaSeparated :: [ByteString] -> ByteString
 commaSeparated = ByteString.intercalate ", "
+
+-- | Add double quotes around a `ByteString`.
+doubleQuoted :: ByteString -> ByteString
+doubleQuoted str = "\"" <> str <> "\""
 
 -- | Comma separate the renderings of a heterogeneous list.
 renderCommaSeparated
