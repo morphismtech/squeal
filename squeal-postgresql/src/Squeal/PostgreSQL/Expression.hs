@@ -168,8 +168,9 @@ column expressions
 -----------------------------------------}
 
 {- | `Expression`s are used in a variety of contexts,
-such as in the target list of the `select` command,
-as new column values in `insertInto` or `update`,
+such as in the target list of the `Squeal.PostgreSQL.Query.select` command,
+as new column values in `Squeal.PostgreSQL.Manipulation.insertRow` or
+`Squeal.PostgreSQL.Manipulation.update`,
 or in search `Condition`s in a number of commands.
 
 The expression syntax allows the calculation of
