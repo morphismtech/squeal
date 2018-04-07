@@ -384,7 +384,7 @@ deriving instance Ord (expression ty)
 
 -- | >>> let renderMaybe = fromString . maybe "Nothing" (const "Just")
 -- >>> renderAliasedAs renderMaybe (Just (3::Int) `As` #an_int)
--- "Just AS an_int"
+-- "Just AS \"an_int\""
 renderAliasedAs
   :: (forall ty. expression ty -> ByteString)
   -> Aliased expression aliased

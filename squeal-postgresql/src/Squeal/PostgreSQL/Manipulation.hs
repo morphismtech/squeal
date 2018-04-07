@@ -80,7 +80,7 @@ let
     insertRow_ #tab (Set 2 `As` #col1 :* Default `As` #col2 :* Nil)
 in renderManipulation manipulation
 :}
-"INSERT INTO tab (col1, col2) VALUES (2, DEFAULT);"
+"INSERT INTO \"tab\" (\"col1\", \"col2\") VALUES (2, DEFAULT);"
 
 parameterized insert:
 
@@ -96,7 +96,7 @@ let
       (Set (param @1) `As` #col1 :* Set (param @2) `As` #col2 :* Nil)
 in renderManipulation manipulation
 :}
-"INSERT INTO tab (col1, col2) VALUES (($1 :: int4), ($2 :: int4));"
+"INSERT INTO \"tab\" (\"col1\", \"col2\") VALUES (($1 :: int4), ($2 :: int4));"
 
 returning insert:
 
@@ -112,7 +112,7 @@ let
       OnConflictDoRaise (Returning (#col1 `As` #fromOnly :* Nil))
 in renderManipulation manipulation
 :}
-"INSERT INTO tab (col1, col2) VALUES (2, DEFAULT) RETURNING col1 AS fromOnly;"
+"INSERT INTO \"tab\" (\"col1\", \"col2\") VALUES (2, DEFAULT) RETURNING \"col1\" AS \"fromOnly\";"
 
 upsert:
 
@@ -133,7 +133,7 @@ let
       (Returning $ (#col1 + #col2) `As` #sum :* Nil)
 in renderManipulation manipulation
 :}
-"INSERT INTO tab (col1, col2) VALUES (2, 4), (6, 8) ON CONFLICT DO UPDATE SET col1 = 2 WHERE (col1 = col2) RETURNING (col1 + col2) AS sum;"
+"INSERT INTO \"tab\" (\"col1\", \"col2\") VALUES (2, 4), (6, 8) ON CONFLICT DO UPDATE SET \"col1\" = 2 WHERE (\"col1\" = \"col2\") RETURNING (\"col1\" + \"col2\") AS \"sum\";"
 
 query insert:
 
@@ -154,7 +154,7 @@ let
       (selectStar (from (table (#other_tab `As` #t))))
 in renderManipulation manipulation
 :}
-"INSERT INTO tab SELECT * FROM other_tab AS t;"
+"INSERT INTO \"tab\" SELECT * FROM \"other_tab\" AS \"t\";"
 
 update:
 
@@ -169,7 +169,7 @@ let
       (#col1 ./= #col2)
 in renderManipulation manipulation
 :}
-"UPDATE tab SET col1 = 2 WHERE (col1 <> col2);"
+"UPDATE \"tab\" SET \"col1\" = 2 WHERE (\"col1\" <> \"col2\");"
 
 delete:
 
@@ -184,7 +184,7 @@ let
   manipulation = deleteFrom #tab (#col1 .== #col2) ReturningStar
 in renderManipulation manipulation
 :}
-"DELETE FROM tab WHERE (col1 = col2) RETURNING *;"
+"DELETE FROM \"tab\" WHERE (\"col1\" = \"col2\") RETURNING *;"
 -}
 newtype Manipulation
   (schema :: TablesType)
@@ -488,7 +488,7 @@ WITH statements
 --     (insertQuery_ #products_deleted (selectStar (from (table (#deleted_rows `As` #t)))))
 -- in renderManipulation manipulation
 -- :}
--- "WITH deleted_rows AS (DELETE FROM products WHERE (date < ($1 :: date)) RETURNING *) INSERT INTO products_deleted SELECT * FROM deleted_rows AS t;"
+-- "WITH \"deleted_rows\" AS (DELETE FROM \"products\" WHERE (\"date\" < ($1 :: date)) RETURNING *) INSERT INTO \"products_deleted\" SELECT * FROM \"deleted_rows\" AS \"t\";"
 with
   :: SOP.SListI commons
   => NP (Aliased (Manipulation schema params)) commons
