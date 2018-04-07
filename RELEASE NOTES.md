@@ -4,7 +4,7 @@
 
 This minor update fixes an issue where alias identifiers could conflict with
 reserved words in PostgreSQL. To fix the issue, alias identifiers are now
-quoted.
+quoted. Thanks to Petter Rasmussen for the fix.
 
 ### Version 0.2 - March 26, 2018
 
