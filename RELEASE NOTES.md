@@ -1,5 +1,11 @@
 ## RELEASE NOTES
 
+### Version 0.2.1 - April 7, 2018
+
+This minor update fixes an issue where alias identifiers could conflict with
+reserved words in PostgreSQL. To fix the issue, alias identifiers are now
+quoted.
+
 ### Version 0.2 - March 26, 2018
 
 **Changes**
