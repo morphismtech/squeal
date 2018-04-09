@@ -37,12 +37,10 @@ module Squeal.PostgreSQL.Definition
   , createTable
   , createTableIfNotExists
   , TableConstraintExpression (..)
-  , Column (..)
   , check
   , unique
   , primaryKey
   , foreignKey
-  , ForeignKeyed
   , OnDeleteClause (OnDeleteNoAction, OnDeleteRestrict, OnDeleteCascade)
   , renderOnDeleteClause
   , OnUpdateClause (OnUpdateNoAction, OnUpdateRestrict, OnUpdateCascade)
@@ -115,13 +113,14 @@ createTable
   :: ( KnownSymbol table
      , columns ~ (col ': cols)
      , SOP.SListI columns
-     , SOP.SListI constraints )
+     , SOP.SListI constraints
+     , schema1 ~ Create table (constraints :=> columns) schema0 )
   => Alias table -- ^ the name of the table to add
   -> NP (Aliased TypeExpression) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression schema columns)) constraints
+  -> NP (Aliased (TableConstraintExpression schema1 table)) constraints
     -- ^ constraints that must hold for the table
-  -> Definition schema (Create table (constraints :=> columns) schema)
+  -> Definition schema0 schema1
 createTable table columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderCreation table columns constraints
 
@@ -144,7 +143,7 @@ createTableIfNotExists
   => Alias table -- ^ the name of the table to add
   -> NP (Aliased TypeExpression) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression schema columns)) constraints
+  -> NP (Aliased (TableConstraintExpression schema table)) constraints
     -- ^ constraints that must hold for the table
   -> Definition schema schema
 createTableIfNotExists table columns constraints = UnsafeDefinition $
@@ -159,7 +158,7 @@ renderCreation
   => Alias table -- ^ the name of the table to add
   -> NP (Aliased TypeExpression) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression schema columns)) constraints
+  -> NP (Aliased (TableConstraintExpression schema table)) constraints
     -- ^ constraints that must hold for the table
   -> ByteString
 renderCreation table columns constraints = renderAlias table
@@ -194,43 +193,41 @@ renderCreation table columns constraints = renderAlias table
 -- even if the value came from the default value definition.
 newtype TableConstraintExpression
   (schema :: TablesType)
-  (columns :: ColumnsType)
+  (table :: Symbol)
   (tableConstraint :: TableConstraint)
     = UnsafeTableConstraintExpression
     { renderTableConstraintExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
-
--- | @Column columns column@ is a witness that `column` is in `columns`. 
-data Column
-  (columns :: ColumnsType)
-  (column :: (Symbol,ColumnType))
-  where
-    Column
-      :: Has column columns ty
-      => Alias column
-      -> Column columns (column ::: ty)
-
--- | Render a `Column`.
-renderColumn :: Column columns column -> ByteString
-renderColumn (Column column) = renderAlias column
 
 -- | A `check` constraint is the most generic `TableConstraint` type.
 -- It allows you to specify that the value in a certain column must satisfy
 -- a Boolean (truth-value) expression.
 --
 -- >>> :{
--- renderDefinition $
---   createTable #tab
+-- type Schema = '[
+--   "tab" ::: '[ "inequality" ::: 'Check '["a","b"]] :=> '[
+--     "a" ::: 'NoDef :=> 'NotNull 'PGint4,
+--     "b" ::: 'NoDef :=> 'NotNull 'PGint4
+--   ]]
+-- :}
+--
+-- >>> :{
+-- let
+--   definition :: Definition '[] Schema
+--   definition = createTable #tab
 --     ( (int & notNull) `As` #a :*
 --       (int & notNull) `As` #b :* Nil )
---     ( check (Column #a :* Column #b :* Nil) (#a .> #b) `As` #inequality :* Nil )
+--     ( check (#a :* #b :* Nil) (#a .> #b) `As` #inequality :* Nil )
 -- :}
+--
+-- >>> renderDefinition definition
 -- "CREATE TABLE \"tab\" (\"a\" int NOT NULL, \"b\" int NOT NULL, CONSTRAINT \"inequality\" CHECK ((\"a\" > \"b\")));"
 check
-  :: NP (Column columns) subcolumns
-  -> Condition '[table ::: ColumnsToRelation subcolumns] 'Ungrouped '[]
-  -- ^ condition to check
-  -> TableConstraintExpression schema columns ('Check (AliasesOf subcolumns))
+  :: ( Has alias schema table
+     , HasAll aliases (TableToColumns table) subcolumns )
+  => NP Alias aliases
+  -> (forall tab. Condition '[tab ::: ColumnsToRelation subcolumns] 'Ungrouped '[])
+  -> TableConstraintExpression schema alias ('Check aliases)
 check _cols condition = UnsafeTableConstraintExpression $
   "CHECK" <+> parenthesized (renderExpression condition)
 
@@ -238,40 +235,62 @@ check _cols condition = UnsafeTableConstraintExpression $
 -- or a group of columns, is unique among all the rows in the table.
 --
 -- >>> :{
--- renderDefinition $
---   createTable #tab
+-- type Schema = '[
+--   "tab" ::: '[ "uq_a_b" ::: 'Unique '["a","b"]] :=> '[
+--     "a" ::: 'NoDef :=> 'Null 'PGint4,
+--     "b" ::: 'NoDef :=> 'Null 'PGint4
+--   ]]
+-- :}
+--
+-- >>> :{
+-- let
+--   definition :: Definition '[] Schema
+--   definition = createTable #tab
 --     ( int `As` #a :*
 --       int `As` #b :* Nil )
---     ( unique (Column #a :* Column #b :* Nil) `As` #uq_a_b :* Nil )
+--     ( unique (#a :* #b :* Nil) `As` #uq_a_b :* Nil )
 -- :}
+--
+-- >>> renderDefinition definition
 -- "CREATE TABLE \"tab\" (\"a\" int, \"b\" int, CONSTRAINT \"uq_a_b\" UNIQUE (\"a\", \"b\"));"
 unique
-  :: SOP.SListI subcolumns
-  => NP (Column columns) subcolumns
-  -- ^ unique column or group of columns
-  -> TableConstraintExpression schema columns ('Unique (AliasesOf subcolumns))
+  :: ( Has alias schema table
+     , HasAll aliases (TableToColumns table) subcolumns )
+  => NP Alias aliases
+  -> TableConstraintExpression schema alias ('Unique aliases)
 unique columns = UnsafeTableConstraintExpression $
-  "UNIQUE" <+> parenthesized (renderCommaSeparated renderColumn columns)
+  "UNIQUE" <+> parenthesized (commaSeparated (renderAliases columns))
 
 -- | A `primaryKey` constraint indicates that a column, or group of columns,
 -- can be used as a unique identifier for rows in the table.
 -- This requires that the values be both unique and not null.
 --
 -- >>> :{
--- renderDefinition $
---   createTable #tab
+-- type Schema = '[
+--   "tab" ::: '[ "pk_id" ::: 'PrimaryKey '["id"]] :=> '[
+--     "id" ::: 'Def :=> 'NotNull 'PGint4,
+--     "name" ::: 'NoDef :=> 'NotNull 'PGtext
+--   ]]
+-- :}
+--
+-- >>> :{
+-- let
+--   definition :: Definition '[] Schema
+--   definition = createTable #tab
 --     ( serial `As` #id :*
 --       (text & notNull) `As` #name :* Nil )
---     ( primaryKey (Column #id :* Nil) `As` #pk_id :* Nil )
+--     ( primaryKey (#id :* Nil) `As` #pk_id :* Nil )
 -- :}
+--
+-- >>> renderDefinition definition
 -- "CREATE TABLE \"tab\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_id\" PRIMARY KEY (\"id\"));"
 primaryKey
-  :: (SOP.SListI subcolumns, AllNotNull subcolumns)
-  => NP (Column columns) subcolumns
-  -- ^ identifying column or group of columns
-  -> TableConstraintExpression schema columns ('PrimaryKey (AliasesOf subcolumns))
+  :: ( Has alias schema table
+     , HasAll aliases (TableToColumns table) subcolumns )
+  => NP Alias aliases
+  -> TableConstraintExpression schema alias ('PrimaryKey aliases)
 primaryKey columns = UnsafeTableConstraintExpression $
-  "PRIMARY KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
+  "PRIMARY KEY" <+> parenthesized (commaSeparated (renderAliases columns))
 
 -- | A `foreignKey` specifies that the values in a column
 -- (or a group of columns) must match the values appearing in some row of
@@ -303,46 +322,41 @@ primaryKey columns = UnsafeTableConstraintExpression $
 --    createTable #users
 --      ( serial `As` #id :*
 --        (text & notNull) `As` #name :* Nil )
---      ( primaryKey (Column #id :* Nil) `As` #pk_users :* Nil ) >>>
+--      ( primaryKey (#id :* Nil) `As` #pk_users :* Nil ) >>>
 --    createTable #emails
 --      ( serial `As` #id :*
 --        (int & notNull) `As` #user_id :*
 --        text `As` #email :* Nil )
---      ( primaryKey (Column #id :* Nil) `As` #pk_emails :*
---        foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
+--      ( primaryKey (#id :* Nil) `As` #pk_emails :*
+--        foreignKey (#user_id :* Nil) #users (#id :* Nil)
 --          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
 -- in renderDefinition setup
 -- :}
 -- "CREATE TABLE \"users\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_users\" PRIMARY KEY (\"id\")); CREATE TABLE \"emails\" (\"id\" serial, \"user_id\" int NOT NULL, \"email\" text, CONSTRAINT \"pk_emails\" PRIMARY KEY (\"id\"), CONSTRAINT \"fk_user_id\" FOREIGN KEY (\"user_id\") REFERENCES \"users\" (\"id\") ON DELETE CASCADE ON UPDATE CASCADE);"
 foreignKey
-  :: ForeignKeyed schema table reftable subcolumns refsubcolumns
-  => NP (Column columns) subcolumns
+  :: ( Has child schema table
+     , Has parent schema reftable
+     , HasAll columns (TableToColumns table) tys
+     , HasAll refcolumns (TableToColumns reftable) reftys
+     , SOP.AllZip SamePGType tys reftys )
+  => NP Alias columns
   -- ^ column or columns in the table
-  -> Alias table
+  -> Alias parent
   -- ^ reference table
-  -> NP (Column (TableToColumns reftable)) refsubcolumns
+  -> NP Alias refcolumns
   -- ^ reference column or columns in the reference table
   -> OnDeleteClause
   -- ^ what to do when reference is deleted
   -> OnUpdateClause
   -- ^ what to do when reference is updated
-  -> TableConstraintExpression schema columns
-      ('ForeignKey (AliasesOf subcolumns) table (AliasesOf refsubcolumns))
-foreignKey columns reftable refcolumns onDelete onUpdate =
-  UnsafeTableConstraintExpression $
-    "FOREIGN KEY" <+> parenthesized (renderCommaSeparated renderColumn columns)
-    <+> "REFERENCES" <+> renderAlias reftable
-    <+> parenthesized (renderCommaSeparated renderColumn refcolumns)
-    <+> renderOnDeleteClause onDelete
-    <+> renderOnUpdateClause onUpdate
-
--- | A type synonym for constraints on a table with a foreign key.
-type ForeignKeyed schema table reftable subcolumns refsubcolumns
-  = ( Has table schema reftable
-    , SameTypes subcolumns refsubcolumns
-    , AllNotNull subcolumns
-    , SOP.SListI subcolumns
-    , SOP.SListI refsubcolumns )
+  -> TableConstraintExpression schema child
+      ('ForeignKey columns parent refcolumns)
+foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
+  "FOREIGN KEY" <+> parenthesized (commaSeparated (renderAliases keys))
+  <+> "REFERENCES" <+> renderAlias parent
+  <+> parenthesized (commaSeparated (renderAliases refs))
+  <+> renderOnDeleteClause ondel
+  <+> renderOnUpdateClause onupd
 
 -- | `OnDeleteClause` indicates what to do with rows that reference a deleted row.
 data OnDeleteClause
@@ -403,10 +417,10 @@ ALTER statements
 
 -- | `alterTable` changes the definition of a table from the schema.
 alterTable
-  :: Has tab schema table0
-  => Alias tab -- ^ table to alter
-  -> AlterTable schema table0 table1 -- ^ alteration to perform
-  -> Definition schema (Alter tab schema table1)
+  :: KnownSymbol alias
+  => Alias alias -- ^ table to alter
+  -> AlterTable alias table schema -- ^ alteration to perform
+  -> Definition schema (Alter alias table schema)
 alterTable table alteration = UnsafeDefinition $
   "ALTER TABLE"
   <+> renderAlias table
@@ -429,9 +443,9 @@ alterTableRename table0 table1 = UnsafeDefinition $
 -- | An `AlterTable` describes the alteration to perform on the columns
 -- of a table.
 newtype AlterTable
-  (schema :: TablesType)
-  (table0 :: TableType)
-  (table1 :: TableType) =
+  (alias :: Symbol)
+  (table :: TableType)
+  (schema :: TablesType) =
     UnsafeAlterTable {renderAlterTable :: ByteString}
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
@@ -442,17 +456,19 @@ newtype AlterTable
 --   definition :: Definition
 --     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
 --     '["tab" ::: '["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
---   definition = alterTable #tab (addConstraint #positive (check (Column #col :* Nil) (#col .> 0)))
+--   definition = alterTable #tab (addConstraint #positive (check (#col :* Nil) (#col .> 0)))
 -- in renderDefinition definition
 -- :}
 -- "ALTER TABLE \"tab\" ADD CONSTRAINT \"positive\" CHECK ((\"col\" > 0));"
 addConstraint
-  :: KnownSymbol alias
+  :: ( KnownSymbol alias
+     , Has tab schema table0
+     , table0 ~ (constraints :=> columns)
+     , table1 ~ (Create alias constraint constraints :=> columns) )
   => Alias alias
-  -> TableConstraintExpression schema columns constraint
+  -> TableConstraintExpression schema tab constraint
   -- ^ constraint to add
-  -> AlterTable schema (constraints :=> columns)
-      (Create alias constraint constraints :=> columns)
+  -> AlterTable tab table1 schema
 addConstraint alias constraint = UnsafeAlterTable $
   "ADD" <+> "CONSTRAINT" <+> renderAlias alias
     <+> renderTableConstraintExpression constraint
@@ -469,12 +485,13 @@ addConstraint alias constraint = UnsafeAlterTable $
 -- :}
 -- "ALTER TABLE \"tab\" DROP CONSTRAINT \"positive\";"
 dropConstraint
-  :: KnownSymbol constraint
+  :: ( KnownSymbol constraint
+     , Has tab schema table0
+     , table0 ~ (constraints :=> columns)
+     , table1 ~ (Drop constraint constraints :=> columns) )
   => Alias constraint
   -- ^ constraint to drop
-  -> AlterTable schema
-      (constraints :=> columns)
-      (Drop constraint constraints :=> columns)
+  -> AlterTable tab table1 schema
 dropConstraint constraint = UnsafeAlterTable $
   "DROP" <+> "CONSTRAINT" <+> renderAlias constraint
 
@@ -507,11 +524,13 @@ class AddColumn ty where
   -- :}
   -- "ALTER TABLE \"tab\" ADD COLUMN \"col2\" text;"
   addColumn
-    :: KnownSymbol column
+    :: ( KnownSymbol column
+       , Has tab schema table0
+       , table0 ~ (constraints :=> columns)
+       , table1 ~ (constraints :=> Create column ty columns) )
     => Alias column -- ^ column to add
     -> TypeExpression ty -- ^ type of the new column
-    -> AlterTable schema (constraints :=> columns)
-        (constraints :=> Create column ty columns)
+    -> AlterTable tab table1 schema
   addColumn column ty = UnsafeAlterTable $
     "ADD COLUMN" <+> renderAlias column <+> renderTypeExpression ty
 instance {-# OVERLAPPING #-} AddColumn ('Def :=> ty)
@@ -534,11 +553,12 @@ instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 -- :}
 -- "ALTER TABLE \"tab\" DROP COLUMN \"col2\";"
 dropColumn
-  :: KnownSymbol column
+  :: ( KnownSymbol column
+     , Has tab schema table0
+     , table0 ~ (constraints :=> columns)
+     , table1 ~ (constraints :=> Drop column columns) )
   => Alias column -- ^ column to remove
-  -> AlterTable schema
-      (constraints :=> columns)
-      (DropIfConstraintsInvolve column constraints :=> Drop column columns)
+  -> AlterTable tab table1 schema
 dropColumn column = UnsafeAlterTable $
   "DROP COLUMN" <+> renderAlias column
 
@@ -554,21 +574,27 @@ dropColumn column = UnsafeAlterTable $
 -- :}
 -- "ALTER TABLE \"tab\" RENAME COLUMN \"foo\" TO \"bar\";"
 renameColumn
-  :: (KnownSymbol column0, KnownSymbol column1)
+  :: ( KnownSymbol column0
+     , KnownSymbol column1
+     , Has tab schema table0
+     , table0 ~ (constraints :=> columns)
+     , table1 ~ (constraints :=> Rename column0 column1 columns) )
   => Alias column0 -- ^ column to rename
   -> Alias column1 -- ^ what to rename the column
-  -> AlterTable schema (constraints :=> columns)
-      (constraints :=> Rename column0 column1 columns)
+  -> AlterTable tab table1 schema
 renameColumn column0 column1 = UnsafeAlterTable $
   "RENAME COLUMN" <+> renderAlias column0  <+> "TO" <+> renderAlias column1
 
 -- | An `alterColumn` alters a single column.
 alterColumn
-  :: (KnownSymbol column, Has column columns ty0)
+  :: ( KnownSymbol column
+     , Has tab schema table0
+     , table0 ~ (constraints :=> columns)
+     , Has column columns ty0
+     , tables1 ~ (constraints :=> Alter column ty1 columns))
   => Alias column -- ^ column to alter
   -> AlterColumn ty0 ty1 -- ^ alteration to perform
-  -> AlterTable schema (constraints :=> columns)
-      (constraints :=> Alter column columns ty1)
+  -> AlterTable tab table1 schema
 alterColumn column alteration = UnsafeAlterTable $
   "ALTER COLUMN" <+> renderAlias column <+> renderAlterColumn alteration
 

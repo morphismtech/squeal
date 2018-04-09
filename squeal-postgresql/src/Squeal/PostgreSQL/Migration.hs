@@ -38,7 +38,7 @@ let
         createTable #users
         ( serial `As` #id :*
           (text & notNull) `As` #name :* Nil )
-        ( primaryKey (Column #id :* Nil) `As` #pk_users :* Nil )
+        ( primaryKey (#id :* Nil) `As` #pk_users :* Nil )
     , down = void . define $ dropTable #users
     }
 :}
@@ -54,8 +54,8 @@ let
           ( serial `As` #id :*
             (int & notNull) `As` #user_id :*
             text `As` #email :* Nil )
-          ( primaryKey (Column #id :* Nil) `As` #pk_emails :*
-            foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
+          ( primaryKey (#id :* Nil) `As` #pk_emails :*
+            foreignKey (#user_id :* Nil) #users (#id :* Nil)
               OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
     , down = void . define $ dropTable #emails
     }
@@ -290,7 +290,7 @@ createMigrations =
     ( (text & notNull) `As` #name :*
       (timestampWithTimeZone & notNull & default_ currentTimestamp)
         `As` #executed_at :* Nil )
-    ( unique (Column #name :* Nil) `As` #migrations_unique_name :* Nil )
+    ( unique (#name :* Nil) `As` #migrations_unique_name :* Nil )
 
 -- | Inserts a `Migration` into the `MigrationsTable`
 insertMigration

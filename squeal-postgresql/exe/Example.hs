@@ -47,14 +47,14 @@ setup =
     ( serial `As` #id :*
       (text & notNull) `As` #name :*
       (vararray int2 & notNull) `As` #vec :* Nil )
-    ( primaryKey (Column #id :* Nil) `As` #pk_users :* Nil )
+    ( primaryKey (#id :* Nil) `As` #pk_users :* Nil )
   >>>
   createTable #emails
     ( serial `As` #id :*
       (int & notNull) `As` #user_id :*
       text `As` #email :* Nil )
-    ( primaryKey (Column #id :* Nil) `As` #pk_emails :*
-      foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
+    ( primaryKey (#id :* Nil) `As` #pk_emails :*
+      foreignKey (#user_id :* Nil) #users (#id :* Nil)
         OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
 
 teardown :: Definition Schema '[]

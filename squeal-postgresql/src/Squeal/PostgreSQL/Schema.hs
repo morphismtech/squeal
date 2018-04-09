@@ -31,6 +31,7 @@ A type-level DSL for kinds of PostgreSQL types, constraints, and aliases.
   , TypeInType
   , TypeOperators
   , UndecidableInstances
+  , UndecidableSuperClasses
 #-}
 
 module Squeal.PostgreSQL.Schema
@@ -59,11 +60,13 @@ module Squeal.PostgreSQL.Schema
   , (:::)
   , Alias (Alias)
   , renderAlias
+  , renderAliases
   , Aliased (As)
   , renderAliasedAs
   , AliasesOf
   , Has
   , HasUnique
+  , HasAll
   , IsLabel (..)
   , IsQualified (..)
     -- * Type Families
@@ -79,6 +82,7 @@ module Squeal.PostgreSQL.Schema
   , PGFloating
   , PGTypeOf
   , SameTypes
+  , SamePGType
   , AllNotNull
   , NotAllNull
   , NullifyType
@@ -98,16 +102,16 @@ module Squeal.PostgreSQL.Schema
 
 import Control.DeepSeq
 import Data.ByteString
-import Data.Monoid
+import Data.Monoid hiding (All)
 import Data.String
 import Data.Word
 import Data.Type.Bool
-import Generics.SOP (AllZip)
-import GHC.Generics (Generic)
 import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
 
+import qualified GHC.Generics as GHC
+import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Type.Metadata as Type
 
 import Squeal.PostgreSQL.Render
@@ -355,7 +359,7 @@ instance {-# OVERLAPPABLE #-}
 -- >>> #foobar :: Alias "foobar"
 -- Alias
 data Alias (alias :: Symbol) = Alias
-  deriving (Eq,Generic,Ord,Show,NFData)
+  deriving (Eq,GHC.Generic,Ord,Show,NFData)
 instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
 
@@ -363,6 +367,14 @@ instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
 -- "\"jimbob\""
 renderAlias :: KnownSymbol alias => Alias alias -> ByteString
 renderAlias = doubleQuoted . fromString . symbolVal
+
+-- | >>> import Generics.SOP (NP(..))
+-- >>> renderAliases (#jimbob :* #kandi :* Nil)
+-- ["\"jimbob\"","\"kandi\""]
+renderAliases
+  :: SOP.All KnownSymbol aliases => SOP.NP Alias aliases -> [ByteString]
+renderAliases = SOP.hcollapse
+  . SOP.hcmap (SOP.Proxy @KnownSymbol) (SOP.K . renderAlias)
 
 -- | The `As` operator is used to name an expression. `As` is like a demoted
 -- version of `:::`.
@@ -411,6 +423,18 @@ instance {-# OVERLAPPING #-} KnownSymbol alias
 instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
   => Has alias (field' ': fields) field
 
+class
+  ( SOP.All KnownSymbol aliases
+  ) => HasAll
+    (aliases :: [Symbol])
+    (fields :: [(Symbol,kind)])
+    (subfields :: [(Symbol,kind)])
+    | aliases fields -> subfields where
+instance {-# OVERLAPPING #-} HasAll '[] fields '[]
+instance {-# OVERLAPPABLE #-}
+  (Has alias fields field, HasAll aliases fields subfields)
+  => HasAll (alias ': aliases) fields (alias ::: field ': subfields)
+
 -- | Analagous to `IsLabel`, the constraint
 -- `IsQualified` defines `!` for a column alias qualified
 -- by a table alias.
@@ -455,6 +479,12 @@ type family SameTypes (columns0 :: ColumnsType) (columns1 :: ColumnsType)
   SameTypes '[] '[] = ()
   SameTypes (column0 ::: def0 :=> ty0 ': columns0) (column1 ::: def1 :=> ty1 ': columns1)
     = (ty0 ~ ty1, SameTypes columns0 columns1)
+
+class SamePGType
+  (ty0 :: (Symbol,ColumnType)) (ty1 :: (Symbol,ColumnType)) where
+instance ty0 ~ ty1 => SamePGType
+  (alias0 ::: def0 :=> nullity0 ty0)
+  (alias1 ::: def1 :=> nullity1 ty1)
 
 -- | `AllNotNull` is a constraint that proves a `ColumnsType` has no @NULL@s.
 type family AllNotNull (columns :: ColumnsType) :: Constraint where
@@ -506,12 +536,12 @@ type family Drop alias xs where
   Drop alias ((alias ::: x) ': xs) = xs
   Drop alias (x ': xs) = x ': Drop alias xs
 
--- | @Alter alias xs x@ replaces the type associated with an @alias@ in @xs@
+-- | @Alter alias x xs@ replaces the type associated with an @alias@ in @xs@
 -- with the type `x` and is used in `Squeal.PostgreSQL.Definition.alterTable`
 -- and `Squeal.PostgreSQL.Definition.alterColumn`.
-type family Alter alias xs x where
-  Alter alias ((alias ::: x0) ': xs) x1 = (alias ::: x1) ': xs
-  Alter alias (x0 ': xs) x1 = x0 ': Alter alias xs x1
+type family Alter alias x xs where
+  Alter alias x1 (alias ::: x0 ': xs) = alias ::: x1 ': xs
+  Alter alias x1 (x0 ': xs) = x0 ': Alter alias x1 xs
 
 -- type family AddConstraint constraint ty where
 --   AddConstraint constraint (constraints :=> ty)
@@ -548,11 +578,11 @@ type family SameFields
   SameFields
     ('Type.ADT _module _datatype '[ 'Type.Record _constructor fields])
     columns
-      = AllZip SameField fields columns
+      = SOP.AllZip SameField fields columns
   SameFields
     ('Type.Newtype _module _datatype ('Type.Record _constructor fields))
     columns
-      = AllZip SameField fields columns
+      = SOP.AllZip SameField fields columns
 
 -- | Check if a `TableConstraint` involves a column
 type family ConstraintInvolves column constraint where
