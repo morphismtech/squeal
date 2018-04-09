@@ -286,7 +286,8 @@ unique columns = UnsafeTableConstraintExpression $
 -- "CREATE TABLE \"tab\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_id\" PRIMARY KEY (\"id\"));"
 primaryKey
   :: ( Has alias schema table
-     , HasAll aliases (TableToColumns table) subcolumns )
+     , HasAll aliases (TableToColumns table) subcolumns
+     , AllNotNull subcolumns )
   => NP Alias aliases
   -> TableConstraintExpression schema alias ('PrimaryKey aliases)
 primaryKey columns = UnsafeTableConstraintExpression $
@@ -337,8 +338,11 @@ foreignKey
   :: ( Has child schema table
      , Has parent schema reftable
      , HasAll columns (TableToColumns table) tys
-     , HasAll refcolumns (TableToColumns reftable) reftys
-     , SOP.AllZip SamePGType tys reftys )
+     , reftable ~ (constraints :=> cols)
+     , HasAll refcolumns cols reftys
+     , SOP.AllZip SamePGType tys reftys
+     , AllNotNull reftys
+     , Uniquely refcolumns constraints )
   => NP Alias columns
   -- ^ column or columns in the table
   -> Alias parent

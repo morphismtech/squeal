@@ -56,6 +56,7 @@ module Squeal.PostgreSQL.Schema
   , TableConstraint (..)
   , TableConstraints
   , NilTableConstraints
+  , Uniquely
     -- * Aliases
   , (:::)
   , Alias (Alias)
@@ -247,6 +248,13 @@ type TableConstraints = [(Symbol,TableConstraint)]
 -- | A monokinded empty `TableConstraints`.
 type family NilTableConstraints :: TableConstraints where
   NilTableConstraints = '[]
+
+type family Uniquely
+  (keys :: [Symbol])
+  (constraints :: TableConstraints) :: Constraint where
+    Uniquely keys (uq ::: 'Unique keys ': constraints) = ()
+    Uniquely keys (uq ::: 'PrimaryKey keys ': constraints) = ()
+    Uniquely keys (_ ': constraints) = Uniquely keys constraints
 
 -- | `TableType` encodes a row of constraints on a table as well as the types
 -- of its columns.
