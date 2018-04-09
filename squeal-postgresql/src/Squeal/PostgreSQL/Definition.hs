@@ -41,6 +41,7 @@ module Squeal.PostgreSQL.Definition
   , unique
   , primaryKey
   , foreignKey
+  , ForeignKeyed
   , OnDeleteClause (OnDeleteNoAction, OnDeleteRestrict, OnDeleteCascade)
   , renderOnDeleteClause
   , OnUpdateClause (OnUpdateNoAction, OnUpdateRestrict, OnUpdateCascade)
@@ -366,14 +367,11 @@ primaryKey columns = UnsafeTableConstraintExpression $
 -- "CREATE TABLE \"employees\" (\"id\" serial, \"name\" text NOT NULL, \"employer_id\" integer, CONSTRAINT \"employees_pk\" PRIMARY KEY (\"id\"), CONSTRAINT \"employees_employer_fk\" FOREIGN KEY (\"employer_id\") REFERENCES \"employees\" (\"id\") ON DELETE CASCADE ON UPDATE CASCADE);"
 --
 foreignKey
-  :: ( Has child schema table
-     , Has parent schema reftable
-     , HasAll columns (TableToColumns table) tys
-     , reftable ~ (constraints :=> cols)
-     , HasAll refcolumns cols reftys
-     , SOP.AllZip SamePGType tys reftys
-     , AllNotNull reftys
-     , Uniquely refcolumns constraints )
+  :: (ForeignKeyed schema child parent
+        table reftable
+        columns refcolumns
+        constraints cols
+        reftys tys )
   => NP Alias columns
   -- ^ column or columns in the table
   -> Alias parent
@@ -392,6 +390,21 @@ foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
   <+> parenthesized (commaSeparated (renderAliases refs))
   <+> renderOnDeleteClause ondel
   <+> renderOnUpdateClause onupd
+
+type ForeignKeyed schema
+  child parent
+  table reftable
+  columns refcolumns
+  constraints cols
+  reftys tys =
+    ( Has child schema table
+    , Has parent schema reftable
+    , HasAll columns (TableToColumns table) tys
+    , reftable ~ (constraints :=> cols)
+    , HasAll refcolumns cols reftys
+    , SOP.AllZip SamePGType tys reftys
+    , AllNotNull reftys
+    , Uniquely refcolumns constraints )
 
 -- | `OnDeleteClause` indicates what to do with rows that reference a deleted row.
 data OnDeleteClause
