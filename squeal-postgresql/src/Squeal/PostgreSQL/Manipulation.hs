@@ -187,7 +187,7 @@ in renderManipulation manipulation
 "DELETE FROM \"tab\" WHERE (\"col1\" = \"col2\") RETURNING *;"
 -}
 newtype Manipulation
-  (schema :: TablesType)
+  (schema :: SchemaType)
   (params :: [NullityType])
   (columns :: RelationType)
     = UnsafeManipulation { renderManipulation :: ByteString }
@@ -213,7 +213,7 @@ INSERT statements
 insertRows
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , Has tab schema table
+     , Has tab (TablesOf schema) table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
   -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
@@ -243,7 +243,7 @@ insertRows tab row rows conflict returning = UnsafeManipulation $
 insertRow
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , Has tab schema table
+     , Has tab (TablesOf schema) table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
   -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
@@ -256,7 +256,7 @@ insertRow tab row = insertRows tab row []
 -- | Insert multiple rows returning `Nil` and raising an error on conflicts.
 insertRows_
   :: ( SOP.SListI columns
-     , Has tab schema table
+     , Has tab (TablesOf schema) table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
   -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
@@ -268,7 +268,7 @@ insertRows_ tab row rows =
 -- | Insert a single row returning `Nil` and raising an error on conflicts.
 insertRow_
   :: ( SOP.SListI columns
-     , Has tab schema table
+     , Has tab (TablesOf schema) table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
   -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
@@ -279,7 +279,7 @@ insertRow_ tab row = insertRow tab row OnConflictDoRaise (Returning Nil)
 insertQuery
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , Has tab schema table
+     , Has tab (TablesOf schema) table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
   -> Query schema params (ColumnsToRelation columns)
@@ -296,7 +296,7 @@ insertQuery tab query conflict returning = UnsafeManipulation $
 -- | Insert a `Query` returning `Nil` and raising an error on conflicts.
 insertQuery_
   :: ( SOP.SListI columns
-     , Has tab schema table
+     , Has tab (TablesOf schema) table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
   -> Query schema params (ColumnsToRelation columns)
@@ -401,7 +401,7 @@ UPDATE statements
 update
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , Has tab schema table
+     , Has tab (TablesOf schema) table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
   -> NP (Aliased (ColumnValue (ColumnsToRelation columns) params)) columns
@@ -431,7 +431,7 @@ update tab columns wh returning = UnsafeManipulation $
 -- | Update a row returning `Nil`.
 update_
   :: ( SOP.SListI columns
-     , Has tab schema table
+     , Has tab (TablesOf schema) table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
   -> NP (Aliased (ColumnValue (ColumnsToRelation columns) params)) columns
@@ -448,7 +448,7 @@ DELETE statements
 -- | Delete rows of a table.
 deleteFrom
   :: ( SOP.SListI results
-     , Has tab schema table
+     , Has tab (TablesOf schema) table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
   -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
@@ -462,7 +462,7 @@ deleteFrom tab wh returning = UnsafeManipulation $
 
 -- | Delete rows returning `Nil`.
 deleteFrom_
-  :: ( Has tab schema table
+  :: ( Has tab (TablesOf schema) table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
   -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
@@ -493,7 +493,7 @@ with
   :: SOP.SListI commons
   => NP (Aliased (Manipulation schema params)) commons
   -- ^ common table expressions
-  -> Manipulation (Join (RelationsToTables commons) schema) params results
+  -> Manipulation (With commons schema) params results
   -> Manipulation schema params results
 with commons manipulation = UnsafeManipulation $
   "WITH" <+> renderCommaSeparated renderCommon commons

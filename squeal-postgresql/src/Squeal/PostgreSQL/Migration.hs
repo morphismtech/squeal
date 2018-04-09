@@ -162,8 +162,8 @@ migrateUp
   :: MonadBaseControl IO io
   => AlignedList (Migration io) schema0 schema1 -- ^ migrations to run
   -> PQ
-    ("schema_migrations" ::: MigrationsTable ': schema0)
-    ("schema_migrations" ::: MigrationsTable ': schema1)
+    ("schema_migrations" ::: 'Table MigrationsTable ': schema0)
+    ("schema_migrations" ::: 'Table MigrationsTable ': schema1)
     io ()
 migrateUp migration =
   define createMigrations
@@ -218,8 +218,8 @@ migrateDown
   :: MonadBaseControl IO io
   => AlignedList (Migration io) schema0 schema1 -- ^ migrations to rewind
   -> PQ
-    ("schema_migrations" ::: MigrationsTable ': schema1)
-    ("schema_migrations" ::: MigrationsTable ': schema0)
+    ("schema_migrations" ::: 'Table MigrationsTable ': schema1)
+    ("schema_migrations" ::: 'Table MigrationsTable ': schema0)
     io ()
 migrateDown migrations =
   define createMigrations
@@ -283,7 +283,7 @@ type MigrationsTable =
 
 -- | Creates a `MigrationsTable` if it does not already exist.
 createMigrations
-  :: Has "schema_migrations" schema MigrationsTable
+  :: Has "schema_migrations" (TablesOf schema) MigrationsTable
   => Definition schema schema
 createMigrations =
   createTableIfNotExists #schema_migrations
@@ -294,7 +294,7 @@ createMigrations =
 
 -- | Inserts a `Migration` into the `MigrationsTable`
 insertMigration
-  :: Has "schema_migrations" schema MigrationsTable
+  :: Has "schema_migrations" (TablesOf schema) MigrationsTable
   => Manipulation schema '[ 'NotNull 'PGtext] '[]
 insertMigration = insertRow_ #schema_migrations
   ( Set (param @1) `As` #name :*
@@ -302,7 +302,7 @@ insertMigration = insertRow_ #schema_migrations
 
 -- | Deletes a `Migration` from the `MigrationsTable`
 deleteMigration
-  :: Has "schema_migrations" schema MigrationsTable
+  :: Has "schema_migrations" (TablesOf schema) MigrationsTable
   => Manipulation schema '[ 'NotNull 'PGtext ] '[]
 deleteMigration = deleteFrom_ #schema_migrations (#name .== param @1)
 

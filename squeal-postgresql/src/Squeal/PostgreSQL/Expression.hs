@@ -1026,12 +1026,12 @@ tables
 -- | A `Table` from a table expression is a way
 -- to call a table reference by its alias.
 newtype Table
-  (schema :: TablesType)
+  (schema :: SchemaType)
   (columns :: RelationType)
     = UnsafeTable { renderTable :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance
-  ( Has alias schema table
+  ( Has alias (TablesOf schema) table
   , relation ~ ColumnsToRelation (TableToColumns table)
   ) => IsLabel alias (Table schema relation) where
     fromLabel = UnsafeTable $ renderAlias (Alias @alias)

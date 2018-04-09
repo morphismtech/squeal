@@ -281,7 +281,7 @@ in renderQuery query
 "(SELECT * FROM \"tab\" AS \"t\") UNION ALL (SELECT * FROM \"tab\" AS \"t\")"
 -}
 newtype Query
-  (schema :: TablesType)
+  (schema :: SchemaType)
   (params :: [NullityType])
   (columns :: RelationType)
     = UnsafeQuery { renderQuery :: ByteString }
@@ -443,7 +443,7 @@ Table Expressions
 -- to a table on disk, a so-called base table, but more complex expressions
 -- can be used to modify or combine base tables in various ways.
 data TableExpression
-  (schema :: TablesType)
+  (schema :: SchemaType)
   (params :: [NullityType])
   (relations :: RelationsType)
   (grouping :: Grouping)

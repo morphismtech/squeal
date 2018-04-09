@@ -160,8 +160,8 @@ lowerConnection (K conn) = K conn
 -- | We keep track of the schema via an Atkey indexed state monad transformer,
 -- `PQ`.
 newtype PQ
-  (schema0 :: TablesType)
-  (schema1 :: TablesType)
+  (schema0 :: SchemaType)
+  (schema1 :: SchemaType)
   (m :: Type -> Type)
   (x :: Type) =
     PQ { unPQ :: K LibPQ.Connection schema0 -> m (K x schema1) }

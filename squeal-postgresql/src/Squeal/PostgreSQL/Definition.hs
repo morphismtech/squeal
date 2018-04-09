@@ -88,8 +88,8 @@ statements
 -- database, like a `createTable`, `dropTable`, or `alterTable` command.
 -- `Definition`s may be composed using the `>>>` operator.
 newtype Definition
-  (schema0 :: TablesType)
-  (schema1 :: TablesType)
+  (schema0 :: SchemaType)
+  (schema1 :: SchemaType)
   = UnsafeDefinition { renderDefinition :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
@@ -115,7 +115,7 @@ createTable
      , columns ~ (col ': cols)
      , SOP.SListI columns
      , SOP.SListI constraints
-     , schema1 ~ Create table (constraints :=> columns) schema0 )
+     , schema1 ~ Create table ('Table (constraints :=> columns)) schema0 )
   => Alias table -- ^ the name of the table to add
   -> NP (Aliased TypeExpression) columns
     -- ^ the names and datatype of each column
@@ -138,7 +138,7 @@ createTable table columns constraints = UnsafeDefinition $
 -- :}
 -- "CREATE TABLE IF NOT EXISTS \"tab\" (\"a\" int, \"b\" real);"
 createTableIfNotExists
-  :: ( Has table schema (constraints :=> columns)
+  :: ( Has table (TablesOf schema) (constraints :=> columns)
      , SOP.SListI columns
      , SOP.SListI constraints )
   => Alias table -- ^ the name of the table to add
@@ -193,7 +193,7 @@ renderCreation table columns constraints = renderAlias table
 -- violate a constraint, an error is raised. This applies
 -- even if the value came from the default value definition.
 newtype TableConstraintExpression
-  (schema :: TablesType)
+  (schema :: SchemaType)
   (table :: Symbol)
   (tableConstraint :: TableConstraint)
     = UnsafeTableConstraintExpression
@@ -224,7 +224,7 @@ newtype TableConstraintExpression
 -- >>> renderDefinition definition
 -- "CREATE TABLE \"tab\" (\"a\" int NOT NULL, \"b\" int NOT NULL, CONSTRAINT \"inequality\" CHECK ((\"a\" > \"b\")));"
 check
-  :: ( Has alias schema table
+  :: ( Has alias (TablesOf schema) table
      , HasAll aliases (TableToColumns table) subcolumns )
   => NP Alias aliases
   -> (forall tab. Condition '[tab ::: ColumnsToRelation subcolumns] 'Ungrouped '[])
@@ -255,7 +255,7 @@ check _cols condition = UnsafeTableConstraintExpression $
 -- >>> renderDefinition definition
 -- "CREATE TABLE \"tab\" (\"a\" int, \"b\" int, CONSTRAINT \"uq_a_b\" UNIQUE (\"a\", \"b\"));"
 unique
-  :: ( Has alias schema table
+  :: ( Has alias (TablesOf schema) table
      , HasAll aliases (TableToColumns table) subcolumns )
   => NP Alias aliases
   -> TableConstraintExpression schema alias ('Unique aliases)
@@ -286,7 +286,7 @@ unique columns = UnsafeTableConstraintExpression $
 -- >>> renderDefinition definition
 -- "CREATE TABLE \"tab\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_id\" PRIMARY KEY (\"id\"));"
 primaryKey
-  :: ( Has alias schema table
+  :: ( Has alias (TablesOf schema) table
      , HasAll aliases (TableToColumns table) subcolumns
      , AllNotNull subcolumns )
   => NP Alias aliases
@@ -397,8 +397,8 @@ type ForeignKeyed schema
   columns refcolumns
   constraints cols
   reftys tys =
-    ( Has child schema table
-    , Has parent schema reftable
+    ( Has child (TablesOf schema) table
+    , Has parent (TablesOf schema) reftable
     , HasAll columns (TableToColumns table) tys
     , reftable ~ (constraints :=> cols)
     , HasAll refcolumns cols reftys
@@ -467,7 +467,7 @@ alterTable
   :: KnownSymbol alias
   => Alias alias -- ^ table to alter
   -> AlterTable alias table schema -- ^ alteration to perform
-  -> Definition schema (Alter alias table schema)
+  -> Definition schema (Alter alias ('Table table) schema)
 alterTable table alteration = UnsafeDefinition $
   "ALTER TABLE"
   <+> renderAlias table
@@ -492,7 +492,7 @@ alterTableRename table0 table1 = UnsafeDefinition $
 newtype AlterTable
   (alias :: Symbol)
   (table :: TableType)
-  (schema :: TablesType) =
+  (schema :: SchemaType) =
     UnsafeAlterTable {renderAlterTable :: ByteString}
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
@@ -509,7 +509,7 @@ newtype AlterTable
 -- "ALTER TABLE \"tab\" ADD CONSTRAINT \"positive\" CHECK ((\"col\" > 0));"
 addConstraint
   :: ( KnownSymbol alias
-     , Has tab schema table0
+     , Has tab (TablesOf schema) table0
      , table0 ~ (constraints :=> columns)
      , table1 ~ (Create alias constraint constraints :=> columns) )
   => Alias alias
@@ -533,7 +533,7 @@ addConstraint alias constraint = UnsafeAlterTable $
 -- "ALTER TABLE \"tab\" DROP CONSTRAINT \"positive\";"
 dropConstraint
   :: ( KnownSymbol constraint
-     , Has tab schema table0
+     , Has tab (TablesOf schema) table0
      , table0 ~ (constraints :=> columns)
      , table1 ~ (Drop constraint constraints :=> columns) )
   => Alias constraint
@@ -572,7 +572,7 @@ class AddColumn ty where
   -- "ALTER TABLE \"tab\" ADD COLUMN \"col2\" text;"
   addColumn
     :: ( KnownSymbol column
-       , Has tab schema table0
+       , Has tab (TablesOf schema) table0
        , table0 ~ (constraints :=> columns)
        , table1 ~ (constraints :=> Create column ty columns) )
     => Alias column -- ^ column to add
@@ -601,7 +601,7 @@ instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 -- "ALTER TABLE \"tab\" DROP COLUMN \"col2\";"
 dropColumn
   :: ( KnownSymbol column
-     , Has tab schema table0
+     , Has tab (TablesOf schema) table0
      , table0 ~ (constraints :=> columns)
      , table1 ~ (constraints :=> Drop column columns) )
   => Alias column -- ^ column to remove
@@ -623,7 +623,7 @@ dropColumn column = UnsafeAlterTable $
 renameColumn
   :: ( KnownSymbol column0
      , KnownSymbol column1
-     , Has tab schema table0
+     , Has tab (TablesOf schema) table0
      , table0 ~ (constraints :=> columns)
      , table1 ~ (constraints :=> Rename column0 column1 columns) )
   => Alias column0 -- ^ column to rename
@@ -635,7 +635,7 @@ renameColumn column0 column1 = UnsafeAlterTable $
 -- | An `alterColumn` alters a single column.
 alterColumn
   :: ( KnownSymbol column
-     , Has tab schema table0
+     , Has tab (TablesOf schema) table0
      , table0 ~ (constraints :=> columns)
      , Has column columns ty0
      , tables1 ~ (constraints :=> Alter column ty1 columns))

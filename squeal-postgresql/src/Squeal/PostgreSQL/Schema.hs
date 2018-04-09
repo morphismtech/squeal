@@ -99,6 +99,12 @@ module Squeal.PostgreSQL.Schema
     -- * Generics
   , SameField
   , SameFields
+    -- * Schema
+  , SchemumType (..)
+  , SchemaType
+  , TablesOf
+  , ViewsOf
+  , With
   ) where
 
 import Control.DeepSeq
@@ -611,3 +617,29 @@ type family DropIfConstraintsInvolve column constraints where
     = If (ConstraintInvolves column constraint)
         (DropIfConstraintsInvolve column constraints)
         (alias ::: constraint ': DropIfConstraintsInvolve column constraints)
+
+data SchemumType
+  = Table TableType
+  | View RelationType
+
+type SchemaType = [(Symbol,SchemumType)]
+
+type family TablesOf (schema :: SchemaType) :: TablesType where
+  TablesOf '[] = '[]
+  TablesOf (alias ::: 'Table table ': schema) =
+    alias ::: table ': TablesOf schema
+  TablesOf (_ ': schema) = TablesOf schema
+
+type family ViewsOf (schema :: SchemaType) :: RelationsType where
+  ViewsOf '[] = '[]
+  ViewsOf (alias ::: 'View view ': schema) =
+    alias ::: view ': ViewsOf schema
+  ViewsOf (_ ': schema) = ViewsOf schema
+
+type family With
+  (relations :: RelationsType)
+  (schema :: SchemaType)
+  :: SchemaType where
+    With '[] schema = schema
+    With (alias ::: rel ': rels) schema =
+      alias ::: 'Table ('[] :=> RelationToColumns rel) ': With rels schema

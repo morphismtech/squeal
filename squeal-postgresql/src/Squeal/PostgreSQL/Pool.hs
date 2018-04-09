@@ -43,7 +43,7 @@ import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Schema
 
 -- | `PoolPQ` @schema@ should be a drop-in replacement for `PQ` @schema schema@.
-newtype PoolPQ (schema :: TablesType) m x =
+newtype PoolPQ (schema :: SchemaType) m x =
   PoolPQ { runPoolPQ :: Pool (K Connection schema) -> m x }
   deriving Functor
 
