@@ -403,7 +403,6 @@ type ForeignKeyed schema
     , reftable ~ (constraints :=> cols)
     , HasAll refcolumns cols reftys
     , SOP.AllZip SamePGType tys reftys
-    , AllNotNull reftys
     , Uniquely refcolumns constraints )
 
 -- | `OnDeleteClause` indicates what to do with rows that reference a deleted row.

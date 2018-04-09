@@ -249,12 +249,14 @@ type TableConstraints = [(Symbol,TableConstraint)]
 type family NilTableConstraints :: TableConstraints where
   NilTableConstraints = '[]
 
+-- | A `ForeignKey` must reference columns that either are
+-- a `PrimaryKey` or form a `Unique` constraint.
 type family Uniquely
-  (keys :: [Symbol])
+  (key :: [Symbol])
   (constraints :: TableConstraints) :: Constraint where
-    Uniquely keys (uq ::: 'Unique keys ': constraints) = ()
-    Uniquely keys (uq ::: 'PrimaryKey keys ': constraints) = ()
-    Uniquely keys (_ ': constraints) = Uniquely keys constraints
+    Uniquely key (uq ::: 'Unique key ': constraints) = ()
+    Uniquely key (pk ::: 'PrimaryKey key ': constraints) = ()
+    Uniquely key (_ ': constraints) = Uniquely key constraints
 
 -- | `TableType` encodes a row of constraints on a table as well as the types
 -- of its columns.
