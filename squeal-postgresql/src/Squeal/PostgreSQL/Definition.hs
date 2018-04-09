@@ -334,6 +334,37 @@ primaryKey columns = UnsafeTableConstraintExpression $
 -- in renderDefinition setup
 -- :}
 -- "CREATE TABLE \"users\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_users\" PRIMARY KEY (\"id\")); CREATE TABLE \"emails\" (\"id\" serial, \"user_id\" int NOT NULL, \"email\" text, CONSTRAINT \"pk_emails\" PRIMARY KEY (\"id\"), CONSTRAINT \"fk_user_id\" FOREIGN KEY (\"user_id\") REFERENCES \"users\" (\"id\") ON DELETE CASCADE ON UPDATE CASCADE);"
+--
+-- A `foreignKey` can even be a table self-reference.
+--
+-- >>> :{
+-- type Schema =
+--   '[ "employees" :::
+--        '[ "employees_pk"          ::: 'PrimaryKey '["id"]
+--         , "employees_employer_fk" ::: 'ForeignKey '["employer_id"] "employees" '["id"]
+--         ] :=>
+--        '[ "id"          :::   'Def :=> 'NotNull 'PGint4
+--         , "name"        ::: 'NoDef :=> 'NotNull 'PGtext
+--         , "employer_id" ::: 'NoDef :=>    'Null 'PGint4
+--         ]
+--    ]
+-- :}
+--
+-- >>> :{
+-- let
+--   setup :: Definition '[] Schema
+--   setup = 
+--    createTable #employees
+--      ( serial `As` #id :*
+--        (text & notNull) `As` #name :*
+--        integer `As` #employer_id :* Nil )
+--      ( primaryKey #id `As` #employees_pk :*
+--        foreignKey #employer_id #employees #id
+--          OnDeleteCascade OnUpdateCascade `As` #employees_employer_fk :* Nil )
+-- in renderDefinition setup
+-- :}
+-- "CREATE TABLE \"employees\" (\"id\" serial, \"name\" text NOT NULL, \"employer_id\" integer, CONSTRAINT \"employees_pk\" PRIMARY KEY (\"id\"), CONSTRAINT \"employees_employer_fk\" FOREIGN KEY (\"employer_id\") REFERENCES \"employees\" (\"id\") ON DELETE CASCADE ON UPDATE CASCADE);"
+--
 foreignKey
   :: ( Has child schema table
      , Has parent schema reftable
