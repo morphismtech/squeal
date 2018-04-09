@@ -217,6 +217,7 @@ class IndexedMonadTransPQ pq where
     :: Monad m
     => pq schema0 schema1 m (pq schema1 schema2 m y)
     -> pq schema0 schema2 m y
+  pqJoin pq = pq & pqBind id
 
   -- | indexed analog of `=<<`
   pqBind
@@ -231,6 +232,15 @@ class IndexedMonadTransPQ pq where
     => pq schema1 schema2 m y
     -> pq schema0 schema1 m x
     -> pq schema0 schema2 m y
+  pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
+
+  -- | indexed analog of `<=<`
+  pqAndThen
+    :: Monad m
+    => (y -> pq schema1 schema2 m z)
+    -> (x -> pq schema0 schema1 m y)
+    -> x -> pq schema0 schema2 m z
+  pqAndThen g f x = pqBind g (f x)
 
   -- | Safely embed a computation in a larger schema.
   pqEmbed
@@ -253,13 +263,9 @@ instance IndexedMonadTransPQ PQ where
     K x' <- x (K (unK conn))
     return $ K (f' x')
 
-  pqJoin pq = pq & pqBind id
-
   pqBind f (PQ x) = PQ $ \ conn -> do
     K x' <- x conn
     unPQ (f x') (K (unK conn))
-
-  pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 
   pqEmbed (PQ pq) = PQ $ \ (K conn) -> do
     K x <- pq (K conn)
