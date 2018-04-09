@@ -31,19 +31,19 @@
 --
 -- >>> :{
 -- type Schema =
---   '[ "users" :::
+--   '[ "users" ::: 'Table (
 --        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
 --        '[ "id"   :::   'Def :=> 'NotNull 'PGint4
 --         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
---         ]
---    , "emails" :::
+--         ])
+--    , "emails" ::: 'Table (
 --        '[ "pk_emails"  ::: 'PrimaryKey '["id"]
 --         , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
 --         ] :=>
 --        '[ "id"      :::   'Def :=> 'NotNull 'PGint4
 --         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
 --         , "email"   ::: 'NoDef :=>    'Null 'PGtext
---         ]
+--         ])
 --    ]
 -- :}
 --

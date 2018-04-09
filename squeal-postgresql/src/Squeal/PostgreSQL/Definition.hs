@@ -135,7 +135,7 @@ createTable tab columns constraints = UnsafeDefinition $
 --
 -- >>> :set -XOverloadedLabels -XTypeApplications
 -- >>> type Table = '[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGfloat4]
--- >>> type Schema = '["tab" ::: Table]
+-- >>> type Schema = '["tab" ::: 'Table Table]
 -- >>> :{
 -- renderDefinition
 --   (createTableIfNotExists #tab (int `As` #a :* real `As` #b :* Nil) Nil :: Definition Schema Schema)
@@ -210,10 +210,10 @@ newtype TableConstraintExpression
 --
 -- >>> :{
 -- type Schema = '[
---   "tab" ::: '[ "inequality" ::: 'Check '["a","b"]] :=> '[
+--   "tab" ::: 'Table ('[ "inequality" ::: 'Check '["a","b"]] :=> '[
 --     "a" ::: 'NoDef :=> 'NotNull 'PGint4,
 --     "b" ::: 'NoDef :=> 'NotNull 'PGint4
---   ]]
+--   ])]
 -- :}
 --
 -- >>> :{
@@ -241,10 +241,10 @@ check _cols condition = UnsafeTableConstraintExpression $
 --
 -- >>> :{
 -- type Schema = '[
---   "tab" ::: '[ "uq_a_b" ::: 'Unique '["a","b"]] :=> '[
+--   "tab" ::: 'Table( '[ "uq_a_b" ::: 'Unique '["a","b"]] :=> '[
 --     "a" ::: 'NoDef :=> 'Null 'PGint4,
 --     "b" ::: 'NoDef :=> 'Null 'PGint4
---   ]]
+--   ])]
 -- :}
 --
 -- >>> :{
@@ -272,10 +272,10 @@ unique columns = UnsafeTableConstraintExpression $
 --
 -- >>> :{
 -- type Schema = '[
---   "tab" ::: '[ "pk_id" ::: 'PrimaryKey '["id"]] :=> '[
+--   "tab" ::: 'Table ('[ "pk_id" ::: 'PrimaryKey '["id"]] :=> '[
 --     "id" ::: 'Def :=> 'NotNull 'PGint4,
 --     "name" ::: 'NoDef :=> 'NotNull 'PGtext
---   ]]
+--   ])]
 -- :}
 --
 -- >>> :{
@@ -305,19 +305,19 @@ primaryKey columns = UnsafeTableConstraintExpression $
 --
 -- >>> :{
 -- type Schema =
---   '[ "users" :::
+--   '[ "users" ::: 'Table (
 --        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
 --        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
 --         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
---         ]
---    , "emails" :::
+--         ])
+--    , "emails" ::: 'Table (
 --        '[  "pk_emails" ::: 'PrimaryKey '["id"]
 --         , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
 --         ] :=>
 --        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
 --         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
 --         , "email" ::: 'NoDef :=> 'Null 'PGtext
---         ]
+--         ])
 --    ]
 -- :}
 --
@@ -344,14 +344,14 @@ primaryKey columns = UnsafeTableConstraintExpression $
 --
 -- >>> :{
 -- type Schema =
---   '[ "employees" :::
+--   '[ "employees" ::: 'Table (
 --        '[ "employees_pk"          ::: 'PrimaryKey '["id"]
 --         , "employees_employer_fk" ::: 'ForeignKey '["employer_id"] "employees" '["id"]
 --         ] :=>
 --        '[ "id"          :::   'Def :=> 'NotNull 'PGint4
 --         , "name"        ::: 'NoDef :=> 'NotNull 'PGtext
 --         , "employer_id" ::: 'NoDef :=>    'Null 'PGint4
---         ]
+--         ])
 --    ]
 -- :}
 --
@@ -454,7 +454,13 @@ DROP statements
 
 -- | `dropTable` removes a table from the schema.
 --
--- >>> renderDefinition $ dropTable #muh_table
+-- >>> :{
+-- let
+--   definition :: Definition '["muh_table" ::: 'Table t] '[]
+--   definition = dropTable #muh_table
+-- :}
+--
+-- >>> renderDefinition definition
 -- "DROP TABLE \"muh_table\";"
 dropTable
   :: Has table schema ('Table t)

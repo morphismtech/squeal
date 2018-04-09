@@ -25,20 +25,20 @@ import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
 type Schema =
-  '[ "users" :::
+  '[ "users" ::: 'Table (
        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
         , "vec" ::: 'NoDef :=> 'NotNull ('PGvararray 'PGint2)
-        ]
-   , "emails" :::
+        ])
+   , "emails" ::: 'Table (
        '[  "pk_emails" ::: 'PrimaryKey '["id"]
         , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
         ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
         , "email" ::: 'NoDef :=> 'Null 'PGtext
-        ]
+        ])
    ]
 
 setup :: Definition '[] Schema

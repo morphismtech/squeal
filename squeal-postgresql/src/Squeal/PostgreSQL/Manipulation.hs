@@ -73,9 +73,9 @@ simple insert:
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'Def :=> 'NotNull 'PGint4 ]] '[] '[]
+       , "col2" ::: 'Def :=> 'NotNull 'PGint4 ])] '[] '[]
   manipulation =
     insertRow_ #tab (Set 2 `As` #col1 :* Default `As` #col2 :* Nil)
 in renderManipulation manipulation
@@ -87,9 +87,9 @@ parameterized insert:
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]]
+       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
     '[ 'NotNull 'PGint4, 'NotNull 'PGint4 ] '[]
   manipulation =
     insertRow_ #tab
@@ -103,9 +103,9 @@ returning insert:
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'Def :=> 'NotNull 'PGint4 ]] '[]
+       , "col2" ::: 'Def :=> 'NotNull 'PGint4 ])] '[]
     '["fromOnly" ::: 'NotNull 'PGint4]
   manipulation =
     insertRow #tab (Set 2 `As` #col1 :* Default `As` #col2 :* Nil)
@@ -119,9 +119,9 @@ upsert:
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]]
+       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
     '[] '[ "sum" ::: 'NotNull 'PGint4]
   manipulation =
     insertRows #tab
@@ -140,14 +140,14 @@ query insert:
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
-       ]
-     , "other_tab" ::: '[] :=>
+       ])
+     , "other_tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
-       ]
+       ])
      ] '[] '[]
   manipulation = 
     insertQuery_ #tab
@@ -161,9 +161,9 @@ update:
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]] '[] '[]
+       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])] '[] '[]
   manipulation =
     update_ #tab (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
       (#col1 ./= #col2)
@@ -176,9 +176,9 @@ delete:
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]] '[]
+       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])] '[]
     '[ "col1" ::: 'NotNull 'PGint4
      , "col2" ::: 'NotNull 'PGint4 ]
   manipulation = deleteFrom #tab (#col1 .== #col2) ReturningStar
@@ -482,7 +482,7 @@ WITH statements
 --
 -- >>> :{
 -- let
---   manipulation :: Manipulation '["products" ::: ProductsTable, "products_deleted" ::: ProductsTable] '[ 'NotNull 'PGdate] '[]
+--   manipulation :: Manipulation '["products" ::: 'Table ProductsTable, "products_deleted" ::: 'Table ProductsTable] '[ 'NotNull 'PGdate] '[]
 --   manipulation = with
 --     (deleteFrom #products (#date .< param @1) ReturningStar `As` #deleted_rows :* Nil)
 --     (insertQuery_ #products_deleted (selectStar (from (table (#deleted_rows `As` #t)))))

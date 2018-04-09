@@ -101,7 +101,7 @@ simple query:
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar (from (table (#tab `As` #t)))
@@ -114,9 +114,9 @@ restricted query:
 >>> :{
 let
   query :: Query
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
        '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]]
+        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
     '[]
     '[ "sum" ::: 'NotNull 'PGint4
      , "col1" ::: 'NotNull 'PGint4 ]
@@ -135,7 +135,7 @@ subquery:
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
   query =
@@ -150,7 +150,7 @@ limits and offsets:
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar
@@ -164,7 +164,7 @@ parameterized query:
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGfloat8]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGfloat8])]
     '[ 'NotNull 'PGfloat8]
     '["col" ::: 'NotNull 'PGfloat8]
   query = selectStar
@@ -178,9 +178,9 @@ aggregation query:
 >>> :{
 let
   query :: Query
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
        '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]]
+        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
     '[]
     '[ "sum" ::: 'NotNull 'PGint4
      , "col1" ::: 'NotNull 'PGint4 ]
@@ -198,7 +198,7 @@ sorted query:
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar
@@ -213,7 +213,7 @@ joins:
 >>> :{
 let
   query :: Query
-    '[ "orders" :::
+    '[ "orders" ::: 'Table (
          '["pk_orders" ::: PrimaryKey '["id"]
           ,"fk_customers" ::: ForeignKey '["customer_id"] "customers" '["id"]
           ,"fk_shippers" ::: ForeignKey '["shipper_id"] "shippers" '["id"]] :=>
@@ -221,17 +221,17 @@ let
           , "price"   ::: 'NoDef :=> 'NotNull 'PGfloat4
           , "customer_id" ::: 'NoDef :=> 'NotNull 'PGint4
           , "shipper_id"  ::: 'NoDef :=> 'NotNull 'PGint4
-          ]
-     , "customers" :::
+          ])
+     , "customers" ::: 'Table (
          '["pk_customers" ::: PrimaryKey '["id"]] :=>
          '[ "id" ::: 'NoDef :=> 'NotNull 'PGint4
           , "name" ::: 'NoDef :=> 'NotNull 'PGtext
-          ]
-     , "shippers" :::
+          ])
+     , "shippers" ::: 'Table (
          '["pk_shippers" ::: PrimaryKey '["id"]] :=>
          '[ "id" ::: 'NoDef :=> 'NotNull 'PGint4
           , "name" ::: 'NoDef :=> 'NotNull 'PGtext
-          ]
+          ])
      ]
     '[]
     '[ "order_price" ::: 'NotNull 'PGfloat4
@@ -256,7 +256,7 @@ self-join:
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectDotStar #t1
@@ -270,7 +270,7 @@ set operations:
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
   query =
