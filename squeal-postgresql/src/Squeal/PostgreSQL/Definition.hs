@@ -64,6 +64,9 @@ module Squeal.PostgreSQL.Definition
   , setNotNull
   , dropNotNull
   , alterType
+    -- * Views
+  , createView
+  , dropView
   ) where
 
 import Control.Category
@@ -77,6 +80,7 @@ import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Expression
+import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
@@ -122,8 +126,8 @@ createTable
   -> NP (Aliased (TableConstraintExpression schema1 table)) constraints
     -- ^ constraints that must hold for the table
   -> Definition schema0 schema1
-createTable table columns constraints = UnsafeDefinition $
-  "CREATE TABLE" <+> renderCreation table columns constraints
+createTable tab columns constraints = UnsafeDefinition $
+  "CREATE TABLE" <+> renderCreation tab columns constraints
 
 -- | `createTableIfNotExists` creates a table if it doesn't exist, but does not add it to the schema.
 -- Instead, the schema already has the table so if the table did not yet exist, the schema was wrong.
@@ -147,9 +151,9 @@ createTableIfNotExists
   -> NP (Aliased (TableConstraintExpression schema table)) constraints
     -- ^ constraints that must hold for the table
   -> Definition schema schema
-createTableIfNotExists table columns constraints = UnsafeDefinition $
+createTableIfNotExists tab columns constraints = UnsafeDefinition $
   "CREATE TABLE IF NOT EXISTS"
-  <+> renderCreation table columns constraints
+  <+> renderCreation tab columns constraints
 
 -- helper function for `createTable` and `createTableIfNotExists`
 renderCreation
@@ -162,7 +166,7 @@ renderCreation
   -> NP (Aliased (TableConstraintExpression schema table)) constraints
     -- ^ constraints that must hold for the table
   -> ByteString
-renderCreation table columns constraints = renderAlias table
+renderCreation tab columns constraints = renderAlias tab
   <+> parenthesized
     ( renderCommaSeparated renderColumnDef columns
       <> ( case constraints of
@@ -453,10 +457,10 @@ DROP statements
 -- >>> renderDefinition $ dropTable #muh_table
 -- "DROP TABLE \"muh_table\";"
 dropTable
-  :: KnownSymbol table
+  :: Has table schema ('Table t)
   => Alias table -- ^ table to remove
   -> Definition schema (Drop table schema)
-dropTable table = UnsafeDefinition $ "DROP TABLE" <+> renderAlias table <> ";"
+dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderAlias tab <> ";"
 
 {-----------------------------------------
 ALTER statements
@@ -468,9 +472,9 @@ alterTable
   => Alias alias -- ^ table to alter
   -> AlterTable alias table schema -- ^ alteration to perform
   -> Definition schema (Alter alias ('Table table) schema)
-alterTable table alteration = UnsafeDefinition $
+alterTable tab alteration = UnsafeDefinition $
   "ALTER TABLE"
-  <+> renderAlias table
+  <+> renderAlias tab
   <+> renderAlterTable alteration
   <> ";"
 
@@ -731,3 +735,19 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 -- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" TYPE numeric NOT NULL;"
 alterType :: TypeExpression ty -> AlterColumn ty0 ty
 alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderTypeExpression ty
+
+createView
+  :: KnownSymbol view
+  => Alias view -- ^ the name of the table to add
+  -> Query schema '[] relation
+    -- ^ query
+  -> Definition schema (Create view ('View relation) schema)
+createView alias query = UnsafeDefinition $
+  "CREATE" <+> "VIEW" <+> renderAlias alias <+> "AS"
+  <+> renderQuery query <> ";"
+
+dropView
+  :: Has view schema ('View v)
+  => Alias view -- ^ view to remove
+  -> Definition schema (Drop view schema)
+dropView v = UnsafeDefinition $ "DROP VIEW" <+> renderAlias v <> ";"

@@ -58,6 +58,7 @@ module Squeal.PostgreSQL.Query
   , FromClause (..)
   , table
   , subquery
+  , view
   , crossJoin
   , innerJoin
   , leftOuterJoin
@@ -611,6 +612,12 @@ subquery
   :: Aliased (Query schema params) table
   -> FromClause schema params '[table]
 subquery = UnsafeFromClause . renderAliasedAs (parenthesized . renderQuery)
+
+-- | `view` derives a table from a `View`.
+view
+  :: Aliased (View schema) table
+  -> FromClause schema params '[table]
+view = UnsafeFromClause . renderAliasedAs renderView
 
 {- | @left & crossJoin right@. For every possible combination of rows from
     @left@ and @right@ (i.e., a Cartesian product), the joined table will contain
