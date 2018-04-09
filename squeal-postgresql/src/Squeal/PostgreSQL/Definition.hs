@@ -279,7 +279,7 @@ unique columns = UnsafeTableConstraintExpression $
 --   definition = createTable #tab
 --     ( serial `As` #id :*
 --       (text & notNull) `As` #name :* Nil )
---     ( primaryKey (#id :* Nil) `As` #pk_id :* Nil )
+--     ( primaryKey #id `As` #pk_id :* Nil )
 -- :}
 --
 -- >>> renderDefinition definition
@@ -322,13 +322,13 @@ primaryKey columns = UnsafeTableConstraintExpression $
 --    createTable #users
 --      ( serial `As` #id :*
 --        (text & notNull) `As` #name :* Nil )
---      ( primaryKey (#id :* Nil) `As` #pk_users :* Nil ) >>>
+--      ( primaryKey #id `As` #pk_users :* Nil ) >>>
 --    createTable #emails
 --      ( serial `As` #id :*
 --        (int & notNull) `As` #user_id :*
 --        text `As` #email :* Nil )
---      ( primaryKey (#id :* Nil) `As` #pk_emails :*
---        foreignKey (#user_id :* Nil) #users (#id :* Nil)
+--      ( primaryKey #id `As` #pk_emails :*
+--        foreignKey #user_id #users #id
 --          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
 -- in renderDefinition setup
 -- :}

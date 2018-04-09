@@ -362,6 +362,8 @@ data Alias (alias :: Symbol) = Alias
   deriving (Eq,GHC.Generic,Ord,Show,NFData)
 instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
+instance aliases ~ '[alias] => IsLabel alias (SOP.NP Alias aliases) where
+  fromLabel = fromLabel SOP.:* SOP.Nil
 
 -- | >>> renderAlias #jimbob
 -- "\"jimbob\""
