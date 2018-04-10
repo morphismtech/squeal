@@ -742,6 +742,18 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 alterType :: TypeExpression ty -> AlterColumn ty0 ty
 alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderTypeExpression ty
 
+-- | create a view...
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '[ "abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])]
+--     '[ "abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])
+--      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]
+--   definition =
+--     createView #bc (select (#b `As` #b :* #c `As` #c :* Nil) (from (table (#abc `As` #abc))))
+-- in renderDefinition definition
+-- :}
+-- "CREATE VIEW \"bc\" AS SELECT \"b\" AS \"b\", \"c\" AS \"c\" FROM \"abc\" AS \"abc\";"
 createView
   :: KnownSymbol view
   => Alias view -- ^ the name of the table to add
