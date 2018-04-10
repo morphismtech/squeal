@@ -70,6 +70,7 @@ module Squeal.PostgreSQL.Definition
     -- * Types
   , createType
   , createTypeEnum
+  , dropType
   , ColumnTypeExpression (..)
   , notNull
   , null'
@@ -799,7 +800,13 @@ createType
   -> Definition schema (Create comp ('Typedef ('PGcomposite fields)) schema)
 createType comp fields = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderAlias comp <+> "AS" <+> parenthesized
-  (renderCommaSeparated (renderAliasedAs renderTypeExpression) fields)
+  (renderCommaSeparated (renderAliasedAs renderTypeExpression) fields) <> ";"
+
+dropType
+  :: Has tydef schema ('Typedef ty)
+  => Alias tydef
+  -> Definition schema (Drop tydef schema)
+dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderAlias tydef <> ";"
 
 -- | `ColumnTypeExpression`s are used in `createTable` commands.
 newtype ColumnTypeExpression (schema :: SchemaType) (ty :: ColumnType)
