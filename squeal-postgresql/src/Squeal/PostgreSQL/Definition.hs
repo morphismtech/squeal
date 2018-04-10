@@ -511,8 +511,8 @@ newtype AlterTable
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
---     '["tab" ::: '["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
+--     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
+--     '["tab" ::: 'Table ('["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --   definition = alterTable #tab (addConstraint #positive (check (#col :* Nil) (#col .> 0)))
 -- in renderDefinition definition
 -- :}
@@ -535,8 +535,8 @@ addConstraint alias constraint = UnsafeAlterTable $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
---     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
+--     '["tab" ::: 'Table ('["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
+--     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --   definition = alterTable #tab (dropConstraint #positive)
 -- in renderDefinition definition
 -- :}
@@ -560,10 +560,10 @@ class AddColumn ty where
   -- >>> :{
   -- let
   --   definition :: Definition
-  --     '["tab" ::: '[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4]]
-  --     '["tab" ::: '[] :=>
+  --     '["tab" ::: 'Table ('[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4])]
+  --     '["tab" ::: 'Table ('[] :=>
   --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
-  --         , "col2" ::: 'Def :=> 'Null 'PGtext ]]
+  --         , "col2" ::: 'Def :=> 'Null 'PGtext ])]
   --   definition = alterTable #tab (addColumn #col2 (text & default_ "foo"))
   -- in renderDefinition definition
   -- :}
@@ -572,10 +572,10 @@ class AddColumn ty where
   -- >>> :{
   -- let
   --   definition :: Definition
-  --     '["tab" ::: '[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4]]
-  --     '["tab" ::: '[] :=>
+  --     '["tab" ::: 'Table ('[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4])]
+  --     '["tab" ::: 'Table ('[] :=>
   --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
-  --         , "col2" ::: 'NoDef :=> 'Null 'PGtext ]]
+  --         , "col2" ::: 'NoDef :=> 'Null 'PGtext ])]
   --   definition = alterTable #tab (addColumn #col2 text)
   -- in renderDefinition definition
   -- :}
@@ -601,10 +601,10 @@ instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '[] :=>
+--     '["tab" ::: 'Table ('[] :=>
 --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
---         , "col2" ::: 'NoDef :=> 'Null 'PGtext ]]
---     '["tab" ::: '[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4]]
+--         , "col2" ::: 'NoDef :=> 'Null 'PGtext ])]
+--     '["tab" ::: 'Table ('[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (dropColumn #col2)
 -- in renderDefinition definition
 -- :}
@@ -624,8 +624,8 @@ dropColumn column = UnsafeAlterTable $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '[] :=> '["foo" ::: 'NoDef :=> 'Null 'PGint4]]
---     '["tab" ::: '[] :=> '["bar" ::: 'NoDef :=> 'Null 'PGint4]]
+--     '["tab" ::: 'Table ('[] :=> '["foo" ::: 'NoDef :=> 'Null 'PGint4])]
+--     '["tab" ::: 'Table ('[] :=> '["bar" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (renameColumn #foo #bar)
 -- in renderDefinition definition
 -- :}
@@ -667,8 +667,8 @@ newtype AlterColumn (ty0 :: ColumnType) (ty1 :: ColumnType) =
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
---     '["tab" ::: '[] :=> '["col" ::: 'Def :=> 'Null 'PGint4]]
+--     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
+--     '["tab" ::: 'Table ('[] :=> '["col" ::: 'Def :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (alterColumn #col (setDefault 5))
 -- in renderDefinition definition
 -- :}
@@ -684,8 +684,8 @@ setDefault expression = UnsafeAlterColumn $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '[] :=> '["col" ::: 'Def :=> 'Null 'PGint4]]
---     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+--     '["tab" ::: 'Table ('[] :=> '["col" ::: 'Def :=> 'Null 'PGint4])]
+--     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (alterColumn #col dropDefault)
 -- in renderDefinition definition
 -- :}
@@ -700,8 +700,8 @@ dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
---     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
+--     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
+--     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --   definition = alterTable #tab (alterColumn #col setNotNull)
 -- in renderDefinition definition
 -- :}
@@ -715,8 +715,8 @@ setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
---     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+--     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
+--     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (alterColumn #col dropNotNull)
 -- in renderDefinition definition
 -- :}
@@ -732,8 +732,8 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4]]
---     '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGnumeric]]
+--     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
+--     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGnumeric])]
 --   definition =
 --     alterTable #tab (alterColumn #col (alterType (numeric & notNull)))
 -- in renderDefinition definition
