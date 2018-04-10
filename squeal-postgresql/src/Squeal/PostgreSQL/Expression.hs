@@ -1032,7 +1032,7 @@ newtype Table
     = UnsafeTable { renderTable :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance
-  ( Has alias (TablesOf schema) table
+  ( Has alias schema ('Table table)
   , relation ~ ColumnsToRelation (TableToColumns table)
   ) => IsLabel alias (Table schema relation) where
     fromLabel = UnsafeTable $ renderAlias (Alias @alias)
@@ -1045,7 +1045,7 @@ newtype View
     = UnsafeView { renderView :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance
-  ( Has alias (ViewsOf schema) columns
+  ( Has alias schema ('View columns)
   ) => IsLabel alias (View schema columns) where
     fromLabel = UnsafeView $ renderAlias (Alias @alias)
 

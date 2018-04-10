@@ -142,7 +142,7 @@ createTable tab columns constraints = UnsafeDefinition $
 -- :}
 -- "CREATE TABLE IF NOT EXISTS \"tab\" (\"a\" int, \"b\" real);"
 createTableIfNotExists
-  :: ( Has table (TablesOf schema) (constraints :=> columns)
+  :: ( Has table schema ('Table (constraints :=> columns))
      , SOP.SListI columns
      , SOP.SListI constraints )
   => Alias table -- ^ the name of the table to add
@@ -228,7 +228,7 @@ newtype TableConstraintExpression
 -- >>> renderDefinition definition
 -- "CREATE TABLE \"tab\" (\"a\" int NOT NULL, \"b\" int NOT NULL, CONSTRAINT \"inequality\" CHECK ((\"a\" > \"b\")));"
 check
-  :: ( Has alias (TablesOf schema) table
+  :: ( Has alias schema ('Table table)
      , HasAll aliases (TableToColumns table) subcolumns )
   => NP Alias aliases
   -> (forall tab. Condition '[tab ::: ColumnsToRelation subcolumns] 'Ungrouped '[])
@@ -259,7 +259,7 @@ check _cols condition = UnsafeTableConstraintExpression $
 -- >>> renderDefinition definition
 -- "CREATE TABLE \"tab\" (\"a\" int, \"b\" int, CONSTRAINT \"uq_a_b\" UNIQUE (\"a\", \"b\"));"
 unique
-  :: ( Has alias (TablesOf schema) table
+  :: ( Has alias schema ('Table table)
      , HasAll aliases (TableToColumns table) subcolumns )
   => NP Alias aliases
   -> TableConstraintExpression schema alias ('Unique aliases)
@@ -290,7 +290,7 @@ unique columns = UnsafeTableConstraintExpression $
 -- >>> renderDefinition definition
 -- "CREATE TABLE \"tab\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_id\" PRIMARY KEY (\"id\"));"
 primaryKey
-  :: ( Has alias (TablesOf schema) table
+  :: ( Has alias schema ('Table table)
      , HasAll aliases (TableToColumns table) subcolumns
      , AllNotNull subcolumns )
   => NP Alias aliases
@@ -401,8 +401,8 @@ type ForeignKeyed schema
   columns refcolumns
   constraints cols
   reftys tys =
-    ( Has child (TablesOf schema) table
-    , Has parent (TablesOf schema) reftable
+    ( Has child schema ('Table table)
+    , Has parent schema ('Table reftable)
     , HasAll columns (TableToColumns table) tys
     , reftable ~ (constraints :=> cols)
     , HasAll refcolumns cols reftys
@@ -519,7 +519,7 @@ newtype AlterTable
 -- "ALTER TABLE \"tab\" ADD CONSTRAINT \"positive\" CHECK ((\"col\" > 0));"
 addConstraint
   :: ( KnownSymbol alias
-     , Has tab (TablesOf schema) table0
+     , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (Create alias constraint constraints :=> columns) )
   => Alias alias
@@ -543,7 +543,7 @@ addConstraint alias constraint = UnsafeAlterTable $
 -- "ALTER TABLE \"tab\" DROP CONSTRAINT \"positive\";"
 dropConstraint
   :: ( KnownSymbol constraint
-     , Has tab (TablesOf schema) table0
+     , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (Drop constraint constraints :=> columns) )
   => Alias constraint
@@ -582,7 +582,7 @@ class AddColumn ty where
   -- "ALTER TABLE \"tab\" ADD COLUMN \"col2\" text;"
   addColumn
     :: ( KnownSymbol column
-       , Has tab (TablesOf schema) table0
+       , Has tab schema ('Table table0)
        , table0 ~ (constraints :=> columns)
        , table1 ~ (constraints :=> Create column ty columns) )
     => Alias column -- ^ column to add
@@ -611,7 +611,7 @@ instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 -- "ALTER TABLE \"tab\" DROP COLUMN \"col2\";"
 dropColumn
   :: ( KnownSymbol column
-     , Has tab (TablesOf schema) table0
+     , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (constraints :=> Drop column columns) )
   => Alias column -- ^ column to remove
@@ -633,7 +633,7 @@ dropColumn column = UnsafeAlterTable $
 renameColumn
   :: ( KnownSymbol column0
      , KnownSymbol column1
-     , Has tab (TablesOf schema) table0
+     , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (constraints :=> Rename column0 column1 columns) )
   => Alias column0 -- ^ column to rename
@@ -645,7 +645,7 @@ renameColumn column0 column1 = UnsafeAlterTable $
 -- | An `alterColumn` alters a single column.
 alterColumn
   :: ( KnownSymbol column
-     , Has tab (TablesOf schema) table0
+     , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , Has column columns ty0
      , tables1 ~ (constraints :=> Alter column ty1 columns))

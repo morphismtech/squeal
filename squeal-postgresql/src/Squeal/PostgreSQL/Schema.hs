@@ -102,8 +102,6 @@ module Squeal.PostgreSQL.Schema
     -- * Schema
   , SchemumType (..)
   , SchemaType
-  , TablesOf
-  , ViewsOf
   , With
   ) where
 
@@ -623,18 +621,6 @@ data SchemumType
   | View RelationType
 
 type SchemaType = [(Symbol,SchemumType)]
-
-type family TablesOf (schema :: SchemaType) :: TablesType where
-  TablesOf '[] = '[]
-  TablesOf (alias ::: 'Table table ': schema) =
-    alias ::: table ': TablesOf schema
-  TablesOf (_ ': schema) = TablesOf schema
-
-type family ViewsOf (schema :: SchemaType) :: RelationsType where
-  ViewsOf '[] = '[]
-  ViewsOf (alias ::: 'View view ': schema) =
-    alias ::: view ': ViewsOf schema
-  ViewsOf (_ ': schema) = ViewsOf schema
 
 type family With
   (relations :: RelationsType)

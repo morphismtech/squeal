@@ -68,7 +68,7 @@ Now that we have a couple migrations we can chain them together.
 >>> :{
 let
   numMigrations
-    :: Has "schema_migrations" (TablesOf schema) MigrationsTable
+    :: Has "schema_migrations" schema ('Table MigrationsTable)
     => PQ schema schema IO ()
   numMigrations = do
     result <- runQuery (selectStar (from (table (#schema_migrations `As` #m))))
@@ -283,7 +283,7 @@ type MigrationsTable =
 
 -- | Creates a `MigrationsTable` if it does not already exist.
 createMigrations
-  :: Has "schema_migrations" (TablesOf schema) MigrationsTable
+  :: Has "schema_migrations" schema ('Table MigrationsTable)
   => Definition schema schema
 createMigrations =
   createTableIfNotExists #schema_migrations
@@ -294,7 +294,7 @@ createMigrations =
 
 -- | Inserts a `Migration` into the `MigrationsTable`
 insertMigration
-  :: Has "schema_migrations" (TablesOf schema) MigrationsTable
+  :: Has "schema_migrations" schema ('Table MigrationsTable)
   => Manipulation schema '[ 'NotNull 'PGtext] '[]
 insertMigration = insertRow_ #schema_migrations
   ( Set (param @1) `As` #name :*
@@ -302,14 +302,14 @@ insertMigration = insertRow_ #schema_migrations
 
 -- | Deletes a `Migration` from the `MigrationsTable`
 deleteMigration
-  :: Has "schema_migrations" (TablesOf schema) MigrationsTable
+  :: Has "schema_migrations" schema ('Table MigrationsTable)
   => Manipulation schema '[ 'NotNull 'PGtext ] '[]
 deleteMigration = deleteFrom_ #schema_migrations (#name .== param @1)
 
 -- | Selects a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was executed.
 selectMigration
-  :: Has "schema_migrations" (TablesOf schema) MigrationsTable
+  :: Has "schema_migrations" schema ('Table MigrationsTable)
   => Query schema '[ 'NotNull 'PGtext ]
     '[ "executed_at" ::: 'NotNull 'PGtimestamptz ]
 selectMigration = select
