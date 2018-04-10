@@ -67,6 +67,8 @@ module Squeal.PostgreSQL.Definition
     -- * Views
   , createView
   , dropView
+    -- * Types
+  , createType
   , createTypeEnum
   , ColumnTypeExpression (..)
   , notNull
@@ -789,6 +791,15 @@ createTypeEnum
 createTypeEnum enum labels = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderAlias enum <+> "AS" <+>
   parenthesized (commaSeparated (renderAliases labels)) <> ";"
+
+createType
+  :: (KnownSymbol comp, SOP.SListI fields)
+  => Alias comp
+  -> NP (Aliased TypeExpression) fields
+  -> Definition schema (Create comp ('Typedef ('PGcomposite fields)) schema)
+createType comp fields = UnsafeDefinition $
+  "CREATE" <+> "TYPE" <+> renderAlias comp <+> "AS" <+> parenthesized
+  (renderCommaSeparated (renderAliasedAs renderTypeExpression) fields)
 
 -- | `ColumnTypeExpression`s are used in `createTable` commands.
 newtype ColumnTypeExpression (schema :: SchemaType) (ty :: ColumnType)
