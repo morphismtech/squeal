@@ -150,6 +150,8 @@ data PGType
   | PGjsonb -- ^ binary JSON data, decomposed
   | PGvararray PGType -- ^ variable length array
   | PGfixarray Nat PGType -- ^ fixed length array
+  | PGenum [Symbol]
+  | PGcomposite [(Symbol, PGType)]
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
 -- | The object identifier of a `PGType`.
@@ -619,6 +621,7 @@ type family DropIfConstraintsInvolve column constraints where
 data SchemumType
   = Table TableType
   | View RelationType
+  | Typedef PGType
 
 type SchemaType = [(Symbol,SchemumType)]
 

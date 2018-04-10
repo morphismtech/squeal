@@ -116,12 +116,6 @@ module Squeal.PostgreSQL.Expression
   , real
   , float8
   , doublePrecision
-  , serial2
-  , smallserial
-  , serial4
-  , serial
-  , serial8
-  , bigserial
   , text
   , char
   , character
@@ -140,8 +134,6 @@ module Squeal.PostgreSQL.Expression
   , jsonb
   , vararray
   , fixarray
-  , notNull
-  , default_
     -- * Re-export
   , (&)
   , NP ((:*), Nil)
@@ -452,7 +444,7 @@ atan2_ y x = UnsafeExpression $
 -- | >>> renderExpression $ true & cast int4
 -- "(TRUE :: int4)"
 cast
-  :: TypeExpression ('NoDef :=> 'Null ty1)
+  :: TypeExpression ty1
   -- ^ type to cast as
   -> Expression relations grouping params (nullity ty0)
   -- ^ value to convert
@@ -1054,110 +1046,92 @@ type expressions
 -----------------------------------------}
 
 -- | `TypeExpression`s are used in `cast`s and `createTable` commands.
-newtype TypeExpression (ty :: ColumnType)
+newtype TypeExpression (ty :: PGType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 -- | logical Boolean (true/false)
-bool :: TypeExpression ('NoDef :=> 'Null 'PGbool)
+bool :: TypeExpression 'PGbool
 bool = UnsafeTypeExpression "bool"
 -- | signed two-byte integer
-int2, smallint :: TypeExpression ('NoDef :=> 'Null 'PGint2)
+int2, smallint :: TypeExpression 'PGint2
 int2 = UnsafeTypeExpression "int2"
 smallint = UnsafeTypeExpression "smallint"
 -- | signed four-byte integer
-int4, int, integer :: TypeExpression ('NoDef :=> 'Null 'PGint4)
+int4, int, integer :: TypeExpression 'PGint4
 int4 = UnsafeTypeExpression "int4"
 int = UnsafeTypeExpression "int"
 integer = UnsafeTypeExpression "integer"
 -- | signed eight-byte integer
-int8, bigint :: TypeExpression ('NoDef :=> 'Null 'PGint8)
+int8, bigint :: TypeExpression 'PGint8
 int8 = UnsafeTypeExpression "int8"
 bigint = UnsafeTypeExpression "bigint"
 -- | arbitrary precision numeric type
-numeric :: TypeExpression ('NoDef :=> 'Null 'PGnumeric)
+numeric :: TypeExpression 'PGnumeric
 numeric = UnsafeTypeExpression "numeric"
 -- | single precision floating-point number (4 bytes)
-float4, real :: TypeExpression ('NoDef :=> 'Null 'PGfloat4)
+float4, real :: TypeExpression 'PGfloat4
 float4 = UnsafeTypeExpression "float4"
 real = UnsafeTypeExpression "real"
 -- | double precision floating-point number (8 bytes)
-float8, doublePrecision :: TypeExpression ('NoDef :=> 'Null 'PGfloat8)
+float8, doublePrecision :: TypeExpression 'PGfloat8
 float8 = UnsafeTypeExpression "float8"
 doublePrecision = UnsafeTypeExpression "double precision"
--- | not a true type, but merely a notational convenience for creating
--- unique identifier columns with type `'PGint2`
-serial2, smallserial
-  :: TypeExpression ('Def :=> 'NotNull 'PGint2)
-serial2 = UnsafeTypeExpression "serial2"
-smallserial = UnsafeTypeExpression "smallserial"
--- | not a true type, but merely a notational convenience for creating
--- unique identifier columns with type `'PGint4`
-serial4, serial
-  :: TypeExpression ('Def :=> 'NotNull 'PGint4)
-serial4 = UnsafeTypeExpression "serial4"
-serial = UnsafeTypeExpression "serial"
--- | not a true type, but merely a notational convenience for creating
--- unique identifier columns with type `'PGint8`
-serial8, bigserial
-  :: TypeExpression ('Def :=> 'NotNull 'PGint8)
-serial8 = UnsafeTypeExpression "serial8"
-bigserial = UnsafeTypeExpression "bigserial"
 -- | variable-length character string
-text :: TypeExpression ('NoDef :=> 'Null 'PGtext)
+text :: TypeExpression 'PGtext
 text = UnsafeTypeExpression "text"
 -- | fixed-length character string
 char, character
   :: (KnownNat n, 1 <= n)
   => proxy n
-  -> TypeExpression ('NoDef :=> 'Null ('PGchar n))
+  -> TypeExpression ('PGchar n)
 char p = UnsafeTypeExpression $ "char(" <> renderNat p <> ")"
 character p = UnsafeTypeExpression $  "character(" <> renderNat p <> ")"
 -- | variable-length character string
 varchar, characterVarying
   :: (KnownNat n, 1 <= n)
   => proxy n
-  -> TypeExpression ('NoDef :=> 'Null ('PGvarchar n))
+  -> TypeExpression ('PGvarchar n)
 varchar p = UnsafeTypeExpression $ "varchar(" <> renderNat p <> ")"
 characterVarying p = UnsafeTypeExpression $
   "character varying(" <> renderNat p <> ")"
 -- | binary data ("byte array")
-bytea :: TypeExpression ('NoDef :=> 'Null 'PGbytea)
+bytea :: TypeExpression 'PGbytea
 bytea = UnsafeTypeExpression "bytea"
 -- | date and time (no time zone)
-timestamp :: TypeExpression ('NoDef :=> 'Null 'PGtimestamp)
+timestamp :: TypeExpression 'PGtimestamp
 timestamp = UnsafeTypeExpression "timestamp"
 -- | date and time, including time zone
-timestampWithTimeZone :: TypeExpression ('NoDef :=> 'Null 'PGtimestamptz)
+timestampWithTimeZone :: TypeExpression 'PGtimestamptz
 timestampWithTimeZone = UnsafeTypeExpression "timestamp with time zone"
 -- | calendar date (year, month, day)
-date :: TypeExpression ('NoDef :=> 'Null 'PGdate)
+date :: TypeExpression 'PGdate
 date = UnsafeTypeExpression "date"
 -- | time of day (no time zone)
-time :: TypeExpression ('NoDef :=> 'Null 'PGtime)
+time :: TypeExpression 'PGtime
 time = UnsafeTypeExpression "time"
 -- | time of day, including time zone
-timeWithTimeZone :: TypeExpression ('NoDef :=> 'Null 'PGtimetz)
+timeWithTimeZone :: TypeExpression 'PGtimetz
 timeWithTimeZone = UnsafeTypeExpression "time with time zone"
 -- | time span
-interval :: TypeExpression ('NoDef :=> 'Null 'PGinterval)
+interval :: TypeExpression 'PGinterval
 interval = UnsafeTypeExpression "interval"
 -- | universally unique identifier
-uuid :: TypeExpression ('NoDef :=> 'Null 'PGuuid)
+uuid :: TypeExpression 'PGuuid
 uuid = UnsafeTypeExpression "uuid"
 -- | IPv4 or IPv6 host address
-inet :: TypeExpression ('NoDef :=> 'Null 'PGinet)
+inet :: TypeExpression 'PGinet
 inet = UnsafeTypeExpression "inet"
 -- | textual JSON data
-json :: TypeExpression ('NoDef :=> 'Null 'PGjson)
+json :: TypeExpression 'PGjson
 json = UnsafeTypeExpression "json"
 -- | binary JSON data, decomposed
-jsonb :: TypeExpression ('NoDef :=> 'Null 'PGjsonb)
+jsonb :: TypeExpression 'PGjsonb
 jsonb = UnsafeTypeExpression "jsonb"
 -- | variable length array
 vararray
-  :: TypeExpression ('NoDef :=> 'Null pg)
-  -> TypeExpression ('NoDef :=> 'Null ('PGvararray pg))
+  :: TypeExpression pg
+  -> TypeExpression ('PGvararray pg)
 vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
 -- | fixed length array
 --
@@ -1166,29 +1140,13 @@ vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
 fixarray
   :: KnownNat n
   => proxy n
-  -> TypeExpression ('NoDef :=> 'Null pg)
-  -> TypeExpression ('NoDef :=> 'Null ('PGfixarray n pg))
+  -> TypeExpression pg
+  -> TypeExpression ('PGfixarray n pg)
 fixarray p ty = UnsafeTypeExpression $
   renderTypeExpression ty <> "[" <> renderNat p <> "]"
 
--- | used in `createTable` commands as a column constraint to ensure
--- @NULL@ is not present
-notNull
-  :: TypeExpression (def :=> 'Null ty)
-  -> TypeExpression (def :=> 'NotNull ty)
-notNull ty = UnsafeTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
-
--- | used in `createTable` commands as a column constraint to give a default
-default_
-  :: Expression '[] 'Ungrouped '[] ty
-  -> TypeExpression ('NoDef :=> ty)
-  -> TypeExpression ('Def :=> ty)
-default_ x ty = UnsafeTypeExpression $
-  renderTypeExpression ty <+> "DEFAULT" <+> renderExpression x
-
 -- | `pgtype` is a demoted version of a `PGType`
-class PGTyped (ty :: PGType) where
-  pgtype :: TypeExpression ('NoDef :=> 'Null ty)
+class PGTyped (ty :: PGType) where pgtype :: TypeExpression ty
 instance PGTyped 'PGbool where pgtype = bool
 instance PGTyped 'PGint2 where pgtype = int2
 instance PGTyped 'PGint4 where pgtype = int4

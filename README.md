@@ -132,7 +132,7 @@ let
    createTable #emails
      ( serial `As` #id :*
        (int & notNull) `As` #user_id :*
-       text `As` #email :* Nil )
+       (text & null') `As` #email :* Nil )
      ( primaryKey #id `As` #pk_emails :*
        foreignKey #user_id #users #id
          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )

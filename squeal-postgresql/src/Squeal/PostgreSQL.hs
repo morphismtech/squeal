@@ -71,7 +71,7 @@
 --    createTable #emails
 --      ( serial `As` #id :*
 --        (int & notNull) `As` #user_id :*
---        text `As` #email :* Nil )
+--        (text & null') `As` #email :* Nil )
 --      ( primaryKey #id `As` #pk_emails :*
 --        foreignKey #user_id #users #id
 --          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
@@ -80,7 +80,7 @@
 -- We can easily see the generated SQL is unsuprising looking.
 --
 -- >>> renderDefinition setup
--- "CREATE TABLE \"users\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_users\" PRIMARY KEY (\"id\")); CREATE TABLE \"emails\" (\"id\" serial, \"user_id\" int NOT NULL, \"email\" text, CONSTRAINT \"pk_emails\" PRIMARY KEY (\"id\"), CONSTRAINT \"fk_user_id\" FOREIGN KEY (\"user_id\") REFERENCES \"users\" (\"id\") ON DELETE CASCADE ON UPDATE CASCADE);"
+-- "CREATE TABLE \"users\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_users\" PRIMARY KEY (\"id\")); CREATE TABLE \"emails\" (\"id\" serial, \"user_id\" int NOT NULL, \"email\" text NULL, CONSTRAINT \"pk_emails\" PRIMARY KEY (\"id\"), CONSTRAINT \"fk_user_id\" FOREIGN KEY (\"user_id\") REFERENCES \"users\" (\"id\") ON DELETE CASCADE ON UPDATE CASCADE);"
 --
 -- Notice that @setup@ starts with an empty schema @'[]@ and produces @Schema@.
 -- In our `createTable` commands we included `TableConstraint`s to define
