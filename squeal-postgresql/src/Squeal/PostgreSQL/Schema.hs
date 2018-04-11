@@ -591,7 +591,7 @@ instance field ~ column => SameField ('Type.FieldInfo field) (column ::: ty)
 -- `Generics.SOP.Type.Metadata.DatatypeInfo` of a record type has the same
 -- field names as the column AliasesOf of a `ColumnsType`.
 type family SameFields
-  (datatypeInfo :: Type.DatatypeInfo) (columns :: RelationType)
+  (datatypeInfo :: Type.DatatypeInfo) (columns :: [(Symbol,ty)])
     :: Constraint where
   SameFields
     ('Type.ADT _module _datatype '[ 'Type.Record _constructor fields])

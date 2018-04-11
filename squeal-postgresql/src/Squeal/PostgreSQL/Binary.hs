@@ -25,6 +25,7 @@ Binary encoding and decoding between Haskell and PostgreSQL types.
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
+  , TypeFamilyDependencies
   , TypeInType
   , TypeOperators
   , UndecidableInstances
@@ -43,6 +44,7 @@ module Squeal.PostgreSQL.Binary
   , Only (..)
   ) where
 
+import BinaryParser
 import Data.Aeson hiding (Null)
 import Data.Int
 import Data.Kind
@@ -201,6 +203,63 @@ instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
   fromValue _ = Decoding.array
     (Decoding.dimensionArray Vector.replicateM
       (Decoding.nullableValueArray (fromValue (Proxy @pg))))
+
+class IsMaybes (xs :: [Type]) where
+  type family Maybes xs = (mxs :: [Type]) | mxs -> xs
+  maybes :: NP Maybe xs -> NP I (Maybes xs)
+
+instance IsMaybes '[] where
+  type Maybes '[] = '[]
+  maybes Nil = Nil
+
+instance IsMaybes xs => IsMaybes (x ': xs) where
+  type Maybes (x ': xs) = Maybe x ': Maybes xs
+  maybes (x :* xs) = I x :* maybes xs
+
+class FromAliasedValue (pg :: (Symbol,PGType)) (y :: Type) where
+  fromAliasedValue :: proxy pg -> Decoding.Value y
+instance FromValue pg y => FromAliasedValue (alias ::: pg) y where
+  fromAliasedValue _ = fromValue (Proxy @pg)
+
+instance
+  ( SListI fields
+  , IsMaybes ys
+  , IsProductType y (Maybes ys)
+  , AllZip FromAliasedValue fields ys
+  , SameFields (DatatypeInfoOf y) fields
+  ) => FromValue ('PGcomposite fields) y where
+    fromValue = fmap (to . SOP . Z . maybes) . composite . decoders
+
+decoders
+  :: forall pgs ys proxy
+   . AllZip FromAliasedValue pgs ys
+  => proxy ('PGcomposite pgs)
+  -> NP Decoding.Value ys
+decoders _ = htrans (Proxy @FromAliasedValue) fromAliasedValue
+  (hpure Proxy :: NP Proxy pgs)
+
+composite
+  :: SListI ys
+  => NP Decoding.Value ys
+  -> Decoding.Value (NP Maybe ys)
+composite decoders = do
+-- [for each field]
+--  <OID of field's type: sizeof(Oid) bytes>
+--  [if value is NULL]
+--    <-1: 4 bytes>
+--  [else]
+--    <length of value: 4 bytes>
+--    <value: <length> bytes>
+--  [end if]
+-- [end for]
+-- <number of fields: 4 bytes>
+  unitOfSize 4
+  let
+    each decoder = do
+      unitOfSize 4
+      len <- sized 4 Decoding.int
+      if len == -1 then return Nothing else Just <$> sized len decoder
+  htraverse' each decoders
 
 -- | A `FromColumnValue` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, ColumnType)@ to a `Type`,
