@@ -242,7 +242,7 @@ composite
   :: SListI ys
   => NP Decoding.Value ys
   -> Decoding.Value (NP Maybe ys)
-composite decoders = do
+composite fields = do
 -- [for each field]
 --  <OID of field's type: sizeof(Oid) bytes>
 --  [if value is NULL]
@@ -255,11 +255,11 @@ composite decoders = do
 -- <number of fields: 4 bytes>
   unitOfSize 4
   let
-    each decoder = do
+    each field = do
       unitOfSize 4
       len <- sized 4 Decoding.int
-      if len == -1 then return Nothing else Just <$> sized len decoder
-  htraverse' each decoders
+      if len == -1 then return Nothing else Just <$> sized len field
+  htraverse' each fields
 
 -- | A `FromColumnValue` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, ColumnType)@ to a `Type`,
