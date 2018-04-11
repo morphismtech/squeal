@@ -203,6 +203,14 @@ instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
   fromValue _ = Decoding.array
     (Decoding.dimensionArray Vector.replicateM
       (Decoding.nullableValueArray (fromValue (Proxy @pg))))
+instance
+  ( SListI fields
+  , IsMaybes ys
+  , IsProductType y (Maybes ys)
+  , AllZip FromAliasedValue fields ys
+  , SameFields (DatatypeInfoOf y) fields
+  ) => FromValue ('PGcomposite fields) y where
+    fromValue = fmap (to . SOP . Z . maybes) . composite . decoders
 
 class IsMaybes (xs :: [Type]) where
   type family Maybes xs = (mxs :: [Type]) | mxs -> xs
@@ -220,15 +228,6 @@ class FromAliasedValue (pg :: (Symbol,PGType)) (y :: Type) where
   fromAliasedValue :: proxy pg -> Decoding.Value y
 instance FromValue pg y => FromAliasedValue (alias ::: pg) y where
   fromAliasedValue _ = fromValue (Proxy @pg)
-
-instance
-  ( SListI fields
-  , IsMaybes ys
-  , IsProductType y (Maybes ys)
-  , AllZip FromAliasedValue fields ys
-  , SameFields (DatatypeInfoOf y) fields
-  ) => FromValue ('PGcomposite fields) y where
-    fromValue = fmap (to . SOP . Z . maybes) . composite . decoders
 
 decoders
   :: forall pgs ys proxy
