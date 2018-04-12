@@ -485,7 +485,7 @@ WITH statements
 --   manipulation :: Manipulation '["products" ::: 'Table ProductsTable, "products_deleted" ::: 'Table ProductsTable] '[ 'NotNull 'PGdate] '[]
 --   manipulation = with
 --     (deleteFrom #products (#date .< param @1) ReturningStar `As` #deleted_rows :* Nil)
---     (insertQuery_ #products_deleted (selectStar (from (table (#deleted_rows `As` #t)))))
+--     (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `As` #t)))))
 -- in renderManipulation manipulation
 -- :}
 -- "WITH \"deleted_rows\" AS (DELETE FROM \"products\" WHERE (\"date\" < ($1 :: date)) RETURNING *) INSERT INTO \"products_deleted\" SELECT * FROM \"deleted_rows\" AS \"t\";"

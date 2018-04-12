@@ -545,6 +545,10 @@ type family Join xs ys where
 -- `Squeal.PostgreSQL.Definition.addColumn`.
 type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
+  Create alias x (alias ::: y ': xs) = TypeError
+    ('Text "Create: alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text "already in use")
   Create alias y (x ': xs) = x ': Create alias y xs
 
 -- | @Drop alias xs@ removes the type associated with @alias@ in @xs@
@@ -631,4 +635,4 @@ type family With
   :: SchemaType where
     With '[] schema = schema
     With (alias ::: rel ': rels) schema =
-      alias ::: 'Table ('[] :=> RelationToColumns rel) ': With rels schema
+      alias ::: 'View rel ': With rels schema
