@@ -60,7 +60,7 @@ import Network.IP.Addr
 import Text.Read (readMaybe)
 
 import qualified Data.ByteString.Lazy as Lazy
-import qualified Data.ByteString as Strict hiding (unpack)
+import qualified Data.ByteString as Strict hiding (pack, unpack)
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text as Strict
 import qualified Data.Vector as Vector
@@ -123,7 +123,16 @@ instance (HasOid pg, ToParam x pg)
   => ToParam (Vector (Maybe x)) ('PGvararray pg) where
     toParam = K . Encoding.nullableArray_vector
       (oid @pg) (unK . toParam @x @pg)
-
+instance
+  ( IsEnumType x
+  , Show x
+  -- , SameLabels (DatatypeInfoOf y) labels
+  --
+  -- uncomment above constraint when GHC issue #11671 is fixed
+  -- Allow labels starting with uppercase with OverloadedLabels
+  -- https://ghc.haskell.org/trac/ghc/ticket/11671?cversion=0&cnum_hist=8
+  ) => ToParam x ('PGenum labels) where
+    toParam = K . Encoding.text_strict . Strict.pack . show
 -- | A `ToColumnParam` constraint lifts the `ToParam` encoding 
 -- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s. You should
 -- not define instances of `ToColumnParam`, just use the provided instances.

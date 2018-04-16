@@ -323,6 +323,31 @@ array
 array xs = UnsafeExpression $
   "ARRAY[" <> commaSeparated (renderExpression <$> xs) <> "]"
 
+label
+  :: (KnownSymbol label, label `In` labels)
+  => Alias label
+  -> Expression relations grouping params (nullity ('PGenum labels))
+label (_ :: Alias label) = UnsafeExpression $
+  fromString $ symbolVal (Proxy @label)
+
+type family Nulls tys where
+  Nulls '[] = '[]
+  Nulls (field ::: ty ': tys) = field ::: 'Null ty ': Nulls tys
+
+row
+  :: (SListI (Nulls fields))
+  => NP (Aliased (Expression relation grouping params)) (Nulls fields)
+  -> Expression relation grouping params (nullity ('PGcomposite fields))
+row exprs = UnsafeExpression $ "ROW" <> parenthesized
+  (renderCommaSeparated (\ (expr `As` _) -> renderExpression expr) exprs)
+
+instance Has field fields ty => IsLabel field
+  (   Expression relation grouping params (nullity ('PGcomposite fields))
+   -> Expression relation grouping params ('Null ty) ) where
+    fromLabel expr = UnsafeExpression $
+      parenthesized (renderExpression expr) <> "." <>
+        fromString (symbolVal (Proxy @field))
+
 instance Monoid
   (Expression relations grouping params (nullity ('PGvararray ty))) where
     mempty = array []
