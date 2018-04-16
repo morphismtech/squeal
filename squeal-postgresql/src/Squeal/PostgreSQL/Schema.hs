@@ -99,6 +99,8 @@ module Squeal.PostgreSQL.Schema
     -- * Generics
   , SameField
   , SameFields
+  , SameLabel
+  , SameLabels
     -- * Schema
   , SchemumType (..)
   , SchemaType
@@ -605,6 +607,17 @@ type family SameFields
     ('Type.Newtype _module _datatype ('Type.Record _constructor fields))
     columns
       = SOP.AllZip SameField fields columns
+
+class SameLabel
+  (constrInfo :: Type.ConstructorInfo) (label :: Symbol) where
+instance name ~ label => SameLabel ('Type.Constructor name) label
+
+type family SameLabels
+  (datatypeInfo :: Type.DatatypeInfo) (labels :: [Symbol])
+    :: Constraint where
+  SameLabels
+    ('Type.ADT _module _datatype constructors) labels
+      = SOP.AllZip SameLabel constructors labels
 
 -- | Check if a `TableConstraint` involves a column
 type family ConstraintInvolves column constraint where

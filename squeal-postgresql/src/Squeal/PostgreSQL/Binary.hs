@@ -46,6 +46,7 @@ module Squeal.PostgreSQL.Binary
 
 import BinaryParser
 import Data.Aeson hiding (Null)
+import Data.Char (toUpper)
 import Data.Int
 import Data.Kind
 import Data.Scientific
@@ -56,6 +57,7 @@ import Data.Word
 import Generics.SOP
 import GHC.TypeLits
 import Network.IP.Addr
+import Text.Read (readMaybe)
 
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict hiding (unpack)
@@ -203,6 +205,21 @@ instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
   fromValue _ = Decoding.array
     (Decoding.dimensionArray Vector.replicateM
       (Decoding.nullableValueArray (fromValue (Proxy @pg))))
+instance
+  ( IsEnumType y
+  , Read y
+  -- , SameLabels (DatatypeInfoOf y) labels
+  --
+  -- uncomment above constraint when GHC issue #11671 is fixed
+  -- Allow labels starting with uppercase with OverloadedLabels
+  -- https://ghc.haskell.org/trac/ghc/ticket/11671?cversion=0&cnum_hist=8
+  ) => FromValue ('PGenum labels) y where
+    fromValue _ =
+      let
+        upper "" = ""
+        upper (ch:chs) = toUpper ch : chs
+      in
+        Decoding.enum (readMaybe . upper . Strict.unpack)
 instance
   ( SListI fields
   , IsMaybes ys
