@@ -9,16 +9,9 @@ Squeal transaction control language.
 -}
 
 {-# LANGUAGE
-    DataKinds
-  , EmptyCase
-  , FlexibleContexts
-  , FlexibleInstances
+    FlexibleContexts
   , LambdaCase
   , OverloadedStrings
-  , MultiParamTypeClasses
-  , ScopedTypeVariables
-  , TypeFamilies
-  , TypeInType
 #-}
 
 module Squeal.PostgreSQL.Transaction

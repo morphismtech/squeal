@@ -10,20 +10,16 @@ Squeal data definition language.
 
 {-# LANGUAGE
     ConstraintKinds
-  , DataKinds
-  , DeriveDataTypeable
   , DeriveGeneric
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
   , GeneralizedNewtypeDeriving
-  , KindSignatures
   , LambdaCase
   , MultiParamTypeClasses
   , OverloadedStrings
   , RankNTypes
   , ScopedTypeVariables
-  , StandaloneDeriving
   , TypeApplications
   , TypeInType
   , TypeOperators

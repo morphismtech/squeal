@@ -11,23 +11,17 @@ A type-level DSL for kinds of PostgreSQL types, constraints, and aliases.
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
-  , DataKinds
   , DeriveAnyClass
-  , DeriveDataTypeable
   , DeriveGeneric
   , FlexibleContexts
   , FlexibleInstances
   , FunctionalDependencies
   , GADTs
-  , MagicHash
-  , MultiParamTypeClasses
   , OverloadedStrings
-  , PolyKinds
   , RankNTypes
-  , ScopedTypeVariables
   , StandaloneDeriving
   , TypeApplications
-  , TypeFamilies
+  , TypeFamilyDependencies
   , TypeInType
   , TypeOperators
   , UndecidableInstances
@@ -45,8 +39,6 @@ module Squeal.PostgreSQL.Schema
   , NilRelation
   , RelationsType
   , TableType
-  , TablesType
-  , NilTables
     -- * Grouping
   , Grouping (..)
   , GroupedBy
@@ -92,8 +84,6 @@ module Squeal.PostgreSQL.Schema
   , ColumnsToRelation
   , RelationToColumns
   , TableToColumns
-  , TablesToRelations
-  , RelationsToTables
   , ConstraintInvolves
   , DropIfConstraintsInvolve
     -- * Generics
@@ -101,6 +91,8 @@ module Squeal.PostgreSQL.Schema
   , SameFields
   , SameLabel
   , SameLabels
+  , MapMaybes (..)
+  , Nulls
     -- * Schema
   , SchemumType (..)
   , SchemaType
@@ -109,11 +101,11 @@ module Squeal.PostgreSQL.Schema
 
 import Control.DeepSeq
 import Data.ByteString
+import Data.Kind
 import Data.Monoid hiding (All)
 import Data.String
 import Data.Word
 import Data.Type.Bool
-import GHC.Exts
 import GHC.OverloadedLabels
 import GHC.TypeLits
 
@@ -279,31 +271,6 @@ type family Uniquely
 -- :}
 type TableType = (TableConstraints,ColumnsType)
 
--- | `TablesType` is a row of `TableType`s, thought of as a union.
---
--- >>> :{
--- type family Schema :: TablesType where
---   Schema =
---     '[ "users" :::
---          '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
---          '[ "id" ::: 'Def :=> 'NotNull 'PGint4
---           , "name" ::: 'NoDef :=> 'NotNull 'PGtext
---           , "vec" ::: 'NoDef :=> 'NotNull ('PGvararray 'PGint2)
---           ]
---      , "emails" :::
---          '[  "pk_emails" ::: 'PrimaryKey '["id"]
---           , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
---           ] :=>
---          '[ "id" ::: 'Def :=> 'NotNull 'PGint4
---           , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
---           , "email" ::: 'NoDef :=> 'Null 'PGtext
---           ]
---      ]
--- :}
-type TablesType = [(Symbol,TableType)]
--- | A monokinded empty `TablesType`.
-type family NilTables :: TablesType where NilTables = '[]
-
 -- | `RelationType` is a row of `NullityType`
 --
 -- >>> :{
@@ -336,18 +303,6 @@ type family RelationToColumns (relation :: RelationType) :: ColumnsType where
 -- | `TableToColumns` removes table constraints.
 type family TableToColumns (table :: TableType) :: ColumnsType where
   TableToColumns (constraints :=> columns) = columns
-
--- | `TablesToRelations` removes both table and column constraints.
-type family TablesToRelations (tables :: TablesType) :: RelationsType where
-  TablesToRelations '[] = '[]
-  TablesToRelations (alias ::: constraint :=> columns ': tables) =
-    alias ::: ColumnsToRelation columns ': TablesToRelations tables
-
--- | `RelationsToTables` adds both trivial table and column constraints.
-type family RelationsToTables (tables :: RelationsType) :: TablesType where
-  RelationsToTables '[] = '[]
-  RelationsToTables (alias ::: columns ': relations) =
-    alias ::: '[] :=> RelationToColumns columns ': RelationsToTables relations
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
@@ -618,6 +573,20 @@ type family SameLabels
   SameLabels
     ('Type.ADT _module _datatype constructors) labels
       = SOP.AllZip SameLabel constructors labels
+
+class MapMaybes xs where
+  type family Maybes (xs :: [Type]) = (mxs :: [Type]) | mxs -> xs
+  maybes :: SOP.NP Maybe xs -> SOP.NP SOP.I (Maybes xs)
+instance MapMaybes '[] where
+  type Maybes '[] = '[]
+  maybes SOP.Nil = SOP.Nil
+instance MapMaybes xs => MapMaybes (x ': xs) where
+  type Maybes (x ': xs) = Maybe x ': Maybes xs
+  maybes (x SOP.:* xs) = SOP.I x SOP.:* maybes xs
+
+type family Nulls tys where
+  Nulls '[] = '[]
+  Nulls (field ::: ty ': tys) = field ::: 'Null ty ': Nulls tys
 
 -- | Check if a `TableConstraint` involves a column
 type family ConstraintInvolves column constraint where

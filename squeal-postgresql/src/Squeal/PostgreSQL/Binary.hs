@@ -9,10 +9,7 @@ Binary encoding and decoding between Haskell and PostgreSQL types.
 -}
 
 {-# LANGUAGE
-    ConstraintKinds
-  , DataKinds
-  , DefaultSignatures
-  , DeriveFoldable
+    DeriveFoldable
   , DeriveFunctor
   , DeriveGeneric
   , DeriveTraversable
@@ -20,12 +17,9 @@ Binary encoding and decoding between Haskell and PostgreSQL types.
   , FlexibleInstances
   , GADTs
   , LambdaCase
-  , KindSignatures
   , MultiParamTypeClasses
   , ScopedTypeVariables
   , TypeApplications
-  , TypeFamilies
-  , TypeFamilyDependencies
   , TypeInType
   , TypeOperators
   , UndecidableInstances
@@ -231,60 +225,46 @@ instance
         Decoding.enum (readMaybe . upper . Strict.unpack)
 instance
   ( SListI fields
-  , IsMaybes ys
+  , MapMaybes ys
   , IsProductType y (Maybes ys)
   , AllZip FromAliasedValue fields ys
   , SameFields (DatatypeInfoOf y) fields
   ) => FromValue ('PGcomposite fields) y where
-    fromValue = fmap (to . SOP . Z . maybes) . composite . decoders
+    fromValue =
+      let
+        decoders
+          :: forall pgs zs proxy
+          . AllZip FromAliasedValue pgs zs
+          => proxy ('PGcomposite pgs)
+          -> NP Decoding.Value zs
+        decoders _ = htrans (Proxy @FromAliasedValue) fromAliasedValue
+          (hpure Proxy :: NP Proxy pgs)
 
-class IsMaybes (xs :: [Type]) where
-  type family Maybes xs = (mxs :: [Type]) | mxs -> xs
-  maybes :: NP Maybe xs -> NP I (Maybes xs)
+        composite fields = do
+        -- [for each field]
+        --  <OID of field's type: sizeof(Oid) bytes>
+        --  [if value is NULL]
+        --    <-1: 4 bytes>
+        --  [else]
+        --    <length of value: 4 bytes>
+        --    <value: <length> bytes>
+        --  [end if]
+        -- [end for]
+        -- <number of fields: 4 bytes>
+          unitOfSize 4
+          let
+            each field = do
+              unitOfSize 4
+              len <- sized 4 Decoding.int
+              if len == -1 then return Nothing else Just <$> sized len field
+          htraverse' each fields
 
-instance IsMaybes '[] where
-  type Maybes '[] = '[]
-  maybes Nil = Nil
-
-instance IsMaybes xs => IsMaybes (x ': xs) where
-  type Maybes (x ': xs) = Maybe x ': Maybes xs
-  maybes (x :* xs) = I x :* maybes xs
+      in fmap (to . SOP . Z . maybes) . composite . decoders
 
 class FromAliasedValue (pg :: (Symbol,PGType)) (y :: Type) where
   fromAliasedValue :: proxy pg -> Decoding.Value y
 instance FromValue pg y => FromAliasedValue (alias ::: pg) y where
   fromAliasedValue _ = fromValue (Proxy @pg)
-
-decoders
-  :: forall pgs ys proxy
-   . AllZip FromAliasedValue pgs ys
-  => proxy ('PGcomposite pgs)
-  -> NP Decoding.Value ys
-decoders _ = htrans (Proxy @FromAliasedValue) fromAliasedValue
-  (hpure Proxy :: NP Proxy pgs)
-
-composite
-  :: SListI ys
-  => NP Decoding.Value ys
-  -> Decoding.Value (NP Maybe ys)
-composite fields = do
--- [for each field]
---  <OID of field's type: sizeof(Oid) bytes>
---  [if value is NULL]
---    <-1: 4 bytes>
---  [else]
---    <length of value: 4 bytes>
---    <value: <length> bytes>
---  [end if]
--- [end for]
--- <number of fields: 4 bytes>
-  unitOfSize 4
-  let
-    each field = do
-      unitOfSize 4
-      len <- sized 4 Decoding.int
-      if len == -1 then return Nothing else Just <$> sized len field
-  htraverse' each fields
 
 -- | A `FromColumnValue` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, ColumnType)@ to a `Type`,

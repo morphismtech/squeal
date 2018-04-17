@@ -14,7 +14,6 @@ Rendering helper functions.
   , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
-  , TypeApplications
 #-}
 
 module Squeal.PostgreSQL.Render

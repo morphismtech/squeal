@@ -9,17 +9,13 @@ Squeal data manipulation language.
 -}
 
 {-# LANGUAGE
-    DataKinds
-  , DeriveDataTypeable
-  , DeriveGeneric
+    DeriveGeneric
   , FlexibleContexts
   , GADTs
   , GeneralizedNewtypeDeriving
-  , KindSignatures
   , LambdaCase
   , OverloadedStrings
   , RankNTypes
-  , StandaloneDeriving
   , TypeInType
   , TypeOperators
 #-}
@@ -203,32 +199,32 @@ queryStatement q = UnsafeManipulation $ renderQuery q <> ";"
 INSERT statements
 -----------------------------------------}
 
--- | Insert multiple rows.
+-- | Insert multiple rws.
 --
 -- When a table is created, it contains no data. The first thing to do
 -- before a database can be of much use is to insert data. Data is
--- conceptually inserted one row at a time. Of course you can also insert
--- more than one row, but there is no way to insert less than one row.
--- Even if you know only some column values, a complete row must be created.
+-- conceptually inserted one rw at a time. Of course you can also insert
+-- more than one rw, but there is no way to insert less than one rw.
+-- Even if you know only some column values, a complete rw must be created.
 insertRows
   :: ( SOP.SListI columns
      , SOP.SListI results
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
-  -> [NP (Aliased (ColumnValue '[] params)) columns] -- ^ more rows to insert
+  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ rw to insert
+  -> [NP (Aliased (ColumnValue '[] params)) columns] -- ^ more rws to insert
   -> ConflictClause columns params
   -- ^ what to do in case of constraint conflict
   -> ReturningClause columns params results -- ^ results to return
   -> Manipulation schema params results
-insertRows tab row rows conflict returning = UnsafeManipulation $
+insertRows tab rw rws conflict returning = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderAlias tab
-    <+> parenthesized (renderCommaSeparated renderAliasPart row)
+    <+> parenthesized (renderCommaSeparated renderAliasPart rw)
     <+> "VALUES"
     <+> commaSeparated
           ( parenthesized
-          . renderCommaSeparated renderColumnValuePart <$> row:rows )
+          . renderCommaSeparated renderColumnValuePart <$> rw:rws )
     <> renderConflictClause conflict
     <> renderReturningClause returning
     where
@@ -239,41 +235,41 @@ insertRows tab row rows conflict returning = UnsafeManipulation $
         Default -> "DEFAULT"
         Set expression -> renderExpression expression
 
--- | Insert a single row.
+-- | Insert a single rw.
 insertRow
   :: ( SOP.SListI columns
      , SOP.SListI results
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
+  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ rw to insert
   -> ConflictClause columns params
   -- ^ what to do in case of constraint conflict
   -> ReturningClause columns params results -- ^ results to return
   -> Manipulation schema params results
-insertRow tab row = insertRows tab row []
+insertRow tab rw = insertRows tab rw []
 
--- | Insert multiple rows returning `Nil` and raising an error on conflicts.
+-- | Insert multiple rws returning `Nil` and raising an error on conflicts.
 insertRows_
   :: ( SOP.SListI columns
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
-  -> [NP (Aliased (ColumnValue '[] params)) columns] -- ^ more rows to insert
+  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ rw to insert
+  -> [NP (Aliased (ColumnValue '[] params)) columns] -- ^ more rws to insert
   -> Manipulation schema params '[]
-insertRows_ tab row rows =
-  insertRows tab row rows OnConflictDoRaise (Returning Nil)
+insertRows_ tab rw rws =
+  insertRows tab rw rws OnConflictDoRaise (Returning Nil)
 
--- | Insert a single row returning `Nil` and raising an error on conflicts.
+-- | Insert a single rw returning `Nil` and raising an error on conflicts.
 insertRow_
   :: ( SOP.SListI columns
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
+  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ rw to insert
   -> Manipulation schema params '[]
-insertRow_ tab row = insertRow tab row OnConflictDoRaise (Returning Nil)
+insertRow_ tab rw = insertRow tab rw OnConflictDoRaise (Returning Nil)
 
 -- | Insert a `Query`.
 insertQuery
@@ -304,11 +300,11 @@ insertQuery_
 insertQuery_ tab query =
   insertQuery tab query OnConflictDoRaise (Returning Nil)
 
--- | `ColumnValue`s are values to insert or update in a row
+-- | `ColumnValue`s are values to insert or update in a rw
 -- `Same` updates with the same value.
 -- `Default` inserts or updates with the @DEFAULT@ value
 -- `Set` a value to be an `Expression`, relative to the given
--- row for an update, and closed for an insert.
+-- rw for an update, and closed for an insert.
 data ColumnValue
   (columns :: RelationType)
   (params :: [NullityType])
@@ -321,14 +317,14 @@ data ColumnValue
       -> ColumnValue columns params (constraint :=> ty)
 
 -- | A `ReturningClause` computes and return value(s) based
--- on each row actually inserted, updated or deleted. This is primarily
+-- on each rw actually inserted, updated or deleted. This is primarily
 -- useful for obtaining values that were supplied by defaults, such as a
 -- serial sequence number. However, any expression using the table's columns
--- is allowed. Only rows that were successfully inserted or updated or
--- deleted will be returned. For example, if a row was locked
+-- is allowed. Only rws that were successfully inserted or updated or
+-- deleted will be returned. For example, if a rw was locked
 -- but not updated because an `OnConflictDoUpdate` condition was not satisfied,
--- the row will not be returned. `ReturningStar` will return all columns
--- in the row. Use @Returning Nil@ in the common case where no return
+-- the rw will not be returned. `ReturningStar` will return all columns
+-- in the rw. Use @Returning Nil@ in the common case where no return
 -- values are desired.
 data ReturningClause
   (columns :: ColumnsType)
@@ -356,8 +352,8 @@ renderReturningClause = \case
 
 -- | A `ConflictClause` specifies an action to perform upon a constraint
 -- violation. `OnConflictDoRaise` will raise an error.
--- `OnConflictDoNothing` simply avoids inserting a row.
--- `OnConflictDoUpdate` updates the existing row that conflicts with the row
+-- `OnConflictDoNothing` simply avoids inserting a rw.
+-- `OnConflictDoUpdate` updates the existing rw that conflicts with the rw
 -- proposed for insertion.
 data ConflictClause (columns :: ColumnsType) params where
   OnConflictDoRaise :: ConflictClause columns params
@@ -397,7 +393,7 @@ UPDATE statements
 -----------------------------------------}
 
 -- | An `update` command changes the values of the specified columns
--- in all rows that satisfy the condition.
+-- in all rws that satisfy the condition.
 update
   :: ( SOP.SListI columns
      , SOP.SListI results
@@ -407,7 +403,7 @@ update
   -> NP (Aliased (ColumnValue (ColumnsToRelation columns) params)) columns
   -- ^ modified values to replace old values
   -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
-  -- ^ condition under which to perform update on a row
+  -- ^ condition under which to perform update on a rw
   -> ReturningClause columns params results -- ^ results to return
   -> Manipulation schema params results
 update tab columns wh returning = UnsafeManipulation $
@@ -428,7 +424,7 @@ update tab columns wh returning = UnsafeManipulation $
       Set expression `As` column -> Just $
         renderAlias column <+> "=" <+> renderExpression expression
 
--- | Update a row returning `Nil`.
+-- | Update a rw returning `Nil`.
 update_
   :: ( SOP.SListI columns
      , Has tab schema ('Table table)
@@ -437,7 +433,7 @@ update_
   -> NP (Aliased (ColumnValue (ColumnsToRelation columns) params)) columns
   -- ^ modified values to replace old values
   -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
-  -- ^ condition under which to perform update on a row
+  -- ^ condition under which to perform update on a rw
   -> Manipulation schema params '[]
 update_ tab columns wh = update tab columns wh (Returning Nil)
 
@@ -445,14 +441,14 @@ update_ tab columns wh = update tab columns wh (Returning Nil)
 DELETE statements
 -----------------------------------------}
 
--- | Delete rows of a table.
+-- | Delete rws of a table.
 deleteFrom
   :: ( SOP.SListI results
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
   -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
-  -- ^ condition under which to delete a row
+  -- ^ condition under which to delete a rw
   -> ReturningClause columns params results -- ^ results to return
   -> Manipulation schema params results
 deleteFrom tab wh returning = UnsafeManipulation $
@@ -460,13 +456,13 @@ deleteFrom tab wh returning = UnsafeManipulation $
   <+> "WHERE" <+> renderExpression wh
   <> renderReturningClause returning
 
--- | Delete rows returning `Nil`.
+-- | Delete rws returning `Nil`.
 deleteFrom_
   :: ( Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
   -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
-  -- ^ condition under which to delete a row
+  -- ^ condition under which to delete a rw
   -> Manipulation schema params '[]
 deleteFrom_ tab wh = deleteFrom tab wh (Returning Nil)
 
@@ -484,11 +480,11 @@ WITH statements
 -- let
 --   manipulation :: Manipulation '["products" ::: 'Table ProductsTable, "products_deleted" ::: 'Table ProductsTable] '[ 'NotNull 'PGdate] '[]
 --   manipulation = with
---     (deleteFrom #products (#date .< param @1) ReturningStar `As` #deleted_rows :* Nil)
---     (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `As` #t)))))
+--     (deleteFrom #products (#date .< param @1) ReturningStar `As` #deleted_rws :* Nil)
+--     (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rws `As` #t)))))
 -- in renderManipulation manipulation
 -- :}
--- "WITH \"deleted_rows\" AS (DELETE FROM \"products\" WHERE (\"date\" < ($1 :: date)) RETURNING *) INSERT INTO \"products_deleted\" SELECT * FROM \"deleted_rows\" AS \"t\";"
+-- "WITH \"deleted_rws\" AS (DELETE FROM \"products\" WHERE (\"date\" < ($1 :: date)) RETURNING *) INSERT INTO \"products_deleted\" SELECT * FROM \"deleted_rws\" AS \"t\";"
 with
   :: SOP.SListI commons
   => NP (Aliased (Manipulation schema params)) commons

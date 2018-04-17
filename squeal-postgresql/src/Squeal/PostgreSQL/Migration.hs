@@ -90,9 +90,7 @@ Row 0
 -}
 
 {-# LANGUAGE
-    ScopedTypeVariables
-  , OverloadedStrings
-  , DataKinds
+    DataKinds
   , GADTs
   , LambdaCase
   , PolyKinds

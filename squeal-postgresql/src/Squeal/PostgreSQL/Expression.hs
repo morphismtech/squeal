@@ -11,21 +11,15 @@ Squeal expressions are the atoms used to build statements.
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE
     AllowAmbiguousTypes
-  , DataKinds
   , DeriveGeneric
-  , DeriveDataTypeable
   , FlexibleContexts
   , FlexibleInstances
   , FunctionalDependencies
-  , GADTs
   , GeneralizedNewtypeDeriving
   , LambdaCase
   , MagicHash
   , OverloadedStrings
-  , PolyKinds
-  , RankNTypes
   , ScopedTypeVariables
-  , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
   , TypeInType
@@ -46,8 +40,10 @@ module Squeal.PostgreSQL.Expression
   , isn'tNull
   , matchNull
   , nullIf
-    -- ** Arrays
+    -- ** Arrays, Enums, Composites
   , array
+  , label
+  , row
     -- ** Functions
   , unsafeBinaryOp
   , unsafeUnaryOp
@@ -329,10 +325,6 @@ label
   -> Expression relations grouping params (nullity ('PGenum labels))
 label (_ :: Alias label) = UnsafeExpression $
   fromString $ symbolVal (Proxy @label)
-
-type family Nulls tys where
-  Nulls '[] = '[]
-  Nulls (field ::: ty ': tys) = field ::: 'Null ty ': Nulls tys
 
 row
   :: (SListI (Nulls fields))

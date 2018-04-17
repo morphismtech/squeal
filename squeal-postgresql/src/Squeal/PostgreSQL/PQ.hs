@@ -20,15 +20,10 @@ of executing Squeal commands.
 
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE
-    DataKinds
-  , DefaultSignatures
+    DefaultSignatures
   , FunctionalDependencies
-  , PolyKinds
-  , DeriveFunctor
   , FlexibleContexts
   , FlexibleInstances
-  , MagicHash
-  , MultiParamTypeClasses
   , OverloadedStrings
   , RankNTypes
   , ScopedTypeVariables

@@ -9,23 +9,14 @@ Squeal queries.
 -}
 
 {-# LANGUAGE
-    DataKinds
-  , DeriveDataTypeable
-  , DeriveGeneric
-  , FlexibleContexts
-  , FlexibleInstances
+    DeriveGeneric
   , GADTs
   , GeneralizedNewtypeDeriving
-  , KindSignatures
   , LambdaCase
-  , MultiParamTypeClasses
   , OverloadedStrings
-  , ScopedTypeVariables
   , StandaloneDeriving
-  , TypeApplications
   , TypeInType
   , TypeOperators
-  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Query

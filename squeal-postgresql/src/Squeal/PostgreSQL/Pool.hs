@@ -9,8 +9,7 @@ A `MonadPQ` for pooled connections.
 -}
 
 {-# LANGUAGE
-    DataKinds
-  , DeriveFunctor
+    DeriveFunctor
   , FlexibleContexts
   , FlexibleInstances
   , MultiParamTypeClasses
