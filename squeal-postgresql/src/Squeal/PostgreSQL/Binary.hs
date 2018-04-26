@@ -211,18 +211,9 @@ instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
 instance
   ( IsEnumType y
   , Read y
-  -- , SameLabels (DatatypeInfoOf y) labels
-  --
-  -- uncomment above constraint when GHC issue #11671 is fixed
-  -- Allow labels starting with uppercase with OverloadedLabels
-  -- https://ghc.haskell.org/trac/ghc/ticket/11671?cversion=0&cnum_hist=8
+  , SameLabels (DatatypeInfoOf y) labels
   ) => FromValue ('PGenum labels) y where
-    fromValue _ =
-      let
-        upper "" = ""
-        upper (ch:chs) = toUpper ch : chs
-      in
-        Decoding.enum (readMaybe . upper . Strict.unpack)
+    fromValue _ = Decoding.enum (readMaybe . Strict.unpack)
 instance
   ( SListI fields
   , MapMaybes ys

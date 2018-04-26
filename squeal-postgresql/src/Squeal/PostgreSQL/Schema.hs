@@ -19,6 +19,7 @@ A type-level DSL for kinds of PostgreSQL types, constraints, and aliases.
   , GADTs
   , OverloadedStrings
   , RankNTypes
+  , ScopedTypeVariables
   , StandaloneDeriving
   , TypeApplications
   , TypeFamilyDependencies
@@ -93,6 +94,10 @@ module Squeal.PostgreSQL.Schema
   , SameLabels
   , MapMaybes (..)
   , Nulls
+  , IsPGlabel (..)
+  , PGlabel (..)
+  , renderLabel
+  , renderLabels
     -- * Schema
   , SchemumType (..)
   , SchemaType
@@ -618,3 +623,17 @@ type family With
     With '[] schema = schema
     With (alias ::: rel ': rels) schema =
       alias ::: 'View rel ': With rels schema
+
+class IsPGlabel (label :: Symbol) expr where label :: expr
+instance label ~ label'
+  => IsPGlabel label (PGlabel label') where label = PGlabel
+data PGlabel (label :: Symbol) = PGlabel
+
+renderLabel :: KnownSymbol label => proxy label -> ByteString
+renderLabel (_ :: proxy label) =
+  "\'" <> fromString (symbolVal (SOP.Proxy @label)) <> "\'"
+
+renderLabels
+  :: SOP.All KnownSymbol labels => SOP.NP PGlabel labels -> [ByteString]
+renderLabels = SOP.hcollapse
+  . SOP.hcmap (SOP.Proxy @KnownSymbol) (SOP.K . renderLabel)

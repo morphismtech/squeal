@@ -783,11 +783,11 @@ dropView v = UnsafeDefinition $ "DROP VIEW" <+> renderAlias v <> ";"
 createTypeEnum
   :: (KnownSymbol enum, SOP.All KnownSymbol labels)
   => Alias enum
-  -> NP Alias labels
+  -> NP PGlabel labels
   -> Definition schema (Create enum ('Typedef ('PGenum labels)) schema)
 createTypeEnum enum labels = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderAlias enum <+> "AS" <+>
-  parenthesized (commaSeparated (renderAliases labels)) <> ";"
+  parenthesized (commaSeparated (renderLabels labels)) <> ";"
 
 createType
   :: (KnownSymbol comp, SOP.SListI fields)

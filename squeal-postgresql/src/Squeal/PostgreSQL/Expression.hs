@@ -42,7 +42,6 @@ module Squeal.PostgreSQL.Expression
   , nullIf
     -- ** Arrays, Enums, Composites
   , array
-  , label
   , row
     -- ** Functions
   , unsafeBinaryOp
@@ -319,12 +318,10 @@ array
 array xs = UnsafeExpression $
   "ARRAY[" <> commaSeparated (renderExpression <$> xs) <> "]"
 
-label
-  :: (KnownSymbol label, label `In` labels)
-  => Alias label
-  -> Expression relations grouping params (nullity ('PGenum labels))
-label (_ :: Alias label) = UnsafeExpression $
-  fromString $ symbolVal (Proxy @label)
+instance (KnownSymbol label, label `In` labels) => IsPGlabel label
+  (Expression relations grouping params (nullity ('PGenum labels))) where
+  label = UnsafeExpression $
+    "\'" <> fromString (symbolVal (Proxy @label)) <> "\'"
 
 row
   :: (SListI (Nulls fields))
