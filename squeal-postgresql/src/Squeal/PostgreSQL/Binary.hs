@@ -40,7 +40,6 @@ module Squeal.PostgreSQL.Binary
 
 import BinaryParser
 import Data.Aeson hiding (Null)
-import Data.Char (toUpper)
 import Data.Int
 import Data.Kind
 import Data.Scientific

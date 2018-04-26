@@ -320,8 +320,7 @@ array xs = UnsafeExpression $
 
 instance (KnownSymbol label, label `In` labels) => IsPGlabel label
   (Expression relations grouping params (nullity ('PGenum labels))) where
-  label = UnsafeExpression $
-    "\'" <> fromString (symbolVal (Proxy @label)) <> "\'"
+  label = UnsafeExpression $ renderLabel (PGlabel @label)
 
 row
   :: (SListI (Nulls fields))
