@@ -9,7 +9,8 @@ Binary encoding and decoding between Haskell and PostgreSQL types.
 -}
 
 {-# LANGUAGE
-    DeriveFoldable
+    AllowAmbiguousTypes
+  , DeriveFoldable
   , DeriveFunctor
   , DeriveGeneric
   , DeriveTraversable
@@ -39,9 +40,11 @@ module Squeal.PostgreSQL.Binary
   ) where
 
 import BinaryParser
+import ByteString.StrictBuilder
 import Data.Aeson hiding (Null)
 import Data.Int
 import Data.Kind
+import Data.Monoid hiding (All)
 import Data.Scientific
 import Data.Time
 import Data.UUID.Types
@@ -119,13 +122,66 @@ instance (HasOid pg, ToParam x pg)
 instance
   ( IsEnumType x
   , Show x
-  -- , SameLabels (DatatypeInfoOf y) labels
-  --
-  -- uncomment above constraint when GHC issue #11671 is fixed
-  -- Allow labels starting with uppercase with OverloadedLabels
-  -- https://ghc.haskell.org/trac/ghc/ticket/11671?cversion=0&cnum_hist=8
+  , SameLabels (DatatypeInfoOf x) labels
   ) => ToParam x ('PGenum labels) where
     toParam = K . Encoding.text_strict . Strict.pack . show
+instance
+  ( SListI fields
+  , MapMaybes xs
+  , IsProductType x (Maybes xs)
+  , AllZip ToAliasedParam xs fields
+  , SameFields (DatatypeInfoOf x) fields
+  , All HasAliasedOid fields
+  ) => ToParam x ('PGcomposite fields) where
+    toParam =
+      let
+
+        encoders = htrans (Proxy @ToAliasedParam) toAliasedParam
+
+        composite
+          :: All HasAliasedOid row
+          => NP (K (Maybe Encoding.Encoding)) row
+          -> K Encoding.Encoding ('PGcomposite row)
+        composite fields = K $
+          -- <number of fields: 4 bytes>
+          -- [for each field]
+          --  <OID of field's type: sizeof(Oid) bytes>
+          --  [if value is NULL]
+          --    <-1: 4 bytes>
+          --  [else]
+          --    <length of value: 4 bytes>
+          --    <value: <length> bytes>
+          --  [end if]
+          -- [end for]
+          int32BE (fromIntegral (lengthSList (Proxy @xs))) <>
+            let
+              each
+                :: HasAliasedOid field
+                => K (Maybe Encoding.Encoding) field
+                -> Encoding.Encoding
+              each (K field :: K (Maybe Encoding.Encoding) field) =
+                word32BE (aliasedOid @field)
+                <> case field of
+                  Nothing -> int64BE (-1)
+                  Just value ->
+                    int32BE (fromIntegral (builderLength value))
+                    <> value
+            in
+              hcfoldMap (Proxy @HasAliasedOid) each fields
+
+      in
+        composite . encoders . unMaybes . unZ . unSOP . from
+
+class HasAliasedOid (field :: (Symbol, PGType)) where aliasedOid :: Word32
+instance HasOid ty => HasAliasedOid (alias ::: ty) where aliasedOid = oid @ty
+
+class ToAliasedParam (x :: Type) (field :: (Symbol, PGType)) where
+  toAliasedParam :: Maybe x -> K (Maybe Encoding.Encoding) field
+instance ToParam x ty => ToAliasedParam x (alias ::: ty) where
+  toAliasedParam = \case
+    Nothing -> K Nothing
+    Just x -> K . Just . unK $ toParam @x @ty x
+
 -- | A `ToColumnParam` constraint lifts the `ToParam` encoding 
 -- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s. You should
 -- not define instances of `ToColumnParam`, just use the provided instances.
@@ -231,6 +287,7 @@ instance
           (hpure Proxy :: NP Proxy pgs)
 
         composite fields = do
+        -- <number of fields: 4 bytes>
         -- [for each field]
         --  <OID of field's type: sizeof(Oid) bytes>
         --  [if value is NULL]
@@ -240,7 +297,6 @@ instance
         --    <value: <length> bytes>
         --  [end if]
         -- [end for]
-        -- <number of fields: 4 bytes>
           unitOfSize 4
           let
             each field = do
@@ -274,10 +330,10 @@ instance FromValue pg y
   => FromColumnValue (column ::: ('NotNull pg)) y where
     fromColumnValue = \case
       K Nothing -> error "fromColumnValue: saw NULL when expecting NOT NULL"
-      K (Just bytes) ->
+      K (Just bs) ->
         let
           errOrValue =
-            Decoding.valueParser (fromValue @pg @y Proxy) bytes
+            Decoding.valueParser (fromValue @pg @y Proxy) bs
           err str = error $ "fromColumnValue: " ++ Strict.unpack str
         in
           either err id errOrValue

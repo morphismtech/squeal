@@ -582,12 +582,15 @@ type family SameLabels
 class MapMaybes xs where
   type family Maybes (xs :: [Type]) = (mxs :: [Type]) | mxs -> xs
   maybes :: SOP.NP Maybe xs -> SOP.NP SOP.I (Maybes xs)
+  unMaybes :: SOP.NP SOP.I (Maybes xs) -> SOP.NP Maybe xs
 instance MapMaybes '[] where
   type Maybes '[] = '[]
   maybes SOP.Nil = SOP.Nil
+  unMaybes SOP.Nil = SOP.Nil
 instance MapMaybes xs => MapMaybes (x ': xs) where
   type Maybes (x ': xs) = Maybe x ': Maybes xs
   maybes (x SOP.:* xs) = SOP.I x SOP.:* maybes xs
+  unMaybes (SOP.I mx SOP.:* xs) = mx SOP.:* unMaybes xs
 
 type family Nulls tys where
   Nulls '[] = '[]

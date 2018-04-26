@@ -39,6 +39,7 @@ library
       aeson >= 1.2.4.0
     , base >= 4.10.1.0 && < 5.0
     , binary-parser
+    , bytestring-strict-builder
     , bytestring >= 0.10.8.2
     , deepseq >= 1.4.3.0
     , generics-sop >= 0.3.2.0
