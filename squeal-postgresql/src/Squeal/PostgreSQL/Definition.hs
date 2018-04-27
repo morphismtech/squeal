@@ -66,6 +66,7 @@ module Squeal.PostgreSQL.Definition
     -- * Types
   , createType
   , createTypeEnum
+  , createTypeEnumFromHaskell
   , dropType
   , ColumnTypeExpression (..)
   , notNull
@@ -788,6 +789,18 @@ createTypeEnum
 createTypeEnum enum labels = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderAlias enum <+> "AS" <+>
   parenthesized (commaSeparated (renderLabels labels)) <> ";"
+
+createTypeEnumFromHaskell
+  :: forall enum labels hask proxy schema
+   . ( KnownSymbol enum
+     , SOP.All KnownSymbol labels
+     , SOP.IsEnumType hask
+     , labels ~ DatatypeLabels (SOP.DatatypeInfoOf hask) )
+  => Alias enum
+  -> proxy hask
+  -> Definition schema (Create enum ('Typedef ('PGenum labels)) schema)
+createTypeEnumFromHaskell enum _ = createTypeEnum enum
+  (SOP.hpure label :: NP PGlabel labels)
 
 createType
   :: (KnownSymbol comp, SOP.SListI fields)

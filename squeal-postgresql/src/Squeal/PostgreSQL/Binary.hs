@@ -313,7 +313,7 @@ instance FromValue pg y => FromAliasedValue (alias ::: pg) y where
   fromAliasedValue _ = fromValue (Proxy @pg)
 
 -- | A `FromColumnValue` constraint lifts the `FromValue` parser
--- to a decoding of a @(Symbol, ColumnType)@ to a `Type`,
+-- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromColumnValue`, just use the provided instances.
 class FromColumnValue (colty :: (Symbol,NullityType)) (y :: Type) where

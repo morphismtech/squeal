@@ -98,6 +98,9 @@ module Squeal.PostgreSQL.Schema
   , PGlabel (..)
   , renderLabel
   , renderLabels
+  , LabelOf
+  , LabelsOf
+  , DatatypeLabels
     -- * Schema
   , SchemumType (..)
   , SchemaType
@@ -640,3 +643,13 @@ renderLabels
   :: SOP.All KnownSymbol labels => SOP.NP PGlabel labels -> [ByteString]
 renderLabels = SOP.hcollapse
   . SOP.hcmap (SOP.Proxy @KnownSymbol) (SOP.K . renderLabel)
+
+type family LabelOf (cons :: Type.ConstructorInfo) :: Symbol where
+  LabelOf ('Type.Constructor name) = name
+
+type family LabelsOf (conss :: [Type.ConstructorInfo]) :: [Symbol] where
+  LabelsOf '[] = '[]
+  LabelsOf (cons ': conss) = LabelOf cons ': LabelsOf conss
+
+type family DatatypeLabels (info :: Type.DatatypeInfo) :: [Symbol] where
+  DatatypeLabels ('Type.ADT _module _datatype constructors) = LabelsOf constructors
