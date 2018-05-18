@@ -35,6 +35,7 @@ module Squeal.PostgreSQL.Query
   , selectDistinctStar
   , selectDotStar
   , selectDistinctDotStar
+  , values
     -- * Table Expressions
   , TableExpression (..)
   , renderTableExpression
@@ -423,6 +424,25 @@ selectDistinctDotStar
 selectDistinctDotStar rel relations = UnsafeQuery $
   "SELECT DISTINCT" <+> renderAlias rel <> ".*"
   <+> renderTableExpression relations
+
+values
+  :: SListI cols
+  => NP (Aliased (Expression '[] 'Ungrouped params)) cols
+  -> [NP (Aliased (Expression '[] 'Ungrouped params)) cols]
+  -> Query schema params cols
+values rw rws = UnsafeQuery $ "SELECT * FROM"
+  <+> parenthesized (
+    "VALUES"
+    <+> commaSeparated
+        ( parenthesized
+        . renderCommaSeparated renderValuePart <$> rw:rws )
+    ) <+> "AS t"
+  <+> parenthesized (renderCommaSeparated renderAliasPart rw)
+  where
+    renderAliasPart, renderValuePart
+      :: Aliased (Expression '[] 'Ungrouped params) ty -> ByteString
+    renderAliasPart (_ `As` name) = renderAlias name
+    renderValuePart (value `As` _) = renderExpression value
 
 {-----------------------------------------
 Table Expressions

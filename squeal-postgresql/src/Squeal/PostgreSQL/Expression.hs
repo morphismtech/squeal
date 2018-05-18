@@ -32,8 +32,8 @@ module Squeal.PostgreSQL.Expression
     Expression (UnsafeExpression, renderExpression)
   , HasParameter (param)
     -- ** Null
-  , null_
-  , unNull
+  , HasNull (null_)
+  , HasNotNull (notNull)
   , coalesce
   , fromNull
   , isNull
@@ -221,26 +221,28 @@ instance
       relation ! column = UnsafeExpression $
         renderAlias relation <> "." <> renderAlias column
 
--- | analagous to `Nothing`
---
--- >>> renderExpression $ null_
--- "NULL"
-null_ :: Expression relations grouping params ('Null ty)
-null_ = UnsafeExpression "NULL"
+class HasNull expr where null_ :: expr
+instance HasNull (Expression rels grouping params ('Null ty)) where
+  -- | analagous to `Nothing`
+  --
+  -- >>> renderExpression $ null_
+  -- "NULL"
+  null_ = UnsafeExpression "NULL"
 
--- | analagous to `Just`
---
--- >>> renderExpression $ unNull true
--- "TRUE"
-unNull
-  :: Expression relations grouping params ('NotNull ty)
-  -- ^ not @NULL@
-  -> Expression relations grouping params ('Null ty)
-unNull = UnsafeExpression . renderExpression
+class HasNotNull expr where notNull :: expr
+instance HasNotNull
+  ( Expression rels grouping params ('NotNull ty)
+    ->
+    Expression rels grouping params ('Null ty) ) where
+  -- | analagous to `Just`
+  --
+  -- >>> renderExpression $ notNull true
+  -- "TRUE"
+  notNull = UnsafeExpression . renderExpression
 
 -- | return the leftmost value which is not NULL
 --
--- >>> renderExpression $ coalesce [null_, unNull true] false
+-- >>> renderExpression $ coalesce [null_, notNull true] false
 -- "COALESCE(NULL, TRUE, FALSE)"
 coalesce
   :: [Expression relations grouping params ('Null ty)]
@@ -309,7 +311,7 @@ nullIf
 nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
   (renderExpression x <> ", " <> renderExpression y)
 
--- | >>> renderExpression $ array [null_, unNull false, unNull true]
+-- | >>> renderExpression $ array [null_, notNull false, notNull true]
 -- "ARRAY[NULL, FALSE, TRUE]"
 array
   :: [Expression relations grouping params ('Null ty)]
@@ -628,7 +630,7 @@ ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 -- | Comparison operations like `.==`, `./=`, `.>`, `.>=`, `.<` and `.<=`
 -- will produce @NULL@s if one of their arguments is @NULL@.
 --
--- >>> renderExpression $ unNull true .== null_
+-- >>> renderExpression $ notNull true .== null_
 -- "(TRUE = NULL)"
 (.==)
   :: Expression relations grouping params (nullity ty) -- ^ lhs
@@ -637,7 +639,7 @@ ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 (.==) = unsafeBinaryOp "="
 infix 4 .==
 
--- | >>> renderExpression $ unNull true ./= null_
+-- | >>> renderExpression $ notNull true ./= null_
 -- "(TRUE <> NULL)"
 (./=)
   :: Expression relations grouping params (nullity ty) -- ^ lhs
@@ -646,7 +648,7 @@ infix 4 .==
 (./=) = unsafeBinaryOp "<>"
 infix 4 ./=
 
--- | >>> renderExpression $ unNull true .>= null_
+-- | >>> renderExpression $ notNull true .>= null_
 -- "(TRUE >= NULL)"
 (.>=)
   :: Expression relations grouping params (nullity ty) -- ^ lhs
@@ -655,7 +657,7 @@ infix 4 ./=
 (.>=) = unsafeBinaryOp ">="
 infix 4 .>=
 
--- | >>> renderExpression $ unNull true .< null_
+-- | >>> renderExpression $ notNull true .< null_
 -- "(TRUE < NULL)"
 (.<)
   :: Expression relations grouping params (nullity ty) -- ^ lhs
@@ -664,7 +666,7 @@ infix 4 .>=
 (.<) = unsafeBinaryOp "<"
 infix 4 .<
 
--- | >>> renderExpression $ unNull true .<= null_
+-- | >>> renderExpression $ notNull true .<= null_
 -- "(TRUE <= NULL)"
 (.<=)
   :: Expression relations grouping params (nullity ty) -- ^ lhs
@@ -673,7 +675,7 @@ infix 4 .<
 (.<=) = unsafeBinaryOp "<="
 infix 4 .<=
 
--- | >>> renderExpression $ unNull true .> null_
+-- | >>> renderExpression $ notNull true .> null_
 -- "(TRUE > NULL)"
 (.>)
   :: Expression relations grouping params (nullity ty) -- ^ lhs
