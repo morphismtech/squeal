@@ -138,7 +138,7 @@ import Control.Category
 import Control.DeepSeq
 import Data.ByteString (ByteString)
 import Data.Function ((&))
-import Data.Monoid hiding (All)
+import Data.Semigroup
 import Data.Ratio
 import Data.String
 import Generics.SOP hiding (from)
@@ -338,10 +338,14 @@ instance Has field fields ty => IsLabel field
       parenthesized (renderExpression expr) <> "." <>
         fromString (symbolVal (Proxy @field))
 
+instance Semigroup
+  (Expression relations grouping params (nullity ('PGvararray ty))) where
+    (<>) = unsafeBinaryOp "||"
+
 instance Monoid
   (Expression relations grouping params (nullity ('PGvararray ty))) where
     mempty = array []
-    mappend = unsafeBinaryOp "||"
+    mappend = (<>)
 
 -- | >>> renderExpression @_ @_ @'[_] $ greatest currentTimestamp [param @1]
 -- "GREATEST(CURRENT_TIMESTAMP, ($1 :: timestamp with time zone))"
@@ -734,10 +738,14 @@ instance IsString
           '\\' -> "\\\\"
           c -> [c]
 
+instance Semigroup
+  (Expression relations grouping params (nullity 'PGtext)) where
+    (<>) = unsafeBinaryOp "||"
+
 instance Monoid
   (Expression relations grouping params (nullity 'PGtext)) where
     mempty = fromString ""
-    mappend = unsafeBinaryOp "||"
+    mappend = (<>)
 
 -- | >>> renderExpression $ lower "ARRRGGG"
 -- "lower(E'ARRRGGG')"
