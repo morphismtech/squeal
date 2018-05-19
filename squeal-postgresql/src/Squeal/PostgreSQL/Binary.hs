@@ -53,7 +53,6 @@ import Data.Word
 import Generics.SOP
 import GHC.TypeLits
 import Network.IP.Addr
-import Text.Read (readMaybe)
 
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict hiding (pack, unpack)
@@ -126,18 +125,17 @@ instance
   ) => ToParam x ('PGenum labels) where
     toParam =
       let
-        gcons :: forall y. (HasDatatypeInfo y, Generic y) => y -> String
-        gcons = gconstructor (constructorInfo (datatypeInfo (Proxy @y))) . from
-
-        gconstructor :: NP ConstructorInfo xs -> SOP I xs -> String
-        gconstructor Nil _ = ""
-        gconstructor (Constructor name :* _) (SOP (Z _)) = name
-        gconstructor (Infix name _ _ :* _) (SOP (Z _)) = name
-        gconstructor (Record name _ :* _) (SOP (Z _)) = name
-        gconstructor (_ :* constructors) (SOP (S xs)) =
-          gconstructor constructors (SOP xs)
+        gshowConstructor :: NP ConstructorInfo xss -> SOP I xss -> String
+        gshowConstructor Nil _ = ""
+        gshowConstructor (constructor :* _) (SOP (Z _)) =
+          constructorName constructor
+        gshowConstructor (_ :* constructors) (SOP (S xs)) =
+          gshowConstructor constructors (SOP xs)
       in
-        K . Encoding.text_strict . Strict.pack . gcons
+        K . Encoding.text_strict
+        . Strict.pack
+        . gshowConstructor (constructorInfo (datatypeInfo (Proxy @x)))
+        . from
 instance
   ( SListI fields
   , MapMaybes xs
@@ -278,10 +276,27 @@ instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
       (Decoding.nullableValueArray (fromValue (Proxy @pg))))
 instance
   ( IsEnumType y
-  , Read y
+  , HasDatatypeInfo y
   , SameLabels (DatatypeInfoOf y) labels
   ) => FromValue ('PGenum labels) y where
-    fromValue _ = Decoding.enum (readMaybe . Strict.unpack)
+    fromValue _ = 
+      let
+        greadConstructor
+          :: All ((~) '[]) xss
+          => NP ConstructorInfo xss
+          -> String
+          -> Maybe (SOP I xss)
+        greadConstructor Nil _ = Nothing
+        greadConstructor (constructor :* constructors) name =
+          if name == constructorName constructor
+            then Just (SOP (Z Nil))
+            else SOP . S . unSOP <$> greadConstructor constructors name
+      in
+        Decoding.enum
+        $ fmap to
+        . greadConstructor (constructorInfo (datatypeInfo (Proxy @y)))
+        . Strict.unpack
+
 instance
   ( SListI fields
   , MapMaybes ys
