@@ -32,12 +32,12 @@ module Squeal.PostgreSQL.Expression
     Expression (UnsafeExpression, renderExpression)
   , HasParameter (param)
     -- ** Null
-  , HasNull (null_)
-  , HasNotNull (notNull)
+  , null_
+  , notNull
   , coalesce
   , fromNull
   , isNull
-  , isn'tNull
+  , isNotNull
   , matchNull
   , nullIf
     -- ** Arrays, Enums, Composites
@@ -221,24 +221,21 @@ instance
       relation ! column = UnsafeExpression $
         renderAlias relation <> "." <> renderAlias column
 
-class HasNull expr where null_ :: expr
-instance HasNull (Expression rels grouping params ('Null ty)) where
-  -- | analagous to `Nothing`
-  --
-  -- >>> renderExpression $ null_
-  -- "NULL"
-  null_ = UnsafeExpression "NULL"
+-- | analagous to `Nothing`
+--
+-- >>> renderExpression $ null_
+-- "NULL"
+null_ :: Expression rels grouping params ('Null ty)
+null_ = UnsafeExpression "NULL"
 
-class HasNotNull expr where notNull :: expr
-instance HasNotNull
-  ( Expression rels grouping params ('NotNull ty)
-    ->
-    Expression rels grouping params ('Null ty) ) where
-  -- | analagous to `Just`
-  --
-  -- >>> renderExpression $ notNull true
-  -- "TRUE"
-  notNull = UnsafeExpression . renderExpression
+-- | analagous to `Just`
+--
+-- >>> renderExpression $ notNull true
+-- "TRUE"
+notNull
+  :: Expression rels grouping params ('NotNull ty)
+  -> Expression rels grouping params ('Null ty)
+notNull = UnsafeExpression . renderExpression
 
 -- | return the leftmost value which is not NULL
 --
@@ -273,13 +270,13 @@ isNull
   -> Condition relations grouping params
 isNull x = UnsafeExpression $ renderExpression x <+> "IS NULL"
 
--- | >>> renderExpression $ null_ & isn'tNull
+-- | >>> renderExpression $ null_ & isNotNull
 -- "NULL IS NOT NULL"
-isn'tNull
+isNotNull
   :: Expression relations grouping params ('Null ty)
   -- ^ possibly @NULL@
   -> Condition relations grouping params
-isn'tNull x = UnsafeExpression $ renderExpression x <+> "IS NOT NULL"
+isNotNull x = UnsafeExpression $ renderExpression x <+> "IS NOT NULL"
 
 -- | analagous to `maybe` using @IS NULL@
 --

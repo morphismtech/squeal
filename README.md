@@ -127,12 +127,12 @@ let
   setup = 
    createTable #users
      ( serial `As` #id :*
-       (text & notNull) `As` #name :* Nil )
+       (text & hasNotNull) `As` #name :* Nil )
      ( primaryKey #id `As` #pk_users :* Nil ) >>>
    createTable #emails
      ( serial `As` #id :*
-       (int & notNull) `As` #user_id :*
-       (text & null_) `As` #email :* Nil )
+       (int & hasNotNull) `As` #user_id :*
+       (text & hasNull) `As` #email :* Nil )
      ( primaryKey #id `As` #pk_emails :*
        foreignKey #user_id #users #id
          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )

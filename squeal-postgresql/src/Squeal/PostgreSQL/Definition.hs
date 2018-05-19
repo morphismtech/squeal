@@ -69,6 +69,8 @@ module Squeal.PostgreSQL.Definition
   , createTypeEnumFromHaskell
   , dropType
   , ColumnTypeExpression (..)
+  , hasNull
+  , hasNotNull
   , default_
   , serial2
   , smallserial
@@ -120,7 +122,7 @@ CREATE statements
 -- >>> :set -XOverloadedLabels
 -- >>> :{
 -- renderDefinition $
---   createTable #tab ((int & null_) `As` #a :* (real & null_) `As` #b :* Nil) Nil
+--   createTable #tab ((int & hasNull) `As` #a :* (real & hasNull) `As` #b :* Nil) Nil
 -- :}
 -- "CREATE TABLE \"tab\" (\"a\" int NULL, \"b\" real NULL);"
 createTable
@@ -147,7 +149,7 @@ createTable tab columns constraints = UnsafeDefinition $
 -- >>> type Schema = '["tab" ::: 'Table Table]
 -- >>> :{
 -- renderDefinition
---   (createTableIfNotExists #tab ((int & null_) `As` #a :* (real & null_) `As` #b :* Nil) Nil :: Definition Schema Schema)
+--   (createTableIfNotExists #tab ((int & hasNull) `As` #a :* (real & hasNull) `As` #b :* Nil) Nil :: Definition Schema Schema)
 -- :}
 -- "CREATE TABLE IF NOT EXISTS \"tab\" (\"a\" int NULL, \"b\" real NULL);"
 createTableIfNotExists
@@ -229,8 +231,8 @@ newtype TableConstraintExpression
 -- let
 --   definition :: Definition '[] Schema
 --   definition = createTable #tab
---     ( (int & notNull) `As` #a :*
---       (int & notNull) `As` #b :* Nil )
+--     ( (int & hasNotNull) `As` #a :*
+--       (int & hasNotNull) `As` #b :* Nil )
 --     ( check (#a :* #b :* Nil) (#a .> #b) `As` #inequality :* Nil )
 -- :}
 --
@@ -260,8 +262,8 @@ check _cols condition = UnsafeTableConstraintExpression $
 -- let
 --   definition :: Definition '[] Schema
 --   definition = createTable #tab
---     ( (int & null_) `As` #a :*
---       (int & null_) `As` #b :* Nil )
+--     ( (int & hasNull) `As` #a :*
+--       (int & hasNull) `As` #b :* Nil )
 --     ( unique (#a :* #b :* Nil) `As` #uq_a_b :* Nil )
 -- :}
 --
@@ -292,7 +294,7 @@ unique columns = UnsafeTableConstraintExpression $
 --   definition :: Definition '[] Schema
 --   definition = createTable #tab
 --     ( serial `As` #id :*
---       (text & notNull) `As` #name :* Nil )
+--       (text & hasNotNull) `As` #name :* Nil )
 --     ( primaryKey #id `As` #pk_id :* Nil )
 -- :}
 --
@@ -336,12 +338,12 @@ primaryKey columns = UnsafeTableConstraintExpression $
 --   setup = 
 --    createTable #users
 --      ( serial `As` #id :*
---        (text & notNull) `As` #name :* Nil )
+--        (text & hasNotNull) `As` #name :* Nil )
 --      ( primaryKey #id `As` #pk_users :* Nil ) >>>
 --    createTable #emails
 --      ( serial `As` #id :*
---        (int & notNull) `As` #user_id :*
---        (text & null_) `As` #email :* Nil )
+--        (int & hasNotNull) `As` #user_id :*
+--        (text & hasNull) `As` #email :* Nil )
 --      ( primaryKey #id `As` #pk_emails :*
 --        foreignKey #user_id #users #id
 --          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
@@ -370,8 +372,8 @@ primaryKey columns = UnsafeTableConstraintExpression $
 --   setup = 
 --    createTable #employees
 --      ( serial `As` #id :*
---        (text & notNull) `As` #name :*
---        (integer & null_) `As` #employer_id :* Nil )
+--        (text & hasNotNull) `As` #name :*
+--        (integer & hasNull) `As` #employer_id :* Nil )
 --      ( primaryKey #id `As` #employees_pk :*
 --        foreignKey #employer_id #employees #id
 --          OnDeleteCascade OnUpdateCascade `As` #employees_employer_fk :* Nil )
@@ -573,7 +575,7 @@ class AddColumn ty where
   --     '["tab" ::: 'Table ('[] :=>
   --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
   --         , "col2" ::: 'Def :=> 'Null 'PGtext ])]
-  --   definition = alterTable #tab (addColumn #col2 (text & null_ & default_ "foo"))
+  --   definition = alterTable #tab (addColumn #col2 (text & hasNull & default_ "foo"))
   -- in renderDefinition definition
   -- :}
   -- "ALTER TABLE \"tab\" ADD COLUMN \"col2\" text NULL DEFAULT E'foo';"
@@ -585,7 +587,7 @@ class AddColumn ty where
   --     '["tab" ::: 'Table ('[] :=>
   --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
   --         , "col2" ::: 'NoDef :=> 'Null 'PGtext ])]
-  --   definition = alterTable #tab (addColumn #col2 (text & null_))
+  --   definition = alterTable #tab (addColumn #col2 (text & hasNull))
   -- in renderDefinition definition
   -- :}
   -- "ALTER TABLE \"tab\" ADD COLUMN \"col2\" text NULL;"
@@ -744,7 +746,7 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGnumeric])]
 --   definition =
---     alterTable #tab (alterColumn #col (alterType (numeric & notNull)))
+--     alterTable #tab (alterColumn #col (alterType (numeric & hasNotNull)))
 -- in renderDefinition definition
 -- :}
 -- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" TYPE numeric NOT NULL;"
@@ -824,18 +826,17 @@ instance (Has alias schema ('Typedef ty))
   => IsLabel alias (ColumnTypeExpression schema ('NoDef :=> 'NotNull ty)) where
     fromLabel = UnsafeColumnTypeExpression (renderAlias (fromLabel @alias))
 
-instance HasNull
-  ( TypeExpression ty
-    -> ColumnTypeExpression schema ('NoDef :=> 'Null ty) ) where
-  null_ ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
+hasNull
+  :: TypeExpression ty
+  -> ColumnTypeExpression schema ('NoDef :=> 'Null ty)
+hasNull ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
 
-instance HasNotNull
-  ( TypeExpression ty
-    ->
-    ColumnTypeExpression schema (def :=> 'NotNull ty) ) where
-  -- | used in `createTable` commands as a column constraint to ensure
-  -- @NULL@ is not present
-  notNull ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
+-- | used in `createTable` commands as a column constraint to ensure
+-- @NULL@ is not present
+hasNotNull
+  :: TypeExpression ty
+  -> ColumnTypeExpression schema (def :=> 'NotNull ty)
+hasNotNull ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
 
 -- | used in `createTable` commands as a column constraint to give a default
 default_
