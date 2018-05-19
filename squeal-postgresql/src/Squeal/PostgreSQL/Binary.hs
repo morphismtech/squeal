@@ -121,10 +121,23 @@ instance (HasOid pg, ToParam x pg)
       (oid @pg) (unK . toParam @x @pg)
 instance
   ( IsEnumType x
-  , Show x
+  , HasDatatypeInfo x
   , SameLabels (DatatypeInfoOf x) labels
   ) => ToParam x ('PGenum labels) where
-    toParam = K . Encoding.text_strict . Strict.pack . show
+    toParam =
+      let
+        gcons :: forall y. (HasDatatypeInfo y, Generic y) => y -> String
+        gcons = gconstructor (constructorInfo (datatypeInfo (Proxy @y))) . from
+
+        gconstructor :: NP ConstructorInfo xs -> SOP I xs -> String
+        gconstructor Nil _ = ""
+        gconstructor (Constructor name :* _) (SOP (Z _)) = name
+        gconstructor (Infix name _ _ :* _) (SOP (Z _)) = name
+        gconstructor (Record name _ :* _) (SOP (Z _)) = name
+        gconstructor (_ :* constructors) (SOP (S xs)) =
+          gconstructor constructors (SOP xs)
+      in
+        K . Encoding.text_strict . Strict.pack . gcons
 instance
   ( SListI fields
   , MapMaybes xs
