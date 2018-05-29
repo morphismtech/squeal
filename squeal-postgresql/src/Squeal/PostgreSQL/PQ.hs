@@ -395,7 +395,8 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
         let
           toParam' bytes = (LibPQ.invalidOid,bytes,LibPQ.Binary)
           params' = fmap (fmap toParam') (hcollapse (toParams @x @ps params))
-        resultMaybe <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
+          q' = q <> ";"
+        resultMaybe <- liftBase $ LibPQ.execParams conn q' params' LibPQ.Binary
         case resultMaybe of
           Nothing -> error
             "manipulateParams: LibPQ.execParams returned no results"

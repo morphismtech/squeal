@@ -127,9 +127,9 @@
 -- :}
 --
 -- >>> renderManipulation insertUser
--- "INSERT INTO \"users\" (\"id\", \"name\") VALUES (DEFAULT, ($1 :: text)) ON CONFLICT DO NOTHING RETURNING \"id\" AS \"fromOnly\";"
+-- "INSERT INTO \"users\" (\"id\", \"name\") VALUES (DEFAULT, ($1 :: text)) ON CONFLICT DO NOTHING RETURNING \"id\" AS \"fromOnly\""
 -- >>> renderManipulation insertEmail
--- "INSERT INTO \"emails\" (\"id\", \"user_id\", \"email\") VALUES (DEFAULT, ($1 :: int4), ($2 :: text)) ON CONFLICT DO NOTHING;"
+-- "INSERT INTO \"emails\" (\"id\", \"user_id\", \"email\") VALUES (DEFAULT, ($1 :: int4), ($2 :: text)) ON CONFLICT DO NOTHING"
 --
 -- Next we write a `Query` to retrieve users from the database. We're not
 -- interested in the ids here, just the usernames and email addresses. We
