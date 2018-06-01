@@ -695,9 +695,9 @@ type family PG (hask :: Type) = (pg :: PGType) | pg -> hask where
   PG (NetAddr IP) = 'PGinet
   PG Value = 'PGjson
 
-type family PGenumWith (hask :: Type) :: PGType where
+type family PGenumWith (hask :: Type) :: [Type.ConstructorName] where
   PGenumWith hask =
-    'PGenum (ConstructorNamesOf (ConstructorsOf (SOP.DatatypeInfoOf hask)))
+    ConstructorNamesOf (ConstructorsOf (SOP.DatatypeInfoOf hask))
 
 type family PGcompositeWith (hask :: Type) :: PGType where
   PGcompositeWith hask =

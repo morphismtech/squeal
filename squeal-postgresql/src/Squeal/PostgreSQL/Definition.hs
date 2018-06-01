@@ -9,7 +9,8 @@ Squeal data definition language.
 -}
 
 {-# LANGUAGE
-    ConstraintKinds
+    AllowAmbiguousTypes
+  , ConstraintKinds
   , DeriveGeneric
   , FlexibleContexts
   , FlexibleInstances
@@ -793,25 +794,14 @@ createTypeEnum enum labels = UnsafeDefinition $
 
 class
   ( SOP.IsEnumType hask
-  , PGenumWith hask ~ 'PGenum labels
+  , SOP.All KnownSymbol (PGenumWith hask)
   ) => HasPGenum hask where
   createTypeEnumWith
     :: KnownSymbol enum
     => Alias enum
-    -> Definition schema (Create enum ('Typedef (PGenumWith hask)) schema)
+    -> Definition schema (Create enum ('Typedef ('PGenum (PGenumWith hask))) schema)
   createTypeEnumWith enum = createTypeEnum enum
-    (SOP.hpure label :: NP PGlabel labels)
--- createTypeEnumWith
---   :: forall enum labels hask proxy schema
---    . ( KnownSymbol enum
---      , SOP.All KnownSymbol labels
---      , SOP.IsEnumType hask
---      , labels ~ DatatypeLabels (SOP.DatatypeInfoOf hask) )
---   => Alias enum
---   -> proxy hask
---   -> Definition schema (Create enum ('Typedef ('PGenum labels)) schema)
--- createTypeEnumWith enum _ = createTypeEnum enum
---   (SOP.hpure label :: NP PGlabel labels)
+    (SOP.hpure label :: NP PGlabel (PGenumWith hask))
 
 createType
   :: (KnownSymbol comp, SOP.SListI fields)
