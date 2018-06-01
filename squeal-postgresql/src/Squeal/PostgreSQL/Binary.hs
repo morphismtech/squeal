@@ -121,7 +121,7 @@ instance (HasOid pg, ToParam x pg)
 instance
   ( IsEnumType x
   , HasDatatypeInfo x
-  , SameLabels (DatatypeInfoOf x) labels
+  , LabelsWith x ~ labels
   ) => ToParam x ('PGenum labels) where
     toParam =
       let
@@ -141,7 +141,7 @@ instance
   , MapMaybes xs
   , IsProductType x (Maybes xs)
   , AllZip ToAliasedParam xs fields
-  , SameFields (DatatypeInfoOf x) fields
+  , FieldNamesWith x ~ AliasesOf fields
   , All HasAliasedOid fields
   ) => ToParam x ('PGcomposite fields) where
     toParam =
@@ -277,7 +277,7 @@ instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
 instance
   ( IsEnumType y
   , HasDatatypeInfo y
-  , SameLabels (DatatypeInfoOf y) labels
+  , LabelsWith y ~ labels
   ) => FromValue ('PGenum labels) y where
     fromValue _ = 
       let
@@ -302,7 +302,7 @@ instance
   , MapMaybes ys
   , IsProductType y (Maybes ys)
   , AllZip FromAliasedValue fields ys
-  , SameFields (DatatypeInfoOf y) fields
+  , FieldNamesWith y ~ AliasesOf fields
   ) => FromValue ('PGcomposite fields) y where
     fromValue =
       let
@@ -395,7 +395,7 @@ instance
   ( SListI results
   , IsProductType y ys
   , AllZip FromColumnValue results ys
-  , SameFields (DatatypeInfoOf y) results
+  , FieldNamesWith y ~ AliasesOf results
   ) => FromRow results y where
     fromRow
       = to . SOP . Z . htrans (Proxy @FromColumnValue) (I . fromColumnValue)

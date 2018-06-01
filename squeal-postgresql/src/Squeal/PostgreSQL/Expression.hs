@@ -1045,7 +1045,7 @@ newtype Table
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance
   ( Has alias schema ('Table table)
-  , relation ~ ColumnsToRelation (TableToColumns table)
+  , relation ~ TableToRelation table
   ) => IsLabel alias (Table schema relation) where
     fromLabel = UnsafeTable $ renderAlias (Alias @alias)
 

@@ -40,6 +40,9 @@ module Squeal.PostgreSQL.Schema
   , NilRelation
   , RelationsType
   , TableType
+    -- * Schema
+  , SchemumType (..)
+  , SchemaType
     -- * Grouping
   , Grouping (..)
   , GroupedBy
@@ -66,6 +69,7 @@ module Squeal.PostgreSQL.Schema
   , IsQualified (..)
     -- * Type Families
   , Join
+  , With
   , Create
   , Drop
   , Alter
@@ -84,32 +88,27 @@ module Squeal.PostgreSQL.Schema
   , NullifyRelation
   , NullifyRelations
   , ColumnsToRelation
-  , RelationToColumns
   , TableToColumns
+  , TableToRelation
   , ConstraintInvolves
   , DropIfConstraintsInvolve
     -- * Generics
-  , SameField
-  , SameFields
-  , SameLabel
-  , SameLabels
   , MapMaybes (..)
   , Nulls
+    -- * Enum Labels
   , IsPGlabel (..)
   , PGlabel (..)
   , renderLabel
   , renderLabels
   , LabelOf
   , LabelsOf
-  , DatatypeLabels
-    -- * Schema
-  , SchemumType (..)
-  , SchemaType
-  , With
-    -- * STUFF
+    -- * Embedding
   , PG
-  , PGenumWith
-  , PGcompositeWith
+  , EnumWith
+  , LabelsWith
+  , CompositeWith
+  , FieldNamesWith
+  , FieldTypesWith
   , ConstructorsOf
   , ConstructorNameOf
   , ConstructorNamesOf
@@ -118,28 +117,30 @@ module Squeal.PostgreSQL.Schema
   , FieldNamesOf
   , FieldTypeOf
   , FieldTypesOf
-  , RecordFieldTypesOf
+  , RecordCodeOf
   ) where
 
 import Control.DeepSeq
 import Data.Aeson (Value)
 import Data.ByteString (ByteString)
-import Data.Int
+import Data.Int (Int16, Int32, Int64)
 import Data.Kind
 import Data.Monoid hiding (All)
-import Data.Scientific
+import Data.Scientific (Scientific)
 import Data.String
 import Data.Text (Text)
 import Data.Time
-import Data.Word
+import Data.Word (Word16, Word32, Word64)
 import Data.Type.Bool
 import Data.UUID.Types (UUID)
+import Generics.SOP
 import GHC.OverloadedLabels
 import GHC.TypeLits
 import Network.IP.Addr
 
+import qualified Data.ByteString.Lazy as Lazy
+import qualified Data.Text.Lazy as Lazy
 import qualified GHC.Generics as GHC
-import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Type.Metadata as Type
 
 import Squeal.PostgreSQL.Render
@@ -323,15 +324,12 @@ type family ColumnsToRelation (columns :: ColumnsType) :: RelationType where
   ColumnsToRelation (column ::: constraint :=> ty ': columns) =
     column ::: ty ': ColumnsToRelation columns
 
--- | `RelationToColumns` adds `'NoDef` column constraints.
-type family RelationToColumns (relation :: RelationType) :: ColumnsType where
-  RelationToColumns '[] = '[]
-  RelationToColumns (column ::: ty ': columns) =
-    column ::: 'NoDef :=> ty ': RelationToColumns columns
-
 -- | `TableToColumns` removes table constraints.
 type family TableToColumns (table :: TableType) :: ColumnsType where
   TableToColumns (constraints :=> columns) = columns
+
+type family TableToRelation (table :: TableType) :: RelationType where
+  TableToRelation tab = ColumnsToRelation (TableToColumns tab)
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
@@ -364,8 +362,8 @@ data Alias (alias :: Symbol) = Alias
   deriving (Eq,GHC.Generic,Ord,Show,NFData)
 instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
-instance aliases ~ '[alias] => IsLabel alias (SOP.NP Alias aliases) where
-  fromLabel = fromLabel SOP.:* SOP.Nil
+instance aliases ~ '[alias] => IsLabel alias (NP Alias aliases) where
+  fromLabel = fromLabel :* Nil
 
 -- | >>> renderAlias #jimbob
 -- "\"jimbob\""
@@ -376,9 +374,9 @@ renderAlias = doubleQuoted . fromString . symbolVal
 -- >>> renderAliases (#jimbob :* #kandi :* Nil)
 -- ["\"jimbob\"","\"kandi\""]
 renderAliases
-  :: SOP.All KnownSymbol aliases => SOP.NP Alias aliases -> [ByteString]
-renderAliases = SOP.hcollapse
-  . SOP.hcmap (SOP.Proxy @KnownSymbol) (SOP.K . renderAlias)
+  :: All KnownSymbol aliases => NP Alias aliases -> [ByteString]
+renderAliases = hcollapse
+  . hcmap (Proxy @KnownSymbol) (K . renderAlias)
 
 -- | The `As` operator is used to name an expression. `As` is like a demoted
 -- version of `:::`.
@@ -413,26 +411,29 @@ type family AliasesOf aliaseds where
   AliasesOf '[] = '[]
   AliasesOf (alias ::: ty ': tys) = alias ': AliasesOf tys
 
-class SOP.All KnownSymbol ns => ZipAliased ns xs where
+class
+  ( SListI (ZipAs ns xs)
+  , All KnownSymbol ns
+  ) => ZipAliased ns xs where
 
   type family ZipAs
     (ns :: [Symbol]) (xs :: [k]) = (zs :: [(Symbol,k)]) | zs -> ns xs
 
-  zipAliases
-    :: SOP.NP Alias ns
-    -> SOP.NP expr xs
-    -> SOP.NP (Aliased expr) (ZipAs ns xs)
+  zipAs
+    :: NP Alias ns
+    -> NP expr xs
+    -> NP (Aliased expr) (ZipAs ns xs)
 
 instance ZipAliased '[] '[] where
   type ZipAs '[] '[] = '[]
-  zipAliases SOP.Nil SOP.Nil = SOP.Nil
+  zipAs Nil Nil = Nil
 
 instance
   ( KnownSymbol n
   , ZipAliased ns xs
   ) => ZipAliased (n ': ns) (x ': xs) where
   type ZipAs (n ': ns) (x ': xs) = '(n,x) ': ZipAs ns xs
-  zipAliases (n SOP.:* ns) (x SOP.:* xs) = x `As` n SOP.:* zipAliases ns xs
+  zipAs (n :* ns) (x :* xs) = x `As` n :* zipAs ns xs
 
 -- | @HasUnique alias fields field@ is a constraint that proves that
 -- @fields@ is a singleton of @alias ::: field@.
@@ -449,7 +450,7 @@ instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
   => Has alias (field' ': fields) field
 
 class
-  ( SOP.All KnownSymbol aliases
+  ( All KnownSymbol aliases
   ) => HasAll
     (aliases :: [Symbol])
     (fields :: [(Symbol,kind)])
@@ -592,50 +593,18 @@ type family Rename alias0 alias1 xs where
   Rename alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
   Rename alias0 alias1 (x ': xs) = x ': Rename alias0 alias1 xs
 
--- | A `SameField` constraint is an equality constraint on a
--- `Generics.SOP.Type.Metadata.FieldInfo` and the column alias in a `:::` pair.
-class SameField
-  (fieldInfo :: Type.FieldInfo) (fieldty :: (Symbol,NullityType)) where
-instance field ~ column => SameField ('Type.FieldInfo field) (column ::: ty)
-
--- | A `SameFields` constraint proves that a
--- `Generics.SOP.Type.Metadata.DatatypeInfo` of a record type has the same
--- field names as the column AliasesOf of a `ColumnsType`.
-type family SameFields
-  (datatypeInfo :: Type.DatatypeInfo) (columns :: [(Symbol,ty)])
-    :: Constraint where
-  SameFields
-    ('Type.ADT _module _datatype '[ 'Type.Record _constructor fields])
-    columns
-      = SOP.AllZip SameField fields columns
-  SameFields
-    ('Type.Newtype _module _datatype ('Type.Record _constructor fields))
-    columns
-      = SOP.AllZip SameField fields columns
-
-class SameLabel
-  (constrInfo :: Type.ConstructorInfo) (label :: Symbol) where
-instance name ~ label => SameLabel ('Type.Constructor name) label
-
-type family SameLabels
-  (datatypeInfo :: Type.DatatypeInfo) (labels :: [Symbol])
-    :: Constraint where
-  SameLabels
-    ('Type.ADT _module _datatype constructors) labels
-      = SOP.AllZip SameLabel constructors labels
-
 class MapMaybes xs where
   type family Maybes (xs :: [Type]) = (mxs :: [Type]) | mxs -> xs
-  maybes :: SOP.NP Maybe xs -> SOP.NP SOP.I (Maybes xs)
-  unMaybes :: SOP.NP SOP.I (Maybes xs) -> SOP.NP Maybe xs
+  maybes :: NP Maybe xs -> NP I (Maybes xs)
+  unMaybes :: NP I (Maybes xs) -> NP Maybe xs
 instance MapMaybes '[] where
   type Maybes '[] = '[]
-  maybes SOP.Nil = SOP.Nil
-  unMaybes SOP.Nil = SOP.Nil
+  maybes Nil = Nil
+  unMaybes Nil = Nil
 instance MapMaybes xs => MapMaybes (x ': xs) where
   type Maybes (x ': xs) = Maybe x ': Maybes xs
-  maybes (x SOP.:* xs) = SOP.I x SOP.:* maybes xs
-  unMaybes (SOP.I mx SOP.:* xs) = mx SOP.:* unMaybes xs
+  maybes (x :* xs) = I x :* maybes xs
+  unMaybes (I mx :* xs) = mx :* unMaybes xs
 
 type family Nulls tys where
   Nulls '[] = '[]
@@ -679,12 +648,12 @@ data PGlabel (label :: Symbol) = PGlabel
 
 renderLabel :: KnownSymbol label => proxy label -> ByteString
 renderLabel (_ :: proxy label) =
-  "\'" <> fromString (symbolVal (SOP.Proxy @label)) <> "\'"
+  "\'" <> fromString (symbolVal (Proxy @label)) <> "\'"
 
 renderLabels
-  :: SOP.All KnownSymbol labels => SOP.NP PGlabel labels -> [ByteString]
-renderLabels = SOP.hcollapse
-  . SOP.hcmap (SOP.Proxy @KnownSymbol) (SOP.K . renderLabel)
+  :: All KnownSymbol labels => NP PGlabel labels -> [ByteString]
+renderLabels = hcollapse
+  . hcmap (Proxy @KnownSymbol) (K . renderLabel)
 
 type family LabelOf (cons :: Type.ConstructorInfo) :: Symbol where
   LabelOf ('Type.Constructor name) = name
@@ -693,19 +662,22 @@ type family LabelsOf (conss :: [Type.ConstructorInfo]) :: [Symbol] where
   LabelsOf '[] = '[]
   LabelsOf (cons ': conss) = LabelOf cons ': LabelsOf conss
 
-type family DatatypeLabels (info :: Type.DatatypeInfo) :: [Symbol] where
-  DatatypeLabels ('Type.ADT _module _datatype constructors) = LabelsOf constructors
-
-type family PG (hask :: Type) = (pg :: PGType) | pg -> hask where
+type family PG (hask :: Type) :: PGType where
   PG Bool = 'PGbool
   PG Int16 = 'PGint2
   PG Int32 = 'PGint4
   PG Int64 = 'PGint8
+  PG Word16 = 'PGint2
+  PG Word32 = 'PGint4
+  PG Word64 = 'PGint8
   PG Scientific = 'PGnumeric
   PG Float = 'PGfloat4
   PG Double = 'PGfloat8
+  PG Char = 'PGchar 1
   PG Text = 'PGtext
+  PG Lazy.Text = 'PGtext
   PG ByteString = 'PGbytea
+  PG Lazy.ByteString = 'PGbytea
   PG LocalTime = 'PGtimestamp
   PG UTCTime = 'PGtimestamptz
   PG Day = 'PGdate
@@ -715,16 +687,25 @@ type family PG (hask :: Type) = (pg :: PGType) | pg -> hask where
   PG UUID = 'PGuuid
   PG (NetAddr IP) = 'PGinet
   PG Value = 'PGjson
+  PG ty = TypeError
+    ('Text "There is no basic Postgres type for " ':<>: 'ShowType ty)
 
-type family PGenumWith (hask :: Type) :: [Type.ConstructorName] where
-  PGenumWith hask =
-    ConstructorNamesOf (ConstructorsOf (SOP.DatatypeInfoOf hask))
+type family EnumWith (hask :: Type) :: PGType where
+  EnumWith hask = 'PGenum (LabelsWith hask)
 
-type family PGcompositeWith (hask :: Type) :: PGType where
-  PGcompositeWith hask =
-    'PGcomposite (ZipAs
-      (FieldNamesOf (FieldsOf (SOP.DatatypeInfoOf hask)))
-      (RecordFieldTypesOf (SOP.Code hask)))
+type family LabelsWith (hask :: Type) :: [Type.ConstructorName] where
+  LabelsWith hask =
+    ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask))
+
+type family CompositeWith (hask :: Type) :: PGType where
+  CompositeWith hask =
+    'PGcomposite (ZipAs (FieldNamesWith hask) (FieldTypesWith hask))
+
+type family FieldNamesWith (hask :: Type) :: [Type.FieldName] where
+  FieldNamesWith hask = FieldNamesOf (FieldsOf (DatatypeInfoOf hask))
+
+type family FieldTypesWith (hask :: Type) :: [PGType] where
+  FieldTypesWith hask = FieldTypesOf (RecordCodeOf hask (Code hask))
 
 type family ConstructorsOf (datatype :: Type.DatatypeInfo)
   :: [Type.ConstructorInfo] where
@@ -736,8 +717,12 @@ type family ConstructorsOf (datatype :: Type.DatatypeInfo)
 type family ConstructorNameOf (constructors :: Type.ConstructorInfo)
   :: Type.ConstructorName where
     ConstructorNameOf ('Type.Constructor name) = name
-    ConstructorNameOf ('Type.Infix name _assoc _fix) = name
-    ConstructorNameOf ('Type.Record name _fields) = name
+    ConstructorNameOf ('Type.Infix name _assoc _fix) = TypeError
+      ('Text "ConstructorNameOf error: non-nullary constructor "
+        ':<>: 'Text name)
+    ConstructorNameOf ('Type.Record name _fields) = TypeError
+      ('Text "ConstructorNameOf error: non-nullary constructor "
+        ':<>: 'Text name)
 
 type family ConstructorNamesOf (constructors :: [Type.ConstructorInfo])
   :: [Type.ConstructorName] where
@@ -748,6 +733,8 @@ type family ConstructorNamesOf (constructors :: [Type.ConstructorInfo])
 type family FieldsOf (constructor :: Type.DatatypeInfo)
   :: [Type.FieldInfo] where
     FieldsOf ('Type.ADT _module _datatype '[ 'Type.Record _name fields]) =
+      fields
+    FieldsOf ('Type.Newtype _module _datatype ('Type.Record _name fields)) =
       fields
 
 type family FieldNameOf (field :: Type.FieldInfo) :: Type.FieldName where
@@ -760,10 +747,14 @@ type family FieldNamesOf (fields :: [Type.FieldInfo])
 
 type family FieldTypeOf (maybe :: Type) where
   FieldTypeOf (Maybe hask) = PG hask
+  FieldTypeOf ty = TypeError
+    ('Text "FieldTypeOf error: non-Maybe type " ':<>: 'ShowType ty)
 
 type family FieldTypesOf (fields :: [Type]) where
   FieldTypesOf '[] = '[]
   FieldTypesOf (field ': fields) = FieldTypeOf field ': FieldTypesOf fields
 
-type family RecordFieldTypesOf (code :: [[Type]]) where
-  RecordFieldTypesOf '[fields] = FieldTypesOf fields
+type family RecordCodeOf (hask :: Type) (code ::[[Type]]) :: [Type] where
+  RecordCodeOf _hask '[tys] = tys
+  RecordCodeOf hask _tys = TypeError
+    ('Text "RecordCodeOf error: non-Record type " ':<>: 'ShowType hask)

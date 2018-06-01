@@ -66,9 +66,10 @@ module Squeal.PostgreSQL.Definition
   , createView
   , dropView
     -- * Types
-  , createType
+  , createTypeComposite
   , createTypeEnum
-  , createTypeEnumWith
+  , HasPGcomposite (..)
+  , HasPGenum (..)
   , dropType
   , ColumnTypeExpression (..)
   , hasNull
@@ -242,9 +243,9 @@ newtype TableConstraintExpression
 -- "CREATE TABLE \"tab\" (\"a\" int NOT NULL, \"b\" int NOT NULL, CONSTRAINT \"inequality\" CHECK ((\"a\" > \"b\")));"
 check
   :: ( Has alias schema ('Table table)
-     , HasAll aliases (TableToColumns table) subcolumns )
+     , HasAll aliases (TableToRelation table) subcolumns )
   => NP Alias aliases
-  -> (forall tab. Condition '[tab ::: ColumnsToRelation subcolumns] 'Ungrouped '[])
+  -> (forall tab. Condition '[tab ::: subcolumns] 'Ungrouped '[])
   -> TableConstraintExpression schema alias ('Check aliases)
 check _cols condition = UnsafeTableConstraintExpression $
   "CHECK" <+> parenthesized (renderExpression condition)
@@ -273,7 +274,7 @@ check _cols condition = UnsafeTableConstraintExpression $
 -- "CREATE TABLE \"tab\" (\"a\" int NULL, \"b\" int NULL, CONSTRAINT \"uq_a_b\" UNIQUE (\"a\", \"b\"));"
 unique
   :: ( Has alias schema ('Table table)
-     , HasAll aliases (TableToColumns table) subcolumns )
+     , HasAll aliases (TableToRelation table) subcolumns )
   => NP Alias aliases
   -> TableConstraintExpression schema alias ('Unique aliases)
 unique columns = UnsafeTableConstraintExpression $
@@ -794,30 +795,36 @@ createTypeEnum enum labels = UnsafeDefinition $
 
 class
   ( SOP.IsEnumType hask
-  , SOP.All KnownSymbol (PGenumWith hask)
+  , SOP.All KnownSymbol (LabelsWith hask)
   ) => HasPGenum hask where
   createTypeEnumWith
     :: KnownSymbol enum
     => Alias enum
-    -> Definition schema (Create enum ('Typedef ('PGenum (PGenumWith hask))) schema)
+    -> Definition schema (Create enum ('Typedef (EnumWith hask)) schema)
   createTypeEnumWith enum = createTypeEnum enum
-    (SOP.hpure label :: NP PGlabel (PGenumWith hask))
+    (SOP.hpure label :: NP PGlabel (LabelsWith hask))
 
-createType
-  :: (KnownSymbol comp, SOP.SListI fields)
-  => Alias comp
+createTypeComposite
+  :: (KnownSymbol ty, SOP.SListI fields)
+  => Alias ty
   -> NP (Aliased TypeExpression) fields
-  -> Definition schema (Create comp ('Typedef ('PGcomposite fields)) schema)
-createType comp fields = UnsafeDefinition $
-  "CREATE" <+> "TYPE" <+> renderAlias comp <+> "AS" <+> parenthesized
+  -> Definition schema (Create ty ('Typedef ('PGcomposite fields)) schema)
+createTypeComposite ty fields = UnsafeDefinition $
+  "CREATE" <+> "TYPE" <+> renderAlias ty <+> "AS" <+> parenthesized
   (renderCommaSeparated (renderAliasedAs renderTypeExpression) fields) <> ";"
 
--- class HasPGcomposite hask where
---   createTypeCompositeWith
---     :: Alias composite
---     -> Definition schema
---       (Create composite ('Typedef ('PGcompositeWith hask)) schema)
---   createTypeCompositeWith
+class
+  ( ZipAliased (FieldNamesWith hask) (FieldTypesWith hask)
+  , SOP.All PGTyped (FieldTypesWith hask)
+  ) => HasPGcomposite hask where
+  createTypeCompositeWith
+    :: KnownSymbol ty
+    => Alias ty
+    -> Definition schema (Create ty ( 'Typedef (CompositeWith hask)) schema)
+  createTypeCompositeWith ty = createTypeComposite ty $ zipAs
+    (SOP.hpure Alias :: NP Alias (FieldNamesWith hask))
+    (SOP.hcpure (SOP.Proxy :: SOP.Proxy PGTyped) pgtype
+      :: NP TypeExpression (FieldTypesWith hask))
 
 dropType
   :: Has tydef schema ('Typedef ty)
