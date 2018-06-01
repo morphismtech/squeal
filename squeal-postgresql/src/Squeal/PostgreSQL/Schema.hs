@@ -58,6 +58,7 @@ module Squeal.PostgreSQL.Schema
   , Aliased (As)
   , renderAliasedAs
   , AliasesOf
+  , ZipAliased (..)
   , Has
   , HasUnique
   , HasAll
@@ -118,7 +119,6 @@ module Squeal.PostgreSQL.Schema
   , FieldTypeOf
   , FieldTypesOf
   , RecordFieldTypesOf
-  , Zip
   ) where
 
 import Control.DeepSeq
@@ -413,6 +413,27 @@ type family AliasesOf aliaseds where
   AliasesOf '[] = '[]
   AliasesOf (alias ::: ty ': tys) = alias ': AliasesOf tys
 
+class SOP.All KnownSymbol ns => ZipAliased ns xs where
+
+  type family ZipAs
+    (ns :: [Symbol]) (xs :: [k]) = (zs :: [(Symbol,k)]) | zs -> ns xs
+
+  zipAliases
+    :: SOP.NP Alias ns
+    -> SOP.NP expr xs
+    -> SOP.NP (Aliased expr) (ZipAs ns xs)
+
+instance ZipAliased '[] '[] where
+  type ZipAs '[] '[] = '[]
+  zipAliases SOP.Nil SOP.Nil = SOP.Nil
+
+instance
+  ( KnownSymbol n
+  , ZipAliased ns xs
+  ) => ZipAliased (n ': ns) (x ': xs) where
+  type ZipAs (n ': ns) (x ': xs) = '(n,x) ': ZipAs ns xs
+  zipAliases (n SOP.:* ns) (x SOP.:* xs) = x `As` n SOP.:* zipAliases ns xs
+
 -- | @HasUnique alias fields field@ is a constraint that proves that
 -- @fields@ is a singleton of @alias ::: field@.
 type HasUnique alias fields field = fields ~ '[alias ::: field]
@@ -701,7 +722,7 @@ type family PGenumWith (hask :: Type) :: [Type.ConstructorName] where
 
 type family PGcompositeWith (hask :: Type) :: PGType where
   PGcompositeWith hask =
-    'PGcomposite (Zip
+    'PGcomposite (ZipAs
       (FieldNamesOf (FieldsOf (SOP.DatatypeInfoOf hask)))
       (RecordFieldTypesOf (SOP.Code hask)))
 
@@ -746,7 +767,3 @@ type family FieldTypesOf (fields :: [Type]) where
 
 type family RecordFieldTypesOf (code :: [[Type]]) where
   RecordFieldTypesOf '[fields] = FieldTypesOf fields
-
-type family Zip xs ys where
-  Zip '[] '[] = '[]
-  Zip (x ': xs) (y ': ys) = '(x,y) ': Zip xs ys
