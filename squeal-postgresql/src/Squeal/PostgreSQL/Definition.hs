@@ -23,6 +23,7 @@ Squeal data definition language.
   , TypeApplications
   , TypeInType
   , TypeOperators
+  , UndecidableSuperClasses
 #-}
 
 module Squeal.PostgreSQL.Definition
@@ -66,7 +67,7 @@ module Squeal.PostgreSQL.Definition
     -- * Types
   , createType
   , createTypeEnum
-  , createTypeEnumFromHaskell
+  , createTypeEnumWith
   , dropType
   , ColumnTypeExpression (..)
   , hasNull
@@ -790,17 +791,27 @@ createTypeEnum enum labels = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderAlias enum <+> "AS" <+>
   parenthesized (commaSeparated (renderLabels labels)) <> ";"
 
-createTypeEnumFromHaskell
-  :: forall enum labels hask proxy schema
-   . ( KnownSymbol enum
-     , SOP.All KnownSymbol labels
-     , SOP.IsEnumType hask
-     , labels ~ DatatypeLabels (SOP.DatatypeInfoOf hask) )
-  => Alias enum
-  -> proxy hask
-  -> Definition schema (Create enum ('Typedef ('PGenum labels)) schema)
-createTypeEnumFromHaskell enum _ = createTypeEnum enum
-  (SOP.hpure label :: NP PGlabel labels)
+class
+  ( SOP.IsEnumType hask
+  , PGenumWith hask ~ 'PGenum labels
+  ) => HasPGenum hask where
+  createTypeEnumWith
+    :: KnownSymbol enum
+    => Alias enum
+    -> Definition schema (Create enum ('Typedef (PGenumWith hask)) schema)
+  createTypeEnumWith enum = createTypeEnum enum
+    (SOP.hpure label :: NP PGlabel labels)
+-- createTypeEnumWith
+--   :: forall enum labels hask proxy schema
+--    . ( KnownSymbol enum
+--      , SOP.All KnownSymbol labels
+--      , SOP.IsEnumType hask
+--      , labels ~ DatatypeLabels (SOP.DatatypeInfoOf hask) )
+--   => Alias enum
+--   -> proxy hask
+--   -> Definition schema (Create enum ('Typedef ('PGenum labels)) schema)
+-- createTypeEnumWith enum _ = createTypeEnum enum
+--   (SOP.hpure label :: NP PGlabel labels)
 
 createType
   :: (KnownSymbol comp, SOP.SListI fields)
@@ -810,6 +821,13 @@ createType
 createType comp fields = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderAlias comp <+> "AS" <+> parenthesized
   (renderCommaSeparated (renderAliasedAs renderTypeExpression) fields) <> ";"
+
+-- class HasPGcomposite hask where
+--   createTypeCompositeWith
+--     :: Alias composite
+--     -> Definition schema
+--       (Create composite ('Typedef ('PGcompositeWith hask)) schema)
+--   createTypeCompositeWith
 
 dropType
   :: Has tydef schema ('Typedef ty)

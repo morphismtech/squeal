@@ -105,17 +105,38 @@ module Squeal.PostgreSQL.Schema
   , SchemumType (..)
   , SchemaType
   , With
+    -- * STUFF
+  , PG
+  , PGenumWith
+  , PGcompositeWith
+  , ConstructorsOf
+  , ConstructorNameOf
+  , ConstructorNamesOf
+  , FieldsOf
+  , FieldNameOf
+  , FieldNamesOf
+  , FieldTypeOf
+  , FieldTypesOf
+  , RecordFieldTypesOf
+  , Zip
   ) where
 
 import Control.DeepSeq
-import Data.ByteString
+import Data.Aeson (Value)
+import Data.ByteString (ByteString)
+import Data.Int
 import Data.Kind
 import Data.Monoid hiding (All)
+import Data.Scientific
 import Data.String
+import Data.Text (Text)
+import Data.Time
 import Data.Word
 import Data.Type.Bool
+import Data.UUID.Types (UUID)
 import GHC.OverloadedLabels
 import GHC.TypeLits
+import Network.IP.Addr
 
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
@@ -653,3 +674,79 @@ type family LabelsOf (conss :: [Type.ConstructorInfo]) :: [Symbol] where
 
 type family DatatypeLabels (info :: Type.DatatypeInfo) :: [Symbol] where
   DatatypeLabels ('Type.ADT _module _datatype constructors) = LabelsOf constructors
+
+type family PG (hask :: Type) = (pg :: PGType) | pg -> hask where
+  PG Bool = 'PGbool
+  PG Int16 = 'PGint2
+  PG Int32 = 'PGint4
+  PG Int64 = 'PGint8
+  PG Scientific = 'PGnumeric
+  PG Float = 'PGfloat4
+  PG Double = 'PGfloat8
+  PG Text = 'PGtext
+  PG ByteString = 'PGbytea
+  PG LocalTime = 'PGtimestamp
+  PG UTCTime = 'PGtimestamptz
+  PG Day = 'PGdate
+  PG TimeOfDay = 'PGtime
+  PG (TimeOfDay, TimeZone) = 'PGtimetz
+  PG DiffTime = 'PGinterval
+  PG UUID = 'PGuuid
+  PG (NetAddr IP) = 'PGinet
+  PG Value = 'PGjson
+
+type family PGenumWith (hask :: Type) :: PGType where
+  PGenumWith hask =
+    'PGenum (ConstructorNamesOf (ConstructorsOf (SOP.DatatypeInfoOf hask)))
+
+type family PGcompositeWith (hask :: Type) :: PGType where
+  PGcompositeWith hask =
+    'PGcomposite (Zip
+      (FieldNamesOf (FieldsOf (SOP.DatatypeInfoOf hask)))
+      (RecordFieldTypesOf (SOP.Code hask)))
+
+type family ConstructorsOf (datatype :: Type.DatatypeInfo)
+  :: [Type.ConstructorInfo] where
+    ConstructorsOf ('Type.ADT _module _datatype constructors) =
+      constructors
+    ConstructorsOf ('Type.Newtype _module _datatype constructor) =
+      '[constructor]
+
+type family ConstructorNameOf (constructors :: Type.ConstructorInfo)
+  :: Type.ConstructorName where
+    ConstructorNameOf ('Type.Constructor name) = name
+    ConstructorNameOf ('Type.Infix name _assoc _fix) = name
+    ConstructorNameOf ('Type.Record name _fields) = name
+
+type family ConstructorNamesOf (constructors :: [Type.ConstructorInfo])
+  :: [Type.ConstructorName] where
+    ConstructorNamesOf '[] = '[]
+    ConstructorNamesOf (constructor ': constructors) =
+      ConstructorNameOf constructor ': ConstructorNamesOf constructors
+
+type family FieldsOf (constructor :: Type.DatatypeInfo)
+  :: [Type.FieldInfo] where
+    FieldsOf ('Type.ADT _module _datatype '[ 'Type.Record _name fields]) =
+      fields
+
+type family FieldNameOf (field :: Type.FieldInfo) :: Type.FieldName where
+  FieldNameOf ('Type.FieldInfo name) = name
+
+type family FieldNamesOf (fields :: [Type.FieldInfo])
+  :: [Type.FieldName] where
+    FieldNamesOf '[] = '[]
+    FieldNamesOf (field ': fields) = FieldNameOf field ': FieldNamesOf fields
+
+type family FieldTypeOf (maybe :: Type) where
+  FieldTypeOf (Maybe hask) = PG hask
+
+type family FieldTypesOf (fields :: [Type]) where
+  FieldTypesOf '[] = '[]
+  FieldTypesOf (field ': fields) = FieldTypeOf field ': FieldTypesOf fields
+
+type family RecordFieldTypesOf (code :: [[Type]]) where
+  RecordFieldTypesOf '[fields] = FieldTypesOf fields
+
+type family Zip xs ys where
+  Zip '[] '[] = '[]
+  Zip (x ': xs) (y ': ys) = '(x,y) ': Zip xs ys
