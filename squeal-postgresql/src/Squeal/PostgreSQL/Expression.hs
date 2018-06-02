@@ -92,9 +92,6 @@ module Squeal.PostgreSQL.Expression
   , count, countDistinct
   , every, everyDistinct
   , max_, maxDistinct, min_, minDistinct
-    -- * Tables
-  , Table (UnsafeTable, renderTable)
-  , View (UnsafeView, renderView)
     -- * Types
   , TypeExpression (UnsafeTypeExpression, renderTypeExpression)
   , PGTyped (pgtype)
@@ -1079,35 +1076,6 @@ max_ = unsafeAggregate "max"
 min_ = unsafeAggregate "min"
 maxDistinct = unsafeAggregateDistinct "max"
 minDistinct = unsafeAggregateDistinct "min"
-
-{-----------------------------------------
-tables
------------------------------------------}
-
--- | A `Table` from a table expression is a way
--- to call a table reference by its alias.
-newtype Table
-  (schema :: SchemaType)
-  (columns :: RelationType)
-    = UnsafeTable { renderTable :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance
-  ( Has alias schema ('Table table)
-  , relation ~ TableToRelation table
-  ) => IsLabel alias (Table schema relation) where
-    fromLabel = UnsafeTable $ renderAlias (Alias @alias)
-
--- | A `View` from a table expression is a way
--- to call a table reference by its alias.
-newtype View
-  (schema :: SchemaType)
-  (columns :: RelationType)
-    = UnsafeView { renderView :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance
-  ( Has alias schema ('View columns)
-  ) => IsLabel alias (View schema columns) where
-    fromLabel = UnsafeView $ renderAlias (Alias @alias)
 
 {-----------------------------------------
 type expressions

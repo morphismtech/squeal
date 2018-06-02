@@ -10,6 +10,7 @@ Squeal queries.
 
 {-# LANGUAGE
     DeriveGeneric
+  , FlexibleContexts
   , GADTs
   , GeneralizedNewtypeDeriving
   , LambdaCase
@@ -96,10 +97,10 @@ let
     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
-  query = selectStar (from (table (#tab `As` #t)))
+  query = selectStar (from (table #tab))
 in renderQuery query
 :}
-"SELECT * FROM \"tab\" AS \"t\""
+"SELECT * FROM \"tab\" AS \"tab\""
 
 restricted query:
 
@@ -115,12 +116,12 @@ let
   query =
     select
       ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
-      ( from (table (#tab `As` #t))
+      ( from (table #tab)
         & where_ (#col1 .> #col2)
         & where_ (#col2 .> 0) )
 in renderQuery query
 :}
-"SELECT (\"col1\" + \"col2\") AS \"sum\", \"col1\" AS \"col1\" FROM \"tab\" AS \"t\" WHERE ((\"col1\" > \"col2\") AND (\"col2\" > 0))"
+"SELECT (\"col1\" + \"col2\") AS \"sum\", \"col1\" AS \"col1\" FROM \"tab\" AS \"tab\" WHERE ((\"col1\" > \"col2\") AND (\"col2\" > 0))"
 
 subquery:
 
@@ -132,10 +133,10 @@ let
     '["col" ::: 'Null 'PGint4]
   query =
     selectStar
-      (from (subquery (selectStar (from (table (#tab `As` #t))) `As` #sub)))
+      (from (subquery (selectStar (from (table #tab)) `As` #sub)))
 in renderQuery query
 :}
-"SELECT * FROM (SELECT * FROM \"tab\" AS \"t\") AS \"sub\""
+"SELECT * FROM (SELECT * FROM \"tab\" AS \"tab\") AS \"sub\""
 
 limits and offsets:
 
@@ -146,10 +147,10 @@ let
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar
-    (from (table (#tab `As` #t)) & limit 100 & offset 2 & limit 50 & offset 2)
+    (from (table #tab) & limit 100 & offset 2 & limit 50 & offset 2)
 in renderQuery query
 :}
-"SELECT * FROM \"tab\" AS \"t\" LIMIT 50 OFFSET 4"
+"SELECT * FROM \"tab\" AS \"tab\" LIMIT 50 OFFSET 4"
 
 parameterized query:
 
@@ -160,10 +161,10 @@ let
     '[ 'NotNull 'PGfloat8]
     '["col" ::: 'NotNull 'PGfloat8]
   query = selectStar
-    (from (table (#tab `As` #t)) & where_ (#col .> param @1))
+    (from (table #tab) & where_ (#col .> param @1))
 in renderQuery query
 :}
-"SELECT * FROM \"tab\" AS \"t\" WHERE (\"col\" > ($1 :: float8))"
+"SELECT * FROM \"tab\" AS \"tab\" WHERE (\"col\" > ($1 :: float8))"
 
 aggregation query:
 
@@ -194,10 +195,10 @@ let
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar
-    (from (table (#tab `As` #t)) & orderBy [#col & AscNullsFirst])
+    (from (table #tab) & orderBy [#col & AscNullsFirst])
 in renderQuery query
 :}
-"SELECT * FROM \"tab\" AS \"t\" ORDER BY \"col\" ASC NULLS FIRST"
+"SELECT * FROM \"tab\" AS \"tab\" ORDER BY \"col\" ASC NULLS FIRST"
 
 joins:
 
@@ -266,12 +267,12 @@ let
     '[]
     '["col" ::: 'Null 'PGint4]
   query =
-    selectStar (from (table (#tab `As` #t)))
+    selectStar (from (table #tab))
     `unionAll`
-    selectStar (from (table (#tab `As` #t)))
+    selectStar (from (table #tab))
 in renderQuery query
 :}
-"(SELECT * FROM \"tab\" AS \"t\") UNION ALL (SELECT * FROM \"tab\" AS \"t\")"
+"(SELECT * FROM \"tab\" AS \"tab\") UNION ALL (SELECT * FROM \"tab\" AS \"tab\")"
 -}
 newtype Query
   (schema :: SchemaType)
@@ -614,21 +615,25 @@ newtype FromClause schema params relations
 
 -- | A real `table` is a table from the schema.
 table
-  :: Aliased (Table schema) table
-  -> FromClause schema params '[table]
-table = UnsafeFromClause . renderAliasedAs renderTable
+  :: Has tab schema ('Table table)
+  => Aliased Alias (alias ::: tab)
+  -> FromClause schema params '[alias ::: TableToRelation table]
+table (tab `As` alias) = UnsafeFromClause $
+  renderAlias tab <+> "AS" <+> renderAlias alias
 
 -- | `subquery` derives a table from a `Query`.
 subquery
-  :: Aliased (Query schema params) table
-  -> FromClause schema params '[table]
+  :: Aliased (Query schema params) rel
+  -> FromClause schema params '[rel]
 subquery = UnsafeFromClause . renderAliasedAs (parenthesized . renderQuery)
 
 -- | `view` derives a table from a `View`.
 view
-  :: Aliased (View schema) table
-  -> FromClause schema params '[table]
-view = UnsafeFromClause . renderAliasedAs renderView
+  :: Has view schema ('View rel)
+  => Aliased Alias (alias ::: view)
+  -> FromClause schema params '[alias ::: rel]
+view (vw `As` alias) = UnsafeFromClause $
+  renderAlias vw <+> "AS" <+> renderAlias alias
 
 {- | @left & crossJoin right@. For every possible combination of rows from
     @left@ and @right@ (i.e., a Cartesian product), the joined table will contain

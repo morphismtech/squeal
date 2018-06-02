@@ -395,6 +395,9 @@ deriving instance Eq (expression ty)
   => Eq (Aliased expression (alias ::: ty))
 deriving instance Ord (expression ty)
   => Ord (Aliased expression (alias ::: ty))
+instance (alias0 ~ alias1, alias0 ~ alias2, KnownSymbol alias2)
+  => IsLabel alias0 (Aliased Alias (alias1 ::: alias2)) where
+    fromLabel = fromLabel @alias2 `As` fromLabel @alias1
 
 -- | >>> let renderMaybe = fromString . maybe "Nothing" (const "Just")
 -- >>> renderAliasedAs renderMaybe (Just (3::Int) `As` #an_int)
