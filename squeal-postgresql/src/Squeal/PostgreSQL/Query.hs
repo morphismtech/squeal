@@ -112,7 +112,7 @@ let
     '[]
     '[ "sum" ::: 'NotNull 'PGint4
      , "col1" ::: 'NotNull 'PGint4 ]
-  query = 
+  query =
     select
       ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
       ( from (table (#tab `As` #t))
@@ -179,7 +179,7 @@ let
   query =
     select (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
     ( from (table (#tab `As` #table1))
-      & group (By #col1 :* Nil) 
+      & group (By #col1 :* Nil)
       & having (#col1 + sum_ #col2 .> 1) )
 in renderQuery query
 :}
@@ -281,7 +281,7 @@ newtype Query
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 -- | The results of two queries can be combined using the set operation
--- `union`. Duplicate rows are eliminated. 
+-- `union`. Duplicate rows are eliminated.
 union
   :: Query schema params columns
   -> Query schema params columns
@@ -412,7 +412,7 @@ selectDotStar
 selectDotStar rel relations = UnsafeQuery $
   "SELECT" <+> renderAlias rel <> ".*" <+> renderTableExpression relations
 
--- | A `selectDistinctDotStar` asks for all the columns of a particular table, 
+-- | A `selectDistinctDotStar` asks for all the columns of a particular table,
 -- and eliminates duplicate rows.
 selectDistinctDotStar
   :: Has relation relations columns
@@ -555,7 +555,7 @@ where_ wh rels = rels {whereClause = wh : whereClause rels}
 group
   :: SListI bys
   => NP (By relations) bys -- ^ grouped columns
-  -> TableExpression schema params relations 'Ungrouped 
+  -> TableExpression schema params relations 'Ungrouped
   -> TableExpression schema params relations ('Grouped bys)
 group bys rels = TableExpression
   { fromClause = fromClause rels

@@ -338,7 +338,7 @@ primaryKey columns = UnsafeTableConstraintExpression $
 -- >>> :{
 -- let
 --   setup :: Definition '[] Schema
---   setup = 
+--   setup =
 --    createTable #users
 --      ( serial `As` #id :*
 --        (text & hasNotNull) `As` #name :* Nil )
@@ -372,7 +372,7 @@ primaryKey columns = UnsafeTableConstraintExpression $
 -- >>> :{
 -- let
 --   setup :: Definition '[] Schema
---   setup = 
+--   setup =
 --    createTable #employees
 --      ( serial `As` #id :*
 --        (text & hasNotNull) `As` #name :*

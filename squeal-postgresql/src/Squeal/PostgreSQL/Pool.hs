@@ -109,7 +109,7 @@ instance MonadBaseControl IO io => MonadPQ schema (PoolPQ schema io) where
       (_ :: K () schema) <- flip unPQ conn $
         traversePrepared_ manipulation params
       return ()
-  liftPQ m = PoolPQ $ \ pool -> 
+  liftPQ m = PoolPQ $ \ pool ->
     withResource pool $ \ conn -> do
       (K result :: K result schema) <- flip unPQ conn $
         liftPQ m

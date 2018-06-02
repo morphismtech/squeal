@@ -193,7 +193,7 @@ instance ToParam x ty => ToAliasedParam x (alias ::: ty) where
     Nothing -> K Nothing
     Just x -> K . Just . unK $ toParam @x @ty x
 
--- | A `ToColumnParam` constraint lifts the `ToParam` encoding 
+-- | A `ToColumnParam` constraint lifts the `ToParam` encoding
 -- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s. You should
 -- not define instances of `ToColumnParam`, just use the provided instances.
 class ToColumnParam (x :: Type) (ty :: NullityType) where
@@ -279,7 +279,7 @@ instance
   , HasDatatypeInfo y
   , LabelsWith y ~ labels
   ) => FromValue ('PGenum labels) y where
-    fromValue _ = 
+    fromValue _ =
       let
         greadConstructor
           :: All ((~) '[]) xss

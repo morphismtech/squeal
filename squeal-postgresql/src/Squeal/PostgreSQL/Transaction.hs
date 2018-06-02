@@ -158,22 +158,22 @@ data IsolationLevel
   = Serializable
   -- ^ Dirty read is not possible.
   -- Nonrepeatable read is not possible.
-  -- Phantom read is not possible. 
+  -- Phantom read is not possible.
   -- Serialization anomaly is not possible.
   | RepeatableRead
   -- ^ Dirty read is not possible.
   -- Nonrepeatable read is not possible.
-  -- Phantom read is not possible. 
+  -- Phantom read is not possible.
   -- Serialization anomaly is possible.
   | ReadCommitted
   -- ^ Dirty read is not possible.
   -- Nonrepeatable read is possible.
-  -- Phantom read is possible. 
+  -- Phantom read is possible.
   -- Serialization anomaly is possible.
   | ReadUncommitted
   -- ^ Dirty read is not possible.
   -- Nonrepeatable read is possible.
-  -- Phantom read is possible. 
+  -- Phantom read is possible.
   -- Serialization anomaly is possible.
   deriving (Show, Eq)
 

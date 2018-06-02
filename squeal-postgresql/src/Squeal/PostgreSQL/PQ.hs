@@ -166,7 +166,7 @@ instance Monad m => Functor (PQ schema0 schema1 m) where
     K x <- pq conn
     return $ K (f x)
 
--- | Run a `PQ` and keep the result and the `Connection`. 
+-- | Run a `PQ` and keep the result and the `Connection`.
 runPQ
   :: Functor m
   => PQ schema0 schema1 m x
@@ -176,7 +176,7 @@ runPQ (PQ pq) conn = (\ x -> (unK x, K (unK conn))) <$> pq conn
   -- K x <- pq conn
   -- return (x, K (unK conn))
 
--- | Execute a `PQ` and discard the result but keep the `Connection`. 
+-- | Execute a `PQ` and discard the result but keep the `Connection`.
 execPQ
   :: Functor m
   => PQ schema0 schema1 m x

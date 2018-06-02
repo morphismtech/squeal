@@ -27,7 +27,7 @@ Squeal expressions are the atoms used to build statements.
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.Expression 
+module Squeal.PostgreSQL.Expression
   ( -- * Expression
     Expression (UnsafeExpression, renderExpression)
   , HasParameter (param)
@@ -223,7 +223,7 @@ instance (Has relation relations columns, Has column columns ty)
   => IsQualified relation column
     (NP (Aliased (Expression relations 'Ungrouped params)) '[column ::: ty]) where
     relation ! column = relation ! column :* Nil
-  
+
 instance
   ( HasUnique relation relations columns
   , Has column columns ty

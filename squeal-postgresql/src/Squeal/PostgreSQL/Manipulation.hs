@@ -144,7 +144,7 @@ let
        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
        ])
      ] '[] '[]
-  manipulation = 
+  manipulation =
     insertQuery_ #tab
       (selectStar (from (table (#other_tab `As` #t))))
 in renderManipulation manipulation
