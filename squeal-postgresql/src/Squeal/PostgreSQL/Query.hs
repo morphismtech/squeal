@@ -114,7 +114,7 @@ let
      , "col1" ::: 'NotNull 'PGint4 ]
   query = 
     select
-      ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
+      ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
       ( from (table (#tab `As` #t))
         & where_ (#col1 .> #col2)
         & where_ (#col2 .> 0) )
