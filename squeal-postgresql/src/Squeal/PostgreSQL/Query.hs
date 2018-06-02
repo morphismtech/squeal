@@ -177,7 +177,7 @@ let
     '[ "sum" ::: 'NotNull 'PGint4
      , "col1" ::: 'NotNull 'PGint4 ]
   query =
-    select (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
+    select (sum_ #col2 `As` #sum :* #col1 :* Nil)
     ( from (table (#tab `As` #table1))
       & group (By #col1 :* Nil)
       & having (#col1 + sum_ #col2 .> 1) )

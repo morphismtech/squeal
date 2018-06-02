@@ -198,12 +198,10 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
 instance (HasUnique relation relations columns, Has column columns ty)
   => IsLabel column (Expression relations 'Ungrouped params ty) where
     fromLabel = UnsafeExpression $ renderAlias (Alias @column)
-
 instance (HasUnique relation relations columns, Has column columns ty)
   => IsLabel column
     (Aliased (Expression relations 'Ungrouped params) (column ::: ty)) where
     fromLabel = fromLabel @column `As` Alias @column
-
 instance (HasUnique relation relations columns, Has column columns ty)
   => IsLabel column
     (NP (Aliased (Expression relations 'Ungrouped params)) '[column ::: ty]) where
@@ -213,12 +211,10 @@ instance (Has relation relations columns, Has column columns ty)
   => IsQualified relation column (Expression relations 'Ungrouped params ty) where
     relation ! column = UnsafeExpression $
       renderAlias relation <> "." <> renderAlias column
-
 instance (Has relation relations columns, Has column columns ty)
   => IsQualified relation column
     (Aliased (Expression relations 'Ungrouped params) (column ::: ty)) where
     relation ! column = relation ! column `As` column
-
 instance (Has relation relations columns, Has column columns ty)
   => IsQualified relation column
     (NP (Aliased (Expression relations 'Ungrouped params)) '[column ::: ty]) where
@@ -231,6 +227,22 @@ instance
   ) => IsLabel column
     (Expression relations ('Grouped bys) params ty) where
       fromLabel = UnsafeExpression $ renderAlias (Alias @column)
+instance
+  ( HasUnique relation relations columns
+  , Has column columns ty
+  , GroupedBy relation column bys
+  ) => IsLabel column
+    ( Aliased (Expression relations ('Grouped bys) params)
+      (column ::: ty) ) where
+      fromLabel = fromLabel @column `As` Alias @column
+instance
+  ( HasUnique relation relations columns
+  , Has column columns ty
+  , GroupedBy relation column bys
+  ) => IsLabel column
+    ( NP (Aliased (Expression relations ('Grouped bys) params))
+      '[column ::: ty] ) where
+      fromLabel = fromLabel @column :* Nil
 
 instance
   ( Has relation relations columns
@@ -240,7 +252,6 @@ instance
     (Expression relations ('Grouped bys) params ty) where
       relation ! column = UnsafeExpression $
         renderAlias relation <> "." <> renderAlias column
-
 instance
   ( Has relation relations columns
   , Has column columns ty
@@ -249,7 +260,6 @@ instance
     (Aliased (Expression relations ('Grouped bys) params)
       (column ::: ty)) where
         relation ! column = relation ! column `As` column
-
 instance
   ( Has relation relations columns
   , Has column columns ty
