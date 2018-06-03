@@ -629,13 +629,18 @@ type family DropIfConstraintsInvolve column constraints where
         (DropIfConstraintsInvolve column constraints)
         (alias ::: constraint ': DropIfConstraintsInvolve column constraints)
 
+-- | A `SchemumType` is a user-defined type, either a `Table`,
+-- `View` or `Typedef`.
 data SchemumType
   = Table TableType
   | View RelationType
   | Typedef PGType
 
+-- | The schema of a database consists of a list of aliased,
+-- user-defined `SchemumType`s.
 type SchemaType = [(Symbol,SchemumType)]
 
+-- | Used in `Squeal.Postgresql.Manipulation.with`.
 type family With
   (relations :: RelationsType)
   (schema :: SchemaType)
@@ -644,27 +649,38 @@ type family With
     With (alias ::: rel ': rels) schema =
       alias ::: 'View rel ': With rels schema
 
+-- | `IsPGlabel` looks very much like the `IsLabel` class. Whereas
+-- the overloaded label, `fromLabel` is used for column references,
+-- `label`s are used for enum terms. A `label` is called with
+-- type application like `label @"beef"`.
 class IsPGlabel (label :: Symbol) expr where label :: expr
 instance label ~ label'
   => IsPGlabel label (PGlabel label') where label = PGlabel
+-- | A `PGlabel` unit type with an `IsPGlabel` instance
 data PGlabel (label :: Symbol) = PGlabel
-
+-- | Renders a label
 renderLabel :: KnownSymbol label => proxy label -> ByteString
 renderLabel (_ :: proxy label) =
   "\'" <> fromString (symbolVal (Proxy @label)) <> "\'"
-
+-- | Renders a list of labels
 renderLabels
   :: All KnownSymbol labels => NP PGlabel labels -> [ByteString]
 renderLabels = hcollapse
   . hcmap (Proxy @KnownSymbol) (K . renderLabel)
-
+-- | Gets the name of a type constructor
 type family LabelOf (cons :: Type.ConstructorInfo) :: Symbol where
   LabelOf ('Type.Constructor name) = name
-
+-- | Gets the names of a list of type constructors
 type family LabelsOf (conss :: [Type.ConstructorInfo]) :: [Symbol] where
   LabelsOf '[] = '[]
   LabelsOf (cons ': conss) = LabelOf cons ': LabelsOf conss
 
+-- | The `PG` type family embeds a subset of Haskell types
+-- as basic Postgres types.
+--
+-- >>> :kind! PG LocalTime
+-- PG LocalTime :: PGType
+-- = 'PGtimestamp
 type family PG (hask :: Type) :: PGType where
   PG Bool = 'PGbool
   PG Int16 = 'PGint2
