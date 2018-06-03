@@ -28,10 +28,11 @@ Squeal data definition language.
 #-}
 
 module Squeal.PostgreSQL.Definition
-  (  -- * Definition
+  ( -- * Definition
     Definition (UnsafeDefinition, renderDefinition)
   , (>>>)
-    -- * Create
+    -- * Tables
+    -- ** Create
   , createTable
   , createTableIfNotExists
   , TableConstraintExpression (..)
@@ -44,9 +45,9 @@ module Squeal.PostgreSQL.Definition
   , renderOnDeleteClause
   , OnUpdateClause (OnUpdateNoAction, OnUpdateRestrict, OnUpdateCascade)
   , renderOnUpdateClause
-    -- * Drop
+    -- ** Drop
   , dropTable
-    -- * Alter
+    -- ** Alter
   , alterTable
   , alterTableRename
   , AlterTable (UnsafeAlterTable, renderAlterTable)
