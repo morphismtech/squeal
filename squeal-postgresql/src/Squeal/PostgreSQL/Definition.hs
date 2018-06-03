@@ -246,7 +246,9 @@ check
   :: ( Has alias schema ('Table table)
      , HasAll aliases (TableToRelation table) subcolumns )
   => NP Alias aliases
+  -- ^ specify the subcolumns which are getting checked
   -> (forall tab. Condition '[tab ::: subcolumns] 'Ungrouped '[])
+  -- ^ a closed `Condition` on those subcolumns
   -> TableConstraintExpression schema alias ('Check aliases)
 check _cols condition = UnsafeTableConstraintExpression $
   "CHECK" <+> parenthesized (renderExpression condition)
@@ -277,6 +279,7 @@ unique
   :: ( Has alias schema ('Table table)
      , HasAll aliases (TableToRelation table) subcolumns )
   => NP Alias aliases
+  -- ^ specify subcolumns which together are unique for each row
   -> TableConstraintExpression schema alias ('Unique aliases)
 unique columns = UnsafeTableConstraintExpression $
   "UNIQUE" <+> parenthesized (commaSeparated (renderAliases columns))
@@ -309,6 +312,7 @@ primaryKey
      , HasAll aliases (TableToColumns table) subcolumns
      , AllNotNull subcolumns )
   => NP Alias aliases
+  -- ^ specify the subcolumns which together form a primary key.
   -> TableConstraintExpression schema alias ('PrimaryKey aliases)
 primaryKey columns = UnsafeTableConstraintExpression $
   "PRIMARY KEY" <+> parenthesized (commaSeparated (renderAliases columns))
