@@ -806,7 +806,9 @@ dropView v = UnsafeDefinition $ "DROP VIEW" <+> renderAlias v <> ";"
 createTypeEnum
   :: (KnownSymbol enum, SOP.All KnownSymbol labels)
   => Alias enum
+  -- ^ name of the user defined enumerated type
   -> NP PGlabel labels
+  -- ^ labels of the enumerated type
   -> Definition schema (Create enum ('Typedef ('PGenum labels)) schema)
 createTypeEnum enum labels = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderAlias enum <+> "AS" <+>
@@ -826,6 +828,7 @@ createTypeEnumWith
   , KnownSymbol enum
   )
   => Alias enum
+  -- ^ name of the user defined enumerated type
   -> Definition schema (Create enum ('Typedef (EnumWith hask)) schema)
 createTypeEnumWith enum = createTypeEnum enum
   (SOP.hpure label :: NP PGlabel (LabelsWith hask))
@@ -838,7 +841,9 @@ createTypeEnumWith enum = createTypeEnum enum
 createTypeComposite
   :: (KnownSymbol ty, SOP.SListI fields)
   => Alias ty
+  -- ^ name of the user defined composite type
   -> NP (Aliased TypeExpression) fields
+  -- ^ list of attribute names and data types
   -> Definition schema (Create ty ('Typedef ('PGcomposite fields)) schema)
 createTypeComposite ty fields = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderAlias ty <+> "AS" <+> parenthesized
@@ -858,6 +863,7 @@ createTypeCompositeWith
   , KnownSymbol ty
   )
   => Alias ty
+  -- ^ name of the user defined composite type
   -> Definition schema (Create ty ( 'Typedef (CompositeWith hask)) schema)
 createTypeCompositeWith ty = createTypeComposite ty $ zipAs
   (SOP.hpure Alias :: NP Alias (FieldNamesWith hask))
@@ -874,6 +880,7 @@ createTypeCompositeWith ty = createTypeComposite ty $ zipAs
 dropType
   :: Has tydef schema ('Typedef ty)
   => Alias tydef
+  -- ^ name of the user defined type
   -> Definition schema (Drop tydef schema)
 dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderAlias tydef <> ";"
 
