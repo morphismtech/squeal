@@ -37,7 +37,7 @@ let
     , up = void . define $
         createTable #users
         ( serial `As` #id :*
-          (text & hasNotNull) `As` #name :* Nil )
+          (text & notNullable) `As` #name :* Nil )
         ( primaryKey #id `As` #pk_users :* Nil )
     , down = void . define $ dropTable #users
     }
@@ -52,8 +52,8 @@ let
     , up = void . define $
         createTable #emails
           ( serial `As` #id :*
-            (int & hasNotNull) `As` #user_id :*
-            (text & hasNull) `As` #email :* Nil )
+            (int & notNullable) `As` #user_id :*
+            (text & nullable) `As` #email :* Nil )
           ( primaryKey #id `As` #pk_emails :*
             foreignKey #user_id #users #id
               OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
@@ -285,8 +285,8 @@ createMigrations
   => Definition schema schema
 createMigrations =
   createTableIfNotExists #schema_migrations
-    ( (text & hasNotNull) `As` #name :*
-      (timestampWithTimeZone & hasNotNull & default_ currentTimestamp)
+    ( (text & notNullable) `As` #name :*
+      (timestampWithTimeZone & notNullable & default_ currentTimestamp)
         `As` #executed_at :* Nil )
     ( unique (#name :* Nil) `As` #migrations_unique_name :* Nil )
 

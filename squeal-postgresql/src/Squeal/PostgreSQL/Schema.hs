@@ -328,6 +328,7 @@ type family ColumnsToRelation (columns :: ColumnsType) :: RelationType where
 type family TableToColumns (table :: TableType) :: ColumnsType where
   TableToColumns (constraints :=> columns) = columns
 
+-- | Convert a table to a relation.
 type family TableToRelation (table :: TableType) :: RelationType where
   TableToRelation tab = ColumnsToRelation (TableToColumns tab)
 
@@ -414,6 +415,12 @@ type family AliasesOf aliaseds where
   AliasesOf '[] = '[]
   AliasesOf (alias ::: ty ': tys) = alias ': AliasesOf tys
 
+-- | The `ZipAliased` class provides a type family for zipping
+-- `Symbol` lists together with arbitrary lists of the same size,
+-- with an associated type family `ZipAs`, together with
+-- a method `zipAs` for zipping heterogeneous lists of `Alias`es
+-- together with a heterogeneous list of expressions into
+-- a heterogeneous list of `Aliased` expressions.
 class
   ( SListI (ZipAs ns xs)
   , All KnownSymbol ns
@@ -443,7 +450,8 @@ instance
 type HasUnique alias fields field = fields ~ '[alias ::: field]
 
 -- | @Has alias fields field@ is a constraint that proves that
--- @fields@ has a field of @alias ::: field@.
+-- @fields@ has a field of @alias ::: field@, inferring @field@
+-- from @alias@ and @fields@.
 class KnownSymbol alias =>
   Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
   | alias fields -> field where
@@ -452,6 +460,8 @@ instance {-# OVERLAPPING #-} KnownSymbol alias
 instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
   => Has alias (field' ': fields) field
 
+-- | `HasAll` extends `Has` to take lists of @aliases@ and @fields@ and infer
+-- a list of @subfields@.
 class
   ( All KnownSymbol aliases
   ) => HasAll
@@ -509,6 +519,7 @@ type family SameTypes (columns0 :: ColumnsType) (columns1 :: ColumnsType)
   SameTypes (column0 ::: def0 :=> ty0 ': columns0) (column1 ::: def1 :=> ty1 ': columns1)
     = (ty0 ~ ty1, SameTypes columns0 columns1)
 
+-- | Equality constraint on the underlying `PGType` of two columns.
 class SamePGType
   (ty0 :: (Symbol,ColumnType)) (ty1 :: (Symbol,ColumnType)) where
 instance ty0 ~ ty1 => SamePGType
@@ -596,6 +607,7 @@ type family Rename alias0 alias1 xs where
   Rename alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
   Rename alias0 alias1 (x ': xs) = x ': Rename alias0 alias1 xs
 
+-- | `MapMaybes` is used in the binary instances of composite types.
 class MapMaybes xs where
   type family Maybes (xs :: [Type]) = (mxs :: [Type]) | mxs -> xs
   maybes :: NP Maybe xs -> NP I (Maybes xs)
@@ -609,6 +621,8 @@ instance MapMaybes xs => MapMaybes (x ': xs) where
   maybes (x :* xs) = I x :* maybes xs
   unMaybes (I mx :* xs) = mx :* unMaybes xs
 
+-- | `Nulls` is used to construct a `Squeal.Postgresql.Expression.row`
+-- of a composite type.
 type family Nulls tys where
   Nulls '[] = '[]
   Nulls (field ::: ty ': tys) = field ::: 'Null ty ': Nulls tys
@@ -676,7 +690,7 @@ type family LabelsOf (conss :: [Type.ConstructorInfo]) :: [Symbol] where
   LabelsOf (cons ': conss) = LabelOf cons ': LabelsOf conss
 
 -- | The `PG` type family embeds a subset of Haskell types
--- as basic Postgres types.
+-- as Postgres basic types.
 --
 -- >>> :kind! PG LocalTime
 -- PG LocalTime :: PGType
@@ -707,25 +721,67 @@ type family PG (hask :: Type) :: PGType where
   PG (NetAddr IP) = 'PGinet
   PG Value = 'PGjson
   PG ty = TypeError
-    ('Text "There is no basic Postgres type for " ':<>: 'ShowType ty)
+    ('Text "There is no Postgres basic type for " ':<>: 'ShowType ty)
 
+-- | The `EnumWith` type family embeds Haskell enum types, ADTs with
+-- nullary constructors, as Postgres enum types
+--
+-- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
+-- >>> instance Generic Schwarma
+-- >>> instance HasDatatypeInfo Schwarma
+-- >>> :kind! EnumWith Schwarma
+-- EnumWith Schwarma :: PGType
+-- = 'PGenum '["Beef", "Lamb", "Chicken"]
 type family EnumWith (hask :: Type) :: PGType where
   EnumWith hask = 'PGenum (LabelsWith hask)
 
+-- | The `LabelsWith` type family calculates the constructors of a
+-- Haskell enum type.
+--
+-- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
+-- >>> instance Generic Schwarma
+-- >>> instance HasDatatypeInfo Schwarma
+-- >>> :kind! LabelsWith Schwarma
+-- LabelsWith Schwarma :: [Type.ConstructorName]
+-- = '["Beef", "Lamb", "Chicken"]
 type family LabelsWith (hask :: Type) :: [Type.ConstructorName] where
   LabelsWith hask =
     ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask))
 
+-- | The `CompositeWith` type family embeds Haskell record types as
+-- Postgres composite types, as long as the record fields
+-- are `Maybe`s of Haskell types that can be embedded as basic types
+-- with the `PG` type family.
+--
+-- >>> data Row = Row { a :: Maybe Int16, b :: Maybe LocalTime } deriving GHC.Generic
+-- >>> instance Generic Row
+-- >>> instance HasDatatypeInfo Row
+-- >>> :kind! CompositeWith Row
+-- CompositeWith Row :: PGType
+-- = 'PGcomposite '['("a", 'PGint2), '("b", 'PGtimestamp)]
 type family CompositeWith (hask :: Type) :: PGType where
   CompositeWith hask =
     'PGcomposite (ZipAs (FieldNamesWith hask) (FieldTypesWith hask))
 
+-- | >>> data Row = Row { a :: Maybe Int16, b :: Maybe LocalTime } deriving GHC.Generic
+-- >>> instance Generic Row
+-- >>> instance HasDatatypeInfo Row
+-- >>> :kind! FieldNamesWith Row
+-- FieldNamesWith Row :: [Type.FieldName]
+-- = '["a", "b"]
 type family FieldNamesWith (hask :: Type) :: [Type.FieldName] where
   FieldNamesWith hask = FieldNamesOf (FieldsOf (DatatypeInfoOf hask))
 
+-- | >>> data Row = Row { a :: Maybe Int16, b :: Maybe LocalTime } deriving GHC.Generic
+-- >>> instance Generic Row
+-- >>> instance HasDatatypeInfo Row
+-- >>> :kind! FieldTypesWith Row
+-- FieldTypesWith Row :: [PGType]
+-- = '['PGint2, 'PGtimestamp]
 type family FieldTypesWith (hask :: Type) :: [PGType] where
   FieldTypesWith hask = FieldTypesOf (RecordCodeOf hask (Code hask))
 
+-- | Calculates constructors of a datatype.
 type family ConstructorsOf (datatype :: Type.DatatypeInfo)
   :: [Type.ConstructorInfo] where
     ConstructorsOf ('Type.ADT _module _datatype constructors) =
@@ -733,6 +789,8 @@ type family ConstructorsOf (datatype :: Type.DatatypeInfo)
     ConstructorsOf ('Type.Newtype _module _datatype constructor) =
       '[constructor]
 
+-- | Calculates the name of a nullary constructor, otherwise
+-- generates a type error.
 type family ConstructorNameOf (constructors :: Type.ConstructorInfo)
   :: Type.ConstructorName where
     ConstructorNameOf ('Type.Constructor name) = name
@@ -743,36 +801,46 @@ type family ConstructorNameOf (constructors :: Type.ConstructorInfo)
       ('Text "ConstructorNameOf error: non-nullary constructor "
         ':<>: 'Text name)
 
+-- | Calculate the names of nullary constructors.
 type family ConstructorNamesOf (constructors :: [Type.ConstructorInfo])
   :: [Type.ConstructorName] where
     ConstructorNamesOf '[] = '[]
     ConstructorNamesOf (constructor ': constructors) =
       ConstructorNameOf constructor ': ConstructorNamesOf constructors
 
-type family FieldsOf (constructor :: Type.DatatypeInfo)
+-- | Calculate the fields of a datatype.
+type family FieldsOf (datatype :: Type.DatatypeInfo)
   :: [Type.FieldInfo] where
     FieldsOf ('Type.ADT _module _datatype '[ 'Type.Record _name fields]) =
       fields
     FieldsOf ('Type.Newtype _module _datatype ('Type.Record _name fields)) =
       fields
 
+-- | Calculate the name of a field.
 type family FieldNameOf (field :: Type.FieldInfo) :: Type.FieldName where
   FieldNameOf ('Type.FieldInfo name) = name
 
+-- | Calculate the names of fields.
 type family FieldNamesOf (fields :: [Type.FieldInfo])
   :: [Type.FieldName] where
     FieldNamesOf '[] = '[]
     FieldNamesOf (field ': fields) = FieldNameOf field ': FieldNamesOf fields
 
+-- | >>> :kind! FieldTypeOf (Maybe Int16)
+-- FieldTypeOf (Maybe Int16) :: PGType
+-- = 'PGint2
 type family FieldTypeOf (maybe :: Type) where
   FieldTypeOf (Maybe hask) = PG hask
   FieldTypeOf ty = TypeError
     ('Text "FieldTypeOf error: non-Maybe type " ':<>: 'ShowType ty)
 
+-- | Calculate the types of fields.
 type family FieldTypesOf (fields :: [Type]) where
   FieldTypesOf '[] = '[]
   FieldTypesOf (field ': fields) = FieldTypeOf field ': FieldTypesOf fields
 
+-- | Inspect the code of an algebraic datatype and ensure it's a product,
+-- otherwise generate a type error
 type family RecordCodeOf (hask :: Type) (code ::[[Type]]) :: [Type] where
   RecordCodeOf _hask '[tys] = tys
   RecordCodeOf hask _tys = TypeError

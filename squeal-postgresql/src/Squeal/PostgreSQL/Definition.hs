@@ -66,14 +66,15 @@ module Squeal.PostgreSQL.Definition
   , createView
   , dropView
     -- * Types
-  , createTypeComposite
   , createTypeEnum
-  , HasPGcomposite (..)
-  , HasPGenum (..)
+  , createTypeEnumWith
+  , createTypeComposite
+  , createTypeCompositeWith
   , dropType
+    -- * Columns
   , ColumnTypeExpression (..)
-  , hasNull
-  , hasNotNull
+  , nullable
+  , notNullable
   , default_
   , serial2
   , smallserial
@@ -125,7 +126,7 @@ CREATE statements
 -- >>> :set -XOverloadedLabels
 -- >>> :{
 -- renderDefinition $
---   createTable #tab ((int & hasNull) `As` #a :* (real & hasNull) `As` #b :* Nil) Nil
+--   createTable #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil
 -- :}
 -- "CREATE TABLE \"tab\" (\"a\" int NULL, \"b\" real NULL);"
 createTable
@@ -152,7 +153,7 @@ createTable tab columns constraints = UnsafeDefinition $
 -- >>> type Schema = '["tab" ::: 'Table Table]
 -- >>> :{
 -- renderDefinition
---   (createTableIfNotExists #tab ((int & hasNull) `As` #a :* (real & hasNull) `As` #b :* Nil) Nil :: Definition Schema Schema)
+--   (createTableIfNotExists #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil :: Definition Schema Schema)
 -- :}
 -- "CREATE TABLE IF NOT EXISTS \"tab\" (\"a\" int NULL, \"b\" real NULL);"
 createTableIfNotExists
@@ -234,8 +235,8 @@ newtype TableConstraintExpression
 -- let
 --   definition :: Definition '[] Schema
 --   definition = createTable #tab
---     ( (int & hasNotNull) `As` #a :*
---       (int & hasNotNull) `As` #b :* Nil )
+--     ( (int & notNullable) `As` #a :*
+--       (int & notNullable) `As` #b :* Nil )
 --     ( check (#a :* #b :* Nil) (#a .> #b) `As` #inequality :* Nil )
 -- :}
 --
@@ -265,8 +266,8 @@ check _cols condition = UnsafeTableConstraintExpression $
 -- let
 --   definition :: Definition '[] Schema
 --   definition = createTable #tab
---     ( (int & hasNull) `As` #a :*
---       (int & hasNull) `As` #b :* Nil )
+--     ( (int & nullable) `As` #a :*
+--       (int & nullable) `As` #b :* Nil )
 --     ( unique (#a :* #b :* Nil) `As` #uq_a_b :* Nil )
 -- :}
 --
@@ -297,7 +298,7 @@ unique columns = UnsafeTableConstraintExpression $
 --   definition :: Definition '[] Schema
 --   definition = createTable #tab
 --     ( serial `As` #id :*
---       (text & hasNotNull) `As` #name :* Nil )
+--       (text & notNullable) `As` #name :* Nil )
 --     ( primaryKey #id `As` #pk_id :* Nil )
 -- :}
 --
@@ -341,12 +342,12 @@ primaryKey columns = UnsafeTableConstraintExpression $
 --   setup =
 --    createTable #users
 --      ( serial `As` #id :*
---        (text & hasNotNull) `As` #name :* Nil )
+--        (text & notNullable) `As` #name :* Nil )
 --      ( primaryKey #id `As` #pk_users :* Nil ) >>>
 --    createTable #emails
 --      ( serial `As` #id :*
---        (int & hasNotNull) `As` #user_id :*
---        (text & hasNull) `As` #email :* Nil )
+--        (int & notNullable) `As` #user_id :*
+--        (text & nullable) `As` #email :* Nil )
 --      ( primaryKey #id `As` #pk_emails :*
 --        foreignKey #user_id #users #id
 --          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
@@ -375,8 +376,8 @@ primaryKey columns = UnsafeTableConstraintExpression $
 --   setup =
 --    createTable #employees
 --      ( serial `As` #id :*
---        (text & hasNotNull) `As` #name :*
---        (integer & hasNull) `As` #employer_id :* Nil )
+--        (text & notNullable) `As` #name :*
+--        (integer & nullable) `As` #employer_id :* Nil )
 --      ( primaryKey #id `As` #employees_pk :*
 --        foreignKey #employer_id #employees #id
 --          OnDeleteCascade OnUpdateCascade `As` #employees_employer_fk :* Nil )
@@ -409,6 +410,7 @@ foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
   <+> renderOnDeleteClause ondel
   <+> renderOnUpdateClause onupd
 
+-- | A constraint synonym between types involved in a foreign key constraint.
 type ForeignKeyed schema
   child parent
   table reftable
@@ -578,7 +580,7 @@ class AddColumn ty where
   --     '["tab" ::: 'Table ('[] :=>
   --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
   --         , "col2" ::: 'Def :=> 'Null 'PGtext ])]
-  --   definition = alterTable #tab (addColumn #col2 (text & hasNull & default_ "foo"))
+  --   definition = alterTable #tab (addColumn #col2 (text & nullable & default_ "foo"))
   -- in renderDefinition definition
   -- :}
   -- "ALTER TABLE \"tab\" ADD COLUMN \"col2\" text NULL DEFAULT E'foo';"
@@ -590,7 +592,7 @@ class AddColumn ty where
   --     '["tab" ::: 'Table ('[] :=>
   --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
   --         , "col2" ::: 'NoDef :=> 'Null 'PGtext ])]
-  --   definition = alterTable #tab (addColumn #col2 (text & hasNull))
+  --   definition = alterTable #tab (addColumn #col2 (text & nullable))
   -- in renderDefinition definition
   -- :}
   -- "ALTER TABLE \"tab\" ADD COLUMN \"col2\" text NULL;"
@@ -749,14 +751,15 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGnumeric])]
 --   definition =
---     alterTable #tab (alterColumn #col (alterType (numeric & hasNotNull)))
+--     alterTable #tab (alterColumn #col (alterType (numeric & notNullable)))
 -- in renderDefinition definition
 -- :}
 -- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" TYPE numeric NOT NULL;"
 alterType :: ColumnTypeExpression schema ty -> AlterColumn schema ty0 ty
 alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 
--- | create a view...
+-- | Create a view.
+--
 -- >>> :{
 -- let
 --   definition :: Definition
@@ -778,12 +781,28 @@ createView alias query = UnsafeDefinition $
   "CREATE" <+> "VIEW" <+> renderAlias alias <+> "AS"
   <+> renderQuery query <> ";"
 
+-- | Drop a view.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '[ "abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])
+--      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]
+--     '[ "abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])]
+--   definition = dropView #bc
+-- in renderDefinition definition
+-- :}
+-- "DROP VIEW \"bc\";"
 dropView
   :: Has view schema ('View v)
   => Alias view -- ^ view to remove
   -> Definition schema (Drop view schema)
 dropView v = UnsafeDefinition $ "DROP VIEW" <+> renderAlias v <> ";"
 
+-- | Enumerated types are created using the `createTypeEnum` command, for example
+--
+-- >>> renderDefinition $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy" :* Nil)
+-- "CREATE TYPE \"mood\" AS ('sad', 'ok', 'happy');"
 createTypeEnum
   :: (KnownSymbol enum, SOP.All KnownSymbol labels)
   => Alias enum
@@ -793,17 +812,29 @@ createTypeEnum enum labels = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderAlias enum <+> "AS" <+>
   parenthesized (commaSeparated (renderLabels labels)) <> ";"
 
-class
-  ( SOP.IsEnumType hask
+-- | Enumerated types can also be generated from a Haskell type, for example
+--
+-- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
+-- >>> instance SOP.Generic Schwarma
+-- >>> instance SOP.HasDatatypeInfo Schwarma
+-- >>> renderDefinition $ createTypeEnumWith @Schwarma #schwarma
+-- "CREATE TYPE \"schwarma\" AS ('Beef', 'Lamb', 'Chicken');"
+createTypeEnumWith
+  :: forall hask enum schema.
+  ( SOP.Generic hask
   , SOP.All KnownSymbol (LabelsWith hask)
-  ) => HasPGenum hask where
-  createTypeEnumWith
-    :: KnownSymbol enum
-    => Alias enum
-    -> Definition schema (Create enum ('Typedef (EnumWith hask)) schema)
-  createTypeEnumWith enum = createTypeEnum enum
-    (SOP.hpure label :: NP PGlabel (LabelsWith hask))
+  , KnownSymbol enum
+  )
+  => Alias enum
+  -> Definition schema (Create enum ('Typedef (EnumWith hask)) schema)
+createTypeEnumWith enum = createTypeEnum enum
+  (SOP.hpure label :: NP PGlabel (LabelsWith hask))
 
+-- | `createTypeComposite` creates a composite type. The composite type is
+-- specified by a list of attribute names and data types.
+--
+-- >>> renderDefinition $ createTypeComposite #complex (float8 `As` #real :* float8 `As` #imaginary :* Nil)
+-- "CREATE TYPE \"complex\" AS (float8 AS \"real\", float8 AS \"imaginary\");"
 createTypeComposite
   :: (KnownSymbol ty, SOP.SListI fields)
   => Alias ty
@@ -813,19 +844,33 @@ createTypeComposite ty fields = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderAlias ty <+> "AS" <+> parenthesized
   (renderCommaSeparated (renderAliasedAs renderTypeExpression) fields) <> ";"
 
-class
+-- | Composite types can also be generated from a Haskell type, for example
+--
+-- >>> data Complex = Complex {real :: Maybe Double, imaginary :: Maybe Double} deriving GHC.Generic
+-- >>> instance SOP.Generic Complex
+-- >>> instance SOP.HasDatatypeInfo Complex
+-- >>> renderDefinition $ createTypeCompositeWith @Complex #complex
+-- "CREATE TYPE \"complex\" AS (float8 AS \"real\", float8 AS \"imaginary\");"
+createTypeCompositeWith
+  :: forall hask ty schema.
   ( ZipAliased (FieldNamesWith hask) (FieldTypesWith hask)
   , SOP.All PGTyped (FieldTypesWith hask)
-  ) => HasPGcomposite hask where
-  createTypeCompositeWith
-    :: KnownSymbol ty
-    => Alias ty
-    -> Definition schema (Create ty ( 'Typedef (CompositeWith hask)) schema)
-  createTypeCompositeWith ty = createTypeComposite ty $ zipAs
-    (SOP.hpure Alias :: NP Alias (FieldNamesWith hask))
-    (SOP.hcpure (SOP.Proxy :: SOP.Proxy PGTyped) pgtype
-      :: NP TypeExpression (FieldTypesWith hask))
+  , KnownSymbol ty
+  )
+  => Alias ty
+  -> Definition schema (Create ty ( 'Typedef (CompositeWith hask)) schema)
+createTypeCompositeWith ty = createTypeComposite ty $ zipAs
+  (SOP.hpure Alias :: NP Alias (FieldNamesWith hask))
+  (SOP.hcpure (SOP.Proxy :: SOP.Proxy PGTyped) pgtype
+    :: NP TypeExpression (FieldTypesWith hask))
 
+-- | Drop a type.
+--
+-- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
+-- >>> instance SOP.Generic Schwarma
+-- >>> instance SOP.HasDatatypeInfo Schwarma
+-- >>> renderDefinition (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (EnumWith Schwarma)] '[])
+-- "DROP TYPE \"schwarma\";"
 dropType
   :: Has tydef schema ('Typedef ty)
   => Alias tydef
@@ -841,17 +886,19 @@ instance (Has alias schema ('Typedef ty))
   => IsLabel alias (ColumnTypeExpression schema ('NoDef :=> 'NotNull ty)) where
     fromLabel = UnsafeColumnTypeExpression (renderAlias (fromLabel @alias))
 
-hasNull
+-- | used in `createTable` commands as a column constraint to note that
+-- @NULL@ may be present in a column
+nullable
   :: TypeExpression ty
   -> ColumnTypeExpression schema ('NoDef :=> 'Null ty)
-hasNull ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
+nullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
 
 -- | used in `createTable` commands as a column constraint to ensure
--- @NULL@ is not present
-hasNotNull
+-- @NULL@ is not present in a column
+notNullable
   :: TypeExpression ty
   -> ColumnTypeExpression schema (def :=> 'NotNull ty)
-hasNotNull ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
+notNullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
 
 -- | used in `createTable` commands as a column constraint to give a default
 default_

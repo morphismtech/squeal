@@ -66,12 +66,12 @@
 --   setup = 
 --    createTable #users
 --      ( serial `As` #id :*
---        (text & hasNotNull) `As` #name :* Nil )
+--        (text & notNullable) `As` #name :* Nil )
 --      ( primaryKey #id `As` #pk_users :* Nil ) >>>
 --    createTable #emails
 --      ( serial `As` #id :*
---        (int & hasNotNull) `As` #user_id :*
---        (text & hasNull) `As` #email :* Nil )
+--        (int & notNullable) `As` #user_id :*
+--        (text & nullable) `As` #email :* Nil )
 --      ( primaryKey #id `As` #pk_emails :*
 --        foreignKey #user_id #users #id
 --          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )

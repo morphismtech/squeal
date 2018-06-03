@@ -426,10 +426,20 @@ selectDistinctDotStar rel relations = UnsafeQuery $
   "SELECT DISTINCT" <+> renderAlias rel <> ".*"
   <+> renderTableExpression relations
 
+-- | `values` computes a row value or set of row values
+-- specified by value expressions. It is most commonly used
+-- to generate a “constant table” within a larger command,
+-- but it can be used on its own.
+--
+-- >>> type Row = '["a" ::: 'NotNull 'PGint4, "b" ::: 'NotNull 'PGtext]
+-- >>> let query = values (1 `As` #a :* "one" `As` #b :* Nil) [] :: Query '[] '[] Row
+-- >>> renderQuery query
+-- "SELECT * FROM (VALUES (1, E'one')) AS t (\"a\", \"b\")"
 values
   :: SListI cols
   => NP (Aliased (Expression '[] 'Ungrouped params)) cols
   -> [NP (Aliased (Expression '[] 'Ungrouped params)) cols]
+  -- ^ When more than one row is specified, all the rows must
   -> Query schema params cols
 values rw rws = UnsafeQuery $ "SELECT * FROM"
   <+> parenthesized (

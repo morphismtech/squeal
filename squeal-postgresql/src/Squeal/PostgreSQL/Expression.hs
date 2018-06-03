@@ -40,7 +40,7 @@ module Squeal.PostgreSQL.Expression
   , isNotNull
   , matchNull
   , nullIf
-    -- ** Arrays, Enums, Composites
+    -- ** Collections
   , array
   , row
     -- ** Functions
@@ -366,9 +366,17 @@ instance (KnownSymbol label, label `In` labels) => IsPGlabel label
   (Expression relations grouping params (nullity ('PGenum labels))) where
   label = UnsafeExpression $ renderLabel (PGlabel @label)
 
+-- | A row constructor is an expression that builds a row value
+-- (also called a composite value) using values for its member fields.
+--
+-- >>> type Complex = PGcomposite '["real" ::: 'PGfloat8, "imaginary" ::: 'PGfloat8]
+-- >>> let i = row (0 `As` #real :* 1 `As` #imaginary :* Nil) :: Expression '[] 'Ungrouped '[] ('NotNull Complex)
+-- >>> renderExpression i
+-- "ROW(0, 1)"
 row
-  :: (SListI (Nulls fields))
+  :: SListI (Nulls fields)
   => NP (Aliased (Expression relation grouping params)) (Nulls fields)
+  -- ^ zero or more expressions for the row field values
   -> Expression relation grouping params (nullity ('PGcomposite fields))
 row exprs = UnsafeExpression $ "ROW" <> parenthesized
   (renderCommaSeparated (\ (expr `As` _) -> renderExpression expr) exprs)
