@@ -37,6 +37,7 @@ module Squeal.PostgreSQL.Query
   , selectDotStar
   , selectDistinctDotStar
   , values
+  , values_
     -- * Table Expressions
   , TableExpression (..)
   , renderTableExpression
@@ -440,6 +441,7 @@ values
   => NP (Aliased (Expression '[] 'Ungrouped params)) cols
   -> [NP (Aliased (Expression '[] 'Ungrouped params)) cols]
   -- ^ When more than one row is specified, all the rows must
+  -- must have the same number of elements
   -> Query schema params cols
 values rw rws = UnsafeQuery $ "SELECT * FROM"
   <+> parenthesized (
@@ -454,6 +456,15 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
       :: Aliased (Expression '[] 'Ungrouped params) ty -> ByteString
     renderAliasPart (_ `As` name) = renderAlias name
     renderValuePart (value `As` _) = renderExpression value
+
+-- | `values_` computes a row value or set of row values
+-- specified by value expressions.
+values_
+  :: SListI cols
+  => NP (Aliased (Expression '[] 'Ungrouped params)) cols
+  -- ^ one row of values
+  -> Query schema params cols
+values_ rw = values rw []
 
 {-----------------------------------------
 Table Expressions

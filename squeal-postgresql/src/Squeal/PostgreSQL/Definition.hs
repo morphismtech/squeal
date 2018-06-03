@@ -896,7 +896,7 @@ newtype ColumnTypeExpression (schema :: SchemaType) (ty :: ColumnType)
 
 instance (Has alias schema ('Typedef ty))
   => IsLabel alias (ColumnTypeExpression schema ('NoDef :=> 'NotNull ty)) where
-    fromLabel = UnsafeColumnTypeExpression (renderAlias (fromLabel @alias))
+    fromLabel = UnsafeColumnTypeExpression (renderAlias (fromLabel @alias) <+> "NOT NULL")
 
 -- | used in `createTable` commands as a column constraint to note that
 -- @NULL@ may be present in a column

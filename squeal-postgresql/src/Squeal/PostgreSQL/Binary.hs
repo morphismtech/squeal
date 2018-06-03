@@ -6,6 +6,66 @@ Maintainer: eitan@morphism.tech
 Stability: experimental
 
 Binary encoding and decoding between Haskell and PostgreSQL types.
+
+Instances are governed by the `Generic` and `HasDatatype` typeclasses.
+
+>>> import Control.Monad
+>>> import Control.Monad.Base
+
+>>> import Squeal.PostgreSQL
+
+>>> data Schwarma = Beef | Lamb | Chicken deriving (Show, GHC.Generic)
+>>> instance Generic Schwarma
+>>> instance HasDatatypeInfo Schwarma
+
+>>> let q = values_ (label @"Beef" `As` #fromOnly :* Nil) :: Query '[] '[] '["fromOnly" ::: 'NotNull (EnumWith Schwarma)]
+
+>>> :{
+void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+  result <- runQuery q
+  Just (Only schwarma) <- firstRow result
+  liftBase $ print (schwarma :: Schwarma)
+:}
+Beef
+
+>>> :{
+type family Schema :: SchemaType where
+  Schema =
+    '[ "schwarma" ::: 'Typedef (EnumWith Schwarma)
+     , "tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull (EnumWith Schwarma)])
+     ]
+:}
+
+>>> :{
+let
+  setup =
+    createTypeEnumWith @Schwarma #schwarma >>>
+    createTable #tab (#schwarma `As` #col :* Nil) Nil
+    :: Definition '[] Schema
+  teardown =
+    dropTable #tab >>>
+    dropType #schwarma
+    :: Definition Schema '[]
+  manip =
+    insertRow_ #tab (Set (param @1) `As` #col :* Nil)
+    :: Manipulation Schema '[ 'NotNull (EnumWith Schwarma)] '[]
+  qry =
+    select (#col `As` #fromOnly :* Nil) (from (table #tab))
+    :: Query Schema '[] '["fromOnly" ::: 'NotNull (EnumWith Schwarma)]
+  session = do
+    manipulateParams manip (Only Chicken)
+    result <- runQuery qry
+    Just (Only schwarma) <- firstRow result
+    liftBase $ print (schwarma :: Schwarma) 
+:}
+
+>>> :{
+void . withConnection "host=localhost port=5432 dbname=exampledb" $
+  define setup
+  & pqThen session
+  & pqThen (define teardown)
+:}
+Chicken
 -}
 
 {-# LANGUAGE
