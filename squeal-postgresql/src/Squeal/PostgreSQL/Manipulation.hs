@@ -211,11 +211,11 @@ insertRows
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
-  -> [NP (Aliased (ColumnValue '[] params)) columns] -- ^ more rows to insert
-  -> ConflictClause columns params
+  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
+  -> [NP (Aliased (ColumnValue schema '[] params)) columns] -- ^ more rows to insert
+  -> ConflictClause schema columns params
   -- ^ what to do in case of constraint conflict
-  -> ReturningClause columns params results -- ^ results to return
+  -> ReturningClause schema columns params results -- ^ results to return
   -> Manipulation schema params results
 insertRows tab rw rws conflict returning = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderAlias tab
@@ -228,7 +228,7 @@ insertRows tab rw rws conflict returning = UnsafeManipulation $
     <> renderReturningClause returning
     where
       renderAliasPart, renderColumnValuePart
-        :: Aliased (ColumnValue '[] params) ty -> ByteString
+        :: Aliased (ColumnValue schema '[] params) ty -> ByteString
       renderAliasPart (_ `As` name) = renderAlias name
       renderColumnValuePart (value `As` _) = case value of
         Default -> "DEFAULT"
@@ -241,10 +241,10 @@ insertRow
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
-  -> ConflictClause columns params
+  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
+  -> ConflictClause schema columns params
   -- ^ what to do in case of constraint conflict
-  -> ReturningClause columns params results -- ^ results to return
+  -> ReturningClause schema columns params results -- ^ results to return
   -> Manipulation schema params results
 insertRow tab rw = insertRows tab rw []
 
@@ -254,8 +254,8 @@ insertRows_
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
-  -> [NP (Aliased (ColumnValue '[] params)) columns] -- ^ more rows to insert
+  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
+  -> [NP (Aliased (ColumnValue schema '[] params)) columns] -- ^ more rows to insert
   -> Manipulation schema params '[]
 insertRows_ tab rw rws =
   insertRows tab rw rws OnConflictDoRaise (Returning Nil)
@@ -266,7 +266,7 @@ insertRow_
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
+  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
   -> Manipulation schema params '[]
 insertRow_ tab rw = insertRow tab rw OnConflictDoRaise (Returning Nil)
 
@@ -278,9 +278,9 @@ insertQuery
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
   -> Query schema params (ColumnsToRelation columns)
-  -> ConflictClause columns params
+  -> ConflictClause schema columns params
   -- ^ what to do in case of constraint conflict
-  -> ReturningClause columns params results -- ^ results to return
+  -> ReturningClause schema columns params results -- ^ results to return
   -> Manipulation schema params results
 insertQuery tab query conflict returning = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderAlias tab
@@ -305,15 +305,16 @@ insertQuery_ tab query =
 -- `Set` a value to be an `Expression`, relative to the given
 -- row for an update, and closed for an insert.
 data ColumnValue
+  (schema :: SchemaType)
   (columns :: RelationType)
   (params :: [NullityType])
   (ty :: ColumnType)
   where
-    Same :: ColumnValue (column ': columns) params ty
-    Default :: ColumnValue columns params ('Def :=> ty)
+    Same :: ColumnValue schema (column ': columns) params ty
+    Default :: ColumnValue schema columns params ('Def :=> ty)
     Set
-      :: (forall table. Expression '[table ::: columns] 'Ungrouped params ty)
-      -> ColumnValue columns params (constraint :=> ty)
+      :: (forall table. Expression schema '[table ::: columns] 'Ungrouped params ty)
+      -> ColumnValue schema columns params (constraint :=> ty)
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
@@ -326,22 +327,23 @@ data ColumnValue
 -- in the row. Use @Returning Nil@ in the common case where no return
 -- values are desired.
 data ReturningClause
+  (schema :: SchemaType)
   (columns :: ColumnsType)
   (params :: [NullityType])
   (results :: RelationType)
   where
     ReturningStar
       :: results ~ ColumnsToRelation columns
-      => ReturningClause columns params results
+      => ReturningClause schema columns params results
     Returning
       :: rel ~ ColumnsToRelation columns
-      => NP (Aliased (Expression '[table ::: rel] 'Ungrouped params)) results
-      -> ReturningClause columns params results
+      => NP (Aliased (Expression schema '[table ::: rel] 'Ungrouped params)) results
+      -> ReturningClause schema columns params results
 
 -- | Render a `ReturningClause`.
 renderReturningClause
   :: SOP.SListI results
-  => ReturningClause params columns results
+  => ReturningClause schema params columns results
   -> ByteString
 renderReturningClause = \case
   ReturningStar -> " RETURNING *"
@@ -354,18 +356,18 @@ renderReturningClause = \case
 -- `OnConflictDoNothing` simply avoids inserting a row.
 -- `OnConflictDoUpdate` updates the existing row that conflicts with the row
 -- proposed for insertion.
-data ConflictClause (columns :: ColumnsType) params where
-  OnConflictDoRaise :: ConflictClause columns params
-  OnConflictDoNothing :: ConflictClause columns params
+data ConflictClause (schema :: SchemaType) (columns :: ColumnsType) params where
+  OnConflictDoRaise :: ConflictClause schema columns params
+  OnConflictDoNothing :: ConflictClause schema columns params
   OnConflictDoUpdate
-    :: NP (Aliased (ColumnValue (ColumnsToRelation columns) params)) columns
-    -> [Condition '[table ::: ColumnsToRelation columns] 'Ungrouped params]
-    -> ConflictClause columns params
+    :: NP (Aliased (ColumnValue schema (ColumnsToRelation columns) params)) columns
+    -> [Condition schema '[table ::: ColumnsToRelation columns] 'Ungrouped params]
+    -> ConflictClause schema columns params
 
 -- | Render a `ConflictClause`.
 renderConflictClause
   :: SOP.SListI columns
-  => ConflictClause columns params
+  => ConflictClause schema columns params
   -> ByteString
 renderConflictClause = \case
   OnConflictDoRaise -> ""
@@ -378,7 +380,7 @@ renderConflictClause = \case
         wh:whs -> " WHERE" <+> renderExpression (foldr (.&&) wh whs)
       where
         renderUpdate
-          :: Aliased (ColumnValue columns params) column
+          :: Aliased (ColumnValue schema columns params) column
           -> Maybe ByteString
         renderUpdate = \case
           Same `As` _ -> Nothing
@@ -399,11 +401,11 @@ update
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue (ColumnsToRelation columns) params)) columns
+  -> NP (Aliased (ColumnValue schema (ColumnsToRelation columns) params)) columns
   -- ^ modified values to replace old values
-  -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
   -- ^ condition under which to perform update on a row
-  -> ReturningClause columns params results -- ^ results to return
+  -> ReturningClause schema columns params results -- ^ results to return
   -> Manipulation schema params results
 update tab columns wh returning = UnsafeManipulation $
   "UPDATE"
@@ -414,7 +416,7 @@ update tab columns wh returning = UnsafeManipulation $
   <> renderReturningClause returning
   where
     renderUpdate
-      :: Aliased (ColumnValue columns params) column
+      :: Aliased (ColumnValue schema columns params) column
       -> Maybe ByteString
     renderUpdate = \case
       Same `As` _ -> Nothing
@@ -429,9 +431,9 @@ update_
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue (ColumnsToRelation columns) params)) columns
+  -> NP (Aliased (ColumnValue schema (ColumnsToRelation columns) params)) columns
   -- ^ modified values to replace old values
-  -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
   -- ^ condition under which to perform update on a row
   -> Manipulation schema params '[]
 update_ tab columns wh = update tab columns wh (Returning Nil)
@@ -446,9 +448,9 @@ deleteFrom
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
-  -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
   -- ^ condition under which to delete a row
-  -> ReturningClause columns params results -- ^ results to return
+  -> ReturningClause schema columns params results -- ^ results to return
   -> Manipulation schema params results
 deleteFrom tab wh returning = UnsafeManipulation $
   "DELETE FROM" <+> renderAlias tab
@@ -460,7 +462,7 @@ deleteFrom_
   :: ( Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
-  -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
   -- ^ condition under which to delete a row
   -> Manipulation schema params '[]
 deleteFrom_ tab wh = deleteFrom tab wh (Returning Nil)

@@ -248,7 +248,7 @@ check
      , HasAll aliases (TableToRelation table) subcolumns )
   => NP Alias aliases
   -- ^ specify the subcolumns which are getting checked
-  -> (forall tab. Condition '[tab ::: subcolumns] 'Ungrouped '[])
+  -> (forall tab. Condition schema '[tab ::: subcolumns] 'Ungrouped '[])
   -- ^ a closed `Condition` on those subcolumns
   -> TableConstraintExpression schema alias ('Check aliases)
 check _cols condition = UnsafeTableConstraintExpression $
@@ -695,7 +695,7 @@ newtype AlterColumn (schema :: SchemaType) (ty0 :: ColumnType) (ty1 :: ColumnTyp
 -- :}
 -- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" SET DEFAULT 5;"
 setDefault
-  :: Expression '[] 'Ungrouped '[] ty -- ^ default value to set
+  :: Expression schema '[] 'Ungrouped '[] ty -- ^ default value to set
   -> AlterColumn schema (constraint :=> ty) ('Def :=> ty)
 setDefault expression = UnsafeAlterColumn $
   "SET DEFAULT" <+> renderExpression expression
@@ -847,7 +847,7 @@ createTypeComposite
   :: (KnownSymbol ty, SOP.SListI fields)
   => Alias ty
   -- ^ name of the user defined composite type
-  -> NP (Aliased TypeExpression) fields
+  -> NP (Aliased (TypeExpression schema)) fields
   -- ^ list of attribute names and data types
   -> Definition schema (Create ty ('Typedef ('PGcomposite fields)) schema)
 createTypeComposite ty fields = UnsafeDefinition $
@@ -864,7 +864,7 @@ createTypeComposite ty fields = UnsafeDefinition $
 createTypeCompositeWith
   :: forall hask ty schema.
   ( ZipAliased (FieldNamesWith hask) (FieldTypesWith hask)
-  , SOP.All PGTyped (FieldTypesWith hask)
+  , SOP.All (PGTyped schema) (FieldTypesWith hask)
   , KnownSymbol ty
   )
   => Alias ty
@@ -872,8 +872,8 @@ createTypeCompositeWith
   -> Definition schema (Create ty ( 'Typedef (CompositeWith hask)) schema)
 createTypeCompositeWith ty = createTypeComposite ty $ zipAs
   (SOP.hpure Alias :: NP Alias (FieldNamesWith hask))
-  (SOP.hcpure (SOP.Proxy :: SOP.Proxy PGTyped) pgtype
-    :: NP TypeExpression (FieldTypesWith hask))
+  (SOP.hcpure (SOP.Proxy :: SOP.Proxy (PGTyped schema)) pgtype
+    :: NP (TypeExpression schema) (FieldTypesWith hask))
 
 -- | Drop a type.
 --
@@ -894,27 +894,23 @@ newtype ColumnTypeExpression (schema :: SchemaType) (ty :: ColumnType)
   = UnsafeColumnTypeExpression { renderColumnTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
-instance (Has alias schema ('Typedef ty))
-  => IsLabel alias (ColumnTypeExpression schema ('NoDef :=> 'NotNull ty)) where
-    fromLabel = UnsafeColumnTypeExpression (renderAlias (fromLabel @alias) <+> "NOT NULL")
-
 -- | used in `createTable` commands as a column constraint to note that
 -- @NULL@ may be present in a column
 nullable
-  :: TypeExpression ty
+  :: TypeExpression schema ty
   -> ColumnTypeExpression schema ('NoDef :=> 'Null ty)
 nullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
 
 -- | used in `createTable` commands as a column constraint to ensure
 -- @NULL@ is not present in a column
 notNullable
-  :: TypeExpression ty
+  :: TypeExpression schema ty
   -> ColumnTypeExpression schema (def :=> 'NotNull ty)
 notNullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
 
 -- | used in `createTable` commands as a column constraint to give a default
 default_
-  :: Expression '[] 'Ungrouped '[] ty
+  :: Expression schema '[] 'Ungrouped '[] ty
   -> ColumnTypeExpression schema ('NoDef :=> ty)
   -> ColumnTypeExpression schema ('Def :=> ty)
 default_ x ty = UnsafeColumnTypeExpression $
