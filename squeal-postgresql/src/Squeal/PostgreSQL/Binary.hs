@@ -13,6 +13,7 @@ Instances are governed by the `Generic` and `HasDatatype` typeclasses.
 >>> import Control.Monad.Base
 
 >>> import Squeal.PostgreSQL
+>>> import qualified Squeal.PostgreSQL as SQL
 
 >>> data Schwarma = Beef | Lamb | Chicken deriving (Show, GHC.Generic)
 >>> instance Generic Schwarma
@@ -28,6 +29,7 @@ void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
 :}
 Beef
 
+>>> :set -XTypeFamilies -XTypeInType -XUndecidableInstances
 >>> :{
 type family Schema :: SchemaType where
   Schema =
@@ -50,7 +52,7 @@ let
     insertRow_ #tab (Set (param @1) `As` #col :* Nil)
     :: Manipulation Schema '[ 'NotNull (EnumWith Schwarma)] '[]
   qry =
-    select (#col `As` #fromOnly :* Nil) (from (table #tab))
+    select (#col `As` #fromOnly :* Nil) (SQL.from (table #tab))
     :: Query Schema '[] '["fromOnly" ::: 'NotNull (EnumWith Schwarma)]
   session = do
     manipulateParams manip (Only Chicken)
