@@ -116,20 +116,21 @@ newtype Definition
 instance Category Definition where
   id = UnsafeDefinition ";"
   ddl1 . ddl0 = UnsafeDefinition $
-    renderDefinition ddl0 <+> renderDefinition ddl1
+    renderDefinition ddl0 <> "\n" <> renderDefinition ddl1
 
 {-----------------------------------------
 CREATE statements
 -----------------------------------------}
 
--- | `createTable` adds a table to the schema.
---
--- >>> :set -XOverloadedLabels
--- >>> :{
--- renderDefinition $
---   createTable #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil
--- :}
--- "CREATE TABLE \"tab\" (\"a\" int NULL, \"b\" real NULL);"
+{- | `createTable` adds a table to the schema.
+
+>>> :set -XOverloadedLabels
+>>> :{
+Data.ByteString.Char8.putStrLn . renderDefinition $
+  createTable #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil
+:}
+CREATE TABLE "tab" ("a" int NULL, "b" real NULL);
+-}
 createTable
   :: ( KnownSymbol table
      , columns ~ (col ': cols)
@@ -145,18 +146,19 @@ createTable
 createTable tab columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderCreation tab columns constraints
 
--- | `createTableIfNotExists` creates a table if it doesn't exist, but does not add it to the schema.
--- Instead, the schema already has the table so if the table did not yet exist, the schema was wrong.
--- `createTableIfNotExists` fixes this. Interestingly, this property makes it an idempotent in the `Category` `Definition`.
---
--- >>> :set -XOverloadedLabels -XTypeApplications
--- >>> type Table = '[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGfloat4]
--- >>> type Schema = '["tab" ::: 'Table Table]
--- >>> :{
--- renderDefinition
---   (createTableIfNotExists #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil :: Definition Schema Schema)
--- :}
--- "CREATE TABLE IF NOT EXISTS \"tab\" (\"a\" int NULL, \"b\" real NULL);"
+{-| `createTableIfNotExists` creates a table if it doesn't exist, but does not add it to the schema.
+Instead, the schema already has the table so if the table did not yet exist, the schema was wrong.
+`createTableIfNotExists` fixes this. Interestingly, this property makes it an idempotent in the `Category` `Definition`.
+
+>>> :set -XOverloadedLabels -XTypeApplications
+>>> type Table = '[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGfloat4]
+>>> type Schema = '["tab" ::: 'Table Table]
+>>> :{
+Data.ByteString.Char8.putStrLn $ renderDefinition
+  (createTableIfNotExists #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil :: Definition Schema Schema)
+:}
+CREATE TABLE IF NOT EXISTS "tab" ("a" int NULL, "b" real NULL);
+-}
 createTableIfNotExists
   :: ( Has table schema ('Table (constraints :=> columns))
      , SOP.SListI columns
@@ -220,29 +222,30 @@ newtype TableConstraintExpression
     { renderTableConstraintExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
--- | A `check` constraint is the most generic `TableConstraint` type.
--- It allows you to specify that the value in a certain column must satisfy
--- a Boolean (truth-value) expression.
---
--- >>> :{
--- type Schema = '[
---   "tab" ::: 'Table ('[ "inequality" ::: 'Check '["a","b"]] :=> '[
---     "a" ::: 'NoDef :=> 'NotNull 'PGint4,
---     "b" ::: 'NoDef :=> 'NotNull 'PGint4
---   ])]
--- :}
---
--- >>> :{
--- let
---   definition :: Definition '[] Schema
---   definition = createTable #tab
---     ( (int & notNullable) `As` #a :*
---       (int & notNullable) `As` #b :* Nil )
---     ( check (#a :* #b :* Nil) (#a .> #b) `As` #inequality :* Nil )
--- :}
---
--- >>> renderDefinition definition
--- "CREATE TABLE \"tab\" (\"a\" int NOT NULL, \"b\" int NOT NULL, CONSTRAINT \"inequality\" CHECK ((\"a\" > \"b\")));"
+{-| A `check` constraint is the most generic `TableConstraint` type.
+It allows you to specify that the value in a certain column must satisfy
+a Boolean (truth-value) expression.
+
+>>> :{
+type Schema = '[
+  "tab" ::: 'Table ('[ "inequality" ::: 'Check '["a","b"]] :=> '[
+    "a" ::: 'NoDef :=> 'NotNull 'PGint4,
+    "b" ::: 'NoDef :=> 'NotNull 'PGint4
+  ])]
+:}
+
+>>> :{
+let
+  definition :: Definition '[] Schema
+  definition = createTable #tab
+    ( (int & notNullable) `As` #a :*
+      (int & notNullable) `As` #b :* Nil )
+    ( check (#a :* #b :* Nil) (#a .> #b) `As` #inequality :* Nil )
+:}
+
+>>> Data.ByteString.Char8.putStrLn $ renderDefinition definition
+CREATE TABLE "tab" ("a" int NOT NULL, "b" int NOT NULL, CONSTRAINT "inequality" CHECK (("a" > "b")));
+-}
 check
   :: ( Has alias schema ('Table table)
      , HasAll aliases (TableToRelation table) subcolumns )
@@ -254,28 +257,29 @@ check
 check _cols condition = UnsafeTableConstraintExpression $
   "CHECK" <+> parenthesized (renderExpression condition)
 
--- | A `unique` constraint ensure that the data contained in a column,
--- or a group of columns, is unique among all the rows in the table.
---
--- >>> :{
--- type Schema = '[
---   "tab" ::: 'Table( '[ "uq_a_b" ::: 'Unique '["a","b"]] :=> '[
---     "a" ::: 'NoDef :=> 'Null 'PGint4,
---     "b" ::: 'NoDef :=> 'Null 'PGint4
---   ])]
--- :}
---
--- >>> :{
--- let
---   definition :: Definition '[] Schema
---   definition = createTable #tab
---     ( (int & nullable) `As` #a :*
---       (int & nullable) `As` #b :* Nil )
---     ( unique (#a :* #b :* Nil) `As` #uq_a_b :* Nil )
--- :}
---
--- >>> renderDefinition definition
--- "CREATE TABLE \"tab\" (\"a\" int NULL, \"b\" int NULL, CONSTRAINT \"uq_a_b\" UNIQUE (\"a\", \"b\"));"
+{-| A `unique` constraint ensure that the data contained in a column,
+or a group of columns, is unique among all the rows in the table.
+
+>>> :{
+type Schema = '[
+  "tab" ::: 'Table( '[ "uq_a_b" ::: 'Unique '["a","b"]] :=> '[
+    "a" ::: 'NoDef :=> 'Null 'PGint4,
+    "b" ::: 'NoDef :=> 'Null 'PGint4
+  ])]
+:}
+
+>>> :{
+let
+  definition :: Definition '[] Schema
+  definition = createTable #tab
+    ( (int & nullable) `As` #a :*
+      (int & nullable) `As` #b :* Nil )
+    ( unique (#a :* #b :* Nil) `As` #uq_a_b :* Nil )
+:}
+
+>>> Data.ByteString.Char8.putStrLn $ renderDefinition definition
+CREATE TABLE "tab" ("a" int NULL, "b" int NULL, CONSTRAINT "uq_a_b" UNIQUE ("a", "b"));
+-}
 unique
   :: ( Has alias schema ('Table table)
      , HasAll aliases (TableToRelation table) subcolumns )
@@ -285,29 +289,30 @@ unique
 unique columns = UnsafeTableConstraintExpression $
   "UNIQUE" <+> parenthesized (commaSeparated (renderAliases columns))
 
--- | A `primaryKey` constraint indicates that a column, or group of columns,
--- can be used as a unique identifier for rows in the table.
--- This requires that the values be both unique and not null.
---
--- >>> :{
--- type Schema = '[
---   "tab" ::: 'Table ('[ "pk_id" ::: 'PrimaryKey '["id"]] :=> '[
---     "id" ::: 'Def :=> 'NotNull 'PGint4,
---     "name" ::: 'NoDef :=> 'NotNull 'PGtext
---   ])]
--- :}
---
--- >>> :{
--- let
---   definition :: Definition '[] Schema
---   definition = createTable #tab
---     ( serial `As` #id :*
---       (text & notNullable) `As` #name :* Nil )
---     ( primaryKey #id `As` #pk_id :* Nil )
--- :}
---
--- >>> renderDefinition definition
--- "CREATE TABLE \"tab\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_id\" PRIMARY KEY (\"id\"));"
+{-| A `primaryKey` constraint indicates that a column, or group of columns,
+can be used as a unique identifier for rows in the table.
+This requires that the values be both unique and not null.
+
+>>> :{
+type Schema = '[
+  "tab" ::: 'Table ('[ "pk_id" ::: 'PrimaryKey '["id"]] :=> '[
+    "id" ::: 'Def :=> 'NotNull 'PGint4,
+    "name" ::: 'NoDef :=> 'NotNull 'PGtext
+  ])]
+:}
+
+>>> :{
+let
+  definition :: Definition '[] Schema
+  definition = createTable #tab
+    ( serial `As` #id :*
+      (text & notNullable) `As` #name :* Nil )
+    ( primaryKey #id `As` #pk_id :* Nil )
+:}
+
+>>> Data.ByteString.Char8.putStrLn $ renderDefinition definition
+CREATE TABLE "tab" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_id" PRIMARY KEY ("id"));
+-}
 primaryKey
   :: ( Has alias schema ('Table table)
      , HasAll aliases (TableToColumns table) subcolumns
@@ -318,78 +323,79 @@ primaryKey
 primaryKey columns = UnsafeTableConstraintExpression $
   "PRIMARY KEY" <+> parenthesized (commaSeparated (renderAliases columns))
 
--- | A `foreignKey` specifies that the values in a column
--- (or a group of columns) must match the values appearing in some row of
--- another table. We say this maintains the referential integrity
--- between two related tables.
---
--- >>> :{
--- type Schema =
---   '[ "users" ::: 'Table (
---        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
---        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
---         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
---         ])
---    , "emails" ::: 'Table (
---        '[  "pk_emails" ::: 'PrimaryKey '["id"]
---         , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
---         ] :=>
---        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
---         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
---         , "email" ::: 'NoDef :=> 'Null 'PGtext
---         ])
---    ]
--- :}
---
--- >>> :{
--- let
---   setup :: Definition '[] Schema
---   setup =
---    createTable #users
---      ( serial `As` #id :*
---        (text & notNullable) `As` #name :* Nil )
---      ( primaryKey #id `As` #pk_users :* Nil ) >>>
---    createTable #emails
---      ( serial `As` #id :*
---        (int & notNullable) `As` #user_id :*
---        (text & nullable) `As` #email :* Nil )
---      ( primaryKey #id `As` #pk_emails :*
---        foreignKey #user_id #users #id
---          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
--- in renderDefinition setup
--- :}
--- "CREATE TABLE \"users\" (\"id\" serial, \"name\" text NOT NULL, CONSTRAINT \"pk_users\" PRIMARY KEY (\"id\")); CREATE TABLE \"emails\" (\"id\" serial, \"user_id\" int NOT NULL, \"email\" text NULL, CONSTRAINT \"pk_emails\" PRIMARY KEY (\"id\"), CONSTRAINT \"fk_user_id\" FOREIGN KEY (\"user_id\") REFERENCES \"users\" (\"id\") ON DELETE CASCADE ON UPDATE CASCADE);"
---
--- A `foreignKey` can even be a table self-reference.
---
--- >>> :{
--- type Schema =
---   '[ "employees" ::: 'Table (
---        '[ "employees_pk"          ::: 'PrimaryKey '["id"]
---         , "employees_employer_fk" ::: 'ForeignKey '["employer_id"] "employees" '["id"]
---         ] :=>
---        '[ "id"          :::   'Def :=> 'NotNull 'PGint4
---         , "name"        ::: 'NoDef :=> 'NotNull 'PGtext
---         , "employer_id" ::: 'NoDef :=>    'Null 'PGint4
---         ])
---    ]
--- :}
---
--- >>> :{
--- let
---   setup :: Definition '[] Schema
---   setup =
---    createTable #employees
---      ( serial `As` #id :*
---        (text & notNullable) `As` #name :*
---        (integer & nullable) `As` #employer_id :* Nil )
---      ( primaryKey #id `As` #employees_pk :*
---        foreignKey #employer_id #employees #id
---          OnDeleteCascade OnUpdateCascade `As` #employees_employer_fk :* Nil )
--- in renderDefinition setup
--- :}
--- "CREATE TABLE \"employees\" (\"id\" serial, \"name\" text NOT NULL, \"employer_id\" integer NULL, CONSTRAINT \"employees_pk\" PRIMARY KEY (\"id\"), CONSTRAINT \"employees_employer_fk\" FOREIGN KEY (\"employer_id\") REFERENCES \"employees\" (\"id\") ON DELETE CASCADE ON UPDATE CASCADE);"
---
+{-| A `foreignKey` specifies that the values in a column
+(or a group of columns) must match the values appearing in some row of
+another table. We say this maintains the referential integrity
+between two related tables.
+
+>>> :{
+type Schema =
+  '[ "users" ::: 'Table (
+       '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
+       '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+        , "name" ::: 'NoDef :=> 'NotNull 'PGtext
+        ])
+   , "emails" ::: 'Table (
+       '[  "pk_emails" ::: 'PrimaryKey '["id"]
+        , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+        ] :=>
+       '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+        , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
+        , "email" ::: 'NoDef :=> 'Null 'PGtext
+        ])
+   ]
+:}
+
+>>> :{
+let
+  setup :: Definition '[] Schema
+  setup =
+   createTable #users
+     ( serial `As` #id :*
+       (text & notNullable) `As` #name :* Nil )
+     ( primaryKey #id `As` #pk_users :* Nil ) >>>
+   createTable #emails
+     ( serial `As` #id :*
+       (int & notNullable) `As` #user_id :*
+       (text & nullable) `As` #email :* Nil )
+     ( primaryKey #id `As` #pk_emails :*
+       foreignKey #user_id #users #id
+         OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
+in Data.ByteString.Char8.putStrLn $ renderDefinition setup
+:}
+CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));
+CREATE TABLE "emails" ("id" serial, "user_id" int NOT NULL, "email" text NULL, CONSTRAINT "pk_emails" PRIMARY KEY ("id"), CONSTRAINT "fk_user_id" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
+
+A `foreignKey` can even be a table self-reference.
+
+>>> :{
+type Schema =
+  '[ "employees" ::: 'Table (
+       '[ "employees_pk"          ::: 'PrimaryKey '["id"]
+        , "employees_employer_fk" ::: 'ForeignKey '["employer_id"] "employees" '["id"]
+        ] :=>
+       '[ "id"          :::   'Def :=> 'NotNull 'PGint4
+        , "name"        ::: 'NoDef :=> 'NotNull 'PGtext
+        , "employer_id" ::: 'NoDef :=>    'Null 'PGint4
+        ])
+   ]
+:}
+
+>>> :{
+let
+  setup :: Definition '[] Schema
+  setup =
+   createTable #employees
+     ( serial `As` #id :*
+       (text & notNullable) `As` #name :*
+       (integer & nullable) `As` #employer_id :* Nil )
+     ( primaryKey #id `As` #employees_pk :*
+       foreignKey #employer_id #employees #id
+         OnDeleteCascade OnUpdateCascade `As` #employees_employer_fk :* Nil )
+in Data.ByteString.Char8.putStrLn $ renderDefinition setup
+:}
+CREATE TABLE "employees" ("id" serial, "name" text NOT NULL, "employer_id" integer NULL, CONSTRAINT "employees_pk" PRIMARY KEY ("id"), CONSTRAINT "employees_employer_fk" FOREIGN KEY ("employer_id") REFERENCES "employees" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
+-}
 foreignKey
   :: (ForeignKeyed schema child parent
         table reftable
@@ -481,8 +487,8 @@ DROP statements
 --   definition = dropTable #muh_table
 -- :}
 --
--- >>> renderDefinition definition
--- "DROP TABLE \"muh_table\";"
+-- >>> Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- DROP TABLE "muh_table";
 dropTable
   :: Has table schema ('Table t)
   => Alias table -- ^ table to remove
@@ -507,8 +513,8 @@ alterTable tab alteration = UnsafeDefinition $
 
 -- | `alterTableRename` changes the name of a table from the schema.
 --
--- >>> renderDefinition $ alterTableRename #foo #bar
--- "ALTER TABLE \"foo\" RENAME TO \"bar\";"
+-- >>> Data.ByteString.Char8.putStrLn $ renderDefinition $ alterTableRename #foo #bar
+-- ALTER TABLE "foo" RENAME TO "bar";
 alterTableRename
   :: (KnownSymbol table0, KnownSymbol table1)
   => Alias table0 -- ^ table to rename
@@ -535,9 +541,9 @@ newtype AlterTable
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --     '["tab" ::: 'Table ('["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --   definition = alterTable #tab (addConstraint #positive (check (#col :* Nil) (#col .> 0)))
--- in renderDefinition definition
+-- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
 -- :}
--- "ALTER TABLE \"tab\" ADD CONSTRAINT \"positive\" CHECK ((\"col\" > 0));"
+-- ALTER TABLE "tab" ADD CONSTRAINT "positive" CHECK (("col" > 0));
 addConstraint
   :: ( KnownSymbol alias
      , Has tab schema ('Table table0)
@@ -559,9 +565,9 @@ addConstraint alias constraint = UnsafeAlterTable $
 --     '["tab" ::: 'Table ('["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --   definition = alterTable #tab (dropConstraint #positive)
--- in renderDefinition definition
+-- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
 -- :}
--- "ALTER TABLE \"tab\" DROP CONSTRAINT \"positive\";"
+-- ALTER TABLE "tab" DROP CONSTRAINT "positive";
 dropConstraint
   :: ( KnownSymbol constraint
      , Has tab schema ('Table table0)
@@ -586,9 +592,9 @@ class AddColumn ty where
   --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
   --         , "col2" ::: 'Def :=> 'Null 'PGtext ])]
   --   definition = alterTable #tab (addColumn #col2 (text & nullable & default_ "foo"))
-  -- in renderDefinition definition
+  -- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
   -- :}
-  -- "ALTER TABLE \"tab\" ADD COLUMN \"col2\" text NULL DEFAULT E'foo';"
+  -- ALTER TABLE "tab" ADD COLUMN "col2" text NULL DEFAULT E'foo';
   --
   -- >>> :{
   -- let
@@ -598,9 +604,9 @@ class AddColumn ty where
   --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
   --         , "col2" ::: 'NoDef :=> 'Null 'PGtext ])]
   --   definition = alterTable #tab (addColumn #col2 (text & nullable))
-  -- in renderDefinition definition
+  -- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
   -- :}
-  -- "ALTER TABLE \"tab\" ADD COLUMN \"col2\" text NULL;"
+  -- ALTER TABLE "tab" ADD COLUMN "col2" text NULL;
   addColumn
     :: ( KnownSymbol column
        , Has tab schema ('Table table0)
@@ -627,9 +633,9 @@ instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 --         , "col2" ::: 'NoDef :=> 'Null 'PGtext ])]
 --     '["tab" ::: 'Table ('[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (dropColumn #col2)
--- in renderDefinition definition
+-- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
 -- :}
--- "ALTER TABLE \"tab\" DROP COLUMN \"col2\";"
+-- ALTER TABLE "tab" DROP COLUMN "col2";
 dropColumn
   :: ( KnownSymbol column
      , Has tab schema ('Table table0)
@@ -648,9 +654,9 @@ dropColumn column = UnsafeAlterTable $
 --     '["tab" ::: 'Table ('[] :=> '["foo" ::: 'NoDef :=> 'Null 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["bar" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (renameColumn #foo #bar)
--- in renderDefinition definition
+-- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
 -- :}
--- "ALTER TABLE \"tab\" RENAME COLUMN \"foo\" TO \"bar\";"
+-- ALTER TABLE "tab" RENAME COLUMN "foo" TO "bar";
 renameColumn
   :: ( KnownSymbol column0
      , KnownSymbol column1
@@ -691,9 +697,9 @@ newtype AlterColumn (schema :: SchemaType) (ty0 :: ColumnType) (ty1 :: ColumnTyp
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'Def :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (alterColumn #col (setDefault 5))
--- in renderDefinition definition
+-- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
 -- :}
--- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" SET DEFAULT 5;"
+-- ALTER TABLE "tab" ALTER COLUMN "col" SET DEFAULT 5;
 setDefault
   :: Expression schema '[] 'Ungrouped '[] ty -- ^ default value to set
   -> AlterColumn schema (constraint :=> ty) ('Def :=> ty)
@@ -708,9 +714,9 @@ setDefault expression = UnsafeAlterColumn $
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'Def :=> 'Null 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (alterColumn #col dropDefault)
--- in renderDefinition definition
+-- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
 -- :}
--- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" DROP DEFAULT;"
+-- ALTER TABLE "tab" ALTER COLUMN "col" DROP DEFAULT;
 dropDefault :: AlterColumn schema ('Def :=> ty) ('NoDef :=> ty)
 dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 
@@ -724,9 +730,9 @@ dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --   definition = alterTable #tab (alterColumn #col setNotNull)
--- in renderDefinition definition
+-- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
 -- :}
--- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" SET NOT NULL;"
+-- ALTER TABLE "tab" ALTER COLUMN "col" SET NOT NULL;
 setNotNull
   :: AlterColumn schema (constraint :=> 'Null ty) (constraint :=> 'NotNull ty)
 setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
@@ -739,9 +745,9 @@ setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (alterColumn #col dropNotNull)
--- in renderDefinition definition
+-- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
 -- :}
--- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" DROP NOT NULL;"
+-- ALTER TABLE "tab" ALTER COLUMN "col" DROP NOT NULL;
 dropNotNull
   :: AlterColumn schema (constraint :=> 'NotNull ty) (constraint :=> 'Null ty)
 dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
@@ -757,9 +763,9 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGnumeric])]
 --   definition =
 --     alterTable #tab (alterColumn #col (alterType (numeric & notNullable)))
--- in renderDefinition definition
+-- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
 -- :}
--- "ALTER TABLE \"tab\" ALTER COLUMN \"col\" TYPE numeric NOT NULL;"
+-- ALTER TABLE "tab" ALTER COLUMN "col" TYPE numeric NOT NULL;
 alterType :: ColumnTypeExpression schema ty -> AlterColumn schema ty0 ty
 alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 
@@ -772,10 +778,10 @@ alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 --     '[ "abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])
 --      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]
 --   definition =
---     createView #bc (select (#b `As` #b :* #c `As` #c :* Nil) (from (table (#abc `As` #abc))))
--- in renderDefinition definition
+--     createView #bc (select (#b :* #c :* Nil) (from (table #abc)))
+-- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
 -- :}
--- "CREATE VIEW \"bc\" AS SELECT \"b\" AS \"b\", \"c\" AS \"c\" FROM \"abc\" AS \"abc\";"
+-- CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
 createView
   :: KnownSymbol view
   => Alias view -- ^ the name of the table to add
@@ -795,9 +801,9 @@ createView alias query = UnsafeDefinition $
 --      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]
 --     '[ "abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = dropView #bc
--- in renderDefinition definition
+-- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
 -- :}
--- "DROP VIEW \"bc\";"
+-- DROP VIEW "bc";
 dropView
   :: Has view schema ('View v)
   => Alias view -- ^ view to remove
@@ -806,8 +812,8 @@ dropView v = UnsafeDefinition $ "DROP VIEW" <+> renderAlias v <> ";"
 
 -- | Enumerated types are created using the `createTypeEnum` command, for example
 --
--- >>> renderDefinition $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy" :* Nil)
--- "CREATE TYPE \"mood\" AS ENUM ('sad', 'ok', 'happy');"
+-- >>> Data.ByteString.Char8.putStrLn $ renderDefinition $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy" :* Nil)
+-- CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
 createTypeEnum
   :: (KnownSymbol enum, SOP.All KnownSymbol labels)
   => Alias enum
@@ -824,8 +830,8 @@ createTypeEnum enum labels = UnsafeDefinition $
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance SOP.Generic Schwarma
 -- >>> instance SOP.HasDatatypeInfo Schwarma
--- >>> renderDefinition $ createTypeEnumWith @Schwarma #schwarma
--- "CREATE TYPE \"schwarma\" AS ENUM ('Beef', 'Lamb', 'Chicken');"
+-- >>> Data.ByteString.Char8.putStrLn $ renderDefinition $ createTypeEnumWith @Schwarma #schwarma
+-- CREATE TYPE "schwarma" AS ENUM ('Beef', 'Lamb', 'Chicken');
 createTypeEnumWith
   :: forall hask enum schema.
   ( SOP.Generic hask
@@ -841,8 +847,8 @@ createTypeEnumWith enum = createTypeEnum enum
 -- | `createTypeComposite` creates a composite type. The composite type is
 -- specified by a list of attribute names and data types.
 --
--- >>> renderDefinition $ createTypeComposite #complex (float8 `As` #real :* float8 `As` #imaginary :* Nil)
--- "CREATE TYPE \"complex\" AS (\"real\" float8, \"imaginary\" float8);"
+-- >>> Data.ByteString.Char8.putStrLn $ renderDefinition $ createTypeComposite #complex (float8 `As` #real :* float8 `As` #imaginary :* Nil)
+-- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 createTypeComposite
   :: (KnownSymbol ty, SOP.SListI fields)
   => Alias ty
@@ -863,8 +869,8 @@ createTypeComposite ty fields = UnsafeDefinition $
 -- >>> data Complex = Complex {real :: Maybe Double, imaginary :: Maybe Double} deriving GHC.Generic
 -- >>> instance SOP.Generic Complex
 -- >>> instance SOP.HasDatatypeInfo Complex
--- >>> renderDefinition $ createTypeCompositeWith @Complex #complex
--- "CREATE TYPE \"complex\" AS (\"real\" float8, \"imaginary\" float8);"
+-- >>> Data.ByteString.Char8.putStrLn $ renderDefinition $ createTypeCompositeWith @Complex #complex
+-- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 createTypeCompositeWith
   :: forall hask ty schema.
   ( ZipAliased (FieldNamesWith hask) (FieldTypesWith hask)
@@ -884,8 +890,8 @@ createTypeCompositeWith ty = createTypeComposite ty $ zipAs
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance SOP.Generic Schwarma
 -- >>> instance SOP.HasDatatypeInfo Schwarma
--- >>> renderDefinition (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (EnumWith Schwarma)] '[])
--- "DROP TYPE \"schwarma\";"
+-- >>> Data.ByteString.Char8.putStrLn $ renderDefinition (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (EnumWith Schwarma)] '[])
+-- DROP TYPE "schwarma";
 dropType
   :: Has tydef schema ('Typedef ty)
   => Alias tydef
