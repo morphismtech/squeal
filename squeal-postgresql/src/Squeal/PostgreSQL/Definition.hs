@@ -807,7 +807,7 @@ dropView v = UnsafeDefinition $ "DROP VIEW" <+> renderAlias v <> ";"
 -- | Enumerated types are created using the `createTypeEnum` command, for example
 --
 -- >>> renderDefinition $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy" :* Nil)
--- "CREATE TYPE \"mood\" AS ('sad', 'ok', 'happy');"
+-- "CREATE TYPE \"mood\" AS ENUM ('sad', 'ok', 'happy');"
 createTypeEnum
   :: (KnownSymbol enum, SOP.All KnownSymbol labels)
   => Alias enum
@@ -816,7 +816,7 @@ createTypeEnum
   -- ^ labels of the enumerated type
   -> Definition schema (Create enum ('Typedef ('PGenum labels)) schema)
 createTypeEnum enum labels = UnsafeDefinition $
-  "CREATE" <+> "TYPE" <+> renderAlias enum <+> "AS" <+>
+  "CREATE" <+> "TYPE" <+> renderAlias enum <+> "AS" <+> "ENUM" <+>
   parenthesized (commaSeparated (renderLabels labels)) <> ";"
 
 -- | Enumerated types can also be generated from a Haskell type, for example
@@ -825,7 +825,7 @@ createTypeEnum enum labels = UnsafeDefinition $
 -- >>> instance SOP.Generic Schwarma
 -- >>> instance SOP.HasDatatypeInfo Schwarma
 -- >>> renderDefinition $ createTypeEnumWith @Schwarma #schwarma
--- "CREATE TYPE \"schwarma\" AS ('Beef', 'Lamb', 'Chicken');"
+-- "CREATE TYPE \"schwarma\" AS ENUM ('Beef', 'Lamb', 'Chicken');"
 createTypeEnumWith
   :: forall hask enum schema.
   ( SOP.Generic hask
@@ -842,7 +842,7 @@ createTypeEnumWith enum = createTypeEnum enum
 -- specified by a list of attribute names and data types.
 --
 -- >>> renderDefinition $ createTypeComposite #complex (float8 `As` #real :* float8 `As` #imaginary :* Nil)
--- "CREATE TYPE \"complex\" AS (float8 AS \"real\", float8 AS \"imaginary\");"
+-- "CREATE TYPE \"complex\" AS (\"real\" float8, \"imaginary\" float8);"
 createTypeComposite
   :: (KnownSymbol ty, SOP.SListI fields)
   => Alias ty
@@ -852,7 +852,11 @@ createTypeComposite
   -> Definition schema (Create ty ('Typedef ('PGcomposite fields)) schema)
 createTypeComposite ty fields = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderAlias ty <+> "AS" <+> parenthesized
-  (renderCommaSeparated (renderAliasedAs renderTypeExpression) fields) <> ";"
+  (renderCommaSeparated renderField fields) <> ";"
+  where
+    renderField :: Aliased (TypeExpression schema) x -> ByteString
+    renderField (typ `As` field) =
+      renderAlias field <+> renderTypeExpression typ
 
 -- | Composite types can also be generated from a Haskell type, for example
 --
@@ -860,7 +864,7 @@ createTypeComposite ty fields = UnsafeDefinition $
 -- >>> instance SOP.Generic Complex
 -- >>> instance SOP.HasDatatypeInfo Complex
 -- >>> renderDefinition $ createTypeCompositeWith @Complex #complex
--- "CREATE TYPE \"complex\" AS (float8 AS \"real\", float8 AS \"imaginary\");"
+-- "CREATE TYPE \"complex\" AS (\"real\" float8, \"imaginary\" float8);"
 createTypeCompositeWith
   :: forall hask ty schema.
   ( ZipAliased (FieldNamesWith hask) (FieldTypesWith hask)

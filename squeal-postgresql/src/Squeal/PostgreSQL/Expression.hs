@@ -352,7 +352,7 @@ matchNull y f x = ifThenElse (isNull x) y
 -- `nullIf` gives @NULL@.
 --
 -- >>> :set -XTypeApplications -XDataKinds
--- >>> renderExpression @_ @_ @'[_] $ fromNull false (nullIf false (param @1))
+-- >>> renderExpression @'[] @_ @_ @'[_] $ fromNull false (nullIf false (param @1))
 -- "COALESCE(NULL IF (FALSE, ($1 :: bool)), FALSE)"
 nullIf
   :: Expression schema relations grouping params ('NotNull ty)
@@ -380,7 +380,7 @@ instance (KnownSymbol label, label `In` labels) => IsPGlabel label
 -- (also called a composite value) using values for its member fields.
 --
 -- >>> type Complex = PGcomposite '["real" ::: 'PGfloat8, "imaginary" ::: 'PGfloat8]
--- >>> let i = row (0 `As` #real :* 1 `As` #imaginary :* Nil) :: Expression '[] 'Ungrouped '[] ('NotNull Complex)
+-- >>> let i = row (0 `As` #real :* 1 `As` #imaginary :* Nil) :: Expression '[] '[] 'Ungrouped '[] ('NotNull Complex)
 -- >>> renderExpression i
 -- "ROW(0, 1)"
 row
@@ -407,7 +407,7 @@ instance Monoid
     mempty = array []
     mappend = (<>)
 
--- | >>> renderExpression @_ @_ @'[_] $ greatest currentTimestamp [param @1]
+-- | >>> renderExpression @'[] @_ @_ @'[_] $ greatest currentTimestamp [param @1]
 -- "GREATEST(CURRENT_TIMESTAMP, ($1 :: timestamp with time zone))"
 greatest
   :: Expression schema relations grouping params (nullty)
@@ -870,7 +870,7 @@ unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Grouped bys) params ('Null 'PGnumeric)
+--   expression :: Expression schema '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Grouped bys) params ('Null 'PGnumeric)
 --   expression = sum_ #col
 -- in renderExpression expression
 -- :}
@@ -884,7 +884,7 @@ sum_ = unsafeAggregate "sum"
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGnumeric]] ('Grouped bys) params (nullity 'PGnumeric)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity 'PGnumeric]] ('Grouped bys) params (nullity 'PGnumeric)
 --   expression = sumDistinct #col
 -- in renderExpression expression
 -- :}
@@ -915,7 +915,7 @@ instance PGAvg 'PGinterval 'PGinterval
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
 --   expression = bitAnd #col
 -- in renderExpression expression
 -- :}
@@ -929,7 +929,7 @@ bitAnd = unsafeAggregate "bit_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
 --   expression = bitOr #col
 -- in renderExpression expression
 -- :}
@@ -943,7 +943,7 @@ bitOr = unsafeAggregate "bit_or"
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
 --   expression = bitAndDistinct #col
 -- in renderExpression expression
 -- :}
@@ -957,7 +957,7 @@ bitAndDistinct = unsafeAggregateDistinct "bit_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
 --   expression = bitOrDistinct #col
 -- in renderExpression expression
 -- :}
@@ -971,7 +971,7 @@ bitOrDistinct = unsafeAggregateDistinct "bit_or"
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
 --   expression = boolAnd #col
 -- in renderExpression expression
 -- :}
@@ -984,7 +984,7 @@ boolAnd = unsafeAggregate "bool_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
 --   expression = boolOr #col
 -- in renderExpression expression
 -- :}
@@ -997,7 +997,7 @@ boolOr = unsafeAggregate "bool_or"
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
 --   expression = boolAndDistinct #col
 -- in renderExpression expression
 -- :}
@@ -1010,7 +1010,7 @@ boolAndDistinct = unsafeAggregateDistinct "bool_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
 --   expression = boolOrDistinct #col
 -- in renderExpression expression
 -- :}
@@ -1031,7 +1031,7 @@ countStar = UnsafeExpression $ "count(*)"
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity ty]] (Grouped bys) params ('NotNull 'PGint8)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity ty]] (Grouped bys) params ('NotNull 'PGint8)
 --   expression = count #col
 -- in renderExpression expression
 -- :}
@@ -1044,7 +1044,7 @@ count = unsafeAggregate "count"
 
 -- | >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity ty]] (Grouped bys) params ('NotNull 'PGint8)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity ty]] (Grouped bys) params ('NotNull 'PGint8)
 --   expression = countDistinct #col
 -- in renderExpression expression
 -- :}
@@ -1059,7 +1059,7 @@ countDistinct = unsafeAggregateDistinct "count"
 --
 -- >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
 --   expression = every #col
 -- in renderExpression expression
 -- :}
@@ -1074,7 +1074,7 @@ every = unsafeAggregate "every"
 --
 -- >>> :{
 -- let
---   expression :: Expression '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression schema '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
 --   expression = everyDistinct #col
 -- in renderExpression expression
 -- :}
@@ -1204,7 +1204,7 @@ fixarray p ty = UnsafeTypeExpression $
   renderTypeExpression ty <> "[" <> renderNat p <> "]"
 
 -- | `pgtype` is a demoted version of a `PGType`
-class PGTyped schema (ty :: PGType) where pgtype :: TypeExpression schema ty 
+class PGTyped schema (ty :: PGType) where pgtype :: TypeExpression schema ty
 instance PGTyped schema 'PGbool where pgtype = bool
 instance PGTyped schema 'PGint2 where pgtype = int2
 instance PGTyped schema 'PGint4 where pgtype = int4

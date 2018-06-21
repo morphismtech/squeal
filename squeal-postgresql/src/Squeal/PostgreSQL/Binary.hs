@@ -7,10 +7,15 @@ Stability: experimental
 
 Binary encoding and decoding between Haskell and PostgreSQL types.
 
-Instances are governed by the `Generic` and `HasDatatype` typeclasses.
+Instances are governed by the `Generic` and `HasDatatypeInfo` typeclasses.
+
+Let's see an example of a round trip, inserting a row containing an value of enumerated type
+and a value of composite type by encoding Haskell values into Postgres binary format
+and then decoding them back into Haskell.
 
 >>> import Control.Monad
 >>> import Control.Monad.Base
+>>> import Data.Text
 
 >>> import Squeal.PostgreSQL
 >>> import qualified Squeal.PostgreSQL as SQL
@@ -19,46 +24,52 @@ Instances are governed by the `Generic` and `HasDatatype` typeclasses.
 >>> instance Generic Schwarma
 >>> instance HasDatatypeInfo Schwarma
 
->>> let q = values_ (label @"Beef" `As` #fromOnly :* Nil) :: Query '[] '[] '["fromOnly" ::: 'NotNull (EnumWith Schwarma)]
-
->>> :{
-void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
-  result <- runQuery q
-  Just (Only schwarma) <- firstRow result
-  liftBase $ print (schwarma :: Schwarma)
-:}
-Beef
+>>> data Person = Person {name :: Maybe Text, age :: Maybe Int32} deriving (Show, GHC.Generic)
+>>> instance Generic Person
+>>> instance HasDatatypeInfo Person
 
 >>> :set -XTypeFamilies -XTypeInType -XUndecidableInstances
 >>> :{
 type family Schema :: SchemaType where
   Schema =
     '[ "schwarma" ::: 'Typedef (EnumWith Schwarma)
-     , "tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull (EnumWith Schwarma)])
+     , "person" ::: 'Typedef (CompositeWith Person)
+     , "tab" ::: 'Table ('[] :=>
+       '[ "col1" ::: 'NoDef :=> 'NotNull (EnumWith Schwarma)
+        , "col2" ::: 'NoDef :=> 'NotNull (CompositeWith Person)
+        ])
      ]
 :}
 
 >>> :{
 let
+  setup :: Definition '[] Schema
   setup =
     createTypeEnumWith @Schwarma #schwarma >>>
-    createTable #tab (#schwarma `As` #col :* Nil) Nil
-    :: Definition '[] Schema
-  teardown =
-    dropTable #tab >>>
-    dropType #schwarma
-    :: Definition Schema '[]
+    createTypeCompositeWith @Person #person >>>
+    createTable #tab (
+      notNullable #schwarma `As` #col1 :*
+      notNullable #person `As` #col2 :* Nil
+      ) Nil
+  teardown :: Definition Schema '[]
+  teardown = dropTable #tab >>> dropType #schwarma >>> dropType #person
+  manip :: Manipulation Schema '[ 'NotNull (EnumWith Schwarma), 'NotNull (CompositeWith Person)] '[]
   manip =
-    insertRow_ #tab (Set (param @1) `As` #col :* Nil)
-    :: Manipulation Schema '[ 'NotNull (EnumWith Schwarma)] '[]
-  qry =
-    select (#col `As` #fromOnly :* Nil) (SQL.from (table #tab))
-    :: Query Schema '[] '["fromOnly" ::: 'NotNull (EnumWith Schwarma)]
+    insertRow_ #tab (
+      Set (parameter @1 #schwarma) `As` #col1 :*
+      Set (parameter @2 #person) `As` #col2 :* Nil)
+  qry1 :: Query Schema '[] '["fromOnly" ::: 'NotNull (EnumWith Schwarma)]
+  qry1 = select (#col1 `As` #fromOnly :* Nil) (SQL.from (table #tab))
+  qry2 :: Query Schema '[] '["fromOnly" ::: 'NotNull (CompositeWith Person)]
+  qry2 = select (#col2 `As` #fromOnly :* Nil) (SQL.from (table #tab))
   session = do
-    manipulateParams manip (Only Chicken)
-    result <- runQuery qry
-    Just (Only schwarma) <- firstRow result
-    liftBase $ print (schwarma :: Schwarma) 
+    manipulateParams manip (Chicken, Person (Just "Faisal") (Just 24))
+    result1 <- runQuery qry1
+    Just (Only schwarma) <- firstRow result1
+    liftBase $ print (schwarma :: Schwarma)
+    result2 <- runQuery qry2
+    Just (Only person) <- firstRow result2
+    liftBase $ print (person :: Person)
 :}
 
 >>> :{
@@ -68,6 +79,7 @@ void . withConnection "host=localhost port=5432 dbname=exampledb" $
   & pqThen (define teardown)
 :}
 Chicken
+Person {name = Just "Faisal", age = Just 24}
 -}
 
 {-# LANGUAGE
