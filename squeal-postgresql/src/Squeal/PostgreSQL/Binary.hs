@@ -85,18 +85,18 @@ Then we can perform roundtrip queries;
 
 >>> :{
 let
-  qry1 :: Query Schema
+  querySchwarma :: Query Schema
     '[ 'NotNull (EnumFrom Schwarma)]
     '["fromOnly" ::: 'NotNull (EnumFrom Schwarma)]
-  qry1 = values_ (parameter @1 #schwarma `As` #fromOnly :* Nil)
+  querySchwarma = values_ (parameter @1 #schwarma `As` #fromOnly :* Nil)
 :}
 
 >>> :{
 let
-  qry2 :: Query Schema
+  queryPerson :: Query Schema
     '[ 'NotNull (CompositeFrom Person)]
     '["fromOnly" ::: 'NotNull (CompositeFrom Person)]
-  qry2 = values_ (parameter @1 #person `As` #fromOnly :* Nil)
+  queryPerson = values_ (parameter @1 #person `As` #fromOnly :* Nil)
 :}
 
 And finally drop the types.
@@ -112,10 +112,10 @@ Now let's run it.
 >>> :{
 let
   session = do
-    result1 <- runQueryParams qry1 (Only Chicken)
+    result1 <- runQueryParams querySchwarma (Only Chicken)
     Just (Only schwarma) <- firstRow result1
     liftBase $ print (schwarma :: Schwarma)
-    result2 <- runQueryParams qry2 (Only (Person (Just "Faisal") (Just 24)))
+    result2 <- runQueryParams queryPerson (Only (Person (Just "Faisal") (Just 24)))
     Just (Only person) <- firstRow result2
     liftBase $ print (person :: Person)
 in

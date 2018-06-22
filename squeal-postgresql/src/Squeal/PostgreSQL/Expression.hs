@@ -189,6 +189,11 @@ class KnownNat n => HasParameter
   (params :: [NullityType])
   (ty :: NullityType)
   | n params -> ty where
+    -- | `parameter` takes a `Nat` using type application and a `TypeExpression`.
+    --
+    -- >>> let expr = parameter @1 int4 :: Expression sch rels grp '[ 'Null 'PGint4] ('Null 'PGint4)
+    -- >>> printSQL expr
+    -- ($1 :: int4)
     parameter
       :: TypeExpression schema (PGTypeOf ty)
       -> Expression schema relations grouping params ty
@@ -199,10 +204,16 @@ instance {-# OVERLAPPING #-} HasParameter 1 schema (ty1:tys) ty1
 instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) schema params ty)
   => HasParameter n schema (ty' : params) ty
 
+-- | `param` takes a `Nat` using type application and for basic types,
+-- infers a `TypeExpression`.
+--
+-- >>> let expr = param @1 :: Expression sch rels grp '[ 'Null 'PGint4] ('Null 'PGint4)
+-- >>> printSQL expr
+-- ($1 :: int4)
 param
   :: forall n schema params relations grouping ty
    . (PGTyped schema (PGTypeOf ty), HasParameter n schema params ty)
-  => Expression schema relations grouping params ty
+  => Expression schema relations grouping params ty -- ^ param
 param = parameter @n pgtype
 
 instance (HasUnique relation relations columns, Has column columns ty)
