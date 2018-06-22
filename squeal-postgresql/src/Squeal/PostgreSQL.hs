@@ -21,7 +21,6 @@ We'll need some imports.
 >>> import Data.Int (Int32)
 >>> import Data.Text (Text)
 >>> import Squeal.PostgreSQL
->>> import qualified Data.ByteString.Char8 as Char8 (putStrLn)
 
 We'll use generics to easily convert between Haskell and PostgreSQL values.
 
@@ -81,13 +80,13 @@ let
 
 We can easily see the generated SQL is unsuprising looking.
 
->>> Char8.putStrLn $ renderDefinition setup
+>>> printSQL setup
 CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));
 CREATE TABLE "emails" ("id" serial, "user_id" int NOT NULL, "email" text NULL, CONSTRAINT "pk_emails" PRIMARY KEY ("id"), CONSTRAINT "fk_user_id" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 
 Notice that @setup@ starts with an empty schema @'[]@ and produces @Schema@.
 In our `createTable` commands we included `TableConstraint`s to define
-primary and foreign keys, making them somewhat complex. Our tear down
+primary and foreign keys, making them somewhat complex. Our @teardown@
 `Definition` is simpler.
 
 >>> :{
@@ -96,7 +95,7 @@ let
   teardown = dropTable #emails >>> dropTable #users
 :}
 
->>> Char8.putStrLn $ renderDefinition teardown
+>>> printSQL teardown
 DROP TABLE "emails";
 DROP TABLE "users";
 
@@ -130,9 +129,9 @@ let
     OnConflictDoNothing (Returning Nil)
 :}
 
->>> Char8.putStrLn $ renderManipulation insertUser
+>>> printSQL insertUser
 INSERT INTO "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) ON CONFLICT DO NOTHING RETURNING "id" AS "fromOnly"
->>> Char8.putStrLn $ renderManipulation insertEmail
+>>> printSQL insertEmail
 INSERT INTO "emails" ("id", "user_id", "email") VALUES (DEFAULT, ($1 :: int4), ($2 :: text)) ON CONFLICT DO NOTHING
 
 Next we write a `Query` to retrieve users from the database. We're not
@@ -152,7 +151,7 @@ let
         (#u ! #id .== #e ! #user_id)) )
 :}
 
->>> Char8.putStrLn $ renderQuery getUsers
+>>> printSQL getUsers
 SELECT "u"."name" AS "userName", "e"."email" AS "userEmail" FROM "users" AS "u" INNER JOIN "emails" AS "e" ON ("u"."id" = "e"."user_id")
 
 Now that we've defined the SQL side of things, we'll need a Haskell type
