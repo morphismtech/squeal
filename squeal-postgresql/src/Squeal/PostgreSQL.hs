@@ -36,28 +36,32 @@ type Schema =
   '[ "users" ::: 'Table (
       '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
       '[ "id"   :::   'Def :=> 'NotNull 'PGint4
-        , "name" ::: 'NoDef :=> 'NotNull 'PGtext
-        ])
+       , "name" ::: 'NoDef :=> 'NotNull 'PGtext
+       ])
   , "emails" ::: 'Table (
       '[ "pk_emails"  ::: 'PrimaryKey '["id"]
-        , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
-        ] :=>
+       , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+       ] :=>
       '[ "id"      :::   'Def :=> 'NotNull 'PGint4
-        , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
-        , "email"   ::: 'NoDef :=>    'Null 'PGtext
-        ])
+       , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
+       , "email"   ::: 'NoDef :=>    'Null 'PGtext
+       ])
   ]
 :}
 
-Notice the use of type operators. `:::` is used
-to pair an alias `Symbol` with either a `TableType` or a `ColumnType`.
-`:=>` is used to pair a `TableConstraint`s with a `ColumnsType`,
+Notice the use of type operators.
+
+`:::` is used to pair an alias `GHC.TypeLits.Symbol` with a `SchemumType`,
+a `TableConstraint` or a `ColumnType`. It is intended to connote Haskell's @::@
+operator.
+
+`:=>` is used to pair `TableConstraints` with a `ColumnsType`,
 yielding a `TableType`, or to pair a `ColumnConstraint` with a `NullityType`,
-yielding a `ColumnType`.
+yielding a `ColumnType`. It is intended to connote Haskell's @=>@ operator
 
 Next, we'll write `Definition`s to set up and tear down the schema. In
-Squeal, a `Definition` is a `createTable`, `alterTable` or `dropTable`
-command and has two type parameters, corresponding to the schema
+Squeal, a `Definition` like `createTable`, `alterTable` or `dropTable` 
+has two type parameters, corresponding to the schema
 before being run and the schema after. We can compose definitions using `>>>`.
 Here and in the rest of our commands we make use of overloaded
 labels to refer to named tables and columns in our schema.
@@ -101,12 +105,11 @@ DROP TABLE "emails";
 DROP TABLE "users";
 
 Next, we'll write `Manipulation`s to insert data into our two tables.
-A `Manipulation` is an `insertRow` (or other inserts), `update`
-or `deleteFrom` command and
+A `Manipulation` like `insertRow`, `update` or `deleteFrom`
 has three type parameters, the schema it refers to, a list of parameters
 it can take as input, and a list of columns it produces as output. When
 we insert into the users table, we will need a parameter for the @name@
-field but not for the @id@ field. Since it's optional, we can use a default
+field but not for the @id@ field. Since it's serial, we can use a default
 value. However, since the emails table refers to the users table, we will
 need to retrieve the user id that the insert generates and insert it into
 the emails table. Take a careful look at the type and definition of both
@@ -144,7 +147,7 @@ need to use an inner join to get the right result. A `Query` is like a
 let
   getUsers :: Query Schema '[]
     '[ "userName"  ::: 'NotNull 'PGtext
-    , "userEmail" :::    'Null 'PGtext ]
+     , "userEmail" :::    'Null 'PGtext ]
   getUsers = select
     (#u ! #name `As` #userName :* #e ! #email `As` #userEmail :* Nil)
     ( from (table (#users `As` #u)
@@ -195,13 +198,11 @@ let
     usersResult <- runQuery getUsers
     usersRows <- getRows usersResult
     liftBase $ print (usersRows :: [User])
-:}
-
->>> :{
-void . withConnection "host=localhost port=5432 dbname=exampledb" $
-  define setup
-  & pqThen session
-  & pqThen (define teardown)
+in
+  void . withConnection "host=localhost port=5432 dbname=exampledb" $
+    define setup
+    & pqThen session
+    & pqThen (define teardown)
 :}
 [User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole@hotmail.com"}]
 -}
