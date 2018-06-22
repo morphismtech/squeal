@@ -113,6 +113,9 @@ newtype Definition
   = UnsafeDefinition { renderDefinition :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
+instance RenderSQL (Definition schema0 schema1) where
+  renderSQL = renderDefinition
+
 instance Category Definition where
   id = UnsafeDefinition ";"
   ddl1 . ddl0 = UnsafeDefinition $
@@ -126,7 +129,7 @@ CREATE statements
 
 >>> :set -XOverloadedLabels
 >>> :{
-Data.ByteString.Char8.putStrLn . renderDefinition $
+printSQL $
   createTable #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil
 :}
 CREATE TABLE "tab" ("a" int NULL, "b" real NULL);
@@ -154,8 +157,10 @@ Instead, the schema already has the table so if the table did not yet exist, the
 >>> type Table = '[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGfloat4]
 >>> type Schema = '["tab" ::: 'Table Table]
 >>> :{
-Data.ByteString.Char8.putStrLn $ renderDefinition
-  (createTableIfNotExists #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil :: Definition Schema Schema)
+let
+  setup :: Definition Schema Schema
+  setup = createTableIfNotExists #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil
+in printSQL setup
 :}
 CREATE TABLE IF NOT EXISTS "tab" ("a" int NULL, "b" real NULL);
 -}
@@ -243,7 +248,7 @@ let
     ( check (#a :* #b :* Nil) (#a .> #b) `As` #inequality :* Nil )
 :}
 
->>> Data.ByteString.Char8.putStrLn $ renderDefinition definition
+>>> printSQL definition
 CREATE TABLE "tab" ("a" int NOT NULL, "b" int NOT NULL, CONSTRAINT "inequality" CHECK (("a" > "b")));
 -}
 check
@@ -277,7 +282,7 @@ let
     ( unique (#a :* #b :* Nil) `As` #uq_a_b :* Nil )
 :}
 
->>> Data.ByteString.Char8.putStrLn $ renderDefinition definition
+>>> printSQL definition
 CREATE TABLE "tab" ("a" int NULL, "b" int NULL, CONSTRAINT "uq_a_b" UNIQUE ("a", "b"));
 -}
 unique
@@ -310,7 +315,7 @@ let
     ( primaryKey #id `As` #pk_id :* Nil )
 :}
 
->>> Data.ByteString.Char8.putStrLn $ renderDefinition definition
+>>> printSQL definition
 CREATE TABLE "tab" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_id" PRIMARY KEY ("id"));
 -}
 primaryKey
@@ -361,7 +366,7 @@ let
      ( primaryKey #id `As` #pk_emails :*
        foreignKey #user_id #users #id
          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
-in Data.ByteString.Char8.putStrLn $ renderDefinition setup
+in printSQL setup
 :}
 CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));
 CREATE TABLE "emails" ("id" serial, "user_id" int NOT NULL, "email" text NULL, CONSTRAINT "pk_emails" PRIMARY KEY ("id"), CONSTRAINT "fk_user_id" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
@@ -392,7 +397,7 @@ let
      ( primaryKey #id `As` #employees_pk :*
        foreignKey #employer_id #employees #id
          OnDeleteCascade OnUpdateCascade `As` #employees_employer_fk :* Nil )
-in Data.ByteString.Char8.putStrLn $ renderDefinition setup
+in printSQL setup
 :}
 CREATE TABLE "employees" ("id" serial, "name" text NOT NULL, "employer_id" integer NULL, CONSTRAINT "employees_pk" PRIMARY KEY ("id"), CONSTRAINT "employees_employer_fk" FOREIGN KEY ("employer_id") REFERENCES "employees" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 -}
@@ -487,7 +492,7 @@ DROP statements
 --   definition = dropTable #muh_table
 -- :}
 --
--- >>> Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- >>> printSQL definition
 -- DROP TABLE "muh_table";
 dropTable
   :: Has table schema ('Table t)
@@ -513,7 +518,7 @@ alterTable tab alteration = UnsafeDefinition $
 
 -- | `alterTableRename` changes the name of a table from the schema.
 --
--- >>> Data.ByteString.Char8.putStrLn $ renderDefinition $ alterTableRename #foo #bar
+-- >>> printSQL $ alterTableRename #foo #bar
 -- ALTER TABLE "foo" RENAME TO "bar";
 alterTableRename
   :: (KnownSymbol table0, KnownSymbol table1)
@@ -541,7 +546,7 @@ newtype AlterTable
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --     '["tab" ::: 'Table ('["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --   definition = alterTable #tab (addConstraint #positive (check (#col :* Nil) (#col .> 0)))
--- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" ADD CONSTRAINT "positive" CHECK (("col" > 0));
 addConstraint
@@ -565,7 +570,7 @@ addConstraint alias constraint = UnsafeAlterTable $
 --     '["tab" ::: 'Table ('["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --   definition = alterTable #tab (dropConstraint #positive)
--- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" DROP CONSTRAINT "positive";
 dropConstraint
@@ -592,7 +597,7 @@ class AddColumn ty where
   --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
   --         , "col2" ::: 'Def :=> 'Null 'PGtext ])]
   --   definition = alterTable #tab (addColumn #col2 (text & nullable & default_ "foo"))
-  -- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+  -- in printSQL definition
   -- :}
   -- ALTER TABLE "tab" ADD COLUMN "col2" text NULL DEFAULT E'foo';
   --
@@ -604,7 +609,7 @@ class AddColumn ty where
   --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
   --         , "col2" ::: 'NoDef :=> 'Null 'PGtext ])]
   --   definition = alterTable #tab (addColumn #col2 (text & nullable))
-  -- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+  -- in printSQL definition
   -- :}
   -- ALTER TABLE "tab" ADD COLUMN "col2" text NULL;
   addColumn
@@ -633,7 +638,7 @@ instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 --         , "col2" ::: 'NoDef :=> 'Null 'PGtext ])]
 --     '["tab" ::: 'Table ('[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (dropColumn #col2)
--- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" DROP COLUMN "col2";
 dropColumn
@@ -654,7 +659,7 @@ dropColumn column = UnsafeAlterTable $
 --     '["tab" ::: 'Table ('[] :=> '["foo" ::: 'NoDef :=> 'Null 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["bar" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (renameColumn #foo #bar)
--- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" RENAME COLUMN "foo" TO "bar";
 renameColumn
@@ -697,7 +702,7 @@ newtype AlterColumn (schema :: SchemaType) (ty0 :: ColumnType) (ty1 :: ColumnTyp
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'Def :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (alterColumn #col (setDefault 5))
--- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" SET DEFAULT 5;
 setDefault
@@ -714,7 +719,7 @@ setDefault expression = UnsafeAlterColumn $
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'Def :=> 'Null 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (alterColumn #col dropDefault)
--- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" DROP DEFAULT;
 dropDefault :: AlterColumn schema ('Def :=> ty) ('NoDef :=> ty)
@@ -730,7 +735,7 @@ dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --   definition = alterTable #tab (alterColumn #col setNotNull)
--- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" SET NOT NULL;
 setNotNull
@@ -745,7 +750,7 @@ setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = alterTable #tab (alterColumn #col dropNotNull)
--- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" DROP NOT NULL;
 dropNotNull
@@ -763,7 +768,7 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGnumeric])]
 --   definition =
 --     alterTable #tab (alterColumn #col (alterType (numeric & notNullable)))
--- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" TYPE numeric NOT NULL;
 alterType :: ColumnTypeExpression schema ty -> AlterColumn schema ty0 ty
@@ -779,7 +784,7 @@ alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 --      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]
 --   definition =
 --     createView #bc (select (#b :* #c :* Nil) (from (table #abc)))
--- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- in printSQL definition
 -- :}
 -- CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
 createView
@@ -801,7 +806,7 @@ createView alias query = UnsafeDefinition $
 --      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]
 --     '[ "abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])]
 --   definition = dropView #bc
--- in Data.ByteString.Char8.putStrLn $ renderDefinition definition
+-- in printSQL definition
 -- :}
 -- DROP VIEW "bc";
 dropView
@@ -812,7 +817,7 @@ dropView v = UnsafeDefinition $ "DROP VIEW" <+> renderAlias v <> ";"
 
 -- | Enumerated types are created using the `createTypeEnum` command, for example
 --
--- >>> Data.ByteString.Char8.putStrLn $ renderDefinition $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy" :* Nil)
+-- >>> printSQL $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy" :* Nil)
 -- CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
 createTypeEnum
   :: (KnownSymbol enum, SOP.All KnownSymbol labels)
@@ -830,7 +835,7 @@ createTypeEnum enum labels = UnsafeDefinition $
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance SOP.Generic Schwarma
 -- >>> instance SOP.HasDatatypeInfo Schwarma
--- >>> Data.ByteString.Char8.putStrLn $ renderDefinition $ createTypeEnumWith @Schwarma #schwarma
+-- >>> printSQL $ createTypeEnumWith @Schwarma #schwarma
 -- CREATE TYPE "schwarma" AS ENUM ('Beef', 'Lamb', 'Chicken');
 createTypeEnumWith
   :: forall hask enum schema.
@@ -847,7 +852,7 @@ createTypeEnumWith enum = createTypeEnum enum
 -- | `createTypeComposite` creates a composite type. The composite type is
 -- specified by a list of attribute names and data types.
 --
--- >>> Data.ByteString.Char8.putStrLn $ renderDefinition $ createTypeComposite #complex (float8 `As` #real :* float8 `As` #imaginary :* Nil)
+-- >>> printSQL $ createTypeComposite #complex (float8 `As` #real :* float8 `As` #imaginary :* Nil)
 -- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 createTypeComposite
   :: (KnownSymbol ty, SOP.SListI fields)
@@ -869,7 +874,7 @@ createTypeComposite ty fields = UnsafeDefinition $
 -- >>> data Complex = Complex {real :: Maybe Double, imaginary :: Maybe Double} deriving GHC.Generic
 -- >>> instance SOP.Generic Complex
 -- >>> instance SOP.HasDatatypeInfo Complex
--- >>> Data.ByteString.Char8.putStrLn $ renderDefinition $ createTypeCompositeWith @Complex #complex
+-- >>> printSQL $ createTypeCompositeWith @Complex #complex
 -- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 createTypeCompositeWith
   :: forall hask ty schema.
@@ -890,7 +895,7 @@ createTypeCompositeWith ty = createTypeComposite ty $ zipAs
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance SOP.Generic Schwarma
 -- >>> instance SOP.HasDatatypeInfo Schwarma
--- >>> Data.ByteString.Char8.putStrLn $ renderDefinition (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (EnumWith Schwarma)] '[])
+-- >>> printSQL (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (EnumWith Schwarma)] '[])
 -- DROP TYPE "schwarma";
 dropType
   :: Has tydef schema ('Typedef ty)

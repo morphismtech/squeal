@@ -9,7 +9,8 @@ Rendering helper functions.
 -}
 
 {-# LANGUAGE
-    MagicHash
+    FlexibleContexts
+  , MagicHash
   , OverloadedStrings
   , PolyKinds
   , RankNTypes
@@ -25,8 +26,11 @@ module Squeal.PostgreSQL.Render
   , renderCommaSeparated
   , renderCommaSeparatedMaybe
   , renderNat
+  , RenderSQL (..)
+  , printSQL
   ) where
 
+import Control.Monad.Base
 import Data.ByteString (ByteString)
 import Data.Maybe
 import Data.Monoid ((<>))
@@ -35,6 +39,7 @@ import GHC.Exts
 import GHC.TypeLits
 
 import qualified Data.ByteString as ByteString
+import qualified Data.ByteString.Char8 as Char8
 
 -- | Parenthesize a `ByteString`.
 parenthesized :: ByteString -> ByteString
@@ -77,3 +82,9 @@ renderCommaSeparatedMaybe render
 -- | Render a promoted `Nat`.
 renderNat :: KnownNat n => proxy n -> ByteString
 renderNat (_ :: proxy n) = fromString (show (natVal' (proxy# :: Proxy# n)))
+
+class RenderSQL sql where
+  renderSQL :: sql -> ByteString
+
+printSQL :: (RenderSQL sql, MonadBase IO io) => sql -> io ()
+printSQL = liftBase . Char8.putStrLn . renderSQL
