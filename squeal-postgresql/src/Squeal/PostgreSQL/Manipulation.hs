@@ -73,9 +73,9 @@ let
        , "col2" ::: 'Def :=> 'NotNull 'PGint4 ])] '[] '[]
   manipulation =
     insertRow_ #tab (Set 2 `As` #col1 :* Default `As` #col2 :* Nil)
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"INSERT INTO \"tab\" (\"col1\", \"col2\") VALUES (2, DEFAULT)"
+INSERT INTO "tab" ("col1", "col2") VALUES (2, DEFAULT)
 
 parameterized insert:
 
@@ -89,9 +89,9 @@ let
   manipulation =
     insertRow_ #tab
       (Set (param @1) `As` #col1 :* Set (param @2) `As` #col2 :* Nil)
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"INSERT INTO \"tab\" (\"col1\", \"col2\") VALUES (($1 :: int4), ($2 :: int4))"
+INSERT INTO "tab" ("col1", "col2") VALUES (($1 :: int4), ($2 :: int4))
 
 returning insert:
 
@@ -105,9 +105,9 @@ let
   manipulation =
     insertRow #tab (Set 2 `As` #col1 :* Default `As` #col2 :* Nil)
       OnConflictDoRaise (Returning (#col1 `As` #fromOnly :* Nil))
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"INSERT INTO \"tab\" (\"col1\", \"col2\") VALUES (2, DEFAULT) RETURNING \"col1\" AS \"fromOnly\""
+INSERT INTO "tab" ("col1", "col2") VALUES (2, DEFAULT) RETURNING "col1" AS "fromOnly"
 
 upsert:
 
@@ -126,9 +126,9 @@ let
         (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
         [#col1 .== #col2])
       (Returning $ (#col1 + #col2) `As` #sum :* Nil)
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"INSERT INTO \"tab\" (\"col1\", \"col2\") VALUES (2, 4), (6, 8) ON CONFLICT DO UPDATE SET \"col1\" = 2 WHERE (\"col1\" = \"col2\") RETURNING (\"col1\" + \"col2\") AS \"sum\""
+INSERT INTO "tab" ("col1", "col2") VALUES (2, 4), (6, 8) ON CONFLICT DO UPDATE SET "col1" = 2 WHERE ("col1" = "col2") RETURNING ("col1" + "col2") AS "sum"
 
 query insert:
 
@@ -147,9 +147,9 @@ let
   manipulation =
     insertQuery_ #tab
       (selectStar (from (table (#other_tab `As` #t))))
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"INSERT INTO \"tab\" SELECT * FROM \"other_tab\" AS \"t\""
+INSERT INTO "tab" SELECT * FROM "other_tab" AS "t"
 
 update:
 
@@ -162,9 +162,9 @@ let
   manipulation =
     update_ #tab (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
       (#col1 ./= #col2)
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"UPDATE \"tab\" SET \"col1\" = 2 WHERE (\"col1\" <> \"col2\")"
+UPDATE "tab" SET "col1" = 2 WHERE ("col1" <> "col2")
 
 delete:
 
@@ -177,9 +177,9 @@ let
     '[ "col1" ::: 'NotNull 'PGint4
      , "col2" ::: 'NotNull 'PGint4 ]
   manipulation = deleteFrom #tab (#col1 .== #col2) ReturningStar
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"DELETE FROM \"tab\" WHERE (\"col1\" = \"col2\") RETURNING *"
+DELETE FROM "tab" WHERE ("col1" = "col2") RETURNING *
 -}
 newtype Manipulation
   (schema :: SchemaType)
@@ -187,6 +187,9 @@ newtype Manipulation
   (columns :: RelationType)
     = UnsafeManipulation { renderManipulation :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
+
+instance RenderSQL (Manipulation schema params columns) where
+  renderSQL = renderManipulation
 
 -- | Convert a `Query` into a `Manipulation`.
 queryStatement
@@ -483,9 +486,9 @@ WITH statements
 --   manipulation = with
 --     (deleteFrom #products (#date .< param @1) ReturningStar `As` #deleted_rows :* Nil)
 --     (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `As` #t)))))
--- in renderManipulation manipulation
+-- in printSQL manipulation
 -- :}
--- "WITH \"deleted_rows\" AS (DELETE FROM \"products\" WHERE (\"date\" < ($1 :: date)) RETURNING *) INSERT INTO \"products_deleted\" SELECT * FROM \"deleted_rows\" AS \"t\""
+-- WITH "deleted_rows" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "deleted_rows" AS "t"
 with
   :: SOP.SListI commons
   => NP (Aliased (Manipulation schema params)) commons
