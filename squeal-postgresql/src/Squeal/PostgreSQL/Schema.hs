@@ -365,6 +365,7 @@ instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
 instance aliases ~ '[alias] => IsLabel alias (NP Alias aliases) where
   fromLabel = fromLabel :* Nil
+instance KnownSymbol alias => RenderSQL (Alias alias) where renderSQL = renderAlias
 
 -- | >>> renderAlias #jimbob
 -- "\"jimbob\""
