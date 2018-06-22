@@ -7,38 +7,71 @@ Stability: experimental
 
 Binary encoding and decoding between Haskell and PostgreSQL types.
 
-Instances are governed by the `Generic` and `HasDatatypeInfo` typeclasses.
+Instances are governed by the `Generic` and `HasDatatypeInfo` typeclasses, so you absolutely
+do not need to define your own instances to decode retrieved rows into Haskell values or
+to encode Haskell values into statement parameters. You only need to derive those type
+classes.
 
-Let's see an example of a round trip, inserting a row containing an value of enumerated type
-and a value of composite type by encoding Haskell values into Postgres binary format
-and then decoding them back into Haskell.
+>>> import Data.Int (Int16)
+>>> import Data.Text (Text)
 
->>> import Control.Monad
->>> import Control.Monad.Base
->>> import Data.Text
+>>> data Row = Row { col1 :: Int16, col2 :: Text } deriving (Eq, GHC.Generic)
+>>> instance Generic Row
+>>> instance HasDatatypeInfo Row
 
+>>> import Control.Monad (void)
+>>> import Control.Monad.Base (liftBase)
 >>> import Squeal.PostgreSQL
->>> import qualified Squeal.PostgreSQL as SQL
+
+>>> :{
+let
+  query :: Query '[]
+    '[ 'NotNull 'PGint2, 'NotNull 'PGtext]
+    '["col1" ::: 'NotNull 'PGint2, "col2" ::: 'NotNull 'PGtext]
+  query = values_ (param @1 `As` #col1 :* param @2 `As` #col2 :* Nil)
+:}
+
+>>> :{
+let
+  roundtrip :: IO ()
+  roundtrip = void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+    result <- runQueryParams query (2 :: Int16, "hi" :: Text)
+    Just row <- firstRow result
+    liftBase . print $ row == Row 2 "hi"
+:}
+
+>>> roundtrip
+True
+
+In addition to being able to encode and decode basic Haskell types like `Int16` and `Text`,
+Squeal permits you to encode and decode Haskell types which are equivalent to
+Postgres enumerated and composite types.
+
+Enumerated (enum) types are data types that comprise a static, ordered set of values.
+They are equivalent to Haskell algebraic data types whose constructors are nullary.
+An example of an enum type might be the days of the week,
+or a set of status values for a piece of data.
 
 >>> data Schwarma = Beef | Lamb | Chicken deriving (Show, GHC.Generic)
 >>> instance Generic Schwarma
 >>> instance HasDatatypeInfo Schwarma
 
+A composite type represents the structure of a row or record;
+it is essentially just a list of field names and their data types. They are almost
+equivalent to Haskell record types. However, because of the potential presence of @NULL@
+all the record fields must be `Maybe`s of basic types.
+
 >>> data Person = Person {name :: Maybe Text, age :: Maybe Int32} deriving (Show, GHC.Generic)
 >>> instance Generic Person
 >>> instance HasDatatypeInfo Person
 
->>> :set -XTypeFamilies -XTypeInType -XUndecidableInstances
+We can create the equivalent Postgres types directly from their Haskell types.
+
 >>> :{
-type family Schema :: SchemaType where
-  Schema =
-    '[ "schwarma" ::: 'Typedef (EnumWith Schwarma)
-     , "person" ::: 'Typedef (CompositeWith Person)
-     , "tab" ::: 'Table ('[] :=>
-       '[ "col1" ::: 'NoDef :=> 'NotNull (EnumWith Schwarma)
-        , "col2" ::: 'NoDef :=> 'NotNull (CompositeWith Person)
-        ])
-     ]
+type Schema =
+  '[ "schwarma" ::: 'Typedef (EnumWith Schwarma)
+   , "person" ::: 'Typedef (CompositeWith Person)
+   ]
 :}
 
 >>> :{
@@ -46,37 +79,51 @@ let
   setup :: Definition '[] Schema
   setup =
     createTypeEnumWith @Schwarma #schwarma >>>
-    createTypeCompositeWith @Person #person >>>
-    createTable #tab (
-      notNullable #schwarma `As` #col1 :*
-      notNullable #person `As` #col2 :* Nil
-      ) Nil
-  teardown :: Definition Schema '[]
-  teardown = dropTable #tab >>> dropType #schwarma >>> dropType #person
-  manip :: Manipulation Schema '[ 'NotNull (EnumWith Schwarma), 'NotNull (CompositeWith Person)] '[]
-  manip =
-    insertRow_ #tab (
-      Set (parameter @1 #schwarma) `As` #col1 :*
-      Set (parameter @2 #person) `As` #col2 :* Nil)
-  qry1 :: Query Schema '[] '["fromOnly" ::: 'NotNull (EnumWith Schwarma)]
-  qry1 = select (#col1 `As` #fromOnly :* Nil) (SQL.from (table #tab))
-  qry2 :: Query Schema '[] '["fromOnly" ::: 'NotNull (CompositeWith Person)]
-  qry2 = select (#col2 `As` #fromOnly :* Nil) (SQL.from (table #tab))
-  session = do
-    manipulateParams manip (Chicken, Person (Just "Faisal") (Just 24))
-    result1 <- runQuery qry1
-    Just (Only schwarma) <- firstRow result1
-    liftBase $ print (schwarma :: Schwarma)
-    result2 <- runQuery qry2
-    Just (Only person) <- firstRow result2
-    liftBase $ print (person :: Person)
+    createTypeCompositeWith @Person #person
+:}
+
+Then we can perform roundtrip queries;
+
+>>> :{
+let
+  qry1 :: Query Schema
+    '[ 'NotNull (EnumWith Schwarma)]
+    '["fromOnly" ::: 'NotNull (EnumWith Schwarma)]
+  qry1 = values_ (parameter @1 #schwarma `As` #fromOnly :* Nil)
 :}
 
 >>> :{
-void . withConnection "host=localhost port=5432 dbname=exampledb" $
-  define setup
-  & pqThen session
-  & pqThen (define teardown)
+let
+  qry2 :: Query Schema
+    '[ 'NotNull (CompositeWith Person)]
+    '["fromOnly" ::: 'NotNull (CompositeWith Person)]
+  qry2 = values_ (parameter @1 #person `As` #fromOnly :* Nil)
+:}
+
+And finally drop the types.
+
+>>> :{
+let
+  teardown :: Definition Schema '[]
+  teardown = dropType #schwarma >>> dropType #person
+:}
+
+Now let's run it.
+
+>>> :{
+let
+  session = do
+    result1 <- runQueryParams qry1 (Only Chicken)
+    Just (Only schwarma) <- firstRow result1
+    liftBase $ print (schwarma :: Schwarma)
+    result2 <- runQueryParams qry2 (Only (Person (Just "Faisal") (Just 24)))
+    Just (Only person) <- firstRow result2
+    liftBase $ print (person :: Person)
+in
+  void . withConnection "host=localhost port=5432 dbname=exampledb" $
+    define setup
+    & pqThen session
+    & pqThen (define teardown)
 :}
 Chicken
 Person {name = Just "Faisal", age = Just 24}
