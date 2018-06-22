@@ -99,9 +99,9 @@ let
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar (from (table #tab))
-in renderQuery query
+in printSQL query
 :}
-"SELECT * FROM \"tab\" AS \"tab\""
+SELECT * FROM "tab" AS "tab"
 
 restricted query:
 
@@ -120,9 +120,9 @@ let
       ( from (table #tab)
         & where_ (#col1 .> #col2)
         & where_ (#col2 .> 0) )
-in renderQuery query
+in printSQL query
 :}
-"SELECT (\"col1\" + \"col2\") AS \"sum\", \"col1\" AS \"col1\" FROM \"tab\" AS \"tab\" WHERE ((\"col1\" > \"col2\") AND (\"col2\" > 0))"
+SELECT ("col1" + "col2") AS "sum", "col1" AS "col1" FROM "tab" AS "tab" WHERE (("col1" > "col2") AND ("col2" > 0))
 
 subquery:
 
@@ -135,9 +135,9 @@ let
   query =
     selectStar
       (from (subquery (selectStar (from (table #tab)) `As` #sub)))
-in renderQuery query
+in printSQL query
 :}
-"SELECT * FROM (SELECT * FROM \"tab\" AS \"tab\") AS \"sub\""
+SELECT * FROM (SELECT * FROM "tab" AS "tab") AS "sub"
 
 limits and offsets:
 
@@ -149,9 +149,9 @@ let
     '["col" ::: 'Null 'PGint4]
   query = selectStar
     (from (table #tab) & limit 100 & offset 2 & limit 50 & offset 2)
-in renderQuery query
+in printSQL query
 :}
-"SELECT * FROM \"tab\" AS \"tab\" LIMIT 50 OFFSET 4"
+SELECT * FROM "tab" AS "tab" LIMIT 50 OFFSET 4
 
 parameterized query:
 
@@ -163,9 +163,9 @@ let
     '["col" ::: 'NotNull 'PGfloat8]
   query = selectStar
     (from (table #tab) & where_ (#col .> param @1))
-in renderQuery query
+in printSQL query
 :}
-"SELECT * FROM \"tab\" AS \"tab\" WHERE (\"col\" > ($1 :: float8))"
+SELECT * FROM "tab" AS "tab" WHERE ("col" > ($1 :: float8))
 
 aggregation query:
 
@@ -183,9 +183,9 @@ let
     ( from (table (#tab `As` #table1))
       & group (By #col1 :* Nil)
       & having (#col1 + sum_ #col2 .> 1) )
-in renderQuery query
+in printSQL query
 :}
-"SELECT sum(\"col2\") AS \"sum\", \"col1\" AS \"col1\" FROM \"tab\" AS \"table1\" GROUP BY \"col1\" HAVING ((\"col1\" + sum(\"col2\")) > 1)"
+SELECT sum("col2") AS "sum", "col1" AS "col1" FROM "tab" AS "table1" GROUP BY "col1" HAVING (("col1" + sum("col2")) > 1)
 
 sorted query:
 
@@ -197,9 +197,9 @@ let
     '["col" ::: 'Null 'PGint4]
   query = selectStar
     (from (table #tab) & orderBy [#col & AscNullsFirst])
-in renderQuery query
+in printSQL query
 :}
-"SELECT * FROM \"tab\" AS \"tab\" ORDER BY \"col\" ASC NULLS FIRST"
+SELECT * FROM "tab" AS "tab" ORDER BY "col" ASC NULLS FIRST
 
 joins:
 
@@ -241,9 +241,9 @@ let
         (#o ! #customer_id .== #c ! #id)
       & innerJoin (table (#shippers `As` #s))
         (#o ! #shipper_id .== #s ! #id)) )
-in renderQuery query
+in printSQL query
 :}
-"SELECT \"o\".\"price\" AS \"order_price\", \"c\".\"name\" AS \"customer_name\", \"s\".\"name\" AS \"shipper_name\" FROM \"orders\" AS \"o\" INNER JOIN \"customers\" AS \"c\" ON (\"o\".\"customer_id\" = \"c\".\"id\") INNER JOIN \"shippers\" AS \"s\" ON (\"o\".\"shipper_id\" = \"s\".\"id\")"
+SELECT "o"."price" AS "order_price", "c"."name" AS "customer_name", "s"."name" AS "shipper_name" FROM "orders" AS "o" INNER JOIN "customers" AS "c" ON ("o"."customer_id" = "c"."id") INNER JOIN "shippers" AS "s" ON ("o"."shipper_id" = "s"."id")
 
 self-join:
 
@@ -255,9 +255,9 @@ let
     '["col" ::: 'Null 'PGint4]
   query = selectDotStar #t1
     (from (table (#tab `As` #t1) & crossJoin (table (#tab `As` #t2))))
-in renderQuery query
+in printSQL query
 :}
-"SELECT \"t1\".* FROM \"tab\" AS \"t1\" CROSS JOIN \"tab\" AS \"t2\""
+SELECT "t1".* FROM "tab" AS "t1" CROSS JOIN "tab" AS "t2"
 
 set operations:
 
@@ -271,9 +271,9 @@ let
     selectStar (from (table #tab))
     `unionAll`
     selectStar (from (table #tab))
-in renderQuery query
+in printSQL query
 :}
-"(SELECT * FROM \"tab\" AS \"tab\") UNION ALL (SELECT * FROM \"tab\" AS \"tab\")"
+(SELECT * FROM "tab" AS "tab") UNION ALL (SELECT * FROM "tab" AS "tab")
 -}
 newtype Query
   (schema :: SchemaType)
@@ -281,6 +281,7 @@ newtype Query
   (columns :: RelationType)
     = UnsafeQuery { renderQuery :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
+instance RenderSQL (Query schema params columns) where renderSQL = renderQuery
 
 -- | The results of two queries can be combined using the set operation
 -- `union`. Duplicate rows are eliminated.
@@ -434,8 +435,8 @@ selectDistinctDotStar rel relations = UnsafeQuery $
 --
 -- >>> type Row = '["a" ::: 'NotNull 'PGint4, "b" ::: 'NotNull 'PGtext]
 -- >>> let query = values (1 `As` #a :* "one" `As` #b :* Nil) [] :: Query '[] '[] Row
--- >>> renderQuery query
--- "SELECT * FROM (VALUES (1, E'one')) AS t (\"a\", \"b\")"
+-- >>> printSQL query
+-- SELECT * FROM (VALUES (1, E'one')) AS t ("a", "b")
 values
   :: SListI cols
   => NP (Aliased (Expression schema '[] 'Ungrouped params)) cols
