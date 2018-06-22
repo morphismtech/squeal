@@ -100,15 +100,13 @@ module Squeal.PostgreSQL.Schema
   , PGlabel (..)
   , renderLabel
   , renderLabels
-  , LabelOf
-  , LabelsOf
     -- * Embedding
   , PG
-  , EnumWith
-  , LabelsWith
-  , CompositeWith
-  , FieldNamesWith
-  , FieldTypesWith
+  , EnumFrom
+  , LabelsFrom
+  , CompositeFrom
+  , FieldNamesFrom
+  , FieldTypesFrom
   , ConstructorsOf
   , ConstructorNameOf
   , ConstructorNamesOf
@@ -682,13 +680,6 @@ renderLabels
   :: All KnownSymbol labels => NP PGlabel labels -> [ByteString]
 renderLabels = hcollapse
   . hcmap (Proxy @KnownSymbol) (K . renderLabel)
--- | Gets the name of a type constructor
-type family LabelOf (cons :: Type.ConstructorInfo) :: Symbol where
-  LabelOf ('Type.Constructor name) = name
--- | Gets the names of a list of type constructors
-type family LabelsOf (conss :: [Type.ConstructorInfo]) :: [Symbol] where
-  LabelsOf '[] = '[]
-  LabelsOf (cons ': conss) = LabelOf cons ': LabelsOf conss
 
 -- | The `PG` type family embeds a subset of Haskell types
 -- as Postgres basic types.
@@ -724,32 +715,32 @@ type family PG (hask :: Type) :: PGType where
   PG ty = TypeError
     ('Text "There is no Postgres basic type for " ':<>: 'ShowType ty)
 
--- | The `EnumWith` type family embeds Haskell enum types, ADTs with
+-- | The `EnumFrom` type family embeds Haskell enum types, ADTs with
 -- nullary constructors, as Postgres enum types
 --
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance Generic Schwarma
 -- >>> instance HasDatatypeInfo Schwarma
--- >>> :kind! EnumWith Schwarma
--- EnumWith Schwarma :: PGType
+-- >>> :kind! EnumFrom Schwarma
+-- EnumFrom Schwarma :: PGType
 -- = 'PGenum '["Beef", "Lamb", "Chicken"]
-type family EnumWith (hask :: Type) :: PGType where
-  EnumWith hask = 'PGenum (LabelsWith hask)
+type family EnumFrom (hask :: Type) :: PGType where
+  EnumFrom hask = 'PGenum (LabelsFrom hask)
 
--- | The `LabelsWith` type family calculates the constructors of a
+-- | The `LabelsFrom` type family calculates the constructors of a
 -- Haskell enum type.
 --
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance Generic Schwarma
 -- >>> instance HasDatatypeInfo Schwarma
--- >>> :kind! LabelsWith Schwarma
--- LabelsWith Schwarma :: [Type.ConstructorName]
+-- >>> :kind! LabelsFrom Schwarma
+-- LabelsFrom Schwarma :: [Type.ConstructorName]
 -- = '["Beef", "Lamb", "Chicken"]
-type family LabelsWith (hask :: Type) :: [Type.ConstructorName] where
-  LabelsWith hask =
+type family LabelsFrom (hask :: Type) :: [Type.ConstructorName] where
+  LabelsFrom hask =
     ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask))
 
--- | The `CompositeWith` type family embeds Haskell record types as
+-- | The `CompositeFrom` type family embeds Haskell record types as
 -- Postgres composite types, as long as the record fields
 -- are `Maybe`s of Haskell types that can be embedded as basic types
 -- with the `PG` type family.
@@ -757,30 +748,30 @@ type family LabelsWith (hask :: Type) :: [Type.ConstructorName] where
 -- >>> data Row = Row { a :: Maybe Int16, b :: Maybe LocalTime } deriving GHC.Generic
 -- >>> instance Generic Row
 -- >>> instance HasDatatypeInfo Row
--- >>> :kind! CompositeWith Row
--- CompositeWith Row :: PGType
+-- >>> :kind! CompositeFrom Row
+-- CompositeFrom Row :: PGType
 -- = 'PGcomposite '['("a", 'PGint2), '("b", 'PGtimestamp)]
-type family CompositeWith (hask :: Type) :: PGType where
-  CompositeWith hask =
-    'PGcomposite (ZipAs (FieldNamesWith hask) (FieldTypesWith hask))
+type family CompositeFrom (hask :: Type) :: PGType where
+  CompositeFrom hask =
+    'PGcomposite (ZipAs (FieldNamesFrom hask) (FieldTypesFrom hask))
 
 -- | >>> data Row = Row { a :: Maybe Int16, b :: Maybe LocalTime } deriving GHC.Generic
 -- >>> instance Generic Row
 -- >>> instance HasDatatypeInfo Row
--- >>> :kind! FieldNamesWith Row
--- FieldNamesWith Row :: [Type.FieldName]
+-- >>> :kind! FieldNamesFrom Row
+-- FieldNamesFrom Row :: [Type.FieldName]
 -- = '["a", "b"]
-type family FieldNamesWith (hask :: Type) :: [Type.FieldName] where
-  FieldNamesWith hask = FieldNamesOf (FieldsOf (DatatypeInfoOf hask))
+type family FieldNamesFrom (hask :: Type) :: [Type.FieldName] where
+  FieldNamesFrom hask = FieldNamesOf (FieldsOf (DatatypeInfoOf hask))
 
 -- | >>> data Row = Row { a :: Maybe Int16, b :: Maybe LocalTime } deriving GHC.Generic
 -- >>> instance Generic Row
 -- >>> instance HasDatatypeInfo Row
--- >>> :kind! FieldTypesWith Row
--- FieldTypesWith Row :: [PGType]
+-- >>> :kind! FieldTypesFrom Row
+-- FieldTypesFrom Row :: [PGType]
 -- = '['PGint2, 'PGtimestamp]
-type family FieldTypesWith (hask :: Type) :: [PGType] where
-  FieldTypesWith hask = FieldTypesOf (RecordCodeOf hask (Code hask))
+type family FieldTypesFrom (hask :: Type) :: [PGType] where
+  FieldTypesFrom hask = FieldTypesOf (RecordCodeOf hask (Code hask))
 
 -- | Calculates constructors of a datatype.
 type family ConstructorsOf (datatype :: Type.DatatypeInfo)

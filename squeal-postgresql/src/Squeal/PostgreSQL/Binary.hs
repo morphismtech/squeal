@@ -68,8 +68,8 @@ We can create the equivalent Postgres types directly from their Haskell types.
 
 >>> :{
 type Schema =
-  '[ "schwarma" ::: 'Typedef (EnumWith Schwarma)
-   , "person" ::: 'Typedef (CompositeWith Person)
+  '[ "schwarma" ::: 'Typedef (EnumFrom Schwarma)
+   , "person" ::: 'Typedef (CompositeFrom Person)
    ]
 :}
 
@@ -77,8 +77,8 @@ type Schema =
 let
   setup :: Definition '[] Schema
   setup =
-    createTypeEnumWith @Schwarma #schwarma >>>
-    createTypeCompositeWith @Person #person
+    createTypeEnumFrom @Schwarma #schwarma >>>
+    createTypeCompositeFrom @Person #person
 :}
 
 Then we can perform roundtrip queries;
@@ -86,16 +86,16 @@ Then we can perform roundtrip queries;
 >>> :{
 let
   qry1 :: Query Schema
-    '[ 'NotNull (EnumWith Schwarma)]
-    '["fromOnly" ::: 'NotNull (EnumWith Schwarma)]
+    '[ 'NotNull (EnumFrom Schwarma)]
+    '["fromOnly" ::: 'NotNull (EnumFrom Schwarma)]
   qry1 = values_ (parameter @1 #schwarma `As` #fromOnly :* Nil)
 :}
 
 >>> :{
 let
   qry2 :: Query Schema
-    '[ 'NotNull (CompositeWith Person)]
-    '["fromOnly" ::: 'NotNull (CompositeWith Person)]
+    '[ 'NotNull (CompositeFrom Person)]
+    '["fromOnly" ::: 'NotNull (CompositeFrom Person)]
   qry2 = values_ (parameter @1 #person `As` #fromOnly :* Nil)
 :}
 
@@ -241,7 +241,7 @@ instance (HasOid pg, ToParam x pg)
 instance
   ( IsEnumType x
   , HasDatatypeInfo x
-  , LabelsWith x ~ labels
+  , LabelsFrom x ~ labels
   ) => ToParam x ('PGenum labels) where
     toParam =
       let
@@ -261,7 +261,7 @@ instance
   , MapMaybes xs
   , IsProductType x (Maybes xs)
   , AllZip ToAliasedParam xs fields
-  , FieldNamesWith x ~ AliasesOf fields
+  , FieldNamesFrom x ~ AliasesOf fields
   , All HasAliasedOid fields
   ) => ToParam x ('PGcomposite fields) where
     toParam =
@@ -397,7 +397,7 @@ instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
 instance
   ( IsEnumType y
   , HasDatatypeInfo y
-  , LabelsWith y ~ labels
+  , LabelsFrom y ~ labels
   ) => FromValue ('PGenum labels) y where
     fromValue _ =
       let
@@ -422,7 +422,7 @@ instance
   , MapMaybes ys
   , IsProductType y (Maybes ys)
   , AllZip FromAliasedValue fields ys
-  , FieldNamesWith y ~ AliasesOf fields
+  , FieldNamesFrom y ~ AliasesOf fields
   ) => FromValue ('PGcomposite fields) y where
     fromValue =
       let
@@ -515,7 +515,7 @@ instance
   ( SListI results
   , IsProductType y ys
   , AllZip FromColumnValue results ys
-  , FieldNamesWith y ~ AliasesOf results
+  , FieldNamesFrom y ~ AliasesOf results
   ) => FromRow results y where
     fromRow
       = to . SOP . Z . htrans (Proxy @FromColumnValue) (I . fromColumnValue)

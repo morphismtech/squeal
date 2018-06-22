@@ -68,9 +68,9 @@ module Squeal.PostgreSQL.Definition
   , dropView
     -- * Types
   , createTypeEnum
-  , createTypeEnumWith
+  , createTypeEnumFrom
   , createTypeComposite
-  , createTypeCompositeWith
+  , createTypeCompositeFrom
   , dropType
     -- * Columns
   , ColumnTypeExpression (..)
@@ -835,19 +835,19 @@ createTypeEnum enum labels = UnsafeDefinition $
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance SOP.Generic Schwarma
 -- >>> instance SOP.HasDatatypeInfo Schwarma
--- >>> printSQL $ createTypeEnumWith @Schwarma #schwarma
+-- >>> printSQL $ createTypeEnumFrom @Schwarma #schwarma
 -- CREATE TYPE "schwarma" AS ENUM ('Beef', 'Lamb', 'Chicken');
-createTypeEnumWith
+createTypeEnumFrom
   :: forall hask enum schema.
   ( SOP.Generic hask
-  , SOP.All KnownSymbol (LabelsWith hask)
+  , SOP.All KnownSymbol (LabelsFrom hask)
   , KnownSymbol enum
   )
   => Alias enum
   -- ^ name of the user defined enumerated type
-  -> Definition schema (Create enum ('Typedef (EnumWith hask)) schema)
-createTypeEnumWith enum = createTypeEnum enum
-  (SOP.hpure label :: NP PGlabel (LabelsWith hask))
+  -> Definition schema (Create enum ('Typedef (EnumFrom hask)) schema)
+createTypeEnumFrom enum = createTypeEnum enum
+  (SOP.hpure label :: NP PGlabel (LabelsFrom hask))
 
 -- | `createTypeComposite` creates a composite type. The composite type is
 -- specified by a list of attribute names and data types.
@@ -874,28 +874,28 @@ createTypeComposite ty fields = UnsafeDefinition $
 -- >>> data Complex = Complex {real :: Maybe Double, imaginary :: Maybe Double} deriving GHC.Generic
 -- >>> instance SOP.Generic Complex
 -- >>> instance SOP.HasDatatypeInfo Complex
--- >>> printSQL $ createTypeCompositeWith @Complex #complex
+-- >>> printSQL $ createTypeCompositeFrom @Complex #complex
 -- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
-createTypeCompositeWith
+createTypeCompositeFrom
   :: forall hask ty schema.
-  ( ZipAliased (FieldNamesWith hask) (FieldTypesWith hask)
-  , SOP.All (PGTyped schema) (FieldTypesWith hask)
+  ( ZipAliased (FieldNamesFrom hask) (FieldTypesFrom hask)
+  , SOP.All (PGTyped schema) (FieldTypesFrom hask)
   , KnownSymbol ty
   )
   => Alias ty
   -- ^ name of the user defined composite type
-  -> Definition schema (Create ty ( 'Typedef (CompositeWith hask)) schema)
-createTypeCompositeWith ty = createTypeComposite ty $ zipAs
-  (SOP.hpure Alias :: NP Alias (FieldNamesWith hask))
+  -> Definition schema (Create ty ( 'Typedef (CompositeFrom hask)) schema)
+createTypeCompositeFrom ty = createTypeComposite ty $ zipAs
+  (SOP.hpure Alias :: NP Alias (FieldNamesFrom hask))
   (SOP.hcpure (SOP.Proxy :: SOP.Proxy (PGTyped schema)) pgtype
-    :: NP (TypeExpression schema) (FieldTypesWith hask))
+    :: NP (TypeExpression schema) (FieldTypesFrom hask))
 
 -- | Drop a type.
 --
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance SOP.Generic Schwarma
 -- >>> instance SOP.HasDatatypeInfo Schwarma
--- >>> printSQL (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (EnumWith Schwarma)] '[])
+-- >>> printSQL (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (EnumFrom Schwarma)] '[])
 -- DROP TYPE "schwarma";
 dropType
   :: Has tydef schema ('Typedef ty)
