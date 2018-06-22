@@ -21,6 +21,7 @@ We'll need some imports.
 >>> import Data.Int (Int32)
 >>> import Data.Text (Text)
 >>> import Squeal.PostgreSQL
+>>> import Squeal.PostgreSQL.Render
 
 We'll use generics to easily convert between Haskell and PostgreSQL values.
 
