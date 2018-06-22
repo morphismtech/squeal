@@ -5,12 +5,11 @@ Copyright: (c) Eitan Chatav, 2017
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Binary encoding and decoding between Haskell and PostgreSQL types.
+This module provides binary encoding and decoding between Haskell and PostgreSQL types.
 
 Instances are governed by the `Generic` and `HasDatatypeInfo` typeclasses, so you absolutely
 do not need to define your own instances to decode retrieved rows into Haskell values or
-to encode Haskell values into statement parameters. You only need to derive those type
-classes.
+to encode Haskell values into statement parameters.
 
 >>> import Data.Int (Int16)
 >>> import Data.Text (Text)
