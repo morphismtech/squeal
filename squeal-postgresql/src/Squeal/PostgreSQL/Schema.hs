@@ -5,7 +5,10 @@ Copyright: (c) Eitan Chatav, 2017
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-A type-level DSL for kinds of PostgreSQL types, constraints, and aliases.
+This module provides a type-level DSL for kinds of Postgres types,
+tables, schema, constraints, aliases, enumerated labels, and groupings.
+It also defines useful type families to operate on these. Finally,
+it defines an embedding of Haskell types into Postgres types.
 -}
 
 {-# LANGUAGE
@@ -35,6 +38,7 @@ module Squeal.PostgreSQL.Schema
   , HasOid (..)
   , NullityType (..)
   , ColumnType
+    -- * Tables
   , ColumnsType
   , RelationType
   , NilRelation
@@ -43,9 +47,6 @@ module Squeal.PostgreSQL.Schema
     -- * Schema
   , SchemumType (..)
   , SchemaType
-    -- * Grouping
-  , Grouping (..)
-  , GroupedBy
     -- * Constraints
   , (:=>)
   , ColumnConstraint (..)
@@ -67,6 +68,14 @@ module Squeal.PostgreSQL.Schema
   , HasAll
   , IsLabel (..)
   , IsQualified (..)
+    -- * Enumerated Labels
+  , IsPGlabel (..)
+  , PGlabel (..)
+  , renderLabel
+  , renderLabels
+    -- * Grouping
+  , Grouping (..)
+  , GroupedBy
     -- * Type Families
   , Join
   , With
@@ -92,14 +101,6 @@ module Squeal.PostgreSQL.Schema
   , TableToRelation
   , ConstraintInvolves
   , DropIfConstraintsInvolve
-    -- * Generics
-  , MapMaybes (..)
-  , Nulls
-    -- * Enum Labels
-  , IsPGlabel (..)
-  , PGlabel (..)
-  , renderLabel
-  , renderLabels
     -- * Embedding
   , PG
   , EnumFrom
@@ -116,6 +117,8 @@ module Squeal.PostgreSQL.Schema
   , FieldTypeOf
   , FieldTypesOf
   , RecordCodeOf
+  , MapMaybes (..)
+  , Nulls
   ) where
 
 import Control.DeepSeq
