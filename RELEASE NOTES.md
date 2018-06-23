@@ -1,5 +1,12 @@
 ## RELEASE NOTES
 
+### Version 0.3.0.0 - June 23, 2018
+
+**Changes**
+- **Views** - Create, drop and query views
+- **Enums, Composites** - Create, drop and marshal enumerated and composite types
+- **Bugfixes**
+
 ### Version 0.2.1 - April 7, 2018
 
 This minor update fixes an issue where alias identifiers could conflict with
