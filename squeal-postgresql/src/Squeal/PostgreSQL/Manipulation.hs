@@ -302,11 +302,11 @@ insertQuery_
 insertQuery_ tab query =
   insertQuery tab query OnConflictDoRaise (Returning Nil)
 
--- | `ColumnValue`s are values to insert or update in a row
+-- | `ColumnValue`s are values to insert or update in a row.
 -- `Same` updates with the same value.
--- `Default` inserts or updates with the @DEFAULT@ value
--- `Set` a value to be an `Expression`, relative to the given
--- row for an update, and closed for an insert.
+-- `Default` inserts or updates with the @DEFAULT@ value.
+-- `Set` sets a value to be an `Expression`, which can refer to
+-- existing value in the row for an update.
 data ColumnValue
   (schema :: SchemaType)
   (columns :: RelationType)

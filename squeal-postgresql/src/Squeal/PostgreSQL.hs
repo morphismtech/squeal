@@ -83,7 +83,7 @@ let
           OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
 :}
 
-We can easily see the generated SQL is unsuprising looking.
+We can easily see the generated SQL is unsurprising looking.
 
 >>> printSQL setup
 CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));

@@ -83,8 +83,10 @@ renderCommaSeparatedMaybe render
 renderNat :: KnownNat n => proxy n -> ByteString
 renderNat (_ :: proxy n) = fromString (show (natVal' (proxy# :: Proxy# n)))
 
+-- | A class for rendering SQL
 class RenderSQL sql where
   renderSQL :: sql -> ByteString
 
+-- | Print SQL.
 printSQL :: (RenderSQL sql, MonadBase IO io) => sql -> io ()
 printSQL = liftBase . Char8.putStrLn . renderSQL

@@ -314,7 +314,7 @@ instance ToParam x ty => ToAliasedParam x (alias ::: ty) where
     Just x -> K . Just . unK $ toParam @x @ty x
 
 -- | A `ToColumnParam` constraint lifts the `ToParam` encoding
--- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s. You should
+-- of a `Type` to a `NullityType`, encoding `Maybe`s to `Null`s. You should
 -- not define instances of `ToColumnParam`, just use the provided instances.
 class ToColumnParam (x :: Type) (ty :: NullityType) where
   -- | >>> toColumnParam @Int16 @('NotNull 'PGint2) 0

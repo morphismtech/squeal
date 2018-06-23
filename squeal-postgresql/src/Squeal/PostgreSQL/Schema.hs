@@ -226,10 +226,7 @@ type (:=>) constraint ty = '(constraint,ty)
 infixr 7 :=>
 
 -- | The alias operator `:::` is like a promoted version of `As`,
--- a type level pair between
--- an alias and some type, like a column alias and either a `ColumnType` or
--- `NullityType` or a table alias and either a `TableType` or a `RelationType`
--- or a constraint alias and a `TableConstraint`.
+-- a type level pair between an alias and some type.
 type (:::) (alias :: Symbol) ty = '(alias,ty)
 infixr 6 :::
 

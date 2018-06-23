@@ -151,7 +151,8 @@ createTable tab columns constraints = UnsafeDefinition $
 
 {-| `createTableIfNotExists` creates a table if it doesn't exist, but does not add it to the schema.
 Instead, the schema already has the table so if the table did not yet exist, the schema was wrong.
-`createTableIfNotExists` fixes this. Interestingly, this property makes it an idempotent in the `Category` `Definition`.
+`createTableIfNotExists` fixes this. Interestingly, this property makes it an idempotent in
+the `Category` of `Definition`s.
 
 >>> :set -XOverloadedLabels -XTypeApplications
 >>> type Table = '[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGfloat4]
@@ -789,7 +790,7 @@ alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 -- CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
 createView
   :: KnownSymbol view
-  => Alias view -- ^ the name of the table to add
+  => Alias view -- ^ the name of the view to add
   -> Query schema '[] relation
     -- ^ query
   -> Definition schema (Create view ('View relation) schema)
@@ -932,19 +933,19 @@ default_ x ty = UnsafeColumnTypeExpression $
   renderColumnTypeExpression ty <+> "DEFAULT" <+> renderExpression x
 
 -- | not a true type, but merely a notational convenience for creating
--- unique identifier columns with type `'PGint2`
+-- unique identifier columns with type `PGint2`
 serial2, smallserial
   :: ColumnTypeExpression schema ('Def :=> 'NotNull 'PGint2)
 serial2 = UnsafeColumnTypeExpression "serial2"
 smallserial = UnsafeColumnTypeExpression "smallserial"
 -- | not a true type, but merely a notational convenience for creating
--- unique identifier columns with type `'PGint4`
+-- unique identifier columns with type `PGint4`
 serial4, serial
   :: ColumnTypeExpression schema ('Def :=> 'NotNull 'PGint4)
 serial4 = UnsafeColumnTypeExpression "serial4"
 serial = UnsafeColumnTypeExpression "serial"
 -- | not a true type, but merely a notational convenience for creating
--- unique identifier columns with type `'PGint8`
+-- unique identifier columns with type `PGint8`
 serial8, bigserial
   :: ColumnTypeExpression schema ('Def :=> 'NotNull 'PGint8)
 serial8 = UnsafeColumnTypeExpression "serial8"
