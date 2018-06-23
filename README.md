@@ -281,5 +281,4 @@ in
     & pqThen (define teardown)
 :}
 [User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole@hotmail.com"}]
--}
 ```
