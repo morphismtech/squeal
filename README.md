@@ -88,7 +88,7 @@ We'll use generics to easily convert between Haskell and PostgreSQL values.
 ```
 
 The first step is to define the schema of our database. This is where
-we use @DataKinds@ and @TypeOperators@.
+we use `DataKinds` and `TypeOperators`.
 
 ```Haskell
 >>> :{
@@ -113,12 +113,12 @@ type Schema =
 Notice the use of type operators.
 
 `:::` is used to pair an alias `GHC.TypeLits.Symbol` with a `SchemumType`,
-a `TableConstraint` or a `ColumnType`. It is intended to connote Haskell's @::@
+a `TableConstraint` or a `ColumnType`. It is intended to connote Haskell's `::`
 operator.
 
 `:=>` is used to pair `TableConstraints` with a `ColumnsType`,
 yielding a `TableType`, or to pair a `ColumnConstraint` with a `NullityType`,
-yielding a `ColumnType`. It is intended to connote Haskell's @=>@ operator
+yielding a `ColumnType`. It is intended to connote Haskell's `=>` operator
 
 Next, we'll write `Definition`s to set up and tear down the schema. In
 Squeal, a `Definition` like `createTable`, `alterTable` or `dropTable` 
@@ -154,9 +154,9 @@ CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" P
 CREATE TABLE "emails" ("id" serial, "user_id" int NOT NULL, "email" text NULL, CONSTRAINT "pk_emails" PRIMARY KEY ("id"), CONSTRAINT "fk_user_id" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 ```
 
-Notice that @setup@ starts with an empty schema @'[]@ and produces @Schema@.
+Notice that `setup` starts with an empty schema `'[]` and produces `Schema`.
 In our `createTable` commands we included `TableConstraint`s to define
-primary and foreign keys, making them somewhat complex. Our @teardown@
+primary and foreign keys, making them somewhat complex. Our `teardown`
 `Definition` is simpler.
 
 ```Haskell
@@ -175,8 +175,8 @@ Next, we'll write `Manipulation`s to insert data into our two tables.
 A `Manipulation` like `insertRow`, `update` or `deleteFrom`
 has three type parameters, the schema it refers to, a list of parameters
 it can take as input, and a list of columns it produces as output. When
-we insert into the users table, we will need a parameter for the @name@
-field but not for the @id@ field. Since it's serial, we can use a default
+we insert into the users table, we will need a parameter for the `name`
+field but not for the `id` field. Since it's serial, we can use a default
 value. However, since the emails table refers to the users table, we will
 need to retrieve the user id that the insert generates and insert it into
 the emails table. Take a careful look at the type and definition of both
@@ -232,8 +232,8 @@ SELECT "u"."name" AS "userName", "e"."email" AS "userEmail" FROM "users" AS "u" 
 Now that we've defined the SQL side of things, we'll need a Haskell type
 for users. We give the type `Generics.SOP.Generic` and
 `Generics.SOP.HasDatatypeInfo` instances so that we can decode the rows
-we receive when we run @getUsers@. Notice that the record fields of the
-@User@ type match the column names of @getUsers@.
+we receive when we run `getUsers`. Notice that the record fields of the
+`User` type match the column names of `getUsers`.
 
 ```Haskell
 >>> data User = User { userName :: Text, userEmail :: Maybe Text } deriving (Show, GHC.Generic)
