@@ -115,6 +115,7 @@ CREATE TYPE "schwarma" AS ENUM ('Beef', 'Lamb', 'Chicken');
 You can express values of an enum type using `label`, which is an overloaded method
 of the `IsPGlabel` typeclass.
 
+```Haskell
 >>> :{
 let
   expression :: Expression sch rels grp params ('NotNull (EnumFrom Schwarma))
@@ -122,6 +123,7 @@ let
 in printSQL expression
 :}
 'Chicken'
+```
 
 **Composite Types**
 
