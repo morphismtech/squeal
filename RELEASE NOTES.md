@@ -54,11 +54,7 @@ type BC =
 
 >>> :{
 let
-  definition :: Definition
-    '[ "abc" ::: 'Table ABC ]
-    '[ "abc" ::: 'Table ABC
-     , "bc"  ::: 'View BC
-     ]
+  definition :: Definition '["abc" ::: 'Table ABC ] '["abc" ::: 'Table ABC, "bc"  ::: 'View BC]
   definition =
     createView #bc (select (#b :* #c :* Nil) (from (table #abc)))
 in printSQL definition
@@ -67,11 +63,7 @@ CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
 
 >>> :{
 let
-  definition :: Definition
-    '[ "abc" ::: 'Table ABC
-     , "bc"  ::: 'View BC
-     ]
-    '[ "abc" ::: 'Table ABC ]
+  definition :: Definition '["abc" ::: 'Table ABC, "bc"  ::: 'View BC] '["abc" ::: 'Table ABC]
   definition = dropView #bc
 in printSQL definition
 :}
@@ -79,10 +71,7 @@ DROP VIEW "bc";
 
 >>> :{
 let
-  query :: Query
-    '[ "abc" ::: 'Table ABC
-     , "bc"  ::: 'View BC
-     ] '[] BC
+  query :: Query '["abc" ::: 'Table ABC, "bc"  ::: 'View BC] '[] BC
   query = selectStar (from (view #bc))
 in printSQL query
 :}
