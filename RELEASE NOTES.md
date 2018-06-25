@@ -1,6 +1,6 @@
 ## RELEASE NOTES
 
-### Version 0.3.0.0 - June 23, 2018
+### Version 0.3 - June 23, 2018
 
 Version 0.3 of Squeal adds views as well as composite and enumerated types to Squeal.
 To support these features, a new kind `SchemumType` was added.
@@ -87,6 +87,30 @@ let
 in printSQL query
 :}
 SELECT * FROM "bc" AS "bc"
+```
+
+**Enumerated Types**
+
+PostgreSQL has a powerful type system. It even allows for user defined types.
+For instance, you can define enumerated types which are data types that comprise
+a static, ordered set of values. An example of an enum type might be the days of the week,
+or a set of status values for a piece of data.
+
+Enumerated types are created using the `createTypeEnum` command, for example
+
+```Haskell
+>>> printSQL $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy" :* Nil)
+CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
+```
+
+Enumerated types can also be generated from a Haskell type, for example
+
+```Haskell
+>>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
+>>> instance SOP.Generic Schwarma
+>>> instance SOP.HasDatatypeInfo Schwarma
+>>> printSQL $ createTypeEnumFrom @Schwarma #schwarma
+CREATE TYPE "schwarma" AS ENUM ('Beef', 'Lamb', 'Chicken');
 ```
 
 ### Version 0.2.1 - April 7, 2018
