@@ -2,10 +2,92 @@
 
 ### Version 0.3.0.0 - June 23, 2018
 
-**Changes**
-- **Views** - Create, drop and query views
-- **Enums, Composites** - Create, drop and marshal enumerated and composite types
-- **Bugfixes**
+Version 0.3 of Squeal adds views as well as composite and enumerated types to Squeal.
+To support these features, a new kind `SchemumType` was added.
+
+```Haskell
+data SchemumType
+  = Table TableType
+  | View RelationType
+  | Typedef PGType
+```
+
+As a consequence, you will have to update your schema definitions like so:
+
+```Haskell
+-- Squeal 0.2
+type Schema =
+  '[ "users" :::
+      '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
+      '[ "id"   :::   'Def :=> 'NotNull 'PGint4
+       , "name" ::: 'NoDef :=> 'NotNull 'PGtext
+       ]
+   ]
+
+-- Squeal 0.3
+type Schema =
+  '[ "users" ::: 'Table (
+      '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
+      '[ "id"   :::   'Def :=> 'NotNull 'PGint4
+       , "name" ::: 'NoDef :=> 'NotNull 'PGtext
+       ])
+   ]
+```
+
+**Views**
+
+You can now create, drop, and query views.
+
+```Haskell
+>>> :{
+type ABC =
+  ('[] :: TableConstraints) :=>
+  '[ "a" ::: 'NoDef :=> 'Null 'PGint4
+   , "b" ::: 'NoDef :=> 'Null 'PGint4
+   , "c" ::: 'NoDef :=> 'Null 'PGint4
+   ]
+type BC =
+  '[ "b" ::: 'Null 'PGint4
+   , "c" ::: 'Null 'PGint4
+   ]
+:}
+
+>>> :{
+let
+  definition :: Definition
+    '[ "abc" ::: 'Table ABC ]
+    '[ "abc" ::: 'Table ABC
+     , "bc"  ::: 'View BC
+     ]
+  definition =
+    createView #bc (select (#b :* #c :* Nil) (from (table #abc)))
+in printSQL definition
+:}
+CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
+
+>>> :{
+let
+  definition :: Definition
+    '[ "abc" ::: 'Table ABC
+     , "bc"  ::: 'View BC
+     ]
+    '[ "abc" ::: 'Table ABC ]
+  definition = dropView #bc
+in printSQL definition
+:}
+DROP VIEW "bc";
+
+>>> :{
+let
+  query :: Query
+    '[ "abc" ::: 'Table ABC
+     , "bc"  ::: 'View BC
+     ] '[] BC
+  query = selectStar (from (view #bc))
+in printSQL query
+:}
+SELECT * FROM "bc" AS "bc"
+```
 
 ### Version 0.2.1 - April 7, 2018
 
