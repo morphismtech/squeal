@@ -1,6 +1,6 @@
 ## RELEASE NOTES
 
-### Version 0.3 - June 23, 2018
+### Version 0.3 - June 27, 2018
 
 Version 0.3 of Squeal adds views as well as composite and enumerated types to Squeal.
 To support these features, a new kind `SchemumType` was added.
