@@ -103,6 +103,11 @@ Enumerated types can also be generated from a Haskell algbraic data type with nu
 >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 >>> instance SOP.Generic Schwarma
 >>> instance SOP.HasDatatypeInfo Schwarma
+
+>>> :kind! EnumFrom Schwarma
+EnumFrom Schwarma :: PGType
+= 'PGenum '["Beef", "Lamb", "Chicken"]
+
 >>> :{
 let
   definition :: Definition '[] '["schwarma" ::: 'Typedef (EnumFrom Schwarma)]
