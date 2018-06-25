@@ -199,6 +199,44 @@ in printSQL expr
 ```
 
 Both composite and enum types can be automatically encoded from and decoded to their equivalent Haskell types.
+And they can be dropped.
+
+```Haskell
+>>> :{
+let
+  definition :: Definition '["mood" ::: 'Typedef ('PGenum '["sad", "ok", "happy"])] '[]
+  definition = dropType #mood
+:}
+>>> printSQL definition
+DROP TYPE "mood";
+```
+
+**Additional Changes**
+
+Squeal 0.3 also introduces a typeclass `HasAll` similar to `Has` but for a list of aliases.
+This makes it possible to clean up some unfortunately messy Squeal 0.2 definitions.
+
+```Haskell
+-- Squeal 0.2
+>>> unique (Column #a :* Column #b :* Nil)
+
+-- Squeal 0.3
+>>> unique (#a :* #b :* Nil)
+```
+
+Squeal 0.3 also adds `IsLabel` instances for `Aliased` expressions and tables as well as
+heterogeneous lists, allowing for some more economy of code.
+
+```Haskell
+-- Squeal 0.2
+>>> select (#a `As` #a :* Nil) (from (table (#t `As` #t)))
+
+-- Squeal 0.3
+>>> select #a (from (table #t))
+```
+
+The above changes required major and minor changes to Squeal DSL functions.
+Please consult the documentation.
 
 ### Version 0.2.1 - April 7, 2018
 
