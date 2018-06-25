@@ -97,7 +97,7 @@ let
 CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
 ```
 
-Enumerated types can also be generated from a Haskell algbraic data type with nullary constructors, for example
+Enumerated types can also be generated from a Haskell algbraic data type with nullary constructors, for example:
 
 ```Haskell
 >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
@@ -132,7 +132,36 @@ in printSQL expression
 
 **Composite Types**
 
+In addition to enum types, you can define composite types.
+A composite type represents the structure of a row or record;
+it is essentially just a list of field names and their data types.
 
+
+`createTypeComposite` creates a composite type. The composite type is
+specified by a list of attribute names and data types.
+
+```Haskell
+>>> :{
+let
+  definition :: Definition '[] '["complex" ::: 'Typedef ('PGcomposite '["real" ::: 'PGfloat8, "imaginary" ::: 'PGfloat8])]
+  definition = createTypeComposite #complex (float8 `As` #real :* float8 `As` #imaginary :* Nil)
+:}
+>>> printSQL definition
+CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
+```
+
+Composite types are almost equivalent to Haskell record types.
+However, because of the potential presence of @NULL@
+all the record fields must be `Maybe`s of basic types.
+Composite types can be generated from a Haskell record type, for example:
+
+```Haskell
+>>> data Complex = Complex {real :: Maybe Double, imaginary :: Maybe Double} deriving GHC.Generic
+>>> instance SOP.Generic Complex
+>>> instance SOP.HasDatatypeInfo Complex
+>>> printSQL $ createTypeCompositeFrom @Complex #complex
+CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
+```
 
 ### Version 0.2.1 - April 7, 2018
 
