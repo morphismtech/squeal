@@ -235,6 +235,8 @@ heterogeneous lists, allowing for some more economy of code.
 >>> select #a (from (table #t))
 ```
 
+Squeal 0.3 also fixes a bug that prevented joined queries on self-referencing tables.
+
 The above changes required major and minor changes to Squeal DSL functions.
 Please consult the documentation.
 
