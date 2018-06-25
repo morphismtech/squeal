@@ -199,7 +199,6 @@ in printSQL expr
 ```
 
 Both composite and enum types can be automatically encoded from and decoded to their equivalent Haskell types.
-```
 
 ### Version 0.2.1 - April 7, 2018
 
