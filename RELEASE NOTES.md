@@ -151,7 +151,7 @@ CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 ```
 
 Composite types are almost equivalent to Haskell record types.
-However, because of the potential presence of @NULL@
+However, because of the potential presence of `NULL`
 all the record fields must be `Maybe`s of basic types.
 Composite types can be generated from a Haskell record type, for example:
 
