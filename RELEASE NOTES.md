@@ -1,11 +1,204 @@
 ## RELEASE NOTES
 
-### Version 0.3.0.0 - June 23, 2018
+### Version 0.3 - June 23, 2018
 
-**Changes**
-- **Views** - Create, drop and query views
-- **Enums, Composites** - Create, drop and marshal enumerated and composite types
-- **Bugfixes**
+Version 0.3 of Squeal adds views as well as composite and enumerated types to Squeal.
+To support these features, a new kind `SchemumType` was added.
+
+```Haskell
+data SchemumType
+  = Table TableType
+  | View RelationType
+  | Typedef PGType
+```
+
+As a consequence, you will have to update your schema definitions like so:
+
+```Haskell
+-- Squeal 0.2
+type Schema =
+  '[ "users" :::
+      '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
+      '[ "id"   :::   'Def :=> 'NotNull 'PGint4
+       , "name" ::: 'NoDef :=> 'NotNull 'PGtext
+       ]
+   ]
+
+-- Squeal 0.3
+type Schema =
+  '[ "users" ::: 'Table (
+      '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
+      '[ "id"   :::   'Def :=> 'NotNull 'PGint4
+       , "name" ::: 'NoDef :=> 'NotNull 'PGtext
+       ])
+   ]
+```
+
+**Views**
+
+You can now create, drop, and query views.
+
+```Haskell
+>>> :{
+type ABC =
+  ('[] :: TableConstraints) :=>
+  '[ "a" ::: 'NoDef :=> 'Null 'PGint4
+   , "b" ::: 'NoDef :=> 'Null 'PGint4
+   , "c" ::: 'NoDef :=> 'Null 'PGint4
+   ]
+type BC =
+  '[ "b" ::: 'Null 'PGint4
+   , "c" ::: 'Null 'PGint4
+   ]
+:}
+
+>>> :{
+let
+  definition :: Definition '["abc" ::: 'Table ABC ] '["abc" ::: 'Table ABC, "bc"  ::: 'View BC]
+  definition = createView #bc (select (#b :* #c :* Nil) (from (table #abc)))
+in printSQL definition
+:}
+CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
+
+>>> :{
+let
+  definition :: Definition '["abc" ::: 'Table ABC, "bc"  ::: 'View BC] '["abc" ::: 'Table ABC]
+  definition = dropView #bc
+in printSQL definition
+:}
+DROP VIEW "bc";
+
+>>> :{
+let
+  query :: Query '["abc" ::: 'Table ABC, "bc"  ::: 'View BC] '[] BC
+  query = selectStar (from (view #bc))
+in printSQL query
+:}
+SELECT * FROM "bc" AS "bc"
+```
+
+**Enumerated Types**
+
+PostgreSQL has a powerful type system. It even allows for user defined types.
+For instance, you can define enumerated types which are data types that comprise
+a static, ordered set of values. They are equivalent to Haskell algebraic data
+types whose constructors are nullary. An example of an enum type might be the days of the week,
+or a set of status values for a piece of data.
+
+Enumerated types are created using the `createTypeEnum` command, for example:
+
+```Haskell
+>>> :{
+let
+  definition :: Definition '[] '["mood" ::: 'Typedef ('PGenum '["sad", "ok", "happy"])]
+  definition = createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy" :* Nil)
+:}
+>>> printSQL definition
+CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
+```
+
+Enumerated types can also be generated from a Haskell algbraic data type with nullary constructors, for example:
+
+```Haskell
+>>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
+>>> instance SOP.Generic Schwarma
+>>> instance SOP.HasDatatypeInfo Schwarma
+
+>>> :kind! EnumFrom Schwarma
+EnumFrom Schwarma :: PGType
+= 'PGenum '["Beef", "Lamb", "Chicken"]
+
+>>> :{
+let
+  definition :: Definition '[] '["schwarma" ::: 'Typedef (EnumFrom Schwarma)]
+  definition = createTypeEnumFrom @Schwarma #schwarma
+:}
+>>> printSQL definition
+CREATE TYPE "schwarma" AS ENUM ('Beef', 'Lamb', 'Chicken');
+```
+
+You can express values of an enum type using `label`, which is an overloaded method
+of the `IsPGlabel` typeclass.
+
+```Haskell
+>>> :{
+let
+  expression :: Expression sch rels grp params ('NotNull (EnumFrom Schwarma))
+  expression = label @"Chicken"
+in printSQL expression
+:}
+'Chicken'
+```
+
+**Composite Types**
+
+In addition to enum types, you can define composite types.
+A composite type represents the structure of a row or record;
+it is essentially just a list of field names and their data types.
+
+
+`createTypeComposite` creates a composite type. The composite type is
+specified by a list of attribute names and data types.
+
+```Haskell
+>>> :{
+let
+  definition :: Definition '[] '["complex" ::: 'Typedef ('PGcomposite '["real" ::: 'PGfloat8, "imaginary" ::: 'PGfloat8])]
+  definition = createTypeComposite #complex (float8 `As` #real :* float8 `As` #imaginary :* Nil)
+:}
+>>> printSQL definition
+CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
+```
+
+Composite types are almost equivalent to Haskell record types.
+However, because of the potential presence of @NULL@
+all the record fields must be `Maybe`s of basic types.
+Composite types can be generated from a Haskell record type, for example:
+
+```Haskell
+>>> data Complex = Complex {real :: Maybe Double, imaginary :: Maybe Double} deriving GHC.Generic
+>>> instance SOP.Generic Complex
+>>> instance SOP.HasDatatypeInfo Complex
+
+>>> :kind! CompositeFrom Complex
+CompositeFrom Complex :: PGType
+= 'PGcomposite '['("real", 'PGfloat8), '("imaginary", 'PGfloat8)]
+
+>>> :{
+let
+  definition :: Definition '[] '["complex" ::: 'Typedef (CompositeFrom Complex)]
+  definition = createTypeCompositeFrom @Complex #complex
+in printSQL definition
+:}
+CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
+```
+
+A row constructor is an expression that builds a row value
+(also called a composite value) using values for its member fields.
+
+```Haskell
+>>> :{
+let
+  i :: Expression '[] '[] 'Ungrouped '[] ('NotNull (CompositeFrom Complex))
+  i = row (0 `As` #real :* 1 `As` #imaginary :* Nil)
+:}
+>>>  printSQL i
+ROW(0, 1)
+```
+
+You can also use `(&)` to apply a field label to a composite value.
+
+```Haskell
+>>> :{
+let
+  expr :: Expression '[] '[] 'Ungrouped '[] ('Null 'PGfloat8)
+  expr = i & #imaginary
+in printSQL expr
+:}
+(ROW(0, 1)).imaginary
+```
+
+Both composite and enum types can be automatically encoded from and decoded to their equivalent Haskell types.
 
 ### Version 0.2.1 - April 7, 2018
 
