@@ -85,7 +85,7 @@ a static, ordered set of values. They are equivalent to Haskell algebraic data
 types whose constructors are nullary. An example of an enum type might be the days of the week,
 or a set of status values for a piece of data.
 
-Enumerated types are created using the `createTypeEnum` command, for example
+Enumerated types are created using the `createTypeEnum` command, for example:
 
 ```Haskell
 >>> :{
@@ -171,6 +171,34 @@ let
 in printSQL definition
 :}
 CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
+```
+
+A row constructor is an expression that builds a row value
+(also called a composite value) using values for its member fields.
+
+```Haskell
+>>> :{
+let
+  i :: Expression '[] '[] 'Ungrouped '[] ('NotNull (CompositeFrom Complex))
+  i = row (0 `As` #real :* 1 `As` #imaginary :* Nil)
+:}
+>>>  printSQL i
+ROW(0, 1)
+```
+
+You can also use `(&)` to apply a field label to a composite value.
+
+```Haskell
+>>> :{
+let
+  expr :: Expression '[] '[] 'Ungrouped '[] ('Null 'PGfloat8)
+  expr = i & #imaginary
+in printSQL expr
+:}
+(ROW(0, 1)).imaginary
+```
+
+Both composite and enum types can be automatically encoded from and decoded to their equivalent Haskell types.
 ```
 
 ### Version 0.2.1 - April 7, 2018
