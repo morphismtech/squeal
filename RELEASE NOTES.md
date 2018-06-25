@@ -159,7 +159,17 @@ Composite types can be generated from a Haskell record type, for example:
 >>> data Complex = Complex {real :: Maybe Double, imaginary :: Maybe Double} deriving GHC.Generic
 >>> instance SOP.Generic Complex
 >>> instance SOP.HasDatatypeInfo Complex
->>> printSQL $ createTypeCompositeFrom @Complex #complex
+
+>>> :kind! CompositeFrom Complex
+CompositeFrom Complex :: PGType
+= 'PGcomposite '['("real", 'PGfloat8), '("imaginary", 'PGfloat8)]
+
+>>> :{
+let
+  definition :: Definition '[] '["complex" ::: 'Typedef (CompositeFrom Complex)]
+  definition = createTypeCompositeFrom @Complex #complex
+in printSQL definition
+:}
 CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 ```
 
