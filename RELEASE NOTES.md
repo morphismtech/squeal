@@ -228,7 +228,7 @@ Squeal 0.3 also adds `IsLabel` instances for `Aliased` expressions and tables as
 heterogeneous lists, allowing for some more economy of code.
 
 ```Haskell
--- Squeal 0.2
+-- Squeal 0.2 (or 0.3)
 >>> select (#a `As` #a :* Nil) (from (table (#t `As` #t)))
 
 -- Squeal 0.3
