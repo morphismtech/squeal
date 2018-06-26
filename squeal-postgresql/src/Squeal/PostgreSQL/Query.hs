@@ -9,23 +9,15 @@ Squeal queries.
 -}
 
 {-# LANGUAGE
-    DataKinds
-  , DeriveDataTypeable
-  , DeriveGeneric
+    DeriveGeneric
   , FlexibleContexts
-  , FlexibleInstances
   , GADTs
   , GeneralizedNewtypeDeriving
-  , KindSignatures
   , LambdaCase
-  , MultiParamTypeClasses
   , OverloadedStrings
-  , ScopedTypeVariables
   , StandaloneDeriving
-  , TypeApplications
   , TypeInType
   , TypeOperators
-  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Query
@@ -44,6 +36,8 @@ module Squeal.PostgreSQL.Query
   , selectDistinctStar
   , selectDotStar
   , selectDistinctDotStar
+  , values
+  , values_
     -- * Table Expressions
   , TableExpression (..)
   , renderTableExpression
@@ -58,6 +52,7 @@ module Squeal.PostgreSQL.Query
   , FromClause (..)
   , table
   , subquery
+  , view
   , crossJoin
   , innerJoin
   , leftOuterJoin
@@ -100,111 +95,111 @@ simple query:
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
-  query = selectStar (from (table (#tab `As` #t)))
-in renderQuery query
+  query = selectStar (from (table #tab))
+in printSQL query
 :}
-"SELECT * FROM \"tab\" AS \"t\""
+SELECT * FROM "tab" AS "tab"
 
 restricted query:
 
 >>> :{
 let
   query :: Query
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
        '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]]
+        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
     '[]
     '[ "sum" ::: 'NotNull 'PGint4
      , "col1" ::: 'NotNull 'PGint4 ]
-  query = 
+  query =
     select
-      ((#col1 + #col2) `As` #sum :* #col1 `As` #col1 :* Nil)
-      ( from (table (#tab `As` #t))
+      ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
+      ( from (table #tab)
         & where_ (#col1 .> #col2)
         & where_ (#col2 .> 0) )
-in renderQuery query
+in printSQL query
 :}
-"SELECT (\"col1\" + \"col2\") AS \"sum\", \"col1\" AS \"col1\" FROM \"tab\" AS \"t\" WHERE ((\"col1\" > \"col2\") AND (\"col2\" > 0))"
+SELECT ("col1" + "col2") AS "sum", "col1" AS "col1" FROM "tab" AS "tab" WHERE (("col1" > "col2") AND ("col2" > 0))
 
 subquery:
 
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
   query =
     selectStar
-      (from (subquery (selectStar (from (table (#tab `As` #t))) `As` #sub)))
-in renderQuery query
+      (from (subquery (selectStar (from (table #tab)) `As` #sub)))
+in printSQL query
 :}
-"SELECT * FROM (SELECT * FROM \"tab\" AS \"t\") AS \"sub\""
+SELECT * FROM (SELECT * FROM "tab" AS "tab") AS "sub"
 
 limits and offsets:
 
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar
-    (from (table (#tab `As` #t)) & limit 100 & offset 2 & limit 50 & offset 2)
-in renderQuery query
+    (from (table #tab) & limit 100 & offset 2 & limit 50 & offset 2)
+in printSQL query
 :}
-"SELECT * FROM \"tab\" AS \"t\" LIMIT 50 OFFSET 4"
+SELECT * FROM "tab" AS "tab" LIMIT 50 OFFSET 4
 
 parameterized query:
 
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGfloat8]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGfloat8])]
     '[ 'NotNull 'PGfloat8]
     '["col" ::: 'NotNull 'PGfloat8]
   query = selectStar
-    (from (table (#tab `As` #t)) & where_ (#col .> param @1))
-in renderQuery query
+    (from (table #tab) & where_ (#col .> param @1))
+in printSQL query
 :}
-"SELECT * FROM \"tab\" AS \"t\" WHERE (\"col\" > ($1 :: float8))"
+SELECT * FROM "tab" AS "tab" WHERE ("col" > ($1 :: float8))
 
 aggregation query:
 
 >>> :{
 let
   query :: Query
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
        '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]]
+        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
     '[]
     '[ "sum" ::: 'NotNull 'PGint4
      , "col1" ::: 'NotNull 'PGint4 ]
   query =
-    select (sum_ #col2 `As` #sum :* #col1 `As` #col1 :* Nil)
+    select (sum_ #col2 `As` #sum :* #col1 :* Nil)
     ( from (table (#tab `As` #table1))
-      & group (By #col1 :* Nil) 
+      & group (By #col1 :* Nil)
       & having (#col1 + sum_ #col2 .> 1) )
-in renderQuery query
+in printSQL query
 :}
-"SELECT sum(\"col2\") AS \"sum\", \"col1\" AS \"col1\" FROM \"tab\" AS \"table1\" GROUP BY \"col1\" HAVING ((\"col1\" + sum(\"col2\")) > 1)"
+SELECT sum("col2") AS "sum", "col1" AS "col1" FROM "tab" AS "table1" GROUP BY "col1" HAVING (("col1" + sum("col2")) > 1)
 
 sorted query:
 
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar
-    (from (table (#tab `As` #t)) & orderBy [#col & AscNullsFirst])
-in renderQuery query
+    (from (table #tab) & orderBy [#col & AscNullsFirst])
+in printSQL query
 :}
-"SELECT * FROM \"tab\" AS \"t\" ORDER BY \"col\" ASC NULLS FIRST"
+SELECT * FROM "tab" AS "tab" ORDER BY "col" ASC NULLS FIRST
 
 joins:
 
@@ -212,7 +207,7 @@ joins:
 >>> :{
 let
   query :: Query
-    '[ "orders" :::
+    '[ "orders" ::: 'Table (
          '["pk_orders" ::: PrimaryKey '["id"]
           ,"fk_customers" ::: ForeignKey '["customer_id"] "customers" '["id"]
           ,"fk_shippers" ::: ForeignKey '["shipper_id"] "shippers" '["id"]] :=>
@@ -220,17 +215,17 @@ let
           , "price"   ::: 'NoDef :=> 'NotNull 'PGfloat4
           , "customer_id" ::: 'NoDef :=> 'NotNull 'PGint4
           , "shipper_id"  ::: 'NoDef :=> 'NotNull 'PGint4
-          ]
-     , "customers" :::
+          ])
+     , "customers" ::: 'Table (
          '["pk_customers" ::: PrimaryKey '["id"]] :=>
          '[ "id" ::: 'NoDef :=> 'NotNull 'PGint4
           , "name" ::: 'NoDef :=> 'NotNull 'PGtext
-          ]
-     , "shippers" :::
+          ])
+     , "shippers" ::: 'Table (
          '["pk_shippers" ::: PrimaryKey '["id"]] :=>
          '[ "id" ::: 'NoDef :=> 'NotNull 'PGint4
           , "name" ::: 'NoDef :=> 'NotNull 'PGtext
-          ]
+          ])
      ]
     '[]
     '[ "order_price" ::: 'NotNull 'PGfloat4
@@ -246,49 +241,50 @@ let
         (#o ! #customer_id .== #c ! #id)
       & innerJoin (table (#shippers `As` #s))
         (#o ! #shipper_id .== #s ! #id)) )
-in renderQuery query
+in printSQL query
 :}
-"SELECT \"o\".\"price\" AS \"order_price\", \"c\".\"name\" AS \"customer_name\", \"s\".\"name\" AS \"shipper_name\" FROM \"orders\" AS \"o\" INNER JOIN \"customers\" AS \"c\" ON (\"o\".\"customer_id\" = \"c\".\"id\") INNER JOIN \"shippers\" AS \"s\" ON (\"o\".\"shipper_id\" = \"s\".\"id\")"
+SELECT "o"."price" AS "order_price", "c"."name" AS "customer_name", "s"."name" AS "shipper_name" FROM "orders" AS "o" INNER JOIN "customers" AS "c" ON ("o"."customer_id" = "c"."id") INNER JOIN "shippers" AS "s" ON ("o"."shipper_id" = "s"."id")
 
 self-join:
 
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectDotStar #t1
     (from (table (#tab `As` #t1) & crossJoin (table (#tab `As` #t2))))
-in renderQuery query
+in printSQL query
 :}
-"SELECT \"t1\".* FROM \"tab\" AS \"t1\" CROSS JOIN \"tab\" AS \"t2\""
+SELECT "t1".* FROM "tab" AS "t1" CROSS JOIN "tab" AS "t2"
 
 set operations:
 
 >>> :{
 let
   query :: Query
-    '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4]]
+    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
     '[]
     '["col" ::: 'Null 'PGint4]
   query =
-    selectStar (from (table (#tab `As` #t)))
+    selectStar (from (table #tab))
     `unionAll`
-    selectStar (from (table (#tab `As` #t)))
-in renderQuery query
+    selectStar (from (table #tab))
+in printSQL query
 :}
-"(SELECT * FROM \"tab\" AS \"t\") UNION ALL (SELECT * FROM \"tab\" AS \"t\")"
+(SELECT * FROM "tab" AS "tab") UNION ALL (SELECT * FROM "tab" AS "tab")
 -}
 newtype Query
-  (schema :: TablesType)
+  (schema :: SchemaType)
   (params :: [NullityType])
   (columns :: RelationType)
     = UnsafeQuery { renderQuery :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
+instance RenderSQL (Query schema params columns) where renderSQL = renderQuery
 
 -- | The results of two queries can be combined using the set operation
--- `union`. Duplicate rows are eliminated. 
+-- `union`. Duplicate rows are eliminated.
 union
   :: Query schema params columns
   -> Query schema params columns
@@ -364,7 +360,7 @@ SELECT queries
 -- the intermediate table are actually output.
 select
   :: SListI columns
-  => NP (Aliased (Expression relations grouping params)) (column ': columns)
+  => NP (Aliased (Expression schema relations grouping params)) (column ': columns)
   -- ^ select list
   -> TableExpression schema params relations grouping
   -- ^ intermediate virtual table
@@ -378,7 +374,7 @@ select list rels = UnsafeQuery $
 -- be subject to the elimination of duplicate rows using `selectDistinct`.
 selectDistinct
   :: SListI columns
-  => NP (Aliased (Expression relations 'Ungrouped params)) (column ': columns)
+  => NP (Aliased (Expression schema relations 'Ungrouped params)) (column ': columns)
   -- ^ select list
   -> TableExpression schema params relations 'Ungrouped
   -- ^ intermediate virtual table
@@ -419,7 +415,7 @@ selectDotStar
 selectDotStar rel relations = UnsafeQuery $
   "SELECT" <+> renderAlias rel <> ".*" <+> renderTableExpression relations
 
--- | A `selectDistinctDotStar` asks for all the columns of a particular table, 
+-- | A `selectDistinctDotStar` asks for all the columns of a particular table,
 -- and eliminates duplicate rows.
 selectDistinctDotStar
   :: Has relation relations columns
@@ -432,6 +428,45 @@ selectDistinctDotStar rel relations = UnsafeQuery $
   "SELECT DISTINCT" <+> renderAlias rel <> ".*"
   <+> renderTableExpression relations
 
+-- | `values` computes a row value or set of row values
+-- specified by value expressions. It is most commonly used
+-- to generate a “constant table” within a larger command,
+-- but it can be used on its own.
+--
+-- >>> type Row = '["a" ::: 'NotNull 'PGint4, "b" ::: 'NotNull 'PGtext]
+-- >>> let query = values (1 `As` #a :* "one" `As` #b :* Nil) [] :: Query '[] '[] Row
+-- >>> printSQL query
+-- SELECT * FROM (VALUES (1, E'one')) AS t ("a", "b")
+values
+  :: SListI cols
+  => NP (Aliased (Expression schema '[] 'Ungrouped params)) cols
+  -> [NP (Aliased (Expression schema '[] 'Ungrouped params)) cols]
+  -- ^ When more than one row is specified, all the rows must
+  -- must have the same number of elements
+  -> Query schema params cols
+values rw rws = UnsafeQuery $ "SELECT * FROM"
+  <+> parenthesized (
+    "VALUES"
+    <+> commaSeparated
+        ( parenthesized
+        . renderCommaSeparated renderValuePart <$> rw:rws )
+    ) <+> "AS t"
+  <+> parenthesized (renderCommaSeparated renderAliasPart rw)
+  where
+    renderAliasPart, renderValuePart
+      :: Aliased (Expression schema '[] 'Ungrouped params) ty -> ByteString
+    renderAliasPart (_ `As` name) = renderAlias name
+    renderValuePart (value `As` _) = renderExpression value
+
+-- | `values_` computes a row value or set of row values
+-- specified by value expressions.
+values_
+  :: SListI cols
+  => NP (Aliased (Expression schema '[] 'Ungrouped params)) cols
+  -- ^ one row of values
+  -> Query schema params cols
+values_ rw = values rw []
+
 {-----------------------------------------
 Table Expressions
 -----------------------------------------}
@@ -443,7 +478,7 @@ Table Expressions
 -- to a table on disk, a so-called base table, but more complex expressions
 -- can be used to modify or combine base tables in various ways.
 data TableExpression
-  (schema :: TablesType)
+  (schema :: SchemaType)
   (params :: [NullityType])
   (relations :: RelationsType)
   (grouping :: Grouping)
@@ -451,7 +486,7 @@ data TableExpression
     { fromClause :: FromClause schema params relations
     -- ^ A table reference that can be a table name, or a derived table such
     -- as a subquery, a @JOIN@ construct, or complex combinations of these.
-    , whereClause :: [Condition relations 'Ungrouped params]
+    , whereClause :: [Condition schema relations 'Ungrouped params]
     -- ^ optional search coditions, combined with `.&&`. After the processing
     -- of the `fromClause` is done, each row of the derived virtual table
     -- is checked against the search condition. If the result of the
@@ -467,13 +502,13 @@ data TableExpression
     -- set of rows having common values into one group row that represents all
     -- rows in the group. This is done to eliminate redundancy in the output
     -- and/or compute aggregates that apply to these groups.
-    , havingClause :: HavingClause relations grouping params
+    , havingClause :: HavingClause schema relations grouping params
     -- ^ If a table has been grouped using `groupBy`, but only certain groups
     -- are of interest, the `havingClause` can be used, much like a
     -- `whereClause`, to eliminate groups from the result. Expressions in the
     -- `havingClause` can refer both to grouped expressions and to ungrouped
     -- expressions (which necessarily involve an aggregate function).
-    , orderByClause :: [SortExpression relations grouping params]
+    , orderByClause :: [SortExpression schema relations grouping params]
     -- ^ The `orderByClause` is for optional sorting. When more than one
     -- `SortExpression` is specified, the later (right) values are used to sort
     -- rows that are equal according to the earlier (left) values.
@@ -532,7 +567,7 @@ from rels = TableExpression rels [] NoGroups NoHaving [] [] []
 -- | A `where_` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `whereClause`.
 where_
-  :: Condition relations 'Ungrouped params -- ^ filtering condition
+  :: Condition schema relations 'Ungrouped params -- ^ filtering condition
   -> TableExpression schema params relations grouping
   -> TableExpression schema params relations grouping
 where_ wh rels = rels {whereClause = wh : whereClause rels}
@@ -543,7 +578,7 @@ where_ wh rels = rels {whereClause = wh : whereClause rels}
 group
   :: SListI bys
   => NP (By relations) bys -- ^ grouped columns
-  -> TableExpression schema params relations 'Ungrouped 
+  -> TableExpression schema params relations 'Ungrouped
   -> TableExpression schema params relations ('Grouped bys)
 group bys rels = TableExpression
   { fromClause = fromClause rels
@@ -558,7 +593,7 @@ group bys rels = TableExpression
 -- | A `having` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `havingClause`.
 having
-  :: Condition relations ('Grouped bys) params -- ^ having condition
+  :: Condition schema relations ('Grouped bys) params -- ^ having condition
   -> TableExpression schema params relations ('Grouped bys)
   -> TableExpression schema params relations ('Grouped bys)
 having hv rels = rels
@@ -567,7 +602,7 @@ having hv rels = rels
 -- | An `orderBy` is an endomorphism of `TableExpression`s which appends an
 -- ordering to the right of the `orderByClause`.
 orderBy
-  :: [SortExpression relations grouping params] -- ^ sort expressions
+  :: [SortExpression schema relations grouping params] -- ^ sort expressions
   -> TableExpression schema params relations grouping
   -> TableExpression schema params relations grouping
 orderBy srts rels = rels {orderByClause = orderByClause rels ++ srts}
@@ -602,15 +637,25 @@ newtype FromClause schema params relations
 
 -- | A real `table` is a table from the schema.
 table
-  :: Aliased (Table schema) table
-  -> FromClause schema params '[table]
-table = UnsafeFromClause . renderAliasedAs renderTable
+  :: Has tab schema ('Table table)
+  => Aliased Alias (alias ::: tab)
+  -> FromClause schema params '[alias ::: TableToRelation table]
+table (tab `As` alias) = UnsafeFromClause $
+  renderAlias tab <+> "AS" <+> renderAlias alias
 
 -- | `subquery` derives a table from a `Query`.
 subquery
-  :: Aliased (Query schema params) table
-  -> FromClause schema params '[table]
+  :: Aliased (Query schema params) rel
+  -> FromClause schema params '[rel]
 subquery = UnsafeFromClause . renderAliasedAs (parenthesized . renderQuery)
+
+-- | `view` derives a table from a `View`.
+view
+  :: Has view schema ('View rel)
+  => Aliased Alias (alias ::: view)
+  -> FromClause schema params '[alias ::: rel]
+view (vw `As` alias) = UnsafeFromClause $
+  renderAlias vw <+> "AS" <+> renderAlias alias
 
 {- | @left & crossJoin right@. For every possible combination of rows from
     @left@ and @right@ (i.e., a Cartesian product), the joined table will contain
@@ -633,7 +678,7 @@ the @on@ condition.
 innerJoin
   :: FromClause schema params right
   -- ^ right
-  -> Condition (Join left right) 'Ungrouped params
+  -> Condition schema (Join left right) 'Ungrouped params
   -- ^ @on@ condition
   -> FromClause schema params left
   -- ^ left
@@ -650,7 +695,7 @@ innerJoin right on left = UnsafeFromClause $
 leftOuterJoin
   :: FromClause schema params right
   -- ^ right
-  -> Condition (Join left right) 'Ungrouped params
+  -> Condition schema (Join left right) 'Ungrouped params
   -- ^ @on@ condition
   -> FromClause schema params left
   -- ^ left
@@ -668,7 +713,7 @@ leftOuterJoin right on left = UnsafeFromClause $
 rightOuterJoin
   :: FromClause schema params right
   -- ^ right
-  -> Condition (Join left right) 'Ungrouped params
+  -> Condition schema (Join left right) 'Ungrouped params
   -- ^ @on@ condition
   -> FromClause schema params left
   -- ^ left
@@ -687,7 +732,7 @@ rightOuterJoin right on left = UnsafeFromClause $
 fullOuterJoin
   :: FromClause schema params right
   -- ^ right
-  -> Condition (Join left right) 'Ungrouped params
+  -> Condition schema (Join left right) 'Ungrouped params
   -- ^ @on@ condition
   -> FromClause schema params left
   -- ^ left
@@ -751,17 +796,17 @@ renderGroupByClause = \case
 -- An `Ungrouped` `TableExpression` may only use `NoHaving` while a `Grouped`
 -- `TableExpression` must use `Having` whose conditions are combined with
 -- `.&&`.
-data HavingClause relations grouping params where
-  NoHaving :: HavingClause relations 'Ungrouped params
+data HavingClause schema relations grouping params where
+  NoHaving :: HavingClause schema relations 'Ungrouped params
   Having
-    :: [Condition relations ('Grouped bys) params]
-    -> HavingClause relations ('Grouped bys) params
-deriving instance Show (HavingClause relations grouping params)
-deriving instance Eq (HavingClause relations grouping params)
-deriving instance Ord (HavingClause relations grouping params)
+    :: [Condition schema relations ('Grouped bys) params]
+    -> HavingClause schema relations ('Grouped bys) params
+deriving instance Show (HavingClause schema relations grouping params)
+deriving instance Eq (HavingClause schema relations grouping params)
+deriving instance Ord (HavingClause schema relations grouping params)
 
 -- | Render a `HavingClause`.
-renderHavingClause :: HavingClause relations grouping params -> ByteString
+renderHavingClause :: HavingClause schema relations grouping params -> ByteString
 renderHavingClause = \case
   NoHaving -> ""
   Having [] -> ""
@@ -780,29 +825,29 @@ Sorting
 -- `AscNullsLast`, `DescNullsFirst` and `DescNullsLast` options are used to
 -- determine whether nulls appear before or after non-null values in the sort
 -- ordering of a `Null` result column.
-data SortExpression relations grouping params where
+data SortExpression schema relations grouping params where
     Asc
-      :: Expression relations grouping params ('NotNull ty)
-      -> SortExpression relations grouping params
+      :: Expression schema relations grouping params ('NotNull ty)
+      -> SortExpression schema relations grouping params
     Desc
-      :: Expression relations grouping params ('NotNull ty)
-      -> SortExpression relations grouping params
+      :: Expression schema relations grouping params ('NotNull ty)
+      -> SortExpression schema relations grouping params
     AscNullsFirst
-      :: Expression relations grouping params  ('Null ty)
-      -> SortExpression relations grouping params
+      :: Expression schema relations grouping params  ('Null ty)
+      -> SortExpression schema relations grouping params
     AscNullsLast
-      :: Expression relations grouping params  ('Null ty)
-      -> SortExpression relations grouping params
+      :: Expression schema relations grouping params  ('Null ty)
+      -> SortExpression schema relations grouping params
     DescNullsFirst
-      :: Expression relations grouping params  ('Null ty)
-      -> SortExpression relations grouping params
+      :: Expression schema relations grouping params  ('Null ty)
+      -> SortExpression schema relations grouping params
     DescNullsLast
-      :: Expression relations grouping params  ('Null ty)
-      -> SortExpression relations grouping params
-deriving instance Show (SortExpression relations grouping params)
+      :: Expression schema relations grouping params  ('Null ty)
+      -> SortExpression schema relations grouping params
+deriving instance Show (SortExpression schema relations grouping params)
 
 -- | Render a `SortExpression`.
-renderSortExpression :: SortExpression relations grouping params -> ByteString
+renderSortExpression :: SortExpression schema relations grouping params -> ByteString
 renderSortExpression = \case
   Asc expression -> renderExpression expression <+> "ASC"
   Desc expression -> renderExpression expression <+> "DESC"

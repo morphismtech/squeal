@@ -9,17 +9,13 @@ Squeal data manipulation language.
 -}
 
 {-# LANGUAGE
-    DataKinds
-  , DeriveDataTypeable
-  , DeriveGeneric
+    DeriveGeneric
   , FlexibleContexts
   , GADTs
   , GeneralizedNewtypeDeriving
-  , KindSignatures
   , LambdaCase
   , OverloadedStrings
   , RankNTypes
-  , StandaloneDeriving
   , TypeInType
   , TypeOperators
 #-}
@@ -54,7 +50,6 @@ import Control.DeepSeq
 import Data.ByteString hiding (foldr)
 import Data.Monoid
 
-import qualified Data.ByteString as ByteString
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
@@ -73,55 +68,55 @@ simple insert:
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'Def :=> 'NotNull 'PGint4 ]] '[] '[]
+       , "col2" ::: 'Def :=> 'NotNull 'PGint4 ])] '[] '[]
   manipulation =
     insertRow_ #tab (Set 2 `As` #col1 :* Default `As` #col2 :* Nil)
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"INSERT INTO \"tab\" (\"col1\", \"col2\") VALUES (2, DEFAULT);"
+INSERT INTO "tab" ("col1", "col2") VALUES (2, DEFAULT)
 
 parameterized insert:
 
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]]
+       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
     '[ 'NotNull 'PGint4, 'NotNull 'PGint4 ] '[]
   manipulation =
     insertRow_ #tab
       (Set (param @1) `As` #col1 :* Set (param @2) `As` #col2 :* Nil)
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"INSERT INTO \"tab\" (\"col1\", \"col2\") VALUES (($1 :: int4), ($2 :: int4));"
+INSERT INTO "tab" ("col1", "col2") VALUES (($1 :: int4), ($2 :: int4))
 
 returning insert:
 
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'Def :=> 'NotNull 'PGint4 ]] '[]
+       , "col2" ::: 'Def :=> 'NotNull 'PGint4 ])] '[]
     '["fromOnly" ::: 'NotNull 'PGint4]
   manipulation =
     insertRow #tab (Set 2 `As` #col1 :* Default `As` #col2 :* Nil)
       OnConflictDoRaise (Returning (#col1 `As` #fromOnly :* Nil))
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"INSERT INTO \"tab\" (\"col1\", \"col2\") VALUES (2, DEFAULT) RETURNING \"col1\" AS \"fromOnly\";"
+INSERT INTO "tab" ("col1", "col2") VALUES (2, DEFAULT) RETURNING "col1" AS "fromOnly"
 
 upsert:
 
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]]
+       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
     '[] '[ "sum" ::: 'NotNull 'PGint4]
   manipulation =
     insertRows #tab
@@ -131,73 +126,76 @@ let
         (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
         [#col1 .== #col2])
       (Returning $ (#col1 + #col2) `As` #sum :* Nil)
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"INSERT INTO \"tab\" (\"col1\", \"col2\") VALUES (2, 4), (6, 8) ON CONFLICT DO UPDATE SET \"col1\" = 2 WHERE (\"col1\" = \"col2\") RETURNING (\"col1\" + \"col2\") AS \"sum\";"
+INSERT INTO "tab" ("col1", "col2") VALUES (2, 4), (6, 8) ON CONFLICT DO UPDATE SET "col1" = 2 WHERE ("col1" = "col2") RETURNING ("col1" + "col2") AS "sum"
 
 query insert:
 
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
-       ]
-     , "other_tab" ::: '[] :=>
+       ])
+     , "other_tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
-       ]
+       ])
      ] '[] '[]
-  manipulation = 
+  manipulation =
     insertQuery_ #tab
       (selectStar (from (table (#other_tab `As` #t))))
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"INSERT INTO \"tab\" SELECT * FROM \"other_tab\" AS \"t\";"
+INSERT INTO "tab" SELECT * FROM "other_tab" AS "t"
 
 update:
 
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]] '[] '[]
+       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])] '[] '[]
   manipulation =
     update_ #tab (Set 2 `As` #col1 :* Same `As` #col2 :* Nil)
       (#col1 ./= #col2)
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"UPDATE \"tab\" SET \"col1\" = 2 WHERE (\"col1\" <> \"col2\");"
+UPDATE "tab" SET "col1" = 2 WHERE ("col1" <> "col2")
 
 delete:
 
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: '[] :=>
+    '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ]] '[]
+       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])] '[]
     '[ "col1" ::: 'NotNull 'PGint4
      , "col2" ::: 'NotNull 'PGint4 ]
   manipulation = deleteFrom #tab (#col1 .== #col2) ReturningStar
-in renderManipulation manipulation
+in printSQL manipulation
 :}
-"DELETE FROM \"tab\" WHERE (\"col1\" = \"col2\") RETURNING *;"
+DELETE FROM "tab" WHERE ("col1" = "col2") RETURNING *
 -}
 newtype Manipulation
-  (schema :: TablesType)
+  (schema :: SchemaType)
   (params :: [NullityType])
   (columns :: RelationType)
     = UnsafeManipulation { renderManipulation :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
+instance RenderSQL (Manipulation schema params columns) where
+  renderSQL = renderManipulation
+
 -- | Convert a `Query` into a `Manipulation`.
 queryStatement
   :: Query schema params columns
   -> Manipulation schema params columns
-queryStatement q = UnsafeManipulation $ renderQuery q <> ";"
+queryStatement q = UnsafeManipulation $ renderQuery q
 
 {-----------------------------------------
 INSERT statements
@@ -213,27 +211,27 @@ INSERT statements
 insertRows
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , Has tab schema table
+     , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
-  -> [NP (Aliased (ColumnValue '[] params)) columns] -- ^ more rows to insert
-  -> ConflictClause columns params
+  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
+  -> [NP (Aliased (ColumnValue schema '[] params)) columns] -- ^ more rows to insert
+  -> ConflictClause schema columns params
   -- ^ what to do in case of constraint conflict
-  -> ReturningClause columns params results -- ^ results to return
+  -> ReturningClause schema columns params results -- ^ results to return
   -> Manipulation schema params results
-insertRows tab row rows conflict returning = UnsafeManipulation $
+insertRows tab rw rws conflict returning = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderAlias tab
-    <+> parenthesized (renderCommaSeparated renderAliasPart row)
+    <+> parenthesized (renderCommaSeparated renderAliasPart rw)
     <+> "VALUES"
     <+> commaSeparated
           ( parenthesized
-          . renderCommaSeparated renderColumnValuePart <$> row:rows )
+          . renderCommaSeparated renderColumnValuePart <$> rw:rws )
     <> renderConflictClause conflict
     <> renderReturningClause returning
     where
       renderAliasPart, renderColumnValuePart
-        :: Aliased (ColumnValue '[] params) ty -> ByteString
+        :: Aliased (ColumnValue schema '[] params) ty -> ByteString
       renderAliasPart (_ `As` name) = renderAlias name
       renderColumnValuePart (value `As` _) = case value of
         Default -> "DEFAULT"
@@ -243,49 +241,49 @@ insertRows tab row rows conflict returning = UnsafeManipulation $
 insertRow
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , Has tab schema table
+     , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
-  -> ConflictClause columns params
+  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
+  -> ConflictClause schema columns params
   -- ^ what to do in case of constraint conflict
-  -> ReturningClause columns params results -- ^ results to return
+  -> ReturningClause schema columns params results -- ^ results to return
   -> Manipulation schema params results
-insertRow tab row = insertRows tab row []
+insertRow tab rw = insertRows tab rw []
 
 -- | Insert multiple rows returning `Nil` and raising an error on conflicts.
 insertRows_
   :: ( SOP.SListI columns
-     , Has tab schema table
+     , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
-  -> [NP (Aliased (ColumnValue '[] params)) columns] -- ^ more rows to insert
+  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
+  -> [NP (Aliased (ColumnValue schema '[] params)) columns] -- ^ more rows to insert
   -> Manipulation schema params '[]
-insertRows_ tab row rows =
-  insertRows tab row rows OnConflictDoRaise (Returning Nil)
+insertRows_ tab rw rws =
+  insertRows tab rw rws OnConflictDoRaise (Returning Nil)
 
 -- | Insert a single row returning `Nil` and raising an error on conflicts.
 insertRow_
   :: ( SOP.SListI columns
-     , Has tab schema table
+     , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue '[] params)) columns -- ^ row to insert
+  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
   -> Manipulation schema params '[]
-insertRow_ tab row = insertRow tab row OnConflictDoRaise (Returning Nil)
+insertRow_ tab rw = insertRow tab rw OnConflictDoRaise (Returning Nil)
 
 -- | Insert a `Query`.
 insertQuery
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , Has tab schema table
+     , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
   -> Query schema params (ColumnsToRelation columns)
-  -> ConflictClause columns params
+  -> ConflictClause schema columns params
   -- ^ what to do in case of constraint conflict
-  -> ReturningClause columns params results -- ^ results to return
+  -> ReturningClause schema columns params results -- ^ results to return
   -> Manipulation schema params results
 insertQuery tab query conflict returning = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderAlias tab
@@ -296,7 +294,7 @@ insertQuery tab query conflict returning = UnsafeManipulation $
 -- | Insert a `Query` returning `Nil` and raising an error on conflicts.
 insertQuery_
   :: ( SOP.SListI columns
-     , Has tab schema table
+     , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
   -> Query schema params (ColumnsToRelation columns)
@@ -304,21 +302,22 @@ insertQuery_
 insertQuery_ tab query =
   insertQuery tab query OnConflictDoRaise (Returning Nil)
 
--- | `ColumnValue`s are values to insert or update in a row
+-- | `ColumnValue`s are values to insert or update in a row.
 -- `Same` updates with the same value.
--- `Default` inserts or updates with the @DEFAULT@ value
--- `Set` a value to be an `Expression`, relative to the given
--- row for an update, and closed for an insert.
+-- `Default` inserts or updates with the @DEFAULT@ value.
+-- `Set` sets a value to be an `Expression`, which can refer to
+-- existing value in the row for an update.
 data ColumnValue
+  (schema :: SchemaType)
   (columns :: RelationType)
   (params :: [NullityType])
   (ty :: ColumnType)
   where
-    Same :: ColumnValue (column ': columns) params ty
-    Default :: ColumnValue columns params ('Def :=> ty)
+    Same :: ColumnValue schema (column ': columns) params ty
+    Default :: ColumnValue schema columns params ('Def :=> ty)
     Set
-      :: (forall table. Expression '[table ::: columns] 'Ungrouped params ty)
-      -> ColumnValue columns params (constraint :=> ty)
+      :: (forall table. Expression schema '[table ::: columns] 'Ungrouped params ty)
+      -> ColumnValue schema columns params (constraint :=> ty)
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
@@ -331,46 +330,47 @@ data ColumnValue
 -- in the row. Use @Returning Nil@ in the common case where no return
 -- values are desired.
 data ReturningClause
+  (schema :: SchemaType)
   (columns :: ColumnsType)
   (params :: [NullityType])
   (results :: RelationType)
   where
     ReturningStar
       :: results ~ ColumnsToRelation columns
-      => ReturningClause columns params results
+      => ReturningClause schema columns params results
     Returning
       :: rel ~ ColumnsToRelation columns
-      => NP (Aliased (Expression '[table ::: rel] 'Ungrouped params)) results
-      -> ReturningClause columns params results
+      => NP (Aliased (Expression schema '[table ::: rel] 'Ungrouped params)) results
+      -> ReturningClause schema columns params results
 
 -- | Render a `ReturningClause`.
 renderReturningClause
   :: SOP.SListI results
-  => ReturningClause params columns results
+  => ReturningClause schema params columns results
   -> ByteString
 renderReturningClause = \case
-  ReturningStar -> " RETURNING *;"
-  Returning Nil -> ";"
+  ReturningStar -> " RETURNING *"
+  Returning Nil -> ""
   Returning results -> " RETURNING"
-    <+> renderCommaSeparated (renderAliasedAs renderExpression) results <> ";"
+    <+> renderCommaSeparated (renderAliasedAs renderExpression) results
 
 -- | A `ConflictClause` specifies an action to perform upon a constraint
 -- violation. `OnConflictDoRaise` will raise an error.
 -- `OnConflictDoNothing` simply avoids inserting a row.
 -- `OnConflictDoUpdate` updates the existing row that conflicts with the row
 -- proposed for insertion.
-data ConflictClause (columns :: ColumnsType) params where
-  OnConflictDoRaise :: ConflictClause columns params
-  OnConflictDoNothing :: ConflictClause columns params
+data ConflictClause (schema :: SchemaType) (columns :: ColumnsType) params where
+  OnConflictDoRaise :: ConflictClause schema columns params
+  OnConflictDoNothing :: ConflictClause schema columns params
   OnConflictDoUpdate
-    :: NP (Aliased (ColumnValue (ColumnsToRelation columns) params)) columns
-    -> [Condition '[table ::: ColumnsToRelation columns] 'Ungrouped params]
-    -> ConflictClause columns params
+    :: NP (Aliased (ColumnValue schema (ColumnsToRelation columns) params)) columns
+    -> [Condition schema '[table ::: ColumnsToRelation columns] 'Ungrouped params]
+    -> ConflictClause schema columns params
 
 -- | Render a `ConflictClause`.
 renderConflictClause
   :: SOP.SListI columns
-  => ConflictClause columns params
+  => ConflictClause schema columns params
   -> ByteString
 renderConflictClause = \case
   OnConflictDoRaise -> ""
@@ -383,7 +383,7 @@ renderConflictClause = \case
         wh:whs -> " WHERE" <+> renderExpression (foldr (.&&) wh whs)
       where
         renderUpdate
-          :: Aliased (ColumnValue columns params) column
+          :: Aliased (ColumnValue schema columns params) column
           -> Maybe ByteString
         renderUpdate = \case
           Same `As` _ -> Nothing
@@ -401,14 +401,14 @@ UPDATE statements
 update
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , Has tab schema table
+     , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue (ColumnsToRelation columns) params)) columns
+  -> NP (Aliased (ColumnValue schema (ColumnsToRelation columns) params)) columns
   -- ^ modified values to replace old values
-  -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
   -- ^ condition under which to perform update on a row
-  -> ReturningClause columns params results -- ^ results to return
+  -> ReturningClause schema columns params results -- ^ results to return
   -> Manipulation schema params results
 update tab columns wh returning = UnsafeManipulation $
   "UPDATE"
@@ -419,7 +419,7 @@ update tab columns wh returning = UnsafeManipulation $
   <> renderReturningClause returning
   where
     renderUpdate
-      :: Aliased (ColumnValue columns params) column
+      :: Aliased (ColumnValue schema columns params) column
       -> Maybe ByteString
     renderUpdate = \case
       Same `As` _ -> Nothing
@@ -431,12 +431,12 @@ update tab columns wh returning = UnsafeManipulation $
 -- | Update a row returning `Nil`.
 update_
   :: ( SOP.SListI columns
-     , Has tab schema table
+     , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue (ColumnsToRelation columns) params)) columns
+  -> NP (Aliased (ColumnValue schema (ColumnsToRelation columns) params)) columns
   -- ^ modified values to replace old values
-  -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
   -- ^ condition under which to perform update on a row
   -> Manipulation schema params '[]
 update_ tab columns wh = update tab columns wh (Returning Nil)
@@ -448,12 +448,12 @@ DELETE statements
 -- | Delete rows of a table.
 deleteFrom
   :: ( SOP.SListI results
-     , Has tab schema table
+     , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
-  -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
   -- ^ condition under which to delete a row
-  -> ReturningClause columns params results -- ^ results to return
+  -> ReturningClause schema columns params results -- ^ results to return
   -> Manipulation schema params results
 deleteFrom tab wh returning = UnsafeManipulation $
   "DELETE FROM" <+> renderAlias tab
@@ -462,10 +462,10 @@ deleteFrom tab wh returning = UnsafeManipulation $
 
 -- | Delete rows returning `Nil`.
 deleteFrom_
-  :: ( Has tab schema table
+  :: ( Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
-  -> Condition '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
   -- ^ condition under which to delete a row
   -> Manipulation schema params '[]
 deleteFrom_ tab wh = deleteFrom tab wh (Returning Nil)
@@ -482,18 +482,18 @@ WITH statements
 --
 -- >>> :{
 -- let
---   manipulation :: Manipulation '["products" ::: ProductsTable, "products_deleted" ::: ProductsTable] '[ 'NotNull 'PGdate] '[]
+--   manipulation :: Manipulation '["products" ::: 'Table ProductsTable, "products_deleted" ::: 'Table ProductsTable] '[ 'NotNull 'PGdate] '[]
 --   manipulation = with
 --     (deleteFrom #products (#date .< param @1) ReturningStar `As` #deleted_rows :* Nil)
---     (insertQuery_ #products_deleted (selectStar (from (table (#deleted_rows `As` #t)))))
--- in renderManipulation manipulation
+--     (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `As` #t)))))
+-- in printSQL manipulation
 -- :}
--- "WITH \"deleted_rows\" AS (DELETE FROM \"products\" WHERE (\"date\" < ($1 :: date)) RETURNING *) INSERT INTO \"products_deleted\" SELECT * FROM \"deleted_rows\" AS \"t\";"
+-- WITH "deleted_rows" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "deleted_rows" AS "t"
 with
   :: SOP.SListI commons
   => NP (Aliased (Manipulation schema params)) commons
   -- ^ common table expressions
-  -> Manipulation (Join (RelationsToTables commons) schema) params results
+  -> Manipulation (With commons schema) params results
   -> Manipulation schema params results
 with commons manipulation = UnsafeManipulation $
   "WITH" <+> renderCommaSeparated renderCommon commons
@@ -504,9 +504,4 @@ with commons manipulation = UnsafeManipulation $
       -> ByteString
     renderCommon (common `As` alias) =
       renderAlias alias <+> "AS" <+>
-        let
-          str = renderManipulation common
-          len = ByteString.length str
-          str' = ByteString.take (len - 1) str -- remove ';'
-        in
-          parenthesized str'
+        parenthesized (renderManipulation common)

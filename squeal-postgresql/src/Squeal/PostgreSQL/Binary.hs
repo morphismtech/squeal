@@ -5,13 +5,131 @@ Copyright: (c) Eitan Chatav, 2017
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Binary encoding and decoding between Haskell and PostgreSQL types.
+This module provides binary encoding and decoding between Haskell and PostgreSQL types.
+
+Instances are governed by the `Generic` and `HasDatatypeInfo` typeclasses, so you absolutely
+do not need to define your own instances to decode retrieved rows into Haskell values or
+to encode Haskell values into statement parameters.
+
+>>> import Data.Int (Int16)
+>>> import Data.Text (Text)
+
+>>> data Row = Row { col1 :: Int16, col2 :: Text } deriving (Eq, GHC.Generic)
+>>> instance Generic Row
+>>> instance HasDatatypeInfo Row
+
+>>> import Control.Monad (void)
+>>> import Control.Monad.Base (liftBase)
+>>> import Squeal.PostgreSQL
+
+>>> :{
+let
+  query :: Query '[]
+    '[ 'NotNull 'PGint2, 'NotNull 'PGtext]
+    '["col1" ::: 'NotNull 'PGint2, "col2" ::: 'NotNull 'PGtext]
+  query = values_ (param @1 `As` #col1 :* param @2 `As` #col2 :* Nil)
+:}
+
+>>> :{
+let
+  roundtrip :: IO ()
+  roundtrip = void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+    result <- runQueryParams query (2 :: Int16, "hi" :: Text)
+    Just row <- firstRow result
+    liftBase . print $ row == Row 2 "hi"
+:}
+
+>>> roundtrip
+True
+
+In addition to being able to encode and decode basic Haskell types like `Int16` and `Text`,
+Squeal permits you to encode and decode Haskell types which are equivalent to
+Postgres enumerated and composite types.
+
+Enumerated (enum) types are data types that comprise a static, ordered set of values.
+They are equivalent to Haskell algebraic data types whose constructors are nullary.
+An example of an enum type might be the days of the week,
+or a set of status values for a piece of data.
+
+>>> data Schwarma = Beef | Lamb | Chicken deriving (Show, GHC.Generic)
+>>> instance Generic Schwarma
+>>> instance HasDatatypeInfo Schwarma
+
+A composite type represents the structure of a row or record;
+it is essentially just a list of field names and their data types. They are almost
+equivalent to Haskell record types. However, because of the potential presence of @NULL@
+all the record fields must be `Maybe`s of basic types.
+
+>>> data Person = Person {name :: Maybe Text, age :: Maybe Int32} deriving (Show, GHC.Generic)
+>>> instance Generic Person
+>>> instance HasDatatypeInfo Person
+
+We can create the equivalent Postgres types directly from their Haskell types.
+
+>>> :{
+type Schema =
+  '[ "schwarma" ::: 'Typedef (EnumFrom Schwarma)
+   , "person" ::: 'Typedef (CompositeFrom Person)
+   ]
+:}
+
+>>> :{
+let
+  setup :: Definition '[] Schema
+  setup =
+    createTypeEnumFrom @Schwarma #schwarma >>>
+    createTypeCompositeFrom @Person #person
+:}
+
+Then we can perform roundtrip queries;
+
+>>> :{
+let
+  querySchwarma :: Query Schema
+    '[ 'NotNull (EnumFrom Schwarma)]
+    '["fromOnly" ::: 'NotNull (EnumFrom Schwarma)]
+  querySchwarma = values_ (parameter @1 #schwarma `As` #fromOnly :* Nil)
+:}
+
+>>> :{
+let
+  queryPerson :: Query Schema
+    '[ 'NotNull (CompositeFrom Person)]
+    '["fromOnly" ::: 'NotNull (CompositeFrom Person)]
+  queryPerson = values_ (parameter @1 #person `As` #fromOnly :* Nil)
+:}
+
+And finally drop the types.
+
+>>> :{
+let
+  teardown :: Definition Schema '[]
+  teardown = dropType #schwarma >>> dropType #person
+:}
+
+Now let's run it.
+
+>>> :{
+let
+  session = do
+    result1 <- runQueryParams querySchwarma (Only Chicken)
+    Just (Only schwarma) <- firstRow result1
+    liftBase $ print (schwarma :: Schwarma)
+    result2 <- runQueryParams queryPerson (Only (Person (Just "Faisal") (Just 24)))
+    Just (Only person) <- firstRow result2
+    liftBase $ print (person :: Person)
+in
+  void . withConnection "host=localhost port=5432 dbname=exampledb" $
+    define setup
+    & pqThen session
+    & pqThen (define teardown)
+:}
+Chicken
+Person {name = Just "Faisal", age = Just 24}
 -}
 
 {-# LANGUAGE
-    ConstraintKinds
-  , DataKinds
-  , DefaultSignatures
+    AllowAmbiguousTypes
   , DeriveFoldable
   , DeriveFunctor
   , DeriveGeneric
@@ -20,11 +138,9 @@ Binary encoding and decoding between Haskell and PostgreSQL types.
   , FlexibleInstances
   , GADTs
   , LambdaCase
-  , KindSignatures
   , MultiParamTypeClasses
   , ScopedTypeVariables
   , TypeApplications
-  , TypeFamilies
   , TypeInType
   , TypeOperators
   , UndecidableInstances
@@ -43,9 +159,12 @@ module Squeal.PostgreSQL.Binary
   , Only (..)
   ) where
 
+import BinaryParser
+import ByteString.StrictBuilder
 import Data.Aeson hiding (Null)
 import Data.Int
 import Data.Kind
+import Data.Monoid hiding (All)
 import Data.Scientific
 import Data.Time
 import Data.UUID.Types
@@ -56,7 +175,7 @@ import GHC.TypeLits
 import Network.IP.Addr
 
 import qualified Data.ByteString.Lazy as Lazy
-import qualified Data.ByteString as Strict hiding (unpack)
+import qualified Data.ByteString as Strict hiding (pack, unpack)
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text as Strict
 import qualified Data.Vector as Vector
@@ -119,9 +238,83 @@ instance (HasOid pg, ToParam x pg)
   => ToParam (Vector (Maybe x)) ('PGvararray pg) where
     toParam = K . Encoding.nullableArray_vector
       (oid @pg) (unK . toParam @x @pg)
+instance
+  ( IsEnumType x
+  , HasDatatypeInfo x
+  , LabelsFrom x ~ labels
+  ) => ToParam x ('PGenum labels) where
+    toParam =
+      let
+        gshowConstructor :: NP ConstructorInfo xss -> SOP I xss -> String
+        gshowConstructor Nil _ = ""
+        gshowConstructor (constructor :* _) (SOP (Z _)) =
+          constructorName constructor
+        gshowConstructor (_ :* constructors) (SOP (S xs)) =
+          gshowConstructor constructors (SOP xs)
+      in
+        K . Encoding.text_strict
+        . Strict.pack
+        . gshowConstructor (constructorInfo (datatypeInfo (Proxy @x)))
+        . from
+instance
+  ( SListI fields
+  , MapMaybes xs
+  , IsProductType x (Maybes xs)
+  , AllZip ToAliasedParam xs fields
+  , FieldNamesFrom x ~ AliasesOf fields
+  , All HasAliasedOid fields
+  ) => ToParam x ('PGcomposite fields) where
+    toParam =
+      let
 
--- | A `ToColumnParam` constraint lifts the `ToParam` encoding 
--- of a `Type` to a `ColumnType`, encoding `Maybe`s to `Null`s. You should
+        encoders = htrans (Proxy @ToAliasedParam) toAliasedParam
+
+        composite
+          :: All HasAliasedOid row
+          => NP (K (Maybe Encoding.Encoding)) row
+          -> K Encoding.Encoding ('PGcomposite row)
+        composite fields = K $
+          -- <number of fields: 4 bytes>
+          -- [for each field]
+          --  <OID of field's type: sizeof(Oid) bytes>
+          --  [if value is NULL]
+          --    <-1: 4 bytes>
+          --  [else]
+          --    <length of value: 4 bytes>
+          --    <value: <length> bytes>
+          --  [end if]
+          -- [end for]
+          int32BE (fromIntegral (lengthSList (Proxy @xs))) <>
+            let
+              each
+                :: HasAliasedOid field
+                => K (Maybe Encoding.Encoding) field
+                -> Encoding.Encoding
+              each (K field :: K (Maybe Encoding.Encoding) field) =
+                word32BE (aliasedOid @field)
+                <> case field of
+                  Nothing -> int64BE (-1)
+                  Just value ->
+                    int32BE (fromIntegral (builderLength value))
+                    <> value
+            in
+              hcfoldMap (Proxy @HasAliasedOid) each fields
+
+      in
+        composite . encoders . unMaybes . unZ . unSOP . from
+
+class HasAliasedOid (field :: (Symbol, PGType)) where aliasedOid :: Word32
+instance HasOid ty => HasAliasedOid (alias ::: ty) where aliasedOid = oid @ty
+
+class ToAliasedParam (x :: Type) (field :: (Symbol, PGType)) where
+  toAliasedParam :: Maybe x -> K (Maybe Encoding.Encoding) field
+instance ToParam x ty => ToAliasedParam x (alias ::: ty) where
+  toAliasedParam = \case
+    Nothing -> K Nothing
+    Just x -> K . Just . unK $ toParam @x @ty x
+
+-- | A `ToColumnParam` constraint lifts the `ToParam` encoding
+-- of a `Type` to a `NullityType`, encoding `Maybe`s to `Null`s. You should
 -- not define instances of `ToColumnParam`, just use the provided instances.
 class ToColumnParam (x :: Type) (ty :: NullityType) where
   -- | >>> toColumnParam @Int16 @('NotNull 'PGint2) 0
@@ -201,9 +394,74 @@ instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
   fromValue _ = Decoding.array
     (Decoding.dimensionArray Vector.replicateM
       (Decoding.nullableValueArray (fromValue (Proxy @pg))))
+instance
+  ( IsEnumType y
+  , HasDatatypeInfo y
+  , LabelsFrom y ~ labels
+  ) => FromValue ('PGenum labels) y where
+    fromValue _ =
+      let
+        greadConstructor
+          :: All ((~) '[]) xss
+          => NP ConstructorInfo xss
+          -> String
+          -> Maybe (SOP I xss)
+        greadConstructor Nil _ = Nothing
+        greadConstructor (constructor :* constructors) name =
+          if name == constructorName constructor
+            then Just (SOP (Z Nil))
+            else SOP . S . unSOP <$> greadConstructor constructors name
+      in
+        Decoding.enum
+        $ fmap to
+        . greadConstructor (constructorInfo (datatypeInfo (Proxy @y)))
+        . Strict.unpack
+
+instance
+  ( SListI fields
+  , MapMaybes ys
+  , IsProductType y (Maybes ys)
+  , AllZip FromAliasedValue fields ys
+  , FieldNamesFrom y ~ AliasesOf fields
+  ) => FromValue ('PGcomposite fields) y where
+    fromValue =
+      let
+        decoders
+          :: forall pgs zs proxy
+          . AllZip FromAliasedValue pgs zs
+          => proxy ('PGcomposite pgs)
+          -> NP Decoding.Value zs
+        decoders _ = htrans (Proxy @FromAliasedValue) fromAliasedValue
+          (hpure Proxy :: NP Proxy pgs)
+
+        composite fields = do
+        -- <number of fields: 4 bytes>
+        -- [for each field]
+        --  <OID of field's type: sizeof(Oid) bytes>
+        --  [if value is NULL]
+        --    <-1: 4 bytes>
+        --  [else]
+        --    <length of value: 4 bytes>
+        --    <value: <length> bytes>
+        --  [end if]
+        -- [end for]
+          unitOfSize 4
+          let
+            each field = do
+              unitOfSize 4
+              len <- sized 4 Decoding.int
+              if len == -1 then return Nothing else Just <$> sized len field
+          htraverse' each fields
+
+      in fmap (to . SOP . Z . maybes) . composite . decoders
+
+class FromAliasedValue (pg :: (Symbol,PGType)) (y :: Type) where
+  fromAliasedValue :: proxy pg -> Decoding.Value y
+instance FromValue pg y => FromAliasedValue (alias ::: pg) y where
+  fromAliasedValue _ = fromValue (Proxy @pg)
 
 -- | A `FromColumnValue` constraint lifts the `FromValue` parser
--- to a decoding of a @(Symbol, ColumnType)@ to a `Type`,
+-- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromColumnValue`, just use the provided instances.
 class FromColumnValue (colty :: (Symbol,NullityType)) (y :: Type) where
@@ -220,10 +478,10 @@ instance FromValue pg y
   => FromColumnValue (column ::: ('NotNull pg)) y where
     fromColumnValue = \case
       K Nothing -> error "fromColumnValue: saw NULL when expecting NOT NULL"
-      K (Just bytes) ->
+      K (Just bs) ->
         let
           errOrValue =
-            Decoding.valueParser (fromValue @pg @y Proxy) bytes
+            Decoding.valueParser (fromValue @pg @y Proxy) bs
           err str = error $ "fromColumnValue: " ++ Strict.unpack str
         in
           either err id errOrValue
@@ -257,7 +515,7 @@ instance
   ( SListI results
   , IsProductType y ys
   , AllZip FromColumnValue results ys
-  , SameFields (DatatypeInfoOf y) results
+  , FieldNamesFrom y ~ AliasesOf results
   ) => FromRow results y where
     fromRow
       = to . SOP . Z . htrans (Proxy @FromColumnValue) (I . fromColumnValue)

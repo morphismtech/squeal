@@ -5,32 +5,31 @@ Copyright: (c) Eitan Chatav, 2017
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-A type-level DSL for kinds of PostgreSQL types, constraints, and aliases.
+This module provides a type-level DSL for kinds of Postgres types,
+tables, schema, constraints, aliases, enumerated labels, and groupings.
+It also defines useful type families to operate on these. Finally,
+it defines an embedding of Haskell types into Postgres types.
 -}
 
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
-  , DataKinds
   , DeriveAnyClass
-  , DeriveDataTypeable
   , DeriveGeneric
   , FlexibleContexts
   , FlexibleInstances
   , FunctionalDependencies
   , GADTs
-  , MagicHash
-  , MultiParamTypeClasses
   , OverloadedStrings
-  , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
   , StandaloneDeriving
   , TypeApplications
-  , TypeFamilies
+  , TypeFamilyDependencies
   , TypeInType
   , TypeOperators
   , UndecidableInstances
+  , UndecidableSuperClasses
 #-}
 
 module Squeal.PostgreSQL.Schema
@@ -39,35 +38,47 @@ module Squeal.PostgreSQL.Schema
   , HasOid (..)
   , NullityType (..)
   , ColumnType
+    -- * Tables
   , ColumnsType
   , RelationType
   , NilRelation
   , RelationsType
   , TableType
-  , TablesType
-  , NilTables
-    -- * Grouping
-  , Grouping (..)
-  , GroupedBy
+    -- * Schema
+  , SchemumType (..)
+  , SchemaType
     -- * Constraints
   , (:=>)
   , ColumnConstraint (..)
   , TableConstraint (..)
   , TableConstraints
   , NilTableConstraints
+  , Uniquely
     -- * Aliases
   , (:::)
   , Alias (Alias)
   , renderAlias
+  , renderAliases
   , Aliased (As)
   , renderAliasedAs
   , AliasesOf
+  , ZipAliased (..)
   , Has
   , HasUnique
+  , HasAll
   , IsLabel (..)
   , IsQualified (..)
+    -- * Enumerated Labels
+  , IsPGlabel (..)
+  , PGlabel (..)
+  , renderLabel
+  , renderLabels
+    -- * Grouping
+  , Grouping (..)
+  , GroupedBy
     -- * Type Families
   , Join
+  , With
   , Create
   , Drop
   , Alter
@@ -79,35 +90,58 @@ module Squeal.PostgreSQL.Schema
   , PGFloating
   , PGTypeOf
   , SameTypes
+  , SamePGType
   , AllNotNull
   , NotAllNull
   , NullifyType
   , NullifyRelation
   , NullifyRelations
   , ColumnsToRelation
-  , RelationToColumns
   , TableToColumns
-  , TablesToRelations
-  , RelationsToTables
+  , TableToRelation
   , ConstraintInvolves
   , DropIfConstraintsInvolve
-    -- * Generics
-  , SameField
-  , SameFields
+    -- * Embedding
+  , PG
+  , EnumFrom
+  , LabelsFrom
+  , CompositeFrom
+  , FieldNamesFrom
+  , FieldTypesFrom
+  , ConstructorsOf
+  , ConstructorNameOf
+  , ConstructorNamesOf
+  , FieldsOf
+  , FieldNameOf
+  , FieldNamesOf
+  , FieldTypeOf
+  , FieldTypesOf
+  , RecordCodeOf
+  , MapMaybes (..)
+  , Nulls
   ) where
 
 import Control.DeepSeq
-import Data.ByteString
-import Data.Monoid
+import Data.Aeson (Value)
+import Data.ByteString (ByteString)
+import Data.Int (Int16, Int32, Int64)
+import Data.Kind
+import Data.Monoid hiding (All)
+import Data.Scientific (Scientific)
 import Data.String
-import Data.Word
+import Data.Text (Text)
+import Data.Time
+import Data.Word (Word16, Word32, Word64)
 import Data.Type.Bool
-import Generics.SOP (AllZip)
-import GHC.Generics (Generic)
-import GHC.Exts
+import Data.UUID.Types (UUID)
+import Generics.SOP
 import GHC.OverloadedLabels
 import GHC.TypeLits
+import Network.IP.Addr
 
+import qualified Data.ByteString.Lazy as Lazy
+import qualified Data.Text.Lazy as Lazy
+import qualified GHC.Generics as GHC
 import qualified Generics.SOP.Type.Metadata as Type
 
 import Squeal.PostgreSQL.Render
@@ -141,6 +175,8 @@ data PGType
   | PGjsonb -- ^ binary JSON data, decomposed
   | PGvararray PGType -- ^ variable length array
   | PGfixarray Nat PGType -- ^ fixed length array
+  | PGenum [Symbol]
+  | PGcomposite [(Symbol, PGType)]
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
 -- | The object identifier of a `PGType`.
@@ -190,10 +226,7 @@ type (:=>) constraint ty = '(constraint,ty)
 infixr 7 :=>
 
 -- | The alias operator `:::` is like a promoted version of `As`,
--- a type level pair between
--- an alias and some type, like a column alias and either a `ColumnType` or
--- `NullityType` or a table alias and either a `TableType` or a `RelationType`
--- or a constraint alias and a `TableConstraint`.
+-- a type level pair between an alias and some type.
 type (:::) (alias :: Symbol) ty = '(alias,ty)
 infixr 6 :::
 
@@ -244,6 +277,15 @@ type TableConstraints = [(Symbol,TableConstraint)]
 type family NilTableConstraints :: TableConstraints where
   NilTableConstraints = '[]
 
+-- | A `ForeignKey` must reference columns that either are
+-- a `PrimaryKey` or form a `Unique` constraint.
+type family Uniquely
+  (key :: [Symbol])
+  (constraints :: TableConstraints) :: Constraint where
+    Uniquely key (uq ::: 'Unique key ': constraints) = ()
+    Uniquely key (pk ::: 'PrimaryKey key ': constraints) = ()
+    Uniquely key (_ ': constraints) = Uniquely key constraints
+
 -- | `TableType` encodes a row of constraints on a table as well as the types
 -- of its columns.
 --
@@ -256,31 +298,6 @@ type family NilTableConstraints :: TableConstraints where
 --      ]
 -- :}
 type TableType = (TableConstraints,ColumnsType)
-
--- | `TablesType` is a row of `TableType`s, thought of as a union.
---
--- >>> :{
--- type family Schema :: TablesType where
---   Schema =
---     '[ "users" :::
---          '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
---          '[ "id" ::: 'Def :=> 'NotNull 'PGint4
---           , "name" ::: 'NoDef :=> 'NotNull 'PGtext
---           , "vec" ::: 'NoDef :=> 'NotNull ('PGvararray 'PGint2)
---           ]
---      , "emails" :::
---          '[  "pk_emails" ::: 'PrimaryKey '["id"]
---           , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
---           ] :=>
---          '[ "id" ::: 'Def :=> 'NotNull 'PGint4
---           , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
---           , "email" ::: 'NoDef :=> 'Null 'PGtext
---           ]
---      ]
--- :}
-type TablesType = [(Symbol,TableType)]
--- | A monokinded empty `TablesType`.
-type family NilTables :: TablesType where NilTables = '[]
 
 -- | `RelationType` is a row of `NullityType`
 --
@@ -305,27 +322,13 @@ type family ColumnsToRelation (columns :: ColumnsType) :: RelationType where
   ColumnsToRelation (column ::: constraint :=> ty ': columns) =
     column ::: ty ': ColumnsToRelation columns
 
--- | `RelationToColumns` adds `'NoDef` column constraints.
-type family RelationToColumns (relation :: RelationType) :: ColumnsType where
-  RelationToColumns '[] = '[]
-  RelationToColumns (column ::: ty ': columns) =
-    column ::: 'NoDef :=> ty ': RelationToColumns columns
-
 -- | `TableToColumns` removes table constraints.
 type family TableToColumns (table :: TableType) :: ColumnsType where
   TableToColumns (constraints :=> columns) = columns
 
--- | `TablesToRelations` removes both table and column constraints.
-type family TablesToRelations (tables :: TablesType) :: RelationsType where
-  TablesToRelations '[] = '[]
-  TablesToRelations (alias ::: constraint :=> columns ': tables) =
-    alias ::: ColumnsToRelation columns ': TablesToRelations tables
-
--- | `RelationsToTables` adds both trivial table and column constraints.
-type family RelationsToTables (tables :: RelationsType) :: TablesType where
-  RelationsToTables '[] = '[]
-  RelationsToTables (alias ::: columns ': relations) =
-    alias ::: '[] :=> RelationToColumns columns ': RelationsToTables relations
+-- | Convert a table to a relation.
+type family TableToRelation (table :: TableType) :: RelationType where
+  TableToRelation tab = ColumnsToRelation (TableToColumns tab)
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
@@ -355,14 +358,25 @@ instance {-# OVERLAPPABLE #-}
 -- >>> #foobar :: Alias "foobar"
 -- Alias
 data Alias (alias :: Symbol) = Alias
-  deriving (Eq,Generic,Ord,Show,NFData)
+  deriving (Eq,GHC.Generic,Ord,Show,NFData)
 instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
+instance aliases ~ '[alias] => IsLabel alias (NP Alias aliases) where
+  fromLabel = fromLabel :* Nil
+instance KnownSymbol alias => RenderSQL (Alias alias) where renderSQL = renderAlias
 
 -- | >>> renderAlias #jimbob
 -- "\"jimbob\""
 renderAlias :: KnownSymbol alias => Alias alias -> ByteString
 renderAlias = doubleQuoted . fromString . symbolVal
+
+-- | >>> import Generics.SOP (NP(..))
+-- >>> renderAliases (#jimbob :* #kandi :* Nil)
+-- ["\"jimbob\"","\"kandi\""]
+renderAliases
+  :: All KnownSymbol aliases => NP Alias aliases -> [ByteString]
+renderAliases = hcollapse
+  . hcmap (Proxy @KnownSymbol) (K . renderAlias)
 
 -- | The `As` operator is used to name an expression. `As` is like a demoted
 -- version of `:::`.
@@ -381,6 +395,9 @@ deriving instance Eq (expression ty)
   => Eq (Aliased expression (alias ::: ty))
 deriving instance Ord (expression ty)
   => Ord (Aliased expression (alias ::: ty))
+instance (alias0 ~ alias1, alias0 ~ alias2, KnownSymbol alias2)
+  => IsLabel alias0 (Aliased Alias (alias1 ::: alias2)) where
+    fromLabel = fromLabel @alias2 `As` fromLabel @alias1
 
 -- | >>> let renderMaybe = fromString . maybe "Nothing" (const "Just")
 -- >>> renderAliasedAs renderMaybe (Just (3::Int) `As` #an_int)
@@ -397,12 +414,43 @@ type family AliasesOf aliaseds where
   AliasesOf '[] = '[]
   AliasesOf (alias ::: ty ': tys) = alias ': AliasesOf tys
 
+-- | The `ZipAliased` class provides a type family for zipping
+-- `Symbol` lists together with arbitrary lists of the same size,
+-- with an associated type family `ZipAs`, together with
+-- a method `zipAs` for zipping heterogeneous lists of `Alias`es
+-- together with a heterogeneous list of expressions into
+-- a heterogeneous list of `Aliased` expressions.
+class
+  ( SListI (ZipAs ns xs)
+  , All KnownSymbol ns
+  ) => ZipAliased ns xs where
+
+  type family ZipAs
+    (ns :: [Symbol]) (xs :: [k]) = (zs :: [(Symbol,k)]) | zs -> ns xs
+
+  zipAs
+    :: NP Alias ns
+    -> NP expr xs
+    -> NP (Aliased expr) (ZipAs ns xs)
+
+instance ZipAliased '[] '[] where
+  type ZipAs '[] '[] = '[]
+  zipAs Nil Nil = Nil
+
+instance
+  ( KnownSymbol n
+  , ZipAliased ns xs
+  ) => ZipAliased (n ': ns) (x ': xs) where
+  type ZipAs (n ': ns) (x ': xs) = '(n,x) ': ZipAs ns xs
+  zipAs (n :* ns) (x :* xs) = x `As` n :* zipAs ns xs
+
 -- | @HasUnique alias fields field@ is a constraint that proves that
 -- @fields@ is a singleton of @alias ::: field@.
 type HasUnique alias fields field = fields ~ '[alias ::: field]
 
 -- | @Has alias fields field@ is a constraint that proves that
--- @fields@ has a field of @alias ::: field@.
+-- @fields@ has a field of @alias ::: field@, inferring @field@
+-- from @alias@ and @fields@.
 class KnownSymbol alias =>
   Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
   | alias fields -> field where
@@ -410,6 +458,20 @@ instance {-# OVERLAPPING #-} KnownSymbol alias
   => Has alias (alias ::: field ': fields) field
 instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
   => Has alias (field' ': fields) field
+
+-- | `HasAll` extends `Has` to take lists of @aliases@ and @fields@ and infer
+-- a list of @subfields@.
+class
+  ( All KnownSymbol aliases
+  ) => HasAll
+    (aliases :: [Symbol])
+    (fields :: [(Symbol,kind)])
+    (subfields :: [(Symbol,kind)])
+    | aliases fields -> subfields where
+instance {-# OVERLAPPING #-} HasAll '[] fields '[]
+instance {-# OVERLAPPABLE #-}
+  (Has alias fields field, HasAll aliases fields subfields)
+  => HasAll (alias ': aliases) fields (alias ::: field ': subfields)
 
 -- | Analagous to `IsLabel`, the constraint
 -- `IsQualified` defines `!` for a column alias qualified
@@ -456,6 +518,13 @@ type family SameTypes (columns0 :: ColumnsType) (columns1 :: ColumnsType)
   SameTypes (column0 ::: def0 :=> ty0 ': columns0) (column1 ::: def1 :=> ty1 ': columns1)
     = (ty0 ~ ty1, SameTypes columns0 columns1)
 
+-- | Equality constraint on the underlying `PGType` of two columns.
+class SamePGType
+  (ty0 :: (Symbol,ColumnType)) (ty1 :: (Symbol,ColumnType)) where
+instance ty0 ~ ty1 => SamePGType
+  (alias0 ::: def0 :=> nullity0 ty0)
+  (alias1 ::: def1 :=> nullity1 ty1)
+
 -- | `AllNotNull` is a constraint that proves a `ColumnsType` has no @NULL@s.
 type family AllNotNull (columns :: ColumnsType) :: Constraint where
   AllNotNull '[] = ()
@@ -497,6 +566,10 @@ type family Join xs ys where
 -- `Squeal.PostgreSQL.Definition.addColumn`.
 type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
+  Create alias x (alias ::: y ': xs) = TypeError
+    ('Text "Create: alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text "already in use")
   Create alias y (x ': xs) = x ': Create alias y xs
 
 -- | @Drop alias xs@ removes the type associated with @alias@ in @xs@
@@ -506,12 +579,12 @@ type family Drop alias xs where
   Drop alias ((alias ::: x) ': xs) = xs
   Drop alias (x ': xs) = x ': Drop alias xs
 
--- | @Alter alias xs x@ replaces the type associated with an @alias@ in @xs@
+-- | @Alter alias x xs@ replaces the type associated with an @alias@ in @xs@
 -- with the type `x` and is used in `Squeal.PostgreSQL.Definition.alterTable`
 -- and `Squeal.PostgreSQL.Definition.alterColumn`.
-type family Alter alias xs x where
-  Alter alias ((alias ::: x0) ': xs) x1 = (alias ::: x1) ': xs
-  Alter alias (x0 ': xs) x1 = x0 ': Alter alias xs x1
+type family Alter alias x xs where
+  Alter alias x1 (alias ::: x0 ': xs) = alias ::: x1 ': xs
+  Alter alias x1 (x0 ': xs) = x0 ': Alter alias x1 xs
 
 -- type family AddConstraint constraint ty where
 --   AddConstraint constraint (constraints :=> ty)
@@ -533,26 +606,25 @@ type family Rename alias0 alias1 xs where
   Rename alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
   Rename alias0 alias1 (x ': xs) = x ': Rename alias0 alias1 xs
 
--- | A `SameField` constraint is an equality constraint on a
--- `Generics.SOP.Type.Metadata.FieldInfo` and the column alias in a `:::` pair.
-class SameField
-  (fieldInfo :: Type.FieldInfo) (fieldty :: (Symbol,NullityType)) where
-instance field ~ column => SameField ('Type.FieldInfo field) (column ::: ty)
+-- | `MapMaybes` is used in the binary instances of composite types.
+class MapMaybes xs where
+  type family Maybes (xs :: [Type]) = (mxs :: [Type]) | mxs -> xs
+  maybes :: NP Maybe xs -> NP I (Maybes xs)
+  unMaybes :: NP I (Maybes xs) -> NP Maybe xs
+instance MapMaybes '[] where
+  type Maybes '[] = '[]
+  maybes Nil = Nil
+  unMaybes Nil = Nil
+instance MapMaybes xs => MapMaybes (x ': xs) where
+  type Maybes (x ': xs) = Maybe x ': Maybes xs
+  maybes (x :* xs) = I x :* maybes xs
+  unMaybes (I mx :* xs) = mx :* unMaybes xs
 
--- | A `SameFields` constraint proves that a
--- `Generics.SOP.Type.Metadata.DatatypeInfo` of a record type has the same
--- field names as the column AliasesOf of a `ColumnsType`.
-type family SameFields
-  (datatypeInfo :: Type.DatatypeInfo) (columns :: RelationType)
-    :: Constraint where
-  SameFields
-    ('Type.ADT _module _datatype '[ 'Type.Record _constructor fields])
-    columns
-      = AllZip SameField fields columns
-  SameFields
-    ('Type.Newtype _module _datatype ('Type.Record _constructor fields))
-    columns
-      = AllZip SameField fields columns
+-- | `Nulls` is used to construct a `Squeal.Postgresql.Expression.row`
+-- of a composite type.
+type family Nulls tys where
+  Nulls '[] = '[]
+  Nulls (field ::: ty ': tys) = field ::: 'Null ty ': Nulls tys
 
 -- | Check if a `TableConstraint` involves a column
 type family ConstraintInvolves column constraint where
@@ -569,3 +641,199 @@ type family DropIfConstraintsInvolve column constraints where
     = If (ConstraintInvolves column constraint)
         (DropIfConstraintsInvolve column constraints)
         (alias ::: constraint ': DropIfConstraintsInvolve column constraints)
+
+-- | A `SchemumType` is a user-defined type, either a `Table`,
+-- `View` or `Typedef`.
+data SchemumType
+  = Table TableType
+  | View RelationType
+  | Typedef PGType
+
+-- | The schema of a database consists of a list of aliased,
+-- user-defined `SchemumType`s.
+type SchemaType = [(Symbol,SchemumType)]
+
+-- | Used in `Squeal.Postgresql.Manipulation.with`.
+type family With
+  (relations :: RelationsType)
+  (schema :: SchemaType)
+  :: SchemaType where
+    With '[] schema = schema
+    With (alias ::: rel ': rels) schema =
+      alias ::: 'View rel ': With rels schema
+
+-- | `IsPGlabel` looks very much like the `IsLabel` class. Whereas
+-- the overloaded label, `fromLabel` is used for column references,
+-- `label`s are used for enum terms. A `label` is called with
+-- type application like `label @"beef"`.
+class IsPGlabel (label :: Symbol) expr where label :: expr
+instance label ~ label'
+  => IsPGlabel label (PGlabel label') where label = PGlabel
+-- | A `PGlabel` unit type with an `IsPGlabel` instance
+data PGlabel (label :: Symbol) = PGlabel
+-- | Renders a label
+renderLabel :: KnownSymbol label => proxy label -> ByteString
+renderLabel (_ :: proxy label) =
+  "\'" <> fromString (symbolVal (Proxy @label)) <> "\'"
+-- | Renders a list of labels
+renderLabels
+  :: All KnownSymbol labels => NP PGlabel labels -> [ByteString]
+renderLabels = hcollapse
+  . hcmap (Proxy @KnownSymbol) (K . renderLabel)
+
+-- | The `PG` type family embeds a subset of Haskell types
+-- as Postgres basic types.
+--
+-- >>> :kind! PG LocalTime
+-- PG LocalTime :: PGType
+-- = 'PGtimestamp
+type family PG (hask :: Type) :: PGType where
+  PG Bool = 'PGbool
+  PG Int16 = 'PGint2
+  PG Int32 = 'PGint4
+  PG Int64 = 'PGint8
+  PG Word16 = 'PGint2
+  PG Word32 = 'PGint4
+  PG Word64 = 'PGint8
+  PG Scientific = 'PGnumeric
+  PG Float = 'PGfloat4
+  PG Double = 'PGfloat8
+  PG Char = 'PGchar 1
+  PG Text = 'PGtext
+  PG Lazy.Text = 'PGtext
+  PG ByteString = 'PGbytea
+  PG Lazy.ByteString = 'PGbytea
+  PG LocalTime = 'PGtimestamp
+  PG UTCTime = 'PGtimestamptz
+  PG Day = 'PGdate
+  PG TimeOfDay = 'PGtime
+  PG (TimeOfDay, TimeZone) = 'PGtimetz
+  PG DiffTime = 'PGinterval
+  PG UUID = 'PGuuid
+  PG (NetAddr IP) = 'PGinet
+  PG Value = 'PGjson
+  PG ty = TypeError
+    ('Text "There is no Postgres basic type for " ':<>: 'ShowType ty)
+
+-- | The `EnumFrom` type family embeds Haskell enum types, ADTs with
+-- nullary constructors, as Postgres enum types
+--
+-- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
+-- >>> instance Generic Schwarma
+-- >>> instance HasDatatypeInfo Schwarma
+-- >>> :kind! EnumFrom Schwarma
+-- EnumFrom Schwarma :: PGType
+-- = 'PGenum '["Beef", "Lamb", "Chicken"]
+type family EnumFrom (hask :: Type) :: PGType where
+  EnumFrom hask = 'PGenum (LabelsFrom hask)
+
+-- | The `LabelsFrom` type family calculates the constructors of a
+-- Haskell enum type.
+--
+-- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
+-- >>> instance Generic Schwarma
+-- >>> instance HasDatatypeInfo Schwarma
+-- >>> :kind! LabelsFrom Schwarma
+-- LabelsFrom Schwarma :: [Type.ConstructorName]
+-- = '["Beef", "Lamb", "Chicken"]
+type family LabelsFrom (hask :: Type) :: [Type.ConstructorName] where
+  LabelsFrom hask =
+    ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask))
+
+-- | The `CompositeFrom` type family embeds Haskell record types as
+-- Postgres composite types, as long as the record fields
+-- are `Maybe`s of Haskell types that can be embedded as basic types
+-- with the `PG` type family.
+--
+-- >>> data Row = Row { a :: Maybe Int16, b :: Maybe LocalTime } deriving GHC.Generic
+-- >>> instance Generic Row
+-- >>> instance HasDatatypeInfo Row
+-- >>> :kind! CompositeFrom Row
+-- CompositeFrom Row :: PGType
+-- = 'PGcomposite '['("a", 'PGint2), '("b", 'PGtimestamp)]
+type family CompositeFrom (hask :: Type) :: PGType where
+  CompositeFrom hask =
+    'PGcomposite (ZipAs (FieldNamesFrom hask) (FieldTypesFrom hask))
+
+-- | >>> data Row = Row { a :: Maybe Int16, b :: Maybe LocalTime } deriving GHC.Generic
+-- >>> instance Generic Row
+-- >>> instance HasDatatypeInfo Row
+-- >>> :kind! FieldNamesFrom Row
+-- FieldNamesFrom Row :: [Type.FieldName]
+-- = '["a", "b"]
+type family FieldNamesFrom (hask :: Type) :: [Type.FieldName] where
+  FieldNamesFrom hask = FieldNamesOf (FieldsOf (DatatypeInfoOf hask))
+
+-- | >>> data Row = Row { a :: Maybe Int16, b :: Maybe LocalTime } deriving GHC.Generic
+-- >>> instance Generic Row
+-- >>> instance HasDatatypeInfo Row
+-- >>> :kind! FieldTypesFrom Row
+-- FieldTypesFrom Row :: [PGType]
+-- = '['PGint2, 'PGtimestamp]
+type family FieldTypesFrom (hask :: Type) :: [PGType] where
+  FieldTypesFrom hask = FieldTypesOf (RecordCodeOf hask (Code hask))
+
+-- | Calculates constructors of a datatype.
+type family ConstructorsOf (datatype :: Type.DatatypeInfo)
+  :: [Type.ConstructorInfo] where
+    ConstructorsOf ('Type.ADT _module _datatype constructors) =
+      constructors
+    ConstructorsOf ('Type.Newtype _module _datatype constructor) =
+      '[constructor]
+
+-- | Calculates the name of a nullary constructor, otherwise
+-- generates a type error.
+type family ConstructorNameOf (constructors :: Type.ConstructorInfo)
+  :: Type.ConstructorName where
+    ConstructorNameOf ('Type.Constructor name) = name
+    ConstructorNameOf ('Type.Infix name _assoc _fix) = TypeError
+      ('Text "ConstructorNameOf error: non-nullary constructor "
+        ':<>: 'Text name)
+    ConstructorNameOf ('Type.Record name _fields) = TypeError
+      ('Text "ConstructorNameOf error: non-nullary constructor "
+        ':<>: 'Text name)
+
+-- | Calculate the names of nullary constructors.
+type family ConstructorNamesOf (constructors :: [Type.ConstructorInfo])
+  :: [Type.ConstructorName] where
+    ConstructorNamesOf '[] = '[]
+    ConstructorNamesOf (constructor ': constructors) =
+      ConstructorNameOf constructor ': ConstructorNamesOf constructors
+
+-- | Calculate the fields of a datatype.
+type family FieldsOf (datatype :: Type.DatatypeInfo)
+  :: [Type.FieldInfo] where
+    FieldsOf ('Type.ADT _module _datatype '[ 'Type.Record _name fields]) =
+      fields
+    FieldsOf ('Type.Newtype _module _datatype ('Type.Record _name fields)) =
+      fields
+
+-- | Calculate the name of a field.
+type family FieldNameOf (field :: Type.FieldInfo) :: Type.FieldName where
+  FieldNameOf ('Type.FieldInfo name) = name
+
+-- | Calculate the names of fields.
+type family FieldNamesOf (fields :: [Type.FieldInfo])
+  :: [Type.FieldName] where
+    FieldNamesOf '[] = '[]
+    FieldNamesOf (field ': fields) = FieldNameOf field ': FieldNamesOf fields
+
+-- | >>> :kind! FieldTypeOf (Maybe Int16)
+-- FieldTypeOf (Maybe Int16) :: PGType
+-- = 'PGint2
+type family FieldTypeOf (maybe :: Type) where
+  FieldTypeOf (Maybe hask) = PG hask
+  FieldTypeOf ty = TypeError
+    ('Text "FieldTypeOf error: non-Maybe type " ':<>: 'ShowType ty)
+
+-- | Calculate the types of fields.
+type family FieldTypesOf (fields :: [Type]) where
+  FieldTypesOf '[] = '[]
+  FieldTypesOf (field ': fields) = FieldTypeOf field ': FieldTypesOf fields
+
+-- | Inspect the code of an algebraic datatype and ensure it's a product,
+-- otherwise generate a type error
+type family RecordCodeOf (hask :: Type) (code ::[[Type]]) :: [Type] where
+  RecordCodeOf _hask '[tys] = tys
+  RecordCodeOf hask _tys = TypeError
+    ('Text "RecordCodeOf error: non-Record type " ':<>: 'ShowType hask)

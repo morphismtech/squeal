@@ -9,8 +9,7 @@ A `MonadPQ` for pooled connections.
 -}
 
 {-# LANGUAGE
-    DataKinds
-  , DeriveFunctor
+    DeriveFunctor
   , FlexibleContexts
   , FlexibleInstances
   , MultiParamTypeClasses
@@ -43,7 +42,7 @@ import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Schema
 
 -- | `PoolPQ` @schema@ should be a drop-in replacement for `PQ` @schema schema@.
-newtype PoolPQ (schema :: TablesType) m x =
+newtype PoolPQ (schema :: SchemaType) m x =
   PoolPQ { runPoolPQ :: Pool (K Connection schema) -> m x }
   deriving Functor
 
@@ -110,7 +109,7 @@ instance MonadBaseControl IO io => MonadPQ schema (PoolPQ schema io) where
       (_ :: K () schema) <- flip unPQ conn $
         traversePrepared_ manipulation params
       return ()
-  liftPQ m = PoolPQ $ \ pool -> 
+  liftPQ m = PoolPQ $ \ pool ->
     withResource pool $ \ conn -> do
       (K result :: K result schema) <- flip unPQ conn $
         liftPQ m

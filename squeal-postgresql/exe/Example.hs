@@ -25,36 +25,36 @@ import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
 type Schema =
-  '[ "users" :::
+  '[ "users" ::: 'Table (
        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
         , "vec" ::: 'NoDef :=> 'NotNull ('PGvararray 'PGint2)
-        ]
-   , "emails" :::
+        ])
+   , "emails" ::: 'Table (
        '[  "pk_emails" ::: 'PrimaryKey '["id"]
         , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
         ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
         , "email" ::: 'NoDef :=> 'Null 'PGtext
-        ]
+        ])
    ]
 
 setup :: Definition '[] Schema
 setup = 
   createTable #users
     ( serial `As` #id :*
-      (text & notNull) `As` #name :*
-      (vararray int2 & notNull) `As` #vec :* Nil )
-    ( primaryKey (Column #id :* Nil) `As` #pk_users :* Nil )
+      (text & notNullable) `As` #name :*
+      (vararray int2 & notNullable) `As` #vec :* Nil )
+    ( primaryKey #id `As` #pk_users :* Nil )
   >>>
   createTable #emails
     ( serial `As` #id :*
-      (int & notNull) `As` #user_id :*
-      text `As` #email :* Nil )
-    ( primaryKey (Column #id :* Nil) `As` #pk_emails :*
-      foreignKey (Column #user_id :* Nil) #users (Column #id :* Nil)
+      (int & notNullable) `As` #user_id :*
+      (text & nullable) `As` #email :* Nil )
+    ( primaryKey #id `As` #pk_emails :*
+      foreignKey #user_id #users #id
         OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
 
 teardown :: Definition Schema '[]

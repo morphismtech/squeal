@@ -20,15 +20,10 @@ of executing Squeal commands.
 
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE
-    DataKinds
-  , DefaultSignatures
+    DefaultSignatures
   , FunctionalDependencies
-  , PolyKinds
-  , DeriveFunctor
   , FlexibleContexts
   , FlexibleInstances
-  , MagicHash
-  , MultiParamTypeClasses
   , OverloadedStrings
   , RankNTypes
   , ScopedTypeVariables
@@ -160,8 +155,8 @@ lowerConnection (K conn) = K conn
 -- | We keep track of the schema via an Atkey indexed state monad transformer,
 -- `PQ`.
 newtype PQ
-  (schema0 :: TablesType)
-  (schema1 :: TablesType)
+  (schema0 :: SchemaType)
+  (schema1 :: SchemaType)
   (m :: Type -> Type)
   (x :: Type) =
     PQ { unPQ :: K LibPQ.Connection schema0 -> m (K x schema1) }
@@ -171,7 +166,7 @@ instance Monad m => Functor (PQ schema0 schema1 m) where
     K x <- pq conn
     return $ K (f x)
 
--- | Run a `PQ` and keep the result and the `Connection`. 
+-- | Run a `PQ` and keep the result and the `Connection`.
 runPQ
   :: Functor m
   => PQ schema0 schema1 m x
@@ -181,7 +176,7 @@ runPQ (PQ pq) conn = (\ x -> (unK x, K (unK conn))) <$> pq conn
   -- K x <- pq conn
   -- return (x, K (unK conn))
 
--- | Execute a `PQ` and discard the result but keep the `Connection`. 
+-- | Execute a `PQ` and discard the result but keep the `Connection`.
 execPQ
   :: Functor m
   => PQ schema0 schema1 m x
@@ -217,6 +212,7 @@ class IndexedMonadTransPQ pq where
     :: Monad m
     => pq schema0 schema1 m (pq schema1 schema2 m y)
     -> pq schema0 schema2 m y
+  pqJoin pq = pq & pqBind id
 
   -- | indexed analog of `=<<`
   pqBind
@@ -231,6 +227,15 @@ class IndexedMonadTransPQ pq where
     => pq schema1 schema2 m y
     -> pq schema0 schema1 m x
     -> pq schema0 schema2 m y
+  pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
+
+  -- | indexed analog of `<=<`
+  pqAndThen
+    :: Monad m
+    => (y -> pq schema1 schema2 m z)
+    -> (x -> pq schema0 schema1 m y)
+    -> x -> pq schema0 schema2 m z
+  pqAndThen g f x = pqBind g (f x)
 
   -- | Safely embed a computation in a larger schema.
   pqEmbed
@@ -253,13 +258,9 @@ instance IndexedMonadTransPQ PQ where
     K x' <- x (K (unK conn))
     return $ K (f' x')
 
-  pqJoin pq = pq & pqBind id
-
   pqBind f (PQ x) = PQ $ \ conn -> do
     K x' <- x conn
     unPQ (f x') (K (unK conn))
-
-  pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 
   pqEmbed (PQ pq) = PQ $ \ (K conn) -> do
     K x <- pq (K conn)
@@ -394,7 +395,8 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
         let
           toParam' bytes = (LibPQ.invalidOid,bytes,LibPQ.Binary)
           params' = fmap (fmap toParam') (hcollapse (toParams @x @ps params))
-        resultMaybe <- liftBase $ LibPQ.execParams conn q params' LibPQ.Binary
+          q' = q <> ";"
+        resultMaybe <- liftBase $ LibPQ.execParams conn q' params' LibPQ.Binary
         case resultMaybe of
           Nothing -> error
             "manipulateParams: LibPQ.execParams returned no results"
