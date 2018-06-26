@@ -12,7 +12,7 @@ jobs:
           keys:
             - dependency-cache
       - run: apt-get update && apt-get install -y libpq-dev xz-utils make
-      - run: stack setup && stack upgrade && stack update
+      - run: stack upgrade && stack update
       - run: stack build
       - run: stack test
       - run: stack haddock
