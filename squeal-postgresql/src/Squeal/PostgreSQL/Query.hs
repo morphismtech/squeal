@@ -16,6 +16,7 @@ Squeal queries.
   , LambdaCase
   , OverloadedStrings
   , StandaloneDeriving
+  , TypeFamilies
   , TypeInType
   , TypeOperators
 #-}
@@ -23,6 +24,7 @@ Squeal queries.
 module Squeal.PostgreSQL.Query
   ( -- * Queries
     Query (UnsafeQuery, renderQuery)
+  , Query'
   , union
   , unionAll
   , intersect
@@ -282,6 +284,9 @@ newtype Query
     = UnsafeQuery { renderQuery :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance RenderSQL (Query schema params columns) where renderSQL = renderQuery
+
+type family Query' schema x y where
+  Query' schema x y = Query schema (ParamsFrom x) (ResultFrom y)
 
 -- | The results of two queries can be combined using the set operation
 -- `union`. Duplicate rows are eliminated.

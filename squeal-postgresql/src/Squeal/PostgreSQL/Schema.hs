@@ -119,6 +119,8 @@ module Squeal.PostgreSQL.Schema
   , RecordCodeOf
   , MapMaybes (..)
   , Nulls
+  , ParamsFrom
+  , ResultFrom
   ) where
 
 import Control.DeepSeq
@@ -837,3 +839,6 @@ type family RecordCodeOf (hask :: Type) (code ::[[Type]]) :: [Type] where
   RecordCodeOf _hask '[tys] = tys
   RecordCodeOf hask _tys = TypeError
     ('Text "RecordCodeOf error: non-Record type " ':<>: 'ShowType hask)
+
+type family ParamsFrom (hask :: Type) :: [NullityType]
+type family ResultFrom (hask :: Type) :: RelationType
