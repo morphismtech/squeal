@@ -828,10 +828,18 @@ type family FieldTypeOf (maybe :: Type) where
   FieldTypeOf ty = TypeError
     ('Text "FieldTypeOf error: non-Maybe type " ':<>: 'ShowType ty)
 
+type family NullityTypeOf (hask :: Type) where
+  NullityTypeOf (Maybe hask) = 'Null (PG hask)
+  NullityTypeOf hask = 'NotNull (PG hask)
+
 -- | Calculate the types of fields.
 type family FieldTypesOf (fields :: [Type]) where
   FieldTypesOf '[] = '[]
   FieldTypesOf (field ': fields) = FieldTypeOf field ': FieldTypesOf fields
+
+type family NullityTypesOf (hasks :: [Type]) where
+  NullityTypesOf '[] = '[]
+  NullityTypesOf (hask ': hasks) = NullityTypeOf hask ': NullityTypesOf hasks
 
 -- | Inspect the code of an algebraic datatype and ensure it's a product,
 -- otherwise generate a type error
@@ -840,5 +848,8 @@ type family RecordCodeOf (hask :: Type) (code ::[[Type]]) :: [Type] where
   RecordCodeOf hask _tys = TypeError
     ('Text "RecordCodeOf error: non-Record type " ':<>: 'ShowType hask)
 
-type family ParamsFrom (hask :: Type) :: [NullityType]
-type family ResultFrom (hask :: Type) :: RelationType
+type family ParamsFrom (hask :: Type) :: [NullityType] where
+  ParamsFrom hask = NullityTypesOf (RecordCodeOf hask (Code hask))
+
+type family ResultFrom (hask :: Type) :: RelationType where
+  ResultFrom hask = ZipAs (FieldNamesFrom hask) (ParamsFrom hask)
