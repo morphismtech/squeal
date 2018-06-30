@@ -97,7 +97,7 @@ let
 CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
 ```
 
-Enumerated types can also be generated from a Haskell algbraic data type with nullary constructors, for example:
+Enumerated types can also be generated from a Haskell algebraic data type with nullary constructors, for example:
 
 ```Haskell
 >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
