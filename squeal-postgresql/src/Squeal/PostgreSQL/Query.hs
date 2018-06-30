@@ -74,7 +74,9 @@ module Squeal.PostgreSQL.Query
 
 import Control.DeepSeq
 import Data.ByteString (ByteString)
+import Data.Kind
 import Data.Monoid hiding (All)
+import Data.Profunctor
 import Data.String
 import Data.Word
 import Generics.SOP hiding (from)
@@ -82,6 +84,7 @@ import GHC.TypeLits
 
 import qualified GHC.Generics as GHC
 
+import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
@@ -284,6 +287,25 @@ newtype Query
     = UnsafeQuery { renderQuery :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance RenderSQL (Query schema params columns) where renderSQL = renderQuery
+
+data QueryFrom
+  (schema :: SchemaType)
+  (x :: Type)
+  (y :: Type)
+  where
+    QueryFrom
+      :: (x -> NP (K (Maybe ByteString)) params)
+      -> Query schema params result
+      -> (NP (K (Maybe ByteString)) result -> y)
+      -> QueryFrom schema x y
+instance Profunctor (QueryFrom schema) where
+  dimap f g (QueryFrom params q result) = QueryFrom (params.f) q (g.result)
+
+queryFrom
+  :: (ToParams x (ParamsFrom x), FromRow (ResultFrom y) y)
+  => Query schema (ParamsFrom x) (ResultFrom y)
+  -> QueryFrom schema x y
+queryFrom q = QueryFrom toParams q fromRow
 
 type family Query' schema x y where
   Query' schema x y = Query schema (ParamsFrom x) (ResultFrom y)
