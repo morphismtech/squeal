@@ -11,14 +11,17 @@ Squeal queries.
 {-# LANGUAGE
     DeriveGeneric
   , FlexibleContexts
+  , FlexibleInstances
   , GADTs
   , GeneralizedNewtypeDeriving
   , LambdaCase
+  , MultiParamTypeClasses
   , OverloadedStrings
   , StandaloneDeriving
   , TypeFamilies
   , TypeInType
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Query
@@ -188,7 +191,7 @@ let
   query =
     select (sum_ #col2 `as` #sum :* #col1)
     ( from (table (#tab `as` #table1))
-      & group (By #col1 :* Nil)
+      & group (#table1 ! #col1)
       & having (#col1 + sum_ #col2 .> 1) )
 in printSQL query
 :}
@@ -794,6 +797,16 @@ data By
 deriving instance Show (By relations by)
 deriving instance Eq (By relations by)
 deriving instance Ord (By relations by)
+
+instance (HasUnique rel rels cols, Has col cols ty, by ~ '(rel, col))
+  => IsLabel col (By rels by) where fromLabel = By fromLabel
+instance (HasUnique rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
+  => IsLabel col (NP (By rels) bys) where fromLabel = By fromLabel :* Nil
+instance (Has rel rels cols, Has col cols ty, by ~ '(rel, col))
+  => IsQualified rel col (By rels by) where (!) = curry By2
+instance (Has rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
+  => IsQualified rel col (NP (By rels) bys) where
+    rel ! col = By2 (rel, col) :* Nil
 
 -- | Renders a `By`.
 renderBy :: By relations by -> ByteString
