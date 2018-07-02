@@ -688,8 +688,10 @@ type family With
 -- `label`s are used for enum terms. A `label` is called with
 -- type application like `label @"beef"`.
 class IsPGlabel (label :: Symbol) expr where label :: expr
-instance label ~ label'
-  => IsPGlabel label (PGlabel label') where label = PGlabel
+instance label ~ label1
+  => IsPGlabel label (PGlabel label1) where label = PGlabel
+instance label ~ label1
+  => IsPGlabel label (NP PGlabel '[label1]) where label = PGlabel :* Nil
 -- | A `PGlabel` unit type with an `IsPGlabel` instance
 data PGlabel (label :: Symbol) = PGlabel
 -- | Renders a label
