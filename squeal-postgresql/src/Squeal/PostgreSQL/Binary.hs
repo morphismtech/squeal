@@ -88,7 +88,7 @@ let
   querySchwarma :: Query Schema
     '[ 'NotNull (EnumFrom Schwarma)]
     '["fromOnly" ::: 'NotNull (EnumFrom Schwarma)]
-  querySchwarma = values_ (parameter @1 #schwarma `As` #fromOnly :* Nil)
+  querySchwarma = values_ (parameter @1 #schwarma `As` #fromOnly)
 :}
 
 >>> :{

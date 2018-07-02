@@ -25,6 +25,8 @@ module Squeal.PostgreSQL.Query
   ( -- * Queries
     Query (UnsafeQuery, renderQuery)
   , Query'
+  , QueryFrom (..)
+  , queryFrom
   , union
   , unionAll
   , intersect
