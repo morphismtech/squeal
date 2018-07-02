@@ -50,7 +50,7 @@ module Squeal.PostgreSQL.Query
   , renderTableExpression
   , from
   , where_
-  , group
+  , groupBy
   , having
   , orderBy
   , limit
@@ -66,7 +66,7 @@ module Squeal.PostgreSQL.Query
   , rightOuterJoin
   , fullOuterJoin
     -- * Grouping
-  , By (By, By2)
+  , By (By1, By2)
   , renderBy
   , GroupByClause (NoGroups, Group)
   , renderGroupByClause
@@ -191,7 +191,7 @@ let
   query =
     select (sum_ #col2 `as` #sum :* #col1)
     ( from (table (#tab `as` #table1))
-      & group (#table1 ! #col1)
+      & groupBy #col1
       & having (#col1 + sum_ #col2 .> 1) )
 in printSQL query
 :}
@@ -604,15 +604,15 @@ where_
   -> TableExpression schema params relations grouping
 where_ wh rels = rels {whereClause = wh : whereClause rels}
 
--- | A `group` is a transformation of `TableExpression`s which switches
+-- | A `groupBy` is a transformation of `TableExpression`s which switches
 -- its `Grouping` from `Ungrouped` to `Grouped`. Use @group Nil@ to perform
 -- a "grand total" aggregation query.
-group
+groupBy
   :: SListI bys
   => NP (By relations) bys -- ^ grouped columns
   -> TableExpression schema params relations 'Ungrouped
   -> TableExpression schema params relations ('Grouped bys)
-group bys rels = TableExpression
+groupBy bys rels = TableExpression
   { fromClause = fromClause rels
   , whereClause = whereClause rels
   , groupByClause = Group bys
@@ -786,33 +786,34 @@ Grouping
 data By
     (relations :: RelationsType)
     (by :: (Symbol,Symbol)) where
-    By
+    By1
       :: (HasUnique relation relations columns, Has column columns ty)
       => Alias column
       -> By relations '(relation, column)
     By2
       :: (Has relation relations columns, Has column columns ty)
-      => (Alias relation, Alias column)
+      => Alias relation
+      -> Alias column
       -> By relations '(relation, column)
 deriving instance Show (By relations by)
 deriving instance Eq (By relations by)
 deriving instance Ord (By relations by)
 
 instance (HasUnique rel rels cols, Has col cols ty, by ~ '(rel, col))
-  => IsLabel col (By rels by) where fromLabel = By fromLabel
+  => IsLabel col (By rels by) where fromLabel = By1 fromLabel
 instance (HasUnique rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
-  => IsLabel col (NP (By rels) bys) where fromLabel = By fromLabel :* Nil
+  => IsLabel col (NP (By rels) bys) where fromLabel = By1 fromLabel :* Nil
 instance (Has rel rels cols, Has col cols ty, by ~ '(rel, col))
-  => IsQualified rel col (By rels by) where (!) = curry By2
+  => IsQualified rel col (By rels by) where (!) = By2
 instance (Has rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
   => IsQualified rel col (NP (By rels) bys) where
-    rel ! col = By2 (rel, col) :* Nil
+    rel ! col = By2 rel col :* Nil
 
 -- | Renders a `By`.
 renderBy :: By relations by -> ByteString
 renderBy = \case
-  By column -> renderAlias column
-  By2 (rel, column) -> renderAlias rel <> "." <> renderAlias column
+  By1 column -> renderAlias column
+  By2 rel column -> renderAlias rel <> "." <> renderAlias column
 
 -- | A `GroupByClause` indicates the `Grouping` of a `TableExpression`.
 -- A `NoGroups` indicates `Ungrouped` while a `Group` indicates `Grouped`.
