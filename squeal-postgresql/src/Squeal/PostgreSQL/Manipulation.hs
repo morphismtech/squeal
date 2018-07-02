@@ -484,7 +484,7 @@ WITH statements
 -- let
 --   manipulation :: Manipulation '["products" ::: 'Table ProductsTable, "products_deleted" ::: 'Table ProductsTable] '[ 'NotNull 'PGdate] '[]
 --   manipulation = with
---     (deleteFrom #products (#date .< param @1) ReturningStar `as` #deleted_rows)
+--     (deleteFrom #products (#date .< param @1) ReturningStar `As` #deleted_rows :* Nil)
 --     (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `as` #t)))))
 -- in printSQL manipulation
 -- :}
