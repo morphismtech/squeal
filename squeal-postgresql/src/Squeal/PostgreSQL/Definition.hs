@@ -818,7 +818,7 @@ dropView v = UnsafeDefinition $ "DROP VIEW" <+> renderAlias v <> ";"
 
 -- | Enumerated types are created using the `createTypeEnum` command, for example
 --
--- >>> printSQL $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy" :* Nil)
+-- >>> printSQL $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy")
 -- CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
 createTypeEnum
   :: (KnownSymbol enum, SOP.All KnownSymbol labels)

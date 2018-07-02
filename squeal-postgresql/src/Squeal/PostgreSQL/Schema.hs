@@ -690,8 +690,8 @@ type family With
 class IsPGlabel (label :: Symbol) expr where label :: expr
 instance label ~ label1
   => IsPGlabel label (PGlabel label1) where label = PGlabel
-instance label ~ label1
-  => IsPGlabel label (NP PGlabel '[label1]) where label = PGlabel :* Nil
+instance labels ~ '[label]
+  => IsPGlabel label (NP PGlabel labels) where label = PGlabel :* Nil
 -- | A `PGlabel` unit type with an `IsPGlabel` instance
 data PGlabel (label :: Symbol) = PGlabel
 -- | Renders a label
