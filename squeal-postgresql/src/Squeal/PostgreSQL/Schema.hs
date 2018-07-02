@@ -402,14 +402,24 @@ instance (alias0 ~ alias1, alias0 ~ alias2, KnownSymbol alias2)
   => IsLabel alias0 (Aliased Alias (alias1 ::: alias2)) where
     fromLabel = fromLabel @alias2 `As` fromLabel @alias1
 
-class KnownSymbol alias => Aliasable expression alias aliased where
-  as :: expression -> Alias alias -> aliased
-instance KnownSymbol alias => Aliasable
-  (expression ty) alias (Aliased expression (alias ::: ty)) where as = As
-instance KnownSymbol alias => Aliasable
-  (expression ty) alias (NP (Aliased expression) '[alias ::: ty])
+class KnownSymbol alias => Aliasable expression alias aliased
+  | aliased -> expression
+  , aliased -> alias
   where
-    expression `as` alias = expression `As` alias :* Nil
+    as :: expression -> Alias alias -> aliased
+
+instance KnownSymbol alias => Aliasable
+  (expression ty)
+  alias
+  (Aliased expression (alias ::: ty))
+    where as = As
+instance KnownSymbol alias => Aliasable
+  (expression ty)
+  alias
+  (NP (Aliased expression) '[alias ::: ty])
+    where
+      expression `as` alias = expression `As` alias :* Nil
+
 -- | >>> let renderMaybe = fromString . maybe "Nothing" (const "Just")
 -- >>> renderAliasedAs renderMaybe (Just (3::Int) `As` #an_int)
 -- "Just AS \"an_int\""

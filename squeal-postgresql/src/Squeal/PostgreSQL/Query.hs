@@ -123,7 +123,7 @@ let
      , "col1" ::: 'NotNull 'PGint4 ]
   query =
     select
-      ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
+      ((#col1 + #col2) `as` #sum :* #col1)
       ( from (table #tab)
         & where_ (#col1 .> #col2)
         & where_ (#col2 .> 0) )
@@ -141,7 +141,7 @@ let
     '["col" ::: 'Null 'PGint4]
   query =
     selectStar
-      (from (subquery (selectStar (from (table #tab)) `As` #sub)))
+      (from (subquery (selectStar (from (table #tab)) `as` #sub)))
 in printSQL query
 :}
 SELECT * FROM (SELECT * FROM "tab" AS "tab") AS "sub"
@@ -186,8 +186,8 @@ let
     '[ "sum" ::: 'NotNull 'PGint4
      , "col1" ::: 'NotNull 'PGint4 ]
   query =
-    select (sum_ #col2 `As` #sum :* #col1 :* Nil)
-    ( from (table (#tab `As` #table1))
+    select (sum_ #col2 `as` #sum :* #col1)
+    ( from (table (#tab `as` #table1))
       & group (By #col1 :* Nil)
       & having (#col1 + sum_ #col2 .> 1) )
 in printSQL query
@@ -240,13 +240,13 @@ let
      , "shipper_name" ::: 'NotNull 'PGtext
      ]
   query = select
-    ( #o ! #price `As` #order_price :*
-      #c ! #name `As` #customer_name :*
-      #s ! #name `As` #shipper_name :* Nil )
-    ( from (table (#orders `As` #o)
-      & innerJoin (table (#customers `As` #c))
+    ( #o ! #price `as` #order_price :*
+      #c ! #name `as` #customer_name :*
+      #s ! #name `as` #shipper_name )
+    ( from (table (#orders `as` #o)
+      & innerJoin (table (#customers `as` #c))
         (#o ! #customer_id .== #c ! #id)
-      & innerJoin (table (#shippers `As` #s))
+      & innerJoin (table (#shippers `as` #s))
         (#o ! #shipper_id .== #s ! #id)) )
 in printSQL query
 :}
@@ -261,7 +261,7 @@ let
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectDotStar #t1
-    (from (table (#tab `As` #t1) & crossJoin (table (#tab `As` #t2))))
+    (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
 in printSQL query
 :}
 SELECT "t1".* FROM "tab" AS "t1" CROSS JOIN "tab" AS "t2"
@@ -463,7 +463,7 @@ selectDistinctDotStar rel relations = UnsafeQuery $
 -- but it can be used on its own.
 --
 -- >>> type Row = '["a" ::: 'NotNull 'PGint4, "b" ::: 'NotNull 'PGtext]
--- >>> let query = values (1 `As` #a :* "one" `As` #b :* Nil) [] :: Query '[] '[] Row
+-- >>> let query = values (1 `as` #a :* "one" `as` #b) [] :: Query '[] '[] Row
 -- >>> printSQL query
 -- SELECT * FROM (VALUES (1, E'one')) AS t ("a", "b")
 values
