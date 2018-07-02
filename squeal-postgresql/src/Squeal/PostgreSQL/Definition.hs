@@ -129,8 +129,17 @@ CREATE statements
 
 >>> :set -XOverloadedLabels
 >>> :{
-printSQL $
-  createTable #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil
+type Table = '[] :=>
+  '[ "a" ::: 'NoDef :=> 'Null 'PGint4
+   , "b" ::: 'NoDef :=> 'Null 'PGfloat4 ]
+:}
+
+>>> :{
+let
+  setup :: Definition '[] '["tab" ::: 'Table Table]
+  setup = createTable #tab
+    (nullable int `as` #a :* nullable real `as` #b) Nil
+in printSQL setup
 :}
 CREATE TABLE "tab" ("a" int NULL, "b" real NULL);
 -}
@@ -155,12 +164,19 @@ Instead, the schema already has the table so if the table did not yet exist, the
 the `Category` of `Definition`s.
 
 >>> :set -XOverloadedLabels -XTypeApplications
->>> type Table = '[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGfloat4]
+>>> :{
+type Table = '[] :=>
+  '[ "a" ::: 'NoDef :=> 'Null 'PGint4
+   , "b" ::: 'NoDef :=> 'Null 'PGfloat4 ]
+:}
+
 >>> type Schema = '["tab" ::: 'Table Table]
+
 >>> :{
 let
   setup :: Definition Schema Schema
-  setup = createTableIfNotExists #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil
+  setup = createTableIfNotExists #tab
+    (nullable int `as` #a :* nullable real `as` #b) Nil
 in printSQL setup
 :}
 CREATE TABLE IF NOT EXISTS "tab" ("a" int NULL, "b" real NULL);
@@ -850,11 +866,20 @@ createTypeEnumFrom
 createTypeEnumFrom enum = createTypeEnum enum
   (SOP.hpure label :: NP PGlabel (LabelsFrom hask))
 
--- | `createTypeComposite` creates a composite type. The composite type is
--- specified by a list of attribute names and data types.
---
--- >>> printSQL $ createTypeComposite #complex (float8 `As` #real :* float8 `As` #imaginary :* Nil)
--- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
+{- | `createTypeComposite` creates a composite type. The composite type is
+specified by a list of attribute names and data types.
+
+>>> type PGcomplex = 'PGcomposite '["real" ::: 'PGfloat8, "imaginary" ::: 'PGfloat8]
+
+>>> :{
+let
+  setup :: Definition '[] '["complex" ::: 'Typedef PGcomplex]
+  setup = createTypeComposite #complex
+    (float8 `as` #real :* float8 `as` #imaginary)
+in printSQL setup
+:}
+CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
+-}
 createTypeComposite
   :: (KnownSymbol ty, SOP.SListI fields)
   => Alias ty

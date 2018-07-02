@@ -374,7 +374,7 @@ renderAlias :: KnownSymbol alias => Alias alias -> ByteString
 renderAlias = doubleQuoted . fromString . symbolVal
 
 -- | >>> import Generics.SOP (NP(..))
--- >>> renderAliases (#jimbob :* #kandi :* Nil)
+-- >>> renderAliases (#jimbob :* #kandi)
 -- ["\"jimbob\"","\"kandi\""]
 renderAliases
   :: All KnownSymbol aliases => NP Alias aliases -> [ByteString]
@@ -402,21 +402,19 @@ instance (alias0 ~ alias1, alias0 ~ alias2, KnownSymbol alias2)
   => IsLabel alias0 (Aliased Alias (alias1 ::: alias2)) where
     fromLabel = fromLabel @alias2 `As` fromLabel @alias1
 
-class KnownSymbol alias => Aliasable expression alias aliased
+class KnownSymbol alias => Aliasable alias expression aliased
   | aliased -> expression
   , aliased -> alias
-  where
-    as :: expression -> Alias alias -> aliased
+  where as :: expression -> Alias alias -> aliased
 
-instance KnownSymbol alias => Aliasable
+instance (alias ~ alias1, KnownSymbol alias) => Aliasable alias
   (expression ty)
-  alias
-  (Aliased expression (alias ::: ty))
-    where as = As
-instance KnownSymbol alias => Aliasable
+  (Aliased expression (alias1 ::: ty))
+    where
+      as = As
+instance (KnownSymbol alias, tys ~ '[alias ::: ty]) => Aliasable alias
   (expression ty)
-  alias
-  (NP (Aliased expression) '[alias ::: ty])
+  (NP (Aliased expression) tys)
     where
       expression `as` alias = expression `As` alias :* Nil
 
