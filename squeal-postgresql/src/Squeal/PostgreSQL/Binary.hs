@@ -235,9 +235,13 @@ instance ToParam UTCTime 'PGtimestamptz where
 instance ToParam DiffTime 'PGinterval where toParam = K . Encoding.interval_int
 instance ToParam Value 'PGjson where toParam = K . Encoding.json_ast
 instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
-instance (HasOid pg, ToParam x pg)
-  => ToParam (Vector (Maybe x)) ('PGvararray pg) where
+instance {-# OVERLAPPING #-}
+  (HasOid pg, ToParam x pg) => ToParam (Vector (Maybe x)) ('PGvararray pg) where
     toParam = K . Encoding.nullableArray_vector
+      (oid @pg) (unK . toParam @x @pg)
+instance {-# OVERLAPPABLE #-}
+  (HasOid pg, ToParam x pg) => ToParam (Vector x) ('PGvararray pg) where
+    toParam = K . Encoding.array_vector
       (oid @pg) (unK . toParam @x @pg)
 instance
   ( IsEnumType x
@@ -388,10 +392,16 @@ instance FromValue 'PGinterval DiffTime where
   fromValue _ = Decoding.interval_int
 instance FromValue 'PGjson Value where fromValue _ = Decoding.json_ast
 instance FromValue 'PGjsonb Value where fromValue _ = Decoding.jsonb_ast
-instance FromValue pg y => FromValue ('PGvararray pg) (Vector (Maybe y)) where
+instance {-# OVERLAPPING #-}
+  FromValue pg y => FromValue ('PGvararray pg) (Vector (Maybe y)) where
   fromValue _ = Decoding.array
     (Decoding.dimensionArray Vector.replicateM
       (Decoding.nullableValueArray (fromValue (Proxy @pg))))
+instance {-# OVERLAPPABLE #-}
+  FromValue pg y => FromValue ('PGvararray pg) (Vector y) where
+  fromValue _ = Decoding.array
+    (Decoding.dimensionArray Vector.replicateM
+      (Decoding.valueArray (fromValue (Proxy @pg))))
 instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
   fromValue _ = Decoding.array
     (Decoding.dimensionArray Vector.replicateM
