@@ -141,6 +141,7 @@ Person {name = Just "Faisal", age = Just 24}
   , MultiParamTypeClasses
   , ScopedTypeVariables
   , TypeApplications
+  , TypeFamilies
   , TypeInType
   , TypeOperators
   , UndecidableInstances
@@ -161,6 +162,7 @@ module Squeal.PostgreSQL.Binary
 
 import BinaryParser
 import ByteString.StrictBuilder
+import Control.Monad.State.Strict
 import Data.Aeson hiding (Null)
 import Data.Int
 import Data.Kind
@@ -238,6 +240,51 @@ instance (HasOid pg, ToParam x pg)
   => ToParam (Vector (Maybe x)) ('PGvararray pg) where
     toParam = K . Encoding.nullableArray_vector
       (oid @pg) (unK . toParam @x @pg)
+
+data FromListN a = FromListN {-# UNPACK #-} !Int [a]
+
+type family Length (xs :: [k]) :: Nat where
+  Length (x : xs) = 1 + Length xs
+  Length '[] = 0
+instance
+  ( HasOid pg
+  , ToParam x pg
+  , Generic c
+  , list ~ (x:xs)
+  , code ~ Code c
+  , code ~ '[list]
+  , len ~ Length list
+  , KnownNat len
+  , All ((~) x) list
+  , SListI list
+  , SListI code
+  ) => ToParam c ('PGfixarray len pg) where
+    toParam c = K
+      (Encoding.array_vector
+       (oid @pg)
+       (unK . toParam @x @pg)
+       (case execState list (FromListN 0 []) of
+          FromListN len xs
+            | len == expectLen -> Vector.fromListN len xs
+            | otherwise -> error $
+              "toParam @'PGfixarray: vector with incorrect length\n\
+              \expected " ++ show expectLen ++ " but got " ++ show len))
+      where
+        expectLen :: Int
+        expectLen = fromIntegral (natVal (Proxy :: Proxy len))
+
+        list :: State (FromListN x) ()
+        list = hctraverse_
+          (Proxy :: Proxy ((~) list))
+          (hctraverse_
+           (Proxy :: Proxy ((~) x))
+           (putElem . unI))
+          (unSOP (from c))
+
+        putElem :: x -> State (FromListN x) ()
+        putElem x =
+          modify' (\(FromListN n xs) -> FromListN (n+1) (x:xs))
+
 instance
   ( IsEnumType x
   , HasDatatypeInfo x
