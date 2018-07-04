@@ -412,8 +412,13 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
             "traversePrepared: LibPQ.prepare returned no results"
           Just prepResult -> do
             status <- LibPQ.resultStatus prepResult
-            unless (status == LibPQ.CommandOk) . error $
-              "traversePrepared: LibPQ.prepare status " <> show status
+            case status of
+              LibPQ.CommandOk -> return ()
+              _               -> do
+                msg <- LibPQ.resultErrorMessage prepResult
+                error $
+                  "traversePrepared: LibPQ.prepare status " <> show status <> "\n\
+                  \error message: " <> maybe "(no message)" show msg
         results <- for list $ \ params -> do
           let
             toParam' bytes = (bytes,LibPQ.Binary)
