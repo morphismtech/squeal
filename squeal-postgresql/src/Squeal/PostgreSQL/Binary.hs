@@ -181,6 +181,7 @@ import qualified Data.ByteString as Strict hiding (pack, unpack)
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text as Strict
 import qualified Data.Vector as Vector
+import qualified Data.Vector.Mutable as MutVector
 import qualified GHC.Generics as GHC
 import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
@@ -241,8 +242,6 @@ instance (HasOid pg, ToParam x pg)
     toParam = K . Encoding.nullableArray_vector
       (oid @pg) (unK . toParam @x @pg)
 
-data FromListN a = FromListN {-# UNPACK #-} !Int [a]
-
 type family Length (xs :: [k]) :: Nat where
   Length (x : xs) = 1 + Length xs
   Length '[] = 0
@@ -263,27 +262,24 @@ instance
       (Encoding.array_vector
        (oid @pg)
        (unK . toParam @x @pg)
-       (case execState list (FromListN 0 []) of
-          FromListN len xs
-            | len == expectLen -> Vector.fromListN len xs
-            | otherwise -> error $
-              "toParam @'PGfixarray: vector with incorrect length\n\
-              \expected " ++ show expectLen ++ " but got " ++ show len))
+       (Vector.create $ do
+         m <- MutVector.new expectLen
+         finalLen <- hctraverse_
+           (Proxy :: Proxy ((~) list))
+           (hctraverse_ (Proxy :: Proxy ((~) x))
+            (\(I x) -> StateT $ \i -> do
+                MutVector.write m i x
+                return $! ((), i + 1)))
+           (unSOP (from c)) `execStateT` 0
+         when
+           (expectLen /= finalLen)
+           (error
+            ("toParam @'PGfixarray: vector with incorrect length\n\
+             \expected " ++ show expectLen ++ " but got " ++ show finalLen))
+         return m))
       where
         expectLen :: Int
         expectLen = fromIntegral (natVal (Proxy :: Proxy len))
-
-        list :: State (FromListN x) ()
-        list = hctraverse_
-          (Proxy :: Proxy ((~) list))
-          (hctraverse_
-           (Proxy :: Proxy ((~) x))
-           (putElem . unI))
-          (unSOP (from c))
-
-        putElem :: x -> State (FromListN x) ()
-        putElem x =
-          modify' (\(FromListN n xs) -> FromListN (n+1) (x:xs))
 
 instance
   ( IsEnumType x
