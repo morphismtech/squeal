@@ -433,10 +433,49 @@ instance FromValue pg y => FromValue ('PGvararray pg) (Vector (Maybe y)) where
   fromValue _ = Decoding.array
     (Decoding.dimensionArray Vector.replicateM
       (Decoding.nullableValueArray (fromValue (Proxy @pg))))
-instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
+
+instance {-# OVERLAPPING #-}
+         FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
   fromValue _ = Decoding.array
     (Decoding.dimensionArray Vector.replicateM
       (Decoding.nullableValueArray (fromValue (Proxy @pg))))
+
+class FromVector xs where
+  fromVector_ :: Int -> Vector a -> Maybe (NP (K a) xs)
+instance FromVector '[] where
+  {-# INLINE fromVector_ #-}
+  fromVector_ i v
+    | i == Vector.length v = Just Nil
+    | otherwise            = Nothing
+instance FromVector xs => FromVector (x : xs) where
+  {-# INLINE fromVector_ #-}
+  fromVector_ i v
+    | i < Vector.length v =
+      fmap
+      (\xs -> K (Vector.unsafeIndex v i) :* xs)
+      (fromVector_ (i + 1) v)
+    | otherwise = Nothing
+
+fromVector :: FromVector xs => Vector a -> Maybe (NP (K a) xs)
+fromVector = fromVector_ 0
+
+instance {-# OVERLAPPABLE #-}
+         ( FromVector xs
+         , FromValue pg a
+         , All ((~) a) xs
+         , Generic c
+         , Code c ~ '[xs]
+         ) => FromValue ('PGfixarray n pg) c where
+  {-# INLINE fromValue #-}
+  fromValue _ =
+    maybe (error "fromValue: invalid PGfixarray") ungeneric . fromVector <$>
+    Decoding.array
+    (Decoding.dimensionArray Vector.replicateM
+     (Decoding.valueArray (fromValue (Proxy @pg) :: Decoding.Value a)))
+    where
+      ungeneric :: NP (K a) xs -> c
+      ungeneric = to . SOP . Z . hcmap (Proxy :: Proxy ((~) a)) (I . unK)
+
 instance
   ( IsEnumType y
   , HasDatatypeInfo y
