@@ -176,7 +176,7 @@ import Network.IP.Addr
 
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict hiding (pack, unpack)
-import qualified Data.Text.Lazy as Lazy
+import qualified Data.Text.Lazy as LT
 import qualified Data.Text as Strict
 import qualified Data.Vector as Vector
 import qualified GHC.Generics as GHC
@@ -218,7 +218,8 @@ instance ToParam UUID 'PGuuid where toParam = K . Encoding.uuid
 instance ToParam (NetAddr IP) 'PGinet where toParam = K . Encoding.inet
 instance ToParam Char ('PGchar 1) where toParam = K . Encoding.char_utf8
 instance ToParam Strict.Text 'PGtext where toParam = K . Encoding.text_strict
-instance ToParam Lazy.Text 'PGtext where toParam = K . Encoding.text_lazy
+instance ToParam LT.Text 'PGtext where toParam = K . Encoding.text_lazy
+instance ToParam String 'PGtext where toParam = K . Encoding.text_lazy . LT.pack
 instance ToParam Strict.ByteString 'PGbytea where
   toParam = K . Encoding.bytea_strict
 instance ToParam Lazy.ByteString 'PGbytea where
@@ -369,7 +370,8 @@ instance FromValue 'PGuuid UUID where fromValue _ = Decoding.uuid
 instance FromValue 'PGinet (NetAddr IP) where fromValue _ = Decoding.inet
 instance FromValue ('PGchar 1) Char where fromValue _ = Decoding.char
 instance FromValue 'PGtext Strict.Text where fromValue _ = Decoding.text_strict
-instance FromValue 'PGtext Lazy.Text where fromValue _ = Decoding.text_lazy
+instance FromValue 'PGtext LT.Text where fromValue _ = Decoding.text_lazy
+instance FromValue 'PGtext String where fromValue _ = fmap LT.unpack Decoding.text_lazy
 instance FromValue 'PGbytea Strict.ByteString where
   fromValue _ = Decoding.bytea_strict
 instance FromValue 'PGbytea Lazy.ByteString where
