@@ -70,6 +70,7 @@ import Control.Monad.Except
 import Control.Monad.Morph
 import Control.Monad.Trans.Control
 import Data.ByteString (ByteString)
+import qualified Data.ByteString.Char8 as C8 (unpack)
 import Data.Foldable
 import Data.Function ((&))
 import Data.Kind
@@ -394,8 +395,8 @@ errorOnPrepareNotOk pfix r = do
     _               -> do
       msg <- LibPQ.resultErrorMessage r
       error $ pfix <>
-        "status: " <> show status <> "\n\
-        \message: " <> maybe "(no message)" show msg
+        "status: " <> show status <> "\n" <>
+        maybe "(no message)" C8.unpack msg
 
 instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
   => MonadPQ schema (PQ schema0 schema1 io) where
