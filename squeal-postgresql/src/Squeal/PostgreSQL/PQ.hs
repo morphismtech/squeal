@@ -386,6 +386,18 @@ class Monad pq => MonadPQ schema pq | pq -> schema where
     => (LibPQ.Connection -> IO a) -> pq a
   liftPQ = lift . liftPQ
 
+errorOnPrepareNotOk :: String -> LibPQ.Result -> IO ()
+errorOnPrepareNotOk pfix r = do
+  status <- LibPQ.resultStatus r
+  case status of
+    LibPQ.CommandOk -> return ()
+    _               -> do
+      msg <- LibPQ.resultErrorMessage r
+      error $
+        pfix <>
+        "status:" <> show status <> "\n\
+        \message: " <> maybe "(no message)" show msg
+
 instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
   => MonadPQ schema (PQ schema0 schema1 io) where
 
@@ -410,15 +422,8 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
         case prepResultMaybe of
           Nothing -> error
             "traversePrepared: LibPQ.prepare returned no results"
-          Just prepResult -> do
-            status <- LibPQ.resultStatus prepResult
-            case status of
-              LibPQ.CommandOk -> return ()
-              _               -> do
-                msg <- LibPQ.resultErrorMessage prepResult
-                error $
-                  "traversePrepared: LibPQ.prepare status " <> show status <> "\n\
-                  \error message: " <> maybe "(no message)" show msg
+          Just prepResult ->
+            errorOnPrepareNotOk "traversePrepared: LibPQ.prepare\n" prepResult
         results <- for list $ \ params -> do
           let
             toParam' bytes = (bytes,LibPQ.Binary)
@@ -446,10 +451,8 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
         case prepResultMaybe of
           Nothing -> error
             "traversePrepared_: LibPQ.prepare returned no results"
-          Just prepResult -> do
-            status <- LibPQ.resultStatus prepResult
-            unless (status == LibPQ.CommandOk) . error $
-              "traversePrepared: LibPQ.prepare status " <> show status
+          Just prepResult ->
+            errorOnPrepareNotOk "traversePrepared_: LibPQ.prepare\n" prepResult
         for_ list $ \ params -> do
           let
             toParam' bytes = (bytes,LibPQ.Binary)
