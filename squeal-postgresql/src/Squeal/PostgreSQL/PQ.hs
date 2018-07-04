@@ -393,9 +393,8 @@ errorOnPrepareNotOk pfix r = do
     LibPQ.CommandOk -> return ()
     _               -> do
       msg <- LibPQ.resultErrorMessage r
-      error $
-        pfix <>
-        "status:" <> show status <> "\n\
+      error $ pfix <>
+        "status: " <> show status <> "\n\
         \message: " <> maybe "(no message)" show msg
 
 instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
