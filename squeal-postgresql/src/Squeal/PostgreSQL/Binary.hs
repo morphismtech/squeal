@@ -176,7 +176,7 @@ import Network.IP.Addr
 
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict hiding (pack, unpack)
-import qualified Data.Text.Lazy as Lazy
+import qualified Data.Text.Lazy as LT
 import qualified Data.Text as Strict
 import qualified Data.Vector as Vector
 import qualified GHC.Generics as GHC
@@ -218,7 +218,8 @@ instance ToParam UUID 'PGuuid where toParam = K . Encoding.uuid
 instance ToParam (NetAddr IP) 'PGinet where toParam = K . Encoding.inet
 instance ToParam Char ('PGchar 1) where toParam = K . Encoding.char_utf8
 instance ToParam Strict.Text 'PGtext where toParam = K . Encoding.text_strict
-instance ToParam Lazy.Text 'PGtext where toParam = K . Encoding.text_lazy
+instance ToParam LT.Text 'PGtext where toParam = K . Encoding.text_lazy
+instance ToParam String 'PGtext where toParam = K . Encoding.text_lazy . LT.pack
 instance ToParam Strict.ByteString 'PGbytea where
   toParam = K . Encoding.bytea_strict
 instance ToParam Lazy.ByteString 'PGbytea where
@@ -234,9 +235,13 @@ instance ToParam UTCTime 'PGtimestamptz where
 instance ToParam DiffTime 'PGinterval where toParam = K . Encoding.interval_int
 instance ToParam Value 'PGjson where toParam = K . Encoding.json_ast
 instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
-instance (HasOid pg, ToParam x pg)
-  => ToParam (Vector (Maybe x)) ('PGvararray pg) where
+instance {-# OVERLAPPING #-}
+  (HasOid pg, ToParam x pg) => ToParam (Vector (Maybe x)) ('PGvararray pg) where
     toParam = K . Encoding.nullableArray_vector
+      (oid @pg) (unK . toParam @x @pg)
+instance {-# OVERLAPPABLE #-}
+  (HasOid pg, ToParam x pg) => ToParam (Vector x) ('PGvararray pg) where
+    toParam = K . Encoding.array_vector
       (oid @pg) (unK . toParam @x @pg)
 instance
   ( IsEnumType x
@@ -369,7 +374,8 @@ instance FromValue 'PGuuid UUID where fromValue _ = Decoding.uuid
 instance FromValue 'PGinet (NetAddr IP) where fromValue _ = Decoding.inet
 instance FromValue ('PGchar 1) Char where fromValue _ = Decoding.char
 instance FromValue 'PGtext Strict.Text where fromValue _ = Decoding.text_strict
-instance FromValue 'PGtext Lazy.Text where fromValue _ = Decoding.text_lazy
+instance FromValue 'PGtext LT.Text where fromValue _ = Decoding.text_lazy
+instance FromValue 'PGtext String where fromValue _ = fmap LT.unpack Decoding.text_lazy
 instance FromValue 'PGbytea Strict.ByteString where
   fromValue _ = Decoding.bytea_strict
 instance FromValue 'PGbytea Lazy.ByteString where
@@ -386,10 +392,16 @@ instance FromValue 'PGinterval DiffTime where
   fromValue _ = Decoding.interval_int
 instance FromValue 'PGjson Value where fromValue _ = Decoding.json_ast
 instance FromValue 'PGjsonb Value where fromValue _ = Decoding.jsonb_ast
-instance FromValue pg y => FromValue ('PGvararray pg) (Vector (Maybe y)) where
+instance {-# OVERLAPPING #-}
+  FromValue pg y => FromValue ('PGvararray pg) (Vector (Maybe y)) where
   fromValue _ = Decoding.array
     (Decoding.dimensionArray Vector.replicateM
       (Decoding.nullableValueArray (fromValue (Proxy @pg))))
+instance {-# OVERLAPPABLE #-}
+  FromValue pg y => FromValue ('PGvararray pg) (Vector y) where
+  fromValue _ = Decoding.array
+    (Decoding.dimensionArray Vector.replicateM
+      (Decoding.valueArray (fromValue (Proxy @pg))))
 instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
   fromValue _ = Decoding.array
     (Decoding.dimensionArray Vector.replicateM
