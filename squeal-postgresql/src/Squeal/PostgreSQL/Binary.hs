@@ -141,6 +141,7 @@ Person {name = Just "Faisal", age = Just 24}
   , MultiParamTypeClasses
   , ScopedTypeVariables
   , TypeApplications
+  , TypeFamilies
   , TypeInType
   , TypeOperators
   , UndecidableInstances
@@ -161,6 +162,7 @@ module Squeal.PostgreSQL.Binary
 
 import BinaryParser
 import ByteString.StrictBuilder
+import Control.Monad.State.Strict
 import Data.Aeson hiding (Null)
 import Data.Int
 import Data.Kind
@@ -179,6 +181,7 @@ import qualified Data.ByteString as Strict hiding (pack, unpack)
 import qualified Data.Text.Lazy as Lazy
 import qualified Data.Text as Strict
 import qualified Data.Vector as Vector
+import qualified Data.Vector.Mutable as MutVector
 import qualified GHC.Generics as GHC
 import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
@@ -238,6 +241,46 @@ instance (HasOid pg, ToParam x pg)
   => ToParam (Vector (Maybe x)) ('PGvararray pg) where
     toParam = K . Encoding.nullableArray_vector
       (oid @pg) (unK . toParam @x @pg)
+
+type family Length (xs :: [k]) :: Nat where
+  Length (x : xs) = 1 + Length xs
+  Length '[] = 0
+instance
+  ( HasOid pg
+  , ToParam x pg
+  , Generic c
+  , list ~ (x:xs)
+  , code ~ Code c
+  , code ~ '[list]
+  , len ~ Length list
+  , KnownNat len
+  , All ((~) x) list
+  , SListI list
+  , SListI code
+  ) => ToParam c ('PGfixarray len pg) where
+    toParam c = K
+      (Encoding.array_vector
+       (oid @pg)
+       (unK . toParam @x @pg)
+       (Vector.create $ do
+         m <- MutVector.new expectLen
+         finalLen <- hctraverse_
+           (Proxy :: Proxy ((~) list))
+           (hctraverse_ (Proxy :: Proxy ((~) x))
+            (\(I x) -> StateT $ \i -> do
+                MutVector.write m i x
+                return $! ((), i + 1)))
+           (unSOP (from c)) `execStateT` 0
+         when
+           (expectLen /= finalLen)
+           (error
+            ("toParam @'PGfixarray: vector with incorrect length\n\
+             \expected " ++ show expectLen ++ " but got " ++ show finalLen))
+         return m))
+      where
+        expectLen :: Int
+        expectLen = fromIntegral (natVal (Proxy :: Proxy len))
+
 instance
   ( IsEnumType x
   , HasDatatypeInfo x
@@ -390,10 +433,49 @@ instance FromValue pg y => FromValue ('PGvararray pg) (Vector (Maybe y)) where
   fromValue _ = Decoding.array
     (Decoding.dimensionArray Vector.replicateM
       (Decoding.nullableValueArray (fromValue (Proxy @pg))))
-instance FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
+
+instance {-# OVERLAPPING #-}
+         FromValue pg y => FromValue ('PGfixarray n pg) (Vector (Maybe y)) where
   fromValue _ = Decoding.array
     (Decoding.dimensionArray Vector.replicateM
       (Decoding.nullableValueArray (fromValue (Proxy @pg))))
+
+class FromVector xs where
+  fromVector_ :: Int -> Vector a -> Maybe (NP (K a) xs)
+instance FromVector '[] where
+  {-# INLINE fromVector_ #-}
+  fromVector_ i v
+    | i == Vector.length v = Just Nil
+    | otherwise            = Nothing
+instance FromVector xs => FromVector (x : xs) where
+  {-# INLINE fromVector_ #-}
+  fromVector_ i v
+    | i < Vector.length v =
+      fmap
+      (\xs -> K (Vector.unsafeIndex v i) :* xs)
+      (fromVector_ (i + 1) v)
+    | otherwise = Nothing
+
+fromVector :: FromVector xs => Vector a -> Maybe (NP (K a) xs)
+fromVector = fromVector_ 0
+
+instance {-# OVERLAPPABLE #-}
+         ( FromVector xs
+         , FromValue pg a
+         , All ((~) a) xs
+         , Generic c
+         , Code c ~ '[xs]
+         ) => FromValue ('PGfixarray n pg) c where
+  {-# INLINE fromValue #-}
+  fromValue _ =
+    maybe (error "fromValue: invalid PGfixarray") ungeneric . fromVector <$>
+    Decoding.array
+    (Decoding.dimensionArray Vector.replicateM
+     (Decoding.valueArray (fromValue (Proxy @pg) :: Decoding.Value a)))
+    where
+      ungeneric :: NP (K a) xs -> c
+      ungeneric = to . SOP . Z . hcmap (Proxy :: Proxy ((~) a)) (I . unK)
+
 instance
   ( IsEnumType y
   , HasDatatypeInfo y
