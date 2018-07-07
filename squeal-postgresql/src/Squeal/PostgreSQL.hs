@@ -71,16 +71,16 @@ let
   setup :: Definition '[] Schema
   setup = 
     createTable #users
-      ( serial `As` #id :*
-        (text & notNullable) `As` #name :* Nil )
-      ( primaryKey #id `As` #pk_users :* Nil ) >>>
+      ( serial `as` #id :*
+        (text & notNullable) `as` #name )
+      ( primaryKey #id `as` #pk_users ) >>>
     createTable #emails
-      ( serial `As` #id :*
-        (int & notNullable) `As` #user_id :*
-        (text & nullable) `As` #email :* Nil )
-      ( primaryKey #id `As` #pk_emails :*
+      ( serial `as` #id :*
+        (int & notNullable) `as` #user_id :*
+        (text & nullable) `as` #email )
+      ( primaryKey #id `as` #pk_emails :*
         foreignKey #user_id #users #id
-          OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
+          OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
 :}
 
 We can easily see the generated SQL is unsurprising looking.
@@ -119,17 +119,17 @@ of our inserts.
 let
   insertUser :: Manipulation Schema '[ 'NotNull 'PGtext ] '[ "fromOnly" ::: 'NotNull 'PGint4 ]
   insertUser = insertRow #users
-    (Default `As` #id :* Set (param @1) `As` #name :* Nil)
-    OnConflictDoNothing (Returning (#id `As` #fromOnly :* Nil))
+    (Default `as` #id :* Set (param @1) `as` #name)
+    OnConflictDoNothing (Returning (#id `as` #fromOnly))
 :}
 
 >>> :{
 let
   insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
   insertEmail = insertRow #emails
-    ( Default `As` #id :*
-      Set (param @1) `As` #user_id :*
-      Set (param @2) `As` #email :* Nil )
+    ( Default `as` #id :*
+      Set (param @1) `as` #user_id :*
+      Set (param @2) `as` #email )
     OnConflictDoNothing (Returning Nil)
 :}
 
@@ -149,9 +149,9 @@ let
     '[ "userName"  ::: 'NotNull 'PGtext
      , "userEmail" :::    'Null 'PGtext ]
   getUsers = select
-    (#u ! #name `As` #userName :* #e ! #email `As` #userEmail :* Nil)
-    ( from (table (#users `As` #u)
-      & innerJoin (table (#emails `As` #e))
+    (#u ! #name `as` #userName :* #e ! #email `as` #userEmail)
+    ( from (table (#users `as` #u)
+      & innerJoin (table (#emails `as` #e))
         (#u ! #id .== #e ! #user_id)) )
 :}
 

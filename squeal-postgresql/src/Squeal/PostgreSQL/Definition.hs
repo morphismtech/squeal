@@ -129,8 +129,17 @@ CREATE statements
 
 >>> :set -XOverloadedLabels
 >>> :{
-printSQL $
-  createTable #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil
+type Table = '[] :=>
+  '[ "a" ::: 'NoDef :=> 'Null 'PGint4
+   , "b" ::: 'NoDef :=> 'Null 'PGfloat4 ]
+:}
+
+>>> :{
+let
+  setup :: Definition '[] '["tab" ::: 'Table Table]
+  setup = createTable #tab
+    (nullable int `as` #a :* nullable real `as` #b) Nil
+in printSQL setup
 :}
 CREATE TABLE "tab" ("a" int NULL, "b" real NULL);
 -}
@@ -155,12 +164,19 @@ Instead, the schema already has the table so if the table did not yet exist, the
 the `Category` of `Definition`s.
 
 >>> :set -XOverloadedLabels -XTypeApplications
->>> type Table = '[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGfloat4]
+>>> :{
+type Table = '[] :=>
+  '[ "a" ::: 'NoDef :=> 'Null 'PGint4
+   , "b" ::: 'NoDef :=> 'Null 'PGfloat4 ]
+:}
+
 >>> type Schema = '["tab" ::: 'Table Table]
+
 >>> :{
 let
   setup :: Definition Schema Schema
-  setup = createTableIfNotExists #tab ((int & nullable) `As` #a :* (real & nullable) `As` #b :* Nil) Nil
+  setup = createTableIfNotExists #tab
+    (nullable int `as` #a :* nullable real `as` #b) Nil
 in printSQL setup
 :}
 CREATE TABLE IF NOT EXISTS "tab" ("a" int NULL, "b" real NULL);
@@ -244,9 +260,9 @@ type Schema = '[
 let
   definition :: Definition '[] Schema
   definition = createTable #tab
-    ( (int & notNullable) `As` #a :*
-      (int & notNullable) `As` #b :* Nil )
-    ( check (#a :* #b :* Nil) (#a .> #b) `As` #inequality :* Nil )
+    ( (int & notNullable) `as` #a :*
+      (int & notNullable) `as` #b )
+    ( check (#a :* #b) (#a .> #b) `as` #inequality )
 :}
 
 >>> printSQL definition
@@ -278,9 +294,9 @@ type Schema = '[
 let
   definition :: Definition '[] Schema
   definition = createTable #tab
-    ( (int & nullable) `As` #a :*
-      (int & nullable) `As` #b :* Nil )
-    ( unique (#a :* #b :* Nil) `As` #uq_a_b :* Nil )
+    ( (int & nullable) `as` #a :*
+      (int & nullable) `as` #b )
+    ( unique (#a :* #b) `as` #uq_a_b )
 :}
 
 >>> printSQL definition
@@ -311,9 +327,9 @@ type Schema = '[
 let
   definition :: Definition '[] Schema
   definition = createTable #tab
-    ( serial `As` #id :*
-      (text & notNullable) `As` #name :* Nil )
-    ( primaryKey #id `As` #pk_id :* Nil )
+    ( serial `as` #id :*
+      (text & notNullable) `as` #name )
+    ( primaryKey #id `as` #pk_id )
 :}
 
 >>> printSQL definition
@@ -357,16 +373,16 @@ let
   setup :: Definition '[] Schema
   setup =
    createTable #users
-     ( serial `As` #id :*
-       (text & notNullable) `As` #name :* Nil )
-     ( primaryKey #id `As` #pk_users :* Nil ) >>>
+     ( serial `as` #id :*
+       (text & notNullable) `as` #name )
+     ( primaryKey #id `as` #pk_users ) >>>
    createTable #emails
-     ( serial `As` #id :*
-       (int & notNullable) `As` #user_id :*
-       (text & nullable) `As` #email :* Nil )
-     ( primaryKey #id `As` #pk_emails :*
+     ( serial `as` #id :*
+       (int & notNullable) `as` #user_id :*
+       (text & nullable) `as` #email )
+     ( primaryKey #id `as` #pk_emails :*
        foreignKey #user_id #users #id
-         OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
+         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
 in printSQL setup
 :}
 CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));
@@ -392,12 +408,12 @@ let
   setup :: Definition '[] Schema
   setup =
    createTable #employees
-     ( serial `As` #id :*
-       (text & notNullable) `As` #name :*
-       (integer & nullable) `As` #employer_id :* Nil )
-     ( primaryKey #id `As` #employees_pk :*
+     ( serial `as` #id :*
+       (text & notNullable) `as` #name :*
+       (integer & nullable) `as` #employer_id )
+     ( primaryKey #id `as` #employees_pk :*
        foreignKey #employer_id #employees #id
-         OnDeleteCascade OnUpdateCascade `As` #employees_employer_fk :* Nil )
+         OnDeleteCascade OnUpdateCascade `as` #employees_employer_fk )
 in printSQL setup
 :}
 CREATE TABLE "employees" ("id" serial, "name" text NOT NULL, "employer_id" integer NULL, CONSTRAINT "employees_pk" PRIMARY KEY ("id"), CONSTRAINT "employees_employer_fk" FOREIGN KEY ("employer_id") REFERENCES "employees" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
@@ -546,7 +562,7 @@ newtype AlterTable
 --   definition :: Definition
 --     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
 --     '["tab" ::: 'Table ('["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
---   definition = alterTable #tab (addConstraint #positive (check (#col :* Nil) (#col .> 0)))
+--   definition = alterTable #tab (addConstraint #positive (check #col (#col .> 0)))
 -- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" ADD CONSTRAINT "positive" CHECK (("col" > 0));
@@ -784,7 +800,7 @@ alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 --     '[ "abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])
 --      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]
 --   definition =
---     createView #bc (select (#b :* #c :* Nil) (from (table #abc)))
+--     createView #bc (select (#b :* #c) (from (table #abc)))
 -- in printSQL definition
 -- :}
 -- CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
@@ -818,7 +834,7 @@ dropView v = UnsafeDefinition $ "DROP VIEW" <+> renderAlias v <> ";"
 
 -- | Enumerated types are created using the `createTypeEnum` command, for example
 --
--- >>> printSQL $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy" :* Nil)
+-- >>> printSQL $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy")
 -- CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
 createTypeEnum
   :: (KnownSymbol enum, SOP.All KnownSymbol labels)
@@ -850,11 +866,20 @@ createTypeEnumFrom
 createTypeEnumFrom enum = createTypeEnum enum
   (SOP.hpure label :: NP PGlabel (LabelsFrom hask))
 
--- | `createTypeComposite` creates a composite type. The composite type is
--- specified by a list of attribute names and data types.
---
--- >>> printSQL $ createTypeComposite #complex (float8 `As` #real :* float8 `As` #imaginary :* Nil)
--- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
+{- | `createTypeComposite` creates a composite type. The composite type is
+specified by a list of attribute names and data types.
+
+>>> type PGcomplex = 'PGcomposite '["real" ::: 'PGfloat8, "imaginary" ::: 'PGfloat8]
+
+>>> :{
+let
+  setup :: Definition '[] '["complex" ::: 'Typedef PGcomplex]
+  setup = createTypeComposite #complex
+    (float8 `as` #real :* float8 `as` #imaginary)
+in printSQL setup
+:}
+CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
+-}
 createTypeComposite
   :: (KnownSymbol ty, SOP.SListI fields)
   => Alias ty

@@ -36,9 +36,9 @@ let
     { name = "make users table"
     , up = void . define $
         createTable #users
-        ( serial `As` #id :*
-          (text & notNullable) `As` #name :* Nil )
-        ( primaryKey #id `As` #pk_users :* Nil )
+        ( serial `as` #id :*
+          (text & notNullable) `as` #name )
+        ( primaryKey #id `as` #pk_users )
     , down = void . define $ dropTable #users
     }
 :}
@@ -51,12 +51,12 @@ let
     { name = "make emails table"
     , up = void . define $
         createTable #emails
-          ( serial `As` #id :*
-            (int & notNullable) `As` #user_id :*
-            (text & nullable) `As` #email :* Nil )
-          ( primaryKey #id `As` #pk_emails :*
+          ( serial `as` #id :*
+            (int & notNullable) `as` #user_id :*
+            (text & nullable) `as` #email )
+          ( primaryKey #id `as` #pk_emails :*
             foreignKey #user_id #users #id
-              OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
+              OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
     , down = void . define $ dropTable #emails
     }
 :}
@@ -71,7 +71,7 @@ let
     :: Has "schema_migrations" schema ('Table MigrationsTable)
     => PQ schema schema IO ()
   numMigrations = do
-    result <- runQuery (selectStar (from (table (#schema_migrations `As` #m))))
+    result <- runQuery (selectStar (from (table (#schema_migrations `as` #m))))
     num <- ntuples result
     liftBase $ print num
 :}
@@ -285,18 +285,18 @@ createMigrations
   => Definition schema schema
 createMigrations =
   createTableIfNotExists #schema_migrations
-    ( (text & notNullable) `As` #name :*
+    ( (text & notNullable) `as` #name :*
       (timestampWithTimeZone & notNullable & default_ currentTimestamp)
-        `As` #executed_at :* Nil )
-    ( unique (#name :* Nil) `As` #migrations_unique_name :* Nil )
+        `as` #executed_at )
+    ( unique #name `as` #migrations_unique_name )
 
 -- | Inserts a `Migration` into the `MigrationsTable`
 insertMigration
   :: Has "schema_migrations" schema ('Table MigrationsTable)
   => Manipulation schema '[ 'NotNull 'PGtext] '[]
 insertMigration = insertRow_ #schema_migrations
-  ( Set (param @1) `As` #name :*
-    Default `As` #executed_at :* Nil )
+  ( Set (param @1) `as` #name :*
+    Default `as` #executed_at )
 
 -- | Deletes a `Migration` from the `MigrationsTable`
 deleteMigration
@@ -311,6 +311,6 @@ selectMigration
   => Query schema '[ 'NotNull 'PGtext ]
     '[ "executed_at" ::: 'NotNull 'PGtimestamptz ]
 selectMigration = select
-  (#executed_at `As` #executed_at :* Nil)
-  ( from (table (#schema_migrations `As` #m))
+  (#executed_at `as` #executed_at)
+  ( from (table (#schema_migrations `as` #m))
     & where_ (#name .== param @1))
