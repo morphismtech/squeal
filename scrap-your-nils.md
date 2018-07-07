@@ -1,11 +1,9 @@
 ## Scrap your Nils
 
 One of the most useful types I've come across in Haskell is the type of
-"heterogeneous lists". This is the same as the [Rec]
-(http://hackage.haskell.org/package/vinyl-0.8.1.1/docs/Data-Vinyl-Core.html)
+"heterogeneous lists". This is the same as the [Rec](http://hackage.haskell.org/package/vinyl-0.8.1.1/docs/Data-Vinyl-Core.html)
 datatype from the [vinyl](http://hackage.haskell.org/package/vinyl) library.
-It's also the same as the [NP]
-(http://hackage.haskell.org/package/generics-sop-0.3.2.0/docs/Generics-SOP-NP.html)
+It's also the same as the [NP](http://hackage.haskell.org/package/generics-sop-0.3.2.0/docs/Generics-SOP-NP.html)
 datatype from the [generics-sop](http://hackage.haskell.org/package/generics-sop) library.
 Squeal makes heavy use of this type.
 
