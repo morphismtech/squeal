@@ -120,8 +120,6 @@ module Squeal.PostgreSQL.Schema
   , RecordCodeOf
   , MapMaybes (..)
   , Nulls
-  , ParamsFrom
-  , ResultFrom
   ) where
 
 import Control.DeepSeq
@@ -402,11 +400,12 @@ instance (alias0 ~ alias1, alias0 ~ alias2, KnownSymbol alias2)
   => IsLabel alias0 (Aliased Alias (alias1 ::: alias2)) where
     fromLabel = fromLabel @alias2 `As` fromLabel @alias1
 
+-- | The `Aliasable` class provides a way to scrap your `Nil`s
+-- in an `NP` list of `Aliased` expressions.
 class KnownSymbol alias => Aliasable alias expression aliased
   | aliased -> expression
   , aliased -> alias
   where as :: expression -> Alias alias -> aliased
-
 instance (alias ~ alias1, KnownSymbol alias) => Aliasable alias
   (expression ty)
   (Aliased expression (alias1 ::: ty))
@@ -866,9 +865,3 @@ type family RecordCodeOf (hask :: Type) (code ::[[Type]]) :: [Type] where
   RecordCodeOf _hask '[tys] = tys
   RecordCodeOf hask _tys = TypeError
     ('Text "RecordCodeOf error: non-Record type " ':<>: 'ShowType hask)
-
-type family ParamsFrom (hask :: Type) :: [NullityType] where
-  ParamsFrom hask = NullityTypesOf (RecordCodeOf hask (Code hask))
-
-type family ResultFrom (hask :: Type) :: RelationType where
-  ResultFrom hask = ZipAs (FieldNamesFrom hask) (ParamsFrom hask)
