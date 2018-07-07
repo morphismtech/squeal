@@ -58,5 +58,5 @@ the last label as a list.
 
 Version 0.3.1 of Squeal enables the "Scrap your Nils" trick for
 heterogeneous lists of `Alias`es, `Aliased` expressions, `PGlabel`s and `By`s
-with the typeclasses `IsLabel`, `IsQualified`, `Aliasable`, and `IsPGlabel`,
-to eliminate all need of using `Nil` in a list.
+with the typeclasses `IsLabel`, `IsQualified`, `IsPGlabel`,
+and the new `Aliasable` typeclass, to eliminate all need of using `Nil` in a list.
