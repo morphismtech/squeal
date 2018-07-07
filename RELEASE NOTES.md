@@ -1,5 +1,12 @@
 ## RELEASE NOTES
 
+### Version 0.3.1 - July 7, 2018
+
+Version 0.3.1 of Squeal enables the "Scrap your Nils" trick for
+heterogeneous lists of `Alias`es, `Aliased` expressions, `PGlabel`s and `By`s
+with the typeclasses `IsLabel`, `IsQualified`, `Aliasable`, and `IsPGlabel`,
+to eliminate all need of using `Nil` in a list.
+
 ### Version 0.3 - June 26, 2018
 
 Version 0.3 of Squeal adds views as well as composite and enumerated types to Squeal.
