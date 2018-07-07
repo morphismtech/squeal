@@ -846,18 +846,10 @@ type family FieldTypeOf (maybe :: Type) where
   FieldTypeOf ty = TypeError
     ('Text "FieldTypeOf error: non-Maybe type " ':<>: 'ShowType ty)
 
-type family NullityTypeOf (hask :: Type) where
-  NullityTypeOf (Maybe hask) = 'Null (PG hask)
-  NullityTypeOf hask = 'NotNull (PG hask)
-
 -- | Calculate the types of fields.
 type family FieldTypesOf (fields :: [Type]) where
   FieldTypesOf '[] = '[]
   FieldTypesOf (field ': fields) = FieldTypeOf field ': FieldTypesOf fields
-
-type family NullityTypesOf (hasks :: [Type]) where
-  NullityTypesOf '[] = '[]
-  NullityTypesOf (hask ': hasks) = NullityTypeOf hask ': NullityTypesOf hasks
 
 -- | Inspect the code of an algebraic datatype and ensure it's a product,
 -- otherwise generate a type error
