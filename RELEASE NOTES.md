@@ -6,6 +6,8 @@ Version 0.3.1 of Squeal enables the "Scrap your Nils" trick for
 heterogeneous lists of `Alias`es, `Aliased` expressions, `PGlabel`s and `By`s
 with the typeclasses `IsLabel`, `IsQualified`, `IsPGlabel`,
 and the new `Aliasable` typeclass, to eliminate all need of using `Nil` in a list.
+There were a couple minor name changes, i.e. the function `group` was renamed to `groupBy`.
+Please consult the documentation.
 
 ### Version 0.3 - June 26, 2018
 
