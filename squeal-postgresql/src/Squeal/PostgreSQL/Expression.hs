@@ -382,7 +382,7 @@ nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
 -- | >>> printSQL $ array [null_, notNull false, notNull true]
 -- ARRAY[NULL, FALSE, TRUE]
 array
-  :: [Expression schema relations grouping params ('Null ty)]
+  :: [Expression schema relations grouping params ty]
   -- ^ array elements
   -> Expression schema relations grouping params (nullity ('PGvararray ty))
 array xs = UnsafeExpression $
@@ -1206,19 +1206,18 @@ jsonb = UnsafeTypeExpression "jsonb"
 -- | variable length array
 vararray
   :: TypeExpression schema pg
-  -> TypeExpression schema ('PGvararray pg)
+  -> TypeExpression schema ('PGvararray (nullity pg))
 vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
 -- | fixed length array
 --
 -- >>> renderTypeExpression (fixarray (Proxy @2) json)
 -- "json[2]"
 fixarray
-  :: KnownNat n
-  => proxy n
-  -> TypeExpression schema pg
-  -> TypeExpression schema ('PGfixarray n pg)
-fixarray p ty = UnsafeTypeExpression $
-  renderTypeExpression ty <> "[" <> renderNat p <> "]"
+  :: forall n schema nullity pg. KnownNat n
+  => TypeExpression schema pg
+  -> TypeExpression schema ('PGfixarray n (nullity pg))
+fixarray ty = UnsafeTypeExpression $
+  renderTypeExpression ty <> "[" <> renderNat (Proxy @n) <> "]"
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped schema (ty :: PGType) where pgtype :: TypeExpression schema ty
@@ -1244,7 +1243,9 @@ instance PGTyped schema 'PGinterval where pgtype = interval
 instance PGTyped schema 'PGuuid where pgtype = uuid
 instance PGTyped schema 'PGjson where pgtype = json
 instance PGTyped schema 'PGjsonb where pgtype = jsonb
-instance PGTyped schema ty => PGTyped schema ('PGvararray ty) where
-  pgtype = vararray (pgtype @schema @ty)
-instance (KnownNat n, PGTyped schema ty) => PGTyped schema ('PGfixarray n ty) where
-  pgtype = fixarray (Proxy @n) (pgtype @schema @ty)
+instance PGTyped schema ty
+  => PGTyped schema ('PGvararray (nullity ty)) where
+    pgtype = vararray (pgtype @schema @ty)
+instance (KnownNat n, PGTyped schema ty)
+  => PGTyped schema ('PGfixarray n (nullity ty)) where
+    pgtype = fixarray @n (pgtype @schema @ty)

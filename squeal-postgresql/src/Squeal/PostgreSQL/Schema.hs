@@ -174,8 +174,8 @@ data PGType
   | PGinet -- ^ IPv4 or IPv6 host address
   | PGjson -- ^	textual JSON data
   | PGjsonb -- ^ binary JSON data, decomposed
-  | PGvararray PGType -- ^ variable length array
-  | PGfixarray Nat PGType -- ^ fixed length array
+  | PGvararray NullityType -- ^ variable length array
+  | PGfixarray Nat NullityType -- ^ fixed length array
   | PGenum [Symbol] -- ^ enumerated (enum) types are data types that comprise a static, ordered set of values.
   | PGcomposite [(Symbol, PGType)] -- ^ a composite type represents the structure of a row or record; it is essentially just a list of field names and their data types.
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types

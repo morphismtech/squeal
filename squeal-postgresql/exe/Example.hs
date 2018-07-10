@@ -29,7 +29,7 @@ type Schema =
        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
-        , "vec" ::: 'NoDef :=> 'NotNull ('PGvararray 'PGint2)
+        , "vec" ::: 'NoDef :=> 'NotNull ('PGvararray ('Null 'PGint2))
         ])
    , "emails" ::: 'Table (
        '[  "pk_emails" ::: 'PrimaryKey '["id"]
@@ -60,7 +60,7 @@ setup =
 teardown :: Definition Schema '[]
 teardown = dropTable #emails >>> dropTable #users
 
-insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'NotNull ('PGvararray 'PGint2)]
+insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
 insertUser = insertRows #users
   (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec) []
@@ -76,7 +76,7 @@ insertEmail = insertRows #emails
 getUsers :: Query Schema '[]
   '[ "userName" ::: 'NotNull 'PGtext
    , "userEmail" ::: 'Null 'PGtext
-   , "userVec" ::: 'NotNull ('PGvararray 'PGint2)]
+   , "userVec" ::: 'NotNull ('PGvararray ('Null 'PGint2))]
 getUsers = select
   (#u ! #name `as` #userName :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)
   ( from (table (#users `as` #u)
