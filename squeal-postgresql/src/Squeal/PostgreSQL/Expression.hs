@@ -965,7 +965,7 @@ type IsPGtextArray arr = PGarrayOf arr 'PGtext
   => Expression schema relations grouping params (jnull json)
   -> Expression schema relations grouping params (knull path)
   -> Expression schema relations grouping params ('Null 'PGtext)
-(.#>>) = unsafeBinaryOp "#>"
+(.#>>) = unsafeBinaryOp "#>>"
 
 -- Additional jsonb operators
 
