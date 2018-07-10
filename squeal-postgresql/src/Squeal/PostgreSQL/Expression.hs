@@ -89,7 +89,7 @@ module Squeal.PostgreSQL.Expression
   , PGarray
   , PGarrayOf
   , PGjsonKey
-  , PGjson
+  , PGjson_
   , (.->)
   , (.->>)
   , (.#>)
@@ -108,6 +108,8 @@ module Squeal.PostgreSQL.Expression
   , toJsonb
   , arrayToJson
   , rowToJson
+  , jsonObjectKeys
+  , jsonbObjectKeys
     -- ** Aggregation
   , unsafeAggregate, unsafeAggregateDistinct
   , sum_, sumDistinct
@@ -1076,6 +1078,16 @@ rowToJson
   :: Expression schema relations grouping params (nullity ('PGcomposite ty))
   -> Expression schema relations grouping params (nullity 'PGjson)
 rowToJson = unsafeFunction "row_to_json"
+
+jsonObjectKeys
+  :: Expression schema relations grouping params (nullity 'PGjson)
+  -> Expression schema relations grouping params (nullity 'PGtext)
+jsonObjectKeys = unsafeFunction "json_object_keys"
+
+jsonbObjectKeys
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity 'PGtext)
+jsonbObjectKeys = unsafeFunction "jsonb_object_keys"
 
 -- TODO: jsonBuildArray, jsonbBuildArray, jsonObject, jsonbObject
 -- probably something like
