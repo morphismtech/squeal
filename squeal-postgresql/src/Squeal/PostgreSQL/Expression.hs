@@ -26,6 +26,7 @@ Squeal expressions are the atoms used to build statements.
   , TypeInType
   , TypeOperators
   , UndecidableInstances
+  , RankNTypes
 #-}
 
 module Squeal.PostgreSQL.Expression
@@ -84,6 +85,27 @@ module Squeal.PostgreSQL.Expression
   , upper
   , charLength
   , like
+    -- ** json or jsonb operators
+  , PGarray
+  , PGarrayOf
+  , (.->)
+  , (.->>)
+  , (.#>)
+  , (.#>>)
+    -- *** jsonb only operators
+  , (.@>)
+  , (.<@)
+  , (.?)
+  , (.?|)
+  , (.?&)
+  , (.||.)
+  , (.-.)
+  , (#-.)
+    -- *** Functions
+  , toJson
+  , toJsonb
+  , arrayToJson
+  , rowToJson
     -- ** Aggregation
   , unsafeAggregate, unsafeAggregateDistinct
   , sum_, sumDistinct
@@ -141,6 +163,7 @@ import Data.Semigroup
 import Data.Ratio
 import Data.String
 import Generics.SOP hiding (from)
+import GHC.Exts (Constraint)
 import GHC.OverloadedLabels
 import GHC.TypeLits
 import Prelude hiding (id, (.))
@@ -882,16 +905,35 @@ see https://www.postgresql.org/docs/10/static/functions-json.html
 type IsJSONKey key = key `In` '[ 'PGint2, 'PGint4, 'PGtext ]
 type IsJSON json = json `In` '[ 'PGjson, 'PGjsonb ]
 
-class IsArray arr => IsArrayOf arr ty
-instance arrTy ~ expectTy => IsArrayOf ('PGvararray arrTy) expectTy
-instance arrTy ~ expectTy => IsArrayOf ('PGfixarray n arrTy) expectTy
+type Placeholder k
+  =     'Text "(_"
+  ':<>: 'Text "::"
+  ':<>: 'ShowType k ':<>:
+  'Text ")"
 
--- IsArray will generate nicer error messages when it is all that is required.
-class IsArray arr
-instance IsArray ('PGvararray x)
-instance IsArray ('PGfixarray n x)
+type ErrArrayOf arr ty = arr ':<>: 'Text " " ':<>: ty
+type ErrPGfixarrayOf t = ErrArrayOf ('ShowType 'PGfixarray ':<>: 'Text " " ':<>: Placeholder Nat) t
+type ErrPGvararrayOf t = ErrArrayOf ('ShowType 'PGvararray) t
 
-type IsPGtextArray arr = IsArrayOf arr 'PGtext
+type family PGarray arr :: Constraint where
+  PGarray ('PGvararray x) = ()
+  PGarray ('PGfixarray n x) = ()
+  PGarray val = TypeError
+    ('Text "Unsatisfied PGarrayOf constraint. Expected either: "
+     ':$$: 'Text " • " ':<>: ErrPGvararrayOf (Placeholder PGType)
+     ':$$: 'Text " • " ':<>: ErrPGfixarrayOf (Placeholder PGType)
+     ':$$: 'Text "But got: " ':<>: 'ShowType val)
+
+type family PGarrayOf arr ty :: Constraint where
+  PGarrayOf ('PGvararray x) ty = x ~ ty
+  PGarrayOf ('PGfixarray n x) ty = x ~ ty
+  PGarrayOf val ty = TypeError
+    ('Text "Unsatisfied PGarrayOf constraint. Expected either: "
+     ':$$: 'Text " • " ':<>: ErrPGvararrayOf ('ShowType ty)
+     ':$$: 'Text " • " ':<>: ErrPGfixarrayOf ('ShowType ty)
+     ':$$: 'Text "But got: " ':<>: 'ShowType val)
+
+type IsPGtextArray arr = PGarrayOf arr 'PGtext
 
 -- | Get JSON value (object field or array element) at a key.
 (.->)
@@ -1022,7 +1064,7 @@ toJsonb
 toJsonb = unsafeUnaryOp "to_jsonb"
 
 arrayToJson
-  :: IsArray arr
+  :: PGarray arr
   => Expression schema relations grouping params (nullity arr)
   -> Expression schema relations grouping params (nullity 'PGjson)
 arrayToJson = unsafeFunction "array_to_json"
