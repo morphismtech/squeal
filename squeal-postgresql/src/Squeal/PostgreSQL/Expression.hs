@@ -88,6 +88,8 @@ module Squeal.PostgreSQL.Expression
     -- ** json or jsonb operators
   , PGarray
   , PGarrayOf
+  , PGjsonKey
+  , PGjson
   , (.->)
   , (.->>)
   , (.#>)
@@ -903,6 +905,7 @@ see https://www.postgresql.org/docs/10/static/functions-json.html
 -----------------------------------------}
 
 type PGjsonKey key = key `In` '[ 'PGint2, 'PGint4, 'PGtext ]
+
 type PGjson_ json = json `In` '[ 'PGjson, 'PGjsonb ]
 
 type Placeholder k
