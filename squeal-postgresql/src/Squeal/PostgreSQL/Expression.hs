@@ -8,7 +8,7 @@ Stability: experimental
 Squeal expressions are the atoms used to build statements.
 -}
 
-{-# OPTIONS_GHC -fno-warn-redundant-constraints -fno-warn-unticked-promoted-constructors #-}
+{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
@@ -917,35 +917,6 @@ comments lifted directly from this page.
 Table 9.44: json and jsonb operators
 -----------------------------------------}
 
-type PGjsonKey key = key `In` '[ 'PGint2, 'PGint4, 'PGtext ]
-
-type PGjson_ json = json `In` '[ 'PGjson, 'PGjsonb ]
-
-type Placeholder k = 'Text "(_::" :<>: 'ShowType k :<>: 'Text ")"
-type ErrArrayOf arr ty = arr :<>: 'Text " " :<>: ty
-type ErrPGfixarrayOf t = ErrArrayOf ('ShowType 'PGfixarray :<>: 'Text " " :<>: Placeholder Nat) t
-type ErrPGvararrayOf t = ErrArrayOf ('ShowType 'PGvararray) t
-
-type family PGarray name arr :: Constraint where
-  PGarray name ('PGvararray x) = ()
-  PGarray name ('PGfixarray n x) = ()
-  PGarray name val = TypeError
-    ('Text name :<>: 'Text ": Unsatisfied PGarrayOf constraint. Expected either: "
-     :$$: 'Text " • " :<>: ErrPGvararrayOf (Placeholder PGType)
-     :$$: 'Text " • " :<>: ErrPGfixarrayOf (Placeholder PGType)
-     :$$: 'Text "But got: " :<>: 'ShowType val)
-
-type family PGarrayOf name arr ty :: Constraint where
-  PGarrayOf name ('PGvararray x) ty = x ~ ty
-  PGarrayOf name ('PGfixarray n x) ty = x ~ ty
-  PGarrayOf name val ty = TypeError
-    ( 'Text name :<>: 'Text "Unsatisfied PGarrayOf constraint. Expected either: "
-      :$$: 'Text " • " :<>: ErrPGvararrayOf ( 'ShowType ty )
-      :$$: 'Text " • " :<>: ErrPGfixarrayOf ( 'ShowType ty )
-      :$$: 'Text "But got: " :<>: 'ShowType val)
-
-type IsPGtextArray name arr = PGarrayOf name arr 'PGtext
-
 -- | Get JSON value (object field or array element) at a key.
 (.->)
   :: (PGjson_ json, PGjsonKey key)
@@ -964,7 +935,7 @@ type IsPGtextArray name arr = PGarrayOf name arr 'PGtext
 
 -- | Get JSON value at a specified path.
 (.#>)
-  :: (PGjson_ json, IsPGtextArray "(.#>)" path)
+  :: (PGjson_ json, PGtextArray "(.#>)" path)
   => Expression schema relations grouping params (nullity json)
   -> Expression schema relations grouping params (nullity path)
   -> Expression schema relations grouping params ('Null json)
@@ -972,7 +943,7 @@ type IsPGtextArray name arr = PGarrayOf name arr 'PGtext
 
 -- | Get JSON value at a specified path as text.
 (.#>>)
-  :: (PGjson_ json, IsPGtextArray "(.#>>)" path)
+  :: (PGjson_ json, PGtextArray "(.#>>)" path)
   => Expression schema relations grouping params (nullity json)
   -> Expression schema relations grouping params (nullity path)
   -> Expression schema relations grouping params ('Null 'PGtext)
@@ -1046,7 +1017,7 @@ type IsPGtextArray name arr = PGarrayOf name arr 'PGtext
 -- | Delete the field or element with specified path (for JSON arrays, negative
 -- integers count from the end)
 (#-.)
-  :: IsPGtextArray "(#-.)" arrayty
+  :: PGtextArray "(#-.)" arrayty
   => Expression schema relations grouping params (nullity 'PGjsonb)
   -> Expression schema relations grouping params (nullity arrayty)
   -> Expression schema relations grouping params (nullity 'PGjsonb)
@@ -1109,14 +1080,6 @@ jsonbBuildArray
   => NP (Expression schema relations grouping params) elems
   -> Expression schema relations grouping params (nullity 'PGjsonb)
 jsonbBuildArray = unsafeVariadicFunction "jsonb_build_array"
-
-type family PGobjectpairs name x :: Constraint where
-  PGobjectpairs name ('NotNull 'PGtext : nullity arg : xs) = PGobjectpairs name xs
-  PGobjectpairs name '[] = ()
-  PGobjectpairs name (x:xs) = TypeError
-    ( 'Text name :<>: 'Text ": Incorrect argument list:"
-     :$$: 'Text "Expected alternating list of keys and values."
-     :$$: 'Text "But got " :<>: 'ShowType (x:xs))
 
 -- | Builds a possibly-heterogeneously-typed JSON object out of a variadic
 -- argument list. The elements of the argument list must alternate between text

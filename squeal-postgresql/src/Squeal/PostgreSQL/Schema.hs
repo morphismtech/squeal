@@ -10,7 +10,7 @@ tables, schema, constraints, aliases, enumerated labels, and groupings.
 It also defines useful type families to operate on these. Finally,
 it defines an embedding of Haskell types into Postgres types.
 -}
-
+{-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors #-}
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
@@ -89,6 +89,10 @@ module Squeal.PostgreSQL.Schema
   , PGIntegral
   , PGFloating
   , PGTypeOf
+  , PGarrayOf
+  , PGarray
+  , PGtextArray
+  , PGobjectpairs
   , SameTypes
   , SamePGType
   , AllNotNull
@@ -101,6 +105,9 @@ module Squeal.PostgreSQL.Schema
   , TableToRelation
   , ConstraintInvolves
   , DropIfConstraintsInvolve
+    -- ** JSON support
+  , PGjson_
+  , PGjsonKey
     -- * Embedding
   , PG
   , EnumFrom
@@ -506,6 +513,46 @@ type PGFloating ty = In ty '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 -- `Squeal.PostgreSQL.Expression.mod_` functions.
 type PGIntegral ty = In ty '[ 'PGint2, 'PGint4, 'PGint8]
 
+-- | Error message helper for displaying unavailable\/unknown\/placeholder type
+-- variables whose kind is known.
+type Placeholder k = 'Text "(_::" :<>: 'ShowType k :<>: 'Text ")"
+
+type ErrArrayOf arr ty = arr :<>: 'Text " " :<>: ty
+type ErrPGfixarrayOf t = ErrArrayOf ('ShowType 'PGfixarray :<>: 'Text " " :<>: Placeholder Nat) t
+type ErrPGvararrayOf t = ErrArrayOf ('ShowType 'PGvararray) t
+
+-- | Ensure a type is a valid array type.
+type family PGarray name arr :: Constraint where
+  PGarray name ('PGvararray x) = ()
+  PGarray name ('PGfixarray n x) = ()
+  PGarray name val = TypeError
+    ('Text name :<>: 'Text ": Unsatisfied PGarray constraint. Expected either: "
+     :$$: 'Text " • " :<>: ErrPGvararrayOf (Placeholder PGType)
+     :$$: 'Text " • " :<>: ErrPGfixarrayOf (Placeholder PGType)
+     :$$: 'Text "But got: " :<>: 'ShowType val)
+
+-- | Ensure a type is a valid array type with a specific element type.
+type family PGarrayOf name arr ty :: Constraint where
+  PGarrayOf name ('PGvararray x) ty = x ~ ty
+  PGarrayOf name ('PGfixarray n x) ty = x ~ ty
+  PGarrayOf name val ty = TypeError
+    ( 'Text name :<>: 'Text "Unsatisfied PGarrayOf constraint. Expected either: "
+      :$$: 'Text " • " :<>: ErrPGvararrayOf ( 'ShowType ty )
+      :$$: 'Text " • " :<>: ErrPGfixarrayOf ( 'ShowType ty )
+      :$$: 'Text "But got: " :<>: 'ShowType val)
+
+-- | Ensure a type is a valid array type whose elements are text.
+type PGtextArray name arr = PGarrayOf name arr 'PGtext
+
+-- | Ensure a list of arguments is an alternating list of text and value pairs.
+type family PGobjectpairs name x :: Constraint where
+  PGobjectpairs name ('NotNull 'PGtext : arg : xs) = PGobjectpairs name xs
+  PGobjectpairs name '[] = ()
+  PGobjectpairs name (x:xs) = TypeError
+    ( 'Text name :<>: 'Text ": Incorrect argument list:"
+     :$$: 'Text "Expected alternating list of keys and values."
+     :$$: 'Text "But got " :<>: 'ShowType (x:xs))
+
 -- | `PGTypeOf` forgets about @NULL@ and any column constraints.
 type family PGTypeOf (ty :: NullityType) :: PGType where
   PGTypeOf (nullity pg) = pg
@@ -837,3 +884,10 @@ type family RecordCodeOf (hask :: Type) (code ::[[Type]]) :: [Type] where
   RecordCodeOf _hask '[tys] = tys
   RecordCodeOf hask _tys = TypeError
     ('Text "RecordCodeOf error: non-Record type " ':<>: 'ShowType hask)
+
+-- | Is a type a valid JSON key?
+type PGjsonKey key = key `In` '[ 'PGint2, 'PGint4, 'PGtext ]
+
+-- | Is a type a valid JSON type?
+type PGjson_ json = json `In` '[ 'PGjson, 'PGjsonb ]
+
