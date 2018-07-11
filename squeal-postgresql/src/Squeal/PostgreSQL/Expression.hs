@@ -114,6 +114,14 @@ module Squeal.PostgreSQL.Expression
   , jsonbBuildArray
   , jsonBuildObject
   , jsonbBuildObject
+  , jsonObject
+  , jsonbObject
+  , jsonZipObject
+  , jsonbZipObject
+  , jsonArrayLength
+  , jsonbArrayLength
+  , jsonEachAsComposite
+  , jsonbEachAsComposite
   , jsonObjectKeys
   , jsonbObjectKeys
     -- ** Aggregation
@@ -1158,11 +1166,87 @@ jsonbArrayLength
   -> Expression schema relations grouping params (nullity 'PGint4)
 jsonbArrayLength = unsafeFunction "jsonb_array_length"
 
+-- | Expands the outermost JSON object into a set of key/value pairs. 
+--
+-- See also 'Squeal.PostgreSQL.Query.jsonEach'.
+jsonEachAsComposite
+  :: Expression schema relations grouping params (nullity 'PGjson)
+  -> Expression schema relations grouping params
+     (nullity ('PGcomposite '[ "key" ::: 'PGtext, "value" ::: 'PGjson ]))
+jsonEachAsComposite = unsafeFunction "json_each"
+
+-- | Expands the outermost JSON object into a set of key/value pairs.
+--
+-- See also 'Squeal.PostgreSQL.Query.jsonbEach'
+jsonbEachAsComposite
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params
+     (nullity ('PGcomposite '[ "key" ::: 'PGtext, "value" ::: 'PGjsonb ]))
+jsonbEachAsComposite = unsafeFunction "jsonb_each"
+
+-- | Expands the outermost JSON object into a set of key/value pairs. 
+--
+-- See also 'Squeal.PostgreSQL.Query.jsonEachText'.
+jsonEachTextAsComposite
+  :: Expression schema relations grouping params (nullity 'PGjson)
+  -> Expression schema relations grouping params
+     (nullity ('PGcomposite '[ "key" ::: 'PGtext, "value" ::: 'PGtext ]))
+jsonEachTextAsComposite = unsafeFunction "json_each_text"
+
+-- | Expands the outermost JSON object into a set of key/value pairs.
+--
+-- See also 'Squeal.PostgreSQL.Query.jsonbEachText'
+jsonbEachTextAsComposite
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params
+     (nullity ('PGcomposite '[ "key" ::: 'PGtext, "value" ::: 'PGtext ]))
+jsonbEachTextAsComposite = unsafeFunction "jsonb_each_text"
+
+-- | Returns JSON value pointed to by path_elems (equivalent to #> operator).
+jsonExtractPath
+  :: SListI elems 
+  => Expression schema relations grouping params (nullity 'PGjson)
+  -> NP (Expression schema relations grouping params) elems
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonExtractPath x xs =
+  unsafeVariadicFunction "json_extract_path" (x :* xs)
+
+-- | Returns JSON value pointed to by path_elems (equivalent to #> operator).
+jsonbExtractPath
+  :: SListI elems 
+  => Expression schema relations grouping params (nullity 'PGjsonb)
+  -> NP (Expression schema relations grouping params) elems
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbExtractPath x xs =
+  unsafeVariadicFunction "jsonb_extract_path" (x :* xs)
+
+-- | Returns JSON value pointed to by path_elems (equivalent to #> operator),
+-- as text.
+jsonExtractPathText
+  :: SListI elems 
+  => Expression schema relations grouping params (nullity 'PGjson)
+  -> NP (Expression schema relations grouping params) elems
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonExtractPathText x xs =
+  unsafeVariadicFunction "json_extract_path_text" (x :* xs)
+
+-- | Returns JSON value pointed to by path_elems (equivalent to #> operator),
+-- as text.
+jsonbExtractPathText
+  :: SListI elems 
+  => Expression schema relations grouping params (nullity 'PGjsonb)
+  -> NP (Expression schema relations grouping params) elems
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbExtractPathText x xs =
+  unsafeVariadicFunction "jsonb_extract_path_text" (x :* xs)
+
+-- | Returns set of keys in the outermost JSON object.
 jsonObjectKeys
   :: Expression schema relations grouping params (nullity 'PGjson)
   -> Expression schema relations grouping params (nullity 'PGtext)
 jsonObjectKeys = unsafeFunction "json_object_keys"
 
+-- | Returns set of keys in the outermost JSON object.
 jsonbObjectKeys
   :: Expression schema relations grouping params (nullity 'PGjsonb)
   -> Expression schema relations grouping params (nullity 'PGtext)

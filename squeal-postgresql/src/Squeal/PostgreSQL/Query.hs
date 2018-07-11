@@ -48,6 +48,11 @@ module Squeal.PostgreSQL.Query
   , orderBy
   , limit
   , offset
+    -- ** JSON table expressions
+  , PGjson_each
+  , PGjsonb_each
+  , jsonEach
+  , jsonbEach
     -- * From
   , FromClause (..)
   , table
@@ -622,6 +627,38 @@ offset
   -> TableExpression schema params relations grouping
   -> TableExpression schema params relations grouping
 offset off rels = rels {offsetClause = off : offsetClause rels}
+
+{-----------------------------------------
+JSON stuff
+-----------------------------------------}
+
+type PGjson_each j = 
+  '[ j ::: '[ "key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson ] ] 
+
+type PGjsonb_each j = 
+  '[ j ::: '[ "key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjsonb ] ] 
+
+-- | Expands the outermost JSON object into a set of key/value pairs. 
+--
+-- See also 'jsonEachAsComposite'.
+jsonEach
+  :: Aliased (Expression schema relations 'Ungrouped params) '(jt, nullity 'PGjson)
+  -> TableExpression schema params (PGjson_each j) 'Ungrouped
+jsonEach (As jexpr jname) = from . UnsafeFromClause 
+  $   renderExpression (jsonEachAsComposite jexpr)
+  <+> "AS" 
+  <+> renderAlias jname
+
+-- | Expands the outermost JSON object into a set of key/value pairs. 
+--
+-- See also 'jsonbEachAsComposite'.
+jsonbEach
+  :: Aliased (Expression schema relations 'Ungrouped params) '(jt, nullity 'PGjsonb)
+  -> TableExpression schema params (PGjsonb_each j) 'Ungrouped
+jsonbEach (As jexpr jname) = from . UnsafeFromClause
+  $   renderExpression (jsonbEachAsComposite jexpr)
+  <+> "AS" 
+  <+> renderAlias jname
 
 {-----------------------------------------
 FROM clauses
