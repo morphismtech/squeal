@@ -171,6 +171,7 @@ import Data.UUID.Types
 import Data.Vector (Vector)
 import Data.Word
 import Generics.SOP
+import Generics.SOP.Record
 import GHC.TypeLits
 import Network.IP.Addr
 
@@ -262,10 +263,8 @@ instance
         . from
 instance
   ( SListI fields
-  , MapMaybes xs
-  , IsProductType x (Maybes xs)
+  , IsRecord x xs
   , AllZip ToAliasedParam xs fields
-  , FieldNamesFrom x ~ AliasesOf fields
   , All HasAliasedOid fields
   ) => ToParam x ('PGcomposite fields) where
     toParam =
@@ -435,10 +434,8 @@ instance
 
 instance
   ( SListI fields
-  , MapMaybes ys
-  , IsProductType y (Maybes ys)
+  , IsRecord y ys
   , AllZip FromAliasedValue fields ys
-  , FieldNamesFrom y ~ AliasesOf fields
   ) => FromValue ('PGcomposite fields) y where
     fromValue =
       let
@@ -529,9 +526,8 @@ class SListI results => FromRow (results :: RelationType) y where
   fromRow :: NP (K (Maybe Strict.ByteString)) results -> y
 instance
   ( SListI results
-  , IsProductType y ys
+  , IsRecord y ys
   , AllZip FromColumnValue results ys
-  , FieldNamesFrom y ~ AliasesOf results
   ) => FromRow results y where
     fromRow
       = to . SOP . Z . htrans (Proxy @FromColumnValue) (I . fromColumnValue)

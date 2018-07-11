@@ -63,7 +63,6 @@ module Squeal.PostgreSQL.Schema
   , Aliasable (as)
   , renderAliasedAs
   , AliasesOf
-  , ZipAliased (..)
   , Has
   , HasUnique
   , HasAll
@@ -107,17 +106,12 @@ module Squeal.PostgreSQL.Schema
   , EnumFrom
   , LabelsFrom
   , CompositeFrom
-  , FieldNamesFrom
-  , FieldTypesFrom
+  , PGFieldsFrom
+  , PGFieldsOf
+  , PGFieldOf
   , ConstructorsOf
   , ConstructorNameOf
   , ConstructorNamesOf
-  , FieldsOf
-  , FieldNameOf
-  , FieldNamesOf
-  , FieldTypeOf
-  , FieldTypesOf
-  , RecordCodeOf
   , MapMaybes (..)
   , Nulls
   ) where
@@ -136,6 +130,7 @@ import Data.Word (Word16, Word32, Word64)
 import Data.Type.Bool
 import Data.UUID.Types (UUID)
 import Generics.SOP
+import Generics.SOP.Record
 import GHC.OverloadedLabels
 import GHC.TypeLits
 import Network.IP.Addr
@@ -177,7 +172,7 @@ data PGType
   | PGvararray NullityType -- ^ variable length array
   | PGfixarray Nat NullityType -- ^ fixed length array
   | PGenum [Symbol] -- ^ enumerated (enum) types are data types that comprise a static, ordered set of values.
-  | PGcomposite [(Symbol, PGType)] -- ^ a composite type represents the structure of a row or record; it is essentially just a list of field names and their data types.
+  | PGcomposite [(Symbol, NullityType)] -- ^ a composite type represents the structure of a row or record; it is essentially just a list of field names and their data types.
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
 -- | The object identifier of a `PGType`.
@@ -431,36 +426,6 @@ renderAliasedAs render (expression `As` alias) =
 type family AliasesOf aliaseds where
   AliasesOf '[] = '[]
   AliasesOf (alias ::: ty ': tys) = alias ': AliasesOf tys
-
--- | The `ZipAliased` class provides a type family for zipping
--- `Symbol` lists together with arbitrary lists of the same size,
--- with an associated type family `ZipAs`, together with
--- a method `zipAs` for zipping heterogeneous lists of `Alias`es
--- together with a heterogeneous list of expressions into
--- a heterogeneous list of `Aliased` expressions.
-class
-  ( SListI (ZipAs ns xs)
-  , All KnownSymbol ns
-  ) => ZipAliased ns xs where
-
-  type family ZipAs
-    (ns :: [Symbol]) (xs :: [k]) = (zs :: [(Symbol,k)]) | zs -> ns xs
-
-  zipAs
-    :: NP Alias ns
-    -> NP expr xs
-    -> NP (Aliased expr) (ZipAs ns xs)
-
-instance ZipAliased '[] '[] where
-  type ZipAs '[] '[] = '[]
-  zipAs Nil Nil = Nil
-
-instance
-  ( KnownSymbol n
-  , ZipAliased ns xs
-  ) => ZipAliased (n ': ns) (x ': xs) where
-  type ZipAs (n ': ns) (x ': xs) = '(n,x) ': ZipAs ns xs
-  zipAs (n :* ns) (x :* xs) = x `As` n :* zipAs ns xs
 
 -- | @HasUnique alias fields field@ is a constraint that proves that
 -- @fields@ is a singleton of @alias ::: field@.
@@ -772,26 +737,21 @@ type family LabelsFrom (hask :: Type) :: [Type.ConstructorName] where
 -- CompositeFrom Row :: PGType
 -- = 'PGcomposite '['("a", 'PGint2), '("b", 'PGtimestamp)]
 type family CompositeFrom (hask :: Type) :: PGType where
-  CompositeFrom hask =
-    'PGcomposite (ZipAs (FieldNamesFrom hask) (FieldTypesFrom hask))
+  CompositeFrom hask = 'PGcomposite (PGFieldsFrom hask)
 
--- | >>> data Row = Row { a :: Maybe Int16, b :: Maybe LocalTime } deriving GHC.Generic
--- >>> instance Generic Row
--- >>> instance HasDatatypeInfo Row
--- >>> :kind! FieldNamesFrom Row
--- FieldNamesFrom Row :: [Type.FieldName]
--- = '["a", "b"]
-type family FieldNamesFrom (hask :: Type) :: [Type.FieldName] where
-  FieldNamesFrom hask = FieldNamesOf (FieldsOf (DatatypeInfoOf hask))
+type family PGFieldsFrom (hask :: Type) :: RelationType where
+  PGFieldsFrom hask = PGFieldsOf (RecordCodeOf hask)
 
--- | >>> data Row = Row { a :: Maybe Int16, b :: Maybe LocalTime } deriving GHC.Generic
--- >>> instance Generic Row
--- >>> instance HasDatatypeInfo Row
--- >>> :kind! FieldTypesFrom Row
--- FieldTypesFrom Row :: [PGType]
--- = '['PGint2, 'PGtimestamp]
-type family FieldTypesFrom (hask :: Type) :: [PGType] where
-  FieldTypesFrom hask = FieldTypesOf (RecordCodeOf hask (Code hask))
+type family PGFieldsOf (fields :: [(Symbol, Type)]) :: RelationType where
+  PGFieldsOf '[] = '[]
+  PGFieldsOf (field ': fields) = PGFieldOf field ': PGFieldsOf fields
+
+type family PGFieldOf (field :: (Symbol, Type)) :: (Symbol, NullityType) where
+  PGFieldOf (field ::: hask) = field ::: NullityTypeOf hask
+
+type family NullityTypeOf (hask :: Type) :: NullityType where
+  NullityTypeOf (Maybe hask) = 'Null (PG hask)
+  NullityTypeOf hask = 'NotNull (PG hask)
 
 -- | Calculates constructors of a datatype.
 type family ConstructorsOf (datatype :: Type.DatatypeInfo)
@@ -819,41 +779,3 @@ type family ConstructorNamesOf (constructors :: [Type.ConstructorInfo])
     ConstructorNamesOf '[] = '[]
     ConstructorNamesOf (constructor ': constructors) =
       ConstructorNameOf constructor ': ConstructorNamesOf constructors
-
--- | Calculate the fields of a datatype.
-type family FieldsOf (datatype :: Type.DatatypeInfo)
-  :: [Type.FieldInfo] where
-    FieldsOf ('Type.ADT _module _datatype '[ 'Type.Record _name fields]) =
-      fields
-    FieldsOf ('Type.Newtype _module _datatype ('Type.Record _name fields)) =
-      fields
-
--- | Calculate the name of a field.
-type family FieldNameOf (field :: Type.FieldInfo) :: Type.FieldName where
-  FieldNameOf ('Type.FieldInfo name) = name
-
--- | Calculate the names of fields.
-type family FieldNamesOf (fields :: [Type.FieldInfo])
-  :: [Type.FieldName] where
-    FieldNamesOf '[] = '[]
-    FieldNamesOf (field ': fields) = FieldNameOf field ': FieldNamesOf fields
-
--- | >>> :kind! FieldTypeOf (Maybe Int16)
--- FieldTypeOf (Maybe Int16) :: PGType
--- = 'PGint2
-type family FieldTypeOf (maybe :: Type) where
-  FieldTypeOf (Maybe hask) = PG hask
-  FieldTypeOf ty = TypeError
-    ('Text "FieldTypeOf error: non-Maybe type " ':<>: 'ShowType ty)
-
--- | Calculate the types of fields.
-type family FieldTypesOf (fields :: [Type]) where
-  FieldTypesOf '[] = '[]
-  FieldTypesOf (field ': fields) = FieldTypeOf field ': FieldTypesOf fields
-
--- | Inspect the code of an algebraic datatype and ensure it's a product,
--- otherwise generate a type error
-type family RecordCodeOf (hask :: Type) (code ::[[Type]]) :: [Type] where
-  RecordCodeOf _hask '[tys] = tys
-  RecordCodeOf hask _tys = TypeError
-    ('Text "RecordCodeOf error: non-Record type " ':<>: 'ShowType hask)

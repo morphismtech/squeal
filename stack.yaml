@@ -1,3 +1,5 @@
 resolver: lts-11.15
 packages:
 - squeal-postgresql
+extra-deps:
+- records-sop-0.1.0.0

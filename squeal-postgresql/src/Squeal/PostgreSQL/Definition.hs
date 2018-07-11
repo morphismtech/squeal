@@ -904,17 +904,22 @@ createTypeComposite ty fields = UnsafeDefinition $
 -- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 createTypeCompositeFrom
   :: forall hask ty schema.
-  ( ZipAliased (FieldNamesFrom hask) (FieldTypesFrom hask)
-  , SOP.All (PGTyped schema) (FieldTypesFrom hask)
+  ( SOP.All (BaseTyped schema) (PGFieldsFrom hask)
   , KnownSymbol ty
   )
   => Alias ty
   -- ^ name of the user defined composite type
   -> Definition schema (Create ty ( 'Typedef (CompositeFrom hask)) schema)
-createTypeCompositeFrom ty = createTypeComposite ty $ zipAs
-  (SOP.hpure Alias :: NP Alias (FieldNamesFrom hask))
-  (SOP.hcpure (SOP.Proxy :: SOP.Proxy (PGTyped schema)) pgtype
-    :: NP (TypeExpression schema) (FieldTypesFrom hask))
+createTypeCompositeFrom ty = createTypeComposite ty
+  (SOP.hcpure (SOP.Proxy :: SOP.Proxy (BaseTyped schema)) basetype
+    :: NP (Aliased (TypeExpression schema)) (PGFieldsFrom hask))
+    
+
+class BaseTyped (schema :: SchemaType) (ty :: (Symbol,NullityType)) where
+  basetype :: Aliased (TypeExpression schema) ty
+instance (KnownSymbol alias, PGTyped schema ty)
+  => BaseTyped schema (alias ::: nullity ty) where
+    basetype = pgtype @schema @ty `As` Alias @alias
 
 -- | Drop a type.
 --
@@ -938,14 +943,14 @@ newtype ColumnTypeExpression (schema :: SchemaType) (ty :: ColumnType)
 -- | used in `createTable` commands as a column constraint to note that
 -- @NULL@ may be present in a column
 nullable
-  :: TypeExpression schema ty
+  :: (forall nullity. TypeExpression schema (nullity ty))
   -> ColumnTypeExpression schema ('NoDef :=> 'Null ty)
 nullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
 
 -- | used in `createTable` commands as a column constraint to ensure
 -- @NULL@ is not present in a column
 notNullable
-  :: TypeExpression schema ty
+  :: (forall nullity. TypeExpression schema (nullity ty))
   -> ColumnTypeExpression schema (def :=> 'NotNull ty)
 notNullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
 

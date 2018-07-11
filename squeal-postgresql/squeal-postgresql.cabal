@@ -51,6 +51,7 @@ library
     , postgresql-binary >= 0.12.1
     , postgresql-libpq >= 0.9.4.1
     , profunctors >= 5.2.2
+    , records-sop >= 0.1.0.0
     , resource-pool >= 0.2.3.2
     , scientific >= 0.3.5.3
     , text >= 1.2.3.0

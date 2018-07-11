@@ -195,7 +195,7 @@ class KnownNat n => HasParameter
     -- >>> printSQL expr
     -- ($1 :: int4)
     parameter
-      :: TypeExpression schema (PGTypeOf ty)
+      :: TypeExpression schema ty
       -> Expression schema relations grouping params ty
     parameter ty = UnsafeExpression $ parenthesized $
       "$" <> renderNat (Proxy @n) <+> "::"
@@ -211,9 +211,9 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) schema params ty)
 -- >>> printSQL expr
 -- ($1 :: int4)
 param
-  :: forall n schema params relations grouping ty
-   . (PGTyped schema (PGTypeOf ty), HasParameter n schema params ty)
-  => Expression schema relations grouping params ty -- ^ param
+  :: forall n schema params relations grouping nullity ty
+   . (PGTyped schema ty, HasParameter n schema params (nullity ty))
+  => Expression schema relations grouping params (nullity ty) -- ^ param
 param = parameter @n pgtype
 
 instance (HasUnique relation relations columns, Has column columns ty)
@@ -400,16 +400,16 @@ instance (KnownSymbol label, label `In` labels) => IsPGlabel label
 -- >>> printSQL i
 -- ROW(0, 1)
 row
-  :: SListI (Nulls fields)
-  => NP (Aliased (Expression schema relations grouping params)) (Nulls fields)
+  :: SListI fields
+  => NP (Aliased (Expression schema relations grouping params)) fields
   -- ^ zero or more expressions for the row field values
   -> Expression schema relations grouping params (nullity ('PGcomposite fields))
 row exprs = UnsafeExpression $ "ROW" <> parenthesized
   (renderCommaSeparated (\ (expr `As` _) -> renderExpression expr) exprs)
 
 instance Has field fields ty => IsLabel field
-  (   Expression schema relation grouping params (nullity ('PGcomposite fields))
-   -> Expression schema relation grouping params ('Null ty) ) where
+  (   Expression schema relation grouping params ('NotNull ('PGcomposite fields))
+   -> Expression schema relation grouping params ty ) where
     fromLabel expr = UnsafeExpression $
       parenthesized (renderExpression expr) <> "." <>
         fromString (symbolVal (Proxy @field))
@@ -1117,96 +1117,96 @@ type expressions
 -----------------------------------------}
 
 -- | `TypeExpression`s are used in `cast`s and `createTable` commands.
-newtype TypeExpression (schema :: SchemaType) (ty :: PGType)
+newtype TypeExpression (schema :: SchemaType) (ty :: NullityType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 instance (Has alias schema ('Typedef ty))
-  => IsLabel alias (TypeExpression schema ty) where
+  => IsLabel alias (TypeExpression schema (nullity ty)) where
     fromLabel = UnsafeTypeExpression (renderAlias (fromLabel @alias))
 
 -- | logical Boolean (true/false)
-bool :: TypeExpression schema 'PGbool
+bool :: TypeExpression schema (nullity 'PGbool)
 bool = UnsafeTypeExpression "bool"
 -- | signed two-byte integer
-int2, smallint :: TypeExpression schema 'PGint2
+int2, smallint :: TypeExpression schema (nullity 'PGint2)
 int2 = UnsafeTypeExpression "int2"
 smallint = UnsafeTypeExpression "smallint"
 -- | signed four-byte integer
-int4, int, integer :: TypeExpression schema 'PGint4
+int4, int, integer :: TypeExpression schema (nullity 'PGint4)
 int4 = UnsafeTypeExpression "int4"
 int = UnsafeTypeExpression "int"
 integer = UnsafeTypeExpression "integer"
 -- | signed eight-byte integer
-int8, bigint :: TypeExpression schema 'PGint8
+int8, bigint :: TypeExpression schema (nullity 'PGint8)
 int8 = UnsafeTypeExpression "int8"
 bigint = UnsafeTypeExpression "bigint"
 -- | arbitrary precision numeric type
-numeric :: TypeExpression schema 'PGnumeric
+numeric :: TypeExpression schema (nullity 'PGnumeric)
 numeric = UnsafeTypeExpression "numeric"
 -- | single precision floating-point number (4 bytes)
-float4, real :: TypeExpression schema 'PGfloat4
+float4, real :: TypeExpression schema (nullity 'PGfloat4)
 float4 = UnsafeTypeExpression "float4"
 real = UnsafeTypeExpression "real"
 -- | double precision floating-point number (8 bytes)
-float8, doublePrecision :: TypeExpression schema 'PGfloat8
+float8, doublePrecision :: TypeExpression schema (nullity 'PGfloat8)
 float8 = UnsafeTypeExpression "float8"
 doublePrecision = UnsafeTypeExpression "double precision"
 -- | variable-length character string
-text :: TypeExpression schema 'PGtext
+text :: TypeExpression schema (nullity 'PGtext)
 text = UnsafeTypeExpression "text"
 -- | fixed-length character string
 char, character
   :: (KnownNat n, 1 <= n)
   => proxy n
-  -> TypeExpression schema ('PGchar n)
+  -> TypeExpression schema (nullity ('PGchar n))
 char p = UnsafeTypeExpression $ "char(" <> renderNat p <> ")"
 character p = UnsafeTypeExpression $  "character(" <> renderNat p <> ")"
 -- | variable-length character string
 varchar, characterVarying
   :: (KnownNat n, 1 <= n)
   => proxy n
-  -> TypeExpression schema ('PGvarchar n)
+  -> TypeExpression schema (nullity ('PGvarchar n))
 varchar p = UnsafeTypeExpression $ "varchar(" <> renderNat p <> ")"
 characterVarying p = UnsafeTypeExpression $
   "character varying(" <> renderNat p <> ")"
 -- | binary data ("byte array")
-bytea :: TypeExpression schema 'PGbytea
+bytea :: TypeExpression schema (nullity 'PGbytea)
 bytea = UnsafeTypeExpression "bytea"
 -- | date and time (no time zone)
-timestamp :: TypeExpression schema 'PGtimestamp
+timestamp :: TypeExpression schema (nullity 'PGtimestamp)
 timestamp = UnsafeTypeExpression "timestamp"
 -- | date and time, including time zone
-timestampWithTimeZone :: TypeExpression schema 'PGtimestamptz
+timestampWithTimeZone :: TypeExpression schema (nullity 'PGtimestamptz)
 timestampWithTimeZone = UnsafeTypeExpression "timestamp with time zone"
 -- | calendar date (year, month, day)
-date :: TypeExpression schema 'PGdate
+date :: TypeExpression schema (nullity 'PGdate)
 date = UnsafeTypeExpression "date"
 -- | time of day (no time zone)
-time :: TypeExpression schema 'PGtime
+time :: TypeExpression schema (nullity 'PGtime)
 time = UnsafeTypeExpression "time"
 -- | time of day, including time zone
-timeWithTimeZone :: TypeExpression schema 'PGtimetz
+timeWithTimeZone :: TypeExpression schema (nullity 'PGtimetz)
 timeWithTimeZone = UnsafeTypeExpression "time with time zone"
 -- | time span
-interval :: TypeExpression schema 'PGinterval
+interval :: TypeExpression schema (nullity 'PGinterval)
 interval = UnsafeTypeExpression "interval"
 -- | universally unique identifier
-uuid :: TypeExpression schema 'PGuuid
+uuid :: TypeExpression schema (nullity 'PGuuid)
 uuid = UnsafeTypeExpression "uuid"
 -- | IPv4 or IPv6 host address
-inet :: TypeExpression schema 'PGinet
+inet :: TypeExpression schema (nullity 'PGinet)
 inet = UnsafeTypeExpression "inet"
 -- | textual JSON data
-json :: TypeExpression schema 'PGjson
+json :: TypeExpression schema (nullity 'PGjson)
 json = UnsafeTypeExpression "json"
 -- | binary JSON data, decomposed
-jsonb :: TypeExpression schema 'PGjsonb
+jsonb :: TypeExpression schema (nullity 'PGjsonb)
 jsonb = UnsafeTypeExpression "jsonb"
 -- | variable length array
 vararray
   :: TypeExpression schema pg
-  -> TypeExpression schema ('PGvararray (nullity pg))
+  -> TypeExpression schema (nullity ('PGvararray pg))
 vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
 -- | fixed length array
 --
@@ -1215,12 +1215,12 @@ vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
 fixarray
   :: forall n schema nullity pg. KnownNat n
   => TypeExpression schema pg
-  -> TypeExpression schema ('PGfixarray n (nullity pg))
+  -> TypeExpression schema (nullity ('PGfixarray n pg))
 fixarray ty = UnsafeTypeExpression $
   renderTypeExpression ty <> "[" <> renderNat (Proxy @n) <> "]"
 
 -- | `pgtype` is a demoted version of a `PGType`
-class PGTyped schema (ty :: PGType) where pgtype :: TypeExpression schema ty
+class PGTyped schema (ty :: PGType) where pgtype :: TypeExpression schema (nullity ty)
 instance PGTyped schema 'PGbool where pgtype = bool
 instance PGTyped schema 'PGint2 where pgtype = int2
 instance PGTyped schema 'PGint4 where pgtype = int4
