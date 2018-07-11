@@ -9,12 +9,14 @@ Rendering helper functions.
 -}
 
 {-# LANGUAGE
-    FlexibleContexts
+    AllowAmbiguousTypes
+  , FlexibleContexts
   , MagicHash
   , OverloadedStrings
   , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
+  , TypeApplications
 #-}
 
 module Squeal.PostgreSQL.Render
@@ -80,8 +82,8 @@ renderCommaSeparatedMaybe render
   . hmap (K . render)
 
 -- | Render a promoted `Nat`.
-renderNat :: KnownNat n => proxy n -> ByteString
-renderNat (_ :: proxy n) = fromString (show (natVal' (proxy# :: Proxy# n)))
+renderNat :: forall n. KnownNat n => ByteString
+renderNat = fromString (show (natVal (Proxy @n)))
 
 -- | A class for rendering SQL
 class RenderSQL sql where

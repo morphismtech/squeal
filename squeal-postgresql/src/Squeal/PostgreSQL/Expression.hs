@@ -198,7 +198,7 @@ class KnownNat n => HasParameter
       :: TypeExpression schema ty
       -> Expression schema relations grouping params ty
     parameter ty = UnsafeExpression $ parenthesized $
-      "$" <> renderNat (Proxy @n) <+> "::"
+      "$" <> renderNat @n <+> "::"
         <+> renderTypeExpression ty
 instance {-# OVERLAPPING #-} HasParameter 1 schema (ty1:tys) ty1
 instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) schema params ty)
@@ -1157,19 +1157,17 @@ text :: TypeExpression schema (nullity 'PGtext)
 text = UnsafeTypeExpression "text"
 -- | fixed-length character string
 char, character
-  :: (KnownNat n, 1 <= n)
-  => proxy n
-  -> TypeExpression schema (nullity ('PGchar n))
-char p = UnsafeTypeExpression $ "char(" <> renderNat p <> ")"
-character p = UnsafeTypeExpression $  "character(" <> renderNat p <> ")"
+  :: forall n schema nullity. (KnownNat n, 1 <= n)
+  => TypeExpression schema (nullity ('PGchar n))
+char = UnsafeTypeExpression $ "char(" <> renderNat @n <> ")"
+character = UnsafeTypeExpression $  "character(" <> renderNat @n <> ")"
 -- | variable-length character string
 varchar, characterVarying
-  :: (KnownNat n, 1 <= n)
-  => proxy n
-  -> TypeExpression schema (nullity ('PGvarchar n))
-varchar p = UnsafeTypeExpression $ "varchar(" <> renderNat p <> ")"
-characterVarying p = UnsafeTypeExpression $
-  "character varying(" <> renderNat p <> ")"
+  :: forall n schema nullity. (KnownNat n, 1 <= n)
+  => TypeExpression schema (nullity ('PGvarchar n))
+varchar = UnsafeTypeExpression $ "varchar(" <> renderNat @n <> ")"
+characterVarying = UnsafeTypeExpression $
+  "character varying(" <> renderNat @n <> ")"
 -- | binary data ("byte array")
 bytea :: TypeExpression schema (nullity 'PGbytea)
 bytea = UnsafeTypeExpression "bytea"
@@ -1217,7 +1215,7 @@ fixarray
   => TypeExpression schema pg
   -> TypeExpression schema (nullity ('PGfixarray n pg))
 fixarray ty = UnsafeTypeExpression $
-  renderTypeExpression ty <> "[" <> renderNat (Proxy @n) <> "]"
+  renderTypeExpression ty <> "[" <> renderNat @n <> "]"
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped schema (ty :: PGType) where pgtype :: TypeExpression schema (nullity ty)
@@ -1230,9 +1228,9 @@ instance PGTyped schema 'PGfloat4 where pgtype = float4
 instance PGTyped schema 'PGfloat8 where pgtype = float8
 instance PGTyped schema 'PGtext where pgtype = text
 instance (KnownNat n, 1 <= n)
-  => PGTyped schema ('PGchar n) where pgtype = char (Proxy @n)
+  => PGTyped schema ('PGchar n) where pgtype = char @n
 instance (KnownNat n, 1 <= n)
-  => PGTyped schema ('PGvarchar n) where pgtype = varchar (Proxy @n)
+  => PGTyped schema ('PGvarchar n) where pgtype = varchar @n
 instance PGTyped schema 'PGbytea where pgtype = bytea
 instance PGTyped schema 'PGtimestamp where pgtype = timestamp
 instance PGTyped schema 'PGtimestamptz where pgtype = timestampWithTimeZone
