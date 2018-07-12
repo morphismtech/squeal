@@ -735,7 +735,7 @@ type family LabelsFrom (hask :: Type) :: [Type.ConstructorName] where
 -- >>> instance HasDatatypeInfo Row
 -- >>> :kind! CompositeFrom Row
 -- CompositeFrom Row :: PGType
--- = 'PGcomposite '['("a", 'PGint2), '("b", 'PGtimestamp)]
+-- = 'PGcomposite '["a" ::: 'Null 'PGint2, "b" ::: 'Null 'PGtimestamp]
 type family CompositeFrom (hask :: Type) :: PGType where
   CompositeFrom hask = 'PGcomposite (PGFieldsFrom hask)
 

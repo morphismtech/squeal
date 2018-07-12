@@ -473,14 +473,6 @@ instance
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromColumnValue`, just use the provided instances.
 class FromColumnValue (pg :: (Symbol, NullityType)) (y :: (Symbol, Type)) where
-  -- | >>> :set -XTypeOperators -XOverloadedStrings
-  -- >>> newtype Id = Id { getId :: Int16 } deriving Show
-  -- >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
-  -- >>> fromColumnValue @("col" ::: 'NotNull 'PGint2) @Id (K (Just "\NUL\SOH"))
-  -- Id {getId = 1}
-  --
-  -- >>> fromColumnValue @("col" ::: 'Null 'PGint2) @(Maybe Id) (K (Just "\NUL\SOH"))
-  -- Just (Id {getId = 1})
   fromColumnValue
     :: K (Maybe Strict.ByteString) pg
     -> (Either Strict.Text :.: P) y
@@ -512,7 +504,7 @@ class SListI result => FromRow (result :: RelationType) y where
   -- >>> instance HasDatatypeInfo UserRow
   -- >>> type User = '["userId" ::: 'NotNull 'PGint2, "userName" ::: 'Null 'PGtext]
   -- >>> fromRow @User @UserRow (K (Just "\NUL\SOH") :* K (Just "bloodninja") :* Nil)
-  -- UserRow {userId = UserId {getUserId = 1}, userName = Just "bloodninja"}
+  -- Right (UserRow {userId = UserId {getUserId = 1}, userName = Just "bloodninja"})
   fromRow :: NP (K (Maybe Strict.ByteString)) result -> Either Strict.Text y
 instance
   ( SListI result
@@ -532,7 +524,7 @@ instance
 -- K (Just "foo") :* Nil
 --
 -- >>> fromRow @'["fromOnly" ::: 'Null 'PGtext] @(Only (Maybe Text)) (K (Just "bar") :* Nil)
--- Only {fromOnly = Just "bar"}
+-- Right (Only {fromOnly = Just "bar"})
 newtype Only x = Only { fromOnly :: x }
   deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
 instance Generic (Only x)

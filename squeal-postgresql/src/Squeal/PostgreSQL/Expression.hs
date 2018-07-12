@@ -395,7 +395,12 @@ instance (KnownSymbol label, label `In` labels) => IsPGlabel label
 -- | A row constructor is an expression that builds a row value
 -- (also called a composite value) using values for its member fields.
 --
--- >>> type Complex = PGcomposite '["real" ::: 'PGfloat8, "imaginary" ::: 'PGfloat8]
+-- >>> :{
+-- type Complex = 'PGcomposite
+--   '[ "real"      ::: 'NotNull 'PGfloat8
+--    , "imaginary" ::: 'NotNull 'PGfloat8 ]
+-- :}
+--
 -- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression '[] '[] 'Ungrouped '[] ('NotNull Complex)
 -- >>> printSQL i
 -- ROW(0, 1)
@@ -542,9 +547,9 @@ atan2_ y x = UnsafeExpression $
 cast
   :: TypeExpression schema ty1
   -- ^ type to cast as
-  -> Expression schema relations grouping params (nullity ty0)
+  -> Expression schema relations grouping params ty0
   -- ^ value to convert
-  -> Expression schema relations grouping params (nullity ty1)
+  -> Expression schema relations grouping params ty1
 cast ty x = UnsafeExpression $ parenthesized $
   renderExpression x <+> "::" <+> renderTypeExpression ty
 
@@ -1208,7 +1213,7 @@ vararray
 vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
 -- | fixed length array
 --
--- >>> renderTypeExpression (fixarray (Proxy @2) json)
+-- >>> renderTypeExpression (fixarray @2 json)
 -- "json[2]"
 fixarray
   :: forall n schema nullity pg. KnownNat n

@@ -869,7 +869,11 @@ createTypeEnumFrom enum = createTypeEnum enum
 {- | `createTypeComposite` creates a composite type. The composite type is
 specified by a list of attribute names and data types.
 
->>> type PGcomplex = 'PGcomposite '["real" ::: 'PGfloat8, "imaginary" ::: 'PGfloat8]
+>>> :{
+type PGcomplex = 'PGcomposite
+  '[ "real"      ::: 'NotNull 'PGfloat8
+   , "imaginary" ::: 'NotNull 'PGfloat8 ]
+:}
 
 >>> :{
 let
@@ -897,7 +901,7 @@ createTypeComposite ty fields = UnsafeDefinition $
 
 -- | Composite types can also be generated from a Haskell type, for example
 --
--- >>> data Complex = Complex {real :: Maybe Double, imaginary :: Maybe Double} deriving GHC.Generic
+-- >>> data Complex = Complex {real :: Double, imaginary :: Double} deriving GHC.Generic
 -- >>> instance SOP.Generic Complex
 -- >>> instance SOP.HasDatatypeInfo Complex
 -- >>> printSQL $ createTypeCompositeFrom @Complex #complex
@@ -951,7 +955,7 @@ nullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
 -- @NULL@ is not present in a column
 notNullable
   :: TypeExpression schema (nullity ty)
-  -> ColumnTypeExpression schema (def :=> 'NotNull ty)
+  -> ColumnTypeExpression schema ('NoDef :=> 'NotNull ty)
 notNullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
 
 -- | used in `createTable` commands as a column constraint to give a default
