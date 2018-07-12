@@ -349,7 +349,7 @@ instance (SListI tys, IsProductType x xs, AllZip ToNullityParam xs tys)
 -- a PostgreSQL `PGType` into a Haskell `Type`.
 class FromValue (pg :: PGType) (y :: Type) where
   -- | >>> newtype Id = Id { getId :: Int16 } deriving Show
-  -- >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
+  -- >>> instance FromValue 'PGint2 Id where fromValue = Id <$> fromValue @'PGint2
   fromValue :: Decoding.Value y
 instance FromValue 'PGbool Bool where fromValue = Decoding.bool
 instance FromValue 'PGint2 Int16 where fromValue = Decoding.int
@@ -484,7 +484,7 @@ class SListI result => FromRow (result :: RelationType) y where
   -- | >>> :set -XOverloadedStrings
   -- >>> import Data.Text
   -- >>> newtype UserId = UserId { getUserId :: Int16 } deriving Show
-  -- >>> instance FromValue 'PGint2 UserId where fromValue = fmap UserId . fromValue
+  -- >>> instance FromValue 'PGint2 UserId where fromValue = UserId <$> fromValue @'PGint2
   -- >>> data UserRow = UserRow { userId :: UserId, userName :: Maybe Text } deriving (Show, GHC.Generic)
   -- >>> instance Generic UserRow
   -- >>> instance HasDatatypeInfo UserRow
