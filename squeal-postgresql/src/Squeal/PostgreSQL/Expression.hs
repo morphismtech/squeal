@@ -211,9 +211,9 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) schema params ty)
 -- >>> printSQL expr
 -- ($1 :: int4)
 param
-  :: forall n schema params relations grouping nullity ty
-   . (PGTyped schema ty, HasParameter n schema params (nullity ty))
-  => Expression schema relations grouping params (nullity ty) -- ^ param
+  :: forall n schema params relations grouping ty
+   . (PGTyped schema ty, HasParameter n schema params ty)
+  => Expression schema relations grouping params ty -- ^ param
 param = parameter @n pgtype
 
 instance (HasUnique relation relations columns, Has column columns ty)
@@ -1223,32 +1223,33 @@ fixarray ty = UnsafeTypeExpression $
   renderTypeExpression ty <> "[" <> renderNat @n <> "]"
 
 -- | `pgtype` is a demoted version of a `PGType`
-class PGTyped schema (ty :: PGType) where pgtype :: TypeExpression schema (nullity ty)
-instance PGTyped schema 'PGbool where pgtype = bool
-instance PGTyped schema 'PGint2 where pgtype = int2
-instance PGTyped schema 'PGint4 where pgtype = int4
-instance PGTyped schema 'PGint8 where pgtype = int8
-instance PGTyped schema 'PGnumeric where pgtype = numeric
-instance PGTyped schema 'PGfloat4 where pgtype = float4
-instance PGTyped schema 'PGfloat8 where pgtype = float8
-instance PGTyped schema 'PGtext where pgtype = text
+class PGTyped schema (ty :: NullityType) where
+  pgtype :: TypeExpression schema ty
+instance PGTyped schema (nullity 'PGbool) where pgtype = bool
+instance PGTyped schema (nullity 'PGint2) where pgtype = int2
+instance PGTyped schema (nullity 'PGint4) where pgtype = int4
+instance PGTyped schema (nullity 'PGint8) where pgtype = int8
+instance PGTyped schema (nullity 'PGnumeric) where pgtype = numeric
+instance PGTyped schema (nullity 'PGfloat4) where pgtype = float4
+instance PGTyped schema (nullity 'PGfloat8) where pgtype = float8
+instance PGTyped schema (nullity 'PGtext) where pgtype = text
 instance (KnownNat n, 1 <= n)
-  => PGTyped schema ('PGchar n) where pgtype = char @n
+  => PGTyped schema (nullity ('PGchar n)) where pgtype = char @n
 instance (KnownNat n, 1 <= n)
-  => PGTyped schema ('PGvarchar n) where pgtype = varchar @n
-instance PGTyped schema 'PGbytea where pgtype = bytea
-instance PGTyped schema 'PGtimestamp where pgtype = timestamp
-instance PGTyped schema 'PGtimestamptz where pgtype = timestampWithTimeZone
-instance PGTyped schema 'PGdate where pgtype = date
-instance PGTyped schema 'PGtime where pgtype = time
-instance PGTyped schema 'PGtimetz where pgtype = timeWithTimeZone
-instance PGTyped schema 'PGinterval where pgtype = interval
-instance PGTyped schema 'PGuuid where pgtype = uuid
-instance PGTyped schema 'PGjson where pgtype = json
-instance PGTyped schema 'PGjsonb where pgtype = jsonb
+  => PGTyped schema (nullity ('PGvarchar n)) where pgtype = varchar @n
+instance PGTyped schema (nullity 'PGbytea) where pgtype = bytea
+instance PGTyped schema (nullity 'PGtimestamp) where pgtype = timestamp
+instance PGTyped schema (nullity 'PGtimestamptz) where pgtype = timestampWithTimeZone
+instance PGTyped schema (nullity 'PGdate) where pgtype = date
+instance PGTyped schema (nullity 'PGtime) where pgtype = time
+instance PGTyped schema (nullity 'PGtimetz) where pgtype = timeWithTimeZone
+instance PGTyped schema (nullity 'PGinterval) where pgtype = interval
+instance PGTyped schema (nullity 'PGuuid) where pgtype = uuid
+instance PGTyped schema (nullity 'PGjson) where pgtype = json
+instance PGTyped schema (nullity 'PGjsonb) where pgtype = jsonb
 instance PGTyped schema ty
-  => PGTyped schema ('PGvararray (nullity ty)) where
+  => PGTyped schema (nullity ('PGvararray ty)) where
     pgtype = vararray (pgtype @schema @ty)
 instance (KnownNat n, PGTyped schema ty)
-  => PGTyped schema ('PGfixarray n (nullity ty)) where
+  => PGTyped schema (nullity ('PGfixarray n ty)) where
     pgtype = fixarray @n (pgtype @schema @ty)
