@@ -138,6 +138,7 @@ Person {name = Just "Faisal", age = Just 24}
   , FlexibleInstances
   , GADTs
   , LambdaCase
+  , OverloadedStrings
   , MultiParamTypeClasses
   , ScopedTypeVariables
   , TypeApplications
@@ -159,7 +160,6 @@ module Squeal.PostgreSQL.Binary
   , Only (..)
   ) where
 
-import BinaryParser
 import ByteString.StrictBuilder
 import Data.Aeson hiding (Null)
 import Data.Int
@@ -270,6 +270,7 @@ instance
     toParam =
       let
 
+        -- encoders :: NP (Maybe :.: P) fields -> NP (K (Maybe Encoding.Encoding)) xs
         encoders = htrans (Proxy @ToAliasedParam) toAliasedParam
 
         composite
@@ -304,17 +305,17 @@ instance
               hcfoldMap (Proxy @HasAliasedOid) each fields
 
       in
-        composite . encoders . unMaybes . unZ . unSOP . from
+        composite . encoders . toRecord
 
-class HasAliasedOid (field :: (Symbol, PGType)) where aliasedOid :: Word32
-instance HasOid ty => HasAliasedOid (alias ::: ty) where aliasedOid = oid @ty
+class HasAliasedOid (field :: (Symbol, NullityType)) where
+  aliasedOid :: Word32
+instance HasOid ty => HasAliasedOid (alias ::: nullity ty) where
+  aliasedOid = oid @ty
 
-class ToAliasedParam (x :: Type) (field :: (Symbol, PGType)) where
-  toAliasedParam :: Maybe x -> K (Maybe Encoding.Encoding) field
-instance ToParam x ty => ToAliasedParam x (alias ::: ty) where
-  toAliasedParam = \case
-    Nothing -> K Nothing
-    Just x -> K . Just . unK $ toParam @x @ty x
+class ToAliasedParam (x :: (Symbol, Type)) (field :: (Symbol, NullityType)) where
+  toAliasedParam :: P x -> K (Maybe Encoding.Encoding) field
+instance ToColumnParam x ty => ToAliasedParam (alias ::: x) (alias ::: ty) where
+  toAliasedParam (P x) = K . unK $ toColumnParam @x @ty x
 
 -- | A `ToColumnParam` constraint lifts the `ToParam` encoding
 -- of a `Type` to a `NullityType`, encoding `Maybe`s to `Null`s. You should
@@ -328,11 +329,11 @@ class ToColumnParam (x :: Type) (ty :: NullityType) where
   --
   -- >>> toColumnParam @(Maybe Int16) @('Null 'PGint2) Nothing
   -- K Nothing
-  toColumnParam :: x -> K (Maybe Strict.ByteString) ty
+  toColumnParam :: x -> K (Maybe Encoding.Encoding) ty
 instance ToParam x pg => ToColumnParam x ('NotNull pg) where
-  toColumnParam = K . Just . Encoding.encodingBytes . unK . toParam @x @pg
+  toColumnParam = K . Just . unK . toParam @x @pg
 instance ToParam x pg => ToColumnParam (Maybe x) ('Null pg) where
-  toColumnParam = K . fmap (Encoding.encodingBytes . unK . toParam @x @pg)
+  toColumnParam = K . fmap (unK . toParam @x @pg)
 
 -- | A `ToParams` constraint generically sequences the encodings of `Type`s
 -- of the fields of a tuple or record to a row of `ColumnType`s. You should
@@ -348,7 +349,7 @@ class SListI tys => ToParams (x :: Type) (tys :: [NullityType]) where
   -- >>> instance Generic Tuple
   -- >>> toParams @Tuple @Params (Tuple False (Just 0))
   -- K (Just "\NUL") :* K (Just "\NUL\NUL") :* Nil
-  toParams :: x -> NP (K (Maybe Strict.ByteString)) tys
+  toParams :: x -> NP (K (Maybe Encoding.Encoding)) tys
 instance (SListI tys, IsProductType x xs, AllZip ToColumnParam xs tys)
   => ToParams x tys where
       toParams
@@ -433,21 +434,21 @@ instance
         . Strict.unpack
 
 instance
-  ( SListI fields
-  , IsRecord y ys
-  , AllZip FromAliasedValue fields ys
+  ( FromRow fields y
   ) => FromValue ('PGcomposite fields) y where
-    fromValue =
+    fromValue p =
       let
-        decoders
-          :: forall pgs zs proxy
-          . AllZip FromAliasedValue pgs zs
-          => proxy ('PGcomposite pgs)
-          -> NP Decoding.Value zs
-        decoders _ = htrans (Proxy @FromAliasedValue) fromAliasedValue
-          (hpure Proxy :: NP Proxy pgs)
+        composite
+          :: proxy ('PGcomposite pgs)
+          -> Strict.ByteString
+          -> NP (K (Maybe Strict.ByteString)) pgs
+        composite = undefined
 
-        composite fields = do
+        -- composite
+        --   :: SListI zs
+        --   => NP ((->) (Maybe Strict.ByteString) :.: Either Strict.Text :.: P) zs
+        --   -> Decoding.Value (NP P zs)
+        -- composite fields = do
         -- <number of fields: 4 bytes>
         -- [for each field]
         --  <OID of field's type: sizeof(Oid) bytes>
@@ -458,26 +459,28 @@ instance
         --    <value: <length> bytes>
         --  [end if]
         -- [end for]
-          unitOfSize 4
-          let
-            each field = do
-              unitOfSize 4
-              len <- sized 4 Decoding.int
-              if len == -1 then return Nothing else Just <$> sized len field
-          htraverse' each fields
+          -- unitOfSize 4
+          -- let
+          --   each
+          --     :: ((->) (Maybe Strict.ByteString) :.: Either Strict.Text :.: P) z
+          --     -> Decoding.Value (P z)
+          --   each = undefined
+            -- each (Comp field) = _
+            --   unitOfSize 4
+            --   len <- sized 4 Decoding.int
+            --   if len == -1
+            --     then return (P (field Nothing))
+            --     else sized len (fn _)
+          -- htraverse' each fields
 
-      in fmap (to . SOP . Z . maybes) . composite . decoders
-
-class FromAliasedValue (pg :: (Symbol,PGType)) (y :: Type) where
-  fromAliasedValue :: proxy pg -> Decoding.Value y
-instance FromValue pg y => FromAliasedValue (alias ::: pg) y where
-  fromAliasedValue _ = fromValue (Proxy @pg)
+      in
+        Decoding.fn (fromRow @fields @y . composite p)
 
 -- | A `FromColumnValue` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromColumnValue`, just use the provided instances.
-class FromColumnValue (colty :: (Symbol,NullityType)) (y :: Type) where
+class FromColumnValue (pg :: (Symbol, NullityType)) (y :: (Symbol, Type)) where
   -- | >>> :set -XTypeOperators -XOverloadedStrings
   -- >>> newtype Id = Id { getId :: Int16 } deriving Show
   -- >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
@@ -486,33 +489,28 @@ class FromColumnValue (colty :: (Symbol,NullityType)) (y :: Type) where
   --
   -- >>> fromColumnValue @("col" ::: 'Null 'PGint2) @(Maybe Id) (K (Just "\NUL\SOH"))
   -- Just (Id {getId = 1})
-  fromColumnValue :: K (Maybe Strict.ByteString) colty -> y
+  fromColumnValue
+    :: K (Maybe Strict.ByteString) pg
+    -> (Either Strict.Text :.: P) y
 instance FromValue pg y
-  => FromColumnValue (column ::: ('NotNull pg)) y where
-    fromColumnValue = \case
-      K Nothing -> error "fromColumnValue: saw NULL when expecting NOT NULL"
-      K (Just bs) ->
-        let
-          errOrValue =
-            Decoding.valueParser (fromValue @pg @y Proxy) bs
-          err str = error $ "fromColumnValue: " ++ Strict.unpack str
-        in
-          either err id errOrValue
+  => FromColumnValue (column ::: ('NotNull pg)) (column ::: y) where
+    fromColumnValue = Comp . \case
+      K Nothing -> Left "fromColumnValue: saw NULL when expecting NOT NULL"
+      K (Just bytestring) -> P <$>
+        Decoding.valueParser (fromValue @pg @y Proxy) bytestring
 instance FromValue pg y
-  => FromColumnValue (column ::: ('Null pg)) (Maybe y) where
-    fromColumnValue (K nullOrBytes)
-      = either err id
-      . Decoding.valueParser (fromValue @pg @y Proxy)
-      <$> nullOrBytes
-      where
-        err str = error $ "fromColumnValue: " ++ Strict.unpack str
+  => FromColumnValue (column ::: 'Null pg) (column ::: Maybe y) where
+    fromColumnValue = Comp . \case
+      K Nothing -> Right $ P Nothing
+      K (Just bytestring) -> P . Just <$>
+        Decoding.valueParser (fromValue @pg @y Proxy) bytestring
 
 -- | A `FromRow` constraint generically sequences the parsings of the columns
 -- of a `RelationType` into the fields of a record `Type` provided they have
 -- the same field names. You should not define instances of `FromRow`.
 -- Instead define `Generic` and `HasDatatypeInfo` instances which in turn
 -- provide `FromRow` instances.
-class SListI results => FromRow (results :: RelationType) y where
+class SListI result => FromRow (result :: RelationType) y where
   -- | >>> :set -XOverloadedStrings
   -- >>> import Data.Text
   -- >>> newtype UserId = UserId { getUserId :: Int16 } deriving Show
@@ -523,14 +521,16 @@ class SListI results => FromRow (results :: RelationType) y where
   -- >>> type User = '["userId" ::: 'NotNull 'PGint2, "userName" ::: 'Null 'PGtext]
   -- >>> fromRow @User @UserRow (K (Just "\NUL\SOH") :* K (Just "bloodninja") :* Nil)
   -- UserRow {userId = UserId {getUserId = 1}, userName = Just "bloodninja"}
-  fromRow :: NP (K (Maybe Strict.ByteString)) results -> y
+  fromRow :: NP (K (Maybe Strict.ByteString)) result -> Either Strict.Text y
 instance
-  ( SListI results
+  ( SListI result
   , IsRecord y ys
-  , AllZip FromColumnValue results ys
-  ) => FromRow results y where
+  , AllZip FromColumnValue result ys
+  ) => FromRow result y where
     fromRow
-      = to . SOP . Z . htrans (Proxy @FromColumnValue) (I . fromColumnValue)
+      = fmap fromRecord
+      . hsequence'
+      . htrans (Proxy @FromColumnValue) fromColumnValue
 
 -- | `Only` is a 1-tuple type, useful for encoding a single parameter with
 -- `toParams` or decoding a single value with `fromRow`.
