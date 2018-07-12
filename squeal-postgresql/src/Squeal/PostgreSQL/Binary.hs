@@ -440,6 +440,16 @@ instance
   ) => FromValue ('PGcomposite fields) y where
     fromValue p =
       let
+        -- <number of fields: 4 bytes>
+        -- [for each field]
+        --  <OID of field's type: sizeof(Oid) bytes>
+        --  [if value is NULL]
+        --    <-1: 4 bytes>
+        --  [else]
+        --    <length of value: 4 bytes>
+        --    <value: <length> bytes>
+        --  [end if]
+        -- [end for]
         composite
           :: forall proxy pgs. SListI pgs
           => proxy ('PGcomposite pgs)
@@ -455,36 +465,6 @@ instance
                 then return (K Nothing)
                 else K . Just <$> bytesOfSize len
           htraverse' each (hpure Proxy :: NP Proxy pgs)
-
-        -- composite
-        --   :: SListI zs
-        --   => NP ((->) (Maybe Strict.ByteString) :.: Either Strict.Text :.: P) zs
-        --   -> Decoding.Value (NP P zs)
-        -- composite fields = do
-        -- <number of fields: 4 bytes>
-        -- [for each field]
-        --  <OID of field's type: sizeof(Oid) bytes>
-        --  [if value is NULL]
-        --    <-1: 4 bytes>
-        --  [else]
-        --    <length of value: 4 bytes>
-        --    <value: <length> bytes>
-        --  [end if]
-        -- [end for]
-          -- unitOfSize 4
-          -- let
-          --   each
-          --     :: ((->) (Maybe Strict.ByteString) :.: Either Strict.Text :.: P) z
-          --     -> Decoding.Value (P z)
-          --   each = undefined
-            -- each (Comp field) = _
-            --   unitOfSize 4
-            --   len <- sized 4 Decoding.int
-            --   if len == -1
-            --     then return (P (field Nothing))
-            --     else sized len (fn _)
-          -- htraverse' each fields
-
       in
         Decoding.fn (fromRow @fields @y <=< composite p)
 

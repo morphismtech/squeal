@@ -74,8 +74,10 @@ import Data.Foldable
 import Data.Function ((&))
 import Data.Kind
 import Data.Monoid
+import Data.Text (unpack)
 import Data.Traversable
 import Generics.SOP
+import PostgreSQL.Binary.Encoding (encodingBytes)
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
@@ -393,7 +395,8 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
     (UnsafeManipulation q :: Manipulation schema ps ys) (params :: x) =
       PQ $ \ (K conn) -> do
         let
-          toParam' bytes = (LibPQ.invalidOid,bytes,LibPQ.Binary)
+          toParam' encoding =
+            (LibPQ.invalidOid, encodingBytes encoding, LibPQ.Binary)
           params' = fmap (fmap toParam') (hcollapse (toParams @x @ps params))
           q' = q <> ";"
         resultMaybe <- liftBase $ LibPQ.execParams conn q' params' LibPQ.Binary
@@ -416,7 +419,7 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
               "traversePrepared: LibPQ.prepare status " <> show status
         results <- for list $ \ params -> do
           let
-            toParam' bytes = (bytes,LibPQ.Binary)
+            toParam' encoding = (encodingBytes encoding,LibPQ.Binary)
             params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
           resultMaybe <- LibPQ.execPrepared conn temp params' LibPQ.Binary
           case resultMaybe of
@@ -447,7 +450,7 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
               "traversePrepared: LibPQ.prepare status " <> show status
         for_ list $ \ params -> do
           let
-            toParam' bytes = (bytes,LibPQ.Binary)
+            toParam' encoding = (encodingBytes encoding, LibPQ.Binary)
             params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
           resultMaybe <- LibPQ.execPrepared conn temp params' LibPQ.Binary
           case resultMaybe of
@@ -541,7 +544,9 @@ getRow r (K result :: K LibPQ.Result columns) = liftBase $ do
   row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
   case fromList row' of
     Nothing -> error "getRow: found unexpected length"
-    Just row -> return $ fromRow @columns row
+    Just row -> case fromRow @columns row of
+      Left parseError -> error $ "fromRow: " <> unpack parseError
+      Right y -> return y
 
 -- | Intended to be used for unfolding in streaming libraries, `nextRow`
 -- takes a total number of rows (which can be found with `ntuples`)
@@ -559,7 +564,9 @@ nextRow total (K result :: K LibPQ.Result columns) r
     row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
     case fromList row' of
       Nothing -> error "nextRow: found unexpected length"
-      Just row -> return $ Just (r+1, fromRow @columns row)
+      Just row -> case fromRow @columns row of
+        Left parseError -> error $ "nextRow: " <> unpack parseError
+        Right y -> return $ Just (r+1, y)
 
 -- | Get all rows from a `LibPQ.Result`.
 getRows
@@ -573,7 +580,9 @@ getRows (K result :: K LibPQ.Result columns) = liftBase $ do
     row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
     case fromList row' of
       Nothing -> error "getRows: found unexpected length"
-      Just row -> return $ fromRow @columns row
+      Just row -> case fromRow @columns row of
+        Left parseError -> error $ "getRows: " <> unpack parseError
+        Right y -> return y
 
 -- | Get the first row if possible from a `LibPQ.Result`.
 firstRow
@@ -587,7 +596,9 @@ firstRow (K result :: K LibPQ.Result columns) = liftBase $ do
     row' <- traverse (LibPQ.getvalue result 0) [0 .. len - 1]
     case fromList row' of
       Nothing -> error "firstRow: found unexpected length"
-      Just row -> return . Just $ fromRow @columns row
+      Just row -> case fromRow @columns row of
+        Left parseError -> error $ "firstRow: " <> unpack parseError
+        Right y -> return $ Just y
 
 -- | Lifts actions on results from @LibPQ@.
 liftResult

@@ -943,14 +943,14 @@ newtype ColumnTypeExpression (schema :: SchemaType) (ty :: ColumnType)
 -- | used in `createTable` commands as a column constraint to note that
 -- @NULL@ may be present in a column
 nullable
-  :: (forall nullity. TypeExpression schema (nullity ty))
+  :: TypeExpression schema (nullity ty)
   -> ColumnTypeExpression schema ('NoDef :=> 'Null ty)
 nullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
 
 -- | used in `createTable` commands as a column constraint to ensure
 -- @NULL@ is not present in a column
 notNullable
-  :: (forall nullity. TypeExpression schema (nullity ty))
+  :: TypeExpression schema (nullity ty)
   -> ColumnTypeExpression schema (def :=> 'NotNull ty)
 notNullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
 
