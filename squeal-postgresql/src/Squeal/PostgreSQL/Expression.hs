@@ -417,7 +417,7 @@ instance Has field fields ty => IsLabel field
    -> Expression schema relation grouping params ty ) where
     fromLabel expr = UnsafeExpression $
       parenthesized (renderExpression expr) <> "." <>
-        fromString (symbolVal (Proxy @field))
+        renderSymbol @field
 
 instance Semigroup
   (Expression schema relations grouping params (nullity ('PGvararray ty))) where

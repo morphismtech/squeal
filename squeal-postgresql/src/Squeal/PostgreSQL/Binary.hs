@@ -350,61 +350,61 @@ instance (SListI tys, IsProductType x xs, AllZip ToNullityParam xs tys)
 class FromValue (pg :: PGType) (y :: Type) where
   -- | >>> newtype Id = Id { getId :: Int16 } deriving Show
   -- >>> instance FromValue 'PGint2 Id where fromValue = fmap Id . fromValue
-  fromValue :: proxy pg -> Decoding.Value y
-instance FromValue 'PGbool Bool where fromValue _ = Decoding.bool
-instance FromValue 'PGint2 Int16 where fromValue _ = Decoding.int
-instance FromValue 'PGint4 Int32 where fromValue _ = Decoding.int
-instance FromValue 'PGint8 Int64 where fromValue _ = Decoding.int
-instance FromValue 'PGfloat4 Float where fromValue _ = Decoding.float4
-instance FromValue 'PGfloat8 Double where fromValue _ = Decoding.float8
-instance FromValue 'PGnumeric Scientific where fromValue _ = Decoding.numeric
-instance FromValue 'PGuuid UUID where fromValue _ = Decoding.uuid
-instance FromValue 'PGinet (NetAddr IP) where fromValue _ = Decoding.inet
-instance FromValue ('PGchar 1) Char where fromValue _ = Decoding.char
-instance FromValue 'PGtext Strict.Text where fromValue _ = Decoding.text_strict
-instance FromValue 'PGtext Lazy.Text where fromValue _ = Decoding.text_lazy
+  fromValue :: Decoding.Value y
+instance FromValue 'PGbool Bool where fromValue = Decoding.bool
+instance FromValue 'PGint2 Int16 where fromValue = Decoding.int
+instance FromValue 'PGint4 Int32 where fromValue = Decoding.int
+instance FromValue 'PGint8 Int64 where fromValue = Decoding.int
+instance FromValue 'PGfloat4 Float where fromValue = Decoding.float4
+instance FromValue 'PGfloat8 Double where fromValue = Decoding.float8
+instance FromValue 'PGnumeric Scientific where fromValue = Decoding.numeric
+instance FromValue 'PGuuid UUID where fromValue = Decoding.uuid
+instance FromValue 'PGinet (NetAddr IP) where fromValue = Decoding.inet
+instance FromValue ('PGchar 1) Char where fromValue = Decoding.char
+instance FromValue 'PGtext Strict.Text where fromValue = Decoding.text_strict
+instance FromValue 'PGtext Lazy.Text where fromValue = Decoding.text_lazy
 instance FromValue 'PGbytea Strict.ByteString where
-  fromValue _ = Decoding.bytea_strict
+  fromValue = Decoding.bytea_strict
 instance FromValue 'PGbytea Lazy.ByteString where
-  fromValue _ = Decoding.bytea_lazy
-instance FromValue 'PGdate Day where fromValue _ = Decoding.date
-instance FromValue 'PGtime TimeOfDay where fromValue _ = Decoding.time_int
+  fromValue = Decoding.bytea_lazy
+instance FromValue 'PGdate Day where fromValue = Decoding.date
+instance FromValue 'PGtime TimeOfDay where fromValue = Decoding.time_int
 instance FromValue 'PGtimetz (TimeOfDay, TimeZone) where
-  fromValue _ = Decoding.timetz_int
+  fromValue = Decoding.timetz_int
 instance FromValue 'PGtimestamp LocalTime where
-  fromValue _ = Decoding.timestamp_int
+  fromValue = Decoding.timestamp_int
 instance FromValue 'PGtimestamptz UTCTime where
-  fromValue _ = Decoding.timestamptz_int
+  fromValue = Decoding.timestamptz_int
 instance FromValue 'PGinterval DiffTime where
-  fromValue _ = Decoding.interval_int
-instance FromValue 'PGjson Value where fromValue _ = Decoding.json_ast
-instance FromValue 'PGjsonb Value where fromValue _ = Decoding.jsonb_ast
+  fromValue = Decoding.interval_int
+instance FromValue 'PGjson Value where fromValue = Decoding.json_ast
+instance FromValue 'PGjsonb Value where fromValue = Decoding.jsonb_ast
 instance FromValue pg y
   => FromValue ('PGvararray ('Null pg)) (Vector (Maybe y)) where
-    fromValue _ = Decoding.array
+    fromValue = Decoding.array
       (Decoding.dimensionArray Vector.replicateM
-        (Decoding.nullableValueArray (fromValue (Proxy @pg))))
+        (Decoding.nullableValueArray (fromValue @pg)))
 instance FromValue pg y
   => FromValue ('PGvararray ('NotNull pg)) (Vector y) where
-    fromValue _ = Decoding.array
+    fromValue = Decoding.array
       (Decoding.dimensionArray Vector.replicateM
-        (Decoding.valueArray (fromValue (Proxy @pg))))
+        (Decoding.valueArray (fromValue @pg)))
 instance FromValue pg y
   => FromValue ('PGfixarray n ('Null pg)) (Vector (Maybe y)) where
-    fromValue _ = Decoding.array
+    fromValue = Decoding.array
       (Decoding.dimensionArray Vector.replicateM
-        (Decoding.nullableValueArray (fromValue (Proxy @pg))))
+        (Decoding.nullableValueArray (fromValue @pg)))
 instance FromValue pg y
   => FromValue ('PGfixarray n ('NotNull pg)) (Vector y) where
-    fromValue _ = Decoding.array
+    fromValue = Decoding.array
       (Decoding.dimensionArray Vector.replicateM
-        (Decoding.valueArray (fromValue (Proxy @pg))))
+        (Decoding.valueArray (fromValue @pg)))
 instance
   ( IsEnumType y
   , HasDatatypeInfo y
   , LabelsFrom y ~ labels
   ) => FromValue ('PGenum labels) y where
-    fromValue _ =
+    fromValue =
       let
         greadConstructor
           :: All ((~) '[]) xss
@@ -425,7 +425,7 @@ instance
 instance
   ( FromRow fields y
   ) => FromValue ('PGcomposite fields) y where
-    fromValue p =
+    fromValue =
       let
         -- <number of fields: 4 bytes>
         -- [for each field]
@@ -438,11 +438,10 @@ instance
         --  [end if]
         -- [end for]
         composite
-          :: forall proxy pgs. SListI pgs
-          => proxy ('PGcomposite pgs)
-          -> Strict.ByteString
+          :: forall pgs. SListI pgs
+          => Strict.ByteString
           -> Either Strict.Text (NP (K (Maybe Strict.ByteString)) pgs)
-        composite _ = Decoding.valueParser $ do
+        composite = Decoding.valueParser $ do
           unitOfSize 4
           let
             each _ = do
@@ -453,7 +452,7 @@ instance
                 else K . Just <$> bytesOfSize len
           htraverse' each (hpure Proxy :: NP Proxy pgs)
       in
-        Decoding.fn (fromRow @fields @y <=< composite p)
+        Decoding.fn (fromRow @fields @y <=< composite)
 
 -- | A `FromField` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
@@ -468,13 +467,13 @@ instance FromValue pg y
     fromField = Comp . \case
       K Nothing -> Left "fromField: saw NULL when expecting NOT NULL"
       K (Just bytestring) -> P <$>
-        Decoding.valueParser (fromValue @pg @y Proxy) bytestring
+        Decoding.valueParser (fromValue @pg @y) bytestring
 instance FromValue pg y
   => FromField (column ::: 'Null pg) (column ::: Maybe y) where
     fromField = Comp . \case
       K Nothing -> Right $ P Nothing
       K (Just bytestring) -> P . Just <$>
-        Decoding.valueParser (fromValue @pg @y Proxy) bytestring
+        Decoding.valueParser (fromValue @pg @y) bytestring
 
 -- | A `FromRow` constraint generically sequences the parsings of the columns
 -- of a `RelationType` into the fields of a record `Type` provided they have

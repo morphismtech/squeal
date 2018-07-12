@@ -632,7 +632,7 @@ data PGlabel (label :: Symbol) = PGlabel
 -- | Renders a label
 renderLabel :: KnownSymbol label => proxy label -> ByteString
 renderLabel (_ :: proxy label) =
-  "\'" <> fromString (symbolVal (Proxy @label)) <> "\'"
+  "\'" <> renderSymbol @label <> "\'"
 -- | Renders a list of labels
 renderLabels
   :: All KnownSymbol labels => NP PGlabel labels -> [ByteString]

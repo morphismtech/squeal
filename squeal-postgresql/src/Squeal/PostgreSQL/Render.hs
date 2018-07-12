@@ -28,6 +28,7 @@ module Squeal.PostgreSQL.Render
   , renderCommaSeparated
   , renderCommaSeparatedMaybe
   , renderNat
+  , renderSymbol
   , RenderSQL (..)
   , printSQL
   ) where
@@ -83,7 +84,11 @@ renderCommaSeparatedMaybe render
 
 -- | Render a promoted `Nat`.
 renderNat :: forall n. KnownNat n => ByteString
-renderNat = fromString (show (natVal (Proxy @n)))
+renderNat = fromString (show (natVal' (proxy# :: Proxy# n)))
+
+-- | Render a promoted `Symbol`.
+renderSymbol :: forall s. KnownSymbol s => ByteString
+renderSymbol = fromString (symbolVal' (proxy# :: Proxy# s))
 
 -- | A class for rendering SQL
 class RenderSQL sql where
