@@ -150,11 +150,9 @@ Person {name = Just "Faisal", age = Just 24}
 module Squeal.PostgreSQL.Binary
   ( -- * Encoding
     ToParam (..)
-  , ToColumnParam (..)
   , ToParams (..)
     -- * Decoding
   , FromValue (..)
-  , FromColumnValue (..)
   , FromRow (..)
     -- * Only
   , Only (..)
@@ -266,14 +264,14 @@ instance
 instance
   ( SListI fields
   , IsRecord x xs
-  , AllZip ToAliasedParam xs fields
+  , AllZip ToField xs fields
   , All HasAliasedOid fields
   ) => ToParam x ('PGcomposite fields) where
     toParam =
       let
 
         -- encoders :: NP (Maybe :.: P) fields -> NP (K (Maybe Encoding.Encoding)) xs
-        encoders = htrans (Proxy @ToAliasedParam) toAliasedParam
+        encoders = htrans (Proxy @ToField) toField
 
         composite
           :: All HasAliasedOid row
@@ -314,28 +312,17 @@ class HasAliasedOid (field :: (Symbol, NullityType)) where
 instance HasOid ty => HasAliasedOid (alias ::: nullity ty) where
   aliasedOid = oid @ty
 
-class ToAliasedParam (x :: (Symbol, Type)) (field :: (Symbol, NullityType)) where
-  toAliasedParam :: P x -> K (Maybe Encoding.Encoding) field
-instance ToColumnParam x ty => ToAliasedParam (alias ::: x) (alias ::: ty) where
-  toAliasedParam (P x) = K . unK $ toColumnParam @x @ty x
+class ToNullityParam (x :: Type) (ty :: NullityType) where
+  toNullityParam :: x -> K (Maybe Encoding.Encoding) ty
+instance ToParam x pg => ToNullityParam x ('NotNull pg) where
+  toNullityParam = K . Just . unK . toParam @x @pg
+instance ToParam x pg => ToNullityParam (Maybe x) ('Null pg) where
+  toNullityParam = K . fmap (unK . toParam @x @pg)
 
--- | A `ToColumnParam` constraint lifts the `ToParam` encoding
--- of a `Type` to a `NullityType`, encoding `Maybe`s to `Null`s. You should
--- not define instances of `ToColumnParam`, just use the provided instances.
-class ToColumnParam (x :: Type) (ty :: NullityType) where
-  -- | >>> toColumnParam @Int16 @('NotNull 'PGint2) 0
-  -- K (Just "\NUL\NUL")
-  --
-  -- >>> toColumnParam @(Maybe Int16) @('Null 'PGint2) (Just 0)
-  -- K (Just "\NUL\NUL")
-  --
-  -- >>> toColumnParam @(Maybe Int16) @('Null 'PGint2) Nothing
-  -- K Nothing
-  toColumnParam :: x -> K (Maybe Encoding.Encoding) ty
-instance ToParam x pg => ToColumnParam x ('NotNull pg) where
-  toColumnParam = K . Just . unK . toParam @x @pg
-instance ToParam x pg => ToColumnParam (Maybe x) ('Null pg) where
-  toColumnParam = K . fmap (unK . toParam @x @pg)
+class ToField (x :: (Symbol, Type)) (field :: (Symbol, NullityType)) where
+  toField :: P x -> K (Maybe Encoding.Encoding) field
+instance ToNullityParam x ty => ToField (alias ::: x) (alias ::: ty) where
+  toField (P x) = K . unK $ toNullityParam @x @ty x
 
 -- | A `ToParams` constraint generically sequences the encodings of `Type`s
 -- of the fields of a tuple or record to a row of `ColumnType`s. You should
@@ -352,10 +339,10 @@ class SListI tys => ToParams (x :: Type) (tys :: [NullityType]) where
   -- >>> toParams @Tuple @Params (Tuple False (Just 0))
   -- K (Just "\NUL") :* K (Just "\NUL\NUL") :* Nil
   toParams :: x -> NP (K (Maybe Encoding.Encoding)) tys
-instance (SListI tys, IsProductType x xs, AllZip ToColumnParam xs tys)
+instance (SListI tys, IsProductType x xs, AllZip ToNullityParam xs tys)
   => ToParams x tys where
       toParams
-        = htrans (Proxy @ToColumnParam) (toColumnParam . unI)
+        = htrans (Proxy @ToNullityParam) (toNullityParam . unI)
         . unZ . unSOP . from
 
 -- | A `FromValue` constraint gives a parser from the binary format of
@@ -468,23 +455,23 @@ instance
       in
         Decoding.fn (fromRow @fields @y <=< composite p)
 
--- | A `FromColumnValue` constraint lifts the `FromValue` parser
+-- | A `FromField` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
--- `FromColumnValue`, just use the provided instances.
-class FromColumnValue (pg :: (Symbol, NullityType)) (y :: (Symbol, Type)) where
-  fromColumnValue
+-- `FromField`, just use the provided instances.
+class FromField (pg :: (Symbol, NullityType)) (y :: (Symbol, Type)) where
+  fromField
     :: K (Maybe Strict.ByteString) pg
     -> (Either Strict.Text :.: P) y
 instance FromValue pg y
-  => FromColumnValue (column ::: ('NotNull pg)) (column ::: y) where
-    fromColumnValue = Comp . \case
-      K Nothing -> Left "fromColumnValue: saw NULL when expecting NOT NULL"
+  => FromField (column ::: ('NotNull pg)) (column ::: y) where
+    fromField = Comp . \case
+      K Nothing -> Left "fromField: saw NULL when expecting NOT NULL"
       K (Just bytestring) -> P <$>
         Decoding.valueParser (fromValue @pg @y Proxy) bytestring
 instance FromValue pg y
-  => FromColumnValue (column ::: 'Null pg) (column ::: Maybe y) where
-    fromColumnValue = Comp . \case
+  => FromField (column ::: 'Null pg) (column ::: Maybe y) where
+    fromField = Comp . \case
       K Nothing -> Right $ P Nothing
       K (Just bytestring) -> P . Just <$>
         Decoding.valueParser (fromValue @pg @y Proxy) bytestring
@@ -509,12 +496,12 @@ class SListI result => FromRow (result :: RelationType) y where
 instance
   ( SListI result
   , IsRecord y ys
-  , AllZip FromColumnValue result ys
+  , AllZip FromField result ys
   ) => FromRow result y where
     fromRow
       = fmap fromRecord
       . hsequence'
-      . htrans (Proxy @FromColumnValue) fromColumnValue
+      . htrans (Proxy @FromField) fromField
 
 -- | `Only` is a 1-tuple type, useful for encoding a single parameter with
 -- `toParams` or decoding a single value with `fromRow`.
