@@ -88,7 +88,6 @@ module Squeal.PostgreSQL.Schema
   , PGNum
   , PGIntegral
   , PGFloating
-  , PGTypeOf
   , SameTypes
   , SamePGType
   , AllNotNull
@@ -488,10 +487,6 @@ type PGFloating ty = In ty '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 -- have `Squeal.PostgreSQL.Expression.div_` and
 -- `Squeal.PostgreSQL.Expression.mod_` functions.
 type PGIntegral ty = In ty '[ 'PGint2, 'PGint4, 'PGint8]
-
--- | `PGTypeOf` forgets about @NULL@ and any column constraints.
-type family PGTypeOf (ty :: NullityType) :: PGType where
-  PGTypeOf (nullity pg) = pg
 
 -- | `SameTypes` is a constraint that proves two `ColumnsType`s have the same
 -- length and the same `ColumnType`s.
