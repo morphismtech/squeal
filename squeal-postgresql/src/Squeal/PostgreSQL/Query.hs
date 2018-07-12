@@ -743,7 +743,7 @@ jsonbPopulateRecordSetAs tableName expr alias = unsafeAliasedFromClauseExpressio
    (nullRow tableName :* expr :* Nil) `As` alias)
 
 renderTableTypeExpression
-  :: All Top types -- ^ always satisfiable
+  :: All Top types
   => Aliased (NP (Aliased (TypeExpression schema))) (tab ::: types)
   -> ByteString
 renderTableTypeExpression (hc `As` tab) =
