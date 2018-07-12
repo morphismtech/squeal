@@ -103,6 +103,7 @@ module Squeal.PostgreSQL.Schema
   , ColumnsToRelation
   , TableToColumns
   , TableToRelation
+  , RelationToRowType
   , ConstraintInvolves
   , DropIfConstraintsInvolve
     -- ** JSON support
@@ -601,6 +602,11 @@ type family NullifyRelations (tables :: RelationsType) :: RelationsType where
   NullifyRelations '[] = '[]
   NullifyRelations (table ::: columns ': tables) =
     table ::: NullifyRelation columns ': NullifyRelations tables
+
+-- | 'RelationToRowType' drops the nullity constraints of its argument relations.
+type family RelationToRowType (tables :: RelationType) :: [(Symbol, PGType)] where
+  RelationToRowType (nullity x : xs) = x : RelationToRowType xs
+  RelationToRowType '[] = '[]
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.

@@ -53,6 +53,12 @@ module Squeal.PostgreSQL.Query
   , PGjsonb_each
   , jsonEach
   , jsonbEach
+  , jsonEachAsText
+  , jsonbEachAsText
+  , jsonPopulateRecordAs
+  , jsonbPopulateRecordAs
+  , jsonPopulateRecordSetAs
+  , jsonbPopulateRecordSetAs
     -- * From
   , FromClause (..)
   , table
@@ -632,33 +638,103 @@ offset off rels = rels {offsetClause = off : offsetClause rels}
 JSON stuff
 -----------------------------------------}
 
-type PGjson_each j = 
-  '[ j ::: '[ "key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson ] ] 
+type PGjson_each_variant val tab =
+  '[ tab ::: '[ "key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull val ] ]
 
-type PGjsonb_each j = 
-  '[ j ::: '[ "key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjsonb ] ] 
+type PGjson_each tab = PGjson_each_variant 'PGjson tab
+type PGjsonb_each tab = PGjson_each_variant 'PGjsonb tab
+type PGjson_each_text tab = PGjson_each_variant 'PGtext tab
+type PGjsonb_each_text tab = PGjson_each_variant 'PGtext tab
 
--- | Expands the outermost JSON object into a set of key/value pairs. 
---
--- See also 'jsonEachAsComposite'.
+unsafeAliasedFromClauseExpression
+  :: Aliased (Expression schema' relations' grouping' params') ty'
+  -> FromClause schema params relations
+unsafeAliasedFromClauseExpression aliasedExpr = UnsafeFromClause
+  (renderAliasedAs renderExpression aliasedExpr)
+
+-- | Expands the outermost JSON object into a set of key/value pairs.
 jsonEach
-  :: Aliased (Expression schema relations 'Ungrouped params) '(jt, nullity 'PGjson)
-  -> TableExpression schema params (PGjson_each j) 'Ungrouped
-jsonEach (As jexpr jname) = from . UnsafeFromClause 
-  $   renderExpression (jsonEachAsComposite jexpr)
-  <+> "AS" 
-  <+> renderAlias jname
+  :: Aliased (Expression schema relations 'Ungrouped params) '(tab, nullity 'PGjson)
+  -> FromClause schema params (PGjson_each tab)
+jsonEach (As jexpr jname) = unsafeAliasedFromClauseExpression
+  (As (unsafeFunction "json_each" jexpr) jname)
 
--- | Expands the outermost JSON object into a set of key/value pairs. 
---
--- See also 'jsonbEachAsComposite'.
+-- | Expands the outermost binary JSON object into a set of key/value pairs.
 jsonbEach
-  :: Aliased (Expression schema relations 'Ungrouped params) '(jt, nullity 'PGjsonb)
-  -> TableExpression schema params (PGjsonb_each j) 'Ungrouped
-jsonbEach (As jexpr jname) = from . UnsafeFromClause
-  $   renderExpression (jsonbEachAsComposite jexpr)
-  <+> "AS" 
-  <+> renderAlias jname
+  :: Aliased (Expression schema relations 'Ungrouped params) '(tab, nullity 'PGjsonb)
+  -> FromClause schema params (PGjsonb_each tab)
+jsonbEach (As jexpr jname) = unsafeAliasedFromClauseExpression
+  (As (unsafeFunction "jsonb_each" jexpr) jname)
+
+-- | Expands the outermost JSON object into a set of key/value pairs.
+jsonEachAsText
+  :: Aliased (Expression schema relations 'Ungrouped params) '(tab, nullity 'PGjson)
+  -> FromClause schema params (PGjson_each_text tab)
+jsonEachAsText (As jexpr jname) = unsafeAliasedFromClauseExpression
+  (As (unsafeFunction "json_each" jexpr) jname)
+
+-- | Expands the outermost binary JSON object into a set of key/value pairs.
+jsonbEachAsText
+  :: Aliased (Expression schema relations 'Ungrouped params) '(tab, nullity 'PGjsonb)
+  -> FromClause schema params (PGjsonb_each_text tab)
+jsonbEachAsText (As jexpr jname) = unsafeAliasedFromClauseExpression
+  (As (unsafeFunction "jsonb_each" jexpr) jname)
+
+nullRow
+  :: Has tab schema ('Table table)
+  => Alias tab
+  -> Expression schema relations grouping params
+     (nullity ('PGcomposite (RelationToRowType (TableToRelation table))))
+nullRow tab = UnsafeExpression ("null::"<+>renderAlias tab)
+
+-- | Expands the JSON expression to a row whose columns match the record
+-- type defined by the given table.
+jsonPopulateRecordAs
+  :: (KnownSymbol alias, Has tab schema ('Table table))
+  => Alias tab
+  -> Expression schema '[] 'Ungrouped params (nullity 'PGjson)
+  -> Alias alias
+  -> FromClause schema params '[alias ::: TableToRelation table]
+jsonPopulateRecordAs tableName expr alias = unsafeAliasedFromClauseExpression
+  (unsafeVariadicFunction "json_populate_record"
+   (nullRow tableName :* expr :* Nil) `As` alias)
+
+-- | Expands the binary JSON expression to a row whose columns match the record
+-- type defined by the given table.
+jsonbPopulateRecordAs
+  :: (KnownSymbol alias, Has tab schema ('Table table))
+  => Alias tab
+  -> Expression schema '[] 'Ungrouped params (nullity 'PGjsonb)
+  -> Alias alias
+  -> FromClause schema params '[alias ::: TableToRelation table]
+jsonbPopulateRecordAs tableName expr alias = unsafeAliasedFromClauseExpression
+  (unsafeVariadicFunction "jsonb_populate_record"
+   (nullRow tableName :* expr :* Nil) `As` alias)
+
+-- | Expands the outermost array of objects in the given binary JSON expression
+-- to a set of rows whose columns match the record type defined by the given
+-- table.
+jsonbPopulateRecordSetAs
+  :: (KnownSymbol alias, Has tab schema ('Table table))
+  => Alias tab
+  -> Expression schema '[] 'Ungrouped params (nullity 'PGjsonb)
+  -> Alias alias
+  -> FromClause schema params '[alias ::: TableToRelation table]
+jsonbPopulateRecordSetAs tableName expr alias = unsafeAliasedFromClauseExpression
+  (unsafeVariadicFunction "jsonb_populate_record_set"
+   (nullRow tableName :* expr :* Nil) `As` alias)
+
+-- | Expands the outermost array of objects in the given JSON expression to a
+-- set of rows whose columns match the record type defined by the given table.
+jsonPopulateRecordSetAs
+  :: (KnownSymbol alias, Has tab schema ('Table table))
+  => Alias tab
+  -> Expression schema '[] 'Ungrouped params (nullity 'PGjson)
+  -> Alias alias
+  -> FromClause schema params '[alias ::: TableToRelation table]
+jsonPopulateRecordSetAs tableName expr alias = unsafeAliasedFromClauseExpression
+  (unsafeVariadicFunction "json_populate_record_set"
+   (nullRow tableName :* expr :* Nil) `As` alias)
 
 {-----------------------------------------
 FROM clauses

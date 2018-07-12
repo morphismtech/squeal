@@ -120,10 +120,14 @@ module Squeal.PostgreSQL.Expression
   , jsonbZipObject
   , jsonArrayLength
   , jsonbArrayLength
-  , jsonEachAsComposite
-  , jsonbEachAsComposite
+  , jsonExtractPath
+  , jsonbExtractPath
+  , jsonExtractPathAsText
+  , jsonbExtractPathAsText
   , jsonObjectKeys
   , jsonbObjectKeys
+  , jsonTypeof
+  , jsonbTypeof
     -- ** Aggregation
   , unsafeAggregate, unsafeAggregateDistinct
   , sum_, sumDistinct
@@ -181,7 +185,6 @@ import Data.Semigroup
 import Data.Ratio
 import Data.String
 import Generics.SOP hiding (from)
-import GHC.Exts (Constraint)
 import GHC.OverloadedLabels
 import GHC.TypeLits
 import Prelude hiding (id, (.))
@@ -1166,42 +1169,6 @@ jsonbArrayLength
   -> Expression schema relations grouping params (nullity 'PGint4)
 jsonbArrayLength = unsafeFunction "jsonb_array_length"
 
--- | Expands the outermost JSON object into a set of key/value pairs. 
---
--- See also 'Squeal.PostgreSQL.Query.jsonEach'.
-jsonEachAsComposite
-  :: Expression schema relations grouping params (nullity 'PGjson)
-  -> Expression schema relations grouping params
-     (nullity ('PGcomposite '[ "key" ::: 'PGtext, "value" ::: 'PGjson ]))
-jsonEachAsComposite = unsafeFunction "json_each"
-
--- | Expands the outermost JSON object into a set of key/value pairs.
---
--- See also 'Squeal.PostgreSQL.Query.jsonbEach'
-jsonbEachAsComposite
-  :: Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params
-     (nullity ('PGcomposite '[ "key" ::: 'PGtext, "value" ::: 'PGjsonb ]))
-jsonbEachAsComposite = unsafeFunction "jsonb_each"
-
--- | Expands the outermost JSON object into a set of key/value pairs. 
---
--- See also 'Squeal.PostgreSQL.Query.jsonEachText'.
-jsonEachTextAsComposite
-  :: Expression schema relations grouping params (nullity 'PGjson)
-  -> Expression schema relations grouping params
-     (nullity ('PGcomposite '[ "key" ::: 'PGtext, "value" ::: 'PGtext ]))
-jsonEachTextAsComposite = unsafeFunction "json_each_text"
-
--- | Expands the outermost JSON object into a set of key/value pairs.
---
--- See also 'Squeal.PostgreSQL.Query.jsonbEachText'
-jsonbEachTextAsComposite
-  :: Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params
-     (nullity ('PGcomposite '[ "key" ::: 'PGtext, "value" ::: 'PGtext ]))
-jsonbEachTextAsComposite = unsafeFunction "jsonb_each_text"
-
 -- | Returns JSON value pointed to by path_elems (equivalent to #> operator).
 jsonExtractPath
   :: SListI elems 
@@ -1222,22 +1189,22 @@ jsonbExtractPath x xs =
 
 -- | Returns JSON value pointed to by path_elems (equivalent to #> operator),
 -- as text.
-jsonExtractPathText
+jsonExtractPathAsText
   :: SListI elems 
   => Expression schema relations grouping params (nullity 'PGjson)
   -> NP (Expression schema relations grouping params) elems
   -> Expression schema relations grouping params (nullity 'PGjsonb)
-jsonExtractPathText x xs =
+jsonExtractPathAsText x xs =
   unsafeVariadicFunction "json_extract_path_text" (x :* xs)
 
 -- | Returns JSON value pointed to by path_elems (equivalent to #> operator),
 -- as text.
-jsonbExtractPathText
+jsonbExtractPathAsText
   :: SListI elems 
   => Expression schema relations grouping params (nullity 'PGjsonb)
   -> NP (Expression schema relations grouping params) elems
   -> Expression schema relations grouping params (nullity 'PGjsonb)
-jsonbExtractPathText x xs =
+jsonbExtractPathAsText x xs =
   unsafeVariadicFunction "jsonb_extract_path_text" (x :* xs)
 
 -- | Returns set of keys in the outermost JSON object.
@@ -1251,6 +1218,20 @@ jsonbObjectKeys
   :: Expression schema relations grouping params (nullity 'PGjsonb)
   -> Expression schema relations grouping params (nullity 'PGtext)
 jsonbObjectKeys = unsafeFunction "jsonb_object_keys"
+
+-- | Returns the type of the outermost JSON value as a text string. Possible
+-- types are object, array, string, number, boolean, and null.
+jsonTypeof
+  :: Expression schema relations grouping params (nullity 'PGjson)
+  -> Expression schema relations grouping params (nullity 'PGtext)
+jsonTypeof = unsafeFunction "json_typeof"
+
+-- | Returns the type of the outermost binary JSON value as a text string.
+-- Possible types are object, array, string, number, boolean, and null.
+jsonbTypeof
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity 'PGtext)
+jsonbTypeof = unsafeFunction "jsonb_typeof"
 
 {-----------------------------------------
 aggregation
