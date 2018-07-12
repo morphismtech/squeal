@@ -111,8 +111,6 @@ module Squeal.PostgreSQL.Schema
   , ConstructorsOf
   , ConstructorNameOf
   , ConstructorNamesOf
-  , MapMaybes (..)
-  , Nulls
   ) where
 
 import Control.DeepSeq
@@ -583,26 +581,6 @@ type family Alter alias x xs where
 type family Rename alias0 alias1 xs where
   Rename alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
   Rename alias0 alias1 (x ': xs) = x ': Rename alias0 alias1 xs
-
--- | `MapMaybes` is used in the binary instances of composite types.
-class MapMaybes xs where
-  type family Maybes (xs :: [Type]) = (mxs :: [Type]) | mxs -> xs
-  maybes :: NP Maybe xs -> NP I (Maybes xs)
-  unMaybes :: NP I (Maybes xs) -> NP Maybe xs
-instance MapMaybes '[] where
-  type Maybes '[] = '[]
-  maybes Nil = Nil
-  unMaybes Nil = Nil
-instance MapMaybes xs => MapMaybes (x ': xs) where
-  type Maybes (x ': xs) = Maybe x ': Maybes xs
-  maybes (x :* xs) = I x :* maybes xs
-  unMaybes (I mx :* xs) = mx :* unMaybes xs
-
--- | `Nulls` is used to construct a `Squeal.Postgresql.Expression.row`
--- of a composite type.
-type family Nulls tys where
-  Nulls '[] = '[]
-  Nulls (field ::: ty ': tys) = field ::: 'Null ty ': Nulls tys
 
 -- | Check if a `TableConstraint` involves a column
 type family ConstraintInvolves column constraint where
