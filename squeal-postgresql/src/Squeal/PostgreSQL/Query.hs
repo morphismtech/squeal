@@ -9,7 +9,8 @@ Squeal queries.
 -}
 
 {-# LANGUAGE
-    DeriveGeneric
+    ConstraintKinds
+  , DeriveGeneric
   , FlexibleContexts
   , GADTs
   , GeneralizedNewtypeDeriving
@@ -18,6 +19,7 @@ Squeal queries.
   , StandaloneDeriving
   , TypeInType
   , TypeOperators
+  , RankNTypes
 #-}
 
 module Squeal.PostgreSQL.Query
@@ -59,6 +61,10 @@ module Squeal.PostgreSQL.Query
   , jsonbPopulateRecordAs
   , jsonPopulateRecordSetAs
   , jsonbPopulateRecordSetAs
+  , jsonToRecordAs
+  , jsonbToRecordAs
+  , jsonToRecordSetAs
+  , jsonbToRecordSetAs
     -- * From
   , FromClause (..)
   , table
@@ -711,6 +717,18 @@ jsonbPopulateRecordAs tableName expr alias = unsafeAliasedFromClauseExpression
   (unsafeVariadicFunction "jsonb_populate_record"
    (nullRow tableName :* expr :* Nil) `As` alias)
 
+-- | Expands the outermost array of objects in the given JSON expression to a
+-- set of rows whose columns match the record type defined by the given table.
+jsonPopulateRecordSetAs
+  :: (KnownSymbol alias, Has tab schema ('Table table))
+  => Alias tab
+  -> Expression schema '[] 'Ungrouped params (nullity 'PGjson)
+  -> Alias alias
+  -> FromClause schema params '[alias ::: TableToRelation table]
+jsonPopulateRecordSetAs tableName expr alias = unsafeAliasedFromClauseExpression
+  (unsafeVariadicFunction "json_populate_record_set"
+   (nullRow tableName :* expr :* Nil) `As` alias)
+
 -- | Expands the outermost array of objects in the given binary JSON expression
 -- to a set of rows whose columns match the record type defined by the given
 -- table.
@@ -724,17 +742,82 @@ jsonbPopulateRecordSetAs tableName expr alias = unsafeAliasedFromClauseExpressio
   (unsafeVariadicFunction "jsonb_populate_record_set"
    (nullRow tableName :* expr :* Nil) `As` alias)
 
--- | Expands the outermost array of objects in the given JSON expression to a
--- set of rows whose columns match the record type defined by the given table.
-jsonPopulateRecordSetAs
-  :: (KnownSymbol alias, Has tab schema ('Table table))
-  => Alias tab
-  -> Expression schema '[] 'Ungrouped params (nullity 'PGjson)
-  -> Alias alias
-  -> FromClause schema params '[alias ::: TableToRelation table]
-jsonPopulateRecordSetAs tableName expr alias = unsafeAliasedFromClauseExpression
-  (unsafeVariadicFunction "json_populate_record_set"
-   (nullRow tableName :* expr :* Nil) `As` alias)
+renderTableTypeExpression
+  :: All Top types -- ^ always satisfiable
+  => Aliased (NP (Aliased (TypeExpression schema))) (tab ::: types)
+  -> ByteString
+renderTableTypeExpression (hc `As` tab) =
+  (renderAlias tab <>)
+  . parenthesized
+  . commaSeparated
+  . flip appEndo []
+  . hcfoldMap
+    (Proxy :: Proxy Top)
+    (\(ty `As` name) -> Endo
+      ((renderAlias name <+> renderTypeExpression ty):))
+  $ hc
+
+unsafeTableAliasedFromClauseExpression
+  :: All Top types
+  => Expression schema' relations' grouping' params' ty'
+  -> Aliased (NP (Aliased (TypeExpression schema))) (tab ::: types)
+  -> FromClause schema params '[alias ::: types]
+unsafeTableAliasedFromClauseExpression expr types = UnsafeFromClause
+  (renderExpression expr
+   <+> "AS"
+   <+> renderTableTypeExpression types)
+
+-- | Builds an arbitrary record from a JSON object. As with all functions
+-- returning record, the caller must explicitly define the structure of the
+-- record with an AS clause.
+jsonToRecordAs
+  :: All Top types
+  => Expression schema '[] 'Ungrouped params (nullity 'PGjson)
+  -> Aliased (NP (Aliased (TypeExpression schema))) (tab ::: types)
+  -> FromClause schema params '[tab ::: types]
+jsonToRecordAs expr types =
+  unsafeTableAliasedFromClauseExpression
+  (unsafeFunction "json_to_record" expr)
+  types
+
+-- | Builds an arbitrary record from a binary JSON object. As with all functions
+-- returning record, the caller must explicitly define the structure of the
+-- record with an AS clause.
+jsonbToRecordAs
+  :: All Top types
+  => Expression schema '[] 'Ungrouped params (nullity 'PGjsonb)
+  -> Aliased (NP (Aliased (TypeExpression schema))) (tab ::: types)
+  -> FromClause schema params '[tab ::: types]
+jsonbToRecordAs expr types =
+  unsafeTableAliasedFromClauseExpression
+  (unsafeFunction "jsonb_to_record" expr)
+  types
+
+-- | Builds an arbitrary set of records from a JSON array of objects (see note
+-- below). As with all functions returning record, the caller must explicitly
+-- define the structure of the record with an AS clause.
+jsonToRecordSetAs
+  :: All Top types
+  => Expression schema '[] 'Ungrouped params (nullity 'PGjson)
+  -> Aliased (NP (Aliased (TypeExpression schema))) (tab ::: types)
+  -> FromClause schema params '[tab ::: types]
+jsonToRecordSetAs expr types =
+  unsafeTableAliasedFromClauseExpression
+  (unsafeFunction "json_to_recordset" expr)
+  types
+
+-- | Builds an arbitrary set of records from a binary JSON array of objects (see
+-- note below). As with all functions returning record, the caller must
+-- explicitly define the structure of the record with an AS clause.
+jsonbToRecordSetAs
+  :: All Top types
+  => Expression schema '[] 'Ungrouped params (nullity 'PGjsonb)
+  -> Aliased (NP (Aliased (TypeExpression schema))) (tab ::: types)
+  -> FromClause schema params '[tab ::: types]
+jsonbToRecordSetAs expr types =
+  unsafeTableAliasedFromClauseExpression
+  (unsafeFunction "jsonb_to_recordset" expr)
+  types
 
 {-----------------------------------------
 FROM clauses
