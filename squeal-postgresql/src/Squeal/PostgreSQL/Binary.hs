@@ -160,7 +160,9 @@ module Squeal.PostgreSQL.Binary
   , Only (..)
   ) where
 
+import BinaryParser
 import ByteString.StrictBuilder
+import Control.Monad
 import Data.Aeson hiding (Null)
 import Data.Int
 import Data.Kind
@@ -178,7 +180,7 @@ import Network.IP.Addr
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.ByteString as Strict hiding (pack, unpack)
 import qualified Data.Text.Lazy as Lazy
-import qualified Data.Text as Strict
+import qualified Data.Text as Strict hiding (empty)
 import qualified Data.Vector as Vector
 import qualified GHC.Generics as GHC
 import qualified PostgreSQL.Binary.Decoding as Decoding
@@ -439,10 +441,20 @@ instance
     fromValue p =
       let
         composite
-          :: proxy ('PGcomposite pgs)
+          :: forall proxy pgs. SListI pgs
+          => proxy ('PGcomposite pgs)
           -> Strict.ByteString
-          -> NP (K (Maybe Strict.ByteString)) pgs
-        composite = undefined
+          -> Either Strict.Text (NP (K (Maybe Strict.ByteString)) pgs)
+        composite _ = Decoding.valueParser $ do
+          unitOfSize 4
+          let
+            each _ = do
+              unitOfSize 4
+              len <- sized 4 Decoding.int
+              if len == -1
+                then return (K Nothing)
+                else K . Just <$> bytesOfSize len
+          htraverse' each (hpure Proxy :: NP Proxy pgs)
 
         -- composite
         --   :: SListI zs
@@ -474,7 +486,7 @@ instance
           -- htraverse' each fields
 
       in
-        Decoding.fn (fromRow @fields @y . composite p)
+        Decoding.fn (fromRow @fields @y <=< composite p)
 
 -- | A `FromColumnValue` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
