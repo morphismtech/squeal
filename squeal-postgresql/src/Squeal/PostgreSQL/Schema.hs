@@ -68,6 +68,7 @@ module Squeal.PostgreSQL.Schema
   , HasAll
   , IsLabel (..)
   , IsQualified (..)
+  , renderAliasString
     -- * Enumerated Labels
   , IsPGlabel (..)
   , PGlabel (..)
@@ -92,7 +93,6 @@ module Squeal.PostgreSQL.Schema
   , PGarrayOf
   , PGarray
   , PGtextArray
-  , PGobjectpairs
   , SameTypes
   , SamePGType
   , AllNotNull
@@ -104,6 +104,7 @@ module Squeal.PostgreSQL.Schema
   , TableToColumns
   , TableToRelation
   , RelationToRowType
+  , RelationToNullityTypes
   , ConstraintInvolves
   , DropIfConstraintsInvolve
     -- ** JSON support
@@ -378,6 +379,9 @@ instance KnownSymbol alias => RenderSQL (Alias alias) where renderSQL = renderAl
 renderAlias :: KnownSymbol alias => Alias alias -> ByteString
 renderAlias = doubleQuoted . fromString . symbolVal
 
+renderAliasString :: KnownSymbol alias => Alias alias -> ByteString
+renderAliasString = singleQuotedText . fromString . symbolVal
+
 -- | >>> import Generics.SOP (NP(..))
 -- >>> renderAliases (#jimbob :* #kandi :* Nil)
 -- ["\"jimbob\"","\"kandi\""]
@@ -545,15 +549,6 @@ type family PGarrayOf name arr ty :: Constraint where
 -- | Ensure a type is a valid array type whose elements are text.
 type PGtextArray name arr = PGarrayOf name arr 'PGtext
 
--- | Ensure a list of arguments is an alternating list of text and value pairs.
-type family PGobjectpairs name x :: Constraint where
-  PGobjectpairs name ('NotNull 'PGtext : arg : xs) = PGobjectpairs name xs
-  PGobjectpairs name '[] = ()
-  PGobjectpairs name (x:xs) = TypeError
-    ( 'Text name :<>: 'Text ": Incorrect argument list:"
-     :$$: 'Text "Expected alternating list of keys and values."
-     :$$: 'Text "But got " :<>: 'ShowType (x:xs))
-
 -- | `PGTypeOf` forgets about @NULL@ and any column constraints.
 type family PGTypeOf (ty :: NullityType) :: PGType where
   PGTypeOf (nullity pg) = pg
@@ -607,6 +602,10 @@ type family NullifyRelations (tables :: RelationsType) :: RelationsType where
 type family RelationToRowType (tables :: RelationType) :: [(Symbol, PGType)] where
   RelationToRowType (nullity x : xs) = x : RelationToRowType xs
   RelationToRowType '[] = '[]
+
+type family RelationToNullityTypes (rel :: RelationType) :: [NullityType] where
+  RelationToNullityTypes ('(k, x) : xs) = x : RelationToNullityTypes xs
+  RelationToNullityTypes '[]            = '[]
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.

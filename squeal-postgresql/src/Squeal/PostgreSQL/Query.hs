@@ -746,8 +746,8 @@ renderTableTypeExpression
   :: All Top types
   => Aliased (NP (Aliased (TypeExpression schema))) (tab ::: types)
   -> ByteString
-renderTableTypeExpression (hc `As` tab) =
-  (renderAlias tab <>)
+renderTableTypeExpression (hc `As` tab)
+  = (renderAlias tab <>)
   . parenthesized
   . commaSeparated
   . flip appEndo []

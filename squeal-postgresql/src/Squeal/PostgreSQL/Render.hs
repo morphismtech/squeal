@@ -23,6 +23,8 @@ module Squeal.PostgreSQL.Render
   , (<+>)
   , commaSeparated
   , doubleQuoted
+  , singleQuotedText
+  , singleQuotedUtf8
   , renderCommaSeparated
   , renderCommaSeparatedMaybe
   , renderNat
@@ -34,10 +36,12 @@ import Control.Monad.Base
 import Data.ByteString (ByteString)
 import Data.Maybe
 import Data.Monoid ((<>))
+import Data.Text (Text)
 import Generics.SOP
 import GHC.Exts
 import GHC.TypeLits
-
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
 
@@ -56,6 +60,12 @@ commaSeparated = ByteString.intercalate ", "
 -- | Add double quotes around a `ByteString`.
 doubleQuoted :: ByteString -> ByteString
 doubleQuoted str = "\"" <> str <> "\""
+
+singleQuotedText :: Text -> ByteString
+singleQuotedText str = "'" <> T.encodeUtf8 (T.replace "'" "''" str) <> "'"
+
+singleQuotedUtf8 :: ByteString -> ByteString
+singleQuotedUtf8 = singleQuotedText . T.decodeUtf8
 
 -- | Comma separate the renderings of a heterogeneous list.
 renderCommaSeparated
