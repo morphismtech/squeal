@@ -44,18 +44,18 @@ type Schema =
 setup :: Definition '[] Schema
 setup = 
   createTable #users
-    ( serial `As` #id :*
-      (text & notNullable) `As` #name :*
-      (vararray int2 & notNullable) `As` #vec :* Nil )
-    ( primaryKey #id `As` #pk_users :* Nil )
+    ( serial `as` #id :*
+      (text & notNullable) `as` #name :*
+      (vararray int2 & notNullable) `as` #vec )
+    ( primaryKey #id `as` #pk_users )
   >>>
   createTable #emails
-    ( serial `As` #id :*
-      (int & notNullable) `As` #user_id :*
-      (text & nullable) `As` #email :* Nil )
-    ( primaryKey #id `As` #pk_emails :*
+    ( serial `as` #id :*
+      (int & notNullable) `as` #user_id :*
+      (text & nullable) `as` #email )
+    ( primaryKey #id `as` #pk_emails :*
       foreignKey #user_id #users #id
-        OnDeleteCascade OnUpdateCascade `As` #fk_user_id :* Nil )
+        OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
 
 teardown :: Definition Schema '[]
 teardown = dropTable #emails >>> dropTable #users
@@ -63,14 +63,14 @@ teardown = dropTable #emails >>> dropTable #users
 insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'NotNull ('PGvararray 'PGint2)]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
 insertUser = insertRows #users
-  (Default `As` #id :* Set (param @1) `As` #name :* Set (param @2) `As` #vec :* Nil) []
-  OnConflictDoNothing (Returning (#id `As` #fromOnly :* Nil))
+  (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec) []
+  OnConflictDoNothing (Returning (#id `as` #fromOnly))
 
 insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
 insertEmail = insertRows #emails
-  ( Default `As` #id :*
-    Set (param @1) `As` #user_id :*
-    Set (param @2) `As` #email :* Nil ) []
+  ( Default `as` #id :*
+    Set (param @1) `as` #user_id :*
+    Set (param @2) `as` #email ) []
   OnConflictDoNothing (Returning Nil)
 
 getUsers :: Query Schema '[]
@@ -78,9 +78,9 @@ getUsers :: Query Schema '[]
    , "userEmail" ::: 'Null 'PGtext
    , "userVec" ::: 'NotNull ('PGvararray 'PGint2)]
 getUsers = select
-  (#u ! #name `As` #userName :* #e ! #email `As` #userEmail :* #u ! #vec `As` #userVec :* Nil)
-  ( from (table (#users `As` #u)
-    & innerJoin (table (#emails `As` #e))
+  (#u ! #name `as` #userName :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)
+  ( from (table (#users `as` #u)
+    & innerJoin (table (#emails `as` #e))
       (#u ! #id .== #e ! #user_id)) )
 
 data User = User { userName :: Text, userEmail :: Maybe Text, userVec :: Vector (Maybe Int16) }

@@ -12,15 +12,19 @@ Squeal queries.
     ConstraintKinds
   , DeriveGeneric
   , FlexibleContexts
+  , FlexibleInstances
   , GADTs
   , GeneralizedNewtypeDeriving
   , LambdaCase
+  , MultiParamTypeClasses
   , OverloadedStrings
   , StandaloneDeriving
+  , TypeFamilies
   , TypeInType
   , TypeOperators
   , RankNTypes
-#-}
+  , UndecidableInstances
+  #-}
 
 module Squeal.PostgreSQL.Query
   ( -- * Queries
@@ -45,7 +49,7 @@ module Squeal.PostgreSQL.Query
   , renderTableExpression
   , from
   , where_
-  , group
+  , groupBy
   , having
   , orderBy
   , limit
@@ -76,7 +80,7 @@ module Squeal.PostgreSQL.Query
   , rightOuterJoin
   , fullOuterJoin
     -- * Grouping
-  , By (By, By2)
+  , By (By1, By2)
   , renderBy
   , GroupByClause (NoGroups, Group)
   , renderGroupByClause
@@ -133,7 +137,7 @@ let
      , "col1" ::: 'NotNull 'PGint4 ]
   query =
     select
-      ((#col1 + #col2) `As` #sum :* #col1 :* Nil)
+      ((#col1 + #col2) `as` #sum :* #col1)
       ( from (table #tab)
         & where_ (#col1 .> #col2)
         & where_ (#col2 .> 0) )
@@ -151,7 +155,7 @@ let
     '["col" ::: 'Null 'PGint4]
   query =
     selectStar
-      (from (subquery (selectStar (from (table #tab)) `As` #sub)))
+      (from (subquery (selectStar (from (table #tab)) `as` #sub)))
 in printSQL query
 :}
 SELECT * FROM (SELECT * FROM "tab" AS "tab") AS "sub"
@@ -196,9 +200,9 @@ let
     '[ "sum" ::: 'NotNull 'PGint4
      , "col1" ::: 'NotNull 'PGint4 ]
   query =
-    select (sum_ #col2 `As` #sum :* #col1 :* Nil)
-    ( from (table (#tab `As` #table1))
-      & group (By #col1 :* Nil)
+    select (sum_ #col2 `as` #sum :* #col1)
+    ( from (table (#tab `as` #table1))
+      & groupBy #col1
       & having (#col1 + sum_ #col2 .> 1) )
 in printSQL query
 :}
@@ -250,13 +254,13 @@ let
      , "shipper_name" ::: 'NotNull 'PGtext
      ]
   query = select
-    ( #o ! #price `As` #order_price :*
-      #c ! #name `As` #customer_name :*
-      #s ! #name `As` #shipper_name :* Nil )
-    ( from (table (#orders `As` #o)
-      & innerJoin (table (#customers `As` #c))
+    ( #o ! #price `as` #order_price :*
+      #c ! #name `as` #customer_name :*
+      #s ! #name `as` #shipper_name )
+    ( from (table (#orders `as` #o)
+      & innerJoin (table (#customers `as` #c))
         (#o ! #customer_id .== #c ! #id)
-      & innerJoin (table (#shippers `As` #s))
+      & innerJoin (table (#shippers `as` #s))
         (#o ! #shipper_id .== #s ! #id)) )
 in printSQL query
 :}
@@ -271,7 +275,7 @@ let
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectDotStar #t1
-    (from (table (#tab `As` #t1) & crossJoin (table (#tab `As` #t2))))
+    (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
 in printSQL query
 :}
 SELECT "t1".* FROM "tab" AS "t1" CROSS JOIN "tab" AS "t2"
@@ -451,7 +455,7 @@ selectDistinctDotStar rel relations = UnsafeQuery $
 -- but it can be used on its own.
 --
 -- >>> type Row = '["a" ::: 'NotNull 'PGint4, "b" ::: 'NotNull 'PGtext]
--- >>> let query = values (1 `As` #a :* "one" `As` #b :* Nil) [] :: Query '[] '[] Row
+-- >>> let query = values (1 `as` #a :* "one" `as` #b) [] :: Query '[] '[] Row
 -- >>> printSQL query
 -- SELECT * FROM (VALUES (1, E'one')) AS t ("a", "b")
 values
@@ -589,15 +593,15 @@ where_
   -> TableExpression schema params relations grouping
 where_ wh rels = rels {whereClause = wh : whereClause rels}
 
--- | A `group` is a transformation of `TableExpression`s which switches
+-- | A `groupBy` is a transformation of `TableExpression`s which switches
 -- its `Grouping` from `Ungrouped` to `Grouped`. Use @group Nil@ to perform
 -- a "grand total" aggregation query.
-group
+groupBy
   :: SListI bys
   => NP (By relations) bys -- ^ grouped columns
   -> TableExpression schema params relations 'Ungrouped
   -> TableExpression schema params relations ('Grouped bys)
-group bys rels = TableExpression
+groupBy bys rels = TableExpression
   { fromClause = fromClause rels
   , whereClause = whereClause rels
   , groupByClause = Group bys
@@ -950,23 +954,34 @@ Grouping
 data By
     (relations :: RelationsType)
     (by :: (Symbol,Symbol)) where
-    By
+    By1
       :: (HasUnique relation relations columns, Has column columns ty)
       => Alias column
       -> By relations '(relation, column)
     By2
       :: (Has relation relations columns, Has column columns ty)
-      => (Alias relation, Alias column)
+      => Alias relation
+      -> Alias column
       -> By relations '(relation, column)
 deriving instance Show (By relations by)
 deriving instance Eq (By relations by)
 deriving instance Ord (By relations by)
 
+instance (HasUnique rel rels cols, Has col cols ty, by ~ '(rel, col))
+  => IsLabel col (By rels by) where fromLabel = By1 fromLabel
+instance (HasUnique rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
+  => IsLabel col (NP (By rels) bys) where fromLabel = By1 fromLabel :* Nil
+instance (Has rel rels cols, Has col cols ty, by ~ '(rel, col))
+  => IsQualified rel col (By rels by) where (!) = By2
+instance (Has rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
+  => IsQualified rel col (NP (By rels) bys) where
+    rel ! col = By2 rel col :* Nil
+
 -- | Renders a `By`.
 renderBy :: By relations by -> ByteString
 renderBy = \case
-  By column -> renderAlias column
-  By2 (rel, column) -> renderAlias rel <> "." <> renderAlias column
+  By1 column -> renderAlias column
+  By2 rel column -> renderAlias rel <> "." <> renderAlias column
 
 -- | A `GroupByClause` indicates the `Grouping` of a `TableExpression`.
 -- A `NoGroups` indicates `Ungrouped` while a `Group` indicates `Grouped`.

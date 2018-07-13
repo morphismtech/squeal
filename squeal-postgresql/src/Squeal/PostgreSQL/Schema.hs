@@ -60,6 +60,7 @@ module Squeal.PostgreSQL.Schema
   , renderAlias
   , renderAliases
   , Aliased (As)
+  , Aliasable (as)
   , renderAliasedAs
   , AliasesOf
   , ZipAliased (..)
@@ -383,7 +384,7 @@ renderAliasString :: KnownSymbol alias => Alias alias -> ByteString
 renderAliasString = singleQuotedText . fromString . symbolVal
 
 -- | >>> import Generics.SOP (NP(..))
--- >>> renderAliases (#jimbob :* #kandi :* Nil)
+-- >>> renderAliases (#jimbob :* #kandi)
 -- ["\"jimbob\"","\"kandi\""]
 renderAliases
   :: All KnownSymbol aliases => NP Alias aliases -> [ByteString]
@@ -410,6 +411,23 @@ deriving instance Ord (expression ty)
 instance (alias0 ~ alias1, alias0 ~ alias2, KnownSymbol alias2)
   => IsLabel alias0 (Aliased Alias (alias1 ::: alias2)) where
     fromLabel = fromLabel @alias2 `As` fromLabel @alias1
+
+-- | The `Aliasable` class provides a way to scrap your `Nil`s
+-- in an `NP` list of `Aliased` expressions.
+class KnownSymbol alias => Aliasable alias expression aliased
+  | aliased -> expression
+  , aliased -> alias
+  where as :: expression -> Alias alias -> aliased
+instance (alias ~ alias1, KnownSymbol alias) => Aliasable alias
+  (expression ty)
+  (Aliased expression (alias1 ::: ty))
+    where
+      as = As
+instance (KnownSymbol alias, tys ~ '[alias ::: ty]) => Aliasable alias
+  (expression ty)
+  (NP (Aliased expression) tys)
+    where
+      expression `as` alias = expression `As` alias :* Nil
 
 -- | >>> let renderMaybe = fromString . maybe "Nothing" (const "Just")
 -- >>> renderAliasedAs renderMaybe (Just (3::Int) `As` #an_int)
@@ -719,8 +737,10 @@ type family With
 -- `label`s are used for enum terms. A `label` is called with
 -- type application like `label @"beef"`.
 class IsPGlabel (label :: Symbol) expr where label :: expr
-instance label ~ label'
-  => IsPGlabel label (PGlabel label') where label = PGlabel
+instance label ~ label1
+  => IsPGlabel label (PGlabel label1) where label = PGlabel
+instance labels ~ '[label]
+  => IsPGlabel label (NP PGlabel labels) where label = PGlabel :* Nil
 -- | A `PGlabel` unit type with an `IsPGlabel` instance
 data PGlabel (label :: Symbol) = PGlabel
 -- | Renders a label
