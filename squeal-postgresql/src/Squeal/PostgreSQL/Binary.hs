@@ -436,22 +436,16 @@ instance
         --    <value: <length> bytes>
         --  [end if]
         -- [end for]
-        composite
-          :: forall pgs. SListI pgs
-          => Strict.ByteString
-          -> Either Strict.Text (NP (K (Maybe Strict.ByteString)) pgs)
         composite = Decoding.valueParser $ do
           unitOfSize 4
-          let
-            each _ = do
-              unitOfSize 4
-              len <- sized 4 Decoding.int
-              if len == -1
-                then return (K Nothing)
-                else K . Just <$> bytesOfSize len
-          htraverse' each (hpure Proxy :: NP Proxy pgs)
+          hsequence' $ hpure $ Comp $ do
+            unitOfSize 4
+            len <- sized 4 Decoding.int
+            if len == -1
+              then return (K Nothing)
+              else K . Just <$> bytesOfSize len
       in
-        Decoding.fn (fromRow @fields @y <=< composite)
+        Decoding.fn (fromRow @fields <=< composite)
 
 -- | A `FromField` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
@@ -466,13 +460,13 @@ instance FromValue pg y
     fromField = Comp . \case
       K Nothing -> Left "fromField: saw NULL when expecting NOT NULL"
       K (Just bytestring) -> P <$>
-        Decoding.valueParser (fromValue @pg @y) bytestring
+        Decoding.valueParser (fromValue @pg) bytestring
 instance FromValue pg y
   => FromField (column ::: 'Null pg) (column ::: Maybe y) where
     fromField = Comp . \case
       K Nothing -> Right $ P Nothing
       K (Just bytestring) -> P . Just <$>
-        Decoding.valueParser (fromValue @pg @y) bytestring
+        Decoding.valueParser (fromValue @pg) bytestring
 
 -- | A `FromRow` constraint generically sequences the parsings of the columns
 -- of a `RelationType` into the fields of a record `Type` provided they have
