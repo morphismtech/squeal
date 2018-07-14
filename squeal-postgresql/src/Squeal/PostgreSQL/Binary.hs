@@ -243,6 +243,28 @@ instance (HasOid pg, ToParam x pg)
   => ToParam (Vector x) ('PGvararray ('NotNull pg)) where
     toParam = K . Encoding.array_vector
       (oid @pg) (unK . toParam @x @pg)
+toVector :: (All ((~) x) xs) => NP I xs -> Vector x
+toVector = \case
+  Nil -> Vector.empty
+  I x :* xs -> Vector.singleton x <> toVector xs
+instance
+  ( HasOid pg
+  , ToParam x pg
+  , IsProductType hask xs
+  , All ((~) x) xs
+  , len ~ Length xs
+  ) => ToParam hask ('PGfixarray len ('NotNull pg)) where
+    toParam = K . Encoding.array_vector
+      (oid @pg) (unK . toParam @x @pg) . toVector . unZ . unSOP . from
+instance
+  ( HasOid pg
+  , ToParam x pg
+  , IsProductType hask xs
+  , All ((~) (Maybe x)) xs
+  , len ~ Length xs
+  ) => ToParam hask ('PGfixarray len ('Null pg)) where
+    toParam = K . Encoding.nullableArray_vector
+      (oid @pg) (unK . toParam @x @pg) . toVector . unZ . unSOP . from
 instance
   ( IsEnumType x
   , HasDatatypeInfo x
@@ -388,16 +410,39 @@ instance FromValue pg y
     fromValue = Decoding.array
       (Decoding.dimensionArray Vector.replicateM
         (Decoding.valueArray (fromValue @pg)))
-instance FromValue pg y
-  => FromValue ('PGfixarray n ('Null pg)) (Vector (Maybe y)) where
-    fromValue = Decoding.array
-      (Decoding.dimensionArray Vector.replicateM
-        (Decoding.nullableValueArray (fromValue @pg)))
-instance FromValue pg y
-  => FromValue ('PGfixarray n ('NotNull pg)) (Vector y) where
-    fromValue = Decoding.array
-      (Decoding.dimensionArray Vector.replicateM
-        (Decoding.valueArray (fromValue @pg)))
+fromVector
+  :: forall x xs. (All ((~) x) xs, SListI xs)
+  => Vector x
+  -> Decoding.Value (NP I xs)
+fromVector vec = case fromList (Vector.toList vec) of
+  Nothing -> failure "fromVector: unexpected length"
+  Just xs -> return $ hcmap (Proxy :: Proxy ((~) x)) (I . unK) xs
+instance
+  ( IsProductType hask ys
+  , All ((~) y) ys
+  , len ~ Length ys
+  , FromValue pg y
+  ) => FromValue ('PGfixarray len ('NotNull pg)) hask where
+    fromValue =
+      let
+        vectorValue = Decoding.array
+          (Decoding.dimensionArray Vector.replicateM
+            (Decoding.valueArray (fromValue @pg)))
+      in
+        fmap (to . SOP . Z) (fromVector @y =<< vectorValue)
+instance
+  ( IsProductType hask ys
+  , All ((~) (Maybe y)) ys
+  , len ~ Length ys
+  , FromValue pg y
+  ) => FromValue ('PGfixarray len ('Null pg)) hask where
+    fromValue =
+      let
+        vectorValue = Decoding.array
+          (Decoding.dimensionArray Vector.replicateM
+            (Decoding.nullableValueArray (fromValue @pg)))
+      in
+        fmap (to . SOP . Z) (fromVector @(Maybe y) =<< vectorValue)
 instance
   ( IsEnumType y
   , HasDatatypeInfo y

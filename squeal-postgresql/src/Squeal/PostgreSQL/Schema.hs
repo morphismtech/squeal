@@ -85,6 +85,7 @@ module Squeal.PostgreSQL.Schema
   , Rename
   , Elem
   , In
+  , Length
   , PGNum
   , PGIntegral
   , PGFloating
@@ -562,19 +563,6 @@ type family Alter alias x xs where
   Alter alias x1 (alias ::: x0 ': xs) = alias ::: x1 ': xs
   Alter alias x1 (x0 ': xs) = x0 ': Alter alias x1 xs
 
--- type family AddConstraint constraint ty where
---   AddConstraint constraint (constraints :=> ty)
---     = AsSet (constraint ': constraints) :=> ty
-
--- type family DeleteFromList (e :: elem) (list :: [elem]) where
---   DeleteFromList elem '[] = '[]
---   DeleteFromList elem (x ': xs) =
---     If (Cmp elem x == 'EQ) xs (x ': DeleteFromList elem xs)
-
--- type family DropConstraint constraint ty where
---   DropConstraint constraint (constraints :=> ty)
---     = (AsSet (DeleteFromList constraint constraints)) :=> ty
-
 -- | @Rename alias0 alias1 xs@ replaces the alias @alias0@ by @alias1@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.alterTableRename` and
 -- `Squeal.PostgreSQL.Definition.renameColumn`.
@@ -597,6 +585,10 @@ type family DropIfConstraintsInvolve column constraints where
     = If (ConstraintInvolves column constraint)
         (DropIfConstraintsInvolve column constraints)
         (alias ::: constraint ': DropIfConstraintsInvolve column constraints)
+
+type family Length (xs :: [k]) :: Nat where
+  Length (x : xs) = 1 + Length xs
+  Length '[] = 0
 
 -- | A `SchemumType` is a user-defined type, either a `Table`,
 -- `View` or `Typedef`.
