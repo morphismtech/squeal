@@ -270,7 +270,6 @@ instance
     toParam =
       let
 
-        -- encoders :: NP (Maybe :.: P) fields -> NP (K (Maybe Encoding.Encoding)) xs
         encoders = htrans (Proxy @ToField) toField
 
         composite
