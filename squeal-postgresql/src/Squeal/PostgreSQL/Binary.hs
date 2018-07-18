@@ -27,7 +27,7 @@ let
   query :: Query '[]
     '[ 'NotNull 'PGint2, 'NotNull 'PGtext]
     '["col1" ::: 'NotNull 'PGint2, "col2" ::: 'NotNull 'PGtext]
-  query = values_ (param @1 `As` #col1 :* param @2 `As` #col2 :* Nil)
+  query = values_ (param @1 `as` #col1 :* param @2 `as` #col2)
 :}
 
 >>> :{
@@ -88,7 +88,7 @@ let
   querySchwarma :: Query Schema
     '[ 'NotNull (EnumFrom Schwarma)]
     '["fromOnly" ::: 'NotNull (EnumFrom Schwarma)]
-  querySchwarma = values_ (parameter @1 #schwarma `As` #fromOnly :* Nil)
+  querySchwarma = values_ (parameter @1 #schwarma `as` #fromOnly)
 :}
 
 >>> :{
@@ -96,7 +96,7 @@ let
   queryPerson :: Query Schema
     '[ 'NotNull (CompositeFrom Person)]
     '["fromOnly" ::: 'NotNull (CompositeFrom Person)]
-  queryPerson = values_ (parameter @1 #person `As` #fromOnly :* Nil)
+  queryPerson = values_ (parameter @1 #person `as` #fromOnly)
 :}
 
 And finally drop the types.

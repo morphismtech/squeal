@@ -448,7 +448,7 @@ instance (KnownSymbol label, label `In` labels) => IsPGlabel label
 -- (also called a composite value) using values for its member fields.
 --
 -- >>> type Complex = PGcomposite '["real" ::: 'PGfloat8, "imaginary" ::: 'PGfloat8]
--- >>> let i = row (0 `As` #real :* 1 `As` #imaginary :* Nil) :: Expression '[] '[] 'Ungrouped '[] ('NotNull Complex)
+-- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression '[] '[] 'Ungrouped '[] ('NotNull Complex)
 -- >>> printSQL i
 -- ROW(0, 1)
 row
