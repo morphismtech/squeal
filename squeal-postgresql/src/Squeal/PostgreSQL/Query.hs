@@ -660,28 +660,28 @@ unsafeAliasedFromClauseExpression aliasedExpr = UnsafeFromClause
 
 -- | Expands the outermost JSON object into a set of key/value pairs.
 jsonEach
-  :: Aliased (Expression schema relations 'Ungrouped params) '(tab, nullity 'PGjson)
+  :: Aliased (Expression schema '[] 'Ungrouped params) '(tab, nullity 'PGjson)
   -> FromClause schema params (PGjson_each tab)
 jsonEach (As jexpr jname) = unsafeAliasedFromClauseExpression
   (As (unsafeFunction "json_each" jexpr) jname)
 
 -- | Expands the outermost binary JSON object into a set of key/value pairs.
 jsonbEach
-  :: Aliased (Expression schema relations 'Ungrouped params) '(tab, nullity 'PGjsonb)
+  :: Aliased (Expression schema '[] 'Ungrouped params) '(tab, nullity 'PGjsonb)
   -> FromClause schema params (PGjsonb_each tab)
 jsonbEach (As jexpr jname) = unsafeAliasedFromClauseExpression
   (As (unsafeFunction "jsonb_each" jexpr) jname)
 
 -- | Expands the outermost JSON object into a set of key/value pairs.
 jsonEachAsText
-  :: Aliased (Expression schema relations 'Ungrouped params) '(tab, nullity 'PGjson)
+  :: Aliased (Expression schema '[] 'Ungrouped params) '(tab, nullity 'PGjson)
   -> FromClause schema params (PGjson_each_text tab)
 jsonEachAsText (As jexpr jname) = unsafeAliasedFromClauseExpression
   (As (unsafeFunction "json_each" jexpr) jname)
 
 -- | Expands the outermost binary JSON object into a set of key/value pairs.
 jsonbEachAsText
-  :: Aliased (Expression schema relations 'Ungrouped params) '(tab, nullity 'PGjsonb)
+  :: Aliased (Expression schema '[] 'Ungrouped params) '(tab, nullity 'PGjsonb)
   -> FromClause schema params (PGjsonb_each_text tab)
 jsonbEachAsText (As jexpr jname) = unsafeAliasedFromClauseExpression
   (As (unsafeFunction "jsonb_each" jexpr) jname)
