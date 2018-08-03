@@ -1071,7 +1071,7 @@ toJson = unsafeFunction "to_json"
 toJsonb
   :: Expression schema relations grouping params (nullity ty)
   -> Expression schema relations grouping params (nullity 'PGjsonb)
-toJsonb = unsafeUnaryOp "to_jsonb"
+toJsonb = unsafeFunction "to_jsonb"
 
 -- | Returns the array as a JSON array. A PostgreSQL multidimensional array
 -- becomes a JSON array of arrays.
