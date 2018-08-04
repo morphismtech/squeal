@@ -41,7 +41,28 @@ import Generics.SOP (K(..))
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Schema
 
--- | `PoolPQ` @schema@ should be a drop-in replacement for `PQ` @schema schema@.
+{- | `PoolPQ` @schema@ should be a drop-in replacement for `PQ` @schema schema@.
+
+Typical use case would be to create your pool using `createConnectionPool` and run anything that requires the pool connection with it.
+
+Here's a simplified example:
+
+> type Schema = '[ "tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint2])]
+>
+> someQuery :: Manipulation Schema '[ 'NotNull 'PGint2] '[]
+> someQuery = insertRow #tab
+>  (Set (param @1) `As` #col :* Nil)
+> OnConflictDoNothing (Returning Nil)
+>
+> insertOne :: (MonadBaseControl IO m, MonadPQ Schema m) => m ()
+> insertOne = void $ manipulateParams someQuery . Only $ (1 :: Int16)
+>
+> insertOneInPool :: ByteString -> IO ()
+> insertOneInPool connectionString = do
+>   pool <- createConnectionPool connectionString 1 0.5 10
+>   liftIO $ runPoolPQ (insertOne) pool
+
+-}
 newtype PoolPQ (schema :: SchemaType) m x =
   PoolPQ { runPoolPQ :: Pool (K Connection schema) -> m x }
   deriving Functor
