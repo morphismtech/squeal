@@ -2,9 +2,13 @@
 
 ### Version 0.3.2 - August 4, 2018
 
-Version 0.3.2 features extensive support for `JSON` functionality.
+Version 0.3.2 features extensive support for `JSON` functionality with
+more than 50 new functions.
 This work is entirely due to [Mike Ledger](https://github.com/mikeplus64)
 who has been making terrific contributions to Squeal. Thanks!
+We also got some examples in the documentation for pools submitted by
+[Raveline](https://github.com/Raveline). I'm so pleased to be
+getting pull requests and issue submissions from you all!
 
 ### Version 0.3.1 - July 7, 2018
 
