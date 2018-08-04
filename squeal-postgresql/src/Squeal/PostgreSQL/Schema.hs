@@ -10,7 +10,7 @@ tables, schema, constraints, aliases, enumerated labels, and groupings.
 It also defines useful type families to operate on these. Finally,
 it defines an embedding of Haskell types into Postgres types.
 -}
-
+{-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors #-}
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
@@ -69,6 +69,7 @@ module Squeal.PostgreSQL.Schema
   , HasAll
   , IsLabel (..)
   , IsQualified (..)
+  , renderAliasString
     -- * Enumerated Labels
   , IsPGlabel (..)
   , PGlabel (..)
@@ -90,6 +91,9 @@ module Squeal.PostgreSQL.Schema
   , PGIntegral
   , PGFloating
   , PGTypeOf
+  , PGarrayOf
+  , PGarray
+  , PGtextArray
   , SameTypes
   , SamePGType
   , AllNotNull
@@ -100,8 +104,13 @@ module Squeal.PostgreSQL.Schema
   , ColumnsToRelation
   , TableToColumns
   , TableToRelation
+  , RelationToRowType
+  , RelationToNullityTypes
   , ConstraintInvolves
   , DropIfConstraintsInvolve
+    -- ** JSON support
+  , PGjson_
+  , PGjsonKey
     -- * Embedding
   , PG
   , EnumFrom
@@ -371,6 +380,11 @@ instance KnownSymbol alias => RenderSQL (Alias alias) where renderSQL = renderAl
 renderAlias :: KnownSymbol alias => Alias alias -> ByteString
 renderAlias = doubleQuoted . fromString . symbolVal
 
+-- | >>> renderAliasString #ohmahgerd
+-- "'ohmahgerd'"
+renderAliasString :: KnownSymbol alias => Alias alias -> ByteString
+renderAliasString = singleQuotedText . fromString . symbolVal
+
 -- | >>> import Generics.SOP (NP(..))
 -- >>> renderAliases (#jimbob :* #kandi)
 -- ["\"jimbob\"","\"kandi\""]
@@ -524,6 +538,37 @@ type PGFloating ty = In ty '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 -- `Squeal.PostgreSQL.Expression.mod_` functions.
 type PGIntegral ty = In ty '[ 'PGint2, 'PGint4, 'PGint8]
 
+-- | Error message helper for displaying unavailable\/unknown\/placeholder type
+-- variables whose kind is known.
+type Placeholder k = 'Text "(_::" :<>: 'ShowType k :<>: 'Text ")"
+
+type ErrArrayOf arr ty = arr :<>: 'Text " " :<>: ty
+type ErrPGfixarrayOf t = ErrArrayOf ('ShowType 'PGfixarray :<>: 'Text " " :<>: Placeholder Nat) t
+type ErrPGvararrayOf t = ErrArrayOf ('ShowType 'PGvararray) t
+
+-- | Ensure a type is a valid array type.
+type family PGarray name arr :: Constraint where
+  PGarray name ('PGvararray x) = ()
+  PGarray name ('PGfixarray n x) = ()
+  PGarray name val = TypeError
+    ('Text name :<>: 'Text ": Unsatisfied PGarray constraint. Expected either: "
+     :$$: 'Text " • " :<>: ErrPGvararrayOf (Placeholder PGType)
+     :$$: 'Text " • " :<>: ErrPGfixarrayOf (Placeholder PGType)
+     :$$: 'Text "But got: " :<>: 'ShowType val)
+
+-- | Ensure a type is a valid array type with a specific element type.
+type family PGarrayOf name arr ty :: Constraint where
+  PGarrayOf name ('PGvararray x) ty = x ~ ty
+  PGarrayOf name ('PGfixarray n x) ty = x ~ ty
+  PGarrayOf name val ty = TypeError
+    ( 'Text name :<>: 'Text "Unsatisfied PGarrayOf constraint. Expected either: "
+      :$$: 'Text " • " :<>: ErrPGvararrayOf ( 'ShowType ty )
+      :$$: 'Text " • " :<>: ErrPGfixarrayOf ( 'ShowType ty )
+      :$$: 'Text "But got: " :<>: 'ShowType val)
+
+-- | Ensure a type is a valid array type whose elements are text.
+type PGtextArray name arr = PGarrayOf name arr 'PGtext
+
 -- | `PGTypeOf` forgets about @NULL@ and any column constraints.
 type family PGTypeOf (ty :: NullityType) :: PGType where
   PGTypeOf (nullity pg) = pg
@@ -572,6 +617,16 @@ type family NullifyRelations (tables :: RelationsType) :: RelationsType where
   NullifyRelations '[] = '[]
   NullifyRelations (table ::: columns ': tables) =
     table ::: NullifyRelation columns ': NullifyRelations tables
+
+-- | `RelationToRowType` drops the nullity constraints of its argument relations.
+type family RelationToRowType (tables :: RelationType) :: [(Symbol, PGType)] where
+  RelationToRowType (nullity x : xs) = x : RelationToRowType xs
+  RelationToRowType '[] = '[]
+
+-- | `RelationToNullityTypes` drops the column constraints.
+type family RelationToNullityTypes (rel :: RelationType) :: [NullityType] where
+  RelationToNullityTypes ('(k, x) : xs) = x : RelationToNullityTypes xs
+  RelationToNullityTypes '[]            = '[]
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.
@@ -857,3 +912,10 @@ type family RecordCodeOf (hask :: Type) (code ::[[Type]]) :: [Type] where
   RecordCodeOf _hask '[tys] = tys
   RecordCodeOf hask _tys = TypeError
     ('Text "RecordCodeOf error: non-Record type " ':<>: 'ShowType hask)
+
+-- | Is a type a valid JSON key?
+type PGjsonKey key = key `In` '[ 'PGint2, 'PGint4, 'PGtext ]
+
+-- | Is a type a valid JSON type?
+type PGjson_ json = json `In` '[ 'PGjson, 'PGjsonb ]
+

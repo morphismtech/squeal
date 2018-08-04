@@ -11,6 +11,7 @@ Squeal expressions are the atoms used to build statements.
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE
     AllowAmbiguousTypes
+  , ConstraintKinds
   , DeriveGeneric
   , FlexibleContexts
   , FlexibleInstances
@@ -25,6 +26,7 @@ Squeal expressions are the atoms used to build statements.
   , TypeInType
   , TypeOperators
   , UndecidableInstances
+  , RankNTypes
 #-}
 
 module Squeal.PostgreSQL.Expression
@@ -48,6 +50,7 @@ module Squeal.PostgreSQL.Expression
   , unsafeBinaryOp
   , unsafeUnaryOp
   , unsafeFunction
+  , unsafeVariadicFunction
   , atan2_
   , cast
   , quot_
@@ -83,6 +86,53 @@ module Squeal.PostgreSQL.Expression
   , upper
   , charLength
   , like
+    -- ** json or jsonb operators
+  , PGarray
+  , PGarrayOf
+  , PGjsonKey
+  , PGjson_
+  , (.->)
+  , (.->>)
+  , (.#>)
+  , (.#>>)
+    -- *** jsonb only operators
+  , (.@>)
+  , (.<@)
+  , (.?)
+  , (.?|)
+  , (.?&)
+  , (.-.)
+  , (#-.)
+    -- *** Functions
+  , jsonLit
+  , jsonbLit
+  , toJson
+  , toJsonb
+  , arrayToJson
+  , rowToJson
+  , jsonBuildArray
+  , jsonbBuildArray
+  , jsonBuildObject
+  , jsonbBuildObject
+  , jsonObject
+  , jsonbObject
+  , jsonZipObject
+  , jsonbZipObject
+  , jsonArrayLength
+  , jsonbArrayLength
+  , jsonExtractPath
+  , jsonbExtractPath
+  , jsonExtractPathAsText
+  , jsonbExtractPathAsText
+  , jsonObjectKeys
+  , jsonbObjectKeys
+  , jsonTypeof
+  , jsonbTypeof
+  , jsonStripNulls
+  , jsonbStripNulls
+  , jsonbSet
+  , jsonbInsert
+  , jsonbPretty
     -- ** Aggregation
   , unsafeAggregate, unsafeAggregateDistinct
   , sum_, sumDistinct
@@ -135,8 +185,10 @@ module Squeal.PostgreSQL.Expression
 import Control.Category
 import Control.DeepSeq
 import Data.ByteString (ByteString)
+import Data.ByteString.Lazy (toStrict)
 import Data.Function ((&))
-import Data.Semigroup
+import Data.Semigroup hiding (All)
+import qualified Data.Aeson as JSON
 import Data.Ratio
 import Data.String
 import Generics.SOP hiding (from)
@@ -476,6 +528,16 @@ unsafeFunction
   -> Expression schema relations grouping params (yty)
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderExpression x)
+
+-- | Helper for defining variadic functions.
+unsafeVariadicFunction
+  :: SListI elems
+  => ByteString
+  -- ^ function
+  -> NP (Expression schema relations grouping params) elems
+  -> Expression schema relations grouping params ret
+unsafeVariadicFunction fun x = UnsafeExpression $
+  fun <> parenthesized (commaSeparated (hcollapse (hmap (K . renderExpression) x)))
 
 instance PGNum ty
   => Num (Expression schema relations grouping params (nullity ty)) where
@@ -864,6 +926,400 @@ like
   -- ^ pattern
   -> Expression schema relations grouping params (nullity 'PGbool)
 like = unsafeBinaryOp "LIKE"
+
+{-----------------------------------------
+ -- json and jsonb support
+
+See https://www.postgresql.org/docs/10/static/functions-json.html -- most
+comments lifted directly from this page.
+
+Table 9.44: json and jsonb operators
+-----------------------------------------}
+
+-- | Get JSON value (object field or array element) at a key.
+(.->)
+  :: (PGjson_ json, PGjsonKey key)
+  => Expression schema relations grouping params (nullity json)
+  -> Expression schema relations grouping params (nullity key)
+  -> Expression schema relations grouping params ('Null json)
+(.->) = unsafeBinaryOp "->"
+
+-- | Get JSON value (object field or array element) at a key, as text.
+(.->>)
+  :: (PGjson_ json, PGjsonKey key)
+  => Expression schema relations grouping params (nullity json)
+  -> Expression schema relations grouping params (nullity key)
+  -> Expression schema relations grouping params ('Null 'PGtext)
+(.->>) = unsafeBinaryOp "->>"
+
+-- | Get JSON value at a specified path.
+(.#>)
+  :: (PGjson_ json, PGtextArray "(.#>)" path)
+  => Expression schema relations grouping params (nullity json)
+  -> Expression schema relations grouping params (nullity path)
+  -> Expression schema relations grouping params ('Null json)
+(.#>) = unsafeBinaryOp "#>"
+
+-- | Get JSON value at a specified path as text.
+(.#>>)
+  :: (PGjson_ json, PGtextArray "(.#>>)" path)
+  => Expression schema relations grouping params (nullity json)
+  -> Expression schema relations grouping params (nullity path)
+  -> Expression schema relations grouping params ('Null 'PGtext)
+(.#>>) = unsafeBinaryOp "#>>"
+
+-- Additional jsonb operators
+
+-- | Does the left JSON value contain the right JSON path/value entries at the
+-- top level?
+(.@>)
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Condition schema relations grouping params
+(.@>) = unsafeBinaryOp "@>"
+
+-- | Are the left JSON path/value entries contained at the top level within the
+-- right JSON value?
+(.<@)
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Condition schema relations grouping params
+(.<@) = unsafeBinaryOp "<@"
+
+-- | Does the string exist as a top-level key within the JSON value?
+(.?)
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity 'PGtext)
+  -> Condition schema relations grouping params
+(.?) = unsafeBinaryOp "?"
+
+-- | Do any of these array strings exist as top-level keys?
+(.?|)
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity ('PGvararray 'PGtext))
+  -> Condition schema relations grouping params
+(.?|) = unsafeBinaryOp "?|"
+
+-- | Do all of these array strings exist as top-level keys?
+(.?&)
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity ('PGvararray 'PGtext))
+  -> Condition schema relations grouping params
+(.?&) = unsafeBinaryOp "?&"
+
+-- | Concatenate two jsonb values into a new jsonb value.
+instance
+  Semigroup (Expression schema relations grouping param (nullity 'PGjsonb)) where
+  (<>) = unsafeBinaryOp "||"
+
+-- | Delete a key or keys from a JSON object, or remove an array element.
+--
+-- If the right operand is..
+--
+-- @ text @: Delete key/value pair or string element from left operand. Key/value pairs
+-- are matched based on their key value.
+--
+-- @ text[] @: Delete multiple key/value pairs or string elements
+-- from left operand. Key/value pairs are matched based on their key value.
+--
+-- @ integer @: Delete the array element with specified index (Negative integers
+-- count from the end). Throws an error if top level container is not an array.
+(.-.)
+  :: (key `In` '[ 'PGtext, 'PGvararray 'PGtext, 'PGint4, 'PGint2 ]) -- hlint error without parens here
+  => Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity key)
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+(.-.) = unsafeBinaryOp "-"
+
+-- | Delete the field or element with specified path (for JSON arrays, negative
+-- integers count from the end)
+(#-.)
+  :: PGtextArray "(#-.)" arrayty
+  => Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity arrayty)
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+(#-.) = unsafeBinaryOp "#-"
+
+{-----------------------------------------
+Table 9.45: JSON creation functions
+-----------------------------------------}
+
+-- | Literal binary JSON
+jsonbLit :: JSON.Value -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbLit = cast jsonb . UnsafeExpression . singleQuotedUtf8 . toStrict . JSON.encode
+
+-- | Literal JSON
+jsonLit :: JSON.Value -> Expression schema relations grouping params (nullity 'PGjson)
+jsonLit = cast json . UnsafeExpression . singleQuotedUtf8 . toStrict . JSON.encode
+
+-- | Returns the value as json. Arrays and composites are converted
+-- (recursively) to arrays and objects; otherwise, if there is a cast from the
+-- type to json, the cast function will be used to perform the conversion;
+-- otherwise, a scalar value is produced. For any scalar type other than a
+-- number, a Boolean, or a null value, the text representation will be used, in
+-- such a fashion that it is a valid json value.
+toJson
+  :: Expression schema relations grouping params (nullity ty)
+  -> Expression schema relations grouping params (nullity 'PGjson)
+toJson = unsafeFunction "to_json"
+
+-- | Returns the value as jsonb. Arrays and composites are converted
+-- (recursively) to arrays and objects; otherwise, if there is a cast from the
+-- type to json, the cast function will be used to perform the conversion;
+-- otherwise, a scalar value is produced. For any scalar type other than a
+-- number, a Boolean, or a null value, the text representation will be used, in
+-- such a fashion that it is a valid jsonb value.
+toJsonb
+  :: Expression schema relations grouping params (nullity ty)
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+toJsonb = unsafeFunction "to_jsonb"
+
+-- | Returns the array as a JSON array. A PostgreSQL multidimensional array
+-- becomes a JSON array of arrays.
+arrayToJson
+  :: PGarray "arrayToJson" arr
+  => Expression schema relations grouping params (nullity arr)
+  -> Expression schema relations grouping params (nullity 'PGjson)
+arrayToJson = unsafeFunction "array_to_json"
+
+-- | Returns the row as a JSON object.
+rowToJson
+  :: Expression schema relations grouping params (nullity ('PGcomposite ty))
+  -> Expression schema relations grouping params (nullity 'PGjson)
+rowToJson = unsafeFunction "row_to_json"
+
+-- | Builds a possibly-heterogeneously-typed JSON array out of a variadic
+-- argument list.
+jsonBuildArray
+  :: SListI elems
+  => NP (Expression schema relations grouping params) elems
+  -> Expression schema relations grouping params (nullity 'PGjson)
+jsonBuildArray = unsafeVariadicFunction "json_build_array"
+
+-- | Builds a possibly-heterogeneously-typed (binary) JSON array out of a
+-- variadic argument list.
+jsonbBuildArray
+  :: SListI elems
+  => NP (Expression schema relations grouping params) elems
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbBuildArray = unsafeVariadicFunction "jsonb_build_array"
+
+unsafeRowFunction
+  :: All Top elems
+  => NP (Aliased (Expression schema relations grouping params)) elems
+  -> [ByteString]
+unsafeRowFunction =
+  (`appEndo` []) . hcfoldMap (Proxy :: Proxy Top)
+  (\(col `As` name) -> Endo $ \xs ->
+      renderAliasString name : renderExpression col : xs)
+
+-- | Builds a possibly-heterogeneously-typed JSON object out of a variadic
+-- argument list. The elements of the argument list must alternate between text
+-- and values.
+jsonBuildObject
+  :: All Top elems
+  => NP (Aliased (Expression schema relations grouping params)) elems
+  -> Expression schema relations grouping params (nullity 'PGjson)
+jsonBuildObject
+  = unsafeFunction "json_build_object"
+  . UnsafeExpression
+  . commaSeparated
+  . unsafeRowFunction
+
+-- | Builds a possibly-heterogeneously-typed (binary) JSON object out of a
+-- variadic argument list. The elements of the argument list must alternate
+-- between text and values.
+jsonbBuildObject
+  :: All Top elems
+  => NP (Aliased (Expression schema relations grouping params)) elems
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbBuildObject
+  = unsafeFunction "jsonb_build_object"
+  . UnsafeExpression
+  . commaSeparated
+  . unsafeRowFunction
+
+-- | Builds a JSON object out of a text array. The array must have either
+-- exactly one dimension with an even number of members, in which case they are
+-- taken as alternating key/value pairs, or two dimensions such that each inner
+-- array has exactly two elements, which are taken as a key/value pair.
+jsonObject
+  :: PGarrayOf "jsonObject" arr 'PGtext
+  => Expression schema relations grouping params (nullity arr)
+  -> Expression schema relations grouping params (nullity 'PGjson)
+jsonObject = unsafeFunction "json_object"
+
+-- | Builds a binary JSON object out of a text array. The array must have either
+-- exactly one dimension with an even number of members, in which case they are
+-- taken as alternating key/value pairs, or two dimensions such that each inner
+-- array has exactly two elements, which are taken as a key/value pair.
+jsonbObject
+  :: PGarrayOf "jsonbObject" arr 'PGtext
+  => Expression schema relations grouping params (nullity arr)
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbObject = unsafeFunction "jsonb_object"
+
+-- | This is an alternate form of 'jsonObject' that takes two arrays; one for
+-- keys and one for values, that are zipped pairwise to create a JSON object.
+jsonZipObject
+  :: ( PGarrayOf "jsonZipObject" keysArray 'PGtext
+     , PGarrayOf "jsonZipObject" valuesArray 'PGtext)
+  => Expression schema relations grouping params (nullity keysArray)
+  -> Expression schema relations grouping params (nullity valuesArray)
+  -> Expression schema relations grouping params (nullity 'PGjson)
+jsonZipObject ks vs =
+  unsafeVariadicFunction "json_object" (ks :* vs :* Nil)
+
+-- | This is an alternate form of 'jsonObject' that takes two arrays; one for
+-- keys and one for values, that are zipped pairwise to create a binary JSON
+-- object.
+jsonbZipObject
+  :: ( PGarrayOf "jsonbZipObject" keysArray 'PGtext
+     , PGarrayOf "jsonbZipObject" valuesArray 'PGtext)
+  => Expression schema relations grouping params (nullity keysArray)
+  -> Expression schema relations grouping params (nullity valuesArray)
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbZipObject ks vs =
+  unsafeVariadicFunction "jsonb_object" (ks :* vs :* Nil)
+
+{-----------------------------------------
+Table 9.46: JSON processing functions
+-----------------------------------------}
+
+-- | Returns the number of elements in the outermost JSON array.
+jsonArrayLength
+  :: Expression schema relations grouping params (nullity 'PGjson)
+  -> Expression schema relations grouping params (nullity 'PGint4)
+jsonArrayLength = unsafeFunction "json_array_length"
+
+-- | Returns the number of elements in the outermost binary JSON array.
+jsonbArrayLength
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity 'PGint4)
+jsonbArrayLength = unsafeFunction "jsonb_array_length"
+
+-- | Returns JSON value pointed to by the given path (equivalent to #>
+-- operator).
+jsonExtractPath
+  :: SListI elems
+  => Expression schema relations grouping params (nullity 'PGjson)
+  -> NP (Expression schema relations grouping params) elems
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonExtractPath x xs =
+  unsafeVariadicFunction "json_extract_path" (x :* xs)
+
+-- | Returns JSON value pointed to by the given path (equivalent to #>
+-- operator).
+jsonbExtractPath
+  :: SListI elems
+  => Expression schema relations grouping params (nullity 'PGjsonb)
+  -> NP (Expression schema relations grouping params) elems
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbExtractPath x xs =
+  unsafeVariadicFunction "jsonb_extract_path" (x :* xs)
+
+-- | Returns JSON value pointed to by the given path (equivalent to #>
+-- operator), as text.
+jsonExtractPathAsText
+  :: SListI elems
+  => Expression schema relations grouping params (nullity 'PGjson)
+  -> NP (Expression schema relations grouping params) elems
+  -> Expression schema relations grouping params (nullity 'PGjson)
+jsonExtractPathAsText x xs =
+  unsafeVariadicFunction "json_extract_path_text" (x :* xs)
+
+-- | Returns JSON value pointed to by the given path (equivalent to #>
+-- operator), as text.
+jsonbExtractPathAsText
+  :: SListI elems
+  => Expression schema relations grouping params (nullity 'PGjsonb)
+  -> NP (Expression schema relations grouping params) elems
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbExtractPathAsText x xs =
+  unsafeVariadicFunction "jsonb_extract_path_text" (x :* xs)
+
+-- | Returns set of keys in the outermost JSON object.
+jsonObjectKeys
+  :: Expression schema relations grouping params (nullity 'PGjson)
+  -> Expression schema relations grouping params (nullity 'PGtext)
+jsonObjectKeys = unsafeFunction "json_object_keys"
+
+-- | Returns set of keys in the outermost JSON object.
+jsonbObjectKeys
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity 'PGtext)
+jsonbObjectKeys = unsafeFunction "jsonb_object_keys"
+
+-- | Returns the type of the outermost JSON value as a text string. Possible
+-- types are object, array, string, number, boolean, and null.
+jsonTypeof
+  :: Expression schema relations grouping params (nullity 'PGjson)
+  -> Expression schema relations grouping params (nullity 'PGtext)
+jsonTypeof = unsafeFunction "json_typeof"
+
+-- | Returns the type of the outermost binary JSON value as a text string.
+-- Possible types are object, array, string, number, boolean, and null.
+jsonbTypeof
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity 'PGtext)
+jsonbTypeof = unsafeFunction "jsonb_typeof"
+
+-- | Returns its argument with all object fields that have null values omitted.
+-- Other null values are untouched.
+jsonStripNulls
+  :: Expression schema relations grouping params (nullity 'PGjson)
+  -> Expression schema relations grouping params (nullity 'PGjson)
+jsonStripNulls = unsafeFunction "json_strip_nulls"
+
+-- | Returns its argument with all object fields that have null values omitted.
+-- Other null values are untouched.
+jsonbStripNulls
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
+
+-- | @ jsonbSet target path new_value create_missing @
+--
+-- Returns target with the section designated by path replaced by new_value,
+-- or with new_value added if create_missing is true ( default is true) and the
+-- item designated by path does not exist. As with the path orientated
+-- operators, negative integers that appear in path count from the end of JSON
+-- arrays.
+jsonbSet
+  :: PGtextArray "jsonbSet" arr
+  => Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity arr)
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Maybe (Expression schema relations grouping params (nullity 'PGbool))
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbSet tgt path val createMissing = case createMissing of
+  Just m -> unsafeVariadicFunction "jsonb_set" (tgt :* path :* val :* m :* Nil)
+  Nothing -> unsafeVariadicFunction "jsonb_set" (tgt :* path :* val :* Nil)
+
+-- | @ jsonbInsert target path new_value insert_after @
+--
+-- Returns target with new_value inserted. If target section designated by
+-- path is in a JSONB array, new_value will be inserted before target or after
+-- if insert_after is true (default is false). If target section designated by
+-- path is in JSONB object, new_value will be inserted only if target does not
+-- exist. As with the path orientated operators, negative integers that appear
+-- in path count from the end of JSON arrays.
+jsonbInsert
+  :: PGtextArray "jsonbInsert" arr
+  => Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity arr)
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Maybe (Expression schema relations grouping params (nullity 'PGbool))
+  -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbInsert tgt path val insertAfter = case insertAfter of
+  Just i -> unsafeVariadicFunction "jsonb_insert" (tgt :* path :* val :* i :* Nil)
+  Nothing -> unsafeVariadicFunction "jsonb_insert" (tgt :* path :* val :* Nil)
+
+-- | Returns its argument as indented JSON text.
+jsonbPretty
+  :: Expression schema relations grouping params (nullity 'PGjsonb)
+  -> Expression schema relations grouping params (nullity 'PGtext)
+jsonbPretty = unsafeFunction "jsonb_pretty"
 
 {-----------------------------------------
 aggregation
