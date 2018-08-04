@@ -3,7 +3,8 @@
 ### Version 0.3.2 - August 4, 2018
 
 Version 0.3.2 features extensive support for `JSON` functionality.
-This work is entirely due to [Mike Ledger](https://github.com/mikeplus64).
+This work is entirely due to [Mike Ledger](https://github.com/mikeplus64)
+who has been making terrific contributions to Squeal. Thanks!
 
 ### Version 0.3.1 - July 7, 2018
 
