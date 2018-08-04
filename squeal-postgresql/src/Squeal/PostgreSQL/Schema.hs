@@ -380,6 +380,8 @@ instance KnownSymbol alias => RenderSQL (Alias alias) where renderSQL = renderAl
 renderAlias :: KnownSymbol alias => Alias alias -> ByteString
 renderAlias = doubleQuoted . fromString . symbolVal
 
+-- | >>> renderAliasString #ohmahgerd
+-- "'ohmahgerd'"
 renderAliasString :: KnownSymbol alias => Alias alias -> ByteString
 renderAliasString = singleQuotedText . fromString . symbolVal
 
@@ -616,11 +618,12 @@ type family NullifyRelations (tables :: RelationsType) :: RelationsType where
   NullifyRelations (table ::: columns ': tables) =
     table ::: NullifyRelation columns ': NullifyRelations tables
 
--- | 'RelationToRowType' drops the nullity constraints of its argument relations.
+-- | `RelationToRowType` drops the nullity constraints of its argument relations.
 type family RelationToRowType (tables :: RelationType) :: [(Symbol, PGType)] where
   RelationToRowType (nullity x : xs) = x : RelationToRowType xs
   RelationToRowType '[] = '[]
 
+-- | `RelationToNullityTypes` drops the column constraints.
 type family RelationToNullityTypes (rel :: RelationType) :: [NullityType] where
   RelationToNullityTypes ('(k, x) : xs) = x : RelationToNullityTypes xs
   RelationToNullityTypes '[]            = '[]

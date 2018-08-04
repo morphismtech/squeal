@@ -651,9 +651,13 @@ JSON stuff
 type PGjson_each_variant val tab =
   '[ tab ::: '[ "key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull val ] ]
 
+-- | The type of a `json_each` `FromClause`.
 type PGjson_each tab = PGjson_each_variant 'PGjson tab
+-- | The type of a `jsonb_each` `FromClause`.
 type PGjsonb_each tab = PGjson_each_variant 'PGjsonb tab
+-- | The type of a `json_each_text` `FromClause`.
 type PGjson_each_text tab = PGjson_each_variant 'PGtext tab
+-- | The type of a `jsonb_each_text` `FromClause`.
 type PGjsonb_each_text tab = PGjson_each_variant 'PGtext tab
 
 unsafeAliasedFromClauseExpression

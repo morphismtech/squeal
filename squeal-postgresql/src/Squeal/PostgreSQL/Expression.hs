@@ -529,6 +529,7 @@ unsafeFunction
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderExpression x)
 
+-- | Helper for defining variadic functions.
 unsafeVariadicFunction
   :: SListI elems
   => ByteString

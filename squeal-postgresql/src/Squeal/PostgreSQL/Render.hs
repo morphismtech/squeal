@@ -61,9 +61,11 @@ commaSeparated = ByteString.intercalate ", "
 doubleQuoted :: ByteString -> ByteString
 doubleQuoted str = "\"" <> str <> "\""
 
+-- | Add single quotes around a `Text` and escape single quotes within it.
 singleQuotedText :: Text -> ByteString
 singleQuotedText str = "'" <> T.encodeUtf8 (T.replace "'" "''" str) <> "'"
 
+-- | Add single quotes around a `ByteString` and escape single quotes within it.
 singleQuotedUtf8 :: ByteString -> ByteString
 singleQuotedUtf8 = singleQuotedText . T.decodeUtf8
 
