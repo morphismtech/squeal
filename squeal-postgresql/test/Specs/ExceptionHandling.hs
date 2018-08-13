@@ -91,7 +91,7 @@ setupDB = void . withConnection connectionString $
 
 dropDB :: IO ()
 dropDB = void . withConnection connectionString $
-  manipulate (UnsafeManipulation "SET client_min_messages = error;")
+  manipulate (UnsafeManipulation "SET client_min_messages = warning;")
   & pqThen $ migrateDown $ single migration
 
 connectionString :: Char8.ByteString
