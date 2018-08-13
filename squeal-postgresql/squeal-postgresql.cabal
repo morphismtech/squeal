@@ -76,6 +76,7 @@ test-suite squeal-postgresql-specs
   hs-source-dirs: test/Specs
   ghc-options: -Wall  -main-is Specs
   main-is: Specs.hs
+  other-modules: ExceptionHandling
   build-depends:
       base >= 4.10.0.0
     , bytestring >= 0.10.8.2

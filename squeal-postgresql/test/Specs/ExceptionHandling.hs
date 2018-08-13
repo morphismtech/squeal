@@ -86,7 +86,7 @@ migration = Migration { name = "test"
 
 setupDB :: IO ()
 setupDB = void . withConnection connectionString $
-  manipulate (UnsafeManipulation "SET client_min_messages = error;")
+  manipulate (UnsafeManipulation "SET client_min_messages = warning;")
   & pqThen $ migrateUp $ single migration
 
 dropDB :: IO ()
@@ -111,8 +111,8 @@ specs = before_ setupDB $ after_ dropDB $
   describe "Exceptions" $ do
     it "Should be raised in transactions and cause rollback" $
       withConnection connectionString insertUserTwice
-       `shouldThrow` anyErrorCall
+       `shouldThrow` (const True :: Selector SquealException)
 
     it "Should be raised outside of transactions" $
       withConnection connectionString (transactionally_ insertUserTwice)
-       `shouldThrow` anyErrorCall
+       `shouldThrow` (const True :: Selector SquealException)
