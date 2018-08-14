@@ -89,6 +89,35 @@ module Squeal.PostgreSQL.Query
     -- * Sorting
   , SortExpression (..)
   , renderSortExpression
+    -- * Subquery expressions
+  , unsafeSubqueryExpression
+  , unsafeRowSubqueryExpression
+  , in_
+  , rowIn
+  , allEq
+  , rowAllEq
+  , anyEq
+  , rowAnyEq
+  , allNeq
+  , rowAllNeq
+  , anyNeq
+  , rowAnyNeq
+  , allLt
+  , rowAllLt
+  , anyLt
+  , rowAnyLt
+  , allLte
+  , rowAllLte
+  , anyLte
+  , rowAnyLte
+  , allGt
+  , rowAllGt
+  , anyGt
+  , rowAnyGt
+  , allGte
+  , rowAllGte
+  , anyGte
+  , rowAnyGte
   ) where
 
 import Control.DeepSeq
@@ -1072,3 +1101,189 @@ renderSortExpression = \case
     <+> "DESC NULLS FIRST"
   AscNullsLast expression -> renderExpression expression <+> "ASC NULLS LAST"
   DescNullsLast expression -> renderExpression expression <+> "DESC NULLS LAST"
+
+unsafeSubqueryExpression
+  :: ByteString
+  -> Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+unsafeSubqueryExpression op x q = UnsafeExpression $
+  renderExpression x <+> op <+> parenthesized (renderQuery q)
+
+unsafeRowSubqueryExpression
+  :: SListI row
+  => ByteString
+  -> NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+unsafeRowSubqueryExpression op xs q = UnsafeExpression $
+  renderExpression (row xs) <+> op <+> parenthesized (renderQuery q)
+
+in_
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+in_ = unsafeSubqueryExpression "IN"
+
+rowIn
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowIn = unsafeRowSubqueryExpression "IN"
+
+allEq
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+allEq = unsafeSubqueryExpression "ALL ="
+
+rowAllEq
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowAllEq = unsafeRowSubqueryExpression "ALL ="
+
+anyEq
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+anyEq = unsafeSubqueryExpression "ANY ="
+
+rowAnyEq
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowAnyEq = unsafeRowSubqueryExpression "ANY ="
+
+allNeq
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+allNeq = unsafeSubqueryExpression "ALL <>"
+
+rowAllNeq
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowAllNeq = unsafeRowSubqueryExpression "ALL <>"
+
+anyNeq
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+anyNeq = unsafeSubqueryExpression "ANY <>"
+
+rowAnyNeq
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowAnyNeq = unsafeRowSubqueryExpression "ANY <>"
+
+allLt
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+allLt = unsafeSubqueryExpression "ALL <"
+
+rowAllLt
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowAllLt = unsafeRowSubqueryExpression "ALL <"
+
+anyLt
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+anyLt = unsafeSubqueryExpression "ANY <"
+
+rowAnyLt
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowAnyLt = unsafeRowSubqueryExpression "ANY <"
+
+allLte
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+allLte = unsafeSubqueryExpression "ALL <="
+
+rowAllLte
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowAllLte = unsafeRowSubqueryExpression "ALL <="
+
+anyLte
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+anyLte = unsafeSubqueryExpression "ANY <="
+
+rowAnyLte
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowAnyLte = unsafeRowSubqueryExpression "ANY <="
+
+allGt
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+allGt = unsafeSubqueryExpression "ALL >"
+
+rowAllGt
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowAllGt = unsafeRowSubqueryExpression "ALL >"
+
+anyGt
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+anyGt = unsafeSubqueryExpression "ANY >"
+
+rowAnyGt
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowAnyGt = unsafeRowSubqueryExpression "ANY >"
+
+allGte
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+allGte = unsafeSubqueryExpression "ALL >="
+
+rowAllGte
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowAllGte = unsafeRowSubqueryExpression "ALL >="
+
+anyGte
+  :: Expression schema from grp params ty
+  -> Query schema params '[alias ::: ty]
+  -> Condition schema from grp params
+anyGte = unsafeSubqueryExpression "ANY >="
+
+rowAnyGte
+  :: SListI row
+  => NP (Aliased (Expression schema from grp params)) row
+  -> Query schema params row
+  -> Condition schema from grp params
+rowAnyGte = unsafeRowSubqueryExpression "ANY >="
