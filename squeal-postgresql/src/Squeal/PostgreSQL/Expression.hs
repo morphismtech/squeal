@@ -351,7 +351,7 @@ null_ = UnsafeExpression "NULL"
 
 -- | analagous to `Just`
 --
--- >>> printSQL $ notNull true
+-- >>> printSQL $ true
 -- TRUE
 notNull
   :: Expression schema rels grouping params ('NotNull ty)
@@ -360,7 +360,7 @@ notNull = UnsafeExpression . renderExpression
 
 -- | return the leftmost value which is not NULL
 --
--- >>> printSQL $ coalesce [null_, notNull true] false
+-- >>> printSQL $ coalesce [null_, true] false
 -- COALESCE(NULL, TRUE, FALSE)
 coalesce
   :: [Expression schema relations grouping params ('Null ty)]
@@ -431,7 +431,7 @@ nullIf
 nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
   (renderExpression x <> ", " <> renderExpression y)
 
--- | >>> printSQL $ array [null_, notNull false, notNull true]
+-- | >>> printSQL $ array [null_, false, true]
 -- ARRAY[NULL, FALSE, TRUE]
 array
   :: [Expression schema relations grouping params ty]
@@ -693,28 +693,27 @@ ceiling_
   -> Expression schema relations grouping params (nullity frac)
 ceiling_ = unsafeFunction "ceiling"
 
--- | A `Condition` is a boolean valued `Expression`. While SQL allows
--- conditions to have @NULL@, Squeal instead chooses to disallow @NULL@,
--- forcing one to handle the case of @NULL@ explicitly to produce
--- a `Condition`.
+-- | A `Condition` is an `Expression`, which can evaluate
+-- to `TRUE`, `FALSE` or `NULL`. This is because SQL uses
+-- a three valued logic.
 type Condition schema relations grouping params =
-  Expression schema relations grouping params ('NotNull 'PGbool)
+  Expression schema relations grouping params ('Null 'PGbool)
 
 -- | >>> printSQL true
 -- TRUE
-true :: Condition schema relations grouping params
+true :: Expression schema relations grouping params (nullity 'PGbool)
 true = UnsafeExpression "TRUE"
 
 -- | >>> printSQL false
 -- FALSE
-false :: Condition schema relations grouping params
+false :: Expression schema relations grouping params (nullity 'PGbool)
 false = UnsafeExpression "FALSE"
 
 -- | >>> printSQL $ not_ true
 -- (NOT TRUE)
 not_
-  :: Condition schema relations grouping params
-  -> Condition schema relations grouping params
+  :: Expression schema relations grouping params (nullity 'PGbool)
+  -> Expression schema relations grouping params (nullity 'PGbool)
 not_ = unsafeUnaryOp "NOT"
 
 -- | >>> printSQL $ true .&& false
@@ -742,12 +741,12 @@ not_ = unsafeUnaryOp "NOT"
 -- CASE WHEN TRUE THEN 1 WHEN FALSE THEN 2 ELSE 3 END
 caseWhenThenElse
   :: [ ( Condition schema relations grouping params
-       , Expression schema relations grouping params (ty)
+       , Expression schema relations grouping params ty
      ) ]
   -- ^ whens and thens
-  -> Expression schema relations grouping params (ty)
+  -> Expression schema relations grouping params ty
   -- ^ else
-  -> Expression schema relations grouping params (ty)
+  -> Expression schema relations grouping params ty
 caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   [ "CASE"
   , mconcat
@@ -770,65 +769,65 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
 -- CASE WHEN TRUE THEN 1 ELSE 0 END
 ifThenElse
   :: Condition schema relations grouping params
-  -> Expression schema relations grouping params (ty) -- ^ then
-  -> Expression schema relations grouping params (ty) -- ^ else
-  -> Expression schema relations grouping params (ty)
+  -> Expression schema relations grouping params ty -- ^ then
+  -> Expression schema relations grouping params ty -- ^ else
+  -> Expression schema relations grouping params ty
 ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 
 -- | Comparison operations like `.==`, `./=`, `.>`, `.>=`, `.<` and `.<=`
 -- will produce @NULL@s if one of their arguments is @NULL@.
 --
--- >>> printSQL $ notNull true .== null_
+-- >>> printSQL $ true .== null_
 -- (TRUE = NULL)
 (.==)
-  :: Expression schema relations grouping params (nullity ty) -- ^ lhs
-  -> Expression schema relations grouping params (nullity ty) -- ^ rhs
-  -> Expression schema relations grouping params (nullity 'PGbool)
+  :: Expression schema relations grouping params (nullity0 ty) -- ^ lhs
+  -> Expression schema relations grouping params (nullity1 ty) -- ^ rhs
+  -> Condition schema relations grouping params
 (.==) = unsafeBinaryOp "="
 infix 4 .==
 
--- | >>> printSQL $ notNull true ./= null_
+-- | >>> printSQL $ true ./= null_
 -- (TRUE <> NULL)
 (./=)
-  :: Expression schema relations grouping params (nullity ty) -- ^ lhs
-  -> Expression schema relations grouping params (nullity ty) -- ^ rhs
-  -> Expression schema relations grouping params (nullity 'PGbool)
+  :: Expression schema relations grouping params (nullity0 ty) -- ^ lhs
+  -> Expression schema relations grouping params (nullity1 ty) -- ^ rhs
+  -> Condition schema relations grouping params
 (./=) = unsafeBinaryOp "<>"
 infix 4 ./=
 
--- | >>> printSQL $ notNull true .>= null_
+-- | >>> printSQL $ true .>= null_
 -- (TRUE >= NULL)
 (.>=)
-  :: Expression schema relations grouping params (nullity ty) -- ^ lhs
-  -> Expression schema relations grouping params (nullity ty) -- ^ rhs
-  -> Expression schema relations grouping params (nullity 'PGbool)
+  :: Expression schema relations grouping params (nullity0 ty) -- ^ lhs
+  -> Expression schema relations grouping params (nullity1 ty) -- ^ rhs
+  -> Condition schema relations grouping params
 (.>=) = unsafeBinaryOp ">="
 infix 4 .>=
 
--- | >>> printSQL $ notNull true .< null_
+-- | >>> printSQL $ true .< null_
 -- (TRUE < NULL)
 (.<)
-  :: Expression schema relations grouping params (nullity ty) -- ^ lhs
-  -> Expression schema relations grouping params (nullity ty) -- ^ rhs
-  -> Expression schema relations grouping params (nullity 'PGbool)
+  :: Expression schema relations grouping params (nullity0 ty) -- ^ lhs
+  -> Expression schema relations grouping params (nullity1 ty) -- ^ rhs
+  -> Condition schema relations grouping params
 (.<) = unsafeBinaryOp "<"
 infix 4 .<
 
--- | >>> printSQL $ notNull true .<= null_
+-- | >>> printSQL $ true .<= null_
 -- (TRUE <= NULL)
 (.<=)
-  :: Expression schema relations grouping params (nullity ty) -- ^ lhs
-  -> Expression schema relations grouping params (nullity ty) -- ^ rhs
-  -> Expression schema relations grouping params (nullity 'PGbool)
+  :: Expression schema relations grouping params (nullity0 ty) -- ^ lhs
+  -> Expression schema relations grouping params (nullity1 ty) -- ^ rhs
+  -> Condition schema relations grouping params
 (.<=) = unsafeBinaryOp "<="
 infix 4 .<=
 
--- | >>> printSQL $ notNull true .> null_
+-- | >>> printSQL $ true .> null_
 -- (TRUE > NULL)
 (.>)
-  :: Expression schema relations grouping params (nullity ty) -- ^ lhs
-  -> Expression schema relations grouping params (nullity ty) -- ^ rhs
-  -> Expression schema relations grouping params (nullity 'PGbool)
+  :: Expression schema relations grouping params (nullity0 ty) -- ^ lhs
+  -> Expression schema relations grouping params (nullity1 ty) -- ^ rhs
+  -> Condition schema relations grouping params
 (.>) = unsafeBinaryOp ">"
 infix 4 .>
 
