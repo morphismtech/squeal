@@ -514,11 +514,11 @@ instance FromValue pg y
         Decoding.valueParser (fromValue @pg) bytestring
 
 -- | A `FromRow` constraint generically sequences the parsings of the columns
--- of a `RelationType` into the fields of a record `Type` provided they have
+-- of a `RowType` into the fields of a record `Type` provided they have
 -- the same field names. You should not define instances of `FromRow`.
 -- Instead define `Generic` and `HasDatatypeInfo` instances which in turn
 -- provide `FromRow` instances.
-class SListI result => FromRow (result :: RelationType) y where
+class SListI result => FromRow (result :: RowType) y where
   -- | >>> :set -XOverloadedStrings
   -- >>> import Data.Text
   -- >>> newtype UserId = UserId { getUserId :: Int16 } deriving Show

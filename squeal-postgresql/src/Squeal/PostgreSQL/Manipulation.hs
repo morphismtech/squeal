@@ -184,7 +184,7 @@ DELETE FROM "tab" WHERE ("col1" = "col2") RETURNING *
 newtype Manipulation
   (schema :: SchemaType)
   (params :: [NullityType])
-  (columns :: RelationType)
+  (columns :: RowType)
     = UnsafeManipulation { renderManipulation :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
@@ -309,7 +309,7 @@ insertQuery_ tab query =
 -- existing value in the row for an update.
 data ColumnValue
   (schema :: SchemaType)
-  (columns :: RelationType)
+  (columns :: RowType)
   (params :: [NullityType])
   (ty :: ColumnType)
   where
@@ -333,7 +333,7 @@ data ReturningClause
   (schema :: SchemaType)
   (columns :: ColumnsType)
   (params :: [NullityType])
-  (results :: RelationType)
+  (results :: RowType)
   where
     ReturningStar
       :: results ~ ColumnsToRelation columns

@@ -807,9 +807,9 @@ alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 createView
   :: KnownSymbol view
   => Alias view -- ^ the name of the view to add
-  -> Query schema '[] relation
+  -> Query schema '[] row
     -- ^ query
-  -> Definition schema (Create view ('View relation) schema)
+  -> Definition schema (Create view ('View row) schema)
 createView alias query = UnsafeDefinition $
   "CREATE" <+> "VIEW" <+> renderAlias alias <+> "AS"
   <+> renderQuery query <> ";"

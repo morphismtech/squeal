@@ -40,9 +40,9 @@ module Squeal.PostgreSQL.Schema
   , ColumnType
     -- * Tables
   , ColumnsType
-  , RelationType
+  , RowType
   , NilRelation
-  , RelationsType
+  , FromType
   , TableType
     -- * Schema
   , SchemumType (..)
@@ -302,25 +302,25 @@ type family Uniquely
 -- :}
 type TableType = (TableConstraints,ColumnsType)
 
--- | `RelationType` is a row of `NullityType`
+-- | `RowType` is a row of `NullityType`
 --
 -- >>> :{
--- type family PersonRelation :: RelationType where
+-- type family PersonRelation :: RowType where
 --   PersonRelation =
 --     '[ "name"        ::: 'NotNull 'PGtext
 --      , "age"         ::: 'NotNull 'PGint4
 --      , "dateOfBirth" :::    'Null 'PGdate
 --      ]
 -- :}
-type RelationType = [(Symbol,NullityType)]
--- | A monokinded empty `RelationType`.
-type family NilRelation :: RelationType where NilRelation = '[]
+type RowType = [(Symbol,NullityType)]
+-- | A monokinded empty `RowType`.
+type family NilRelation :: RowType where NilRelation = '[]
 
--- | `RelationsType` is a row of `RelationType`s, thought of as a product.
-type RelationsType = [(Symbol,RelationType)]
+-- | `FromType` is a row of `RowType`s, thought of as a product.
+type FromType = [(Symbol,RowType)]
 
 -- | `ColumnsToRelation` removes column constraints.
-type family ColumnsToRelation (columns :: ColumnsType) :: RelationType where
+type family ColumnsToRelation (columns :: ColumnsType) :: RowType where
   ColumnsToRelation '[] = '[]
   ColumnsToRelation (column ::: constraint :=> ty ': columns) =
     column ::: ty ': ColumnsToRelation columns
@@ -330,7 +330,7 @@ type family TableToColumns (table :: TableType) :: ColumnsType where
   TableToColumns (constraints :=> columns) = columns
 
 -- | Convert a table to a relation.
-type family TableToRelation (table :: TableType) :: RelationType where
+type family TableToRelation (table :: TableType) :: RowType where
   TableToRelation tab = ColumnsToRelation (TableToColumns tab)
 
 -- | `Grouping` is an auxiliary namespace, created by
@@ -568,21 +568,21 @@ type family NullifyType (ty :: NullityType) :: NullityType where
   NullifyType ('NotNull ty) = 'Null ty
 
 -- | `NullifyRelation` is an idempotent that nullifies a `ColumnsType`.
-type family NullifyRelation (columns :: RelationType) :: RelationType where
+type family NullifyRelation (columns :: RowType) :: RowType where
   NullifyRelation '[] = '[]
   NullifyRelation (column ::: ty ': columns) =
     column ::: NullifyType ty ': NullifyRelation columns
 
--- | `NullifyRelations` is an idempotent that nullifies a `RelationsType`
+-- | `NullifyRelations` is an idempotent that nullifies a `FromType`
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
-type family NullifyRelations (tables :: RelationsType) :: RelationsType where
+type family NullifyRelations (tables :: FromType) :: FromType where
   NullifyRelations '[] = '[]
   NullifyRelations (table ::: columns ': tables) =
     table ::: NullifyRelation columns ': NullifyRelations tables
 
 -- | `RelationToNullityTypes` drops the column constraints.
-type family RelationToNullityTypes (rel :: RelationType) :: [NullityType] where
+type family RelationToNullityTypes (rel :: RowType) :: [NullityType] where
   RelationToNullityTypes ('(k, x) : xs) = x : RelationToNullityTypes xs
   RelationToNullityTypes '[]            = '[]
 
@@ -648,7 +648,7 @@ type family Length (xs :: [k]) :: Nat where
 -- `View` or `Typedef`.
 data SchemumType
   = Table TableType
-  | View RelationType
+  | View RowType
   | Typedef PGType
 
 -- | The schema of a database consists of a list of aliased,
@@ -657,7 +657,7 @@ type SchemaType = [(Symbol,SchemumType)]
 
 -- | Used in `Squeal.Postgresql.Manipulation.with`.
 type family With
-  (relations :: RelationsType)
+  (from :: FromType)
   (schema :: SchemaType)
   :: SchemaType where
     With '[] schema = schema
@@ -758,10 +758,10 @@ type family LabelsFrom (hask :: Type) :: [Type.ConstructorName] where
 type family CompositeFrom (hask :: Type) :: PGType where
   CompositeFrom hask = 'PGcomposite (PGFieldsFrom hask)
 
-type family PGFieldsFrom (hask :: Type) :: RelationType where
+type family PGFieldsFrom (hask :: Type) :: RowType where
   PGFieldsFrom hask = PGFieldsOf (RecordCodeOf hask)
 
-type family PGFieldsOf (fields :: [(Symbol, Type)]) :: RelationType where
+type family PGFieldsOf (fields :: [(Symbol, Type)]) :: RowType where
   PGFieldsOf '[] = '[]
   PGFieldsOf (field ': fields) = PGFieldOf field ': PGFieldsOf fields
 

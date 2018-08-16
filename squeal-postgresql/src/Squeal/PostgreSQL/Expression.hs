@@ -217,14 +217,14 @@ and other operations.
 -}
 newtype Expression
   (schema :: SchemaType)
-  (relations :: RelationsType)
+  (from :: FromType)
   (grouping :: Grouping)
   (params :: [NullityType])
   (ty :: NullityType)
     = UnsafeExpression { renderExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
-instance RenderSQL (Expression schema relations grouping params ty) where
+instance RenderSQL (Expression schema from grouping params ty) where
   renderSQL = renderExpression
 
 {- | A `HasParameter` constraint is used to indicate a value that is
@@ -248,7 +248,7 @@ class KnownNat n => HasParameter
     -- ($1 :: int4)
     parameter
       :: TypeExpression schema ty
-      -> Expression schema relations grouping params ty
+      -> Expression schema from grouping params ty
     parameter ty = UnsafeExpression $ parenthesized $
       "$" <> renderNat @n <+> "::"
         <+> renderTypeExpression ty
@@ -263,82 +263,82 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) schema params ty)
 -- >>> printSQL expr
 -- ($1 :: int4)
 param
-  :: forall n schema params relations grouping ty
+  :: forall n schema params from grouping ty
    . (PGTyped schema ty, HasParameter n schema params ty)
-  => Expression schema relations grouping params ty -- ^ param
+  => Expression schema from grouping params ty -- ^ param
 param = parameter @n pgtype
 
-instance (HasUnique relation relations columns, Has column columns ty)
-  => IsLabel column (Expression schema relations 'Ungrouped params ty) where
+instance (HasUnique relation from columns, Has column columns ty)
+  => IsLabel column (Expression schema from 'Ungrouped params ty) where
     fromLabel = UnsafeExpression $ renderAlias (Alias @column)
-instance (HasUnique relation relations columns, Has column columns ty)
+instance (HasUnique relation from columns, Has column columns ty)
   => IsLabel column
-    (Aliased (Expression schema relations 'Ungrouped params) (column ::: ty)) where
+    (Aliased (Expression schema from 'Ungrouped params) (column ::: ty)) where
     fromLabel = fromLabel @column `As` Alias @column
-instance (HasUnique relation relations columns, Has column columns ty)
+instance (HasUnique relation from columns, Has column columns ty)
   => IsLabel column
-    (NP (Aliased (Expression schema relations 'Ungrouped params)) '[column ::: ty]) where
+    (NP (Aliased (Expression schema from 'Ungrouped params)) '[column ::: ty]) where
     fromLabel = fromLabel @column :* Nil
 
-instance (Has relation relations columns, Has column columns ty)
-  => IsQualified relation column (Expression schema relations 'Ungrouped params ty) where
+instance (Has relation from columns, Has column columns ty)
+  => IsQualified relation column (Expression schema from 'Ungrouped params ty) where
     relation ! column = UnsafeExpression $
       renderAlias relation <> "." <> renderAlias column
-instance (Has relation relations columns, Has column columns ty)
+instance (Has relation from columns, Has column columns ty)
   => IsQualified relation column
-    (Aliased (Expression schema relations 'Ungrouped params) (column ::: ty)) where
+    (Aliased (Expression schema from 'Ungrouped params) (column ::: ty)) where
     relation ! column = relation ! column `As` column
-instance (Has relation relations columns, Has column columns ty)
+instance (Has relation from columns, Has column columns ty)
   => IsQualified relation column
-    (NP (Aliased (Expression schema relations 'Ungrouped params)) '[column ::: ty]) where
+    (NP (Aliased (Expression schema from 'Ungrouped params)) '[column ::: ty]) where
     relation ! column = relation ! column :* Nil
 
 instance
-  ( HasUnique relation relations columns
+  ( HasUnique relation from columns
   , Has column columns ty
   , GroupedBy relation column bys
   ) => IsLabel column
-    (Expression schema relations ('Grouped bys) params ty) where
+    (Expression schema from ('Grouped bys) params ty) where
       fromLabel = UnsafeExpression $ renderAlias (Alias @column)
 instance
-  ( HasUnique relation relations columns
+  ( HasUnique relation from columns
   , Has column columns ty
   , GroupedBy relation column bys
   ) => IsLabel column
-    ( Aliased (Expression schema relations ('Grouped bys) params)
+    ( Aliased (Expression schema from ('Grouped bys) params)
       (column ::: ty) ) where
       fromLabel = fromLabel @column `As` Alias @column
 instance
-  ( HasUnique relation relations columns
+  ( HasUnique relation from columns
   , Has column columns ty
   , GroupedBy relation column bys
   ) => IsLabel column
-    ( NP (Aliased (Expression schema relations ('Grouped bys) params))
+    ( NP (Aliased (Expression schema from ('Grouped bys) params))
       '[column ::: ty] ) where
       fromLabel = fromLabel @column :* Nil
 
 instance
-  ( Has relation relations columns
+  ( Has relation from columns
   , Has column columns ty
   , GroupedBy relation column bys
   ) => IsQualified relation column
-    (Expression schema relations ('Grouped bys) params ty) where
+    (Expression schema from ('Grouped bys) params ty) where
       relation ! column = UnsafeExpression $
         renderAlias relation <> "." <> renderAlias column
 instance
-  ( Has relation relations columns
+  ( Has relation from columns
   , Has column columns ty
   , GroupedBy relation column bys
   ) => IsQualified relation column
-    (Aliased (Expression schema relations ('Grouped bys) params)
+    (Aliased (Expression schema from ('Grouped bys) params)
       (column ::: ty)) where
         relation ! column = relation ! column `As` column
 instance
-  ( Has relation relations columns
+  ( Has relation from columns
   , Has column columns ty
   , GroupedBy relation column bys
   ) => IsQualified relation column
-    ( NP (Aliased (Expression schema relations ('Grouped bys) params))
+    ( NP (Aliased (Expression schema from ('Grouped bys) params))
       '[column ::: ty]) where
         relation ! column = relation ! column :* Nil
 
@@ -363,11 +363,11 @@ notNull = UnsafeExpression . renderExpression
 -- >>> printSQL $ coalesce [null_, true] false
 -- COALESCE(NULL, TRUE, FALSE)
 coalesce
-  :: [Expression schema relations grouping params ('Null ty)]
+  :: [Expression schema from grouping params ('Null ty)]
   -- ^ @NULL@s may be present
-  -> Expression schema relations grouping params ('NotNull ty)
+  -> Expression schema from grouping params ('NotNull ty)
   -- ^ @NULL@ is absent
-  -> Expression schema relations grouping params ('NotNull ty)
+  -> Expression schema from grouping params ('NotNull ty)
 coalesce nullxs notNullx = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
     ((renderExpression <$> nullxs) <> [renderExpression notNullx]))
@@ -377,26 +377,26 @@ coalesce nullxs notNullx = UnsafeExpression $
 -- >>> printSQL $ fromNull true null_
 -- COALESCE(NULL, TRUE)
 fromNull
-  :: Expression schema relations grouping params ('NotNull ty)
+  :: Expression schema from grouping params ('NotNull ty)
   -- ^ what to convert @NULL@ to
-  -> Expression schema relations grouping params ('Null ty)
-  -> Expression schema relations grouping params ('NotNull ty)
+  -> Expression schema from grouping params ('Null ty)
+  -> Expression schema from grouping params ('NotNull ty)
 fromNull notNullx nullx = coalesce [nullx] notNullx
 
 -- | >>> printSQL $ null_ & isNull
 -- NULL IS NULL
 isNull
-  :: Expression schema relations grouping params ('Null ty)
+  :: Expression schema from grouping params ('Null ty)
   -- ^ possibly @NULL@
-  -> Condition schema relations grouping params
+  -> Condition schema from grouping params
 isNull x = UnsafeExpression $ renderExpression x <+> "IS NULL"
 
 -- | >>> printSQL $ null_ & isNotNull
 -- NULL IS NOT NULL
 isNotNull
-  :: Expression schema relations grouping params ('Null ty)
+  :: Expression schema from grouping params ('Null ty)
   -- ^ possibly @NULL@
-  -> Condition schema relations grouping params
+  -> Condition schema from grouping params
 isNotNull x = UnsafeExpression $ renderExpression x <+> "IS NOT NULL"
 
 -- | analagous to `maybe` using @IS NULL@
@@ -404,13 +404,13 @@ isNotNull x = UnsafeExpression $ renderExpression x <+> "IS NOT NULL"
 -- >>> printSQL $ matchNull true not_ null_
 -- CASE WHEN NULL IS NULL THEN TRUE ELSE (NOT NULL) END
 matchNull
-  :: Expression schema relations grouping params (nullty)
+  :: Expression schema from grouping params (nullty)
   -- ^ what to convert @NULL@ to
-  -> ( Expression schema relations grouping params ('NotNull ty)
-       -> Expression schema relations grouping params (nullty) )
+  -> ( Expression schema from grouping params ('NotNull ty)
+       -> Expression schema from grouping params (nullty) )
   -- ^ function to perform when @NULL@ is absent
-  -> Expression schema relations grouping params ('Null ty)
-  -> Expression schema relations grouping params (nullty)
+  -> Expression schema from grouping params ('Null ty)
+  -> Expression schema from grouping params (nullty)
 matchNull y f x = ifThenElse (isNull x) y
   (f (UnsafeExpression (renderExpression x)))
 
@@ -423,25 +423,25 @@ matchNull y f x = ifThenElse (isNull x) y
 NULL IF (FALSE, ($1 :: bool))
 -}
 nullIf
-  :: Expression schema relations grouping params ('NotNull ty)
+  :: Expression schema from grouping params ('NotNull ty)
   -- ^ @NULL@ is absent
-  -> Expression schema relations grouping params ('NotNull ty)
+  -> Expression schema from grouping params ('NotNull ty)
   -- ^ @NULL@ is absent
-  -> Expression schema relations grouping params ('Null ty)
+  -> Expression schema from grouping params ('Null ty)
 nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
   (renderExpression x <> ", " <> renderExpression y)
 
 -- | >>> printSQL $ array [null_, false, true]
 -- ARRAY[NULL, FALSE, TRUE]
 array
-  :: [Expression schema relations grouping params ty]
+  :: [Expression schema from grouping params ty]
   -- ^ array elements
-  -> Expression schema relations grouping params (nullity ('PGvararray ty))
+  -> Expression schema from grouping params (nullity ('PGvararray ty))
 array xs = UnsafeExpression $
   "ARRAY[" <> commaSeparated (renderExpression <$> xs) <> "]"
 
 instance (KnownSymbol label, label `In` labels) => IsPGlabel label
-  (Expression schema relations grouping params (nullity ('PGenum labels))) where
+  (Expression schema from grouping params (nullity ('PGenum labels))) where
   label = UnsafeExpression $ renderLabel (PGlabel @label)
 
 -- | A row constructor is an expression that builds a row value
@@ -458,9 +458,9 @@ instance (KnownSymbol label, label `In` labels) => IsPGlabel label
 -- ROW(0, 1)
 row
   :: SListI fields
-  => NP (Aliased (Expression schema relations grouping params)) fields
+  => NP (Aliased (Expression schema from grouping params)) fields
   -- ^ zero or more expressions for the row field values
-  -> Expression schema relations grouping params (nullity ('PGcomposite fields))
+  -> Expression schema from grouping params (nullity ('PGcomposite fields))
 row exprs = UnsafeExpression $ "ROW" <> parenthesized
   (renderCommaSeparated (\ (expr `As` _) -> renderExpression expr) exprs)
 
@@ -472,11 +472,11 @@ instance Has field fields ty => IsLabel field
         renderSymbol @field
 
 instance Semigroup
-  (Expression schema relations grouping params (nullity ('PGvararray ty))) where
+  (Expression schema from grouping params (nullity ('PGvararray ty))) where
     (<>) = unsafeBinaryOp "||"
 
 instance Monoid
-  (Expression schema relations grouping params (nullity ('PGvararray ty))) where
+  (Expression schema from grouping params (nullity ('PGvararray ty))) where
     mempty = array []
     mappend = (<>)
 
@@ -484,22 +484,22 @@ instance Monoid
 -- >>> printSQL expr
 -- GREATEST(CURRENT_TIMESTAMP, ($1 :: timestamp with time zone))
 greatest
-  :: Expression schema relations grouping params (nullty)
+  :: Expression schema from grouping params (nullty)
   -- ^ needs at least 1 argument
-  -> [Expression schema relations grouping params (nullty)]
+  -> [Expression schema from grouping params (nullty)]
   -- ^ or more
-  -> Expression schema relations grouping params (nullty)
+  -> Expression schema from grouping params (nullty)
 greatest x xs = UnsafeExpression $ "GREATEST("
   <> commaSeparated (renderExpression <$> (x:xs)) <> ")"
 
 -- | >>> printSQL $ least currentTimestamp [null_]
 -- LEAST(CURRENT_TIMESTAMP, NULL)
 least
-  :: Expression schema relations grouping params (nullty)
+  :: Expression schema from grouping params (nullty)
   -- ^ needs at least 1 argument
-  -> [Expression schema relations grouping params (nullty)]
+  -> [Expression schema from grouping params (nullty)]
   -- ^ or more
-  -> Expression schema relations grouping params (nullty)
+  -> Expression schema from grouping params (nullty)
 least x xs = UnsafeExpression $ "LEAST("
   <> commaSeparated (renderExpression <$> (x:xs)) <> ")"
 
@@ -508,9 +508,9 @@ least x xs = UnsafeExpression $ "LEAST("
 unsafeBinaryOp
   :: ByteString
   -- ^ operator
-  -> Expression schema relations grouping params (ty0)
-  -> Expression schema relations grouping params (ty1)
-  -> Expression schema relations grouping params (ty2)
+  -> Expression schema from grouping params (ty0)
+  -> Expression schema from grouping params (ty1)
+  -> Expression schema from grouping params (ty2)
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderExpression x <+> op <+> renderExpression y
 
@@ -519,8 +519,8 @@ unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
 unsafeUnaryOp
   :: ByteString
   -- ^ operator
-  -> Expression schema relations grouping params (ty0)
-  -> Expression schema relations grouping params (ty1)
+  -> Expression schema from grouping params (ty0)
+  -> Expression schema from grouping params (ty1)
 unsafeUnaryOp op x = UnsafeExpression $ parenthesized $
   op <+> renderExpression x
 
@@ -529,8 +529,8 @@ unsafeUnaryOp op x = UnsafeExpression $ parenthesized $
 unsafeFunction
   :: ByteString
   -- ^ function
-  -> Expression schema relations grouping params (xty)
-  -> Expression schema relations grouping params (yty)
+  -> Expression schema from grouping params (xty)
+  -> Expression schema from grouping params (yty)
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderExpression x)
 
@@ -539,13 +539,13 @@ unsafeVariadicFunction
   :: SListI elems
   => ByteString
   -- ^ function
-  -> NP (Expression schema relations grouping params) elems
-  -> Expression schema relations grouping params ret
+  -> NP (Expression schema from grouping params) elems
+  -> Expression schema from grouping params ret
 unsafeVariadicFunction fun x = UnsafeExpression $
   fun <> parenthesized (commaSeparated (hcollapse (hmap (K . renderExpression) x)))
 
 instance PGNum ty
-  => Num (Expression schema relations grouping params (nullity ty)) where
+  => Num (Expression schema from grouping params (nullity ty)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
     (*) = unsafeBinaryOp "*"
@@ -557,12 +557,12 @@ instance PGNum ty
       . show
 
 instance (PGNum ty, PGFloating ty) => Fractional
-  (Expression schema relations grouping params (nullity ty)) where
+  (Expression schema from grouping params (nullity ty)) where
     (/) = unsafeBinaryOp "/"
     fromRational x = fromInteger (numerator x) / fromInteger (denominator x)
 
 instance (PGNum ty, PGFloating ty) => Floating
-  (Expression schema relations grouping params (nullity ty)) where
+  (Expression schema from grouping params (nullity ty)) where
     pi = UnsafeExpression "pi()"
     exp = unsafeFunction "exp"
     log = unsafeFunction "ln"
@@ -585,18 +585,18 @@ instance (PGNum ty, PGFloating ty) => Floating
 
 -- | >>> :{
 -- let
---   expression :: Expression schema relations grouping params (nullity 'PGfloat4)
+--   expression :: Expression schema from grouping params (nullity 'PGfloat4)
 --   expression = atan2_ pi 2
 -- in printSQL expression
 -- :}
 -- atan2(pi(), 2)
 atan2_
   :: PGFloating float
-  => Expression schema relations grouping params (nullity float)
+  => Expression schema from grouping params (nullity float)
   -- ^ numerator
-  -> Expression schema relations grouping params (nullity float)
+  -> Expression schema from grouping params (nullity float)
   -- ^ denominator
-  -> Expression schema relations grouping params (nullity float)
+  -> Expression schema from grouping params (nullity float)
 atan2_ y x = UnsafeExpression $
   "atan2(" <> renderExpression y <> ", " <> renderExpression x <> ")"
 
@@ -609,9 +609,9 @@ atan2_ y x = UnsafeExpression $
 cast
   :: TypeExpression schema ty1
   -- ^ type to cast as
-  -> Expression schema relations grouping params ty0
+  -> Expression schema from grouping params ty0
   -- ^ value to convert
-  -> Expression schema relations grouping params ty1
+  -> Expression schema from grouping params ty1
 cast ty x = UnsafeExpression $ parenthesized $
   renderExpression x <+> "::" <+> renderTypeExpression ty
 
@@ -619,134 +619,134 @@ cast ty x = UnsafeExpression $ parenthesized $
 --
 -- >>> :{
 -- let
---   expression :: Expression schema relations grouping params (nullity 'PGint2)
+--   expression :: Expression schema from grouping params (nullity 'PGint2)
 --   expression = 5 `quot_` 2
 -- in printSQL expression
 -- :}
 -- (5 / 2)
 quot_
   :: PGIntegral int
-  => Expression schema relations grouping params (nullity int)
+  => Expression schema from grouping params (nullity int)
   -- ^ numerator
-  -> Expression schema relations grouping params (nullity int)
+  -> Expression schema from grouping params (nullity int)
   -- ^ denominator
-  -> Expression schema relations grouping params (nullity int)
+  -> Expression schema from grouping params (nullity int)
 quot_ = unsafeBinaryOp "/"
 
 -- | remainder upon integer division
 --
 -- >>> :{
 -- let
---   expression :: Expression schema relations grouping params (nullity 'PGint2)
+--   expression :: Expression schema from grouping params (nullity 'PGint2)
 --   expression = 5 `rem_` 2
 -- in printSQL expression
 -- :}
 -- (5 % 2)
 rem_
   :: PGIntegral int
-  => Expression schema relations grouping params (nullity int)
+  => Expression schema from grouping params (nullity int)
   -- ^ numerator
-  -> Expression schema relations grouping params (nullity int)
+  -> Expression schema from grouping params (nullity int)
   -- ^ denominator
-  -> Expression schema relations grouping params (nullity int)
+  -> Expression schema from grouping params (nullity int)
 rem_ = unsafeBinaryOp "%"
 
 -- | >>> :{
 -- let
---   expression :: Expression schema relations grouping params (nullity 'PGfloat4)
+--   expression :: Expression schema from grouping params (nullity 'PGfloat4)
 --   expression = trunc pi
 -- in printSQL expression
 -- :}
 -- trunc(pi())
 trunc
   :: PGFloating frac
-  => Expression schema relations grouping params (nullity frac)
+  => Expression schema from grouping params (nullity frac)
   -- ^ fractional number
-  -> Expression schema relations grouping params (nullity frac)
+  -> Expression schema from grouping params (nullity frac)
 trunc = unsafeFunction "trunc"
 
 -- | >>> :{
 -- let
---   expression :: Expression schema relations grouping params (nullity 'PGfloat4)
+--   expression :: Expression schema from grouping params (nullity 'PGfloat4)
 --   expression = round_ pi
 -- in printSQL expression
 -- :}
 -- round(pi())
 round_
   :: PGFloating frac
-  => Expression schema relations grouping params (nullity frac)
+  => Expression schema from grouping params (nullity frac)
   -- ^ fractional number
-  -> Expression schema relations grouping params (nullity frac)
+  -> Expression schema from grouping params (nullity frac)
 round_ = unsafeFunction "round"
 
 -- | >>> :{
 -- let
---   expression :: Expression schema relations grouping params (nullity 'PGfloat4)
+--   expression :: Expression schema from grouping params (nullity 'PGfloat4)
 --   expression = ceiling_ pi
 -- in printSQL expression
 -- :}
 -- ceiling(pi())
 ceiling_
   :: PGFloating frac
-  => Expression schema relations grouping params (nullity frac)
+  => Expression schema from grouping params (nullity frac)
   -- ^ fractional number
-  -> Expression schema relations grouping params (nullity frac)
+  -> Expression schema from grouping params (nullity frac)
 ceiling_ = unsafeFunction "ceiling"
 
 -- | A `Condition` is an `Expression`, which can evaluate
 -- to `TRUE`, `FALSE` or `NULL`. This is because SQL uses
 -- a three valued logic.
-type Condition schema relations grouping params =
-  Expression schema relations grouping params ('Null 'PGbool)
+type Condition schema from grouping params =
+  Expression schema from grouping params ('Null 'PGbool)
 
 -- | >>> printSQL true
 -- TRUE
-true :: Expression schema relations grouping params (nullity 'PGbool)
+true :: Expression schema from grouping params (nullity 'PGbool)
 true = UnsafeExpression "TRUE"
 
 -- | >>> printSQL false
 -- FALSE
-false :: Expression schema relations grouping params (nullity 'PGbool)
+false :: Expression schema from grouping params (nullity 'PGbool)
 false = UnsafeExpression "FALSE"
 
 -- | >>> printSQL $ not_ true
 -- (NOT TRUE)
 not_
-  :: Expression schema relations grouping params (nullity 'PGbool)
-  -> Expression schema relations grouping params (nullity 'PGbool)
+  :: Expression schema from grouping params (nullity 'PGbool)
+  -> Expression schema from grouping params (nullity 'PGbool)
 not_ = unsafeUnaryOp "NOT"
 
 -- | >>> printSQL $ true .&& false
 -- (TRUE AND FALSE)
 (.&&)
-  :: Condition schema relations grouping params
-  -> Condition schema relations grouping params
-  -> Condition schema relations grouping params
+  :: Condition schema from grouping params
+  -> Condition schema from grouping params
+  -> Condition schema from grouping params
 (.&&) = unsafeBinaryOp "AND"
 
 -- | >>> printSQL $ true .|| false
 -- (TRUE OR FALSE)
 (.||)
-  :: Condition schema relations grouping params
-  -> Condition schema relations grouping params
-  -> Condition schema relations grouping params
+  :: Condition schema from grouping params
+  -> Condition schema from grouping params
+  -> Condition schema from grouping params
 (.||) = unsafeBinaryOp "OR"
 
 -- | >>> :{
 -- let
---   expression :: Expression schema relations grouping params (nullity 'PGint2)
+--   expression :: Expression schema from grouping params (nullity 'PGint2)
 --   expression = caseWhenThenElse [(true, 1), (false, 2)] 3
 -- in printSQL expression
 -- :}
 -- CASE WHEN TRUE THEN 1 WHEN FALSE THEN 2 ELSE 3 END
 caseWhenThenElse
-  :: [ ( Condition schema relations grouping params
-       , Expression schema relations grouping params ty
+  :: [ ( Condition schema from grouping params
+       , Expression schema from grouping params ty
      ) ]
   -- ^ whens and thens
-  -> Expression schema relations grouping params ty
+  -> Expression schema from grouping params ty
   -- ^ else
-  -> Expression schema relations grouping params ty
+  -> Expression schema from grouping params ty
 caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   [ "CASE"
   , mconcat
@@ -762,16 +762,16 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
 
 -- | >>> :{
 -- let
---   expression :: Expression schema relations grouping params (nullity 'PGint2)
+--   expression :: Expression schema from grouping params (nullity 'PGint2)
 --   expression = ifThenElse true 1 0
 -- in printSQL expression
 -- :}
 -- CASE WHEN TRUE THEN 1 ELSE 0 END
 ifThenElse
-  :: Condition schema relations grouping params
-  -> Expression schema relations grouping params ty -- ^ then
-  -> Expression schema relations grouping params ty -- ^ else
-  -> Expression schema relations grouping params ty
+  :: Condition schema from grouping params
+  -> Expression schema from grouping params ty -- ^ then
+  -> Expression schema from grouping params ty -- ^ else
+  -> Expression schema from grouping params ty
 ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 
 -- | Comparison operations like `.==`, `./=`, `.>`, `.>=`, `.<` and `.<=`
@@ -780,85 +780,85 @@ ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 -- >>> printSQL $ true .== null_
 -- (TRUE = NULL)
 (.==)
-  :: Expression schema relations grouping params (nullity0 ty) -- ^ lhs
-  -> Expression schema relations grouping params (nullity1 ty) -- ^ rhs
-  -> Condition schema relations grouping params
+  :: Expression schema from grouping params (nullity0 ty) -- ^ lhs
+  -> Expression schema from grouping params (nullity1 ty) -- ^ rhs
+  -> Condition schema from grouping params
 (.==) = unsafeBinaryOp "="
 infix 4 .==
 
 -- | >>> printSQL $ true ./= null_
 -- (TRUE <> NULL)
 (./=)
-  :: Expression schema relations grouping params (nullity0 ty) -- ^ lhs
-  -> Expression schema relations grouping params (nullity1 ty) -- ^ rhs
-  -> Condition schema relations grouping params
+  :: Expression schema from grouping params (nullity0 ty) -- ^ lhs
+  -> Expression schema from grouping params (nullity1 ty) -- ^ rhs
+  -> Condition schema from grouping params
 (./=) = unsafeBinaryOp "<>"
 infix 4 ./=
 
 -- | >>> printSQL $ true .>= null_
 -- (TRUE >= NULL)
 (.>=)
-  :: Expression schema relations grouping params (nullity0 ty) -- ^ lhs
-  -> Expression schema relations grouping params (nullity1 ty) -- ^ rhs
-  -> Condition schema relations grouping params
+  :: Expression schema from grouping params (nullity0 ty) -- ^ lhs
+  -> Expression schema from grouping params (nullity1 ty) -- ^ rhs
+  -> Condition schema from grouping params
 (.>=) = unsafeBinaryOp ">="
 infix 4 .>=
 
 -- | >>> printSQL $ true .< null_
 -- (TRUE < NULL)
 (.<)
-  :: Expression schema relations grouping params (nullity0 ty) -- ^ lhs
-  -> Expression schema relations grouping params (nullity1 ty) -- ^ rhs
-  -> Condition schema relations grouping params
+  :: Expression schema from grouping params (nullity0 ty) -- ^ lhs
+  -> Expression schema from grouping params (nullity1 ty) -- ^ rhs
+  -> Condition schema from grouping params
 (.<) = unsafeBinaryOp "<"
 infix 4 .<
 
 -- | >>> printSQL $ true .<= null_
 -- (TRUE <= NULL)
 (.<=)
-  :: Expression schema relations grouping params (nullity0 ty) -- ^ lhs
-  -> Expression schema relations grouping params (nullity1 ty) -- ^ rhs
-  -> Condition schema relations grouping params
+  :: Expression schema from grouping params (nullity0 ty) -- ^ lhs
+  -> Expression schema from grouping params (nullity1 ty) -- ^ rhs
+  -> Condition schema from grouping params
 (.<=) = unsafeBinaryOp "<="
 infix 4 .<=
 
 -- | >>> printSQL $ true .> null_
 -- (TRUE > NULL)
 (.>)
-  :: Expression schema relations grouping params (nullity0 ty) -- ^ lhs
-  -> Expression schema relations grouping params (nullity1 ty) -- ^ rhs
-  -> Condition schema relations grouping params
+  :: Expression schema from grouping params (nullity0 ty) -- ^ lhs
+  -> Expression schema from grouping params (nullity1 ty) -- ^ rhs
+  -> Condition schema from grouping params
 (.>) = unsafeBinaryOp ">"
 infix 4 .>
 
 -- | >>> printSQL currentDate
 -- CURRENT_DATE
 currentDate
-  :: Expression schema relations grouping params (nullity 'PGdate)
+  :: Expression schema from grouping params (nullity 'PGdate)
 currentDate = UnsafeExpression "CURRENT_DATE"
 
 -- | >>> printSQL currentTime
 -- CURRENT_TIME
 currentTime
-  :: Expression schema relations grouping params (nullity 'PGtimetz)
+  :: Expression schema from grouping params (nullity 'PGtimetz)
 currentTime = UnsafeExpression "CURRENT_TIME"
 
 -- | >>> printSQL currentTimestamp
 -- CURRENT_TIMESTAMP
 currentTimestamp
-  :: Expression schema relations grouping params (nullity 'PGtimestamptz)
+  :: Expression schema from grouping params (nullity 'PGtimestamptz)
 currentTimestamp = UnsafeExpression "CURRENT_TIMESTAMP"
 
 -- | >>> printSQL localTime
 -- LOCALTIME
 localTime
-  :: Expression schema relations grouping params (nullity 'PGtime)
+  :: Expression schema from grouping params (nullity 'PGtime)
 localTime = UnsafeExpression "LOCALTIME"
 
 -- | >>> printSQL localTimestamp
 -- LOCALTIMESTAMP
 localTimestamp
-  :: Expression schema relations grouping params (nullity 'PGtimestamp)
+  :: Expression schema from grouping params (nullity 'PGtimestamp)
 localTimestamp = UnsafeExpression "LOCALTIMESTAMP"
 
 {-----------------------------------------
@@ -866,7 +866,7 @@ text
 -----------------------------------------}
 
 instance IsString
-  (Expression schema relations grouping params (nullity 'PGtext)) where
+  (Expression schema from grouping params (nullity 'PGtext)) where
     fromString str = UnsafeExpression $
       "E\'" <> fromString (escape =<< str) <> "\'"
       where
@@ -882,36 +882,36 @@ instance IsString
           c -> [c]
 
 instance Semigroup
-  (Expression schema relations grouping params (nullity 'PGtext)) where
+  (Expression schema from grouping params (nullity 'PGtext)) where
     (<>) = unsafeBinaryOp "||"
 
 instance Monoid
-  (Expression schema relations grouping params (nullity 'PGtext)) where
+  (Expression schema from grouping params (nullity 'PGtext)) where
     mempty = fromString ""
     mappend = (<>)
 
 -- | >>> printSQL $ lower "ARRRGGG"
 -- lower(E'ARRRGGG')
 lower
-  :: Expression schema relations grouping params (nullity 'PGtext)
+  :: Expression schema from grouping params (nullity 'PGtext)
   -- ^ string to lower case
-  -> Expression schema relations grouping params (nullity 'PGtext)
+  -> Expression schema from grouping params (nullity 'PGtext)
 lower = unsafeFunction "lower"
 
 -- | >>> printSQL $ upper "eeee"
 -- upper(E'eeee')
 upper
-  :: Expression schema relations grouping params (nullity 'PGtext)
+  :: Expression schema from grouping params (nullity 'PGtext)
   -- ^ string to upper case
-  -> Expression schema relations grouping params (nullity 'PGtext)
+  -> Expression schema from grouping params (nullity 'PGtext)
 upper = unsafeFunction "upper"
 
 -- | >>> printSQL $ charLength "four"
 -- char_length(E'four')
 charLength
-  :: Expression schema relations grouping params (nullity 'PGtext)
+  :: Expression schema from grouping params (nullity 'PGtext)
   -- ^ string to measure
-  -> Expression schema relations grouping params (nullity 'PGint4)
+  -> Expression schema from grouping params (nullity 'PGint4)
 charLength = unsafeFunction "char_length"
 
 -- | The `like` expression returns true if the @string@ matches
@@ -924,11 +924,11 @@ charLength = unsafeFunction "char_length"
 -- >>> printSQL $ "abc" `like` "a%"
 -- (E'abc' LIKE E'a%')
 like
-  :: Expression schema relations grouping params (nullity 'PGtext)
+  :: Expression schema from grouping params (nullity 'PGtext)
   -- ^ string
-  -> Expression schema relations grouping params (nullity 'PGtext)
+  -> Expression schema from grouping params (nullity 'PGtext)
   -- ^ pattern
-  -> Expression schema relations grouping params (nullity 'PGbool)
+  -> Expression schema from grouping params (nullity 'PGbool)
 like = unsafeBinaryOp "LIKE"
 
 {-----------------------------------------
@@ -943,33 +943,33 @@ Table 9.44: json and jsonb operators
 -- | Get JSON value (object field or array element) at a key.
 (.->)
   :: (PGjson_ json, PGjsonKey key)
-  => Expression schema relations grouping params (nullity json)
-  -> Expression schema relations grouping params (nullity key)
-  -> Expression schema relations grouping params ('Null json)
+  => Expression schema from grouping params (nullity json)
+  -> Expression schema from grouping params (nullity key)
+  -> Expression schema from grouping params ('Null json)
 (.->) = unsafeBinaryOp "->"
 
 -- | Get JSON value (object field or array element) at a key, as text.
 (.->>)
   :: (PGjson_ json, PGjsonKey key)
-  => Expression schema relations grouping params (nullity json)
-  -> Expression schema relations grouping params (nullity key)
-  -> Expression schema relations grouping params ('Null 'PGtext)
+  => Expression schema from grouping params (nullity json)
+  -> Expression schema from grouping params (nullity key)
+  -> Expression schema from grouping params ('Null 'PGtext)
 (.->>) = unsafeBinaryOp "->>"
 
 -- | Get JSON value at a specified path.
 (.#>)
   :: (PGjson_ json, PGtextArray "(.#>)" path)
-  => Expression schema relations grouping params (nullity json)
-  -> Expression schema relations grouping params (nullity path)
-  -> Expression schema relations grouping params ('Null json)
+  => Expression schema from grouping params (nullity json)
+  -> Expression schema from grouping params (nullity path)
+  -> Expression schema from grouping params ('Null json)
 (.#>) = unsafeBinaryOp "#>"
 
 -- | Get JSON value at a specified path as text.
 (.#>>)
   :: (PGjson_ json, PGtextArray "(.#>>)" path)
-  => Expression schema relations grouping params (nullity json)
-  -> Expression schema relations grouping params (nullity path)
-  -> Expression schema relations grouping params ('Null 'PGtext)
+  => Expression schema from grouping params (nullity json)
+  -> Expression schema from grouping params (nullity path)
+  -> Expression schema from grouping params ('Null 'PGtext)
 (.#>>) = unsafeBinaryOp "#>>"
 
 -- Additional jsonb operators
@@ -977,43 +977,43 @@ Table 9.44: json and jsonb operators
 -- | Does the left JSON value contain the right JSON path/value entries at the
 -- top level?
 (.@>)
-  :: Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Condition schema relations grouping params
+  :: Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity 'PGjsonb)
+  -> Condition schema from grouping params
 (.@>) = unsafeBinaryOp "@>"
 
 -- | Are the left JSON path/value entries contained at the top level within the
 -- right JSON value?
 (.<@)
-  :: Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Condition schema relations grouping params
+  :: Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity 'PGjsonb)
+  -> Condition schema from grouping params
 (.<@) = unsafeBinaryOp "<@"
 
 -- | Does the string exist as a top-level key within the JSON value?
 (.?)
-  :: Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity 'PGtext)
-  -> Condition schema relations grouping params
+  :: Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity 'PGtext)
+  -> Condition schema from grouping params
 (.?) = unsafeBinaryOp "?"
 
 -- | Do any of these array strings exist as top-level keys?
 (.?|)
-  :: Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity ('PGvararray ('NotNull 'PGtext)))
-  -> Condition schema relations grouping params
+  :: Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity ('PGvararray ('NotNull 'PGtext)))
+  -> Condition schema from grouping params
 (.?|) = unsafeBinaryOp "?|"
 
 -- | Do all of these array strings exist as top-level keys?
 (.?&)
-  :: Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity ('PGvararray ('NotNull 'PGtext)))
-  -> Condition schema relations grouping params
+  :: Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity ('PGvararray ('NotNull 'PGtext)))
+  -> Condition schema from grouping params
 (.?&) = unsafeBinaryOp "?&"
 
 -- | Concatenate two jsonb values into a new jsonb value.
 instance
-  Semigroup (Expression schema relations grouping param (nullity 'PGjsonb)) where
+  Semigroup (Expression schema from grouping param (nullity 'PGjsonb)) where
   (<>) = unsafeBinaryOp "||"
 
 -- | Delete a key or keys from a JSON object, or remove an array element.
@@ -1030,18 +1030,18 @@ instance
 -- count from the end). Throws an error if top level container is not an array.
 (.-.)
   :: (key `In` '[ 'PGtext, 'PGvararray ('NotNull 'PGtext), 'PGint4, 'PGint2 ]) -- hlint error without parens here
-  => Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity key)
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  => Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity key)
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 (.-.) = unsafeBinaryOp "-"
 
 -- | Delete the field or element with specified path (for JSON arrays, negative
 -- integers count from the end)
 (#-.)
   :: PGtextArray "(#-.)" arrayty
-  => Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity arrayty)
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  => Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity arrayty)
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 (#-.) = unsafeBinaryOp "#-"
 
 {-----------------------------------------
@@ -1049,11 +1049,11 @@ Table 9.45: JSON creation functions
 -----------------------------------------}
 
 -- | Literal binary JSON
-jsonbLit :: JSON.Value -> Expression schema relations grouping params (nullity 'PGjsonb)
+jsonbLit :: JSON.Value -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonbLit = cast jsonb . UnsafeExpression . singleQuotedUtf8 . toStrict . JSON.encode
 
 -- | Literal JSON
-jsonLit :: JSON.Value -> Expression schema relations grouping params (nullity 'PGjson)
+jsonLit :: JSON.Value -> Expression schema from grouping params (nullity 'PGjson)
 jsonLit = cast json . UnsafeExpression . singleQuotedUtf8 . toStrict . JSON.encode
 
 -- | Returns the value as json. Arrays and composites are converted
@@ -1063,8 +1063,8 @@ jsonLit = cast json . UnsafeExpression . singleQuotedUtf8 . toStrict . JSON.enco
 -- number, a Boolean, or a null value, the text representation will be used, in
 -- such a fashion that it is a valid json value.
 toJson
-  :: Expression schema relations grouping params (nullity ty)
-  -> Expression schema relations grouping params (nullity 'PGjson)
+  :: Expression schema from grouping params (nullity ty)
+  -> Expression schema from grouping params (nullity 'PGjson)
 toJson = unsafeFunction "to_json"
 
 -- | Returns the value as jsonb. Arrays and composites are converted
@@ -1074,43 +1074,43 @@ toJson = unsafeFunction "to_json"
 -- number, a Boolean, or a null value, the text representation will be used, in
 -- such a fashion that it is a valid jsonb value.
 toJsonb
-  :: Expression schema relations grouping params (nullity ty)
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  :: Expression schema from grouping params (nullity ty)
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 toJsonb = unsafeFunction "to_jsonb"
 
 -- | Returns the array as a JSON array. A PostgreSQL multidimensional array
 -- becomes a JSON array of arrays.
 arrayToJson
   :: PGarray "arrayToJson" arr
-  => Expression schema relations grouping params (nullity arr)
-  -> Expression schema relations grouping params (nullity 'PGjson)
+  => Expression schema from grouping params (nullity arr)
+  -> Expression schema from grouping params (nullity 'PGjson)
 arrayToJson = unsafeFunction "array_to_json"
 
 -- | Returns the row as a JSON object.
 rowToJson
-  :: Expression schema relations grouping params (nullity ('PGcomposite ty))
-  -> Expression schema relations grouping params (nullity 'PGjson)
+  :: Expression schema from grouping params (nullity ('PGcomposite ty))
+  -> Expression schema from grouping params (nullity 'PGjson)
 rowToJson = unsafeFunction "row_to_json"
 
 -- | Builds a possibly-heterogeneously-typed JSON array out of a variadic
 -- argument list.
 jsonBuildArray
   :: SListI elems
-  => NP (Expression schema relations grouping params) elems
-  -> Expression schema relations grouping params (nullity 'PGjson)
+  => NP (Expression schema from grouping params) elems
+  -> Expression schema from grouping params (nullity 'PGjson)
 jsonBuildArray = unsafeVariadicFunction "json_build_array"
 
 -- | Builds a possibly-heterogeneously-typed (binary) JSON array out of a
 -- variadic argument list.
 jsonbBuildArray
   :: SListI elems
-  => NP (Expression schema relations grouping params) elems
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  => NP (Expression schema from grouping params) elems
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonbBuildArray = unsafeVariadicFunction "jsonb_build_array"
 
 unsafeRowFunction
   :: All Top elems
-  => NP (Aliased (Expression schema relations grouping params)) elems
+  => NP (Aliased (Expression schema from grouping params)) elems
   -> [ByteString]
 unsafeRowFunction =
   (`appEndo` []) . hcfoldMap (Proxy :: Proxy Top)
@@ -1122,8 +1122,8 @@ unsafeRowFunction =
 -- and values.
 jsonBuildObject
   :: All Top elems
-  => NP (Aliased (Expression schema relations grouping params)) elems
-  -> Expression schema relations grouping params (nullity 'PGjson)
+  => NP (Aliased (Expression schema from grouping params)) elems
+  -> Expression schema from grouping params (nullity 'PGjson)
 jsonBuildObject
   = unsafeFunction "json_build_object"
   . UnsafeExpression
@@ -1135,8 +1135,8 @@ jsonBuildObject
 -- between text and values.
 jsonbBuildObject
   :: All Top elems
-  => NP (Aliased (Expression schema relations grouping params)) elems
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  => NP (Aliased (Expression schema from grouping params)) elems
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonbBuildObject
   = unsafeFunction "jsonb_build_object"
   . UnsafeExpression
@@ -1149,8 +1149,8 @@ jsonbBuildObject
 -- array has exactly two elements, which are taken as a key/value pair.
 jsonObject
   :: PGarrayOf "jsonObject" arr ('NotNull 'PGtext)
-  => Expression schema relations grouping params (nullity arr)
-  -> Expression schema relations grouping params (nullity 'PGjson)
+  => Expression schema from grouping params (nullity arr)
+  -> Expression schema from grouping params (nullity 'PGjson)
 jsonObject = unsafeFunction "json_object"
 
 -- | Builds a binary JSON object out of a text array. The array must have either
@@ -1159,8 +1159,8 @@ jsonObject = unsafeFunction "json_object"
 -- array has exactly two elements, which are taken as a key/value pair.
 jsonbObject
   :: PGarrayOf "jsonbObject" arr ('NotNull 'PGtext)
-  => Expression schema relations grouping params (nullity arr)
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  => Expression schema from grouping params (nullity arr)
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonbObject = unsafeFunction "jsonb_object"
 
 -- | This is an alternate form of 'jsonObject' that takes two arrays; one for
@@ -1168,9 +1168,9 @@ jsonbObject = unsafeFunction "jsonb_object"
 jsonZipObject
   :: ( PGarrayOf "jsonZipObject" keysArray ('NotNull 'PGtext)
      , PGarrayOf "jsonZipObject" valuesArray ('NotNull 'PGtext))
-  => Expression schema relations grouping params (nullity keysArray)
-  -> Expression schema relations grouping params (nullity valuesArray)
-  -> Expression schema relations grouping params (nullity 'PGjson)
+  => Expression schema from grouping params (nullity keysArray)
+  -> Expression schema from grouping params (nullity valuesArray)
+  -> Expression schema from grouping params (nullity 'PGjson)
 jsonZipObject ks vs =
   unsafeVariadicFunction "json_object" (ks :* vs :* Nil)
 
@@ -1180,9 +1180,9 @@ jsonZipObject ks vs =
 jsonbZipObject
   :: ( PGarrayOf "jsonbZipObject" keysArray ('NotNull 'PGtext)
      , PGarrayOf "jsonbZipObject" valuesArray ('NotNull 'PGtext))
-  => Expression schema relations grouping params (nullity keysArray)
-  -> Expression schema relations grouping params (nullity valuesArray)
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  => Expression schema from grouping params (nullity keysArray)
+  -> Expression schema from grouping params (nullity valuesArray)
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonbZipObject ks vs =
   unsafeVariadicFunction "jsonb_object" (ks :* vs :* Nil)
 
@@ -1192,23 +1192,23 @@ Table 9.46: JSON processing functions
 
 -- | Returns the number of elements in the outermost JSON array.
 jsonArrayLength
-  :: Expression schema relations grouping params (nullity 'PGjson)
-  -> Expression schema relations grouping params (nullity 'PGint4)
+  :: Expression schema from grouping params (nullity 'PGjson)
+  -> Expression schema from grouping params (nullity 'PGint4)
 jsonArrayLength = unsafeFunction "json_array_length"
 
 -- | Returns the number of elements in the outermost binary JSON array.
 jsonbArrayLength
-  :: Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity 'PGint4)
+  :: Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity 'PGint4)
 jsonbArrayLength = unsafeFunction "jsonb_array_length"
 
 -- | Returns JSON value pointed to by the given path (equivalent to #>
 -- operator).
 jsonExtractPath
   :: SListI elems
-  => Expression schema relations grouping params (nullity 'PGjson)
-  -> NP (Expression schema relations grouping params) elems
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  => Expression schema from grouping params (nullity 'PGjson)
+  -> NP (Expression schema from grouping params) elems
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonExtractPath x xs =
   unsafeVariadicFunction "json_extract_path" (x :* xs)
 
@@ -1216,9 +1216,9 @@ jsonExtractPath x xs =
 -- operator).
 jsonbExtractPath
   :: SListI elems
-  => Expression schema relations grouping params (nullity 'PGjsonb)
-  -> NP (Expression schema relations grouping params) elems
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  => Expression schema from grouping params (nullity 'PGjsonb)
+  -> NP (Expression schema from grouping params) elems
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonbExtractPath x xs =
   unsafeVariadicFunction "jsonb_extract_path" (x :* xs)
 
@@ -1226,9 +1226,9 @@ jsonbExtractPath x xs =
 -- operator), as text.
 jsonExtractPathAsText
   :: SListI elems
-  => Expression schema relations grouping params (nullity 'PGjson)
-  -> NP (Expression schema relations grouping params) elems
-  -> Expression schema relations grouping params (nullity 'PGjson)
+  => Expression schema from grouping params (nullity 'PGjson)
+  -> NP (Expression schema from grouping params) elems
+  -> Expression schema from grouping params (nullity 'PGjson)
 jsonExtractPathAsText x xs =
   unsafeVariadicFunction "json_extract_path_text" (x :* xs)
 
@@ -1236,50 +1236,50 @@ jsonExtractPathAsText x xs =
 -- operator), as text.
 jsonbExtractPathAsText
   :: SListI elems
-  => Expression schema relations grouping params (nullity 'PGjsonb)
-  -> NP (Expression schema relations grouping params) elems
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  => Expression schema from grouping params (nullity 'PGjsonb)
+  -> NP (Expression schema from grouping params) elems
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonbExtractPathAsText x xs =
   unsafeVariadicFunction "jsonb_extract_path_text" (x :* xs)
 
 -- | Returns set of keys in the outermost JSON object.
 jsonObjectKeys
-  :: Expression schema relations grouping params (nullity 'PGjson)
-  -> Expression schema relations grouping params (nullity 'PGtext)
+  :: Expression schema from grouping params (nullity 'PGjson)
+  -> Expression schema from grouping params (nullity 'PGtext)
 jsonObjectKeys = unsafeFunction "json_object_keys"
 
 -- | Returns set of keys in the outermost JSON object.
 jsonbObjectKeys
-  :: Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity 'PGtext)
+  :: Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity 'PGtext)
 jsonbObjectKeys = unsafeFunction "jsonb_object_keys"
 
 -- | Returns the type of the outermost JSON value as a text string. Possible
 -- types are object, array, string, number, boolean, and null.
 jsonTypeof
-  :: Expression schema relations grouping params (nullity 'PGjson)
-  -> Expression schema relations grouping params (nullity 'PGtext)
+  :: Expression schema from grouping params (nullity 'PGjson)
+  -> Expression schema from grouping params (nullity 'PGtext)
 jsonTypeof = unsafeFunction "json_typeof"
 
 -- | Returns the type of the outermost binary JSON value as a text string.
 -- Possible types are object, array, string, number, boolean, and null.
 jsonbTypeof
-  :: Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity 'PGtext)
+  :: Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity 'PGtext)
 jsonbTypeof = unsafeFunction "jsonb_typeof"
 
 -- | Returns its argument with all object fields that have null values omitted.
 -- Other null values are untouched.
 jsonStripNulls
-  :: Expression schema relations grouping params (nullity 'PGjson)
-  -> Expression schema relations grouping params (nullity 'PGjson)
+  :: Expression schema from grouping params (nullity 'PGjson)
+  -> Expression schema from grouping params (nullity 'PGjson)
 jsonStripNulls = unsafeFunction "json_strip_nulls"
 
 -- | Returns its argument with all object fields that have null values omitted.
 -- Other null values are untouched.
 jsonbStripNulls
-  :: Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  :: Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
 
 -- | @ jsonbSet target path new_value create_missing @
@@ -1291,11 +1291,11 @@ jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
 -- arrays.
 jsonbSet
   :: PGtextArray "jsonbSet" arr
-  => Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity arr)
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Maybe (Expression schema relations grouping params (nullity 'PGbool))
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  => Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity arr)
+  -> Expression schema from grouping params (nullity 'PGjsonb)
+  -> Maybe (Expression schema from grouping params (nullity 'PGbool))
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonbSet tgt path val createMissing = case createMissing of
   Just m -> unsafeVariadicFunction "jsonb_set" (tgt :* path :* val :* m :* Nil)
   Nothing -> unsafeVariadicFunction "jsonb_set" (tgt :* path :* val :* Nil)
@@ -1310,19 +1310,19 @@ jsonbSet tgt path val createMissing = case createMissing of
 -- in path count from the end of JSON arrays.
 jsonbInsert
   :: PGtextArray "jsonbInsert" arr
-  => Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity arr)
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Maybe (Expression schema relations grouping params (nullity 'PGbool))
-  -> Expression schema relations grouping params (nullity 'PGjsonb)
+  => Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity arr)
+  -> Expression schema from grouping params (nullity 'PGjsonb)
+  -> Maybe (Expression schema from grouping params (nullity 'PGbool))
+  -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonbInsert tgt path val insertAfter = case insertAfter of
   Just i -> unsafeVariadicFunction "jsonb_insert" (tgt :* path :* val :* i :* Nil)
   Nothing -> unsafeVariadicFunction "jsonb_insert" (tgt :* path :* val :* Nil)
 
 -- | Returns its argument as indented JSON text.
 jsonbPretty
-  :: Expression schema relations grouping params (nullity 'PGjsonb)
-  -> Expression schema relations grouping params (nullity 'PGtext)
+  :: Expression schema from grouping params (nullity 'PGjsonb)
+  -> Expression schema from grouping params (nullity 'PGtext)
 jsonbPretty = unsafeFunction "jsonb_pretty"
 
 {-----------------------------------------
@@ -1332,16 +1332,16 @@ aggregation
 -- | escape hatch to define aggregate functions
 unsafeAggregate
   :: ByteString -- ^ aggregate function
-  -> Expression schema relations 'Ungrouped params (xty)
-  -> Expression schema relations ('Grouped bys) params (yty)
+  -> Expression schema from 'Ungrouped params (xty)
+  -> Expression schema from ('Grouped bys) params (yty)
 unsafeAggregate fun x = UnsafeExpression $ mconcat
   [fun, "(", renderExpression x, ")"]
 
 -- | escape hatch to define aggregate functions over distinct values
 unsafeAggregateDistinct
   :: ByteString -- ^ aggregate function
-  -> Expression schema relations 'Ungrouped params (xty)
-  -> Expression schema relations ('Grouped bys) params (yty)
+  -> Expression schema from 'Ungrouped params (xty)
+  -> Expression schema from ('Grouped bys) params (yty)
 unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
   [fun, "(DISTINCT ", renderExpression x, ")"]
 
@@ -1354,9 +1354,9 @@ unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
 -- sum("col")
 sum_
   :: PGNum ty
-  => Expression schema relations 'Ungrouped params (nullity ty)
+  => Expression schema from 'Ungrouped params (nullity ty)
   -- ^ what to sum
-  -> Expression schema relations ('Grouped bys) params (nullity ty)
+  -> Expression schema from ('Grouped bys) params (nullity ty)
 sum_ = unsafeAggregate "sum"
 
 -- | >>> :{
@@ -1368,18 +1368,18 @@ sum_ = unsafeAggregate "sum"
 -- sum(DISTINCT "col")
 sumDistinct
   :: PGNum ty
-  => Expression schema relations 'Ungrouped params (nullity ty)
+  => Expression schema from 'Ungrouped params (nullity ty)
   -- ^ what to sum
-  -> Expression schema relations ('Grouped bys) params (nullity ty)
+  -> Expression schema from ('Grouped bys) params (nullity ty)
 sumDistinct = unsafeAggregateDistinct "sum"
 
 -- | A constraint for `PGType`s that you can take averages of and the resulting
 -- `PGType`.
 class PGAvg ty avg | ty -> avg where
   avg, avgDistinct
-    :: Expression schema relations 'Ungrouped params (nullity ty)
+    :: Expression schema from 'Ungrouped params (nullity ty)
     -- ^ what to average
-    -> Expression schema relations ('Grouped bys) params (nullity avg)
+    -> Expression schema from ('Grouped bys) params (nullity avg)
   avg = unsafeAggregate "avg"
   avgDistinct = unsafeAggregateDistinct "avg"
 instance PGAvg 'PGint2 'PGnumeric
@@ -1399,9 +1399,9 @@ instance PGAvg 'PGinterval 'PGinterval
 -- bit_and("col")
 bitAnd
   :: PGIntegral int
-  => Expression schema relations 'Ungrouped params (nullity int)
+  => Expression schema from 'Ungrouped params (nullity int)
   -- ^ what to aggregate
-  -> Expression schema relations ('Grouped bys) params (nullity int)
+  -> Expression schema from ('Grouped bys) params (nullity int)
 bitAnd = unsafeAggregate "bit_and"
 
 -- | >>> :{
@@ -1413,9 +1413,9 @@ bitAnd = unsafeAggregate "bit_and"
 -- bit_or("col")
 bitOr
   :: PGIntegral int
-  => Expression schema relations 'Ungrouped params (nullity int)
+  => Expression schema from 'Ungrouped params (nullity int)
   -- ^ what to aggregate
-  -> Expression schema relations ('Grouped bys) params (nullity int)
+  -> Expression schema from ('Grouped bys) params (nullity int)
 bitOr = unsafeAggregate "bit_or"
 
 -- | >>> :{
@@ -1427,9 +1427,9 @@ bitOr = unsafeAggregate "bit_or"
 -- bit_and(DISTINCT "col")
 bitAndDistinct
   :: PGIntegral int
-  => Expression schema relations 'Ungrouped params (nullity int)
+  => Expression schema from 'Ungrouped params (nullity int)
   -- ^ what to aggregate
-  -> Expression schema relations ('Grouped bys) params (nullity int)
+  -> Expression schema from ('Grouped bys) params (nullity int)
 bitAndDistinct = unsafeAggregateDistinct "bit_and"
 
 -- | >>> :{
@@ -1441,9 +1441,9 @@ bitAndDistinct = unsafeAggregateDistinct "bit_and"
 -- bit_or(DISTINCT "col")
 bitOrDistinct
   :: PGIntegral int
-  => Expression schema relations 'Ungrouped params (nullity int)
+  => Expression schema from 'Ungrouped params (nullity int)
   -- ^ what to aggregate
-  -> Expression schema relations ('Grouped bys) params (nullity int)
+  -> Expression schema from ('Grouped bys) params (nullity int)
 bitOrDistinct = unsafeAggregateDistinct "bit_or"
 
 -- | >>> :{
@@ -1454,9 +1454,9 @@ bitOrDistinct = unsafeAggregateDistinct "bit_or"
 -- :}
 -- bool_and("col")
 boolAnd
-  :: Expression schema relations 'Ungrouped params (nullity 'PGbool)
+  :: Expression schema from 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
-  -> Expression schema relations ('Grouped bys) params (nullity 'PGbool)
+  -> Expression schema from ('Grouped bys) params (nullity 'PGbool)
 boolAnd = unsafeAggregate "bool_and"
 
 -- | >>> :{
@@ -1467,9 +1467,9 @@ boolAnd = unsafeAggregate "bool_and"
 -- :}
 -- bool_or("col")
 boolOr
-  :: Expression schema relations 'Ungrouped params (nullity 'PGbool)
+  :: Expression schema from 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
-  -> Expression schema relations ('Grouped bys) params (nullity 'PGbool)
+  -> Expression schema from ('Grouped bys) params (nullity 'PGbool)
 boolOr = unsafeAggregate "bool_or"
 
 -- | >>> :{
@@ -1480,9 +1480,9 @@ boolOr = unsafeAggregate "bool_or"
 -- :}
 -- bool_and(DISTINCT "col")
 boolAndDistinct
-  :: Expression schema relations 'Ungrouped params (nullity 'PGbool)
+  :: Expression schema from 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
-  -> Expression schema relations ('Grouped bys) params (nullity 'PGbool)
+  -> Expression schema from ('Grouped bys) params (nullity 'PGbool)
 boolAndDistinct = unsafeAggregateDistinct "bool_and"
 
 -- | >>> :{
@@ -1493,9 +1493,9 @@ boolAndDistinct = unsafeAggregateDistinct "bool_and"
 -- :}
 -- bool_or(DISTINCT "col")
 boolOrDistinct
-  :: Expression schema relations 'Ungrouped params (nullity 'PGbool)
+  :: Expression schema from 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
-  -> Expression schema relations ('Grouped bys) params (nullity 'PGbool)
+  -> Expression schema from ('Grouped bys) params (nullity 'PGbool)
 boolOrDistinct = unsafeAggregateDistinct "bool_or"
 
 -- | A special aggregation that does not require an input
@@ -1503,7 +1503,7 @@ boolOrDistinct = unsafeAggregateDistinct "bool_or"
 -- >>> printSQL countStar
 -- count(*)
 countStar
-  :: Expression schema relations ('Grouped bys) params ('NotNull 'PGint8)
+  :: Expression schema from ('Grouped bys) params ('NotNull 'PGint8)
 countStar = UnsafeExpression $ "count(*)"
 
 -- | >>> :{
@@ -1514,9 +1514,9 @@ countStar = UnsafeExpression $ "count(*)"
 -- :}
 -- count("col")
 count
-  :: Expression schema relations 'Ungrouped params ty
+  :: Expression schema from 'Ungrouped params ty
   -- ^ what to count
-  -> Expression schema relations ('Grouped bys) params ('NotNull 'PGint8)
+  -> Expression schema from ('Grouped bys) params ('NotNull 'PGint8)
 count = unsafeAggregate "count"
 
 -- | >>> :{
@@ -1527,9 +1527,9 @@ count = unsafeAggregate "count"
 -- :}
 -- count(DISTINCT "col")
 countDistinct
-  :: Expression schema relations 'Ungrouped params ty
+  :: Expression schema from 'Ungrouped params ty
   -- ^ what to count
-  -> Expression schema relations ('Grouped bys) params ('NotNull 'PGint8)
+  -> Expression schema from ('Grouped bys) params ('NotNull 'PGint8)
 countDistinct = unsafeAggregateDistinct "count"
 
 -- | synonym for `boolAnd`
@@ -1542,9 +1542,9 @@ countDistinct = unsafeAggregateDistinct "count"
 -- :}
 -- every("col")
 every
-  :: Expression schema relations 'Ungrouped params (nullity 'PGbool)
+  :: Expression schema from 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
-  -> Expression schema relations ('Grouped bys) params (nullity 'PGbool)
+  -> Expression schema from ('Grouped bys) params (nullity 'PGbool)
 every = unsafeAggregate "every"
 
 -- | synonym for `boolAndDistinct`
@@ -1557,16 +1557,16 @@ every = unsafeAggregate "every"
 -- :}
 -- every(DISTINCT "col")
 everyDistinct
-  :: Expression schema relations 'Ungrouped params (nullity 'PGbool)
+  :: Expression schema from 'Ungrouped params (nullity 'PGbool)
   -- ^ what to aggregate
-  -> Expression schema relations ('Grouped bys) params (nullity 'PGbool)
+  -> Expression schema from ('Grouped bys) params (nullity 'PGbool)
 everyDistinct = unsafeAggregateDistinct "every"
 
 -- | minimum and maximum aggregation
 max_, min_, maxDistinct, minDistinct
-  :: Expression schema relations 'Ungrouped params (nullity ty)
+  :: Expression schema from 'Ungrouped params (nullity ty)
   -- ^ what to aggregate
-  -> Expression schema relations ('Grouped bys) params (nullity ty)
+  -> Expression schema from ('Grouped bys) params (nullity ty)
 max_ = unsafeAggregate "max"
 min_ = unsafeAggregate "min"
 maxDistinct = unsafeAggregateDistinct "max"
