@@ -46,6 +46,7 @@ module Squeal.PostgreSQL.Schema
   , TableType
     -- * Schema
   , SchemumType (..)
+  , SchemumToType
   , SchemaType
     -- * Constraints
   , (:=>)
@@ -650,6 +651,11 @@ data SchemumType
   = Table TableType
   | View RowType
   | Typedef PGType
+
+type family SchemumToType (schemum :: SchemumType) :: PGType where
+  SchemumToType ('Typedef ty) = ty
+  SchemumToType ('Table table) = 'PGcomposite (TableToRow table)
+  SchemumToType ('View view) = 'PGcomposite view
 
 -- | The schema of a database consists of a list of aliased,
 -- user-defined `SchemumType`s.

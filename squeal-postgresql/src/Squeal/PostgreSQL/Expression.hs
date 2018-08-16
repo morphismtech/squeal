@@ -1581,7 +1581,7 @@ newtype TypeExpression (schema :: SchemaType) (ty :: NullityType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
-instance (Has alias schema ('Typedef ty))
+instance (Has alias schema schemum, SchemumToType schemum ~ ty)
   => IsLabel alias (TypeExpression schema (nullity ty)) where
     fromLabel = UnsafeTypeExpression (renderAlias (fromLabel @alias))
 
