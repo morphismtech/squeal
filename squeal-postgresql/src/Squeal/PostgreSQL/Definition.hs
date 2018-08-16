@@ -270,7 +270,7 @@ CREATE TABLE "tab" ("a" int NOT NULL, "b" int NOT NULL, CONSTRAINT "inequality" 
 -}
 check
   :: ( Has alias schema ('Table table)
-     , HasAll aliases (TableToRelation table) subcolumns )
+     , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify the subcolumns which are getting checked
   -> (forall tab. Condition schema '[tab ::: subcolumns] 'Ungrouped '[])
@@ -304,7 +304,7 @@ CREATE TABLE "tab" ("a" int NULL, "b" int NULL, CONSTRAINT "uq_a_b" UNIQUE ("a",
 -}
 unique
   :: ( Has alias schema ('Table table)
-     , HasAll aliases (TableToRelation table) subcolumns )
+     , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify subcolumns which together are unique for each row
   -> TableConstraintExpression schema alias ('Unique aliases)

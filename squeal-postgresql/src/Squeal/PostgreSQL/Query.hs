@@ -727,7 +727,7 @@ nullRow
   :: Has tab schema ('Table table)
   => Alias tab
   -> Expression schema from grouping params
-     (nullity ('PGcomposite (TableToRelation table)))
+     (nullity ('PGcomposite (TableToRow table)))
 nullRow tab = UnsafeExpression ("null::"<+>renderAlias tab)
 
 -- | Expands the JSON expression to a row whose columns match the record
@@ -737,7 +737,7 @@ jsonPopulateRecordAs
   => Alias tab
   -> Expression schema '[] 'Ungrouped params (nullity 'PGjson)
   -> Alias alias
-  -> FromClause schema params '[alias ::: TableToRelation table]
+  -> FromClause schema params '[alias ::: TableToRow table]
 jsonPopulateRecordAs tableName expr alias = unsafeAliasedFromClauseExpression
   (unsafeVariadicFunction "json_populate_record"
    (nullRow tableName :* expr :* Nil) `As` alias)
@@ -749,7 +749,7 @@ jsonbPopulateRecordAs
   => Alias tab
   -> Expression schema '[] 'Ungrouped params (nullity 'PGjsonb)
   -> Alias alias
-  -> FromClause schema params '[alias ::: TableToRelation table]
+  -> FromClause schema params '[alias ::: TableToRow table]
 jsonbPopulateRecordAs tableName expr alias = unsafeAliasedFromClauseExpression
   (unsafeVariadicFunction "jsonb_populate_record"
    (nullRow tableName :* expr :* Nil) `As` alias)
@@ -761,7 +761,7 @@ jsonPopulateRecordSetAs
   => Alias tab
   -> Expression schema '[] 'Ungrouped params (nullity 'PGjson)
   -> Alias alias
-  -> FromClause schema params '[alias ::: TableToRelation table]
+  -> FromClause schema params '[alias ::: TableToRow table]
 jsonPopulateRecordSetAs tableName expr alias = unsafeAliasedFromClauseExpression
   (unsafeVariadicFunction "json_populate_record_set"
    (nullRow tableName :* expr :* Nil) `As` alias)
@@ -774,7 +774,7 @@ jsonbPopulateRecordSetAs
   => Alias tab
   -> Expression schema '[] 'Ungrouped params (nullity 'PGjsonb)
   -> Alias alias
-  -> FromClause schema params '[alias ::: TableToRelation table]
+  -> FromClause schema params '[alias ::: TableToRow table]
 jsonbPopulateRecordSetAs tableName expr alias = unsafeAliasedFromClauseExpression
   (unsafeVariadicFunction "jsonb_populate_record_set"
    (nullRow tableName :* expr :* Nil) `As` alias)
@@ -872,7 +872,7 @@ newtype FromClause schema params from
 table
   :: Has tab schema ('Table table)
   => Aliased Alias (alias ::: tab)
-  -> FromClause schema params '[alias ::: TableToRelation table]
+  -> FromClause schema params '[alias ::: TableToRow table]
 table (tab `As` alias) = UnsafeFromClause $
   renderAlias tab <+> "AS" <+> renderAlias alias
 

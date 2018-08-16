@@ -280,7 +280,7 @@ insertQuery
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> Query schema params (ColumnsToRelation columns)
+  -> Query schema params (ColumnsToRow columns)
   -> ConflictClause schema columns params
   -- ^ what to do in case of constraint conflict
   -> ReturningClause schema columns params results -- ^ results to return
@@ -297,7 +297,7 @@ insertQuery_
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> Query schema params (ColumnsToRelation columns)
+  -> Query schema params (ColumnsToRow columns)
   -> Manipulation schema params '[]
 insertQuery_ tab query =
   insertQuery tab query OnConflictDoRaise (Returning Nil)
@@ -336,10 +336,10 @@ data ReturningClause
   (results :: RowType)
   where
     ReturningStar
-      :: results ~ ColumnsToRelation columns
+      :: results ~ ColumnsToRow columns
       => ReturningClause schema columns params results
     Returning
-      :: rel ~ ColumnsToRelation columns
+      :: rel ~ ColumnsToRow columns
       => NP (Aliased (Expression schema '[table ::: rel] 'Ungrouped params)) results
       -> ReturningClause schema columns params results
 
@@ -363,8 +363,8 @@ data ConflictClause (schema :: SchemaType) (columns :: ColumnsType) params where
   OnConflictDoRaise :: ConflictClause schema columns params
   OnConflictDoNothing :: ConflictClause schema columns params
   OnConflictDoUpdate
-    :: NP (Aliased (ColumnValue schema (ColumnsToRelation columns) params)) columns
-    -> [Condition schema '[table ::: ColumnsToRelation columns] 'Ungrouped params]
+    :: NP (Aliased (ColumnValue schema (ColumnsToRow columns) params)) columns
+    -> [Condition schema '[table ::: ColumnsToRow columns] 'Ungrouped params]
     -> ConflictClause schema columns params
 
 -- | Render a `ConflictClause`.
@@ -404,9 +404,9 @@ update
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue schema (ColumnsToRelation columns) params)) columns
+  -> NP (Aliased (ColumnValue schema (ColumnsToRow columns) params)) columns
   -- ^ modified values to replace old values
-  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: ColumnsToRow columns] 'Ungrouped params
   -- ^ condition under which to perform update on a row
   -> ReturningClause schema columns params results -- ^ results to return
   -> Manipulation schema params results
@@ -434,9 +434,9 @@ update_
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue schema (ColumnsToRelation columns) params)) columns
+  -> NP (Aliased (ColumnValue schema (ColumnsToRow columns) params)) columns
   -- ^ modified values to replace old values
-  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: ColumnsToRow columns] 'Ungrouped params
   -- ^ condition under which to perform update on a row
   -> Manipulation schema params '[]
 update_ tab columns wh = update tab columns wh (Returning Nil)
@@ -451,7 +451,7 @@ deleteFrom
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
-  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: ColumnsToRow columns] 'Ungrouped params
   -- ^ condition under which to delete a row
   -> ReturningClause schema columns params results -- ^ results to return
   -> Manipulation schema params results
@@ -465,7 +465,7 @@ deleteFrom_
   :: ( Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
-  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: ColumnsToRow columns] 'Ungrouped params
   -- ^ condition under which to delete a row
   -> Manipulation schema params '[]
 deleteFrom_ tab wh = deleteFrom tab wh (Returning Nil)

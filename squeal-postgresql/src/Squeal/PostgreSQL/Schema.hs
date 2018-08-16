@@ -101,9 +101,9 @@ module Squeal.PostgreSQL.Schema
   , NullifyType
   , NullifyRelation
   , NullifyRelations
-  , ColumnsToRelation
+  , ColumnsToRow
   , TableToColumns
-  , TableToRelation
+  , TableToRow
   , RelationToNullityTypes
   , ConstraintInvolves
   , DropIfConstraintsInvolve
@@ -319,19 +319,19 @@ type family NilRelation :: RowType where NilRelation = '[]
 -- | `FromType` is a row of `RowType`s, thought of as a product.
 type FromType = [(Symbol,RowType)]
 
--- | `ColumnsToRelation` removes column constraints.
-type family ColumnsToRelation (columns :: ColumnsType) :: RowType where
-  ColumnsToRelation '[] = '[]
-  ColumnsToRelation (column ::: constraint :=> ty ': columns) =
-    column ::: ty ': ColumnsToRelation columns
+-- | `ColumnsToRow` removes column constraints.
+type family ColumnsToRow (columns :: ColumnsType) :: RowType where
+  ColumnsToRow '[] = '[]
+  ColumnsToRow (column ::: constraint :=> ty ': columns) =
+    column ::: ty ': ColumnsToRow columns
 
 -- | `TableToColumns` removes table constraints.
 type family TableToColumns (table :: TableType) :: ColumnsType where
   TableToColumns (constraints :=> columns) = columns
 
 -- | Convert a table to a relation.
-type family TableToRelation (table :: TableType) :: RowType where
-  TableToRelation tab = ColumnsToRelation (TableToColumns tab)
+type family TableToRow (table :: TableType) :: RowType where
+  TableToRow tab = ColumnsToRow (TableToColumns tab)
 
 -- | `Grouping` is an auxiliary namespace, created by
 -- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
