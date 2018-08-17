@@ -118,6 +118,10 @@ module Squeal.PostgreSQL.Query
   , rowAllGte
   , anyGte
   , rowAnyGte
+  , With' (with')
+  , CommonTableExpression (..)
+  , renderCte
+  , renderCtes
   ) where
 
 import Control.DeepSeq
@@ -324,6 +328,43 @@ let
 in printSQL query
 :}
 (SELECT * FROM "tab" AS "tab") UNION ALL (SELECT * FROM "tab" AS "tab")
+
+with queries:
+
+>>> :{
+let
+  query :: Query
+    '[ "orders" ::: 'View
+       '[ "region" ::: 'NotNull 'PGtext
+        , "product" ::: 'NotNull 'PGtext
+        , "quantity" ::: 'NotNull 'PGint8
+        , "amount" ::: 'NotNull 'PGnumeric ] ]
+    '[ 'NotNull 'PGint8 ]
+    '[ "region" ::: 'NotNull 'PGtext
+     , "product" ::: 'NotNull 'PGtext
+     , "product_units" ::: 'NotNull 'PGint8
+     , "product_sales" ::: 'NotNull 'PGnumeric ]
+  query = with' (
+    CommonTableExpression
+    (((select (#region :* sum_ @'PGnumeric #amount `as` #total_sales)
+      (from (view #orders) & groupBy #region))
+        `as` #regional_sales)) :>>
+    CommonTableExpression
+    (((select (#region `as` #region)
+      (from (view #regional_sales) & where_ (#total_sales .> param @1)))
+        `as` #top_regions)) :>> Done
+    ) (select (
+      #region :*
+      #product :*
+      sum_ #quantity `as` #product_units :*
+      sum_ #amount `as` #product_sales
+      ) (from (view #orders)
+        & where_ (#region `in_` select #region (from (view #top_regions)))
+        & groupBy (#region :* #product))
+      )
+in printSQL query
+:}
+
 -}
 newtype Query
   (schema :: SchemaType)
@@ -1287,3 +1328,47 @@ rowAnyGte
   -> Query schema params row
   -> Condition schema from grp params
 rowAnyGte = unsafeRowSubqueryExpression "ANY >="
+
+data CommonTableExpression statement
+  (params :: [NullityType])
+  (schema0 :: SchemaType)
+  (schema1 :: SchemaType) where
+  CommonTableExpression
+    :: Aliased (statement schema params) (alias ::: cte)
+    -> CommonTableExpression
+      statement params schema (alias ::: 'View cte ': schema)
+instance KnownSymbol alias => Aliasable alias (statement schema params cte)
+  (CommonTableExpression statement params schema
+    (alias ::: 'View cte ': schema)) where
+      statement `as` alias = CommonTableExpression (statement `As` alias)
+instance KnownSymbol alias => Aliasable alias (statement schema params cte)
+  (AlignedList (CommonTableExpression statement params) schema
+    (alias ::: 'View cte ': schema)) where
+      statement `as` alias = statement `as` alias :>> Done
+
+renderCte
+  :: (forall sch ps row. statement ps sch row -> ByteString)
+  -> CommonTableExpression statement params schema0 schema1 -> ByteString
+renderCte renderStatement (CommonTableExpression (statement `As` alias)) =
+  renderAlias alias <+> "AS" <+> parenthesized (renderStatement statement)
+
+renderCtes
+  :: (forall sch ps row. statement ps sch row -> ByteString)
+  -> CommonTableExpression statement params schema0 schema1
+  -> AlignedList (CommonTableExpression statement params) schema1 schema2
+  -> ByteString
+renderCtes renderStatement cte ctes =
+  renderCte renderStatement cte <+> case ctes of
+    Done           -> ""
+    cte' :>> ctes' -> "," <+>
+      renderCtes renderStatement cte' ctes'
+
+class With' statement where
+  with'
+    :: AlignedList (CommonTableExpression statement params) schema0 schema1
+    -> statement schema1 params row
+    -> statement schema0 params row
+instance With' Query where
+  with' Done query = query
+  with' (cte :>> ctes) query = UnsafeQuery $
+    "WITH" <+> renderCtes renderQuery cte ctes <+> renderQuery query

@@ -20,6 +20,7 @@ it defines an embedding of Haskell types into Postgres types.
   , FlexibleInstances
   , FunctionalDependencies
   , GADTs
+  , LambdaCase
   , OverloadedStrings
   , RankNTypes
   , ScopedTypeVariables
@@ -122,8 +123,12 @@ module Squeal.PostgreSQL.Schema
   , ConstructorsOf
   , ConstructorNameOf
   , ConstructorNamesOf
+  -- * Aligned lists
+  , AlignedList (..)
+  , single
   ) where
 
+import Control.Category
 import Control.DeepSeq
 import Data.Aeson (Value)
 import Data.ByteString (ByteString)
@@ -142,6 +147,7 @@ import Generics.SOP.Record
 import GHC.OverloadedLabels
 import GHC.TypeLits
 import Network.IP.Addr
+import Prelude hiding (id, (.))
 
 import qualified Data.ByteString.Lazy as Lazy
 import qualified Data.Text.Lazy as Lazy
@@ -810,3 +816,18 @@ type PGjsonKey key = key `In` '[ 'PGint2, 'PGint4, 'PGtext ]
 
 -- | Is a type a valid JSON type?
 type PGjson_ json = json `In` '[ 'PGjson, 'PGjsonb ]
+
+-- | An `AlignedList` is a type-aligned list or free category.
+data AlignedList p x0 x1 where
+  Done :: AlignedList p x x
+  (:>>) :: p x0 x1 -> AlignedList p x1 x2 -> AlignedList p x0 x2
+infixr 7 :>>
+instance Category (AlignedList p) where
+  id = Done
+  (.) list = \case
+    Done -> list
+    step :>> steps -> step :>> (steps >>> list)
+
+-- | A `single` step.
+single :: p x0 x1 -> AlignedList p x0 x1
+single step = step :>> Done

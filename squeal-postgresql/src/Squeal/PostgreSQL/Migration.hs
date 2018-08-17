@@ -105,9 +105,6 @@ module Squeal.PostgreSQL.Migration
     Migration (..)
   , migrateUp
   , migrateDown
-    -- * Aligned lists
-  , AlignedList (..)
-  , single
     -- * Migration table
   , MigrationsTable
   , createMigrations
@@ -116,7 +113,6 @@ module Squeal.PostgreSQL.Migration
   , selectMigration
   ) where
 
-import Control.Category
 import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Trans.Control
@@ -124,7 +120,6 @@ import Data.Monoid
 import Generics.SOP (K(..))
 import Data.Function ((&))
 import Data.Text (Text)
-import Prelude hiding (id, (.))
 
 import Squeal.PostgreSQL
 
@@ -136,21 +131,6 @@ data Migration io schema0 schema1 = Migration
   , up :: PQ schema0 schema1 io () -- ^ The `up` instruction of a `Migration`.
   , down :: PQ schema1 schema0 io () -- ^ The `down` instruction of a `Migration`.
   }
-
--- | An `AlignedList` is a type-aligned list or free category.
-data AlignedList p x0 x1 where
-  Done :: AlignedList p x x
-  (:>>) :: p x0 x1 -> AlignedList p x1 x2 -> AlignedList p x0 x2
-infixr 7 :>>
-instance Category (AlignedList p) where
-  id = Done
-  (.) list = \case
-    Done -> list
-    step :>> steps -> step :>> (steps >>> list)
-
--- | A `single` step.
-single :: p x0 x1 -> AlignedList p x0 x1
-single step = step :>> Done
 
 -- | Run `Migration`s by creating the `MigrationsTable`
 -- if it does not exist and then in a transaction, for each each `Migration`

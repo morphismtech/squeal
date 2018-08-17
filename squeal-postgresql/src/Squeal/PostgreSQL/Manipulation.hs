@@ -187,9 +187,13 @@ newtype Manipulation
   (columns :: RowType)
     = UnsafeManipulation { renderManipulation :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
-
 instance RenderSQL (Manipulation schema params columns) where
   renderSQL = renderManipulation
+instance With' Manipulation where
+  with' Done manip = manip
+  with' (cte :>> ctes) manip = UnsafeManipulation $
+    "WITH" <+> renderCtes renderManipulation cte ctes
+    <+> renderManipulation manip
 
 -- | Convert a `Query` into a `Manipulation`.
 queryStatement
