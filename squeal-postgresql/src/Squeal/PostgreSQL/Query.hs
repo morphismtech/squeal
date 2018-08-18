@@ -1321,13 +1321,13 @@ data CommonTableExpression statement
       statement params schema (alias ::: 'View cte ': schema)
 instance (KnownSymbol alias, schema1 ~ (alias ::: 'View cte ': schema))
   => Aliasable alias
-    (Query schema params cte)
-    (CommonTableExpression Query params schema schema1) where
-      query `as` alias = CommonTableExpression (query `as` alias)
+    (statement schema params cte)
+    (CommonTableExpression statement params schema schema1) where
+      statement `as` alias = CommonTableExpression (statement `as` alias)
 instance (KnownSymbol alias, schema1 ~ (alias ::: 'View cte ': schema))
-  => Aliasable alias (Query schema params cte)
-    (AlignedList (CommonTableExpression Query params) schema schema1) where
-      query `as` alias = single (query `as` alias)
+  => Aliasable alias (statement schema params cte)
+    (AlignedList (CommonTableExpression statement params) schema schema1) where
+      statement `as` alias = single (statement `as` alias)
 
 renderCommonTableExpression
   :: (forall sch ps row. statement ps sch row -> ByteString)
