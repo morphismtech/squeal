@@ -120,8 +120,8 @@ module Squeal.PostgreSQL.Query
   , rowAnyGte
   , With' (with')
   , CommonTableExpression (..)
-  , renderCte
-  , renderCtes
+  , renderCommonTableExpression
+  , renderCommonTableExpressions
   ) where
 
 import Control.DeepSeq
@@ -334,37 +334,19 @@ with queries:
 >>> :{
 let
   query :: Query
-    '[ "orders" ::: 'View
-       '[ "region" ::: 'NotNull 'PGtext
-        , "product" ::: 'NotNull 'PGtext
-        , "quantity" ::: 'NotNull 'PGint8
-        , "amount" ::: 'NotNull 'PGnumeric ] ]
-    '[ 'NotNull 'PGint8 ]
-    '[ "region" ::: 'NotNull 'PGtext
-     , "product" ::: 'NotNull 'PGtext
-     , "product_units" ::: 'NotNull 'PGint8
-     , "product_sales" ::: 'NotNull 'PGnumeric ]
+    '[ "t1" ::: 'View
+       '[ "c1" ::: 'NotNull 'PGtext
+        , "c2" ::: 'NotNull 'PGtext] ]
+    '[]
+    '[ "c1" ::: 'NotNull 'PGtext
+     , "c2" ::: 'NotNull 'PGtext ]
   query = with' (
-    CommonTableExpression
-    (((select (#region :* sum_ @'PGnumeric #amount `as` #total_sales)
-      (from (view #orders) & groupBy #region))
-        `as` #regional_sales)) :>>
-    CommonTableExpression
-    (((select (#region `as` #region)
-      (from (view #regional_sales) & where_ (#total_sales .> param @1)))
-        `as` #top_regions)) :>> Done
-    ) (select (
-      #region :*
-      #product :*
-      sum_ #quantity `as` #product_units :*
-      sum_ #amount `as` #product_sales
-      ) (from (view #orders)
-        & where_ (#region `in_` select #region (from (view #top_regions)))
-        & groupBy (#region :* #product))
-      )
+    selectStar (from (view #t1)) `as` #t2 :>>
+    selectStar (from (view #t2)) `as` #t3
+    ) (selectStar (from (view #t3)))
 in printSQL query
 :}
-
+WITH "t2" AS (SELECT * FROM "t1" AS "t1"), "t3" AS (SELECT * FROM "t2" AS "t2") SELECT * FROM "t3" AS "t3"
 -}
 newtype Query
   (schema :: SchemaType)
@@ -1337,31 +1319,33 @@ data CommonTableExpression statement
     :: Aliased (statement schema params) (alias ::: cte)
     -> CommonTableExpression
       statement params schema (alias ::: 'View cte ': schema)
-instance KnownSymbol alias => Aliasable alias (statement schema params cte)
-  (CommonTableExpression statement params schema
-    (alias ::: 'View cte ': schema)) where
-      statement `as` alias = CommonTableExpression (statement `As` alias)
-instance KnownSymbol alias => Aliasable alias (statement schema params cte)
-  (AlignedList (CommonTableExpression statement params) schema
-    (alias ::: 'View cte ': schema)) where
-      statement `as` alias = statement `as` alias :>> Done
+instance (KnownSymbol alias, schema1 ~ (alias ::: 'View cte ': schema))
+  => Aliasable alias
+    (Query schema params cte)
+    (CommonTableExpression Query params schema schema1) where
+      query `as` alias = CommonTableExpression (query `as` alias)
+instance (KnownSymbol alias, schema1 ~ (alias ::: 'View cte ': schema))
+  => Aliasable alias (Query schema params cte)
+    (AlignedList (CommonTableExpression Query params) schema schema1) where
+      query `as` alias = single (query `as` alias)
 
-renderCte
+renderCommonTableExpression
   :: (forall sch ps row. statement ps sch row -> ByteString)
   -> CommonTableExpression statement params schema0 schema1 -> ByteString
-renderCte renderStatement (CommonTableExpression (statement `As` alias)) =
-  renderAlias alias <+> "AS" <+> parenthesized (renderStatement statement)
+renderCommonTableExpression renderStatement
+  (CommonTableExpression (statement `As` alias)) =
+    renderAlias alias <+> "AS" <+> parenthesized (renderStatement statement)
 
-renderCtes
+renderCommonTableExpressions
   :: (forall sch ps row. statement ps sch row -> ByteString)
   -> CommonTableExpression statement params schema0 schema1
   -> AlignedList (CommonTableExpression statement params) schema1 schema2
   -> ByteString
-renderCtes renderStatement cte ctes =
-  renderCte renderStatement cte <+> case ctes of
+renderCommonTableExpressions renderStatement cte ctes =
+  renderCommonTableExpression renderStatement cte <> case ctes of
     Done           -> ""
     cte' :>> ctes' -> "," <+>
-      renderCtes renderStatement cte' ctes'
+      renderCommonTableExpressions renderStatement cte' ctes'
 
 class With' statement where
   with'
@@ -1371,4 +1355,5 @@ class With' statement where
 instance With' Query where
   with' Done query = query
   with' (cte :>> ctes) query = UnsafeQuery $
-    "WITH" <+> renderCtes renderQuery cte ctes <+> renderQuery query
+    "WITH" <+> renderCommonTableExpressions renderQuery cte ctes
+      <+> renderQuery query

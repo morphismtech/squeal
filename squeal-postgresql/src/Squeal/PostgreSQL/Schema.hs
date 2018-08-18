@@ -420,7 +420,7 @@ class KnownSymbol alias => Aliasable alias expression aliased
   | aliased -> expression
   , aliased -> alias
   where as :: expression -> Alias alias -> aliased
-instance (alias ~ alias1, KnownSymbol alias) => Aliasable alias
+instance (KnownSymbol alias, alias ~ alias1) => Aliasable alias
   (expression ty)
   (Aliased expression (alias1 ::: ty))
     where

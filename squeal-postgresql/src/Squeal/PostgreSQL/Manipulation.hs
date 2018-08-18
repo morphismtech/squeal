@@ -192,7 +192,7 @@ instance RenderSQL (Manipulation schema params columns) where
 instance With' Manipulation where
   with' Done manip = manip
   with' (cte :>> ctes) manip = UnsafeManipulation $
-    "WITH" <+> renderCtes renderManipulation cte ctes
+    "WITH" <+> renderCommonTableExpressions renderManipulation cte ctes
     <+> renderManipulation manip
 
 -- | Convert a `Query` into a `Manipulation`.
