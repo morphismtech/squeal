@@ -42,8 +42,6 @@ module Squeal.PostgreSQL.Manipulation
     -- * Delete
   , deleteFrom
   , deleteFrom_
-    -- * With
-  , with
   ) where
 
 import Control.DeepSeq
@@ -180,7 +178,25 @@ let
 in printSQL manipulation
 :}
 DELETE FROM "tab" WHERE ("col1" = "col2") RETURNING *
+
+with manipulation:
+
+>>> type ProductsTable = '[] :=> '["product" ::: 'NoDef :=> 'NotNull 'PGtext, "date" ::: 'Def :=> 'NotNull 'PGdate]
+
+>>> :{
+let
+  manipulation :: Manipulation
+    '[ "products" ::: 'Table ProductsTable
+     , "products_deleted" ::: 'Table ProductsTable
+     ] '[ 'NotNull 'PGdate] '[]
+  manipulation = with
+    (deleteFrom #products (#date .< param @1) ReturningStar `as` #deleted_rows)
+    (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `as` #t)))))
+in printSQL manipulation
+:}
+WITH "deleted_rows" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "deleted_rows" AS "t"
 -}
+
 newtype Manipulation
   (schema :: SchemaType)
   (params :: [NullityType])
@@ -189,9 +205,9 @@ newtype Manipulation
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance RenderSQL (Manipulation schema params columns) where
   renderSQL = renderManipulation
-instance With' Manipulation where
-  with' Done manip = manip
-  with' (cte :>> ctes) manip = UnsafeManipulation $
+instance With Manipulation where
+  with Done manip = manip
+  with (cte :>> ctes) manip = UnsafeManipulation $
     "WITH" <+> renderCommonTableExpressions renderManipulation cte ctes
     <+> renderManipulation manip
 
@@ -473,39 +489,3 @@ deleteFrom_
   -- ^ condition under which to delete a row
   -> Manipulation schema params '[]
 deleteFrom_ tab wh = deleteFrom tab wh (Returning Nil)
-
-{-----------------------------------------
-WITH statements
------------------------------------------}
-
--- | `with` provides a way to write auxiliary statements for use in a larger statement.
--- These statements, which are often referred to as Common Table Expressions or CTEs,
--- can be thought of as defining temporary tables that exist just for one statement.
---
--- >>> type ProductsTable = '[] :=> '["product" ::: 'NoDef :=> 'NotNull 'PGtext, "date" ::: 'Def :=> 'NotNull 'PGdate]
---
--- >>> :{
--- let
---   manipulation :: Manipulation '["products" ::: 'Table ProductsTable, "products_deleted" ::: 'Table ProductsTable] '[ 'NotNull 'PGdate] '[]
---   manipulation = with
---     (deleteFrom #products (#date .< param @1) ReturningStar `as` #deleted_rows)
---     (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `as` #t)))))
--- in printSQL manipulation
--- :}
--- WITH "deleted_rows" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "deleted_rows" AS "t"
-with
-  :: SOP.SListI commons
-  => NP (Aliased (Manipulation schema params)) (common ': commons)
-  -- ^ common table expressions
-  -> Manipulation (With (common ': commons) schema) params results
-  -> Manipulation schema params results
-with commons manipulation = UnsafeManipulation $
-  "WITH" <+> renderCommaSeparated renderCommon commons
-  <+> renderManipulation manipulation
-  where
-    renderCommon
-      :: Aliased (Manipulation schema params) common
-      -> ByteString
-    renderCommon (common `As` alias) =
-      renderAlias alias <+> "AS" <+>
-        parenthesized (renderManipulation common)

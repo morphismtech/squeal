@@ -118,7 +118,7 @@ module Squeal.PostgreSQL.Query
   , rowAllGte
   , anyGte
   , rowAnyGte
-  , With' (with')
+  , With (with)
   , CommonTableExpression (..)
   , renderCommonTableExpression
   , renderCommonTableExpressions
@@ -340,7 +340,7 @@ let
     '[]
     '[ "c1" ::: 'NotNull 'PGtext
      , "c2" ::: 'NotNull 'PGtext ]
-  query = with' (
+  query = with (
     selectStar (from (view #t1)) `as` #t2 :>>
     selectStar (from (view #t2)) `as` #t3
     ) (selectStar (from (view #t3)))
@@ -1347,13 +1347,17 @@ renderCommonTableExpressions renderStatement cte ctes =
     cte' :>> ctes' -> "," <+>
       renderCommonTableExpressions renderStatement cte' ctes'
 
-class With' statement where
   with'
+-- | `with` provides a way to write auxiliary statements for use in a larger statement.
+-- These statements, which are often referred to as Common Table Expressions or CTEs,
+-- can be thought of as defining temporary tables that exist just for one statement.
+class With statement where
+  with
     :: AlignedList (CommonTableExpression statement params) schema0 schema1
     -> statement schema1 params row
     -> statement schema0 params row
-instance With' Query where
-  with' Done query = query
-  with' (cte :>> ctes) query = UnsafeQuery $
+instance With Query where
+  with Done query = query
+  with (cte :>> ctes) query = UnsafeQuery $
     "WITH" <+> renderCommonTableExpressions renderQuery cte ctes
       <+> renderQuery query

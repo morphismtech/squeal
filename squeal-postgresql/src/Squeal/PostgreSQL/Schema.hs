@@ -81,7 +81,6 @@ module Squeal.PostgreSQL.Schema
   , GroupedBy
     -- * Type Families
   , Join
-  , With
   , Create
   , Drop
   , Alter
@@ -666,15 +665,6 @@ type family SchemumToType (schemum :: SchemumType) :: PGType where
 -- | The schema of a database consists of a list of aliased,
 -- user-defined `SchemumType`s.
 type SchemaType = [(Symbol,SchemumType)]
-
--- | Used in `Squeal.Postgresql.Manipulation.with`.
-type family With
-  (from :: FromType)
-  (schema :: SchemaType)
-  :: SchemaType where
-    With '[] schema = schema
-    With (alias ::: rel ': rels) schema =
-      alias ::: 'View rel ': With rels schema
 
 -- | `IsPGlabel` looks very much like the `IsLabel` class. Whereas
 -- the overloaded label, `fromLabel` is used for column references,
