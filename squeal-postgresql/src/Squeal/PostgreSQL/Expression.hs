@@ -725,6 +725,7 @@ not_ = unsafeUnaryOp "NOT"
   :: Condition schema from grouping params
   -> Condition schema from grouping params
   -> Condition schema from grouping params
+infixr 3 .&&
 (.&&) = unsafeBinaryOp "AND"
 
 -- | >>> printSQL $ true .|| false
@@ -733,6 +734,7 @@ not_ = unsafeUnaryOp "NOT"
   :: Condition schema from grouping params
   -> Condition schema from grouping params
   -> Condition schema from grouping params
+infixr 2 .||
 (.||) = unsafeBinaryOp "OR"
 
 -- | >>> :{
@@ -949,6 +951,7 @@ Table 9.44: json and jsonb operators
   => Expression schema from grouping params (nullity json)
   -> Expression schema from grouping params (nullity key)
   -> Expression schema from grouping params ('Null json)
+infixl 8 .->
 (.->) = unsafeBinaryOp "->"
 
 -- | Get JSON value (object field or array element) at a key, as text.
@@ -957,6 +960,7 @@ Table 9.44: json and jsonb operators
   => Expression schema from grouping params (nullity json)
   -> Expression schema from grouping params (nullity key)
   -> Expression schema from grouping params ('Null 'PGtext)
+infixl 8 .->>
 (.->>) = unsafeBinaryOp "->>"
 
 -- | Get JSON value at a specified path.
@@ -965,6 +969,7 @@ Table 9.44: json and jsonb operators
   => Expression schema from grouping params (nullity json)
   -> Expression schema from grouping params (nullity path)
   -> Expression schema from grouping params ('Null json)
+infixl 8 .#>
 (.#>) = unsafeBinaryOp "#>"
 
 -- | Get JSON value at a specified path as text.
@@ -973,6 +978,7 @@ Table 9.44: json and jsonb operators
   => Expression schema from grouping params (nullity json)
   -> Expression schema from grouping params (nullity path)
   -> Expression schema from grouping params ('Null 'PGtext)
+infixl 8 .#>>
 (.#>>) = unsafeBinaryOp "#>>"
 
 -- Additional jsonb operators
@@ -983,6 +989,7 @@ Table 9.44: json and jsonb operators
   :: Expression schema from grouping params (nullity 'PGjsonb)
   -> Expression schema from grouping params (nullity 'PGjsonb)
   -> Condition schema from grouping params
+infixl 9 .@>
 (.@>) = unsafeBinaryOp "@>"
 
 -- | Are the left JSON path/value entries contained at the top level within the
@@ -991,6 +998,7 @@ Table 9.44: json and jsonb operators
   :: Expression schema from grouping params (nullity 'PGjsonb)
   -> Expression schema from grouping params (nullity 'PGjsonb)
   -> Condition schema from grouping params
+infixl 9 .<@
 (.<@) = unsafeBinaryOp "<@"
 
 -- | Does the string exist as a top-level key within the JSON value?
@@ -998,6 +1006,7 @@ Table 9.44: json and jsonb operators
   :: Expression schema from grouping params (nullity 'PGjsonb)
   -> Expression schema from grouping params (nullity 'PGtext)
   -> Condition schema from grouping params
+infixl 9 .?
 (.?) = unsafeBinaryOp "?"
 
 -- | Do any of these array strings exist as top-level keys?
@@ -1005,6 +1014,7 @@ Table 9.44: json and jsonb operators
   :: Expression schema from grouping params (nullity 'PGjsonb)
   -> Expression schema from grouping params (nullity ('PGvararray ('NotNull 'PGtext)))
   -> Condition schema from grouping params
+infixl 9 .?|
 (.?|) = unsafeBinaryOp "?|"
 
 -- | Do all of these array strings exist as top-level keys?
@@ -1012,6 +1022,7 @@ Table 9.44: json and jsonb operators
   :: Expression schema from grouping params (nullity 'PGjsonb)
   -> Expression schema from grouping params (nullity ('PGvararray ('NotNull 'PGtext)))
   -> Condition schema from grouping params
+infixl 9 .?&
 (.?&) = unsafeBinaryOp "?&"
 
 -- | Concatenate two jsonb values into a new jsonb value.
@@ -1036,6 +1047,7 @@ instance
   => Expression schema from grouping params (nullity 'PGjsonb)
   -> Expression schema from grouping params (nullity key)
   -> Expression schema from grouping params (nullity 'PGjsonb)
+infixl 6 .-.
 (.-.) = unsafeBinaryOp "-"
 
 -- | Delete the field or element with specified path (for JSON arrays, negative
@@ -1045,6 +1057,7 @@ instance
   => Expression schema from grouping params (nullity 'PGjsonb)
   -> Expression schema from grouping params (nullity arrayty)
   -> Expression schema from grouping params (nullity 'PGjsonb)
+infixl 6 #-.
 (#-.) = unsafeBinaryOp "#-"
 
 {-----------------------------------------

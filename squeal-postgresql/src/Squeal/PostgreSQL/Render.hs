@@ -54,6 +54,7 @@ parenthesized str = "(" <> str <> ")"
 
 -- | Concatenate two `ByteString`s with a space between.
 (<+>) :: ByteString -> ByteString -> ByteString
+infixr 7 <+>
 str1 <+> str2 = str1 <> " " <> str2
 
 -- | Comma separate a list of `ByteString`s.
