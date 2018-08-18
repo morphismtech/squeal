@@ -1347,7 +1347,6 @@ renderCommonTableExpressions renderStatement cte ctes =
     cte' :>> ctes' -> "," <+>
       renderCommonTableExpressions renderStatement cte' ctes'
 
-  with'
 -- | `with` provides a way to write auxiliary statements for use in a larger statement.
 -- These statements, which are often referred to as Common Table Expressions or CTEs,
 -- can be thought of as defining temporary tables that exist just for one statement.
