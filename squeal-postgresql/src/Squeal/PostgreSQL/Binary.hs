@@ -88,7 +88,7 @@ let
   querySchwarma :: Query Schema
     '[ 'NotNull (EnumFrom Schwarma)]
     '["fromOnly" ::: 'NotNull (EnumFrom Schwarma)]
-  querySchwarma = values_ (parameter @1 #schwarma `as` #fromOnly)
+  querySchwarma = values_ (parameter @1 (typedef #schwarma) `as` #fromOnly)
 :}
 
 >>> :{
@@ -96,7 +96,7 @@ let
   queryPerson :: Query Schema
     '[ 'NotNull (CompositeFrom Person)]
     '["fromOnly" ::: 'NotNull (CompositeFrom Person)]
-  queryPerson = values_ (parameter @1 #person `as` #fromOnly)
+  queryPerson = values_ (parameter @1 (typedef #person) `as` #fromOnly)
 :}
 
 And finally drop the types.
