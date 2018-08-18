@@ -146,6 +146,9 @@ module Squeal.PostgreSQL.Expression
     -- * Types
   , TypeExpression (UnsafeTypeExpression, renderTypeExpression)
   , PGTyped (pgtype)
+  , typedef
+  , typetable
+  , typeview
   , bool
   , int2
   , smallint
@@ -1581,9 +1584,23 @@ newtype TypeExpression (schema :: SchemaType) (ty :: NullityType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
-instance (Has alias schema schemum, SchemumToType schemum ~ ty)
-  => IsLabel alias (TypeExpression schema (nullity ty)) where
-    fromLabel = UnsafeTypeExpression (renderAlias (fromLabel @alias))
+typedef
+  :: Has alias schema ('Typedef ty)
+  => Alias alias
+  -> TypeExpression schema (nullity ty)
+typedef = UnsafeTypeExpression . renderAlias
+
+typetable
+  :: Has alias schema ('Table tab)
+  => Alias alias
+  -> TypeExpression schema (nullity ('PGcomposite (TableToRow tab)))
+typetable = UnsafeTypeExpression . renderAlias
+
+typeview
+  :: Has alias schema ('View view)
+  => Alias alias
+  -> TypeExpression schema (nullity ('PGcomposite view))
+typeview = UnsafeTypeExpression . renderAlias
 
 -- | logical Boolean (true/false)
 bool :: TypeExpression schema (nullity 'PGbool)
