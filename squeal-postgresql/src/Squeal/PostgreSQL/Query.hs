@@ -118,6 +118,7 @@ module Squeal.PostgreSQL.Query
   , rowAllGte
   , anyGte
   , rowAnyGte
+    -- * With
   , With (with)
   , CommonTableExpression (..)
   , renderCommonTableExpression
