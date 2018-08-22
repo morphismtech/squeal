@@ -44,7 +44,46 @@ True
 
 In addition to being able to encode and decode basic Haskell types like `Int16` and `Text`,
 Squeal permits you to encode and decode Haskell types which are equivalent to
-Postgres enumerated and composite types.
+Postgres array, enumerated and composite types.
+
+>>> :{
+let
+  query :: Query '[]
+    '[ 'NotNull ('PGvararray ('NotNull 'PGint2))
+     , 'NotNull ('PGfixarray 2 ('Null 'PGint2))
+     , 'NotNull ('PGfixarray 3 ('NotNull ('PGfixarray 2 ('NotNull 'PGint2))))
+     ]
+    '[ "v1" ::: 'NotNull ('PGvararray ('NotNull 'PGint2))
+     , "v2" ::: 'NotNull ('PGfixarray 2 ('Null 'PGint2))
+     , "v3" ::: 'NotNull ('PGfixarray 3 ('NotNull ('PGfixarray 2 ('NotNull 'PGint2))))
+     ]
+  query = values_ (param @1 `as` #v1 :* param @2 `as` #v2 :* param @3 `as` #v3)
+:}
+
+>>> :{
+data VRow = VRow
+  { v1 :: Vector Int16
+  , v2 :: (Maybe Int16,Maybe Int16)
+  , v3 :: ((Int16,Int16),(Int16,Int16),(Int16,Int16))
+  } deriving (Eq, GHC.Generic)
+:}
+
+>>> instance Generic VRow
+>>> instance HasDatatypeInfo VRow
+>>> :set -XOverloadedLists
+>>> let vparams = VRow [1,2] (Just 1,Nothing) ((1,2), (3,4), (5,6))
+
+>>> :{
+let
+  roundtrip :: IO ()
+  roundtrip = void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+    result <- runQueryParams query vparams
+    Just row <- firstRow result
+    liftBase . print $ row == vparams
+:}
+
+>>> roundtrip
+True
 
 Enumerated (enum) types are data types that comprise a static, ordered set of values.
 They are equivalent to Haskell algebraic data types whose constructors are nullary.
@@ -433,16 +472,12 @@ instance FromValue 'PGinterval DiffTime where
   fromValue = Decoding.interval_int
 instance FromValue 'PGjson Value where fromValue = Decoding.json_ast
 instance FromValue 'PGjsonb Value where fromValue = Decoding.jsonb_ast
-instance FromValue pg y
-  => FromValue ('PGvararray ('Null pg)) (Vector (Maybe y)) where
-    fromValue = Decoding.array
-      (Decoding.dimensionArray Vector.replicateM
-        (Decoding.nullableValueArray (fromValue @pg)))
-instance FromValue pg y
-  => FromValue ('PGvararray ('NotNull pg)) (Vector y) where
-    fromValue = Decoding.array
-      (Decoding.dimensionArray Vector.replicateM
-        (Decoding.valueArray (fromValue @pg)))
+instance FromArray ('NotNull ('PGvararray ty)) y
+  => FromValue ('PGvararray ty) y where
+    fromValue = Decoding.array (fromArray @('NotNull ('PGvararray ty)) @y)
+instance FromArray ('NotNull ('PGfixarray n ty)) y
+  => FromValue ('PGfixarray n ty) y where
+    fromValue = Decoding.array (fromArray @('NotNull ('PGfixarray n ty)) @y)
 instance
   ( IsEnumType y
   , HasDatatypeInfo y
