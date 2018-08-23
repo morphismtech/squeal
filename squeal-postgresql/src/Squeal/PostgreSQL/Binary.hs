@@ -276,14 +276,14 @@ instance ToParam UTCTime 'PGtimestamptz where
 instance ToParam DiffTime 'PGinterval where toParam = K . Encoding.interval_int
 instance ToParam Value 'PGjson where toParam = K . Encoding.json_ast
 instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
-instance ToArray x ('PGvararray ty) => ToParam x ('PGvararray ty) where
-  toParam
-    = K . Encoding.array (baseOid @x @('PGvararray ty))
-    . unK . toArray @x @('PGvararray ty)
-instance ToArray x ('PGfixarray n ty) => ToParam x ('PGfixarray n ty) where
-  toParam
-    = K . Encoding.array (baseOid @x @('PGfixarray n ty))
-    . unK . toArray @x @('PGfixarray n ty)
+-- instance ToArray x ('PGvararray ty) => ToParam x ('PGvararray ty) where
+--   toParam
+--     = K . Encoding.array (baseOid @x @('PGvararray ty))
+--     . unK . toArray @x @('PGvararray ty)
+-- instance ToArray x ('PGfixarray n ty) => ToParam x ('PGfixarray n ty) where
+--   toParam
+--     = K . Encoding.array (baseOid @x @('PGfixarray n ty))
+--     . unK . toArray @x @('PGfixarray n ty)
 instance
   ( IsEnumType x
   , HasDatatypeInfo x
@@ -364,57 +364,57 @@ class ToField (x :: (Symbol, Type)) (field :: (Symbol, NullityType)) where
 instance ToNullityParam x ty => ToField (alias ::: x) (alias ::: ty) where
   toField (P x) = K . unK $ toNullityParam @x @ty x
 
-class ToArray (x :: Type) (array :: PGType) where
+class ToArray (x :: Type) (array :: NullityType) where
   toArray :: x -> K Encoding.Array array
-  default toArray :: ToParam x array => x -> K Encoding.Array array
-  toArray = K . Encoding.encodingArray . unK . toParam @x @array
   baseOid :: Word32
-  default baseOid :: HasOid array => Word32
-  baseOid = oid @array
-instance ToArray Bool 'PGbool
-instance ToArray Int16 'PGint2
-instance ToArray Word16 'PGint2
-instance ToArray Int32 'PGint4
-instance ToArray Word32 'PGint4
-instance ToArray Int64 'PGint8
-instance ToArray Word64 'PGint8
-instance ToArray Float 'PGfloat4
-instance ToArray Double 'PGfloat8
-instance ToArray Scientific 'PGnumeric
-instance ToArray UUID 'PGuuid
-instance ToArray (NetAddr IP) 'PGinet
-instance ToArray Char ('PGchar 1)
-instance ToArray Strict.Text 'PGtext
-instance ToArray Lazy.Text 'PGtext
-instance ToArray Strict.ByteString 'PGbytea
-instance ToArray Lazy.ByteString 'PGbytea
-instance ToArray Day 'PGdate
-instance ToArray TimeOfDay 'PGtime
-instance ToArray (TimeOfDay, TimeZone) 'PGtimetz
-instance ToArray LocalTime 'PGtimestamp
-instance ToArray UTCTime 'PGtimestamptz
-instance ToArray DiffTime 'PGinterval
-instance ToArray Value 'PGjson
-instance ToArray Value 'PGjsonb
+  default baseOid :: HasOid (PGTypeOf array) => Word32
+  baseOid = oid @(PGTypeOf array)
+toArrayLeaf
+  :: forall x pg. ToParam x pg
+  => x -> K Encoding.Array ('NotNull pg)
+toArrayLeaf = K . Encoding.encodingArray . unK . toParam @x @pg
+toNullableArrayLeaf
+  :: forall x pg. ToParam x pg
+  => Maybe x -> K Encoding.Array ('Null pg)
+toNullableArrayLeaf = K . maybe Encoding.nullArray
+  (Encoding.encodingArray . unK . toParam @x @pg)
+instance ToArray Bool ('NotNull 'PGbool) where
+  toArray = toArrayLeaf @Bool @'PGbool
+instance ToArray (Maybe Bool) ('Null 'PGbool) where
+  toArray = toNullableArrayLeaf @Bool @'PGbool
+-- instance ToArray Int16 'PGint2
+-- instance ToArray Word16 'PGint2
+-- instance ToArray Int32 'PGint4
+-- instance ToArray Word32 'PGint4
+-- instance ToArray Int64 'PGint8
+-- instance ToArray Word64 'PGint8
+-- instance ToArray Float 'PGfloat4
+-- instance ToArray Double 'PGfloat8
+-- instance ToArray Scientific 'PGnumeric
+-- instance ToArray UUID 'PGuuid
+-- instance ToArray (NetAddr IP) 'PGinet
+-- instance ToArray Char ('PGchar 1)
+-- instance ToArray Strict.Text 'PGtext
+-- instance ToArray Lazy.Text 'PGtext
+-- instance ToArray Strict.ByteString 'PGbytea
+-- instance ToArray Lazy.ByteString 'PGbytea
+-- instance ToArray Day 'PGdate
+-- instance ToArray TimeOfDay 'PGtime
+-- instance ToArray (TimeOfDay, TimeZone) 'PGtimetz
+-- instance ToArray LocalTime 'PGtimestamp
+-- instance ToArray UTCTime 'PGtimestamptz
+-- instance ToArray DiffTime 'PGinterval
+-- instance ToArray Value 'PGjson
+-- instance ToArray Value 'PGjsonb
 instance ToArray x array
-  => ToArray (Vector x) ('PGvararray ('NotNull array)) where
+  => ToArray (Vector x) ('NotNull ('PGvararray array)) where
     toArray = K . Encoding.dimensionArray Vector.foldl'
       (unK . toArray @x @array)
     baseOid = baseOid @x @array
-instance ToArray x array
-  => ToArray (Vector (Maybe x)) ('PGvararray ('Null array)) where
-    toArray = K . Encoding.dimensionArray Vector.foldl'
-      (maybe Encoding.nullArray (unK . toArray @x @array))
-    baseOid = baseOid @x @array
-instance (HomogeneousProduct n x product, ToArray x array)
-  => ToArray product ('PGfixarray n ('NotNull array)) where
+instance (IsProductType product xs, HomogeneousList n x xs, ToArray x array)
+  => ToArray product ('NotNull ('PGfixarray n array)) where
     toArray = K . Encoding.dimensionArray foldlN
-      (unK . toArray @x @array)
-    baseOid = baseOid @x @array
-instance (HomogeneousProduct n (Maybe x) product, ToArray x array)
-  => ToArray product ('PGfixarray n ('Null array)) where
-    toArray = K . Encoding.dimensionArray foldlN
-      (maybe Encoding.nullArray (unK . toArray @x @array))
+      (unK . toArray @x @array) . unZ . unSOP . from
     baseOid = baseOid @x @array
 
 -- | A `ToParams` constraint generically sequences the encodings of `Type`s
@@ -642,7 +642,7 @@ instance FromArray array y
   => FromArray (nullity ('PGvararray array)) (Vector y) where
     fromArray =
       Decoding.dimensionArray Vector.replicateM (fromArray @array @y)
-instance (FromArray array y, HomogeneousProduct n y product)
+instance (FromArray array y, HomogeneousList n y ys, IsProductType product ys)
   => FromArray (nullity ('PGfixarray n array)) product where
     fromArray =
       Decoding.dimensionArray (pure replicateMN) (fromArray @array @y)
@@ -688,33 +688,27 @@ newtype Only x = Only { fromOnly :: x }
 instance Generic (Only x)
 instance HasDatatypeInfo (Only x)
 
-class HomogeneousProduct
-  (n :: Nat) (x :: Type) (product :: Type)
-  | product -> n where
-    foldlN :: (b -> x -> b) -> b -> product -> b
-    replicateMN :: Monad m => m x -> m product
-instance
-  ( IsProductType product xs
-  , All ((~) x) xs
-  , SListI xs
-  , Length xs ~ n )
-  => HomogeneousProduct n x product where
-
-    foldlN f z =
-      let
-        foldlNP
-          :: All ((~) x') xs'
-          => (z -> x' -> z) -> z -> NP I xs' -> z
-        foldlNP f' z' = \case
-          Nil -> z'
-          I x' :* xs' -> let z'' = f' z' x' in seq z'' $ foldlNP f' z'' xs'
-      in
-        foldlNP f z  . unZ . unSOP . from
-
-    replicateMN mx =
-      let
-        replicateMNP :: Monad m => m x -> m (NP I xs)
-        replicateMNP mx' = hsequence' $
-          hcpure (Proxy :: Proxy ((~) x)) (Comp (I <$> mx'))
-      in
-        to . SOP . Z <$> replicateMNP mx
+class HomogeneousList
+  (n :: Nat) (x :: Type) (list :: [Type])
+  | list -> n, n x -> list where
+    foldlN :: (b -> x -> b) -> b -> NP I xs -> b
+    replicateMN :: Monad m => m x -> m (NP I xs)
+instance HomogeneousList 0 x '[] where
+  foldlN _ z _ = z
+  replicateMN _ = return Nil
+instance (1 <= n, HomogeneousList (n-1) x xs) => HomogeneousList n x (x ': xs) where
+  foldlN f z (I x :* xs) = let z' = f z x in seq z' $ foldlN f z' xs
+  replicateMN mx = do
+    x <- mx
+    xs <- replicateMN mx
+    return (I x :* xs)
+-- instance
+--   ( All ((~) x) xs
+--   , SListI xs
+--   , Length xs ~ n )
+--   => HomogeneousList n x xs where
+--     foldlN f z = \case
+--       Nil -> z
+--       I x :* xs -> let z' = f z x in seq z' $ foldlN f z' xs
+--     replicateMN mx = hsequence' $
+--       hcpure (Proxy :: Proxy ((~) x)) (Comp (I <$> mx))
