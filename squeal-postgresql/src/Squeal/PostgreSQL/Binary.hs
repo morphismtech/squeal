@@ -371,121 +371,19 @@ class ToArray (x :: Type) (array :: NullityType) where
   baseOid :: Word32
   default baseOid :: HasOid (PGTypeOf array) => Word32
   baseOid = oid @(PGTypeOf array)
-toArrayLeaf
-  :: forall x pg. ToParam x pg
-  => x -> K Encoding.Array ('NotNull pg)
-toArrayLeaf = K . Encoding.encodingArray . unK . toParam @x @pg
-toNullableArrayLeaf
-  :: forall x pg. ToParam x pg
-  => Maybe x -> K Encoding.Array ('Null pg)
-toNullableArrayLeaf = K . maybe Encoding.nullArray
-  (Encoding.encodingArray . unK . toParam @x @pg)
-instance ToArray Bool ('NotNull 'PGbool) where
-  toArray = toArrayLeaf @Bool @'PGbool
-instance ToArray (Maybe Bool) ('Null 'PGbool) where
-  toArray = toNullableArrayLeaf @Bool @'PGbool
-instance ToArray Int16 ('NotNull 'PGint2) where
-  toArray = toArrayLeaf @Int16 @'PGint2
-instance ToArray (Maybe Int16) ('Null 'PGint2) where
-  toArray = toNullableArrayLeaf @Int16 @'PGint2
-instance ToArray Word16 ('NotNull 'PGint2) where
-  toArray = toArrayLeaf @Word16 @'PGint2
-instance ToArray (Maybe Word16) ('Null 'PGint2) where
-  toArray = toNullableArrayLeaf @Word16 @'PGint2
-instance ToArray Int32 ('NotNull 'PGint4) where
-  toArray = toArrayLeaf @Int32 @'PGint4
-instance ToArray (Maybe Int32) ('Null 'PGint4) where
-  toArray = toNullableArrayLeaf @Int32 @'PGint4
-instance ToArray Word32 ('NotNull 'PGint4) where
-  toArray = toArrayLeaf @Word32 @'PGint4
-instance ToArray (Maybe Word32) ('Null 'PGint4) where
-  toArray = toNullableArrayLeaf @Word32 @'PGint4
-instance ToArray Int64 ('NotNull 'PGint8) where
-  toArray = toArrayLeaf @Int64 @'PGint8
-instance ToArray (Maybe Int64) ('Null 'PGint8) where
-  toArray = toNullableArrayLeaf @Int64 @'PGint8
-instance ToArray Word64 ('NotNull 'PGint8) where
-  toArray = toArrayLeaf @Word64 @'PGint8
-instance ToArray (Maybe Word64) ('Null 'PGint8) where
-  toArray = toNullableArrayLeaf @Word64 @'PGint8
-instance ToArray Float ('NotNull 'PGfloat4) where
-  toArray = toArrayLeaf @Float @'PGfloat4
-instance ToArray (Maybe Float) ('Null 'PGfloat4) where
-  toArray = toNullableArrayLeaf @Float @'PGfloat4
-instance ToArray Double ('NotNull 'PGfloat8) where
-  toArray = toArrayLeaf @Double @'PGfloat8
-instance ToArray (Maybe Double) ('Null 'PGfloat8) where
-  toArray = toNullableArrayLeaf @Double @'PGfloat8
-instance ToArray Scientific ('NotNull 'PGnumeric) where
-  toArray = toArrayLeaf @Scientific @'PGnumeric
-instance ToArray (Maybe Scientific) ('Null 'PGnumeric) where
-  toArray = toNullableArrayLeaf @Scientific @'PGnumeric
-instance ToArray UUID ('NotNull 'PGuuid) where
-  toArray = toArrayLeaf @UUID @'PGuuid
-instance ToArray (Maybe UUID) ('Null 'PGuuid) where
-  toArray = toNullableArrayLeaf @UUID @'PGuuid
-instance ToArray (NetAddr IP) ('NotNull 'PGinet) where
-  toArray = toArrayLeaf @(NetAddr IP) @'PGinet
-instance ToArray (Maybe (NetAddr IP)) ('Null 'PGinet) where
-  toArray = toNullableArrayLeaf @(NetAddr IP) @'PGinet
-instance ToArray Char ('NotNull ('PGchar 1)) where
-  toArray = toArrayLeaf @Char @('PGchar 1)
-instance ToArray (Maybe Char) ('Null ('PGchar 1)) where
-  toArray = toNullableArrayLeaf @Char @('PGchar 1)
-instance ToArray Strict.Text ('NotNull 'PGtext) where
-  toArray = toArrayLeaf @Strict.Text @'PGtext
-instance ToArray (Maybe Strict.Text) ('Null 'PGtext) where
-  toArray = toNullableArrayLeaf @Strict.Text @'PGtext
-instance ToArray Lazy.Text ('NotNull 'PGtext) where
-  toArray = toArrayLeaf @Lazy.Text @'PGtext
-instance ToArray (Maybe Lazy.Text) ('Null 'PGtext) where
-  toArray = toNullableArrayLeaf @Lazy.Text @'PGtext
-instance ToArray Strict.ByteString ('NotNull 'PGbytea) where
-  toArray = toArrayLeaf @Strict.ByteString @'PGbytea
-instance ToArray (Maybe Strict.ByteString) ('Null 'PGbytea) where
-  toArray = toNullableArrayLeaf @Strict.ByteString @'PGbytea
-instance ToArray Lazy.ByteString ('NotNull 'PGbytea) where
-  toArray = toArrayLeaf @Lazy.ByteString @'PGbytea
-instance ToArray (Maybe Lazy.ByteString) ('Null 'PGbytea) where
-  toArray = toNullableArrayLeaf @Lazy.ByteString @'PGbytea
-instance ToArray Day ('NotNull 'PGdate) where
-  toArray = toArrayLeaf @Day @'PGdate
-instance ToArray (Maybe Day) ('Null 'PGdate) where
-  toArray = toNullableArrayLeaf @Day @'PGdate
-instance ToArray TimeOfDay ('NotNull 'PGtime) where
-  toArray = toArrayLeaf @TimeOfDay @'PGtime
-instance ToArray (Maybe TimeOfDay) ('Null 'PGtime) where
-  toArray = toNullableArrayLeaf @TimeOfDay @'PGtime
-instance ToArray (TimeOfDay, TimeZone) ('NotNull 'PGtimetz) where
-  toArray = toArrayLeaf @(TimeOfDay, TimeZone) @'PGtimetz
-instance ToArray (Maybe (TimeOfDay, TimeZone)) ('Null 'PGtimetz) where
-  toArray = toNullableArrayLeaf @(TimeOfDay, TimeZone) @'PGtimetz
-instance ToArray LocalTime ('NotNull 'PGtimestamp) where
-  toArray = toArrayLeaf @LocalTime @'PGtimestamp
-instance ToArray (Maybe LocalTime) ('Null 'PGtimestamp) where
-  toArray = toNullableArrayLeaf @LocalTime @'PGtimestamp
-instance ToArray UTCTime ('NotNull 'PGtimestamptz) where
-  toArray = toArrayLeaf @UTCTime @'PGtimestamptz
-instance ToArray (Maybe UTCTime) ('Null 'PGtimestamptz) where
-  toArray = toNullableArrayLeaf @UTCTime @'PGtimestamptz
-instance ToArray DiffTime ('NotNull 'PGinterval) where
-  toArray = toArrayLeaf @DiffTime @'PGinterval
-instance ToArray (Maybe DiffTime) ('Null 'PGinterval) where
-  toArray = toNullableArrayLeaf @DiffTime @'PGinterval
-instance ToArray Value ('NotNull 'PGjson) where
-  toArray = toArrayLeaf @Value @'PGjson
-instance ToArray (Maybe Value) ('Null 'PGjson) where
-  toArray = toNullableArrayLeaf @Value @'PGjson
-instance ToArray Value ('NotNull 'PGjsonb) where
-  toArray = toArrayLeaf @Value @'PGjsonb
-instance ToArray (Maybe Value) ('Null 'PGjsonb) where
-  toArray = toNullableArrayLeaf @Value @'PGjsonb
-instance ToArray x array
+instance {-# OVERLAPPABLE #-} (HasOid pg, ToParam x pg)
+  => ToArray x ('NotNull pg) where
+    toArray = K . Encoding.encodingArray . unK . toParam @x @pg
+instance {-# OVERLAPPABLE #-} (HasOid pg, ToParam x pg)
+  => ToArray (Maybe x) ('Null pg) where
+    toArray = K . maybe Encoding.nullArray
+      (Encoding.encodingArray . unK . toParam @x @pg)
+instance {-# OVERLAPPING #-} ToArray x array
   => ToArray (Vector x) ('NotNull ('PGvararray array)) where
     toArray = K . Encoding.dimensionArray Vector.foldl'
       (unK . toArray @x @array)
     baseOid = baseOid @x @array
-instance
+instance {-# OVERLAPPING #-}
   ( IsProductType product xs
   , Length xs ~ n
   , All ((~) x) xs
@@ -628,109 +526,22 @@ instance FromValue pg y
 
 class FromArray (ty :: NullityType) (y :: Type) where
   fromArray :: Decoding.Array y
-fromArrayLeaf :: forall pg y. FromValue pg y => Decoding.Array y
-fromArrayLeaf = Decoding.valueArray (fromValue @pg @y)
-fromNullableArrayLeaf
-  :: forall pg y. FromValue pg y => Decoding.Array (Maybe y)
-fromNullableArrayLeaf = Decoding.nullableValueArray (fromValue @pg @y)
-instance FromArray ('NotNull 'PGbool) Bool where
-  fromArray = fromArrayLeaf @'PGbool @Bool
-instance FromArray ('Null 'PGbool) (Maybe Bool) where
-  fromArray = fromNullableArrayLeaf @'PGbool @Bool
-instance FromArray ('NotNull 'PGint2) Int16 where
-  fromArray = fromArrayLeaf @'PGint2 @Int16
-instance FromArray ('Null 'PGint2) (Maybe Int16) where
-  fromArray = fromNullableArrayLeaf @'PGint2 @Int16
-instance FromArray ('NotNull 'PGint4) Int32 where
-  fromArray = fromArrayLeaf @'PGint4 @Int32
-instance FromArray ('Null 'PGint4) (Maybe Int32) where
-  fromArray = fromNullableArrayLeaf @'PGint4 @Int32
-instance FromArray ('NotNull 'PGint8) Int64 where
-  fromArray = fromArrayLeaf @'PGint8 @Int64
-instance FromArray ('Null 'PGint8) (Maybe Int64) where
-  fromArray = fromNullableArrayLeaf @'PGint8 @Int64
-instance FromArray ('NotNull 'PGfloat4) Float where
-  fromArray = fromArrayLeaf @'PGfloat4 @Float
-instance FromArray ('Null 'PGfloat4) (Maybe Float) where
-  fromArray = fromNullableArrayLeaf @'PGfloat4 @Float
-instance FromArray ('NotNull 'PGfloat8) Double where
-  fromArray = fromArrayLeaf @'PGfloat8 @Double
-instance FromArray ('Null 'PGfloat8) (Maybe Double) where
-  fromArray = fromNullableArrayLeaf @'PGfloat8 @Double
-instance FromArray ('NotNull 'PGnumeric) Scientific where
-  fromArray = fromArrayLeaf @'PGnumeric @Scientific
-instance FromArray ('Null 'PGnumeric) (Maybe Scientific) where
-  fromArray = fromNullableArrayLeaf @'PGnumeric @Scientific
-instance FromArray ('NotNull 'PGuuid) UUID where
-  fromArray = fromArrayLeaf @'PGuuid @UUID
-instance FromArray ('Null 'PGuuid) (Maybe UUID) where
-  fromArray = fromNullableArrayLeaf @'PGuuid @UUID
-instance FromArray ('NotNull 'PGinet) (NetAddr IP) where
-  fromArray = fromArrayLeaf @'PGinet @(NetAddr IP)
-instance FromArray ('Null 'PGinet) (Maybe (NetAddr IP)) where
-  fromArray = fromNullableArrayLeaf @'PGinet @(NetAddr IP)
-instance FromArray ('NotNull ('PGchar 1)) Char where
-  fromArray = fromArrayLeaf @('PGchar 1) @Char
-instance FromArray ('Null ('PGchar 1)) (Maybe Char) where
-  fromArray = fromNullableArrayLeaf @('PGchar 1) @Char
-instance FromArray ('NotNull 'PGtext) Strict.Text where
-  fromArray = fromArrayLeaf @'PGtext @Strict.Text
-instance FromArray ('Null 'PGtext) (Maybe Strict.Text) where
-  fromArray = fromNullableArrayLeaf @'PGtext @Strict.Text
-instance FromArray ('NotNull 'PGtext) Lazy.Text where
-  fromArray = fromArrayLeaf @'PGtext @Lazy.Text
-instance FromArray ('Null 'PGtext) (Maybe Lazy.Text) where
-  fromArray = fromNullableArrayLeaf @'PGtext @Lazy.Text
-instance FromArray ('NotNull 'PGbytea) Strict.ByteString where
-  fromArray = fromArrayLeaf @'PGbytea @Strict.ByteString
-instance FromArray ('Null 'PGbytea) (Maybe Strict.ByteString) where
-  fromArray = fromNullableArrayLeaf @'PGbytea @Strict.ByteString
-instance FromArray ('NotNull 'PGbytea) Lazy.ByteString where
-  fromArray = fromArrayLeaf @'PGbytea @Lazy.ByteString
-instance FromArray ('Null 'PGbytea) (Maybe Lazy.ByteString) where
-  fromArray = fromNullableArrayLeaf @'PGbytea @Lazy.ByteString
-instance FromArray ('NotNull 'PGdate) Day where
-  fromArray = fromArrayLeaf @'PGdate @Day
-instance FromArray ('Null 'PGdate) (Maybe Day) where
-  fromArray = fromNullableArrayLeaf @'PGdate @Day
-instance FromArray ('NotNull 'PGtime) TimeOfDay where
-  fromArray = fromArrayLeaf @'PGtime @TimeOfDay
-instance FromArray ('Null 'PGtime) (Maybe TimeOfDay) where
-  fromArray = fromNullableArrayLeaf @'PGtime @TimeOfDay
-instance FromArray ('NotNull 'PGtimetz) (TimeOfDay, TimeZone) where
-  fromArray = fromArrayLeaf @'PGtimetz @(TimeOfDay, TimeZone)
-instance FromArray ('Null 'PGtimetz) (Maybe (TimeOfDay, TimeZone)) where
-  fromArray = fromNullableArrayLeaf @'PGtimetz @(TimeOfDay, TimeZone)
-instance FromArray ('NotNull 'PGtimestamp) LocalTime where
-  fromArray = fromArrayLeaf @'PGtimestamp @LocalTime
-instance FromArray ('Null 'PGtimestamp) (Maybe LocalTime) where
-  fromArray = fromNullableArrayLeaf @'PGtimestamp @LocalTime
-instance FromArray ('NotNull 'PGtimestamptz) UTCTime where
-  fromArray = fromArrayLeaf @'PGtimestamptz @UTCTime
-instance FromArray ('Null 'PGtimestamptz) (Maybe UTCTime) where
-  fromArray = fromNullableArrayLeaf @'PGtimestamptz @UTCTime
-instance FromArray ('NotNull 'PGinterval) DiffTime where
-  fromArray = fromArrayLeaf @'PGinterval @DiffTime
-instance FromArray ('Null 'PGinterval) (Maybe DiffTime) where
-  fromArray = fromNullableArrayLeaf @'PGinterval @DiffTime
-instance FromArray ('NotNull 'PGjson) Value where
-  fromArray = fromArrayLeaf @'PGjson @Value
-instance FromArray ('Null 'PGjson) (Maybe Value) where
-  fromArray = fromNullableArrayLeaf @'PGjson @Value
-instance FromArray ('NotNull 'PGjsonb) Value where
-  fromArray = fromArrayLeaf @'PGjsonb @Value
-instance FromArray ('Null 'PGjsonb) (Maybe Value) where
-  fromArray = fromNullableArrayLeaf @'PGjsonb @Value
-instance FromArray array y
-  => FromArray (nullity ('PGvararray array)) (Vector y) where
+instance {-# OVERLAPPABLE #-} FromValue pg y
+  => FromArray ('NotNull pg) y where
+    fromArray = Decoding.valueArray (fromValue @pg @y)
+instance {-# OVERLAPPABLE #-} FromValue pg y
+  => FromArray ('Null pg) (Maybe y) where
+    fromArray = Decoding.nullableValueArray (fromValue @pg @y)
+instance {-# OVERLAPPING #-} FromArray array y
+  => FromArray ('NotNull ('PGvararray array)) (Vector y) where
     fromArray =
       Decoding.dimensionArray Vector.replicateM (fromArray @array @y)
-instance
+instance {-# OVERLAPPING #-}
   ( FromArray array y
   , All ((~) y) ys
   , SListI ys
   , IsProductType product ys )
-  => FromArray (nullity ('PGfixarray n array)) product where
+  => FromArray ('NotNull ('PGfixarray n array)) product where
     fromArray =
       let
         rep _ = fmap (to . SOP . Z) . replicateMN
