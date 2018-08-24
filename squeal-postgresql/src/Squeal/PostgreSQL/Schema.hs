@@ -115,9 +115,10 @@ module Squeal.PostgreSQL.Schema
   , Jsonb (..)
   , Composite (..)
   , Enumerated (..)
-  -- , EnumFrom
+  , NullPG
+  , EnumFrom
   , LabelsFrom
-  -- , CompositeFrom
+  , CompositeFrom
   , PGFieldsFrom
   , RowOf
   , PGFieldOf
@@ -749,8 +750,8 @@ newtype Enumerated enum = Enumerated {getEnumerated :: enum}
 -- >>> :kind! EnumFrom Schwarma
 -- EnumFrom Schwarma :: PGType
 -- = 'PGenum '["Beef", "Lamb", "Chicken"]
--- type family EnumFrom (hask :: Type) :: PGType where
---   EnumFrom hask = 'PGenum (LabelsFrom hask)
+type family EnumFrom (hask :: Type) :: PGType where
+  EnumFrom hask = PG (Enumerated hask)
 
 -- | The `LabelsFrom` type family calculates the constructors of a
 -- Haskell enum type.
@@ -777,7 +778,7 @@ type family LabelsFrom (hask :: Type) :: [Type.ConstructorName] where
 -- CompositeFrom Row :: PGType
 -- = 'PGcomposite '["a" ::: 'Null 'PGint2, "b" ::: 'Null 'PGtimestamp]
 type family CompositeFrom (hask :: Type) :: PGType where
-  CompositeFrom hask = 'PGcomposite (PGFieldsFrom hask)
+  CompositeFrom hask = PG (Composite hask)
 
 type family PGFieldsFrom (hask :: Type) :: RowType where
   PGFieldsFrom hask = RowOf (RecordCodeOf hask)
