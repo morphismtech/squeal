@@ -794,6 +794,26 @@ type family NullPG (hask :: Type) :: NullityType where
   NullPG (Maybe hask) = 'Null (PG hask)
   NullPG hask = 'NotNull (PG hask)
 
+type family ParamsOf (hask :: Type) :: [NullityType] where
+  ParamsOf hask = NullPGs (TupleCodeOf hask (Code hask))
+
+type family NullPGs (tuple :: [Type]) :: [NullityType] where
+  NullPGs '[] = '[]
+  NullPGs (hask ': tuple) = NullPG hask ': NullPGs tuple
+
+type family TupleCodeOf (hask :: Type) (code :: [[Type]]) :: [Type] where
+  TupleCodeOf hask '[tuple] = tuple
+  TupleCodeOf hask '[] =
+    TypeError
+      (    'Text "The type `" :<>: 'ShowType hask :<>: 'Text "' is not a tuple type."
+      :$$: 'Text "It is a void type with no constructors."
+      )
+  TupleCodeOf hask (_ ': _ ': _) =
+    TypeError
+      (    'Text "The type `" :<>: 'ShowType hask :<>: 'Text "' is not a tuple type."
+      :$$: 'Text "It is a sum type with more than one constructor."
+      )
+
 -- | Calculates constructors of a datatype.
 type family ConstructorsOf (datatype :: Type.DatatypeInfo)
   :: [Type.ConstructorInfo] where
