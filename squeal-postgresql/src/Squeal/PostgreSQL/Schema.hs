@@ -112,11 +112,14 @@ module Squeal.PostgreSQL.Schema
   , PGjsonKey
     -- * Embedding
   , PG
-  , EnumFrom
+  , Jsonb
+  , Composite
+  , Enumerated
+  -- , EnumFrom
   , LabelsFrom
-  , CompositeFrom
+  -- , CompositeFrom
   , PGFieldsFrom
-  , PGFieldsOf
+  , RowOf
   , PGFieldOf
   , ConstructorsOf
   , ConstructorNameOf
@@ -140,6 +143,7 @@ import Data.Time
 import Data.Word (Word16, Word32, Word64)
 import Data.Type.Bool
 import Data.UUID.Types (UUID)
+import Data.Vector (Vector)
 import Generics.SOP
 import Generics.SOP.Record
 import GHC.OverloadedLabels
@@ -712,8 +716,29 @@ type family PG (hask :: Type) :: PGType where
   PG UUID = 'PGuuid
   PG (NetAddr IP) = 'PGinet
   PG Value = 'PGjson
+  PG Jsonb = 'PGjsonb
+  PG (Vector hask) = 'PGvararray (NullPG hask)
+  PG (hask, hask) = 'PGfixarray 2 (NullPG hask)
+  PG (hask, hask, hask) = 'PGfixarray 3 (NullPG hask)
+  PG (hask, hask, hask, hask) = 'PGfixarray 4 (NullPG hask)
+  PG (hask, hask, hask, hask, hask) = 'PGfixarray 5 (NullPG hask)
+  PG (hask, hask, hask, hask, hask, hask) = 'PGfixarray 6 (NullPG hask)
+  PG (hask, hask, hask, hask, hask, hask, hask) = 'PGfixarray 7 (NullPG hask)
+  PG (hask, hask, hask, hask, hask, hask, hask, hask)
+    = 'PGfixarray 8 (NullPG hask)
+  PG (hask, hask, hask, hask, hask, hask, hask, hask, hask)
+    = 'PGfixarray 9 (NullPG hask)
+  PG (hask, hask, hask, hask, hask, hask, hask, hask, hask, hask)
+    = 'PGfixarray 10 (NullPG hask)
+  PG (Composite hask) = 'PGcomposite (RowOf (RecordCodeOf hask))
+  PG (Enumerated hask)
+    = 'PGenum (ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask)))
   PG ty = TypeError
-    ('Text "There is no Postgres basic type for " ':<>: 'ShowType ty)
+    ('Text "There is no Postgres type for " ':<>: 'ShowType ty)
+
+newtype Jsonb = Jsonb {getJsonb :: Value}
+newtype Composite record = Composite {getComposite :: record}
+newtype Enumerated enum = Enumerated {getEnumerated :: enum}
 
 -- | The `EnumFrom` type family embeds Haskell enum types, ADTs with
 -- nullary constructors, as Postgres enum types
@@ -724,8 +749,8 @@ type family PG (hask :: Type) :: PGType where
 -- >>> :kind! EnumFrom Schwarma
 -- EnumFrom Schwarma :: PGType
 -- = 'PGenum '["Beef", "Lamb", "Chicken"]
-type family EnumFrom (hask :: Type) :: PGType where
-  EnumFrom hask = 'PGenum (LabelsFrom hask)
+-- type family EnumFrom (hask :: Type) :: PGType where
+--   EnumFrom hask = 'PGenum (LabelsFrom hask)
 
 -- | The `LabelsFrom` type family calculates the constructors of a
 -- Haskell enum type.
@@ -755,18 +780,18 @@ type family CompositeFrom (hask :: Type) :: PGType where
   CompositeFrom hask = 'PGcomposite (PGFieldsFrom hask)
 
 type family PGFieldsFrom (hask :: Type) :: RowType where
-  PGFieldsFrom hask = PGFieldsOf (RecordCodeOf hask)
+  PGFieldsFrom hask = RowOf (RecordCodeOf hask)
 
-type family PGFieldsOf (fields :: [(Symbol, Type)]) :: RowType where
-  PGFieldsOf '[] = '[]
-  PGFieldsOf (field ': fields) = PGFieldOf field ': PGFieldsOf fields
+type family RowOf (fields :: [(Symbol, Type)]) :: RowType where
+  RowOf '[] = '[]
+  RowOf (field ': fields) = PGFieldOf field ': RowOf fields
 
 type family PGFieldOf (field :: (Symbol, Type)) :: (Symbol, NullityType) where
-  PGFieldOf (field ::: hask) = field ::: NullityTypeOf hask
+  PGFieldOf (field ::: hask) = field ::: NullPG hask
 
-type family NullityTypeOf (hask :: Type) :: NullityType where
-  NullityTypeOf (Maybe hask) = 'Null (PG hask)
-  NullityTypeOf hask = 'NotNull (PG hask)
+type family NullPG (hask :: Type) :: NullityType where
+  NullPG (Maybe hask) = 'Null (PG hask)
+  NullPG hask = 'NotNull (PG hask)
 
 -- | Calculates constructors of a datatype.
 type family ConstructorsOf (datatype :: Type.DatatypeInfo)

@@ -862,7 +862,7 @@ createTypeEnumFrom
   )
   => Alias enum
   -- ^ name of the user defined enumerated type
-  -> Definition schema (Create enum ('Typedef (EnumFrom hask)) schema)
+  -> Definition schema (Create enum ('Typedef (PG (Enumerated hask))) schema)
 createTypeEnumFrom enum = createTypeEnum enum
   (SOP.hpure label :: NP PGlabel (LabelsFrom hask))
 
@@ -912,7 +912,7 @@ createTypeCompositeFrom
   , KnownSymbol ty )
   => Alias ty
   -- ^ name of the user defined composite type
-  -> Definition schema (Create ty ( 'Typedef (CompositeFrom hask)) schema)
+  -> Definition schema (Create ty ( 'Typedef (PG (Composite hask))) schema)
 createTypeCompositeFrom ty = createTypeComposite ty
   (SOP.hcpure (SOP.Proxy :: SOP.Proxy (FieldTyped schema)) fieldtype
     :: NP (Aliased (TypeExpression schema)) (PGFieldsFrom hask))
