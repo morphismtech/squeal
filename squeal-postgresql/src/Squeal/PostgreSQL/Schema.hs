@@ -112,9 +112,9 @@ module Squeal.PostgreSQL.Schema
   , PGjsonKey
     -- * Embedding
   , PG
-  , Jsonb
-  , Composite
-  , Enumerated
+  , Jsonb (..)
+  , Composite (..)
+  , Enumerated (..)
   -- , EnumFrom
   , LabelsFrom
   -- , CompositeFrom

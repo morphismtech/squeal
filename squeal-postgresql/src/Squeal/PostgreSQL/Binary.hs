@@ -276,6 +276,7 @@ instance ToParam UTCTime 'PGtimestamptz where
 instance ToParam DiffTime 'PGinterval where toParam = K . Encoding.interval_int
 instance ToParam Value 'PGjson where toParam = K . Encoding.json_ast
 instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
+instance ToParam Jsonb 'PGjsonb where toParam = toParam . getJsonb
 instance ToArray x ('NotNull ('PGvararray ty))
   => ToParam x ('PGvararray ty) where
     toParam
@@ -286,6 +287,8 @@ instance ToArray x ('NotNull ('PGfixarray n ty))
     toParam
       = K . Encoding.array (baseOid @x @('NotNull ('PGfixarray n ty)))
       . unK . toArray @x @('NotNull ('PGfixarray n ty))
+instance ToParam x pg => ToParam (Enumerated x) pg where
+  toParam = toParam . getEnumerated
 instance
   ( IsEnumType x
   , HasDatatypeInfo x
@@ -304,6 +307,8 @@ instance
         . Strict.pack
         . gshowConstructor (constructorInfo (datatypeInfo (Proxy @x)))
         . from
+instance ToParam x pg => ToParam (Composite x) pg where
+  toParam = toParam . getComposite
 instance
   ( SListI fields
   , IsRecord x xs
@@ -448,12 +453,16 @@ instance FromValue 'PGinterval DiffTime where
   fromValue = Decoding.interval_int
 instance FromValue 'PGjson Value where fromValue = Decoding.json_ast
 instance FromValue 'PGjsonb Value where fromValue = Decoding.jsonb_ast
+instance FromValue 'PGjsonb Jsonb where
+  fromValue = Jsonb <$> fromValue @'PGjsonb
 instance FromArray ('NotNull ('PGvararray ty)) y
   => FromValue ('PGvararray ty) y where
     fromValue = Decoding.array (fromArray @('NotNull ('PGvararray ty)) @y)
 instance FromArray ('NotNull ('PGfixarray n ty)) y
   => FromValue ('PGfixarray n ty) y where
     fromValue = Decoding.array (fromArray @('NotNull ('PGfixarray n ty)) @y)
+instance FromValue pg y => FromValue pg (Enumerated y) where
+  fromValue = Enumerated <$> fromValue @pg
 instance
   ( IsEnumType y
   , HasDatatypeInfo y
@@ -476,7 +485,8 @@ instance
         $ fmap to
         . greadConstructor (constructorInfo (datatypeInfo (Proxy @y)))
         . Strict.unpack
-
+instance FromValue pg y => FromValue pg (Composite y) where
+  fromValue = Composite <$> fromValue @pg
 instance
   ( FromRow fields y
   ) => FromValue ('PGcomposite fields) y where
