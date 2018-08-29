@@ -261,6 +261,8 @@ instance ToParam (NetAddr IP) 'PGinet where toParam = K . Encoding.inet
 instance ToParam Char ('PGchar 1) where toParam = K . Encoding.char_utf8
 instance ToParam Strict.Text 'PGtext where toParam = K . Encoding.text_strict
 instance ToParam Lazy.Text 'PGtext where toParam = K . Encoding.text_lazy
+instance ToParam String 'PGtext where
+  toParam = K . Encoding.text_strict . Strict.pack
 instance ToParam Strict.ByteString 'PGbytea where
   toParam = K . Encoding.bytea_strict
 instance ToParam Lazy.ByteString 'PGbytea where
@@ -437,6 +439,8 @@ instance FromValue 'PGinet (NetAddr IP) where fromValue = Decoding.inet
 instance FromValue ('PGchar 1) Char where fromValue = Decoding.char
 instance FromValue 'PGtext Strict.Text where fromValue = Decoding.text_strict
 instance FromValue 'PGtext Lazy.Text where fromValue = Decoding.text_lazy
+instance FromValue 'PGtext String where
+  fromValue = Strict.unpack <$> Decoding.text_strict
 instance FromValue 'PGbytea Strict.ByteString where
   fromValue = Decoding.bytea_strict
 instance FromValue 'PGbytea Lazy.ByteString where
