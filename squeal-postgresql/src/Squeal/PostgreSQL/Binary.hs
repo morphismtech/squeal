@@ -103,12 +103,16 @@ all the record fields must be `Maybe`s of basic types.
 >>> instance Generic Person
 >>> instance HasDatatypeInfo Person
 
-We can create the equivalent Postgres types directly from their Haskell types.
+We can create the equivalent Postgres types directly from their Haskell types. First,
+define a type instances for `PG`.
+
+>>> type instance PG Schwarma = PG (Composite Schwarma)
+>>> type instance PG Person = PG (Enumerated Person)
 
 >>> :{
 type Schema =
-  '[ "schwarma" ::: 'Typedef (EnumFrom Schwarma)
-   , "person" ::: 'Typedef (CompositeFrom Person)
+  '[ "schwarma" ::: 'Typedef (PG Schwarma)
+   , "person" ::: 'Typedef (PG Person)
    ]
 :}
 
@@ -124,17 +128,13 @@ Then we can perform roundtrip queries;
 
 >>> :{
 let
-  querySchwarma :: Query Schema
-    '[ 'NotNull (EnumFrom Schwarma)]
-    '["fromOnly" ::: 'NotNull (EnumFrom Schwarma)]
+  querySchwarma :: Query Schema (TuplePG (Only Schwarma)) (RowPG (Only Schwarma))
   querySchwarma = values_ (parameter @1 (typedef #schwarma) `as` #fromOnly)
 :}
 
 >>> :{
 let
-  queryPerson :: Query Schema
-    '[ 'NotNull (CompositeFrom Person)]
-    '["fromOnly" ::: 'NotNull (CompositeFrom Person)]
+  queryPerson :: Query Schema (TuplePG (Only Person)) (RowPG (Only Person))
   queryPerson = values_ (parameter @1 (typedef #person) `as` #fromOnly)
 :}
 

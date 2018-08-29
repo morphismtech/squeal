@@ -115,9 +115,7 @@ module Squeal.PostgreSQL.Schema
   , Composite (..)
   , Enumerated (..)
   , NullPG
-  , EnumFrom
   , LabelsFrom
-  , CompositeFrom
   , RowPG
   , RowOf
   , FieldPG
@@ -722,25 +720,12 @@ type instance PG (hask, hask, hask, hask, hask, hask, hask, hask, hask)
 type instance PG (hask, hask, hask, hask, hask, hask, hask, hask, hask, hask)
   = 'PGfixarray 10 (NullPG hask)
 type instance PG (Composite hask) = 'PGcomposite (RowOf (RecordCodeOf hask))
-type instance PG (Enumerated hask)
-  = 'PGenum (ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask)))
+type instance PG (Enumerated hask) = 'PGenum (LabelsFrom hask)
 
 newtype Json hask = Json {getJson :: hask}
 newtype Jsonb hask = Jsonb {getJsonb :: hask}
 newtype Composite record = Composite {getComposite :: record}
 newtype Enumerated enum = Enumerated {getEnumerated :: enum}
-
--- | The `EnumFrom` type family embeds Haskell enum types, ADTs with
--- nullary constructors, as Postgres enum types
---
--- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
--- >>> instance Generic Schwarma
--- >>> instance HasDatatypeInfo Schwarma
--- >>> :kind! EnumFrom Schwarma
--- EnumFrom Schwarma :: PGType
--- = 'PGenum '["Beef", "Lamb", "Chicken"]
-type family EnumFrom (hask :: Type) :: PGType where
-  EnumFrom hask = PG (Enumerated hask)
 
 -- | The `LabelsFrom` type family calculates the constructors of a
 -- Haskell enum type.
@@ -754,20 +739,6 @@ type family EnumFrom (hask :: Type) :: PGType where
 type family LabelsFrom (hask :: Type) :: [Type.ConstructorName] where
   LabelsFrom hask =
     ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask))
-
--- | The `CompositeFrom` type family embeds Haskell record types as
--- Postgres composite types, as long as the record fields
--- are `Maybe`s of Haskell types that can be embedded as basic types
--- with the `PG` type family.
---
--- >>> data Row = Row { a :: Maybe Int16, b :: Maybe LocalTime } deriving GHC.Generic
--- >>> instance Generic Row
--- >>> instance HasDatatypeInfo Row
--- >>> :kind! CompositeFrom Row
--- CompositeFrom Row :: PGType
--- = 'PGcomposite '["a" ::: 'Null 'PGint2, "b" ::: 'Null 'PGtimestamp]
-type family CompositeFrom (hask :: Type) :: PGType where
-  CompositeFrom hask = PG (Composite hask)
 
 type family RowPG (hask :: Type) :: RowType where
   RowPG hask = RowOf (RecordCodeOf hask)
