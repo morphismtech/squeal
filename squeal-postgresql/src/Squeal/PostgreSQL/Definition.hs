@@ -908,14 +908,14 @@ createTypeComposite ty fields = UnsafeDefinition $
 -- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 createTypeCompositeFrom
   :: forall hask ty schema.
-  ( SOP.All (FieldTyped schema) (PGFieldsFrom hask)
+  ( SOP.All (FieldTyped schema) (RowPG hask)
   , KnownSymbol ty )
   => Alias ty
   -- ^ name of the user defined composite type
   -> Definition schema (Create ty ( 'Typedef (PG (Composite hask))) schema)
 createTypeCompositeFrom ty = createTypeComposite ty
   (SOP.hcpure (SOP.Proxy :: SOP.Proxy (FieldTyped schema)) fieldtype
-    :: NP (Aliased (TypeExpression schema)) (PGFieldsFrom hask))
+    :: NP (Aliased (TypeExpression schema)) (RowPG hask))
 
 class FieldTyped schema ty where
   fieldtype :: Aliased (TypeExpression schema) ty

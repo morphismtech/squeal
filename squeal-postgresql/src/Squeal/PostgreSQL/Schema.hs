@@ -119,9 +119,9 @@ module Squeal.PostgreSQL.Schema
   , EnumFrom
   , LabelsFrom
   , CompositeFrom
-  , PGFieldsFrom
+  , RowPG
   , RowOf
-  , PGFieldOf
+  , FieldPG
   , ConstructorsOf
   , ConstructorNameOf
   , ConstructorNamesOf
@@ -692,50 +692,50 @@ renderLabels = hcollapse
 -- >>> :kind! PG LocalTime
 -- PG LocalTime :: PGType
 -- = 'PGtimestamp
-type family PG (hask :: Type) :: PGType where
-  PG Bool = 'PGbool
-  PG Int16 = 'PGint2
-  PG Int32 = 'PGint4
-  PG Int64 = 'PGint8
-  PG Word16 = 'PGint2
-  PG Word32 = 'PGint4
-  PG Word64 = 'PGint8
-  PG Scientific = 'PGnumeric
-  PG Float = 'PGfloat4
-  PG Double = 'PGfloat8
-  PG Char = 'PGchar 1
-  PG Text = 'PGtext
-  PG Lazy.Text = 'PGtext
-  PG ByteString = 'PGbytea
-  PG Lazy.ByteString = 'PGbytea
-  PG LocalTime = 'PGtimestamp
-  PG UTCTime = 'PGtimestamptz
-  PG Day = 'PGdate
-  PG TimeOfDay = 'PGtime
-  PG (TimeOfDay, TimeZone) = 'PGtimetz
-  PG DiffTime = 'PGinterval
-  PG UUID = 'PGuuid
-  PG (NetAddr IP) = 'PGinet
-  PG Value = 'PGjson
-  PG Jsonb = 'PGjsonb
-  PG (Vector hask) = 'PGvararray (NullPG hask)
-  PG (hask, hask) = 'PGfixarray 2 (NullPG hask)
-  PG (hask, hask, hask) = 'PGfixarray 3 (NullPG hask)
-  PG (hask, hask, hask, hask) = 'PGfixarray 4 (NullPG hask)
-  PG (hask, hask, hask, hask, hask) = 'PGfixarray 5 (NullPG hask)
-  PG (hask, hask, hask, hask, hask, hask) = 'PGfixarray 6 (NullPG hask)
-  PG (hask, hask, hask, hask, hask, hask, hask) = 'PGfixarray 7 (NullPG hask)
-  PG (hask, hask, hask, hask, hask, hask, hask, hask)
-    = 'PGfixarray 8 (NullPG hask)
-  PG (hask, hask, hask, hask, hask, hask, hask, hask, hask)
-    = 'PGfixarray 9 (NullPG hask)
-  PG (hask, hask, hask, hask, hask, hask, hask, hask, hask, hask)
-    = 'PGfixarray 10 (NullPG hask)
-  PG (Composite hask) = 'PGcomposite (RowOf (RecordCodeOf hask))
-  PG (Enumerated hask)
-    = 'PGenum (ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask)))
-  PG ty = TypeError
-    ('Text "There is no Postgres type for " ':<>: 'ShowType ty)
+type family PG (hask :: Type) :: PGType
+type instance PG Bool = 'PGbool
+type instance PG Int16 = 'PGint2
+type instance PG Int32 = 'PGint4
+type instance PG Int64 = 'PGint8
+type instance PG Word16 = 'PGint2
+type instance PG Word32 = 'PGint4
+type instance PG Word64 = 'PGint8
+type instance PG Scientific = 'PGnumeric
+type instance PG Float = 'PGfloat4
+type instance PG Double = 'PGfloat8
+type instance PG Char = 'PGchar 1
+type instance PG Text = 'PGtext
+type instance PG Lazy.Text = 'PGtext
+type instance PG ByteString = 'PGbytea
+type instance PG Lazy.ByteString = 'PGbytea
+type instance PG LocalTime = 'PGtimestamp
+type instance PG UTCTime = 'PGtimestamptz
+type instance PG Day = 'PGdate
+type instance PG TimeOfDay = 'PGtime
+type instance PG (TimeOfDay, TimeZone) = 'PGtimetz
+type instance PG DiffTime = 'PGinterval
+type instance PG UUID = 'PGuuid
+type instance PG (NetAddr IP) = 'PGinet
+type instance PG Value = 'PGjson
+type instance PG Jsonb = 'PGjsonb
+type instance PG (Vector hask) = 'PGvararray (NullPG hask)
+type instance PG (hask, hask) = 'PGfixarray 2 (NullPG hask)
+type instance PG (hask, hask, hask) = 'PGfixarray 3 (NullPG hask)
+type instance PG (hask, hask, hask, hask) = 'PGfixarray 4 (NullPG hask)
+type instance PG (hask, hask, hask, hask, hask) = 'PGfixarray 5 (NullPG hask)
+type instance PG (hask, hask, hask, hask, hask, hask)
+  = 'PGfixarray 6 (NullPG hask)
+type instance PG (hask, hask, hask, hask, hask, hask, hask)
+  = 'PGfixarray 7 (NullPG hask)
+type instance PG (hask, hask, hask, hask, hask, hask, hask, hask)
+  = 'PGfixarray 8 (NullPG hask)
+type instance PG (hask, hask, hask, hask, hask, hask, hask, hask, hask)
+  = 'PGfixarray 9 (NullPG hask)
+type instance PG (hask, hask, hask, hask, hask, hask, hask, hask, hask, hask)
+  = 'PGfixarray 10 (NullPG hask)
+type instance PG (Composite hask) = 'PGcomposite (RowOf (RecordCodeOf hask))
+type instance PG (Enumerated hask)
+  = 'PGenum (ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask)))
 
 newtype Jsonb = Jsonb {getJsonb :: Value}
 newtype Composite record = Composite {getComposite :: record}
@@ -780,26 +780,26 @@ type family LabelsFrom (hask :: Type) :: [Type.ConstructorName] where
 type family CompositeFrom (hask :: Type) :: PGType where
   CompositeFrom hask = PG (Composite hask)
 
-type family PGFieldsFrom (hask :: Type) :: RowType where
-  PGFieldsFrom hask = RowOf (RecordCodeOf hask)
+type family RowPG (hask :: Type) :: RowType where
+  RowPG hask = RowOf (RecordCodeOf hask)
 
 type family RowOf (fields :: [(Symbol, Type)]) :: RowType where
   RowOf '[] = '[]
-  RowOf (field ': fields) = PGFieldOf field ': RowOf fields
+  RowOf (field ': fields) = FieldPG field ': RowOf fields
 
-type family PGFieldOf (field :: (Symbol, Type)) :: (Symbol, NullityType) where
-  PGFieldOf (field ::: hask) = field ::: NullPG hask
+type family FieldPG (field :: (Symbol, Type)) :: (Symbol, NullityType) where
+  FieldPG (field ::: hask) = field ::: NullPG hask
 
 type family NullPG (hask :: Type) :: NullityType where
   NullPG (Maybe hask) = 'Null (PG hask)
   NullPG hask = 'NotNull (PG hask)
 
-type family ParamsOf (hask :: Type) :: [NullityType] where
-  ParamsOf hask = NullPGs (TupleCodeOf hask (Code hask))
+type family TuplePG (hask :: Type) :: [NullityType] where
+  TuplePG hask = TupleOf (TupleCodeOf hask (Code hask))
 
-type family NullPGs (tuple :: [Type]) :: [NullityType] where
-  NullPGs '[] = '[]
-  NullPGs (hask ': tuple) = NullPG hask ': NullPGs tuple
+type family TupleOf (tuple :: [Type]) :: [NullityType] where
+  TupleOf '[] = '[]
+  TupleOf (hask ': tuple) = NullPG hask ': TupleOf tuple
 
 type family TupleCodeOf (hask :: Type) (code :: [[Type]]) :: [Type] where
   TupleCodeOf hask '[tuple] = tuple
