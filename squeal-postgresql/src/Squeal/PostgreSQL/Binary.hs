@@ -201,6 +201,7 @@ module Squeal.PostgreSQL.Binary
 
 import BinaryParser
 import ByteString.StrictBuilder
+import Control.Arrow (left)
 import Control.Monad
 import Data.Aeson hiding (Null)
 import Data.Int
@@ -216,10 +217,12 @@ import Generics.SOP.Record
 import GHC.TypeLits
 import Network.IP.Addr
 
-import qualified Data.ByteString.Lazy as Lazy
-import qualified Data.ByteString as Strict hiding (pack, unpack)
-import qualified Data.Text.Lazy as Lazy
-import qualified Data.Text as Strict hiding (empty)
+import qualified Data.ByteString.Lazy as Lazy (ByteString)
+import qualified Data.ByteString.Lazy as Lazy.ByteString
+import qualified Data.ByteString as Strict (ByteString)
+import qualified Data.Text.Lazy as Lazy (Text)
+import qualified Data.Text as Strict (Text)
+import qualified Data.Text as Strict.Text
 import qualified Data.Vector as Vector
 import qualified GHC.Generics as GHC
 import qualified PostgreSQL.Binary.Decoding as Decoding
@@ -262,7 +265,7 @@ instance ToParam Char ('PGchar 1) where toParam = K . Encoding.char_utf8
 instance ToParam Strict.Text 'PGtext where toParam = K . Encoding.text_strict
 instance ToParam Lazy.Text 'PGtext where toParam = K . Encoding.text_lazy
 instance ToParam String 'PGtext where
-  toParam = K . Encoding.text_strict . Strict.pack
+  toParam = K . Encoding.text_strict . Strict.Text.pack
 instance ToParam Strict.ByteString 'PGbytea where
   toParam = K . Encoding.bytea_strict
 instance ToParam Lazy.ByteString 'PGbytea where
@@ -278,7 +281,9 @@ instance ToParam UTCTime 'PGtimestamptz where
 instance ToParam DiffTime 'PGinterval where toParam = K . Encoding.interval_int
 instance ToParam Value 'PGjson where toParam = K . Encoding.json_ast
 instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
-instance ToParam Jsonb 'PGjsonb where toParam = toParam . getJsonb
+instance ToJSON x => ToParam (Jsonb x) 'PGjsonb where
+  toParam = K . Encoding.jsonb_bytes
+    . Lazy.ByteString.toStrict . encode . getJsonb
 instance ToArray x ('NotNull ('PGvararray ty))
   => ToParam x ('PGvararray ty) where
     toParam
@@ -306,7 +311,7 @@ instance
           gshowConstructor constructors (SOP xs)
       in
         K . Encoding.text_strict
-        . Strict.pack
+        . Strict.Text.pack
         . gshowConstructor (constructorInfo (datatypeInfo (Proxy @x)))
         . from
 instance ToParam x pg => ToParam (Composite x) pg where
@@ -440,7 +445,7 @@ instance FromValue ('PGchar 1) Char where fromValue = Decoding.char
 instance FromValue 'PGtext Strict.Text where fromValue = Decoding.text_strict
 instance FromValue 'PGtext Lazy.Text where fromValue = Decoding.text_lazy
 instance FromValue 'PGtext String where
-  fromValue = Strict.unpack <$> Decoding.text_strict
+  fromValue = Strict.Text.unpack <$> Decoding.text_strict
 instance FromValue 'PGbytea Strict.ByteString where
   fromValue = Decoding.bytea_strict
 instance FromValue 'PGbytea Lazy.ByteString where
@@ -457,8 +462,12 @@ instance FromValue 'PGinterval DiffTime where
   fromValue = Decoding.interval_int
 instance FromValue 'PGjson Value where fromValue = Decoding.json_ast
 instance FromValue 'PGjsonb Value where fromValue = Decoding.jsonb_ast
-instance FromValue 'PGjsonb Jsonb where
-  fromValue = Jsonb <$> fromValue @'PGjsonb
+instance FromJSON x => FromValue 'PGjson (Json x) where
+  fromValue = Json <$>
+    Decoding.json_bytes (left Strict.Text.pack . eitherDecodeStrict)
+instance FromJSON x => FromValue 'PGjsonb (Jsonb x) where
+  fromValue = Jsonb <$>
+    Decoding.jsonb_bytes (left Strict.Text.pack . eitherDecodeStrict)
 instance FromArray ('NotNull ('PGvararray ty)) y
   => FromValue ('PGvararray ty) y where
     fromValue = Decoding.array (fromArray @('NotNull ('PGvararray ty)) @y)
@@ -488,7 +497,7 @@ instance
         Decoding.enum
         $ fmap to
         . greadConstructor (constructorInfo (datatypeInfo (Proxy @y)))
-        . Strict.unpack
+        . Strict.Text.unpack
 instance FromValue pg y => FromValue pg (Composite y) where
   fromValue = Composite <$> fromValue @pg
 instance

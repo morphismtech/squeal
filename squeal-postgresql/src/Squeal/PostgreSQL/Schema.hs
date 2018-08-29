@@ -112,6 +112,7 @@ module Squeal.PostgreSQL.Schema
   , PGjsonKey
     -- * Embedding
   , PG
+  , Json (..)
   , Jsonb (..)
   , Composite (..)
   , Enumerated (..)
@@ -718,7 +719,8 @@ type instance PG DiffTime = 'PGinterval
 type instance PG UUID = 'PGuuid
 type instance PG (NetAddr IP) = 'PGinet
 type instance PG Value = 'PGjson
-type instance PG Jsonb = 'PGjsonb
+type instance PG (Json hask) = 'PGjson
+type instance PG (Jsonb hask) = 'PGjsonb
 type instance PG (Vector hask) = 'PGvararray (NullPG hask)
 type instance PG (hask, hask) = 'PGfixarray 2 (NullPG hask)
 type instance PG (hask, hask, hask) = 'PGfixarray 3 (NullPG hask)
@@ -738,7 +740,8 @@ type instance PG (Composite hask) = 'PGcomposite (RowOf (RecordCodeOf hask))
 type instance PG (Enumerated hask)
   = 'PGenum (ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask)))
 
-newtype Jsonb = Jsonb {getJsonb :: Value}
+newtype Json hask = Json {getJson :: hask}
+newtype Jsonb hask = Jsonb {getJsonb :: hask}
 newtype Composite record = Composite {getComposite :: record}
 newtype Enumerated enum = Enumerated {getEnumerated :: enum}
 
