@@ -706,6 +706,7 @@ type instance PG Double = 'PGfloat8
 type instance PG Char = 'PGchar 1
 type instance PG Text = 'PGtext
 type instance PG Lazy.Text = 'PGtext
+type instance PG String = 'PGtext
 type instance PG ByteString = 'PGbytea
 type instance PG Lazy.ByteString = 'PGbytea
 type instance PG LocalTime = 'PGtimestamp
