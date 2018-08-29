@@ -98,12 +98,11 @@ module Squeal.PostgreSQL.Schema
   , AllNotNull
   , NotAllNull
   , NullifyType
-  , NullifyRelation
-  , NullifyRelations
+  , NullifyRow
+  , NullifyFrom
   , ColumnsToRow
   , TableToColumns
   , TableToRow
-  , RelationToNullityTypes
   , ConstraintInvolves
   , DropIfConstraintsInvolve
     -- ** JSON support
@@ -564,29 +563,24 @@ type family NotAllNull (columns :: ColumnsType) :: Constraint where
   NotAllNull (column ::: def :=> 'NotNull ty ': columns) = ()
   NotAllNull (column ::: def :=> 'Null ty ': columns) = NotAllNull columns
 
--- | `NullifyType` is an idempotent that nullifies a `ColumnType`.
+-- | `NullifyType` is an idempotent that nullifies a `NullityType`.
 type family NullifyType (ty :: NullityType) :: NullityType where
   NullifyType ('Null ty) = 'Null ty
   NullifyType ('NotNull ty) = 'Null ty
 
--- | `NullifyRelation` is an idempotent that nullifies a `ColumnsType`.
-type family NullifyRelation (columns :: RowType) :: RowType where
-  NullifyRelation '[] = '[]
-  NullifyRelation (column ::: ty ': columns) =
-    column ::: NullifyType ty ': NullifyRelation columns
+-- | `NullifyRow` is an idempotent that nullifies a `RowType`.
+type family NullifyRow (columns :: RowType) :: RowType where
+  NullifyRow '[] = '[]
+  NullifyRow (column ::: ty ': columns) =
+    column ::: NullifyType ty ': NullifyRow columns
 
--- | `NullifyRelations` is an idempotent that nullifies a `FromType`
+-- | `NullifyFrom` is an idempotent that nullifies a `FromType`
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
-type family NullifyRelations (tables :: FromType) :: FromType where
-  NullifyRelations '[] = '[]
-  NullifyRelations (table ::: columns ': tables) =
-    table ::: NullifyRelation columns ': NullifyRelations tables
-
--- | `RelationToNullityTypes` drops the column constraints.
-type family RelationToNullityTypes (rel :: RowType) :: [NullityType] where
-  RelationToNullityTypes ('(k, x) : xs) = x : RelationToNullityTypes xs
-  RelationToNullityTypes '[]            = '[]
+type family NullifyFrom (tables :: FromType) :: FromType where
+  NullifyFrom '[] = '[]
+  NullifyFrom (table ::: columns ': tables) =
+    table ::: NullifyRow columns ': NullifyFrom tables
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.

@@ -956,7 +956,7 @@ leftOuterJoin
   -- ^ @on@ condition
   -> FromClause schema params left
   -- ^ left
-  -> FromClause schema params (Join left (NullifyRelations right))
+  -> FromClause schema params (Join left (NullifyFrom right))
 leftOuterJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "LEFT OUTER JOIN" <+> renderFromClause right
   <+> "ON" <+> renderExpression on
@@ -974,7 +974,7 @@ rightOuterJoin
   -- ^ @on@ condition
   -> FromClause schema params left
   -- ^ left
-  -> FromClause schema params (Join (NullifyRelations left) right)
+  -> FromClause schema params (Join (NullifyFrom left) right)
 rightOuterJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "RIGHT OUTER JOIN" <+> renderFromClause right
   <+> "ON" <+> renderExpression on
@@ -994,7 +994,7 @@ fullOuterJoin
   -> FromClause schema params left
   -- ^ left
   -> FromClause schema params
-      (Join (NullifyRelations left) (NullifyRelations right))
+      (Join (NullifyFrom left) (NullifyFrom right))
 fullOuterJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "FULL OUTER JOIN" <+> renderFromClause right
   <+> "ON" <+> renderExpression on
