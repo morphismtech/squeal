@@ -94,7 +94,6 @@ module Squeal.PostgreSQL.Schema
   , PGarrayOf
   , PGarray
   , PGtextArray
-  , SameTypes
   , SamePGType
   , AllNotNull
   , NotAllNull
@@ -110,7 +109,7 @@ module Squeal.PostgreSQL.Schema
     -- ** JSON support
   , PGjson_
   , PGjsonKey
-    -- * Embedding
+    -- * Immersion
   , PG
   , Json (..)
   , Jsonb (..)
@@ -546,14 +545,6 @@ type PGtextArray name arr = PGarrayOf name arr ('NotNull 'PGtext)
 -- | `PGTypeOf` forgets about @NULL@ and any column constraints.
 type family PGTypeOf (ty :: NullityType) :: PGType where
   PGTypeOf (nullity pg) = pg
-
--- | `SameTypes` is a constraint that proves two `ColumnsType`s have the same
--- length and the same `ColumnType`s.
-type family SameTypes (columns0 :: ColumnsType) (columns1 :: ColumnsType)
-  :: Constraint where
-  SameTypes '[] '[] = ()
-  SameTypes (column0 ::: def0 :=> ty0 ': columns0) (column1 ::: def1 :=> ty1 ': columns1)
-    = (ty0 ~ ty1, SameTypes columns0 columns1)
 
 -- | Equality constraint on the underlying `PGType` of two columns.
 class SamePGType
