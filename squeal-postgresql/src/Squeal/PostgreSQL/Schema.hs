@@ -720,7 +720,7 @@ type instance PG (hask, hask, hask, hask, hask, hask, hask, hask, hask)
   = 'PGfixarray 9 (NullPG hask)
 type instance PG (hask, hask, hask, hask, hask, hask, hask, hask, hask, hask)
   = 'PGfixarray 10 (NullPG hask)
-type instance PG (Composite hask) = 'PGcomposite (RowOf (RecordCodeOf hask))
+type instance PG (Composite hask) = 'PGcomposite (RowPG hask)
 type instance PG (Enumerated hask) = 'PGenum (LabelsFrom hask)
 
 newtype Json hask = Json {getJson :: hask}
