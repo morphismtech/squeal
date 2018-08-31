@@ -928,7 +928,7 @@ instance (KnownSymbol alias, PGTyped schema ty)
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance SOP.Generic Schwarma
 -- >>> instance SOP.HasDatatypeInfo Schwarma
--- >>> printSQL (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (EnumFrom Schwarma)] '[])
+-- >>> printSQL (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))] '[])
 -- DROP TYPE "schwarma";
 dropType
   :: Has tydef schema ('Typedef ty)

@@ -115,6 +115,7 @@ module Squeal.PostgreSQL.Schema
   , Composite (..)
   , Enumerated (..)
   , NullPG
+  , TuplePG
   , LabelsFrom
   , RowPG
   , RowOf
@@ -723,9 +724,13 @@ type instance PG (Composite hask) = 'PGcomposite (RowOf (RecordCodeOf hask))
 type instance PG (Enumerated hask) = 'PGenum (LabelsFrom hask)
 
 newtype Json hask = Json {getJson :: hask}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
 newtype Jsonb hask = Jsonb {getJsonb :: hask}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
 newtype Composite record = Composite {getComposite :: record}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
 newtype Enumerated enum = Enumerated {getEnumerated :: enum}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
 
 -- | The `LabelsFrom` type family calculates the constructors of a
 -- Haskell enum type.

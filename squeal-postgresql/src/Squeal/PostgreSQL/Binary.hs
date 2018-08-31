@@ -24,9 +24,7 @@ to encode Haskell values into statement parameters.
 
 >>> :{
 let
-  query :: Query '[]
-    '[ 'NotNull 'PGint2, 'NotNull 'PGtext]
-    '["col1" ::: 'NotNull 'PGint2, "col2" ::: 'NotNull 'PGtext]
+  query :: Query '[] (TuplePG Row) (RowPG Row)
   query = values_ (param @1 `as` #col1 :* param @2 `as` #col2)
 :}
 
@@ -43,22 +41,8 @@ let
 True
 
 In addition to being able to encode and decode basic Haskell types like `Int16` and `Text`,
-Squeal permits you to encode and decode Haskell types which are equivalent to
+Squeal permits you to encode and decode Haskell types to
 Postgres array, enumerated and composite types.
-
->>> :{
-let
-  query :: Query '[]
-    '[ 'NotNull ('PGvararray ('NotNull 'PGint2))
-     , 'NotNull ('PGfixarray 2 ('Null 'PGint2))
-     , 'NotNull ('PGfixarray 3 ('NotNull ('PGfixarray 2 ('NotNull 'PGint2))))
-     ]
-    '[ "v1" ::: 'NotNull ('PGvararray ('NotNull 'PGint2))
-     , "v2" ::: 'NotNull ('PGfixarray 2 ('Null 'PGint2))
-     , "v3" ::: 'NotNull ('PGfixarray 3 ('NotNull ('PGfixarray 2 ('NotNull 'PGint2))))
-     ]
-  query = values_ (param @1 `as` #v1 :* param @2 `as` #v2 :* param @3 `as` #v3)
-:}
 
 >>> :{
 data VRow = VRow
@@ -72,6 +56,12 @@ data VRow = VRow
 >>> instance HasDatatypeInfo VRow
 >>> :set -XOverloadedLists
 >>> let vparams = VRow [1,2] (Just 1,Nothing) ((1,2), (3,4), (5,6))
+
+>>> :{
+let
+  query :: Query '[] (TuplePG VRow) (RowPG VRow)
+  query = values_ (param @1 `as` #v1 :* param @2 `as` #v2 :* param @3 `as` #v3)
+:}
 
 >>> :{
 let
@@ -90,7 +80,7 @@ They are equivalent to Haskell algebraic data types whose constructors are nulla
 An example of an enum type might be the days of the week,
 or a set of status values for a piece of data.
 
->>> data Schwarma = Beef | Lamb | Chicken deriving (Show, GHC.Generic)
+>>> data Schwarma = Beef | Lamb | Chicken deriving (Eq, Show, GHC.Generic)
 >>> instance Generic Schwarma
 >>> instance HasDatatypeInfo Schwarma
 
@@ -99,20 +89,17 @@ it is essentially just a list of field names and their data types. They are almo
 equivalent to Haskell record types. However, because of the potential presence of @NULL@
 all the record fields must be `Maybe`s of basic types.
 
->>> data Person = Person {name :: Maybe Text, age :: Maybe Int32} deriving (Show, GHC.Generic)
+>>> data Person = Person {name :: Text, age :: Int32} deriving (Eq, Show, GHC.Generic)
 >>> instance Generic Person
 >>> instance HasDatatypeInfo Person
 
 We can create the equivalent Postgres types directly from their Haskell types. First,
 define a type instances for `PG`.
 
->>> type instance PG Schwarma = PG (Composite Schwarma)
->>> type instance PG Person = PG (Enumerated Person)
-
 >>> :{
 type Schema =
-  '[ "schwarma" ::: 'Typedef (PG Schwarma)
-   , "person" ::: 'Typedef (PG Person)
+  '[ "schwarma" ::: 'Typedef (PG (Enumerated Schwarma))
+   , "person" ::: 'Typedef (PG (Composite Person))
    ]
 :}
 
@@ -127,15 +114,22 @@ let
 Then we can perform roundtrip queries;
 
 >>> :{
-let
-  querySchwarma :: Query Schema (TuplePG (Only Schwarma)) (RowPG (Only Schwarma))
-  querySchwarma = values_ (parameter @1 (typedef #schwarma) `as` #fromOnly)
+data TRow = TRow
+  { schwarma :: Enumerated Schwarma
+  , person :: Composite Person
+  } deriving (Eq, GHC.Generic)
 :}
+
+>>> instance Generic TRow
+>>> instance HasDatatypeInfo TRow
+>>> let tparams = TRow (Enumerated Chicken) (Composite (Person "Faisal" 24))
 
 >>> :{
 let
-  queryPerson :: Query Schema (TuplePG (Only Person)) (RowPG (Only Person))
-  queryPerson = values_ (parameter @1 (typedef #person) `as` #fromOnly)
+  query :: Query Schema (TuplePG TRow) (RowPG TRow)
+  query = values_
+    ( parameter @1 (typedef #schwarma) `as` #schwarma :*
+      parameter @2 (typedef #person) `as` #person)
 :}
 
 And finally drop the types.
@@ -151,20 +145,16 @@ Now let's run it.
 >>> :{
 let
   session = do
-    result1 <- runQueryParams querySchwarma (Only Chicken)
-    Just (Only schwarma) <- firstRow result1
-    liftBase $ print (schwarma :: Schwarma)
-    result2 <- runQueryParams queryPerson (Only (Person (Just "Faisal") (Just 24)))
-    Just (Only person) <- firstRow result2
-    liftBase $ print (person :: Person)
+    result1 <- runQueryParams query tparams
+    Just row <- firstRow result1
+    liftBase . print $ row == tparams
 in
   void . withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
     & pqThen session
     & pqThen (define teardown)
 :}
-Chicken
-Person {name = Just "Faisal", age = Just 24}
+True
 -}
 
 {-# LANGUAGE
@@ -294,13 +284,11 @@ instance ToArray x ('NotNull ('PGfixarray n ty))
     toParam
       = K . Encoding.array (baseOid @x @('NotNull ('PGfixarray n ty)))
       . unK . toArray @x @('NotNull ('PGfixarray n ty))
-instance ToParam x pg => ToParam (Enumerated x) pg where
-  toParam = toParam . getEnumerated
 instance
   ( IsEnumType x
   , HasDatatypeInfo x
   , LabelsFrom x ~ labels
-  ) => ToParam x ('PGenum labels) where
+  ) => ToParam (Enumerated x) ('PGenum labels) where
     toParam =
       let
         gshowConstructor :: NP ConstructorInfo xss -> SOP I xss -> String
@@ -314,14 +302,13 @@ instance
         . Strict.Text.pack
         . gshowConstructor (constructorInfo (datatypeInfo (Proxy @x)))
         . from
-instance ToParam x pg => ToParam (Composite x) pg where
-  toParam = toParam . getComposite
+        . getEnumerated
 instance
   ( SListI fields
   , IsRecord x xs
   , AllZip ToField xs fields
   , All HasAliasedOid fields
-  ) => ToParam x ('PGcomposite fields) where
+  ) => ToParam (Composite x) ('PGcomposite fields) where
     toParam =
       let
 
@@ -359,7 +346,7 @@ instance
               hcfoldMap (Proxy @HasAliasedOid) each fields
 
       in
-        composite . encoders . toRecord
+        composite . encoders . toRecord . getComposite
 
 class HasAliasedOid (field :: (Symbol, NullityType)) where
   aliasedOid :: Word32
@@ -474,13 +461,11 @@ instance FromArray ('NotNull ('PGvararray ty)) y
 instance FromArray ('NotNull ('PGfixarray n ty)) y
   => FromValue ('PGfixarray n ty) y where
     fromValue = Decoding.array (fromArray @('NotNull ('PGfixarray n ty)) @y)
-instance FromValue pg y => FromValue pg (Enumerated y) where
-  fromValue = Enumerated <$> fromValue @pg
 instance
   ( IsEnumType y
   , HasDatatypeInfo y
   , LabelsFrom y ~ labels
-  ) => FromValue ('PGenum labels) y where
+  ) => FromValue ('PGenum labels) (Enumerated y) where
     fromValue =
       let
         greadConstructor
@@ -494,15 +479,14 @@ instance
             then Just (SOP (Z Nil))
             else SOP . S . unSOP <$> greadConstructor constructors name
       in
-        Decoding.enum
+        fmap Enumerated
+        . Decoding.enum
         $ fmap to
         . greadConstructor (constructorInfo (datatypeInfo (Proxy @y)))
         . Strict.Text.unpack
-instance FromValue pg y => FromValue pg (Composite y) where
-  fromValue = Composite <$> fromValue @pg
 instance
   ( FromRow fields y
-  ) => FromValue ('PGcomposite fields) y where
+  ) => FromValue ('PGcomposite fields) (Composite y) where
     fromValue =
       let
         -- <number of fields: 4 bytes>
@@ -524,7 +508,7 @@ instance
               then return (K Nothing)
               else K . Just <$> bytesOfSize len
       in
-        Decoding.fn (fromRow @fields <=< composite)
+        fmap Composite (Decoding.fn (fromRow @fields <=< composite))
 
 -- | A `FromField` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
