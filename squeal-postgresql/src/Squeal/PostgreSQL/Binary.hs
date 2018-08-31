@@ -397,12 +397,26 @@ instance {-# OVERLAPPING #-} ToArray x array
     toArray = K . Encoding.dimensionArray Vector.foldl'
       (unK . toArray @x @array)
     baseOid = baseOid @x @array
+instance {-# OVERLAPPING #-} ToArray x array
+  => ToArray (Vector x) ('Null ('PGvararray array)) where
+    toArray = K . Encoding.dimensionArray Vector.foldl'
+      (unK . toArray @x @array)
+    baseOid = baseOid @x @array
 instance {-# OVERLAPPING #-}
   ( IsProductType product xs
   , Length xs ~ n
   , All ((~) x) xs
   , ToArray x array )
   => ToArray product ('NotNull ('PGfixarray n array)) where
+    toArray = K . Encoding.dimensionArray foldlN
+      (unK . toArray @x @array) . unZ . unSOP . from
+    baseOid = baseOid @x @array
+instance {-# OVERLAPPING #-}
+  ( IsProductType product xs
+  , Length xs ~ n
+  , All ((~) x) xs
+  , ToArray x array )
+  => ToArray product ('Null ('PGfixarray n array)) where
     toArray = K . Encoding.dimensionArray foldlN
       (unK . toArray @x @array) . unZ . unSOP . from
     baseOid = baseOid @x @array
@@ -558,12 +572,27 @@ instance {-# OVERLAPPING #-} FromArray array y
   => FromArray ('NotNull ('PGvararray array)) (Vector y) where
     fromArray =
       Decoding.dimensionArray Vector.replicateM (fromArray @array @y)
+instance {-# OVERLAPPING #-} FromArray array y
+  => FromArray ('Null ('PGvararray array)) (Vector y) where
+    fromArray =
+      Decoding.dimensionArray Vector.replicateM (fromArray @array @y)
 instance {-# OVERLAPPING #-}
   ( FromArray array y
   , All ((~) y) ys
   , SListI ys
   , IsProductType product ys )
   => FromArray ('NotNull ('PGfixarray n array)) product where
+    fromArray =
+      let
+        rep _ = fmap (to . SOP . Z) . replicateMN
+      in
+        Decoding.dimensionArray rep (fromArray @array @y)
+instance {-# OVERLAPPING #-}
+  ( FromArray array y
+  , All ((~) y) ys
+  , SListI ys
+  , IsProductType product ys )
+  => FromArray ('Null ('PGfixarray n array)) product where
     fromArray =
       let
         rep _ = fmap (to . SOP . Z) . replicateMN
