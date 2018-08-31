@@ -54,6 +54,21 @@ data VRow = VRow
 
 >>> instance Generic VRow
 >>> instance HasDatatypeInfo VRow
+>>> :kind! TuplePG VRow
+TuplePG VRow :: [NullityType]
+= '['NotNull ('PGvararray ('NotNull 'PGint2)),
+    'NotNull ('PGfixarray 2 ('Null 'PGint2)),
+    'NotNull
+      ('PGfixarray 3 ('NotNull ('PGfixarray 2 ('NotNull 'PGint2))))]
+
+>>> :kind! RowPG VRow
+RowPG VRow :: [(Symbol, NullityType)]
+= '["v1" ::: 'NotNull ('PGvararray ('NotNull 'PGint2)),
+    "v2" ::: 'NotNull ('PGfixarray 2 ('Null 'PGint2)),
+    "v3"
+    ::: 'NotNull
+          ('PGfixarray 3 ('NotNull ('PGfixarray 2 ('NotNull 'PGint2))))]
+
 >>> :set -XOverloadedLists
 >>> let vparams = VRow [1,2] (Just 1,Nothing) ((1,2), (3,4), (5,6))
 
