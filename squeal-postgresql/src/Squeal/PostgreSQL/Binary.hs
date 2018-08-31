@@ -142,9 +142,9 @@ data TRow = TRow
 >>> :{
 let
   query :: Query Schema (TuplePG TRow) (RowPG TRow)
-  query = values_
-    ( parameter @1 (typedef #schwarma) `as` #schwarma :*
-      parameter @2 (typedef #person) `as` #person)
+  query = values_ $
+    parameter @1 (typedef #schwarma) `as` #schwarma :*
+    parameter @2 (typedef #person) `as` #person
 :}
 
 And finally drop the types.
