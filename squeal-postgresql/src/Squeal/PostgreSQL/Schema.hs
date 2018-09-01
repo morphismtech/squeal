@@ -337,7 +337,7 @@ type family ColumnsToRow (columns :: ColumnsType) :: RowType where
 type family TableToColumns (table :: TableType) :: ColumnsType where
   TableToColumns (constraints :=> columns) = columns
 
--- | Convert a table to a relation.
+-- | Convert a table to a row type.
 type family TableToRow (table :: TableType) :: RowType where
   TableToRow tab = ColumnsToRow (TableToColumns tab)
 
@@ -352,15 +352,15 @@ data Grouping
 a member of the auxiliary namespace created by @GROUP BY@ clauses and thus,
 may be called in an output `Squeal.PostgreSQL.Expression.Expression` without aggregating.
 -}
-class (KnownSymbol relation, KnownSymbol column)
-  => GroupedBy relation column bys where
-instance {-# OVERLAPPING #-} (KnownSymbol relation, KnownSymbol column)
-  => GroupedBy relation column ('(table,column) ': bys)
+class (KnownSymbol table, KnownSymbol column)
+  => GroupedBy table column bys where
+instance {-# OVERLAPPING #-} (KnownSymbol table, KnownSymbol column)
+  => GroupedBy table column ('(table,column) ': bys)
 instance {-# OVERLAPPABLE #-}
-  ( KnownSymbol relation
+  ( KnownSymbol table
   , KnownSymbol column
-  , GroupedBy relation column bys
-  ) => GroupedBy relation column (tabcol ': bys)
+  , GroupedBy table column bys
+  ) => GroupedBy table column (tabcol ': bys)
 
 -- | `Alias`es are proxies for a type level string or `Symbol`
 -- and have an `IsLabel` instance so that with @-XOverloadedLabels@

@@ -271,79 +271,79 @@ param
   => Expression schema from grouping params ty -- ^ param
 param = parameter @n pgtype
 
-instance (HasUnique relation from columns, Has column columns ty)
+instance (HasUnique table from columns, Has column columns ty)
   => IsLabel column (Expression schema from 'Ungrouped params ty) where
     fromLabel = UnsafeExpression $ renderAlias (Alias @column)
-instance (HasUnique relation from columns, Has column columns ty)
+instance (HasUnique table from columns, Has column columns ty)
   => IsLabel column
     (Aliased (Expression schema from 'Ungrouped params) (column ::: ty)) where
     fromLabel = fromLabel @column `As` Alias @column
-instance (HasUnique relation from columns, Has column columns ty)
+instance (HasUnique table from columns, Has column columns ty)
   => IsLabel column
     (NP (Aliased (Expression schema from 'Ungrouped params)) '[column ::: ty]) where
     fromLabel = fromLabel @column :* Nil
 
-instance (Has relation from columns, Has column columns ty)
-  => IsQualified relation column (Expression schema from 'Ungrouped params ty) where
-    relation ! column = UnsafeExpression $
-      renderAlias relation <> "." <> renderAlias column
-instance (Has relation from columns, Has column columns ty)
-  => IsQualified relation column
+instance (Has table from columns, Has column columns ty)
+  => IsQualified table column (Expression schema from 'Ungrouped params ty) where
+    table ! column = UnsafeExpression $
+      renderAlias table <> "." <> renderAlias column
+instance (Has table from columns, Has column columns ty)
+  => IsQualified table column
     (Aliased (Expression schema from 'Ungrouped params) (column ::: ty)) where
-    relation ! column = relation ! column `As` column
-instance (Has relation from columns, Has column columns ty)
-  => IsQualified relation column
+    table ! column = table ! column `As` column
+instance (Has table from columns, Has column columns ty)
+  => IsQualified table column
     (NP (Aliased (Expression schema from 'Ungrouped params)) '[column ::: ty]) where
-    relation ! column = relation ! column :* Nil
+    table ! column = table ! column :* Nil
 
 instance
-  ( HasUnique relation from columns
+  ( HasUnique table from columns
   , Has column columns ty
-  , GroupedBy relation column bys
+  , GroupedBy table column bys
   ) => IsLabel column
     (Expression schema from ('Grouped bys) params ty) where
       fromLabel = UnsafeExpression $ renderAlias (Alias @column)
 instance
-  ( HasUnique relation from columns
+  ( HasUnique table from columns
   , Has column columns ty
-  , GroupedBy relation column bys
+  , GroupedBy table column bys
   ) => IsLabel column
     ( Aliased (Expression schema from ('Grouped bys) params)
       (column ::: ty) ) where
       fromLabel = fromLabel @column `As` Alias @column
 instance
-  ( HasUnique relation from columns
+  ( HasUnique table from columns
   , Has column columns ty
-  , GroupedBy relation column bys
+  , GroupedBy table column bys
   ) => IsLabel column
     ( NP (Aliased (Expression schema from ('Grouped bys) params))
       '[column ::: ty] ) where
       fromLabel = fromLabel @column :* Nil
 
 instance
-  ( Has relation from columns
+  ( Has table from columns
   , Has column columns ty
-  , GroupedBy relation column bys
-  ) => IsQualified relation column
+  , GroupedBy table column bys
+  ) => IsQualified table column
     (Expression schema from ('Grouped bys) params ty) where
-      relation ! column = UnsafeExpression $
-        renderAlias relation <> "." <> renderAlias column
+      table ! column = UnsafeExpression $
+        renderAlias table <> "." <> renderAlias column
 instance
-  ( Has relation from columns
+  ( Has table from columns
   , Has column columns ty
-  , GroupedBy relation column bys
-  ) => IsQualified relation column
+  , GroupedBy table column bys
+  ) => IsQualified table column
     (Aliased (Expression schema from ('Grouped bys) params)
       (column ::: ty)) where
-        relation ! column = relation ! column `As` column
+        table ! column = table ! column `As` column
 instance
-  ( Has relation from columns
+  ( Has table from columns
   , Has column columns ty
-  , GroupedBy relation column bys
-  ) => IsQualified relation column
+  , GroupedBy table column bys
+  ) => IsQualified table column
     ( NP (Aliased (Expression schema from ('Grouped bys) params))
       '[column ::: ty]) where
-        relation ! column = relation ! column :* Nil
+        table ! column = table ! column :* Nil
 
 -- | analagous to `Nothing`
 --

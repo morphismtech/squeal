@@ -461,7 +461,7 @@ selectDistinct list rels = UnsafeQuery $
 -- | The simplest kind of query is `selectStar` which emits all columns
 -- that the table expression produces.
 selectStar
-  :: HasUnique relation from columns
+  :: HasUnique table from columns
   => TableExpression schema params from 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
@@ -470,7 +470,7 @@ selectStar rels = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression rels
 -- | A `selectDistinctStar` emits all columns that the table expression
 -- produces and eliminates duplicate rows.
 selectDistinctStar
-  :: HasUnique relation from columns
+  :: HasUnique table from columns
   => TableExpression schema params from 'Ungrouped
   -- ^ intermediate virtual table
   -> Query schema params columns
@@ -480,8 +480,8 @@ selectDistinctStar rels = UnsafeQuery $
 -- | When working with multiple tables, it can also be useful to ask
 -- for all the columns of a particular table, using `selectDotStar`.
 selectDotStar
-  :: Has relation from columns
-  => Alias relation
+  :: Has table from columns
+  => Alias table
   -- ^ particular virtual subtable
   -> TableExpression schema params from 'Ungrouped
   -- ^ intermediate virtual table
@@ -492,8 +492,8 @@ selectDotStar rel tab = UnsafeQuery $
 -- | A `selectDistinctDotStar` asks for all the columns of a particular table,
 -- and eliminates duplicate rows.
 selectDistinctDotStar
-  :: Has relation from columns
-  => Alias relation
+  :: Has table from columns
+  => Alias table
   -- ^ particular virtual table
   -> TableExpression schema params from 'Ungrouped
   -- ^ intermediate virtual table
@@ -1012,14 +1012,14 @@ data By
     (from :: FromType)
     (by :: (Symbol,Symbol)) where
     By1
-      :: (HasUnique relation from columns, Has column columns ty)
+      :: (HasUnique table from columns, Has column columns ty)
       => Alias column
-      -> By from '(relation, column)
+      -> By from '(table, column)
     By2
-      :: (Has relation from columns, Has column columns ty)
-      => Alias relation
+      :: (Has table from columns, Has column columns ty)
+      => Alias table
       -> Alias column
-      -> By from '(relation, column)
+      -> By from '(table, column)
 deriving instance Show (By from by)
 deriving instance Eq (By from by)
 deriving instance Ord (By from by)
