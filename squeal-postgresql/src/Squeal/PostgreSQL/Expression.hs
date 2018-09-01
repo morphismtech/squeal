@@ -45,6 +45,7 @@ module Squeal.PostgreSQL.Expression
   , nullIf
     -- ** Collections
   , array
+  , index
   , row
   , field
     -- ** Functions
@@ -195,6 +196,7 @@ import Data.Semigroup hiding (All)
 import qualified Data.Aeson as JSON
 import Data.Ratio
 import Data.String
+import Data.Word
 import Generics.SOP hiding (from)
 import GHC.OverloadedLabels
 import GHC.TypeLits
@@ -443,6 +445,13 @@ array
   -> Expression schema from grouping params (nullity ('PGvararray ty))
 array xs = UnsafeExpression $
   "ARRAY[" <> commaSeparated (renderExpression <$> xs) <> "]"
+
+index
+  :: Word64
+  -> Expression schema from grouping params (nullity ('PGvararray ty))
+  -> Expression schema from grouping params (NullifyType ty)
+index n expr = UnsafeExpression $
+  parenthesized (renderExpression expr) <> "[" <> fromString (show n) <> "]"
 
 instance (KnownSymbol label, label `In` labels) => IsPGlabel label
   (Expression schema from grouping params (nullity ('PGenum labels))) where
