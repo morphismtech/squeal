@@ -116,7 +116,7 @@ module Squeal.PostgreSQL.Schema
   , Enumerated (..)
   , NullPG
   , TuplePG
-  , LabelsFrom
+  , LabelsPG
   , RowPG
   , RowOf
   , FieldPG
@@ -721,7 +721,7 @@ type instance PG (hask, hask, hask, hask, hask, hask, hask, hask, hask)
 type instance PG (hask, hask, hask, hask, hask, hask, hask, hask, hask, hask)
   = 'PGfixarray 10 (NullPG hask)
 type instance PG (Composite hask) = 'PGcomposite (RowPG hask)
-type instance PG (Enumerated hask) = 'PGenum (LabelsFrom hask)
+type instance PG (Enumerated hask) = 'PGenum (LabelsPG hask)
 
 newtype Json hask = Json {getJson :: hask}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
@@ -732,17 +732,17 @@ newtype Composite record = Composite {getComposite :: record}
 newtype Enumerated enum = Enumerated {getEnumerated :: enum}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
 
--- | The `LabelsFrom` type family calculates the constructors of a
+-- | The `LabelsPG` type family calculates the constructors of a
 -- Haskell enum type.
 --
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance Generic Schwarma
 -- >>> instance HasDatatypeInfo Schwarma
--- >>> :kind! LabelsFrom Schwarma
--- LabelsFrom Schwarma :: [Type.ConstructorName]
+-- >>> :kind! LabelsPG Schwarma
+-- LabelsPG Schwarma :: [Type.ConstructorName]
 -- = '["Beef", "Lamb", "Chicken"]
-type family LabelsFrom (hask :: Type) :: [Type.ConstructorName] where
-  LabelsFrom hask =
+type family LabelsPG (hask :: Type) :: [Type.ConstructorName] where
+  LabelsPG hask =
     ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask))
 
 type family RowPG (hask :: Type) :: RowType where

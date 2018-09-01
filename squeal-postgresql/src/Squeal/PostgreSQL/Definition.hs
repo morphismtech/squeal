@@ -857,14 +857,14 @@ createTypeEnum enum labels = UnsafeDefinition $
 createTypeEnumFrom
   :: forall hask enum schema.
   ( SOP.Generic hask
-  , SOP.All KnownSymbol (LabelsFrom hask)
+  , SOP.All KnownSymbol (LabelsPG hask)
   , KnownSymbol enum
   )
   => Alias enum
   -- ^ name of the user defined enumerated type
   -> Definition schema (Create enum ('Typedef (PG (Enumerated hask))) schema)
 createTypeEnumFrom enum = createTypeEnum enum
-  (SOP.hpure label :: NP PGlabel (LabelsFrom hask))
+  (SOP.hpure label :: NP PGlabel (LabelsPG hask))
 
 {- | `createTypeComposite` creates a composite type. The composite type is
 specified by a list of attribute names and data types.

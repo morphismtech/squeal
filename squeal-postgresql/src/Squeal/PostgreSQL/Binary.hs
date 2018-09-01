@@ -302,7 +302,7 @@ instance ToArray x ('NotNull ('PGfixarray n ty))
 instance
   ( IsEnumType x
   , HasDatatypeInfo x
-  , LabelsFrom x ~ labels
+  , LabelsPG x ~ labels
   ) => ToParam (Enumerated x) ('PGenum labels) where
     toParam =
       let
@@ -493,7 +493,7 @@ instance FromArray ('NotNull ('PGfixarray n ty)) y
 instance
   ( IsEnumType y
   , HasDatatypeInfo y
-  , LabelsFrom y ~ labels
+  , LabelsPG y ~ labels
   ) => FromValue ('PGenum labels) (Enumerated y) where
     fromValue =
       let
