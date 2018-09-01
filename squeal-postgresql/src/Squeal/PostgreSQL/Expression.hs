@@ -88,12 +88,13 @@ module Squeal.PostgreSQL.Expression
   , upper
   , charLength
   , like
-    -- ** json or jsonb operators
+    -- ** Json functions and operators
+    -- *** Json and Jsonb operators
   , (.->)
   , (.->>)
   , (.#>)
   , (.#>>)
-    -- *** jsonb only operators
+    -- *** Additional Jsonb operators
   , (.@>)
   , (.<@)
   , (.?)
@@ -101,7 +102,7 @@ module Squeal.PostgreSQL.Expression
   , (.?&)
   , (.-.)
   , (#-.)
-    -- *** Functions
+    -- *** Json creation functions
   , jsonLit
   , jsonbLit
   , toJson
@@ -1072,12 +1073,18 @@ Table 9.45: JSON creation functions
 -----------------------------------------}
 
 -- | Literal binary JSON
-jsonbLit :: JSON.Value -> Expression schema from grouping params (nullity 'PGjsonb)
-jsonbLit = cast jsonb . UnsafeExpression . singleQuotedUtf8 . toStrict . JSON.encode
+jsonbLit
+  :: JSON.ToJSON x
+  => x -> Expression schema from grouping params (nullity 'PGjsonb)
+jsonbLit = cast jsonb . UnsafeExpression
+  . singleQuotedUtf8 . toStrict . JSON.encode
 
 -- | Literal JSON
-jsonLit :: JSON.Value -> Expression schema from grouping params (nullity 'PGjson)
-jsonLit = cast json . UnsafeExpression . singleQuotedUtf8 . toStrict . JSON.encode
+jsonLit
+  :: JSON.ToJSON x
+  => x -> Expression schema from grouping params (nullity 'PGjson)
+jsonLit = cast json . UnsafeExpression
+  . singleQuotedUtf8 . toStrict . JSON.encode
 
 -- | Returns the value as json. Arrays and composites are converted
 -- (recursively) to arrays and objects; otherwise, if there is a cast from the
