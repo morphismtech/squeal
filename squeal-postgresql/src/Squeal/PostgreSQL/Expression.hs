@@ -63,12 +63,12 @@ module Squeal.PostgreSQL.Expression
   , greatest
   , least
     -- ** Conditions
-  , Condition
   , true
   , false
   , not_
   , (.&&)
   , (.||)
+  , Condition
   , caseWhenThenElse
   , ifThenElse
   , (.==)
@@ -89,10 +89,6 @@ module Squeal.PostgreSQL.Expression
   , charLength
   , like
     -- ** json or jsonb operators
-  , PGarray
-  , PGarrayOf
-  , PGjsonKey
-  , PGjson_
   , (.->)
   , (.->>)
   , (.#>)
@@ -708,7 +704,7 @@ ceiling_
 ceiling_ = unsafeFunction "ceiling"
 
 -- | A `Condition` is an `Expression`, which can evaluate
--- to `TRUE`, `FALSE` or `NULL`. This is because SQL uses
+-- to `true`, `false` or `null_`. This is because SQL uses
 -- a three valued logic.
 type Condition schema from grouping params =
   Expression schema from grouping params ('Null 'PGbool)
@@ -733,18 +729,18 @@ not_ = unsafeUnaryOp "NOT"
 -- | >>> printSQL $ true .&& false
 -- (TRUE AND FALSE)
 (.&&)
-  :: Condition schema from grouping params
-  -> Condition schema from grouping params
-  -> Condition schema from grouping params
+  :: Expression schema from grouping params (nullity 'PGbool)
+  -> Expression schema from grouping params (nullity 'PGbool)
+  -> Expression schema from grouping params (nullity 'PGbool)
 infixr 3 .&&
 (.&&) = unsafeBinaryOp "AND"
 
 -- | >>> printSQL $ true .|| false
 -- (TRUE OR FALSE)
 (.||)
-  :: Condition schema from grouping params
-  -> Condition schema from grouping params
-  -> Condition schema from grouping params
+  :: Expression schema from grouping params (nullity 'PGbool)
+  -> Expression schema from grouping params (nullity 'PGbool)
+  -> Expression schema from grouping params (nullity 'PGbool)
 infixr 2 .||
 (.||) = unsafeBinaryOp "OR"
 
