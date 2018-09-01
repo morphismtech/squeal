@@ -9,9 +9,11 @@ Squeal transaction control language.
 -}
 
 {-# LANGUAGE
-    FlexibleContexts
+    DataKinds
+  , FlexibleContexts
   , LambdaCase
   , OverloadedStrings
+  , TypeInType
 #-}
 
 module Squeal.PostgreSQL.Transaction
@@ -69,16 +71,16 @@ transactionally_
 transactionally_ = transactionally defaultMode
 
 -- | @BEGIN@ a transaction.
-begin :: MonadPQ schema tx => TransactionMode -> tx (K Result NilRelation)
+begin :: MonadPQ schema tx => TransactionMode -> tx (K Result ('[] :: RowType))
 begin mode = manipulate . UnsafeManipulation $
   "BEGIN" <+> renderTransactionMode mode <> ";"
 
 -- | @COMMIT@ a schema invariant transaction.
-commit :: MonadPQ schema tx => tx (K Result NilRelation)
+commit :: MonadPQ schema tx => tx (K Result ('[] :: RowType))
 commit = manipulate $ UnsafeManipulation "COMMIT;"
 
 -- | @ROLLBACK@ a schema invariant transaction.
-rollback :: MonadPQ schema tx => tx (K Result NilRelation)
+rollback :: MonadPQ schema tx => tx (K Result ('[] :: RowType))
 rollback = manipulate $ UnsafeManipulation "ROLLBACK;"
 
 -- | Run a schema changing computation `transactionallySchema`.

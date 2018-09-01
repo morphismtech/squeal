@@ -42,7 +42,6 @@ module Squeal.PostgreSQL.Schema
     -- * Tables
   , ColumnsType
   , RowType
-  , NilRelation
   , FromType
   , TableType
     -- * Schema
@@ -53,7 +52,6 @@ module Squeal.PostgreSQL.Schema
   , ColumnConstraint (..)
   , TableConstraint (..)
   , TableConstraints
-  , NilTableConstraints
   , Uniquely
     -- * Aliases
   , (:::)
@@ -284,9 +282,6 @@ data TableConstraint
 
 -- | A `TableConstraints` is a row of `TableConstraint`s.
 type TableConstraints = [(Symbol,TableConstraint)]
--- | A monokinded empty `TableConstraints`.
-type family NilTableConstraints :: TableConstraints where
-  NilTableConstraints = '[]
 
 -- | A `ForeignKey` must reference columns that either are
 -- a `PrimaryKey` or form a `Unique` constraint.
@@ -321,8 +316,6 @@ type TableType = (TableConstraints,ColumnsType)
 --      ]
 -- :}
 type RowType = [(Symbol,NullityType)]
--- | A monokinded empty `RowType`.
-type family NilRelation :: RowType where NilRelation = '[]
 
 -- | `FromType` is a row of `RowType`s, thought of as a product.
 type FromType = [(Symbol,RowType)]
