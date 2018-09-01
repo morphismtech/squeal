@@ -46,6 +46,7 @@ module Squeal.PostgreSQL.Expression
     -- ** Collections
   , array
   , row
+  , field
     -- ** Functions
   , unsafeBinaryOp
   , unsafeUnaryOp
@@ -354,7 +355,7 @@ null_ = UnsafeExpression "NULL"
 
 -- | analagous to `Just`
 --
--- >>> printSQL $ true
+-- >>> printSQL $ notNull true
 -- TRUE
 notNull
   :: Expression schema rels grouping params ('NotNull ty)
@@ -467,12 +468,13 @@ row
 row exprs = UnsafeExpression $ "ROW" <> parenthesized
   (renderCommaSeparated (\ (expr `As` _) -> renderExpression expr) exprs)
 
-instance Has field fields ty => IsLabel field
-  (   Expression schema relation grouping params ('NotNull ('PGcomposite fields))
-   -> Expression schema relation grouping params ty ) where
-    fromLabel expr = UnsafeExpression $
-      parenthesized (renderExpression expr) <> "." <>
-        renderSymbol @field
+field
+  :: forall field fields ty schema from grouping params. Has field fields ty
+  => Expression schema from grouping params ('NotNull ('PGcomposite fields))
+  -> Expression schema from grouping params ty
+field expr = UnsafeExpression $
+  parenthesized (renderExpression expr) <> "." <>
+    renderSymbol @field
 
 instance Semigroup
   (Expression schema from grouping params (nullity ('PGvararray ty))) where

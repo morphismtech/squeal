@@ -896,8 +896,8 @@ createTypeComposite ty fields = UnsafeDefinition $
   (renderCommaSeparated renderField fields) <> ";"
   where
     renderField :: Aliased (TypeExpression schema) x -> ByteString
-    renderField (typ `As` field) =
-      renderAlias field <+> renderTypeExpression typ
+    renderField (typ `As` alias) =
+      renderAlias alias <+> renderTypeExpression typ
 
 -- | Composite types can also be generated from a Haskell type, for example
 --
