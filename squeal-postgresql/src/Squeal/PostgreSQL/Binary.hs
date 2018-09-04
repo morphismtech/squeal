@@ -11,83 +11,78 @@ Instances are governed by the `Generic` and `HasDatatypeInfo` typeclasses, so yo
 do not need to define your own instances to decode retrieved rows into Haskell values or
 to encode Haskell values into statement parameters.
 
+Let's see some examples. We'll need some imports
+
 >>> import Data.Int (Int16)
 >>> import Data.Text (Text)
-
->>> data Row = Row { col1 :: Int16, col2 :: Text } deriving (Eq, GHC.Generic)
->>> instance Generic Row
->>> instance HasDatatypeInfo Row
-
 >>> import Control.Monad (void)
 >>> import Control.Monad.Base (liftBase)
 >>> import Squeal.PostgreSQL
 
+Define a Haskell datatype `Row` that will serve as both the input and output of a simple
+round trip query.
+
+>>> data Row = Row { col1 :: Int16, col2 :: Text, col3 :: Maybe Bool } deriving (Eq, GHC.Generic)
+>>> instance Generic Row
+>>> instance HasDatatypeInfo Row
 >>> :{
 let
-  query :: Query '[] (TuplePG Row) (RowPG Row)
-  query = values_ (param @1 `as` #col1 :* param @2 `as` #col2)
+  roundTrip :: Query '[] (TuplePG Row) (RowPG Row)
+  roundTrip = values_ $
+    parameter @1 int2 `as` #col1 :*
+    parameter @2 text `as` #col2 :*
+    parameter @3 bool `as` #col3
 :}
 
+So long as we can encode the parameters and then decode the result of the query,
+the input and output should be equal.
+
+>>> let input = Row 2 "hi" (Just True)
 >>> :{
-let
-  roundtrip :: IO ()
-  roundtrip = void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
-    result <- runQueryParams query (2 :: Int16, "hi" :: Text)
-    Just row <- firstRow result
-    liftBase . print $ row == Row 2 "hi"
+void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+  result <- runQueryParams roundTrip input
+  Just output <- firstRow result
+  liftBase . print $ input == output
 :}
-
->>> roundtrip
 True
 
-In addition to being able to encode and decode basic Haskell types like `Int16` and `Text`,
-Squeal permits you to encode and decode Haskell types to
-Postgres array, enumerated and composite types.
+In addition to being able to encode and decode basic Haskell types
+like `Int16` and `Text`, Squeal permits you to encode and decode Haskell types to
+Postgres array, enumerated and composite types and json. Let's see another example,
+this time using the `Vector` type which corresponds to variable length arrays
+and homogeneous tuples which correspond to fixed length arrays. We can even
+create multi-dimensional fixed length arrays.
 
 >>> :{
-data VRow = VRow
-  { v1 :: Vector Int16
-  , v2 :: (Maybe Int16,Maybe Int16)
-  , v3 :: ((Int16,Int16),(Int16,Int16),(Int16,Int16))
+data Row = Row
+  { col1 :: Vector Int16
+  , col2 :: (Maybe Int16,Maybe Int16)
+  , col3 :: ((Int16,Int16),(Int16,Int16),(Int16,Int16))
   } deriving (Eq, GHC.Generic)
 :}
 
->>> instance Generic VRow
->>> instance HasDatatypeInfo VRow
->>> :kind! TuplePG VRow
-TuplePG VRow :: [NullityType]
-= '['NotNull ('PGvararray ('NotNull 'PGint2)),
-    'NotNull ('PGfixarray 2 ('Null 'PGint2)),
-    'NotNull
-      ('PGfixarray 3 ('NotNull ('PGfixarray 2 ('NotNull 'PGint2))))]
+>>> instance Generic Row
+>>> instance HasDatatypeInfo Row
 
->>> :kind! RowPG VRow
-RowPG VRow :: [(Symbol, NullityType)]
-= '["v1" ::: 'NotNull ('PGvararray ('NotNull 'PGint2)),
-    "v2" ::: 'NotNull ('PGfixarray 2 ('Null 'PGint2)),
-    "v3"
-    ::: 'NotNull
-          ('PGfixarray 3 ('NotNull ('PGfixarray 2 ('NotNull 'PGint2))))]
+Once again, we define a simple round trip query.
+
+>>> :{
+let
+  roundTrip :: Query '[] (TuplePG Row) (RowPG Row)
+  roundTrip = values_ $
+    parameter @1 (int2 & vararray)                  `as` #col1 :*
+    parameter @2 (int2 & fixarray @2)               `as` #col2 :*
+    parameter @3 (int2 & fixarray @2 & fixarray @3) `as` #col3
+:}
 
 >>> :set -XOverloadedLists
->>> let vparams = VRow [1,2] (Just 1,Nothing) ((1,2), (3,4), (5,6))
-
+>>> let input = Row [1,2] (Just 1,Nothing) ((1,2),(3,4),(5,6))
 >>> :{
-let
-  query :: Query '[] (TuplePG VRow) (RowPG VRow)
-  query = values_ (param @1 `as` #v1 :* param @2 `as` #v2 :* param @3 `as` #v3)
+void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+  result <- runQueryParams roundTrip input
+  Just output <- firstRow result
+  liftBase . print $ input == output
 :}
-
->>> :{
-let
-  roundtrip :: IO ()
-  roundtrip = void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
-    result <- runQueryParams query vparams
-    Just row <- firstRow result
-    liftBase . print $ row == vparams
-:}
-
->>> roundtrip
 True
 
 Enumerated (enum) types are data types that comprise a static, ordered set of values.
@@ -100,16 +95,15 @@ or a set of status values for a piece of data.
 >>> instance HasDatatypeInfo Schwarma
 
 A composite type represents the structure of a row or record;
-it is essentially just a list of field names and their data types. They are almost
-equivalent to Haskell record types. However, because of the potential presence of @NULL@
-all the record fields must be `Maybe`s of basic types.
+it is essentially just a list of field names and their data types.
 
 >>> data Person = Person {name :: Text, age :: Int32} deriving (Eq, Show, GHC.Generic)
 >>> instance Generic Person
 >>> instance HasDatatypeInfo Person
+>>> instance Aeson.FromJSON Person
+>>> instance Aeson.ToJSON Person
 
-We can create the equivalent Postgres types directly from their Haskell types. First,
-define a type instances for `PG`.
+We can create the equivalent Postgres types directly from their Haskell types.
 
 >>> :{
 type Schema =
@@ -126,28 +120,40 @@ let
     createTypeCompositeFrom @Person #person
 :}
 
-Then we can perform roundtrip queries;
+Let's demonstrate how to associate our Haskell types `Schwarma` and `Person`
+with enumerated, composite or json types in Postgres. First create a Haskell
+`Row` type using the `Enumerated`, `Composite` and `Json` newtypes as fields.
 
 >>> :{
-data TRow = TRow
+data Row = Row
   { schwarma :: Enumerated Schwarma
-  , person :: Composite Person
+  , person1 :: Composite Person
+  , person2 :: Json Person
   } deriving (Eq, GHC.Generic)
 :}
 
->>> instance Generic TRow
->>> instance HasDatatypeInfo TRow
->>> let tparams = TRow (Enumerated Chicken) (Composite (Person "Faisal" 24))
+>>> instance Generic Row
+>>> instance HasDatatypeInfo Row
+>>> :{
+let
+  input = Row
+    (Enumerated Chicken)
+    (Composite (Person "Faisal" 24))
+    (Json (Person "Ahmad" 48))
+:}
+
+Once again, define a round trip query.
 
 >>> :{
 let
-  query :: Query Schema (TuplePG TRow) (RowPG TRow)
-  query = values_ $
+  roundTrip :: Query Schema (TuplePG Row) (RowPG Row)
+  roundTrip = values_ $
     parameter @1 (typedef #schwarma) `as` #schwarma :*
-    parameter @2 (typedef #person) `as` #person
+    parameter @2 (typedef #person)   `as` #person1  :*
+    parameter @3 json                `as` #person2
 :}
 
-And finally drop the types.
+Finally, we can drop our type definitions.
 
 >>> :{
 let
@@ -160,9 +166,9 @@ Now let's run it.
 >>> :{
 let
   session = do
-    result1 <- runQueryParams query tparams
-    Just row <- firstRow result1
-    liftBase . print $ row == tparams
+    result <- runQueryParams roundTrip input
+    Just output <- firstRow result
+    liftBase . print $ input == output
 in
   void . withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
@@ -205,10 +211,9 @@ module Squeal.PostgreSQL.Binary
   ) where
 
 import BinaryParser
-import ByteString.StrictBuilder
+import ByteString.StrictBuilder (builderLength, int32BE, int64BE, word32BE)
 import Control.Arrow (left)
 import Control.Monad
-import Data.Aeson hiding (Null)
 import Data.Int
 import Data.Kind
 import Data.Monoid hiding (All)
@@ -222,6 +227,7 @@ import Generics.SOP.Record
 import GHC.TypeLits
 import Network.IP.Addr
 
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as Lazy (ByteString)
 import qualified Data.ByteString.Lazy as Lazy.ByteString
 import qualified Data.ByteString as Strict (ByteString)
@@ -284,11 +290,14 @@ instance ToParam LocalTime 'PGtimestamp where
 instance ToParam UTCTime 'PGtimestamptz where
   toParam = K . Encoding.timestamptz_int
 instance ToParam DiffTime 'PGinterval where toParam = K . Encoding.interval_int
-instance ToParam Value 'PGjson where toParam = K . Encoding.json_ast
-instance ToParam Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
-instance ToJSON x => ToParam (Jsonb x) 'PGjsonb where
+instance ToParam Aeson.Value 'PGjson where toParam = K . Encoding.json_ast
+instance ToParam Aeson.Value 'PGjsonb where toParam = K . Encoding.jsonb_ast
+instance Aeson.ToJSON x => ToParam (Json x) 'PGjson where
+  toParam = K . Encoding.json_bytes
+    . Lazy.ByteString.toStrict . Aeson.encode . getJson
+instance Aeson.ToJSON x => ToParam (Jsonb x) 'PGjsonb where
   toParam = K . Encoding.jsonb_bytes
-    . Lazy.ByteString.toStrict . encode . getJsonb
+    . Lazy.ByteString.toStrict . Aeson.encode . getJsonb
 instance ToArray x ('NotNull ('PGvararray ty))
   => ToParam x ('PGvararray ty) where
     toParam
@@ -476,14 +485,14 @@ instance FromValue 'PGtimestamptz UTCTime where
   fromValue = Decoding.timestamptz_int
 instance FromValue 'PGinterval DiffTime where
   fromValue = Decoding.interval_int
-instance FromValue 'PGjson Value where fromValue = Decoding.json_ast
-instance FromValue 'PGjsonb Value where fromValue = Decoding.jsonb_ast
-instance FromJSON x => FromValue 'PGjson (Json x) where
+instance FromValue 'PGjson Aeson.Value where fromValue = Decoding.json_ast
+instance FromValue 'PGjsonb Aeson.Value where fromValue = Decoding.jsonb_ast
+instance Aeson.FromJSON x => FromValue 'PGjson (Json x) where
   fromValue = Json <$>
-    Decoding.json_bytes (left Strict.Text.pack . eitherDecodeStrict)
-instance FromJSON x => FromValue 'PGjsonb (Jsonb x) where
+    Decoding.json_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
+instance Aeson.FromJSON x => FromValue 'PGjsonb (Jsonb x) where
   fromValue = Jsonb <$>
-    Decoding.jsonb_bytes (left Strict.Text.pack . eitherDecodeStrict)
+    Decoding.jsonb_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
 instance FromArray ('NotNull ('PGvararray ty)) y
   => FromValue ('PGvararray ty) y where
     fromValue = Decoding.array (fromArray @('NotNull ('PGvararray ty)) @y)
