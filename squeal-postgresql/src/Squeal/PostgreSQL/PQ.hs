@@ -76,7 +76,7 @@ import Data.Foldable
 import Data.Function ((&))
 import Data.Kind
 import Data.Monoid
-import Data.Text (unpack)
+import Data.Text (pack, Text)
 import Data.Traversable
 import Generics.SOP
 import PostgreSQL.Binary.Encoding (encodingBytes)
@@ -273,7 +273,7 @@ instance IndexedMonadTransPQ PQ where
   define (UnsafeDefinition q) = PQ $ \ (K conn) -> do
     resultMaybe <- liftBase $ LibPQ.exec conn q
     case resultMaybe of
-      Nothing -> error
+      Nothing -> throw $ ResultException
         "define: LibPQ.exec returned no results"
       Just result -> return $ K (K result)
 
@@ -403,7 +403,7 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
           q' = q <> ";"
         resultMaybe <- liftBase $ LibPQ.execParams conn q' params' LibPQ.Binary
         case resultMaybe of
-          Nothing -> error
+          Nothing -> throw $ ResultException
             "manipulateParams: LibPQ.execParams returned no results"
           Just result -> do
             tryResult result
@@ -415,7 +415,7 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
         let temp = "temporary_statement"
         prepResultMaybe <- LibPQ.prepare conn temp q Nothing
         case prepResultMaybe of
-          Nothing -> error
+          Nothing -> throw $ ResultException
             "traversePrepared: LibPQ.prepare returned no results"
           Just prepResult -> tryResult prepResult
         results <- for list $ \ params -> do
@@ -424,14 +424,14 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
             params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
           resultMaybe <- LibPQ.execPrepared conn temp params' LibPQ.Binary
           case resultMaybe of
-            Nothing -> error
+            Nothing -> throw $ ResultException
               "traversePrepared: LibPQ.execParams returned no results"
             Just result -> do
               tryResult result
               return $ K result
         deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
         case deallocResultMaybe of
-          Nothing -> error
+          Nothing -> throw $ ResultException
             "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
           Just deallocResult -> tryResult deallocResult
         return (K results)
@@ -442,7 +442,7 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
         let temp = "temporary_statement"
         prepResultMaybe <- LibPQ.prepare conn temp q Nothing
         case prepResultMaybe of
-          Nothing -> error
+          Nothing -> throw $ ResultException
             "traversePrepared_: LibPQ.prepare returned no results"
           Just prepResult -> tryResult prepResult
         for_ list $ \ params -> do
@@ -451,12 +451,12 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
             params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
           resultMaybe <- LibPQ.execPrepared conn temp params' LibPQ.Binary
           case resultMaybe of
-            Nothing -> error
+            Nothing -> throw $ ResultException
               "traversePrepared_: LibPQ.execParams returned no results"
             Just result -> tryResult result
         deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
         case deallocResultMaybe of
-          Nothing -> error
+          Nothing -> throw $ ResultException
             "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
           Just deallocResult -> tryResult deallocResult
         return (K ())
@@ -531,15 +531,15 @@ getRow
   -> io y
 getRow r (K result :: K LibPQ.Result columns) = liftBase $ do
   numRows <- LibPQ.ntuples result
-  when (numRows < r) $ error $
-    "getRow: expected at least " <> show r <> "rows but only saw "
-    <> show numRows
+  when (numRows < r) $ throw $ ResultException $
+    "getRow: expected at least " <> pack (show r) <> "rows but only saw "
+    <> pack (show numRows)
   let len = fromIntegral (lengthSList (Proxy @columns))
   row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
   case fromList row' of
-    Nothing -> error "getRow: found unexpected length"
+    Nothing -> throw $ ResultException "getRow: found unexpected length"
     Just row -> case fromRow @columns row of
-      Left parseError -> error $ "fromRow: " <> unpack parseError
+      Left parseError -> throw $ ParseException $ "getRow: " <> parseError
       Right y -> return y
 
 -- | Intended to be used for unfolding in streaming libraries, `nextRow`
@@ -557,9 +557,9 @@ nextRow total (K result :: K LibPQ.Result columns) r
     let len = fromIntegral (lengthSList (Proxy @columns))
     row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
     case fromList row' of
-      Nothing -> error "nextRow: found unexpected length"
+      Nothing -> throw $ ResultException "nextRow: found unexpected length"
       Just row -> case fromRow @columns row of
-        Left parseError -> error $ "nextRow: " <> unpack parseError
+        Left parseError -> throw $ ParseException $ "nextRow: " <> parseError
         Right y -> return $ Just (r+1, y)
 
 -- | Get all rows from a `LibPQ.Result`.
@@ -573,9 +573,9 @@ getRows (K result :: K LibPQ.Result columns) = liftBase $ do
   for [0 .. numRows - 1] $ \ r -> do
     row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
     case fromList row' of
-      Nothing -> error "getRows: found unexpected length"
+      Nothing -> throw $ ResultException "getRows: found unexpected length"
       Just row -> case fromRow @columns row of
-        Left parseError -> error $ "getRows: " <> unpack parseError
+        Left parseError -> throw $ ParseException $ "getRows: " <> parseError
         Right y -> return y
 
 -- | Get the first row if possible from a `LibPQ.Result`.
@@ -589,9 +589,9 @@ firstRow (K result :: K LibPQ.Result columns) = liftBase $ do
     let len = fromIntegral (lengthSList (Proxy @columns))
     row' <- traverse (LibPQ.getvalue result 0) [0 .. len - 1]
     case fromList row' of
-      Nothing -> error "firstRow: found unexpected length"
+      Nothing -> throw $ ResultException "firstRow: found unexpected length"
       Just row -> case fromRow @columns row of
-        Left parseError -> error $ "firstRow: " <> unpack parseError
+        Left parseError -> throw $ ParseException $ "firstRow: " <> parseError
         Right y -> return $ Just y
 
 -- | Lifts actions on results from @LibPQ@.
@@ -626,12 +626,15 @@ resultErrorCode
 resultErrorCode = liftResult (flip LibPQ.resultErrorField LibPQ.DiagSqlstate)
 
 data SquealException
-  = SquealException
+  = PQException
   { sqlExecStatus :: LibPQ.ExecStatus
   , sqlStateCode :: Maybe ByteString
     -- ^ https://www.postgresql.org/docs/current/static/errcodes-appendix.html
   , sqlErrorMessage :: Maybe ByteString
-  } deriving (Eq, Show)
+  }
+  | ResultException Text
+  | ParseException Text
+  deriving (Eq, Show)
 instance Exception SquealException
 
 tryResult
@@ -646,4 +649,4 @@ tryResult result = liftBase $ do
     _ -> do
       stateCode <- LibPQ.resultErrorField result LibPQ.DiagSqlstate
       msg <- LibPQ.resultErrorMessage result
-      throw $ SquealException status stateCode msg
+      throw $ PQException status stateCode msg

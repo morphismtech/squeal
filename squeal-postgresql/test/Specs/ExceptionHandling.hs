@@ -86,13 +86,11 @@ migration = Migration { name = "test"
 
 setupDB :: IO ()
 setupDB = void . withConnection connectionString $
-  manipulate (UnsafeManipulation "SET client_min_messages = warning;")
-  & pqThen $ migrateUp $ single migration
+  migrateUp $ single migration
 
 dropDB :: IO ()
 dropDB = void . withConnection connectionString $
-  manipulate (UnsafeManipulation "SET client_min_messages = warning;")
-  & pqThen $ migrateDown $ single migration
+  migrateDown $ single migration
 
 connectionString :: Char8.ByteString
 connectionString = "host=localhost port=5432 dbname=exampledb"
@@ -109,10 +107,15 @@ insertUserTwice = newUser testUser >> newUser testUser
 specs :: SpecWith ()
 specs = before_ setupDB $ after_ dropDB $
   describe "Exceptions" $ do
-    it "Should be raised in transactions and cause rollback" $
-      withConnection connectionString insertUserTwice
-       `shouldThrow` (const True :: Selector SquealException)
 
-    it "Should be raised outside of transactions" $
+    let
+      dupKeyErr = SquealException FatalError (Just "23505")
+        (Just "ERROR:  duplicate key value violates unique constraint \"unique_names\"\nDETAIL:  Key (name)=(TestUser) already exists.\n")
+
+    it "should be thrown for unique constraint violation in a manipulation" $
+      withConnection connectionString insertUserTwice
+       `shouldThrow` (== dupKeyErr)
+
+    it "should be rethrown for unique constraint violation in a manipulation by a transaction" $
       withConnection connectionString (transactionally_ insertUserTwice)
-       `shouldThrow` (const True :: Selector SquealException)
+       `shouldThrow` (== dupKeyErr)
