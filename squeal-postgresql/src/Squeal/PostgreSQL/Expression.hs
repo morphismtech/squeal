@@ -88,13 +88,13 @@ module Squeal.PostgreSQL.Expression
   , upper
   , charLength
   , like
-    -- ** Json functions and operators
+    -- ** Json
     -- *** Json and Jsonb operators
   , (.->)
   , (.->>)
   , (.#>)
   , (.#>>)
-    -- *** Additional Jsonb operators
+    -- *** Jsonb operators
   , (.@>)
   , (.<@)
   , (.?)
@@ -102,7 +102,7 @@ module Squeal.PostgreSQL.Expression
   , (.?&)
   , (.-.)
   , (#-.)
-    -- *** Json creation functions
+    -- *** functions
   , jsonLit
   , jsonbLit
   , toJson
@@ -443,9 +443,11 @@ array
 array xs = UnsafeExpression $
   "ARRAY[" <> commaSeparated (renderExpression <$> xs) <> "]"
 
+-- | >>> printSQL $ array [null_, false, true] & index 2
+-- (ARRAY[NULL, FALSE, TRUE])[2]
 index
-  :: Word64
-  -> Expression schema from grouping params (nullity ('PGvararray ty))
+  :: Word64 -- ^ index
+  -> Expression schema from grouping params (nullity ('PGvararray ty)) -- ^ array
   -> Expression schema from grouping params (NullifyType ty)
 index n expr = UnsafeExpression $
   parenthesized (renderExpression expr) <> "[" <> fromString (show n) <> "]"
@@ -467,20 +469,31 @@ instance (KnownSymbol label, label `In` labels) => IsPGlabel label
 -- >>> printSQL i
 -- ROW(0, 1)
 row
-  :: SListI fields
-  => NP (Aliased (Expression schema from grouping params)) fields
+  :: SListI row
+  => NP (Aliased (Expression schema from grouping params)) row
   -- ^ zero or more expressions for the row field values
-  -> Expression schema from grouping params (nullity ('PGcomposite fields))
+  -> Expression schema from grouping params (nullity ('PGcomposite row))
 row exprs = UnsafeExpression $ "ROW" <> parenthesized
   (renderCommaSeparated (\ (expr `As` _) -> renderExpression expr) exprs)
 
+-- | >>> :{
+-- type Complex = 'PGcomposite
+--   '[ "real"      ::: 'NotNull 'PGfloat8
+--    , "imaginary" ::: 'NotNull 'PGfloat8 ]
+-- :}
+--
+-- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression '["complex" ::: 'Typedef Complex] '[] 'Ungrouped '[] ('NotNull Complex)
+-- >>> printSQL $ i & field #complex #imaginary
+-- (ROW(0, 1)::"complex")."imaginary"
 field
-  :: forall field fields ty schema from grouping params. Has field fields ty
-  => Expression schema from grouping params ('NotNull ('PGcomposite fields))
+  :: (Has tydef schema ('Typedef ('PGcomposite row)), Has field row ty)
+  => Alias tydef -- ^ row type
+  -> Alias field -- ^ field name
+  -> Expression schema from grouping params ('NotNull ('PGcomposite row))
   -> Expression schema from grouping params ty
-field expr = UnsafeExpression $
-  parenthesized (renderExpression expr) <> "." <>
-    renderSymbol @field
+field td fld expr = UnsafeExpression $
+  parenthesized (renderExpression expr <> "::" <> renderAlias td)
+    <> "." <> renderAlias fld
 
 instance Semigroup
   (Expression schema from grouping params (nullity ('PGvararray ty))) where
@@ -1611,18 +1624,23 @@ newtype TypeExpression (schema :: SchemaType) (ty :: NullityType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
+-- | The enum or composite type in a `Typedef` can be expressed by its alias.
 typedef
   :: Has alias schema ('Typedef ty)
   => Alias alias
   -> TypeExpression schema (nullity ty)
 typedef = UnsafeTypeExpression . renderAlias
 
+-- | The composite type corresponding to a `Table` definition can be expressed
+-- by its alias.
 typetable
   :: Has alias schema ('Table tab)
   => Alias alias
   -> TypeExpression schema (nullity ('PGcomposite (TableToRow tab)))
 typetable = UnsafeTypeExpression . renderAlias
 
+-- | The composite type corresponding to a `View` definition can be expressed
+-- by its alias.
 typeview
   :: Has alias schema ('View view)
   => Alias alias
