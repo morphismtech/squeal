@@ -127,7 +127,6 @@ module Squeal.PostgreSQL.Query
 
 import Control.DeepSeq
 import Data.ByteString (ByteString)
-import Data.Monoid hiding (All)
 import Data.String
 import Data.Word
 import Generics.SOP hiding (from)

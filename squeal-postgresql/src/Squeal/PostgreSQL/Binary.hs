@@ -216,7 +216,6 @@ import Control.Arrow (left)
 import Control.Monad
 import Data.Int
 import Data.Kind
-import Data.Monoid hiding (All)
 import Data.Scientific
 import Data.Time
 import Data.UUID.Types

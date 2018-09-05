@@ -41,7 +41,6 @@ import Control.Exception.Lifted
 import Control.Monad.Base
 import Control.Monad.Trans.Control
 import Data.ByteString
-import Data.Monoid
 import Generics.SOP
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ

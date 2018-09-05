@@ -78,7 +78,6 @@ import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Function ((&))
 import Data.Kind
-import Data.Monoid
 import Data.Text (pack, Text)
 import Data.Traversable
 import Generics.SOP
@@ -97,7 +96,6 @@ import Control.Monad.Trans.Identity
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Cont
-import Control.Monad.Trans.List
 
 import qualified Control.Monad.Trans.State.Lazy as Lazy
 import qualified Control.Monad.Trans.State.Strict as Strict
@@ -479,7 +477,6 @@ instance MonadPQ schema m => MonadPQ schema (ExceptT e m)
 instance (Monoid w, MonadPQ schema m) => MonadPQ schema (Strict.RWST r w s m)
 instance (Monoid w, MonadPQ schema m) => MonadPQ schema (Lazy.RWST r w s m)
 instance MonadPQ schema m => MonadPQ schema (ContT r m)
-instance MonadPQ schema m => MonadPQ schema (ListT m)
 
 instance (Monad m, schema0 ~ schema1)
   => Applicative (PQ schema0 schema1 m) where

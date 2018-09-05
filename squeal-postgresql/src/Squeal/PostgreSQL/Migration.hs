@@ -116,7 +116,6 @@ module Squeal.PostgreSQL.Migration
 import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Trans.Control
-import Data.Monoid
 import Generics.SOP (K(..))
 import Data.Function ((&))
 import Data.Text (Text)
