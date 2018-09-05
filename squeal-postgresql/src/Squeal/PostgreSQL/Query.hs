@@ -29,31 +29,28 @@ Squeal queries.
 module Squeal.PostgreSQL.Query
   ( -- * Queries
     Query (UnsafeQuery, renderQuery)
-  , union
-  , unionAll
-  , intersect
-  , intersectAll
-  , except
-  , exceptAll
-    -- * Select
+    -- ** Select
   , select
   , selectDistinct
   , selectStar
   , selectDistinctStar
   , selectDotStar
   , selectDistinctDotStar
+    -- ** Values
   , values
   , values_
-    -- * Table Expressions
-  , TableExpression (..)
-  , renderTableExpression
-  , from
-  , where_
-  , groupBy
-  , having
-  , orderBy
-  , limit
-  , offset
+    -- ** Set Operations
+  , union
+  , unionAll
+  , intersect
+  , intersectAll
+  , except
+  , exceptAll
+    -- ** With
+  , With (with)
+  , CommonTableExpression (..)
+  , renderCommonTableExpression
+  , renderCommonTableExpressions
     -- ** Json
   , jsonEach
   , jsonbEach
@@ -69,7 +66,17 @@ module Squeal.PostgreSQL.Query
   , jsonbToRecord
   , jsonToRecordSet
   , jsonbToRecordSet
-    -- * From
+    -- * Table Expressions
+  , TableExpression (..)
+  , renderTableExpression
+  , from
+  , where_
+  , groupBy
+  , having
+  , orderBy
+  , limit
+  , offset
+    -- * From Clauses
   , FromClause (..)
   , table
   , subquery
@@ -89,38 +96,33 @@ module Squeal.PostgreSQL.Query
     -- * Sorting
   , SortExpression (..)
   , renderSortExpression
-    -- * Subquery expressions
+    -- * Subquery Expressions
   , in_
   , rowIn
-  , allEq
-  , rowAllEq
-  , anyEq
-  , rowAnyEq
-  , allNeq
-  , rowAllNeq
-  , anyNeq
-  , rowAnyNeq
+  , eqAll
+  , rowEqAll
+  , eqAny
+  , rowEqAny
+  , neqAll
+  , rowNeqAll
+  , neqAny
+  , rowNeqAny
   , allLt
-  , rowAllLt
-  , anyLt
-  , rowAnyLt
-  , allLte
-  , rowAllLte
-  , anyLte
-  , rowAnyLte
-  , allGt
-  , rowAllGt
-  , anyGt
-  , rowAnyGt
-  , allGte
-  , rowAllGte
-  , anyGte
-  , rowAnyGte
-    -- * With
-  , With (with)
-  , CommonTableExpression (..)
-  , renderCommonTableExpression
-  , renderCommonTableExpressions
+  , rowLtAll
+  , ltAny
+  , rowLtAny
+  , lteAll
+  , rowLteAll
+  , lteAny
+  , rowLteAny
+  , gtAll
+  , rowGtAll
+  , gtAny
+  , rowGtAny
+  , gteAll
+  , rowGteAll
+  , gteAny
+  , rowGteAny
   ) where
 
 import Control.DeepSeq
@@ -139,9 +141,7 @@ import Squeal.PostgreSQL.Schema
 
 {- |
 The process of retrieving or the command to retrieve data from a database
-is called a `Query`. The `select`, `selectStar`, `selectDotStar`,
-`selectDistinct`, `selectDistinctStar` and `selectDistinctDotStar` commands
-are used to specify queries.
+is called a `Query`. Let's see some examples of queries.
 
 simple query:
 
@@ -311,6 +311,16 @@ let
 in printSQL query
 :}
 SELECT "t1".* FROM "tab" AS "t1" CROSS JOIN "tab" AS "t2"
+
+value queries:
+
+>>> :{
+let
+  query :: Query '[] '[] '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+  query = values (1 `as` #foo :* true `as` #bar) [2 `as` #foo :* false `as` #bar]
+in printSQL query
+:}
+SELECT * FROM (VALUES (1, TRUE), (2, FALSE)) AS t ("foo", "bar")
 
 set operations:
 
@@ -708,41 +718,41 @@ unsafeSetOfFunction fun expr = UnsafeQuery $
 
 -- | Expands the outermost JSON object into a set of key/value pairs.
 jsonEach
-  :: Expression schema '[] 'Ungrouped params (nullity 'PGjson) -- ^ json
+  :: Expression schema '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
   -> Query schema params
       '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]
 jsonEach = unsafeSetOfFunction "json_each"
 
 -- | Expands the outermost binary JSON object into a set of key/value pairs.
 jsonbEach
-  :: Expression schema '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb
+  :: Expression schema '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
   -> Query schema params
       '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjsonb]
 jsonbEach = unsafeSetOfFunction "jsonb_each"
 
 -- | Expands the outermost JSON object into a set of key/value pairs.
 jsonEachAsText
-  :: Expression schema '[] 'Ungrouped params (nullity 'PGjson) -- ^ json
+  :: Expression schema '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
   -> Query schema params
       '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
 jsonEachAsText = unsafeSetOfFunction "json_each_text"
 
 -- | Expands the outermost binary JSON object into a set of key/value pairs.
 jsonbEachAsText
-  :: Expression schema '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb
+  :: Expression schema '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
   -> Query schema params
     '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
 jsonbEachAsText = unsafeSetOfFunction "jsonb_each_text"
 
 -- | Returns set of keys in the outermost JSON object.
 jsonObjectKeys
-  :: Expression schema '[] 'Ungrouped params (nullity 'PGjson)
+  :: Expression schema '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
   -> Query schema params '["json_object_keys" ::: 'NotNull 'PGtext]
 jsonObjectKeys = unsafeSetOfFunction "json_object_keys"
 
 -- | Returns set of keys in the outermost JSON object.
 jsonbObjectKeys
-  :: Expression schema '[] 'Ungrouped params (nullity 'PGjsonb)
+  :: Expression schema '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
   -> Query schema params '["jsonb_object_keys" ::: 'NotNull 'PGtext]
 jsonbObjectKeys = unsafeSetOfFunction "jsonb_object_keys"
 
@@ -759,24 +769,24 @@ unsafePopulateFunction fun ty expr = UnsafeQuery $
 -- | Expands the JSON expression to a row whose columns match the record
 -- type defined by the given table.
 jsonPopulateRecord
-  :: TypeExpression schema (nullity ('PGcomposite row))
-  -> Expression schema '[] 'Ungrouped params (nullity 'PGjson)
+  :: TypeExpression schema (nullity ('PGcomposite row)) -- ^ row type
+  -> Expression schema '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
   -> Query schema params row
 jsonPopulateRecord = unsafePopulateFunction "json_populate_record"
 
 -- | Expands the binary JSON expression to a row whose columns match the record
 -- type defined by the given table.
 jsonbPopulateRecord
-  :: TypeExpression schema (nullity ('PGcomposite row))
-  -> Expression schema '[] 'Ungrouped params (nullity 'PGjsonb)
+  :: TypeExpression schema (nullity ('PGcomposite row)) -- ^ row type
+  -> Expression schema '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
   -> Query schema params row
 jsonbPopulateRecord = unsafePopulateFunction "jsonb_populate_record"
 
 -- | Expands the outermost array of objects in the given JSON expression to a
 -- set of rows whose columns match the record type defined by the given table.
 jsonPopulateRecordSet
-  :: TypeExpression schema (nullity ('PGcomposite row))
-  -> Expression schema '[] 'Ungrouped params (nullity 'PGjson)
+  :: TypeExpression schema (nullity ('PGcomposite row)) -- ^ row type
+  -> Expression schema '[] 'Ungrouped params (nullity 'PGjson) -- ^ json array
   -> Query schema params row
 jsonPopulateRecordSet = unsafePopulateFunction "json_populate_record_set"
 
@@ -784,17 +794,17 @@ jsonPopulateRecordSet = unsafePopulateFunction "json_populate_record_set"
 -- to a set of rows whose columns match the record type defined by the given
 -- table.
 jsonbPopulateRecordSet
-  :: TypeExpression schema (nullity ('PGcomposite row))
-  -> Expression schema '[] 'Ungrouped params (nullity 'PGjsonb)
+  :: TypeExpression schema (nullity ('PGcomposite row)) -- ^ row type
+  -> Expression schema '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb array
   -> Query schema params row
 jsonbPopulateRecordSet = unsafePopulateFunction "jsonb_populate_record_set"
 
 unsafeRecordFunction
-  :: (SListI row, json `In` PGJsonType)
+  :: (SListI record, json `In` PGJsonType)
   => ByteString
   -> Expression schema '[] 'Ungrouped params (nullity json)
-  -> NP (Aliased (TypeExpression schema)) row
-  -> Query schema params row
+  -> NP (Aliased (TypeExpression schema)) record
+  -> Query schema params record
 unsafeRecordFunction fun expr types = UnsafeQuery $
   "SELECT * FROM " <> fun <> "("
     <> renderExpression expr <> ")"
@@ -806,36 +816,34 @@ unsafeRecordFunction fun expr types = UnsafeQuery $
 
 -- | Builds an arbitrary record from a JSON object.
 jsonToRecord
-  :: SListI row
-  => Expression schema '[] 'Ungrouped params (nullity 'PGjson)
-  -> NP (Aliased (TypeExpression schema)) row
-  -> Query schema params row
+  :: SListI record
+  => Expression schema '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
+  -> NP (Aliased (TypeExpression schema)) record -- ^ record types
+  -> Query schema params record
 jsonToRecord = unsafeRecordFunction "json_to_record"
 
 -- | Builds an arbitrary record from a binary JSON object.
 jsonbToRecord
-  :: SListI row
-  => Expression schema '[] 'Ungrouped params (nullity 'PGjsonb)
-  -> NP (Aliased (TypeExpression schema)) row
-  -> Query schema params row
+  :: SListI record
+  => Expression schema '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
+  -> NP (Aliased (TypeExpression schema)) record -- ^ record types
+  -> Query schema params record
 jsonbToRecord = unsafeRecordFunction "jsonb_to_record"
 
 -- | Builds an arbitrary set of records from a JSON array of objects.
 jsonToRecordSet
-  :: SListI row
-  => Expression schema '[] 'Ungrouped params (nullity 'PGjson)
-  -> NP (Aliased (TypeExpression schema)) row
-  -> Query schema params row
+  :: SListI record
+  => Expression schema '[] 'Ungrouped params (nullity 'PGjson) -- ^ json array
+  -> NP (Aliased (TypeExpression schema)) record -- ^ record types
+  -> Query schema params record
 jsonToRecordSet = unsafeRecordFunction "json_to_record_set"
 
--- | Builds an arbitrary set of records from a binary JSON array of objects (see
--- note below). As with all functions returning record, the caller must
--- explicitly define the structure of the record with an AS clause.
+-- | Builds an arbitrary set of records from a binary JSON array of objects.
 jsonbToRecordSet
-  :: SListI row
-  => Expression schema '[] 'Ungrouped params (nullity 'PGjsonb)
-  -> NP (Aliased (TypeExpression schema)) row
-  -> Query schema params row
+  :: SListI record
+  => Expression schema '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb array
+  -> NP (Aliased (TypeExpression schema)) record -- ^ record types
+  -> Query schema params record
 jsonbToRecordSet = unsafeRecordFunction "jsonb_to_record_set"
 
 {-----------------------------------------
@@ -1136,221 +1144,221 @@ rowIn
   -> Condition schema from grp params
 rowIn = unsafeRowSubqueryExpression "IN"
 
--- | >>> printSQL $ true `allEq` values_ (true `as` #foo)
--- TRUE ALL = (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-allEq
-  :: Expression schema from grp params ty
-  -> Query schema params '[alias ::: ty]
+-- | >>> printSQL $ true `eqAll` values_ (true `as` #foo)
+-- TRUE = ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
+eqAll
+  :: Expression schema from grp params ty -- ^ expression
+  -> Query schema params '[alias ::: ty] -- ^ subquery
   -> Condition schema from grp params
-allEq = unsafeSubqueryExpression "ALL ="
+eqAll = unsafeSubqueryExpression "= ALL"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowAllEq` values_ myRow
--- ROW(1, FALSE) ALL = (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowAllEq
+-- >>> printSQL $ myRow `rowEqAll` values_ myRow
+-- ROW(1, FALSE) = ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
+rowEqAll
   :: SListI row
-  => NP (Aliased (Expression schema from grp params)) row
-  -> Query schema params row
+  => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
+  -> Query schema params row -- ^ subquery
   -> Condition schema from grp params
-rowAllEq = unsafeRowSubqueryExpression "ALL ="
+rowEqAll = unsafeRowSubqueryExpression "= ALL"
 
--- | >>> printSQL $ true `anyEq` values_ (true `as` #foo)
--- TRUE ANY = (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-anyEq
-  :: Expression schema from grp params ty
-  -> Query schema params '[alias ::: ty]
+-- | >>> printSQL $ true `eqAny` values_ (true `as` #foo)
+-- TRUE = ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
+eqAny
+  :: Expression schema from grp params ty -- ^ expression
+  -> Query schema params '[alias ::: ty] -- ^ subquery
   -> Condition schema from grp params
-anyEq = unsafeSubqueryExpression "ANY ="
+eqAny = unsafeSubqueryExpression "= ANY"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowAnyEq` values_ myRow
--- ROW(1, FALSE) ANY = (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowAnyEq
+-- >>> printSQL $ myRow `rowEqAny` values_ myRow
+-- ROW(1, FALSE) = ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
+rowEqAny
   :: SListI row
-  => NP (Aliased (Expression schema from grp params)) row
-  -> Query schema params row
+  => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
+  -> Query schema params row -- ^ subquery
   -> Condition schema from grp params
-rowAnyEq = unsafeRowSubqueryExpression "ANY ="
+rowEqAny = unsafeRowSubqueryExpression "= ANY"
 
--- | >>> printSQL $ true `allNeq` values_ (true `as` #foo)
--- TRUE ALL <> (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-allNeq
-  :: Expression schema from grp params ty
-  -> Query schema params '[alias ::: ty]
+-- | >>> printSQL $ true `neqAll` values_ (true `as` #foo)
+-- TRUE <> ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
+neqAll
+  :: Expression schema from grp params ty -- ^ expression
+  -> Query schema params '[alias ::: ty] -- ^ subquery
   -> Condition schema from grp params
-allNeq = unsafeSubqueryExpression "ALL <>"
+neqAll = unsafeSubqueryExpression "<> ALL"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowAllNeq` values_ myRow
--- ROW(1, FALSE) ALL <> (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowAllNeq
+-- >>> printSQL $ myRow `rowNeqAll` values_ myRow
+-- ROW(1, FALSE) <> ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
+rowNeqAll
   :: SListI row
-  => NP (Aliased (Expression schema from grp params)) row
-  -> Query schema params row
+  => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
+  -> Query schema params row -- ^ subquery
   -> Condition schema from grp params
-rowAllNeq = unsafeRowSubqueryExpression "ALL <>"
+rowNeqAll = unsafeRowSubqueryExpression "<> ALL"
 
--- | >>> printSQL $ true `anyNeq` values_ (true `as` #foo)
--- TRUE ANY <> (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-anyNeq
-  :: Expression schema from grp params ty
-  -> Query schema params '[alias ::: ty]
+-- | >>> printSQL $ true `neqAny` values_ (true `as` #foo)
+-- TRUE <> ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
+neqAny
+  :: Expression schema from grp params ty -- ^ expression
+  -> Query schema params '[alias ::: ty] -- ^ subquery
   -> Condition schema from grp params
-anyNeq = unsafeSubqueryExpression "ANY <>"
+neqAny = unsafeSubqueryExpression "<> ANY"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowAnyNeq` values_ myRow
--- ROW(1, FALSE) ANY <> (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowAnyNeq
+-- >>> printSQL $ myRow `rowNeqAny` values_ myRow
+-- ROW(1, FALSE) <> ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
+rowNeqAny
   :: SListI row
-  => NP (Aliased (Expression schema from grp params)) row
-  -> Query schema params row
+  => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
+  -> Query schema params row -- ^ subquery
   -> Condition schema from grp params
-rowAnyNeq = unsafeRowSubqueryExpression "ANY <>"
+rowNeqAny = unsafeRowSubqueryExpression "<> ANY"
 
 -- | >>> printSQL $ true `allLt` values_ (true `as` #foo)
 -- TRUE ALL < (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 allLt
-  :: Expression schema from grp params ty
-  -> Query schema params '[alias ::: ty]
+  :: Expression schema from grp params ty -- ^ expression
+  -> Query schema params '[alias ::: ty] -- ^ subquery
   -> Condition schema from grp params
 allLt = unsafeSubqueryExpression "ALL <"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowAllLt` values_ myRow
+-- >>> printSQL $ myRow `rowLtAll` values_ myRow
 -- ROW(1, FALSE) ALL < (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowAllLt
+rowLtAll
   :: SListI row
-  => NP (Aliased (Expression schema from grp params)) row
-  -> Query schema params row
+  => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
+  -> Query schema params row -- ^ subquery
   -> Condition schema from grp params
-rowAllLt = unsafeRowSubqueryExpression "ALL <"
+rowLtAll = unsafeRowSubqueryExpression "ALL <"
 
--- | >>> printSQL $ true `anyLt` values_ (true `as` #foo)
+-- | >>> printSQL $ true `ltAny` values_ (true `as` #foo)
 -- TRUE ANY < (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-anyLt
-  :: Expression schema from grp params ty
-  -> Query schema params '[alias ::: ty]
+ltAny
+  :: Expression schema from grp params ty -- ^ expression
+  -> Query schema params '[alias ::: ty] -- ^ subquery
   -> Condition schema from grp params
-anyLt = unsafeSubqueryExpression "ANY <"
+ltAny = unsafeSubqueryExpression "ANY <"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowAllLt` values_ myRow
+-- >>> printSQL $ myRow `rowLtAll` values_ myRow
 -- ROW(1, FALSE) ALL < (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowAnyLt
+rowLtAny
   :: SListI row
-  => NP (Aliased (Expression schema from grp params)) row
-  -> Query schema params row
+  => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
+  -> Query schema params row -- ^ subquery
   -> Condition schema from grp params
-rowAnyLt = unsafeRowSubqueryExpression "ANY <"
+rowLtAny = unsafeRowSubqueryExpression "ANY <"
 
--- | >>> printSQL $ true `allLte` values_ (true `as` #foo)
--- TRUE ALL <= (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-allLte
-  :: Expression schema from grp params ty
-  -> Query schema params '[alias ::: ty]
+-- | >>> printSQL $ true `lteAll` values_ (true `as` #foo)
+-- TRUE <= ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
+lteAll
+  :: Expression schema from grp params ty -- ^ expression
+  -> Query schema params '[alias ::: ty] -- ^ subquery
   -> Condition schema from grp params
-allLte = unsafeSubqueryExpression "ALL <="
+lteAll = unsafeSubqueryExpression "<= ALL"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowAllLte` values_ myRow
--- ROW(1, FALSE) ALL <= (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowAllLte
+-- >>> printSQL $ myRow `rowLteAll` values_ myRow
+-- ROW(1, FALSE) <= ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
+rowLteAll
   :: SListI row
-  => NP (Aliased (Expression schema from grp params)) row
-  -> Query schema params row
+  => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
+  -> Query schema params row -- ^ subquery
   -> Condition schema from grp params
-rowAllLte = unsafeRowSubqueryExpression "ALL <="
+rowLteAll = unsafeRowSubqueryExpression "<= ALL"
 
--- | >>> printSQL $ true `anyLte` values_ (true `as` #foo)
--- TRUE ANY <= (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-anyLte
-  :: Expression schema from grp params ty
-  -> Query schema params '[alias ::: ty]
+-- | >>> printSQL $ true `lteAny` values_ (true `as` #foo)
+-- TRUE <= ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
+lteAny
+  :: Expression schema from grp params ty -- ^ expression
+  -> Query schema params '[alias ::: ty] -- ^ subquery
   -> Condition schema from grp params
-anyLte = unsafeSubqueryExpression "ANY <="
+lteAny = unsafeSubqueryExpression "<= ANY"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowAnyLte` values_ myRow
--- ROW(1, FALSE) ANY <= (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowAnyLte
+-- >>> printSQL $ myRow `rowLteAny` values_ myRow
+-- ROW(1, FALSE) <= ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
+rowLteAny
   :: SListI row
-  => NP (Aliased (Expression schema from grp params)) row
-  -> Query schema params row
+  => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
+  -> Query schema params row -- ^ subquery
   -> Condition schema from grp params
-rowAnyLte = unsafeRowSubqueryExpression "ANY <="
+rowLteAny = unsafeRowSubqueryExpression "<= ANY"
 
--- | >>> printSQL $ true `allGt` values_ (true `as` #foo)
--- TRUE ALL > (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-allGt
-  :: Expression schema from grp params ty
-  -> Query schema params '[alias ::: ty]
+-- | >>> printSQL $ true `gtAll` values_ (true `as` #foo)
+-- TRUE > ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
+gtAll
+  :: Expression schema from grp params ty -- ^ expression
+  -> Query schema params '[alias ::: ty] -- ^ subquery
   -> Condition schema from grp params
-allGt = unsafeSubqueryExpression "ALL >"
+gtAll = unsafeSubqueryExpression "> ALL"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowAllGt` values_ myRow
--- ROW(1, FALSE) ALL > (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowAllGt
+-- >>> printSQL $ myRow `rowGtAll` values_ myRow
+-- ROW(1, FALSE) > ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
+rowGtAll
   :: SListI row
-  => NP (Aliased (Expression schema from grp params)) row
-  -> Query schema params row
+  => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
+  -> Query schema params row -- ^ subquery
   -> Condition schema from grp params
-rowAllGt = unsafeRowSubqueryExpression "ALL >"
+rowGtAll = unsafeRowSubqueryExpression "> ALL"
 
--- | >>> printSQL $ true `anyGt` values_ (true `as` #foo)
--- TRUE ANY > (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-anyGt
-  :: Expression schema from grp params ty
-  -> Query schema params '[alias ::: ty]
+-- | >>> printSQL $ true `gtAny` values_ (true `as` #foo)
+-- TRUE > ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
+gtAny
+  :: Expression schema from grp params ty -- ^ expression
+  -> Query schema params '[alias ::: ty] -- ^ subquery
   -> Condition schema from grp params
-anyGt = unsafeSubqueryExpression "ANY >"
+gtAny = unsafeSubqueryExpression "> ANY"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowAnyGt` values_ myRow
--- ROW(1, FALSE) ANY > (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowAnyGt
+-- >>> printSQL $ myRow `rowGtAny` values_ myRow
+-- ROW(1, FALSE) > ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
+rowGtAny
   :: SListI row
-  => NP (Aliased (Expression schema from grp params)) row
-  -> Query schema params row
+  => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
+  -> Query schema params row -- ^ subquery
   -> Condition schema from grp params
-rowAnyGt = unsafeRowSubqueryExpression "ANY >"
+rowGtAny = unsafeRowSubqueryExpression "> ANY"
 
--- | >>> printSQL $ true `allGte` values_ (true `as` #foo)
--- TRUE ALL >= (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-allGte
-  :: Expression schema from grp params ty
-  -> Query schema params '[alias ::: ty]
+-- | >>> printSQL $ true `gteAll` values_ (true `as` #foo)
+-- TRUE >= ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
+gteAll
+  :: Expression schema from grp params ty -- ^ expression
+  -> Query schema params '[alias ::: ty] -- ^ subquery
   -> Condition schema from grp params
-allGte = unsafeSubqueryExpression "ALL >="
+gteAll = unsafeSubqueryExpression ">= ALL"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowAllGte` values_ myRow
--- ROW(1, FALSE) ALL >= (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowAllGte
+-- >>> printSQL $ myRow `rowGteAll` values_ myRow
+-- ROW(1, FALSE) >= ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
+rowGteAll
   :: SListI row
-  => NP (Aliased (Expression schema from grp params)) row
-  -> Query schema params row
+  => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
+  -> Query schema params row -- ^ subquery
   -> Condition schema from grp params
-rowAllGte = unsafeRowSubqueryExpression "ALL >="
+rowGteAll = unsafeRowSubqueryExpression ">= ALL"
 
--- | >>> printSQL $ true `anyGte` values_ (true `as` #foo)
--- TRUE ANY >= (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-anyGte
-  :: Expression schema from grp params ty
-  -> Query schema params '[alias ::: ty]
+-- | >>> printSQL $ true `gteAny` values_ (true `as` #foo)
+-- TRUE >= ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
+gteAny
+  :: Expression schema from grp params ty -- ^ expression
+  -> Query schema params '[alias ::: ty] -- ^ subquery
   -> Condition schema from grp params
-anyGte = unsafeSubqueryExpression "ANY >="
+gteAny = unsafeSubqueryExpression ">= ANY"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowAnyGte` values_ myRow
--- ROW(1, FALSE) ANY >= (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowAnyGte
+-- >>> printSQL $ myRow `rowGteAny` values_ myRow
+-- ROW(1, FALSE) >= ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
+rowGteAny
   :: SListI row
-  => NP (Aliased (Expression schema from grp params)) row
-  -> Query schema params row
+  => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
+  -> Query schema params row -- ^ subquery
   -> Condition schema from grp params
-rowAnyGte = unsafeRowSubqueryExpression "ANY >="
+rowGteAny = unsafeRowSubqueryExpression ">= ANY"
 
 -- | A `CommonTableExpression` is an auxiliary statement in a `with` clause.
 data CommonTableExpression statement
@@ -1373,7 +1381,7 @@ instance (KnownSymbol alias, schema1 ~ (alias ::: 'View cte ': schema))
 
 -- | render a `CommonTableExpression`.
 renderCommonTableExpression
-  :: (forall sch ps row. statement ps sch row -> ByteString)
+  :: (forall sch ps row. statement ps sch row -> ByteString) -- ^ render statement
   -> CommonTableExpression statement params schema0 schema1 -> ByteString
 renderCommonTableExpression renderStatement
   (CommonTableExpression (statement `As` alias)) =
@@ -1381,7 +1389,7 @@ renderCommonTableExpression renderStatement
 
 -- | render a non-empty `AlignedList` of `CommonTableExpression`s.
 renderCommonTableExpressions
-  :: (forall sch ps row. statement ps sch row -> ByteString)
+  :: (forall sch ps row. statement ps sch row -> ByteString) -- ^ render statement
   -> CommonTableExpression statement params schema0 schema1
   -> AlignedList (CommonTableExpression statement params) schema1 schema2
   -> ByteString
@@ -1397,7 +1405,9 @@ renderCommonTableExpressions renderStatement cte ctes =
 class With statement where
   with
     :: AlignedList (CommonTableExpression statement params) schema0 schema1
+    -- ^ common table expressions
     -> statement schema1 params row
+    -- ^ larger query
     -> statement schema0 params row
 instance With Query where
   with Done query = query

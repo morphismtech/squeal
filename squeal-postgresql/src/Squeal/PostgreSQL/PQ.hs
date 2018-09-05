@@ -625,6 +625,7 @@ resultErrorCode
   -> io (Maybe ByteString)
 resultErrorCode = liftResult (flip LibPQ.resultErrorField LibPQ.DiagSqlstate)
 
+-- | `Exception`s that can be thrown by Squeal.
 data SquealException
   = PQException
   { sqlExecStatus :: LibPQ.ExecStatus
