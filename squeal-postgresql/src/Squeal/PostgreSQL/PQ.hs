@@ -663,7 +663,7 @@ catchSqueal
   -> io a
 catchSqueal = catch
 
--- | Handle `SquealExceptions`s.
+-- | Handle `SquealException`s.
 handleSqueal
   :: MonadBaseControl IO io
   => (SquealException -> io a) -- ^ handler
