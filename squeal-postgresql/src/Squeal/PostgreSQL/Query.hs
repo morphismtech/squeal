@@ -1096,7 +1096,7 @@ unsafeSubqueryExpression
   :: ByteString
   -> Expression schema from grp params ty
   -> Query schema params '[alias ::: ty]
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 unsafeSubqueryExpression op x q = UnsafeExpression $
   renderExpression x <+> op <+> parenthesized (renderQuery q)
 
@@ -1105,7 +1105,7 @@ unsafeRowSubqueryExpression
   => ByteString
   -> NP (Aliased (Expression schema from grp params)) row
   -> Query schema params row
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 unsafeRowSubqueryExpression op xs q = UnsafeExpression $
   renderExpression (row xs) <+> op <+> parenthesized (renderQuery q)
 
@@ -1120,7 +1120,7 @@ unsafeRowSubqueryExpression op xs q = UnsafeExpression $
 in_
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 in_ = unsafeSubqueryExpression "IN"
 
 {- | The left-hand side of this form of `rowIn` is a row constructor.
@@ -1141,7 +1141,7 @@ rowIn
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowIn = unsafeRowSubqueryExpression "IN"
 
 -- | >>> printSQL $ true `eqAll` values_ (true `as` #foo)
@@ -1149,7 +1149,7 @@ rowIn = unsafeRowSubqueryExpression "IN"
 eqAll
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 eqAll = unsafeSubqueryExpression "= ALL"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
@@ -1159,7 +1159,7 @@ rowEqAll
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowEqAll = unsafeRowSubqueryExpression "= ALL"
 
 -- | >>> printSQL $ true `eqAny` values_ (true `as` #foo)
@@ -1167,7 +1167,7 @@ rowEqAll = unsafeRowSubqueryExpression "= ALL"
 eqAny
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 eqAny = unsafeSubqueryExpression "= ANY"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
@@ -1177,7 +1177,7 @@ rowEqAny
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowEqAny = unsafeRowSubqueryExpression "= ANY"
 
 -- | >>> printSQL $ true `neqAll` values_ (true `as` #foo)
@@ -1185,7 +1185,7 @@ rowEqAny = unsafeRowSubqueryExpression "= ANY"
 neqAll
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 neqAll = unsafeSubqueryExpression "<> ALL"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
@@ -1195,7 +1195,7 @@ rowNeqAll
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowNeqAll = unsafeRowSubqueryExpression "<> ALL"
 
 -- | >>> printSQL $ true `neqAny` values_ (true `as` #foo)
@@ -1203,7 +1203,7 @@ rowNeqAll = unsafeRowSubqueryExpression "<> ALL"
 neqAny
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 neqAny = unsafeSubqueryExpression "<> ANY"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
@@ -1213,7 +1213,7 @@ rowNeqAny
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowNeqAny = unsafeRowSubqueryExpression "<> ANY"
 
 -- | >>> printSQL $ true `allLt` values_ (true `as` #foo)
@@ -1221,7 +1221,7 @@ rowNeqAny = unsafeRowSubqueryExpression "<> ANY"
 allLt
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 allLt = unsafeSubqueryExpression "ALL <"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
@@ -1231,7 +1231,7 @@ rowLtAll
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowLtAll = unsafeRowSubqueryExpression "ALL <"
 
 -- | >>> printSQL $ true `ltAny` values_ (true `as` #foo)
@@ -1239,7 +1239,7 @@ rowLtAll = unsafeRowSubqueryExpression "ALL <"
 ltAny
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 ltAny = unsafeSubqueryExpression "ANY <"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
@@ -1249,7 +1249,7 @@ rowLtAny
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowLtAny = unsafeRowSubqueryExpression "ANY <"
 
 -- | >>> printSQL $ true `lteAll` values_ (true `as` #foo)
@@ -1257,7 +1257,7 @@ rowLtAny = unsafeRowSubqueryExpression "ANY <"
 lteAll
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 lteAll = unsafeSubqueryExpression "<= ALL"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
@@ -1267,7 +1267,7 @@ rowLteAll
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowLteAll = unsafeRowSubqueryExpression "<= ALL"
 
 -- | >>> printSQL $ true `lteAny` values_ (true `as` #foo)
@@ -1275,7 +1275,7 @@ rowLteAll = unsafeRowSubqueryExpression "<= ALL"
 lteAny
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 lteAny = unsafeSubqueryExpression "<= ANY"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
@@ -1285,7 +1285,7 @@ rowLteAny
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowLteAny = unsafeRowSubqueryExpression "<= ANY"
 
 -- | >>> printSQL $ true `gtAll` values_ (true `as` #foo)
@@ -1293,7 +1293,7 @@ rowLteAny = unsafeRowSubqueryExpression "<= ANY"
 gtAll
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 gtAll = unsafeSubqueryExpression "> ALL"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
@@ -1303,7 +1303,7 @@ rowGtAll
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowGtAll = unsafeRowSubqueryExpression "> ALL"
 
 -- | >>> printSQL $ true `gtAny` values_ (true `as` #foo)
@@ -1311,7 +1311,7 @@ rowGtAll = unsafeRowSubqueryExpression "> ALL"
 gtAny
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 gtAny = unsafeSubqueryExpression "> ANY"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
@@ -1321,7 +1321,7 @@ rowGtAny
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowGtAny = unsafeRowSubqueryExpression "> ANY"
 
 -- | >>> printSQL $ true `gteAll` values_ (true `as` #foo)
@@ -1329,7 +1329,7 @@ rowGtAny = unsafeRowSubqueryExpression "> ANY"
 gteAll
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 gteAll = unsafeSubqueryExpression ">= ALL"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
@@ -1339,7 +1339,7 @@ rowGteAll
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowGteAll = unsafeRowSubqueryExpression ">= ALL"
 
 -- | >>> printSQL $ true `gteAny` values_ (true `as` #foo)
@@ -1347,7 +1347,7 @@ rowGteAll = unsafeRowSubqueryExpression ">= ALL"
 gteAny
   :: Expression schema from grp params ty -- ^ expression
   -> Query schema params '[alias ::: ty] -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 gteAny = unsafeSubqueryExpression ">= ANY"
 
 -- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
@@ -1357,7 +1357,7 @@ rowGteAny
   :: SListI row
   => NP (Aliased (Expression schema from grp params)) row -- ^ row constructor
   -> Query schema params row -- ^ subquery
-  -> Condition schema from grp params
+  -> Expression schema from grp params (nullity 'PGbool)
 rowGteAny = unsafeRowSubqueryExpression ">= ANY"
 
 -- | A `CommonTableExpression` is an auxiliary statement in a `with` clause.
