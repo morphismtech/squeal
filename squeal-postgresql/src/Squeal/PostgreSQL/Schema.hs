@@ -179,7 +179,7 @@ data PGType
   | PGvararray NullityType -- ^ variable length array
   | PGfixarray Nat NullityType -- ^ fixed length array
   | PGenum [Symbol] -- ^ enumerated (enum) types are data types that comprise a static, ordered set of values.
-  | PGcomposite [(Symbol, NullityType)] -- ^ a composite type represents the structure of a row or record; it is essentially just a list of field names and their data types.
+  | PGcomposite RowType -- ^ a composite type represents the structure of a row or record; it is essentially just a list of field names and their data types.
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
 -- | The object identifier of a `PGType`.
