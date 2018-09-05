@@ -1,5 +1,306 @@
 ## RELEASE NOTES
 
+### Version 0.4
+
+Version 0.4 of strengthens Squeal's type system, adds
+support for multidimensional arrays, improves `with` statements,
+improves runtime exceptions, accomodates SQL's three-valued logic,
+adds subquery expressions, and adds table and view type expressions.
+
+**Types**
+
+Squeal 0.4 renames some kinds to aid intuition:
+
+```Haskell
+type RowType = [(Symbol, NullityType)] -- previously RelationType
+type FromType = [(Symbol, RowType)] -- previously RelationsType
+```
+
+Null safety for array and composite types is gained by having the base
+type of an array be a `NullityType` and the base type of a composite
+a `RowType`.
+
+```Haskell
+data PGType
+  = ..
+  | PGvararray NullityType
+  | PGfixarray Nat NullityType
+  | PGcomposite RowType
+```
+
+Squeal embeds Postgres types into Haskell using data kinds and type-in-type:
+
+```Haskell
+data PGType = PGbool | ..
+data NullityType = Null PGType | NotNull PGType
+type RowType = [(Symbol, NullityType)] -- previously RelationType
+type FromType = [(Symbol, RowType)] -- previously RelationsType
+```
+
+In another sense, we can embed Haskell types
+into Postgres types by providing type families:
+
+```Haskell
+type family PG (hask :: Type) :: PGType
+type family NullPG (hask :: Type) :: NullityType
+type family TuplePG (hask :: Type) :: [NullityType]
+type family RowPG (hask :: Type) :: RowType
+```
+
+Let's look at these one by one.
+
+`PG` was introduced in Squeal 0.3. It's a closed type family that
+associates some Haskell types to their obvious corresponding Postgres
+types like `PG Double = 'PGfloat8`. It only worked on base types,
+no arrays or composites. Squeal 0.4 extends it to
+such container types and makes it an open type family so that
+users can make their own type instances.
+
+`NullPG` had a different name before but it does the obvious
+thing for Haskell with `Maybe`s:
+
+```Haskell
+type family NullPG hask where
+  NullPG (Maybe hask) = 'Null (PG hask)
+  NullPG hask = 'NotNull (PG hask)
+```
+
+`TuplePG` uses generics to turn tuple types (including records)
+into lists of `NullityType`s in the logical way, e.g.
+`TuplePG (Bool, Day) = '[ 'PGbool, 'PGdate]`.
+
+`RowPG` also uses generics to turn record types into a `RowType` in the logical way, e.g.
+
+```Haskell
+>>> data Person = Person { name :: Text, age :: Int32 } deriving GHC.Generic
+>>> instance Generic Person
+>>> instance HasDatatypeInfo Person
+>>> :kind! RowPG Person
+RowPG Person :: [(Symbol, NullityType)]
+= '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
+```
+
+We've already seen a hint of why these types are useful in one construction
+from Squeal 0.3. Creating composite types in Postgres directly from a Haskell
+record type essentially uses `RowPG`. Another important use is in simplifying
+the type signatures for a `Query` or `Manipulation`. Very often, you will have
+a tuple type corresponding to the parameters and a record type corresponding
+to the returned columns of a `Query` or `Manipulation`. Instead of writing
+boilerplate signature you can reuse these with the help of `TuplePG` and `RowPG`
+
+For instance:
+
+```Haskell
+>>> data Person = Person { name :: Text, age :: Int32 } deriving GHC.Generic
+>>> instance SOP.Generic Person
+>>> instance SOP.HasDatatypeInfo Person
+>>> :{
+let
+  query :: Query '["user" ::: 'View (RowPG Person)] (TuplePG (Only Int32)) (RowPG Person)
+  query = selectStar (from (view #user) & where_ (#age .> param @1))
+:}
+```
+
+**Arrays**
+
+In addition to being able to encode and decode basic Haskell types
+like `Int16` and `Text`, Squeal 0.4 permits you to encode and decode Haskell types to
+Postgres array types. The `Vector` type corresponds to to variable length arrays.
+And thanks to [Mike Ledger](https://github.com/mikeplus64) for the idea,
+and homogeneous tuples correspond to fixed length arrays. We can even
+create multi-dimensional fixed length arrays. Let's see an example.
+
+```Haskell
+>>> :{
+data Row = Row
+  { col1 :: Vector Int16
+  , col2 :: (Maybe Int16,Maybe Int16)
+  , col3 :: ((Int16,Int16),(Int16,Int16),(Int16,Int16))
+  } deriving (Eq, GHC.Generic)
+:}
+
+>>> instance Generic Row
+>>> instance HasDatatypeInfo Row
+```
+
+Define a simple round trip query.
+
+```Haskell
+>>> :{
+let
+  roundTrip :: Query '[] (TuplePG Row) (RowPG Row)
+  roundTrip = values_ $
+    parameter @1 (int2 & vararray)                  `as` #col1 :*
+    parameter @2 (int2 & fixarray @2)               `as` #col2 :*
+    parameter @3 (int2 & fixarray @2 & fixarray @3) `as` #col3
+:}
+
+>>> :set -XOverloadedLists
+>>> let input = Row [1,2] (Just 1,Nothing) ((1,2),(3,4),(5,6))
+>>> :{
+void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+  result <- runQueryParams roundTrip input
+  Just output <- firstRow result
+  liftBase . print $ input == output
+:}
+True
+```
+
+**With**
+
+Squeal 0.3 supported WITH statements but there's a couple problems with them.
+Here's the type signature for `with` in Squeal 0.3.
+
+```Haskell
+with
+  :: SOP.SListI commons
+  => NP (Aliased (Manipulation schema params)) (common ': commons)
+  -- ^ common table expressions
+  -> Manipulation (With (common ': commons) schema) params results
+  -> Manipulation schema params results
+```
+
+The first problem is that with only works with `Manipulations`.
+It can work on Querys by using queryStatement but it still will
+return a Manipulation. We can fix this issue by making it a
+method of a type class with instances for both `Query` and `Manipulation`.
+
+The second problem is that all the common table expressions
+refer the base schema, whereas in SQL, each subsequent CTE can
+refer to previous CTEs as well. But this can be fixed! First define a datatype:
+
+```Haskell
+data CommonTableExpression statement params schema0 schema1 where
+  CommonTableExpression
+    :: Aliased (statement schema params) (alias ::: cte)
+    -> CommonTableExpression statement params schema (alias ::: 'View cte ': schema)
+```
+
+It's just a wrapper around an aliased statement, where the statement
+could be either a `Query` or `Manipulation`, but it augments the schema
+by adding a view to it. It almost looks like a morphism between schemas
+but there is no way yet to compose them. Luckily, Squeal already has
+a datatype for this, which is used for migrations, the `AlignedList`
+type which is really the "free category". So we can then define a `With` type class:
+
+```Haskell
+class With statement where
+  with
+    :: AlignedList (CommonTableExpression statement params) schema0 schema1
+    -> statement schema1 params row
+    -> statement schema0 params row
+```
+
+By giving `Aliasable` instances to CTEs and aligned singleton lists of CTEs (i.e. scrap-your-nils), we get a nice syntax for WITH statements in Squeal.
+
+Here's an example of using `with` for a `Query` and a `Manipulation`:
+
+```Haskell
+>>> :{
+let
+  query :: Query
+    '[ "t1" ::: 'View
+       '[ "c1" ::: 'NotNull 'PGtext
+        , "c2" ::: 'NotNull 'PGtext] ]
+    '[]
+    '[ "c1" ::: 'NotNull 'PGtext
+     , "c2" ::: 'NotNull 'PGtext ]
+  query = with (
+    selectStar (from (view #t1)) `as` #t2 :>>
+    selectStar (from (view #t2)) `as` #t3
+    ) (selectStar (from (view #t3)))
+in printSQL query
+:}
+WITH "t2" AS (SELECT * FROM "t1" AS "t1"), "t3" AS (SELECT * FROM "t2" AS "t2") SELECT * FROM "t3" AS "t3"
+
+>>> :{
+let
+  manipulation :: Manipulation
+    '[ "products" ::: 'Table ProductsTable
+     , "products_deleted" ::: 'Table ProductsTable
+     ] '[ 'NotNull 'PGdate] '[]
+  manipulation = with
+    (deleteFrom #products (#date .< param @1) ReturningStar `as` #deleted_rows)
+    (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `as` #t)))))
+in printSQL manipulation
+:}
+WITH "deleted_rows" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "deleted_rows" AS "t"
+```
+
+**Three Valued Logic**
+
+In previous versions of Squeal, conditions followed classical two valued logic
+of `true` and `false`.
+
+```Haskell
+-- Squeal 0.2
+type Condition schema from grouping params =
+  Expression schema from grouping params ('NotNull 'PGbool)
+```
+
+I had thought that three valued logic, which is what SQL uses, was confusing.
+However, multiple users reported being confused at being forced to do `NULL`
+handling, particularly in their left joins. Since the original motivation
+of being less confusing evaporated I decided to switch to three valued logic
+of `true`, `false` and `null_`.
+
+```Haskell
+-- Squeal 0.3
+type Condition schema from grouping params =
+  Expression schema from grouping params ('Null 'PGbool)
+```
+
+**Subquery Expressions**
+
+Squeal 0.4 adds support for subquery expressions such as `IN` and `op ANY/ALL`.
+
+**Row Types**
+
+Squeal 0.4 adds functions to define type expressions from tables and views
+and a type expression for user defined types, `typetable`, `typeview` and
+`typedef`.
+
+**Runtime Exceptions**
+
+Squeal now has an exception type which gives details on the sort of error
+encountered and handler functions.
+
+```Haskell
+data SquealException
+  = PQException
+  { sqlExecStatus :: LibPQ.ExecStatus
+  , sqlStateCode :: Maybe ByteString
+    -- ^ https://www.postgresql.org/docs/current/static/errcodes-appendix.html
+  , sqlErrorMessage :: Maybe ByteString
+  }
+  | ResultException Text
+  | ParseException Text
+  deriving (Eq, Show)
+instance Exception SquealException
+
+catchSqueal
+  :: MonadBaseControl IO io
+  => io a
+  -> (SquealException -> io a) -- ^ handler
+  -> io a
+
+handleSqueal
+  :: MonadBaseControl IO io
+  => (SquealException -> io a) -- ^ handler
+  -> io a -> io a
+```
+
+**Additional Changes**
+
+Squeal 0.4 adds `field` and `index` functions to get components of composite
+and array expressions.
+
+Squeal 0.4 adds a dependency on `records-sop` to offload a lot of boilerplate
+type family logic that was needed for `RowPG`.
+
+The above changes required major and minor changes to Squeal DSL functions.
+Please consult the documentation.
+
 ### Version 0.3.2 - August 4, 2018
 
 Version 0.3.2 features extensive support for `JSON` functionality with
