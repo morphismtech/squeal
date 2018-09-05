@@ -123,8 +123,6 @@ module Squeal.PostgreSQL.Expression
   , jsonbExtractPath
   , jsonExtractPathAsText
   , jsonbExtractPathAsText
-  , jsonObjectKeys
-  , jsonbObjectKeys
   , jsonTypeof
   , jsonbTypeof
   , jsonStripNulls
@@ -1284,18 +1282,6 @@ jsonbExtractPathAsText
   -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonbExtractPathAsText x xs =
   unsafeVariadicFunction "jsonb_extract_path_text" (x :* xs)
-
--- | Returns set of keys in the outermost JSON object.
-jsonObjectKeys
-  :: Expression schema from grouping params (nullity 'PGjson)
-  -> Expression schema from grouping params (nullity 'PGtext)
-jsonObjectKeys = unsafeFunction "json_object_keys"
-
--- | Returns set of keys in the outermost JSON object.
-jsonbObjectKeys
-  :: Expression schema from grouping params (nullity 'PGjsonb)
-  -> Expression schema from grouping params (nullity 'PGtext)
-jsonbObjectKeys = unsafeFunction "jsonb_object_keys"
 
 -- | Returns the type of the outermost JSON value as a text string. Possible
 -- types are object, array, string, number, boolean, and null.
