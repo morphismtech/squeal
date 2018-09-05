@@ -34,17 +34,24 @@ it defines an embedding of Haskell types into Postgres types.
 #-}
 
 module Squeal.PostgreSQL.Schema
-  ( -- * Types
+  ( -- * Postgres Types
     PGType (..)
-  , HasOid (..)
   , NullityType (..)
-  , ColumnType
-    -- * Tables
-  , ColumnsType
   , RowType
   , FromType
+    -- * Haskell to Postgres Types
+  , PG
+  , NullPG
+  , TuplePG
+  , RowPG
+  , Json (..)
+  , Jsonb (..)
+  , Composite (..)
+  , Enumerated (..)
+    -- * Schema Types
+  , ColumnType
+  , ColumnsType
   , TableType
-    -- * Schema
   , SchemumType (..)
   , SchemaType
     -- * Constraints
@@ -61,7 +68,6 @@ module Squeal.PostgreSQL.Schema
   , Aliased (As)
   , Aliasable (as)
   , renderAliasedAs
-  , AliasesOf
   , Has
   , HasUnique
   , HasAll
@@ -73,57 +79,45 @@ module Squeal.PostgreSQL.Schema
   , PGlabel (..)
   , renderLabel
   , renderLabels
+  , LabelsPG
     -- * Grouping
   , Grouping (..)
   , GroupedBy
-    -- * Type Families
-  , Join
+    -- * Aligned lists
+  , AlignedList (..)
+  , single
+    -- * Data Definitions
   , Create
   , Drop
   , Alter
   , Rename
+  , DropIfConstraintsInvolve
+    -- * Lists
+  , Join
   , Elem
   , In
   , Length
+    -- * Type Classifications
+  , HasOid (..)
   , PGNum
   , PGIntegral
   , PGFloating
   , PGTypeOf
-  , PGarrayOf
-  , PGarray
-  , PGtextArray
+  , PGArrayOf
+  , PGArray
+  , PGTextArray
+  , PGJsonType
+  , PGJsonKey
   , SamePGType
   , AllNotNull
   , NotAllNull
+    -- * Nullifications
   , NullifyType
   , NullifyRow
   , NullifyFrom
-  , ColumnsToRow
+    -- * Table Conversions
   , TableToColumns
   , TableToRow
-  , ConstraintInvolves
-  , DropIfConstraintsInvolve
-    -- ** JSON support
-  , PGjson_
-  , PGjsonKey
-    -- * Immersion
-  , PG
-  , Json (..)
-  , Jsonb (..)
-  , Composite (..)
-  , Enumerated (..)
-  , NullPG
-  , TuplePG
-  , LabelsPG
-  , RowPG
-  , RowOf
-  , FieldPG
-  , ConstructorsOf
-  , ConstructorNameOf
-  , ConstructorNamesOf
-  -- * Aligned lists
-  , AlignedList (..)
-  , single
   ) where
 
 import Control.Category
@@ -305,19 +299,24 @@ type family Uniquely
 -- :}
 type TableType = (TableConstraints,ColumnsType)
 
--- | `RowType` is a row of `NullityType`
---
--- >>> :{
--- type family PersonRelation :: RowType where
---   PersonRelation =
---     '[ "name"        ::: 'NotNull 'PGtext
---      , "age"         ::: 'NotNull 'PGint4
---      , "dateOfBirth" :::    'Null 'PGdate
---      ]
--- :}
+{- | A `RowType` is a row of `NullityType`. They correspond to Haskell
+record types by means of `RowPG` and are used in many places.
+
+>>> :{
+type family PersonRow :: RowType where
+  PersonRow =
+    '[ "name"        ::: 'NotNull 'PGtext
+     , "age"         ::: 'NotNull 'PGint4
+     , "dateOfBirth" :::    'Null 'PGdate
+     ]
+:}
+-}
 type RowType = [(Symbol,NullityType)]
 
--- | `FromType` is a row of `RowType`s, thought of as a product.
+{- | `FromType` is a row of `RowType`s. It can be thought of as
+a product, or horizontal gluing and is used in `Squeal.PostgreSQL.Query.FromClause`s
+and `Squeal.PostgreSQL.Query.TableExpression`s.
+-}
 type FromType = [(Symbol,RowType)]
 
 -- | `ColumnsToRow` removes column constraints.
@@ -435,11 +434,6 @@ renderAliasedAs
 renderAliasedAs render (expression `As` alias) =
   render expression <> " AS " <> renderAlias alias
 
--- | `AliasesOf` retains the AliasesOf in a row.
-type family AliasesOf aliaseds where
-  AliasesOf '[] = '[]
-  AliasesOf (alias ::: ty ': tys) = alias ': AliasesOf tys
-
 -- | @HasUnique alias fields field@ is a constraint that proves that
 -- @fields@ is a singleton of @alias ::: field@.
 type HasUnique alias fields field = fields ~ '[alias ::: field]
@@ -486,21 +480,15 @@ type family Elem x xs where
 -- | @In x xs@ is a constraint that proves that @x@ is in @xs@.
 type family In x xs :: Constraint where In x xs = Elem x xs ~ 'True
 
--- | `PGNum` is a constraint on `PGType` whose
--- `Squeal.PostgreSQL.Expression.Expression`s have a `Num` constraint.
-type PGNum ty =
-  In ty '[ 'PGint2, 'PGint4, 'PGint8, 'PGnumeric, 'PGfloat4, 'PGfloat8]
+-- | Numeric Postgres types.
+type PGNum =
+  '[ 'PGint2, 'PGint4, 'PGint8, 'PGnumeric, 'PGfloat4, 'PGfloat8]
 
--- | `PGFloating` is a constraint on `PGType` whose
--- `Squeal.PostgreSQL.Expression.Expression`s
--- have `Fractional` and `Floating` constraints.
-type PGFloating ty = In ty '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
+-- | Floating Postgres types.
+type PGFloating = '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 
--- | `PGIntegral` is a constraint on `PGType` whose
--- `Squeal.PostgreSQL.Expression.Expression`s
--- have `Squeal.PostgreSQL.Expression.div_` and
--- `Squeal.PostgreSQL.Expression.mod_` functions.
-type PGIntegral ty = In ty '[ 'PGint2, 'PGint4, 'PGint8]
+-- | Integral Postgres types.
+type PGIntegral = '[ 'PGint2, 'PGint4, 'PGint8]
 
 -- | Error message helper for displaying unavailable\/unknown\/placeholder type
 -- variables whose kind is known.
@@ -511,27 +499,27 @@ type ErrPGfixarrayOf t = ErrArrayOf ('ShowType 'PGfixarray :<>: 'Text " " :<>: P
 type ErrPGvararrayOf t = ErrArrayOf ('ShowType 'PGvararray) t
 
 -- | Ensure a type is a valid array type.
-type family PGarray name arr :: Constraint where
-  PGarray name ('PGvararray x) = ()
-  PGarray name ('PGfixarray n x) = ()
-  PGarray name val = TypeError
-    ('Text name :<>: 'Text ": Unsatisfied PGarray constraint. Expected either: "
+type family PGArray name arr :: Constraint where
+  PGArray name ('PGvararray x) = ()
+  PGArray name ('PGfixarray n x) = ()
+  PGArray name val = TypeError
+    ('Text name :<>: 'Text ": Unsatisfied PGArray constraint. Expected either: "
      :$$: 'Text " • " :<>: ErrPGvararrayOf (Placeholder PGType)
      :$$: 'Text " • " :<>: ErrPGfixarrayOf (Placeholder PGType)
      :$$: 'Text "But got: " :<>: 'ShowType val)
 
 -- | Ensure a type is a valid array type with a specific element type.
-type family PGarrayOf name arr ty :: Constraint where
-  PGarrayOf name ('PGvararray x) ty = x ~ ty
-  PGarrayOf name ('PGfixarray n x) ty = x ~ ty
-  PGarrayOf name val ty = TypeError
-    ( 'Text name :<>: 'Text "Unsatisfied PGarrayOf constraint. Expected either: "
+type family PGArrayOf name arr ty :: Constraint where
+  PGArrayOf name ('PGvararray x) ty = x ~ ty
+  PGArrayOf name ('PGfixarray n x) ty = x ~ ty
+  PGArrayOf name val ty = TypeError
+    ( 'Text name :<>: 'Text "Unsatisfied PGArrayOf constraint. Expected either: "
       :$$: 'Text " • " :<>: ErrPGvararrayOf ( 'ShowType ty )
       :$$: 'Text " • " :<>: ErrPGfixarrayOf ( 'ShowType ty )
       :$$: 'Text "But got: " :<>: 'ShowType val)
 
 -- | Ensure a type is a valid array type whose elements are text.
-type PGtextArray name arr = PGarrayOf name arr ('NotNull 'PGtext)
+type PGTextArray name arr = PGArrayOf name arr ('NotNull 'PGtext)
 
 -- | `PGTypeOf` forgets about @NULL@ and any column constraints.
 type family PGTypeOf (ty :: NullityType) :: PGType where
@@ -628,6 +616,12 @@ type family DropIfConstraintsInvolve column constraints where
         (DropIfConstraintsInvolve column constraints)
         (alias ::: constraint ': DropIfConstraintsInvolve column constraints)
 
+{- | Calculate the `Length` of a type level list
+
+>>> :kind! Length '[Char,String,Bool,Double]
+Length '[Char,String,Bool,Double] :: Nat
+= 4
+-}
 type family Length (xs :: [k]) :: Nat where
   Length (x : xs) = 1 + Length xs
   Length '[] = 0
@@ -639,8 +633,28 @@ data SchemumType
   | View RowType
   | Typedef PGType
 
--- | The schema of a database consists of a list of aliased,
--- user-defined `SchemumType`s.
+{- | The schema of a database consists of a list of aliased,
+user-defined `SchemumType`s.
+
+>>> :{
+type family Schema :: SchemaType where
+  Schema =
+    '[ "users" ::: 'Table (
+        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
+        '[ "id"   :::   'Def :=> 'NotNull 'PGint4
+        , "name" ::: 'NoDef :=> 'NotNull 'PGtext
+        ])
+    , "emails" ::: 'Table (
+        '[ "pk_emails"  ::: 'PrimaryKey '["id"]
+        , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+        ] :=>
+        '[ "id"      :::   'Def :=> 'NotNull 'PGint4
+        , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
+        , "email"   ::: 'NoDef :=>    'Null 'PGtext
+        ])
+    ]
+:}
+-}
 type SchemaType = [(Symbol,SchemumType)]
 
 -- | `IsPGlabel` looks very much like the `IsLabel` class. Whereas
@@ -664,12 +678,16 @@ renderLabels
 renderLabels = hcollapse
   . hcmap (Proxy @KnownSymbol) (K . renderLabel)
 
--- | The `PG` type family embeds a subset of Haskell types
--- as Postgres basic types.
---
--- >>> :kind! PG LocalTime
--- PG LocalTime :: PGType
--- = 'PGtimestamp
+{- | The `PG` type family embeds a subset of Haskell types
+as Postgres types. As an open type family, `PG` is extensible.
+
+>>> :kind! PG LocalTime
+PG LocalTime :: PGType
+= 'PGtimestamp
+
+>>> newtype MyDouble = My Double
+>>> type instance PG MyDouble = 'PGfloat8
+-}
 type family PG (hask :: Type) :: PGType
 type instance PG Bool = 'PGbool
 type instance PG Int16 = 'PGint2
@@ -716,28 +734,53 @@ type instance PG (hask, hask, hask, hask, hask, hask, hask, hask, hask, hask)
 type instance PG (Composite hask) = 'PGcomposite (RowPG hask)
 type instance PG (Enumerated hask) = 'PGenum (LabelsPG hask)
 
+{- | The `Json` newtype is an indication that the Haskell
+type it's applied to should be stored as `PGjson`.
+-}
 newtype Json hask = Json {getJson :: hask}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
+
+{- | The `Jsonb` newtype is an indication that the Haskell
+type it's applied to should be stored as `PGjsonb`.
+-}
 newtype Jsonb hask = Jsonb {getJsonb :: hask}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
+
+{- | The `Composite` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGcomposite`.
+-}
 newtype Composite record = Composite {getComposite :: record}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
+
+{- | The `Enumerated` newtype is an indication that the Haskell
+type it's applied to should be stored as `PGenum`.
+-}
 newtype Enumerated enum = Enumerated {getEnumerated :: enum}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
 
--- | The `LabelsPG` type family calculates the constructors of a
--- Haskell enum type.
---
--- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
--- >>> instance Generic Schwarma
--- >>> instance HasDatatypeInfo Schwarma
--- >>> :kind! LabelsPG Schwarma
--- LabelsPG Schwarma :: [Type.ConstructorName]
--- = '["Beef", "Lamb", "Chicken"]
+{-| The `LabelsPG` type family calculates the constructors of a
+Haskell enum type.
+
+>>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
+>>> instance Generic Schwarma
+>>> instance HasDatatypeInfo Schwarma
+>>> :kind! LabelsPG Schwarma
+LabelsPG Schwarma :: [Type.ConstructorName]
+= '["Beef", "Lamb", "Chicken"]
+-}
 type family LabelsPG (hask :: Type) :: [Type.ConstructorName] where
   LabelsPG hask =
     ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask))
 
+{- | `RowPG` turns a Haskell record type into a `RowType`.
+
+>>> data Person = Person { name :: Text, age :: Int32 } deriving GHC.Generic
+>>> instance Generic Person
+>>> instance HasDatatypeInfo Person
+>>> :kind! RowPG Person
+RowPG Person :: [(Symbol, NullityType)]
+= '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
+-}
 type family RowPG (hask :: Type) :: RowType where
   RowPG hask = RowOf (RecordCodeOf hask)
 
@@ -748,10 +791,26 @@ type family RowOf (fields :: [(Symbol, Type)]) :: RowType where
 type family FieldPG (field :: (Symbol, Type)) :: (Symbol, NullityType) where
   FieldPG (field ::: hask) = field ::: NullPG hask
 
+{- | `NullPG` turns a Haskell type into a `NullityType`.
+
+>>> :kind! NullPG Double
+NullPG Double :: NullityType
+= 'NotNull 'PGfloat8
+>>> :kind! NullPG (Maybe Double)
+NullPG (Maybe Double) :: NullityType
+= 'Null 'PGfloat8
+-}
 type family NullPG (hask :: Type) :: NullityType where
   NullPG (Maybe hask) = 'Null (PG hask)
   NullPG hask = 'NotNull (PG hask)
 
+{- | `TuplePG` turns a Haskell tuple type (including record types) into
+the corresponding list of `NullityType`s.
+
+>>> :kind! TuplePG (Double, Maybe Char)
+TuplePG (Double, Maybe Char) :: [NullityType]
+= '['NotNull 'PGfloat8, 'Null ('PGchar 1)]
+-}
 type family TuplePG (hask :: Type) :: [NullityType] where
   TuplePG hask = TupleOf (TupleCodeOf hask (Code hask))
 
@@ -800,10 +859,10 @@ type family ConstructorNamesOf (constructors :: [Type.ConstructorInfo])
       ConstructorNameOf constructor ': ConstructorNamesOf constructors
 
 -- | Is a type a valid JSON key?
-type PGjsonKey key = key `In` '[ 'PGint2, 'PGint4, 'PGtext ]
+type PGJsonKey = '[ 'PGint2, 'PGint4, 'PGtext ]
 
 -- | Is a type a valid JSON type?
-type PGjson_ json = json `In` '[ 'PGjson, 'PGjsonb ]
+type PGJsonType = '[ 'PGjson, 'PGjsonb ]
 
 -- | An `AlignedList` is a type-aligned list or free category.
 data AlignedList p x0 x1 where

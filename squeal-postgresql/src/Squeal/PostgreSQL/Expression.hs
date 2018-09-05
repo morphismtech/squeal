@@ -555,7 +555,7 @@ unsafeVariadicFunction
 unsafeVariadicFunction fun x = UnsafeExpression $
   fun <> parenthesized (commaSeparated (hcollapse (hmap (K . renderExpression) x)))
 
-instance PGNum ty
+instance ty `In` PGNum
   => Num (Expression schema from grouping params (nullity ty)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
@@ -567,12 +567,12 @@ instance PGNum ty
       . fromString
       . show
 
-instance (PGNum ty, PGFloating ty) => Fractional
+instance (ty `In` PGNum, ty `In` PGFloating) => Fractional
   (Expression schema from grouping params (nullity ty)) where
     (/) = unsafeBinaryOp "/"
     fromRational x = fromInteger (numerator x) / fromInteger (denominator x)
 
-instance (PGNum ty, PGFloating ty) => Floating
+instance (ty `In` PGNum, ty `In` PGFloating) => Floating
   (Expression schema from grouping params (nullity ty)) where
     pi = UnsafeExpression "pi()"
     exp = unsafeFunction "exp"
@@ -602,7 +602,7 @@ instance (PGNum ty, PGFloating ty) => Floating
 -- :}
 -- atan2(pi(), 2)
 atan2_
-  :: PGFloating float
+  :: float `In` PGFloating
   => Expression schema from grouping params (nullity float)
   -- ^ numerator
   -> Expression schema from grouping params (nullity float)
@@ -636,7 +636,7 @@ cast ty x = UnsafeExpression $ parenthesized $
 -- :}
 -- (5 / 2)
 quot_
-  :: PGIntegral int
+  :: int `In` PGIntegral
   => Expression schema from grouping params (nullity int)
   -- ^ numerator
   -> Expression schema from grouping params (nullity int)
@@ -654,7 +654,7 @@ quot_ = unsafeBinaryOp "/"
 -- :}
 -- (5 % 2)
 rem_
-  :: PGIntegral int
+  :: int `In` PGIntegral
   => Expression schema from grouping params (nullity int)
   -- ^ numerator
   -> Expression schema from grouping params (nullity int)
@@ -670,7 +670,7 @@ rem_ = unsafeBinaryOp "%"
 -- :}
 -- trunc(pi())
 trunc
-  :: PGFloating frac
+  :: frac `In` PGFloating
   => Expression schema from grouping params (nullity frac)
   -- ^ fractional number
   -> Expression schema from grouping params (nullity frac)
@@ -684,7 +684,7 @@ trunc = unsafeFunction "trunc"
 -- :}
 -- round(pi())
 round_
-  :: PGFloating frac
+  :: frac `In` PGFloating
   => Expression schema from grouping params (nullity frac)
   -- ^ fractional number
   -> Expression schema from grouping params (nullity frac)
@@ -698,7 +698,7 @@ round_ = unsafeFunction "round"
 -- :}
 -- ceiling(pi())
 ceiling_
-  :: PGFloating frac
+  :: frac `In` PGFloating
   => Expression schema from grouping params (nullity frac)
   -- ^ fractional number
   -> Expression schema from grouping params (nullity frac)
@@ -955,7 +955,7 @@ Table 9.44: json and jsonb operators
 
 -- | Get JSON value (object field or array element) at a key.
 (.->)
-  :: (PGjson_ json, PGjsonKey key)
+  :: (json `In` PGJsonType, key `In` PGJsonKey)
   => Expression schema from grouping params (nullity json)
   -> Expression schema from grouping params (nullity key)
   -> Expression schema from grouping params ('Null json)
@@ -964,7 +964,7 @@ infixl 8 .->
 
 -- | Get JSON value (object field or array element) at a key, as text.
 (.->>)
-  :: (PGjson_ json, PGjsonKey key)
+  :: (json `In` PGJsonType, key `In` PGJsonKey)
   => Expression schema from grouping params (nullity json)
   -> Expression schema from grouping params (nullity key)
   -> Expression schema from grouping params ('Null 'PGtext)
@@ -973,7 +973,7 @@ infixl 8 .->>
 
 -- | Get JSON value at a specified path.
 (.#>)
-  :: (PGjson_ json, PGtextArray "(.#>)" path)
+  :: (json `In` PGJsonType, PGTextArray "(.#>)" path)
   => Expression schema from grouping params (nullity json)
   -> Expression schema from grouping params (nullity path)
   -> Expression schema from grouping params ('Null json)
@@ -982,7 +982,7 @@ infixl 8 .#>
 
 -- | Get JSON value at a specified path as text.
 (.#>>)
-  :: (PGjson_ json, PGtextArray "(.#>>)" path)
+  :: (json `In` PGJsonType, PGTextArray "(.#>>)" path)
   => Expression schema from grouping params (nullity json)
   -> Expression schema from grouping params (nullity path)
   -> Expression schema from grouping params ('Null 'PGtext)
@@ -1061,7 +1061,7 @@ infixl 6 .-.
 -- | Delete the field or element with specified path (for JSON arrays, negative
 -- integers count from the end)
 (#-.)
-  :: PGtextArray "(#-.)" arrayty
+  :: PGTextArray "(#-.)" arrayty
   => Expression schema from grouping params (nullity 'PGjsonb)
   -> Expression schema from grouping params (nullity arrayty)
   -> Expression schema from grouping params (nullity 'PGjsonb)
@@ -1111,7 +1111,7 @@ toJsonb = unsafeFunction "to_jsonb"
 -- | Returns the array as a JSON array. A PostgreSQL multidimensional array
 -- becomes a JSON array of arrays.
 arrayToJson
-  :: PGarray "arrayToJson" arr
+  :: PGArray "arrayToJson" arr
   => Expression schema from grouping params (nullity arr)
   -> Expression schema from grouping params (nullity 'PGjson)
 arrayToJson = unsafeFunction "array_to_json"
@@ -1178,7 +1178,7 @@ jsonbBuildObject
 -- taken as alternating key/value pairs, or two dimensions such that each inner
 -- array has exactly two elements, which are taken as a key/value pair.
 jsonObject
-  :: PGarrayOf "jsonObject" arr ('NotNull 'PGtext)
+  :: PGArrayOf "jsonObject" arr ('NotNull 'PGtext)
   => Expression schema from grouping params (nullity arr)
   -> Expression schema from grouping params (nullity 'PGjson)
 jsonObject = unsafeFunction "json_object"
@@ -1188,7 +1188,7 @@ jsonObject = unsafeFunction "json_object"
 -- taken as alternating key/value pairs, or two dimensions such that each inner
 -- array has exactly two elements, which are taken as a key/value pair.
 jsonbObject
-  :: PGarrayOf "jsonbObject" arr ('NotNull 'PGtext)
+  :: PGArrayOf "jsonbObject" arr ('NotNull 'PGtext)
   => Expression schema from grouping params (nullity arr)
   -> Expression schema from grouping params (nullity 'PGjsonb)
 jsonbObject = unsafeFunction "jsonb_object"
@@ -1196,8 +1196,8 @@ jsonbObject = unsafeFunction "jsonb_object"
 -- | This is an alternate form of 'jsonObject' that takes two arrays; one for
 -- keys and one for values, that are zipped pairwise to create a JSON object.
 jsonZipObject
-  :: ( PGarrayOf "jsonZipObject" keysArray ('NotNull 'PGtext)
-     , PGarrayOf "jsonZipObject" valuesArray ('NotNull 'PGtext))
+  :: ( PGArrayOf "jsonZipObject" keysArray ('NotNull 'PGtext)
+     , PGArrayOf "jsonZipObject" valuesArray ('NotNull 'PGtext))
   => Expression schema from grouping params (nullity keysArray)
   -> Expression schema from grouping params (nullity valuesArray)
   -> Expression schema from grouping params (nullity 'PGjson)
@@ -1208,8 +1208,8 @@ jsonZipObject ks vs =
 -- keys and one for values, that are zipped pairwise to create a binary JSON
 -- object.
 jsonbZipObject
-  :: ( PGarrayOf "jsonbZipObject" keysArray ('NotNull 'PGtext)
-     , PGarrayOf "jsonbZipObject" valuesArray ('NotNull 'PGtext))
+  :: ( PGArrayOf "jsonbZipObject" keysArray ('NotNull 'PGtext)
+     , PGArrayOf "jsonbZipObject" valuesArray ('NotNull 'PGtext))
   => Expression schema from grouping params (nullity keysArray)
   -> Expression schema from grouping params (nullity valuesArray)
   -> Expression schema from grouping params (nullity 'PGjsonb)
@@ -1320,7 +1320,7 @@ jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
 -- operators, negative integers that appear in path count from the end of JSON
 -- arrays.
 jsonbSet
-  :: PGtextArray "jsonbSet" arr
+  :: PGTextArray "jsonbSet" arr
   => Expression schema from grouping params (nullity 'PGjsonb)
   -> Expression schema from grouping params (nullity arr)
   -> Expression schema from grouping params (nullity 'PGjsonb)
@@ -1339,7 +1339,7 @@ jsonbSet tgt path val createMissing = case createMissing of
 -- exist. As with the path orientated operators, negative integers that appear
 -- in path count from the end of JSON arrays.
 jsonbInsert
-  :: PGtextArray "jsonbInsert" arr
+  :: PGTextArray "jsonbInsert" arr
   => Expression schema from grouping params (nullity 'PGjsonb)
   -> Expression schema from grouping params (nullity arr)
   -> Expression schema from grouping params (nullity 'PGjsonb)
@@ -1383,7 +1383,7 @@ unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
 -- :}
 -- sum("col")
 sum_
-  :: PGNum ty
+  :: ty `In` PGNum
   => Expression schema from 'Ungrouped params (nullity ty)
   -- ^ what to sum
   -> Expression schema from ('Grouped bys) params (nullity ty)
@@ -1397,7 +1397,7 @@ sum_ = unsafeAggregate "sum"
 -- :}
 -- sum(DISTINCT "col")
 sumDistinct
-  :: PGNum ty
+  :: ty `In` PGNum
   => Expression schema from 'Ungrouped params (nullity ty)
   -- ^ what to sum
   -> Expression schema from ('Grouped bys) params (nullity ty)
@@ -1428,7 +1428,7 @@ instance PGAvg 'PGinterval 'PGinterval
 -- :}
 -- bit_and("col")
 bitAnd
-  :: PGIntegral int
+  :: int `In` PGIntegral
   => Expression schema from 'Ungrouped params (nullity int)
   -- ^ what to aggregate
   -> Expression schema from ('Grouped bys) params (nullity int)
@@ -1442,7 +1442,7 @@ bitAnd = unsafeAggregate "bit_and"
 -- :}
 -- bit_or("col")
 bitOr
-  :: PGIntegral int
+  :: int `In` PGIntegral
   => Expression schema from 'Ungrouped params (nullity int)
   -- ^ what to aggregate
   -> Expression schema from ('Grouped bys) params (nullity int)
@@ -1456,7 +1456,7 @@ bitOr = unsafeAggregate "bit_or"
 -- :}
 -- bit_and(DISTINCT "col")
 bitAndDistinct
-  :: PGIntegral int
+  :: int `In` PGIntegral
   => Expression schema from 'Ungrouped params (nullity int)
   -- ^ what to aggregate
   -> Expression schema from ('Grouped bys) params (nullity int)
@@ -1470,7 +1470,7 @@ bitAndDistinct = unsafeAggregateDistinct "bit_and"
 -- :}
 -- bit_or(DISTINCT "col")
 bitOrDistinct
-  :: PGIntegral int
+  :: int `In` PGIntegral
   => Expression schema from 'Ungrouped params (nullity int)
   -- ^ what to aggregate
   -> Expression schema from ('Grouped bys) params (nullity int)
