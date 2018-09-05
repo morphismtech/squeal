@@ -106,8 +106,8 @@ let
 In addition to being able to encode and decode basic Haskell types
 like `Int16` and `Text`, Squeal 0.4 permits you to encode and decode Haskell types to
 Postgres array types. The `Vector` type corresponds to to variable length arrays.
-And thanks to [Mike Ledger](https://github.com/mikeplus64) for the idea,
-and homogeneous tuples correspond to fixed length arrays. We can even
+And thanks to an idea from [Mike Ledger](https://github.com/mikeplus64),
+homogeneous tuples correspond to fixed length arrays. We can even
 create multi-dimensional fixed length arrays. Let's see an example.
 
 ```Haskell
