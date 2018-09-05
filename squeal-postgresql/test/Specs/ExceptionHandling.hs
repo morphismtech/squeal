@@ -9,8 +9,8 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 module ExceptionHandling
-  (
-    specs
+  ( specs
+  , User (..)
   )
 where
 
