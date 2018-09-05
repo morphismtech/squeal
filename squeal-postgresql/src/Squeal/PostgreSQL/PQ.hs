@@ -50,7 +50,7 @@ module Squeal.PostgreSQL.PQ
   , MonadPQ (..)
   , PQRun
   , pqliftWith
-    -- * Result
+    -- * Results
   , LibPQ.Result
   , LibPQ.Row
   , ntuples
@@ -63,7 +63,10 @@ module Squeal.PostgreSQL.PQ
   , resultStatus
   , resultErrorMessage
   , resultErrorCode
+    -- * Exceptions
   , SquealException (..)
+  , catchSqueal
+  , handleSqueal
   ) where
 
 import Control.Exception.Lifted
@@ -651,3 +654,18 @@ tryResult result = liftBase $ do
       stateCode <- LibPQ.resultErrorField result LibPQ.DiagSqlstate
       msg <- LibPQ.resultErrorMessage result
       throw $ PQException status stateCode msg
+
+-- | Catch `SquealException`s.
+catchSqueal
+  :: MonadBaseControl IO io
+  => io a
+  -> (SquealException -> io a) -- ^ handler
+  -> io a
+catchSqueal = catch
+
+-- | Handle `SquealExceptions`s.
+handleSqueal
+  :: MonadBaseControl IO io
+  => (SquealException -> io a) -- ^ handler
+  -> io a -> io a
+handleSqueal = handle
