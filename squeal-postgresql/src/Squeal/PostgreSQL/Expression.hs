@@ -102,7 +102,7 @@ module Squeal.PostgreSQL.Expression
   , (.?&)
   , (.-.)
   , (#-.)
-    -- *** functions
+    -- *** Functions
   , jsonLit
   , jsonbLit
   , toJson
