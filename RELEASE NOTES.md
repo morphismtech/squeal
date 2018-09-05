@@ -235,7 +235,7 @@ In previous versions of Squeal, conditions followed classical two valued logic
 of `true` and `false`.
 
 ```Haskell
--- Squeal 0.2
+-- Squeal 0.3
 type Condition schema from grouping params =
   Expression schema from grouping params ('NotNull 'PGbool)
 ```
@@ -247,7 +247,7 @@ of being less confusing evaporated I decided to switch to three valued logic
 of `true`, `false` and `null_`.
 
 ```Haskell
--- Squeal 0.3
+-- Squeal 0.4
 type Condition schema from grouping params =
   Expression schema from grouping params ('Null 'PGbool)
 ```
