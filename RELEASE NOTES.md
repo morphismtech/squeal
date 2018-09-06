@@ -49,7 +49,7 @@ type family RowPG (hask :: Type) :: RowType
 
 Let's look at these one by one.
 
-`PG` was introduced in Squeal 0.3. It's a closed type family that
+`PG` was introduced in Squeal 0.3. It was a closed type family that
 associates some Haskell types to their obvious corresponding Postgres
 types like `PG Double = 'PGfloat8`. It only worked on base types,
 no arrays or composites. Squeal 0.4 extends it to
@@ -73,8 +73,11 @@ into lists of `NullityType`s in the logical way, e.g.
 
 ```Haskell
 >>> data Person = Person { name :: Text, age :: Int32 } deriving GHC.Generic
->>> instance Generic Person
->>> instance HasDatatypeInfo Person
+>>> instance SOP.Generic Person
+>>> instance SOP.HasDatatypeInfo Person
+>>> :kind! TuplePG Person
+TuplePG Person :: [NullityType]
+= '['NotNull 'PGtext, 'NotNull 'PGint4]
 >>> :kind! RowPG Person
 RowPG Person :: [(Symbol, NullityType)]
 = '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
@@ -91,9 +94,6 @@ boilerplate signature you can reuse these with the help of `TuplePG` and `RowPG`
 For instance:
 
 ```Haskell
->>> data Person = Person { name :: Text, age :: Int32 } deriving GHC.Generic
->>> instance SOP.Generic Person
->>> instance SOP.HasDatatypeInfo Person
 >>> :{
 let
   query :: Query '["user" ::: 'View (RowPG Person)] (TuplePG (Only Int32)) (RowPG Person)
