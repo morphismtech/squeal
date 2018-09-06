@@ -160,9 +160,9 @@ with
   -> Manipulation schema params results
 ```
 
-The first problem is that with only works with `Manipulations`.
+The first problem is that `with` only works with `Manipulations`.
 It can work on `Query`s by using `queryStatement` but it still will
-return a `Manipulation`. We can fix this issue by making it a
+return a `Manipulation`. We can fix this issue by making `with` a
 method of a type class with instances for both `Query` and `Manipulation`.
 
 The second problem is that all the common table expressions
