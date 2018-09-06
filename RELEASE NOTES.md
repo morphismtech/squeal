@@ -3,7 +3,8 @@
 ### Version 0.4
 
 Version 0.4 of strengthens Squeal's type system, adds
-support for multidimensional arrays, improves `with` statements,
+support for multidimensional arrays, improves support
+for container type, improves `with` statements,
 improves runtime exceptions, accomodates SQL's three-valued logic,
 adds subquery expressions, and adds table and view type expressions.
 
@@ -142,6 +143,120 @@ void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
   result <- runQueryParams roundTrip input
   Just output <- firstRow result
   liftBase . print $ input == output
+:}
+True
+```
+
+**Containers**
+
+Squeal aims to provide a correspondence between Haskell types and Postgres types.
+In particular, Haskell ADTs with nullary constructors can correspond to
+Postgres enum types and Haskell record types can correspond to Postgres
+composite types. However, it's not always obvious that that's how a user
+will choose to store values of those types. So Squeal 0.4 introduces newtypes
+whose purpose is to specify how a user wants to store values of a type.
+
+```Haskell
+newtype Json hask = Json {getJson :: hask}
+newtype Jsonb hask = Jsonb {getJsonb :: hask}
+newtype Composite record = Composite {getComposite :: record}
+newtype Enumerated enum = Enumerated {getEnumerated :: enum}
+```
+
+Let's see an example:
+
+```Haskell
+>>> data Schwarma = Beef | Lamb | Chicken deriving (Eq, Show, GHC.Generic)
+>>> instance SOP.Generic Schwarma
+>>> instance SOP.HasDatatypeInfo Schwarma
+>>>
+>>> data Person = Person {name :: Text, age :: Int32} deriving (Eq, Show, GHC.Generic)
+>>> instance SOP.Generic Person
+>>> instance SOP.HasDatatypeInfo Person
+>>> instance Aeson.FromJSON Person
+>>> instance Aeson.ToJSON Person
+```
+
+We can create the equivalent Postgres types directly from their Haskell types.
+
+```Haskell
+>>> :{
+type Schema =
+  '[ "schwarma" ::: 'Typedef (PG (Enumerated Schwarma))
+   , "person" ::: 'Typedef (PG (Composite Person))
+   ]
+:}
+
+>>> :{
+let
+  setup :: Definition '[] Schema
+  setup =
+    createTypeEnumFrom @Schwarma #schwarma >>>
+    createTypeCompositeFrom @Person #person
+:}
+```
+
+Let's demonstrate how to associate our Haskell types `Schwarma` and `Person`
+with enumerated, composite or json types in Postgres. First create a Haskell
+`Row` type using the `Enumerated`, `Composite` and `Json` newtypes as fields.
+
+```
+>>> :{
+data Row = Row
+  { schwarma :: Enumerated Schwarma
+  , person1 :: Composite Person
+  , person2 :: Json Person
+  } deriving (Eq, GHC.Generic)
+:}
+
+>>> instance Generic Row
+>>> instance HasDatatypeInfo Row
+>>> :{
+let
+  input = Row
+    (Enumerated Chicken)
+    (Composite (Person "Faisal" 24))
+    (Json (Person "Ahmad" 48))
+:}
+```
+
+Once again, define a round trip query.
+
+```Haskell
+>>> :{
+let
+  roundTrip :: Query Schema (TuplePG Row) (RowPG Row)
+  roundTrip = values_ $
+    parameter @1 (typedef #schwarma) `as` #schwarma :*
+    parameter @2 (typedef #person)   `as` #person1  :*
+    parameter @3 json                `as` #person2
+:}
+```
+
+Finally, we can drop our type definitions.
+
+```Haskell
+>>> :{
+let
+  teardown :: Definition Schema '[]
+  teardown = dropType #schwarma >>> dropType #person
+:}
+```
+
+Now let's run it.
+
+```Haskell
+>>> :{
+let
+  session = do
+    result <- runQueryParams roundTrip input
+    Just output <- firstRow result
+    liftBase . print $ input == output
+in
+  void . withConnection "host=localhost port=5432 dbname=exampledb" $
+    define setup
+    & pqThen session
+    & pqThen (define teardown)
 :}
 True
 ```
