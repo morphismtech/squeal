@@ -200,7 +200,7 @@ Let's demonstrate how to associate our Haskell types `Schwarma` and `Person`
 with enumerated, composite or json types in Postgres. First create a Haskell
 `Row` type using the `Enumerated`, `Composite` and `Json` newtypes as fields.
 
-```
+```Haskell
 >>> :{
 data Row = Row
   { schwarma :: Enumerated Schwarma
