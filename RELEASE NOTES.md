@@ -2,7 +2,7 @@
 
 ### Version 0.4
 
-Version 0.4 of strengthens Squeal's type system, adds
+Version 0.4 strengthens Squeal's type system, adds
 support for multidimensional arrays, improves support
 for container type, improves `with` statements,
 improves runtime exceptions, accomodates SQL's three-valued logic,
