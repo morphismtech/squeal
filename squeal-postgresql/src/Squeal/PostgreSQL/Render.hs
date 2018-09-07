@@ -9,12 +9,14 @@ Rendering helper functions.
 -}
 
 {-# LANGUAGE
-    FlexibleContexts
+    AllowAmbiguousTypes
+  , FlexibleContexts
   , MagicHash
   , OverloadedStrings
   , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
+  , TypeApplications
 #-}
 
 module Squeal.PostgreSQL.Render
@@ -28,6 +30,7 @@ module Squeal.PostgreSQL.Render
   , renderCommaSeparated
   , renderCommaSeparatedMaybe
   , renderNat
+  , renderSymbol
   , RenderSQL (..)
   , printSQL
   ) where
@@ -51,6 +54,7 @@ parenthesized str = "(" <> str <> ")"
 
 -- | Concatenate two `ByteString`s with a space between.
 (<+>) :: ByteString -> ByteString -> ByteString
+infixr 7 <+>
 str1 <+> str2 = str1 <> " " <> str2
 
 -- | Comma separate a list of `ByteString`s.
@@ -92,8 +96,12 @@ renderCommaSeparatedMaybe render
   . hmap (K . render)
 
 -- | Render a promoted `Nat`.
-renderNat :: KnownNat n => proxy n -> ByteString
-renderNat (_ :: proxy n) = fromString (show (natVal' (proxy# :: Proxy# n)))
+renderNat :: forall n. KnownNat n => ByteString
+renderNat = fromString (show (natVal' (proxy# :: Proxy# n)))
+
+-- | Render a promoted `Symbol`.
+renderSymbol :: forall s. KnownSymbol s => ByteString
+renderSymbol = fromString (symbolVal' (proxy# :: Proxy# s))
 
 -- | A class for rendering SQL
 class RenderSQL sql where

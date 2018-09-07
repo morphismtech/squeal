@@ -270,7 +270,7 @@ CREATE TABLE "tab" ("a" int NOT NULL, "b" int NOT NULL, CONSTRAINT "inequality" 
 -}
 check
   :: ( Has alias schema ('Table table)
-     , HasAll aliases (TableToRelation table) subcolumns )
+     , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify the subcolumns which are getting checked
   -> (forall tab. Condition schema '[tab ::: subcolumns] 'Ungrouped '[])
@@ -304,7 +304,7 @@ CREATE TABLE "tab" ("a" int NULL, "b" int NULL, CONSTRAINT "uq_a_b" UNIQUE ("a",
 -}
 unique
   :: ( Has alias schema ('Table table)
-     , HasAll aliases (TableToRelation table) subcolumns )
+     , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify subcolumns which together are unique for each row
   -> TableConstraintExpression schema alias ('Unique aliases)
@@ -807,9 +807,9 @@ alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 createView
   :: KnownSymbol view
   => Alias view -- ^ the name of the view to add
-  -> Query schema '[] relation
+  -> Query schema '[] row
     -- ^ query
-  -> Definition schema (Create view ('View relation) schema)
+  -> Definition schema (Create view ('View row) schema)
 createView alias query = UnsafeDefinition $
   "CREATE" <+> "VIEW" <+> renderAlias alias <+> "AS"
   <+> renderQuery query <> ";"
@@ -857,19 +857,23 @@ createTypeEnum enum labels = UnsafeDefinition $
 createTypeEnumFrom
   :: forall hask enum schema.
   ( SOP.Generic hask
-  , SOP.All KnownSymbol (LabelsFrom hask)
+  , SOP.All KnownSymbol (LabelsPG hask)
   , KnownSymbol enum
   )
   => Alias enum
   -- ^ name of the user defined enumerated type
-  -> Definition schema (Create enum ('Typedef (EnumFrom hask)) schema)
+  -> Definition schema (Create enum ('Typedef (PG (Enumerated hask))) schema)
 createTypeEnumFrom enum = createTypeEnum enum
-  (SOP.hpure label :: NP PGlabel (LabelsFrom hask))
+  (SOP.hpure label :: NP PGlabel (LabelsPG hask))
 
 {- | `createTypeComposite` creates a composite type. The composite type is
 specified by a list of attribute names and data types.
 
->>> type PGcomplex = 'PGcomposite '["real" ::: 'PGfloat8, "imaginary" ::: 'PGfloat8]
+>>> :{
+type PGcomplex = 'PGcomposite
+  '[ "real"      ::: 'NotNull 'PGfloat8
+   , "imaginary" ::: 'NotNull 'PGfloat8 ]
+:}
 
 >>> :{
 let
@@ -892,36 +896,39 @@ createTypeComposite ty fields = UnsafeDefinition $
   (renderCommaSeparated renderField fields) <> ";"
   where
     renderField :: Aliased (TypeExpression schema) x -> ByteString
-    renderField (typ `As` field) =
-      renderAlias field <+> renderTypeExpression typ
+    renderField (typ `As` alias) =
+      renderAlias alias <+> renderTypeExpression typ
 
 -- | Composite types can also be generated from a Haskell type, for example
 --
--- >>> data Complex = Complex {real :: Maybe Double, imaginary :: Maybe Double} deriving GHC.Generic
+-- >>> data Complex = Complex {real :: Double, imaginary :: Double} deriving GHC.Generic
 -- >>> instance SOP.Generic Complex
 -- >>> instance SOP.HasDatatypeInfo Complex
 -- >>> printSQL $ createTypeCompositeFrom @Complex #complex
 -- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 createTypeCompositeFrom
   :: forall hask ty schema.
-  ( ZipAliased (FieldNamesFrom hask) (FieldTypesFrom hask)
-  , SOP.All (PGTyped schema) (FieldTypesFrom hask)
-  , KnownSymbol ty
-  )
+  ( SOP.All (FieldTyped schema) (RowPG hask)
+  , KnownSymbol ty )
   => Alias ty
   -- ^ name of the user defined composite type
-  -> Definition schema (Create ty ( 'Typedef (CompositeFrom hask)) schema)
-createTypeCompositeFrom ty = createTypeComposite ty $ zipAs
-  (SOP.hpure Alias :: NP Alias (FieldNamesFrom hask))
-  (SOP.hcpure (SOP.Proxy :: SOP.Proxy (PGTyped schema)) pgtype
-    :: NP (TypeExpression schema) (FieldTypesFrom hask))
+  -> Definition schema (Create ty ( 'Typedef (PG (Composite hask))) schema)
+createTypeCompositeFrom ty = createTypeComposite ty
+  (SOP.hcpure (SOP.Proxy :: SOP.Proxy (FieldTyped schema)) fieldtype
+    :: NP (Aliased (TypeExpression schema)) (RowPG hask))
+
+class FieldTyped schema ty where
+  fieldtype :: Aliased (TypeExpression schema) ty
+instance (KnownSymbol alias, PGTyped schema ty)
+  => FieldTyped schema (alias ::: ty) where
+    fieldtype = pgtype `As` Alias
 
 -- | Drop a type.
 --
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance SOP.Generic Schwarma
 -- >>> instance SOP.HasDatatypeInfo Schwarma
--- >>> printSQL (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (EnumFrom Schwarma)] '[])
+-- >>> printSQL (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))] '[])
 -- DROP TYPE "schwarma";
 dropType
   :: Has tydef schema ('Typedef ty)
@@ -938,15 +945,15 @@ newtype ColumnTypeExpression (schema :: SchemaType) (ty :: ColumnType)
 -- | used in `createTable` commands as a column constraint to note that
 -- @NULL@ may be present in a column
 nullable
-  :: TypeExpression schema ty
+  :: TypeExpression schema (nullity ty)
   -> ColumnTypeExpression schema ('NoDef :=> 'Null ty)
 nullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
 
 -- | used in `createTable` commands as a column constraint to ensure
 -- @NULL@ is not present in a column
 notNullable
-  :: TypeExpression schema ty
-  -> ColumnTypeExpression schema (def :=> 'NotNull ty)
+  :: TypeExpression schema (nullity ty)
+  -> ColumnTypeExpression schema ('NoDef :=> 'NotNull ty)
 notNullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
 
 -- | used in `createTable` commands as a column constraint to give a default

@@ -42,13 +42,10 @@ module Squeal.PostgreSQL.Manipulation
     -- * Delete
   , deleteFrom
   , deleteFrom_
-    -- * With
-  , with
   ) where
 
 import Control.DeepSeq
 import Data.ByteString hiding (foldr)
-import Data.Monoid
 
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
@@ -180,16 +177,38 @@ let
 in printSQL manipulation
 :}
 DELETE FROM "tab" WHERE ("col1" = "col2") RETURNING *
+
+with manipulation:
+
+>>> type ProductsTable = '[] :=> '["product" ::: 'NoDef :=> 'NotNull 'PGtext, "date" ::: 'Def :=> 'NotNull 'PGdate]
+
+>>> :{
+let
+  manipulation :: Manipulation
+    '[ "products" ::: 'Table ProductsTable
+     , "products_deleted" ::: 'Table ProductsTable
+     ] '[ 'NotNull 'PGdate] '[]
+  manipulation = with
+    (deleteFrom #products (#date .< param @1) ReturningStar `as` #deleted_rows)
+    (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `as` #t)))))
+in printSQL manipulation
+:}
+WITH "deleted_rows" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "deleted_rows" AS "t"
 -}
+
 newtype Manipulation
   (schema :: SchemaType)
   (params :: [NullityType])
-  (columns :: RelationType)
+  (columns :: RowType)
     = UnsafeManipulation { renderManipulation :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
-
 instance RenderSQL (Manipulation schema params columns) where
   renderSQL = renderManipulation
+instance With Manipulation where
+  with Done manip = manip
+  with (cte :>> ctes) manip = UnsafeManipulation $
+    "WITH" <+> renderCommonTableExpressions renderManipulation cte ctes
+    <+> renderManipulation manip
 
 -- | Convert a `Query` into a `Manipulation`.
 queryStatement
@@ -212,13 +231,14 @@ insertRows
   :: ( SOP.SListI columns
      , SOP.SListI results
      , Has tab schema ('Table table)
+     , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
   -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
   -> [NP (Aliased (ColumnValue schema '[] params)) columns] -- ^ more rows to insert
-  -> ConflictClause schema columns params
+  -> ConflictClause schema table params
   -- ^ what to do in case of constraint conflict
-  -> ReturningClause schema columns params results -- ^ results to return
+  -> ReturningClause schema params row results -- ^ results to return
   -> Manipulation schema params results
 insertRows tab rw rws conflict returning = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderAlias tab
@@ -242,12 +262,13 @@ insertRow
   :: ( SOP.SListI columns
      , SOP.SListI results
      , Has tab schema ('Table table)
+     , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
   -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
-  -> ConflictClause schema columns params
+  -> ConflictClause schema table params
   -- ^ what to do in case of constraint conflict
-  -> ReturningClause schema columns params results -- ^ results to return
+  -> ReturningClause schema params row results -- ^ results to return
   -> Manipulation schema params results
 insertRow tab rw = insertRows tab rw []
 
@@ -278,12 +299,13 @@ insertQuery
   :: ( SOP.SListI columns
      , SOP.SListI results
      , Has tab schema ('Table table)
+     , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> Query schema params (ColumnsToRelation columns)
-  -> ConflictClause schema columns params
+  -> Query schema params (TableToRow table)
+  -> ConflictClause schema table params
   -- ^ what to do in case of constraint conflict
-  -> ReturningClause schema columns params results -- ^ results to return
+  -> ReturningClause schema params row results -- ^ results to return
   -> Manipulation schema params results
 insertQuery tab query conflict returning = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderAlias tab
@@ -297,7 +319,7 @@ insertQuery_
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to insert into
-  -> Query schema params (ColumnsToRelation columns)
+  -> Query schema params (TableToRow table)
   -> Manipulation schema params '[]
 insertQuery_ tab query =
   insertQuery tab query OnConflictDoRaise (Returning Nil)
@@ -309,7 +331,7 @@ insertQuery_ tab query =
 -- existing value in the row for an update.
 data ColumnValue
   (schema :: SchemaType)
-  (columns :: RelationType)
+  (columns :: RowType)
   (params :: [NullityType])
   (ty :: ColumnType)
   where
@@ -331,17 +353,15 @@ data ColumnValue
 -- values are desired.
 data ReturningClause
   (schema :: SchemaType)
-  (columns :: ColumnsType)
   (params :: [NullityType])
-  (results :: RelationType)
+  (row0 :: RowType)
+  (row1 :: RowType)
   where
     ReturningStar
-      :: results ~ ColumnsToRelation columns
-      => ReturningClause schema columns params results
+      :: ReturningClause schema params row row
     Returning
-      :: rel ~ ColumnsToRelation columns
-      => NP (Aliased (Expression schema '[table ::: rel] 'Ungrouped params)) results
-      -> ReturningClause schema columns params results
+      :: NP (Aliased (Expression schema '[table ::: row0] 'Ungrouped params)) row1
+      -> ReturningClause schema params row0 row1
 
 -- | Render a `ReturningClause`.
 renderReturningClause
@@ -359,18 +379,22 @@ renderReturningClause = \case
 -- `OnConflictDoNothing` simply avoids inserting a row.
 -- `OnConflictDoUpdate` updates the existing row that conflicts with the row
 -- proposed for insertion.
-data ConflictClause (schema :: SchemaType) (columns :: ColumnsType) params where
-  OnConflictDoRaise :: ConflictClause schema columns params
-  OnConflictDoNothing :: ConflictClause schema columns params
-  OnConflictDoUpdate
-    :: NP (Aliased (ColumnValue schema (ColumnsToRelation columns) params)) columns
-    -> [Condition schema '[table ::: ColumnsToRelation columns] 'Ungrouped params]
-    -> ConflictClause schema columns params
+data ConflictClause
+  (schema :: SchemaType)
+  (table :: TableType)
+  (params :: [NullityType]) where
+    OnConflictDoRaise :: ConflictClause schema table params
+    OnConflictDoNothing :: ConflictClause schema table params
+    OnConflictDoUpdate
+      :: (row ~ TableToRow table, columns ~ TableToColumns table)
+      => NP (Aliased (ColumnValue schema row params)) columns
+      -> [Condition schema '[t ::: row] 'Ungrouped params]
+      -> ConflictClause schema table params
 
 -- | Render a `ConflictClause`.
 renderConflictClause
-  :: SOP.SListI columns
-  => ConflictClause schema columns params
+  :: SOP.SListI (TableToColumns table)
+  => ConflictClause schema table params
   -> ByteString
 renderConflictClause = \case
   OnConflictDoRaise -> ""
@@ -402,13 +426,14 @@ update
   :: ( SOP.SListI columns
      , SOP.SListI results
      , Has tab schema ('Table table)
+     , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue schema (ColumnsToRelation columns) params)) columns
+  -> NP (Aliased (ColumnValue schema row params)) columns
   -- ^ modified values to replace old values
-  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> (forall t. Condition schema '[t ::: row] 'Ungrouped params)
   -- ^ condition under which to perform update on a row
-  -> ReturningClause schema columns params results -- ^ results to return
+  -> ReturningClause schema params row results -- ^ results to return
   -> Manipulation schema params results
 update tab columns wh returning = UnsafeManipulation $
   "UPDATE"
@@ -432,11 +457,12 @@ update tab columns wh returning = UnsafeManipulation $
 update_
   :: ( SOP.SListI columns
      , Has tab schema ('Table table)
+     , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue schema (ColumnsToRelation columns) params)) columns
+  -> NP (Aliased (ColumnValue schema row params)) columns
   -- ^ modified values to replace old values
-  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> (forall t. Condition schema '[t ::: row] 'Ungrouped params)
   -- ^ condition under which to perform update on a row
   -> Manipulation schema params '[]
 update_ tab columns wh = update tab columns wh (Returning Nil)
@@ -449,11 +475,12 @@ DELETE statements
 deleteFrom
   :: ( SOP.SListI results
      , Has tab schema ('Table table)
+     , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
-  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> Condition schema '[tab ::: row] 'Ungrouped params
   -- ^ condition under which to delete a row
-  -> ReturningClause schema columns params results -- ^ results to return
+  -> ReturningClause schema params row results -- ^ results to return
   -> Manipulation schema params results
 deleteFrom tab wh returning = UnsafeManipulation $
   "DELETE FROM" <+> renderAlias tab
@@ -463,45 +490,10 @@ deleteFrom tab wh returning = UnsafeManipulation $
 -- | Delete rows returning `Nil`.
 deleteFrom_
   :: ( Has tab schema ('Table table)
+     , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
-  -> Condition schema '[tab ::: ColumnsToRelation columns] 'Ungrouped params
+  -> (forall t. Condition schema '[t ::: row] 'Ungrouped params)
   -- ^ condition under which to delete a row
   -> Manipulation schema params '[]
 deleteFrom_ tab wh = deleteFrom tab wh (Returning Nil)
-
-{-----------------------------------------
-WITH statements
------------------------------------------}
-
--- | `with` provides a way to write auxiliary statements for use in a larger statement.
--- These statements, which are often referred to as Common Table Expressions or CTEs,
--- can be thought of as defining temporary tables that exist just for one statement.
---
--- >>> type ProductsTable = '[] :=> '["product" ::: 'NoDef :=> 'NotNull 'PGtext, "date" ::: 'Def :=> 'NotNull 'PGdate]
---
--- >>> :{
--- let
---   manipulation :: Manipulation '["products" ::: 'Table ProductsTable, "products_deleted" ::: 'Table ProductsTable] '[ 'NotNull 'PGdate] '[]
---   manipulation = with
---     (deleteFrom #products (#date .< param @1) ReturningStar `as` #deleted_rows)
---     (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `as` #t)))))
--- in printSQL manipulation
--- :}
--- WITH "deleted_rows" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "deleted_rows" AS "t"
-with
-  :: SOP.SListI commons
-  => NP (Aliased (Manipulation schema params)) (common ': commons)
-  -- ^ common table expressions
-  -> Manipulation (With (common ': commons) schema) params results
-  -> Manipulation schema params results
-with commons manipulation = UnsafeManipulation $
-  "WITH" <+> renderCommaSeparated renderCommon commons
-  <+> renderManipulation manipulation
-  where
-    renderCommon
-      :: Aliased (Manipulation schema params) common
-      -> ByteString
-    renderCommon (common `As` alias) =
-      renderAlias alias <+> "AS" <+>
-        parenthesized (renderManipulation common)

@@ -50,7 +50,7 @@ module Squeal.PostgreSQL.PQ
   , MonadPQ (..)
   , PQRun
   , pqliftWith
-    -- * Result
+    -- * Results
   , LibPQ.Result
   , LibPQ.Row
   , ntuples
@@ -62,6 +62,11 @@ module Squeal.PostgreSQL.PQ
   , LibPQ.ExecStatus (..)
   , resultStatus
   , resultErrorMessage
+  , resultErrorCode
+    -- * Exceptions
+  , SquealException (..)
+  , catchSqueal
+  , handleSqueal
   ) where
 
 import Control.Exception.Lifted
@@ -73,9 +78,10 @@ import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Function ((&))
 import Data.Kind
-import Data.Monoid
+import Data.Text (pack, Text)
 import Data.Traversable
 import Generics.SOP
+import PostgreSQL.Binary.Encoding (encodingBytes)
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
@@ -90,7 +96,6 @@ import Control.Monad.Trans.Identity
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Cont
-import Control.Monad.Trans.List
 
 import qualified Control.Monad.Trans.State.Lazy as Lazy
 import qualified Control.Monad.Trans.State.Strict as Strict
@@ -269,7 +274,7 @@ instance IndexedMonadTransPQ PQ where
   define (UnsafeDefinition q) = PQ $ \ (K conn) -> do
     resultMaybe <- liftBase $ LibPQ.exec conn q
     case resultMaybe of
-      Nothing -> error
+      Nothing -> throw $ ResultException
         "define: LibPQ.exec returned no results"
       Just result -> return $ K (K result)
 
@@ -393,14 +398,17 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
     (UnsafeManipulation q :: Manipulation schema ps ys) (params :: x) =
       PQ $ \ (K conn) -> do
         let
-          toParam' bytes = (LibPQ.invalidOid,bytes,LibPQ.Binary)
+          toParam' encoding =
+            (LibPQ.invalidOid, encodingBytes encoding, LibPQ.Binary)
           params' = fmap (fmap toParam') (hcollapse (toParams @x @ps params))
           q' = q <> ";"
         resultMaybe <- liftBase $ LibPQ.execParams conn q' params' LibPQ.Binary
         case resultMaybe of
-          Nothing -> error
+          Nothing -> throw $ ResultException
             "manipulateParams: LibPQ.execParams returned no results"
-          Just result -> return $ K (K result)
+          Just result -> do
+            tryResult result
+            return $ K (K result)
 
   traversePrepared
     (UnsafeManipulation q :: Manipulation schema xs ys) (list :: list x) =
@@ -408,29 +416,25 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
         let temp = "temporary_statement"
         prepResultMaybe <- LibPQ.prepare conn temp q Nothing
         case prepResultMaybe of
-          Nothing -> error
+          Nothing -> throw $ ResultException
             "traversePrepared: LibPQ.prepare returned no results"
-          Just prepResult -> do
-            status <- LibPQ.resultStatus prepResult
-            unless (status == LibPQ.CommandOk) . error $
-              "traversePrepared: LibPQ.prepare status " <> show status
+          Just prepResult -> tryResult prepResult
         results <- for list $ \ params -> do
           let
-            toParam' bytes = (bytes,LibPQ.Binary)
+            toParam' encoding = (encodingBytes encoding,LibPQ.Binary)
             params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
           resultMaybe <- LibPQ.execPrepared conn temp params' LibPQ.Binary
           case resultMaybe of
-            Nothing -> error
+            Nothing -> throw $ ResultException
               "traversePrepared: LibPQ.execParams returned no results"
-            Just result -> return $ K result
+            Just result -> do
+              tryResult result
+              return $ K result
         deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
         case deallocResultMaybe of
-          Nothing -> error
+          Nothing -> throw $ ResultException
             "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
-          Just deallocResult -> do
-            status <- LibPQ.resultStatus deallocResult
-            unless (status == LibPQ.CommandOk) . error $
-              "traversePrepared: DEALLOCATE status " <> show status
+          Just deallocResult -> tryResult deallocResult
         return (K results)
 
   traversePrepared_
@@ -439,29 +443,23 @@ instance (MonadBase IO io, schema0 ~ schema, schema1 ~ schema)
         let temp = "temporary_statement"
         prepResultMaybe <- LibPQ.prepare conn temp q Nothing
         case prepResultMaybe of
-          Nothing -> error
+          Nothing -> throw $ ResultException
             "traversePrepared_: LibPQ.prepare returned no results"
-          Just prepResult -> do
-            status <- LibPQ.resultStatus prepResult
-            unless (status == LibPQ.CommandOk) . error $
-              "traversePrepared: LibPQ.prepare status " <> show status
+          Just prepResult -> tryResult prepResult
         for_ list $ \ params -> do
           let
-            toParam' bytes = (bytes,LibPQ.Binary)
+            toParam' encoding = (encodingBytes encoding, LibPQ.Binary)
             params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
           resultMaybe <- LibPQ.execPrepared conn temp params' LibPQ.Binary
           case resultMaybe of
-            Nothing -> error
+            Nothing -> throw $ ResultException
               "traversePrepared_: LibPQ.execParams returned no results"
-            Just _result -> return ()
+            Just result -> tryResult result
         deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
         case deallocResultMaybe of
-          Nothing -> error
+          Nothing -> throw $ ResultException
             "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
-          Just deallocResult -> do
-            status <- LibPQ.resultStatus deallocResult
-            unless (status == LibPQ.CommandOk) . error $
-              "traversePrepared: DEALLOCATE status " <> show status
+          Just deallocResult -> tryResult deallocResult
         return (K ())
 
   liftPQ pq = PQ $ \ (K conn) -> do
@@ -479,7 +477,6 @@ instance MonadPQ schema m => MonadPQ schema (ExceptT e m)
 instance (Monoid w, MonadPQ schema m) => MonadPQ schema (Strict.RWST r w s m)
 instance (Monoid w, MonadPQ schema m) => MonadPQ schema (Lazy.RWST r w s m)
 instance MonadPQ schema m => MonadPQ schema (ContT r m)
-instance MonadPQ schema m => MonadPQ schema (ListT m)
 
 instance (Monad m, schema0 ~ schema1)
   => Applicative (PQ schema0 schema1 m) where
@@ -534,14 +531,16 @@ getRow
   -> io y
 getRow r (K result :: K LibPQ.Result columns) = liftBase $ do
   numRows <- LibPQ.ntuples result
-  when (numRows < r) $ error $
-    "getRow: expected at least " <> show r <> "rows but only saw "
-    <> show numRows
+  when (numRows < r) $ throw $ ResultException $
+    "getRow: expected at least " <> pack (show r) <> "rows but only saw "
+    <> pack (show numRows)
   let len = fromIntegral (lengthSList (Proxy @columns))
   row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
   case fromList row' of
-    Nothing -> error "getRow: found unexpected length"
-    Just row -> return $ fromRow @columns row
+    Nothing -> throw $ ResultException "getRow: found unexpected length"
+    Just row -> case fromRow @columns row of
+      Left parseError -> throw $ ParseException $ "getRow: " <> parseError
+      Right y -> return y
 
 -- | Intended to be used for unfolding in streaming libraries, `nextRow`
 -- takes a total number of rows (which can be found with `ntuples`)
@@ -558,8 +557,10 @@ nextRow total (K result :: K LibPQ.Result columns) r
     let len = fromIntegral (lengthSList (Proxy @columns))
     row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
     case fromList row' of
-      Nothing -> error "nextRow: found unexpected length"
-      Just row -> return $ Just (r+1, fromRow @columns row)
+      Nothing -> throw $ ResultException "nextRow: found unexpected length"
+      Just row -> case fromRow @columns row of
+        Left parseError -> throw $ ParseException $ "nextRow: " <> parseError
+        Right y -> return $ Just (r+1, y)
 
 -- | Get all rows from a `LibPQ.Result`.
 getRows
@@ -572,8 +573,10 @@ getRows (K result :: K LibPQ.Result columns) = liftBase $ do
   for [0 .. numRows - 1] $ \ r -> do
     row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
     case fromList row' of
-      Nothing -> error "getRows: found unexpected length"
-      Just row -> return $ fromRow @columns row
+      Nothing -> throw $ ResultException "getRows: found unexpected length"
+      Just row -> case fromRow @columns row of
+        Left parseError -> throw $ ParseException $ "getRows: " <> parseError
+        Right y -> return y
 
 -- | Get the first row if possible from a `LibPQ.Result`.
 firstRow
@@ -586,8 +589,10 @@ firstRow (K result :: K LibPQ.Result columns) = liftBase $ do
     let len = fromIntegral (lengthSList (Proxy @columns))
     row' <- traverse (LibPQ.getvalue result 0) [0 .. len - 1]
     case fromList row' of
-      Nothing -> error "firstRow: found unexpected length"
-      Just row -> return . Just $ fromRow @columns row
+      Nothing -> throw $ ResultException "firstRow: found unexpected length"
+      Just row -> case fromRow @columns row of
+        Left parseError -> throw $ ParseException $ "firstRow: " <> parseError
+        Right y -> return $ Just y
 
 -- | Lifts actions on results from @LibPQ@.
 liftResult
@@ -609,3 +614,55 @@ resultStatus = liftResult LibPQ.resultStatus
 resultErrorMessage
   :: MonadBase IO io => K LibPQ.Result results -> io (Maybe ByteString)
 resultErrorMessage = liftResult LibPQ.resultErrorMessage
+
+-- | Returns the error code most recently generated by an operation
+-- on the connection.
+--
+-- https://www.postgresql.org/docs/current/static/errcodes-appendix.html
+resultErrorCode
+  :: MonadBase IO io
+  => K LibPQ.Result results
+  -> io (Maybe ByteString)
+resultErrorCode = liftResult (flip LibPQ.resultErrorField LibPQ.DiagSqlstate)
+
+-- | `Exception`s that can be thrown by Squeal.
+data SquealException
+  = PQException
+  { sqlExecStatus :: LibPQ.ExecStatus
+  , sqlStateCode :: Maybe ByteString
+    -- ^ https://www.postgresql.org/docs/current/static/errcodes-appendix.html
+  , sqlErrorMessage :: Maybe ByteString
+  }
+  | ResultException Text
+  | ParseException Text
+  deriving (Eq, Show)
+instance Exception SquealException
+
+tryResult
+  :: MonadBase IO io
+  => LibPQ.Result
+  -> io ()
+tryResult result = liftBase $ do
+  status <- LibPQ.resultStatus result
+  case status of
+    LibPQ.CommandOk -> return ()
+    LibPQ.TuplesOk -> return ()
+    _ -> do
+      stateCode <- LibPQ.resultErrorField result LibPQ.DiagSqlstate
+      msg <- LibPQ.resultErrorMessage result
+      throw $ PQException status stateCode msg
+
+-- | Catch `SquealException`s.
+catchSqueal
+  :: MonadBaseControl IO io
+  => io a
+  -> (SquealException -> io a) -- ^ handler
+  -> io a
+catchSqueal = catch
+
+-- | Handle `SquealException`s.
+handleSqueal
+  :: MonadBaseControl IO io
+  => (SquealException -> io a) -- ^ handler
+  -> io a -> io a
+handleSqueal = handle
