@@ -54,9 +54,15 @@ composable and cover a large portion of SQL.
 
 ## testing
 
-start postgres on localhost port `5432` and create a database named `exampledb`.
+Start postgres on localhost port `5432` and create a database named `exampledb`.
 
 `stack test`
+
+## contributing
+
+We welcome contributors.
+Please make pull requests on the `dev` branch instead of `master`.
+The `Issues` page is a good place to communicate.
 
 ## usage
 
