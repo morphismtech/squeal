@@ -5,6 +5,7 @@ jobs:
       - image: haskell:8.4.3
       - image: circleci/postgres:latest
         environment:
+          POSTGRES_USER: root
           POSTGRES_DB: exampledb
     steps:
       - checkout
