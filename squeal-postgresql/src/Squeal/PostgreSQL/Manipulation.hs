@@ -27,6 +27,7 @@ module Squeal.PostgreSQL.Manipulation
   , ColumnValue (..)
   , ReturningClause (ReturningStar, Returning)
   , ConflictClause (OnConflictDoRaise, OnConflictDoNothing, OnConflictDoUpdate)
+  , ConflictTarget (OnConstraint, UniqueIndexOn)
     -- * Insert
   , insertRows
   , insertRow
@@ -46,6 +47,7 @@ module Squeal.PostgreSQL.Manipulation
 
 import Control.DeepSeq
 import Data.ByteString hiding (foldr)
+import GHC.TypeLits (KnownSymbol)
 
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
@@ -120,12 +122,13 @@ let
       (Set 2 `as` #col1 :* Set 4 `as` #col2)
       [Set 6 `as` #col1 :* Set 8 `as` #col2]
       (OnConflictDoUpdate
+        (UniqueIndexOn #col1)
         (Set 2 `as` #col1 :* Same `as` #col2)
         [#col1 .== #col2])
       (Returning $ (#col1 + #col2) `as` #sum)
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (2, 4), (6, 8) ON CONFLICT DO UPDATE SET "col1" = 2 WHERE ("col1" = "col2") RETURNING ("col1" + "col2") AS "sum"
+INSERT INTO "tab" ("col1", "col2") VALUES (2, 4), (6, 8) ON CONFLICT ("col1") DO UPDATE SET "col1" = 2 WHERE ("col1" = "col2") RETURNING ("col1" + "col2") AS "sum"
 
 query insert:
 
@@ -387,9 +390,25 @@ data ConflictClause
     OnConflictDoNothing :: ConflictClause schema table params
     OnConflictDoUpdate
       :: (row ~ TableToRow table, columns ~ TableToColumns table)
-      => NP (Aliased (ColumnValue schema row params)) columns
+      => ConflictTarget table
+      -> NP (Aliased (ColumnValue schema row params)) columns
       -> [Condition schema '[t ::: row] 'Ungrouped params]
       -> ConflictClause schema table params
+
+-- | A `ConflictTarget` specifies the constraint violation that triggers an
+-- `OnConflictDoUpdate`.
+data ConflictTarget (table :: TableType) where
+  -- | An explicitly named constraint.
+  OnConstraint
+    :: (Has constraintName constraints constraint)
+    => Alias constraintName
+    -> ConflictTarget '(constraints, columns)
+  -- | Match each unique index over exactly these columns.
+  UniqueIndexOn
+    :: ( HasAll columnNames columns columnTypes
+       , SOP.All KnownSymbol columnNames )
+    => NP Alias columnNames
+    -> ConflictTarget '(constraints, columns)
 
 -- | Render a `ConflictClause`.
 renderConflictClause
@@ -399,8 +418,10 @@ renderConflictClause
 renderConflictClause = \case
   OnConflictDoRaise -> ""
   OnConflictDoNothing -> " ON CONFLICT DO NOTHING"
-  OnConflictDoUpdate updates whs'
-    -> " ON CONFLICT DO UPDATE SET"
+  OnConflictDoUpdate target updates whs'
+    -> " ON CONFLICT"
+      <+> renderTarget target
+      <+> "DO UPDATE SET"
       <+> renderCommaSeparatedMaybe renderUpdate updates
       <> case whs' of
         [] -> ""
@@ -415,6 +436,14 @@ renderConflictClause = \case
             renderAlias column <+> "=" <+> "DEFAULT"
           Set expression `As` column -> Just $
             renderAlias column <+> "=" <+> renderExpression expression
+        renderTarget
+          :: ConflictTarget table
+          -> ByteString
+        renderTarget = \case
+          OnConstraint name ->
+            "ON CONSTRAINT" <+> renderAlias name
+          UniqueIndexOn columns ->
+            parenthesized (commaSeparated (renderAliases columns))
 
 {-----------------------------------------
 UPDATE statements
