@@ -16,7 +16,6 @@ Rendering helper functions.
   , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
-  , TypeApplications
 #-}
 
 module Squeal.PostgreSQL.Render
@@ -28,7 +27,6 @@ module Squeal.PostgreSQL.Render
   , singleQuotedText
   , singleQuotedUtf8
   , renderCommaSeparated
-  , renderCommaSeparatedMaybe
   , renderNat
   , renderSymbol
   , RenderSQL (..)
@@ -37,7 +35,6 @@ module Squeal.PostgreSQL.Render
 
 import Control.Monad.Base
 import Data.ByteString (ByteString)
-import Data.Maybe
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Generics.SOP
@@ -80,18 +77,6 @@ renderCommaSeparated
   -> NP expression xs -> ByteString
 renderCommaSeparated render
   = commaSeparated
-  . hcollapse
-  . hmap (K . render)
-
--- | Comma separate the `Maybe` renderings of a heterogeneous list, dropping
--- `Nothing`s.
-renderCommaSeparatedMaybe
-  :: SListI xs
-  => (forall x. expression x -> Maybe ByteString)
-  -> NP expression xs -> ByteString
-renderCommaSeparatedMaybe render
-  = commaSeparated
-  . catMaybes
   . hcollapse
   . hmap (K . render)
 
