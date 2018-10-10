@@ -11,13 +11,18 @@ Squeal data manipulation language.
 {-# LANGUAGE
     DeriveGeneric
   , FlexibleContexts
+  , FlexibleInstances
   , GADTs
   , GeneralizedNewtypeDeriving
   , LambdaCase
+  , MultiParamTypeClasses
   , OverloadedStrings
   , RankNTypes
+  , TypeFamilies
   , TypeInType
   , TypeOperators
+  , UndecidableInstances
+  , UndecidableSuperClasses
 #-}
 
 module Squeal.PostgreSQL.Manipulation
@@ -47,7 +52,8 @@ module Squeal.PostgreSQL.Manipulation
 
 import Control.DeepSeq
 import Data.ByteString hiding (foldr)
-import GHC.TypeLits (KnownSymbol)
+import Data.Kind (Constraint)
+import GHC.TypeLits (ErrorMessage (..), KnownSymbol, Symbol, TypeError)
 
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
@@ -123,7 +129,7 @@ let
       [Set 6 `as` #col1 :* Set 8 `as` #col2]
       (OnConflictDoUpdate
         (UniqueIndexOn #col1)
-        (Set 2 `as` #col1 :* Same `as` #col2)
+        (Set 2 `as` #col1)
         [#existing ! #col1 .== #excluded ! #col2])
       (Returning $ (#col1 + #col2) `as` #sum)
 in printSQL manipulation
@@ -160,7 +166,7 @@ let
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])] '[] '[]
   manipulation =
-    update_ #tab (Set 2 `as` #col1 :* Same `as` #col2)
+    update_ #tab (Set 2 `as` #col1)
       (#col1 ./= #col2)
 in printSQL manipulation
 :}
@@ -330,7 +336,6 @@ insertQuery_ tab query =
   insertQuery tab query OnConflictDoRaise (Returning Nil)
 
 -- | `ColumnValue`s are values to insert or update in a row.
--- `Same` updates with the same value.
 -- `Default` inserts or updates with the @DEFAULT@ value.
 -- `Set` sets a value to be an `Expression`, which can refer to
 -- existing value in the row for an update.
@@ -340,7 +345,6 @@ data ColumnValue
   (params :: [NullityType])
   (ty :: ColumnType)
   where
-    Same :: ColumnValue schema (table ': tables) params ty
     Default :: ColumnValue schema tables params ('Def :=> ty)
     Set
       :: Expression schema tables 'Ungrouped params ty
@@ -391,7 +395,8 @@ data ConflictClause
     OnConflictDoRaise :: ConflictClause schema table params
     OnConflictDoNothing :: ConflictClause schema table params
     OnConflictDoUpdate
-      :: (row ~ TableToRow table, columns ~ TableToColumns table)
+      :: ( row ~ TableToRow table, SOP.SListI columns, columns ~ (col0 ': cols)
+         , OrderedSubsetOf (TableToColumns table) columns )
       => ConflictTarget table
       -> NP (Aliased (ColumnValue schema '["existing" ::: row, "excluded" ::: row] params)) columns
       -> [Condition schema '["existing" ::: row, "excluded" ::: row] 'Ungrouped params]
@@ -430,19 +435,18 @@ renderConflictClause = \case
     -> " ON CONFLICT"
       <+> renderTarget target
       <+> "DO UPDATE SET"
-      <+> renderCommaSeparatedMaybe renderUpdate updates
+      <+> renderCommaSeparated renderUpdate updates
       <> case whs' of
         [] -> ""
         wh:whs -> " WHERE" <+> renderExpression (foldr (.&&) wh whs)
       where
         renderUpdate
           :: Aliased (ColumnValue schema columns params) column
-          -> Maybe ByteString
+          -> ByteString
         renderUpdate = \case
-          Same `As` _ -> Nothing
-          Default `As` column -> Just $
+          Default `As` column ->
             renderAlias column <+> "=" <+> "DEFAULT"
-          Set expression `As` column -> Just $
+          Set expression `As` column ->
             renderAlias column <+> "=" <+> renderExpression expression
         renderTarget
           :: ConflictTarget table
@@ -457,6 +461,26 @@ renderConflictClause = \case
 UPDATE statements
 -----------------------------------------}
 
+-- In order to guide type inference, also enforces that a key appearing in
+-- the common subset prefix of both sup and sub maps to the same value (type).
+type family OrderedSubsetOf'
+    (origSup :: [(Symbol, a)]) (origSub :: [(Symbol, a)])
+    (sup     :: [(Symbol, a)]) (sub     :: [(Symbol, a)])
+    :: Constraint where
+  OrderedSubsetOf' _ _ _ '[] = ()
+  OrderedSubsetOf' sup sub ('(xk, xv) ': xs) ('(xk, yv) ': ys) =
+    (xv ~ yv, OrderedSubsetOf' sup sub xs ys)
+  OrderedSubsetOf' sup sub (x ': xs) (y ': ys) =
+    OrderedSubsetOf' sup sub xs (y ': ys)
+  OrderedSubsetOf' sup sub '[] _ = TypeError
+    (     'Text "The type"
+    ':$$: 'ShowType sub
+    ':$$: 'Text "is not an ordered subset of"
+    ':$$: 'ShowType sup)
+
+class    (OrderedSubsetOf' sup sub sup sub) => OrderedSubsetOf sup sub where
+instance (OrderedSubsetOf' sup sub sup sub) => OrderedSubsetOf sup sub where
+
 -- | An `update` command changes the values of the specified columns
 -- in all rows that satisfy the condition.
 update
@@ -464,7 +488,8 @@ update
      , SOP.SListI results
      , Has tab schema ('Table table)
      , row ~ TableToRow table
-     , columns ~ TableToColumns table )
+     , columns ~ (col0 ': cols)
+     , OrderedSubsetOf (TableToColumns table) columns )
   => Alias tab -- ^ table to update
   -> (forall t. NP (Aliased (ColumnValue schema '[t ::: row] params)) columns)
   -- ^ modified values to replace old values
@@ -476,18 +501,17 @@ update tab columns wh returning = UnsafeManipulation $
   "UPDATE"
   <+> renderAlias tab
   <+> "SET"
-  <+> renderCommaSeparatedMaybe renderUpdate columns
+  <+> renderCommaSeparated renderUpdate columns
   <+> "WHERE" <+> renderExpression wh
   <> renderReturningClause returning
   where
     renderUpdate
       :: Aliased (ColumnValue schema columns params) column
-      -> Maybe ByteString
+      -> ByteString
     renderUpdate = \case
-      Same `As` _ -> Nothing
-      Default `As` column -> Just $
+      Default `As` column ->
         renderAlias column <+> "=" <+> "DEFAULT"
-      Set expression `As` column -> Just $
+      Set expression `As` column ->
         renderAlias column <+> "=" <+> renderExpression expression
 
 -- | Update a row returning `Nil`.
@@ -495,7 +519,8 @@ update_
   :: ( SOP.SListI columns
      , Has tab schema ('Table table)
      , row ~ TableToRow table
-     , columns ~ TableToColumns table )
+     , columns ~ (col0 ': cols)
+     , OrderedSubsetOf (TableToColumns table) columns )
   => Alias tab -- ^ table to update
   -> (forall t. NP (Aliased (ColumnValue schema '[t ::: row] params)) columns)
   -- ^ modified values to replace old values
