@@ -272,26 +272,26 @@ param = parameter @n pgtype
 instance (HasUnique table from columns, Has column columns ty)
   => IsLabel column (Expression schema from 'Ungrouped params ty) where
     fromLabel = UnsafeExpression $ renderAlias (Alias @column)
-instance (HasUnique table from columns, Has column columns ty)
-  => IsLabel column
-    (Aliased (Expression schema from 'Ungrouped params) (column ::: ty)) where
+instance (HasUnique table from columns, Has column columns ty, columnLabel ~ column, x ~ (column ::: ty))
+  => IsLabel columnLabel
+    (Aliased (Expression schema from 'Ungrouped params) x) where
     fromLabel = fromLabel @column `As` Alias @column
-instance (HasUnique table from columns, Has column columns ty)
-  => IsLabel column
-    (NP (Aliased (Expression schema from 'Ungrouped params)) '[column ::: ty]) where
+instance (HasUnique table from columns, Has column columns ty, columnLabel ~ column, singleColumn ~ '[column ::: ty])
+  => IsLabel columnLabel
+    (NP (Aliased (Expression schema from 'Ungrouped params)) singleColumn) where
     fromLabel = fromLabel @column :* Nil
 
 instance (Has table from columns, Has column columns ty)
   => IsQualified table column (Expression schema from 'Ungrouped params ty) where
     table ! column = UnsafeExpression $
       renderAlias table <> "." <> renderAlias column
-instance (Has table from columns, Has column columns ty)
-  => IsQualified table column
-    (Aliased (Expression schema from 'Ungrouped params) (column ::: ty)) where
+instance (Has table from columns, Has column columns ty, columnLabel ~ column, x ~ (column ::: ty))
+  => IsQualified table columnLabel
+    (Aliased (Expression schema from 'Ungrouped params) x) where
     table ! column = table ! column `As` column
-instance (Has table from columns, Has column columns ty)
-  => IsQualified table column
-    (NP (Aliased (Expression schema from 'Ungrouped params)) '[column ::: ty]) where
+instance (Has table from columns, Has column columns ty, columnLabel ~ column, singleColumn ~ '[column ::: ty])
+  => IsQualified table columnLabel
+    (NP (Aliased (Expression schema from 'Ungrouped params)) singleColumn) where
     table ! column = table ! column :* Nil
 
 instance

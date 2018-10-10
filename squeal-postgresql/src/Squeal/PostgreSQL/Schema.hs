@@ -413,9 +413,9 @@ class KnownSymbol alias => Aliasable alias expression aliased
   | aliased -> expression
   , aliased -> alias
   where as :: expression -> Alias alias -> aliased
-instance (KnownSymbol alias, alias ~ alias1) => Aliasable alias
+instance (KnownSymbol alias, aliased ~ (alias ::: ty)) => Aliasable alias
   (expression ty)
-  (Aliased expression (alias1 ::: ty))
+  (Aliased expression aliased)
     where
       as = As
 instance (KnownSymbol alias, tys ~ '[alias ::: ty]) => Aliasable alias
