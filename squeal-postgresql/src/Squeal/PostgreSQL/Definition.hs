@@ -697,7 +697,7 @@ alterColumn
      , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , Has column columns ty0
-     , tables1 ~ (constraints :=> Alter column ty1 columns))
+     , table1 ~ (constraints :=> Alter column ty1 columns))
   => Alias column -- ^ column to alter
   -> AlterColumn schema ty0 ty1 -- ^ alteration to perform
   -> AlterTable tab table1 schema
