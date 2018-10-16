@@ -124,11 +124,11 @@ let
       (OnConflictDoUpdate
         (UniqueIndexOn #col1)
         (Set 2 `as` #col1 :* Same `as` #col2)
-        [#col1 .== #col2])
+        [#existing ! #col1 .== #excluded ! #col2])
       (Returning $ (#col1 + #col2) `as` #sum)
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (2, 4), (6, 8) ON CONFLICT ("col1") DO UPDATE SET "col1" = 2 WHERE ("col1" = "col2") RETURNING ("col1" + "col2") AS "sum"
+INSERT INTO "tab" AS existing ("col1", "col2") VALUES (2, 4), (6, 8) ON CONFLICT ("col1") DO UPDATE SET "col1" = 2 WHERE ("existing"."col1" = "excluded"."col2") RETURNING ("col1" + "col2") AS "sum"
 
 query insert:
 
@@ -245,6 +245,7 @@ insertRows
   -> Manipulation schema params results
 insertRows tab rw rws conflict returning = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderAlias tab
+    <>  renderConflictAlias conflict
     <+> parenthesized (renderCommaSeparated renderAliasPart rw)
     <+> "VALUES"
     <+> commaSeparated
@@ -312,6 +313,7 @@ insertQuery
   -> Manipulation schema params results
 insertQuery tab query conflict returning = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderAlias tab
+    <> renderConflictAlias conflict
     <+> renderQuery query
     <> renderConflictClause conflict
     <> renderReturningClause returning
@@ -334,15 +336,15 @@ insertQuery_ tab query =
 -- existing value in the row for an update.
 data ColumnValue
   (schema :: SchemaType)
-  (columns :: RowType)
+  (tables :: FromType)
   (params :: [NullityType])
   (ty :: ColumnType)
   where
-    Same :: ColumnValue schema (column ': columns) params ty
-    Default :: ColumnValue schema columns params ('Def :=> ty)
+    Same :: ColumnValue schema (table ': tables) params ty
+    Default :: ColumnValue schema tables params ('Def :=> ty)
     Set
-      :: (forall table. Expression schema '[table ::: columns] 'Ungrouped params ty)
-      -> ColumnValue schema columns params (constraint :=> ty)
+      :: Expression schema tables 'Ungrouped params ty
+      -> ColumnValue schema tables params (constraint :=> ty)
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
@@ -381,7 +383,8 @@ renderReturningClause = \case
 -- violation. `OnConflictDoRaise` will raise an error.
 -- `OnConflictDoNothing` simply avoids inserting a row.
 -- `OnConflictDoUpdate` updates the existing row that conflicts with the row
--- proposed for insertion.
+-- proposed for insertion, and has access to the @existing@ row in the database
+-- and the @excluded@ row that would have resulted from the update.
 data ConflictClause
   (schema :: SchemaType)
   (table :: TableType)
@@ -391,8 +394,8 @@ data ConflictClause
     OnConflictDoUpdate
       :: (row ~ TableToRow table, columns ~ TableToColumns table)
       => ConflictTarget table
-      -> NP (Aliased (ColumnValue schema row params)) columns
-      -> [Condition schema '[t ::: row] 'Ungrouped params]
+      -> NP (Aliased (ColumnValue schema '["existing" ::: row, "excluded" ::: row] params)) columns
+      -> [Condition schema '["existing" ::: row, "excluded" ::: row] 'Ungrouped params]
       -> ConflictClause schema table params
 
 -- | A `ConflictTarget` specifies the constraint violation that triggers an
@@ -409,6 +412,12 @@ data ConflictTarget (table :: TableType) where
        , SOP.All KnownSymbol columnNames )
     => NP Alias columnNames
     -> ConflictTarget '(constraints, columns)
+
+-- | Render any table alias required for a `ConflictClause`.
+renderConflictAlias :: ConflictClause schema table params -> ByteString
+renderConflictAlias = \case
+  OnConflictDoUpdate _ _ _ -> " AS existing"
+  _                        -> ""
 
 -- | Render a `ConflictClause`.
 renderConflictClause
@@ -458,7 +467,7 @@ update
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue schema row params)) columns
+  -> (forall t. NP (Aliased (ColumnValue schema '[t ::: row] params)) columns)
   -- ^ modified values to replace old values
   -> (forall t. Condition schema '[t ::: row] 'Ungrouped params)
   -- ^ condition under which to perform update on a row
@@ -489,7 +498,7 @@ update_
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue schema row params)) columns
+  -> (forall t. NP (Aliased (ColumnValue schema '[t ::: row] params)) columns)
   -- ^ modified values to replace old values
   -> (forall t. Condition schema '[t ::: row] 'Ungrouped params)
   -- ^ condition under which to perform update on a row
