@@ -51,7 +51,6 @@ module Squeal.PostgreSQL.Manipulation
 
 import Control.DeepSeq
 import Data.ByteString hiding (foldr)
-import Data.Kind (Constraint)
 import GHC.TypeLits (ErrorMessage (..), Symbol, TypeError)
 
 import qualified Generics.SOP as SOP
@@ -392,7 +391,8 @@ data ConflictClause
     OnConflictDoNothing :: ConflictClause schema table params
     OnConflictDoUpdate
       :: ( row ~ TableToRow table, SOP.SListI columns, columns ~ (col0 ': cols)
-         , OrderedSubsetOf (TableToColumns table) columns )
+         , SOP.All (HasIn (TableToColumns table)) columns
+         , AllUnique columns )
       => NP (Aliased (ColumnValue schema row params)) columns
       -> [Condition schema '[t ::: row] 'Ungrouped params]
       -> ConflictClause schema table params
@@ -425,25 +425,21 @@ renderConflictClause = \case
 UPDATE statements
 -----------------------------------------}
 
--- In order to guide type inference, also enforces that a key appearing in
--- the common subset prefix of both sup and sub maps to the same value (type).
-type family OrderedSubsetOf'
-    (origSup :: [(Symbol, a)]) (origSub :: [(Symbol, a)])
-    (sup     :: [(Symbol, a)]) (sub     :: [(Symbol, a)])
-    :: Constraint where
-  OrderedSubsetOf' _ _ _ '[] = ()
-  OrderedSubsetOf' sup sub ('(xk, xv) ': xs) ('(xk, yv) ': ys) =
-    (xv ~ yv, OrderedSubsetOf' sup sub xs ys)
-  OrderedSubsetOf' sup sub (x ': xs) (y ': ys) =
-    OrderedSubsetOf' sup sub xs (y ': ys)
-  OrderedSubsetOf' sup sub '[] _ = TypeError
-    (     'Text "The type"
-    ':$$: 'ShowType sub
-    ':$$: 'Text "is not an ordered subset of"
-    ':$$: 'ShowType sup)
+class HasIn fields (x :: (Symbol, a)) where
+instance (Has alias fields field) => HasIn fields '(alias, field) where
 
-class    (OrderedSubsetOf' sup sub sup sub) => OrderedSubsetOf sup sub where
-instance (OrderedSubsetOf' sup sub sup sub) => OrderedSubsetOf sup sub where
+-- | Utility class for `AllUnique` to provide nicer error messages.
+class IsNotElem x isElem where
+instance IsNotElem x 'False where
+instance (TypeError (      'Text "Cannot assign to "
+                     ':<>: 'ShowType alias
+                     ':<>: 'Text " more than once"))
+  => IsNotElem '(alias, a) 'True where
+
+-- | No elem of @xs@ appears more than once, in the context of assignment.
+class AllUnique (xs :: [(Symbol, a)]) where
+instance AllUnique '[] where
+instance (IsNotElem x (Elem x xs), AllUnique xs) => AllUnique (x ': xs) where
 
 -- | An `update` command changes the values of the specified columns
 -- in all rows that satisfy the condition.
@@ -453,7 +449,8 @@ update
      , Has tab schema ('Table table)
      , row ~ TableToRow table
      , columns ~ (col0 ': cols)
-     , OrderedSubsetOf (TableToColumns table) columns )
+     , SOP.All (HasIn (TableToColumns table)) columns
+     , AllUnique columns )
   => Alias tab -- ^ table to update
   -> NP (Aliased (ColumnValue schema row params)) columns
   -- ^ modified values to replace old values
@@ -484,7 +481,8 @@ update_
      , Has tab schema ('Table table)
      , row ~ TableToRow table
      , columns ~ (col0 ': cols)
-     , OrderedSubsetOf (TableToColumns table) columns )
+     , SOP.All (HasIn (TableToColumns table)) columns
+     , AllUnique columns )
   => Alias tab -- ^ table to update
   -> NP (Aliased (ColumnValue schema row params)) columns
   -- ^ modified values to replace old values
