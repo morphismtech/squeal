@@ -150,8 +150,7 @@ createTable
      , SOP.SListI columns
      , SOP.SListI constraints
      , Has sch db0 schema0
-     , schema1 ~ Create table ('Table (constraints :=> columns)) schema0
-     , db1 ~ Alter sch schema1 db0 )
+     , db1 ~ Alter sch (Create tab ('Table (constraints :=> columns)) schema0) db0 )
   => QualifiedAlias sch tab -- ^ the name of the table to add
   -> NP (Aliased (ColumnTypeExpression db0)) columns
     -- ^ the names and datatype of each column
