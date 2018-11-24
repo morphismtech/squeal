@@ -853,31 +853,31 @@ FROM clauses
 A `FromClause` can be a table name, or a derived table such
 as a subquery, a @JOIN@ construct, or complex combinations of these.
 -}
-newtype FromClause schema params from
+newtype FromClause db params from
   = UnsafeFromClause { renderFromClause :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 -- | A real `table` is a table from the schema.
 table
-  :: Has tab schema ('Table table)
-  => Aliased Alias (alias ::: tab)
-  -> FromClause schema params '[alias ::: TableToRow table]
+  :: HasQualified sch tab db schema ('Table table)
+  => Aliased (QualifiedAlias sch) (alias ::: tab)
+  -> FromClause db params '[alias ::: TableToRow table]
 table (tab `As` alias) = UnsafeFromClause $
-  renderAlias tab <+> "AS" <+> renderAlias alias
+  renderQualifiedAlias tab <+> "AS" <+> renderAlias alias
 
 -- | `subquery` derives a table from a `Query`.
 subquery
-  :: Aliased (Query db params) rel
-  -> FromClause schema params '[rel]
+  :: Aliased (Query db params) query
+  -> FromClause schema params '[query]
 subquery = UnsafeFromClause . renderAliasedAs (parenthesized . renderQuery)
 
 -- | `view` derives a table from a `View`.
 view
-  :: Has view schema ('View row)
-  => Aliased Alias (alias ::: view)
-  -> FromClause schema params '[alias ::: row]
+  :: HasQualified sch vw db schema ('View view)
+  => Aliased (QualifiedAlias sch) (alias ::: vw)
+  -> FromClause db params '[alias ::: view]
 view (vw `As` alias) = UnsafeFromClause $
-  renderAlias vw <+> "AS" <+> renderAlias alias
+  renderQualifiedAlias vw <+> "AS" <+> renderAlias alias
 
 {- | @left & crossJoin right@. For every possible combination of rows from
     @left@ and @right@ (i.e., a Cartesian product), the joined table will contain

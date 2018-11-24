@@ -41,7 +41,7 @@ import Generics.SOP (K(..))
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Schema
 
-{- | `PoolPQ` @schema@ should be a drop-in replacement for `PQ` @schema schema@.
+{- | `PoolPQ` @db@ should be a drop-in replacement for `PQ` @db db@.
 
 Typical use case would be to create your pool using `createConnectionPool` and run anything that requires the pool connection with it.
 
@@ -63,8 +63,8 @@ Here's a simplified example:
 >   liftIO $ runPoolPQ (insertOne) pool
 
 -}
-newtype PoolPQ (schema :: SchemaType) m x =
-  PoolPQ { runPoolPQ :: Pool (K Connection schema) -> m x }
+newtype PoolPQ (db :: DBType) m x =
+  PoolPQ { runPoolPQ :: Pool (K Connection db) -> m x }
   deriving Functor
 
 -- | Create a striped pool of connections.
@@ -86,12 +86,12 @@ createConnectionPool
   -> Int
   -- ^ Maximum number of connections to keep open per stripe. The smallest acceptable value is 1.
   -- Requests for connections will block if this limit is reached on a single stripe, even if other stripes have idle connections available.
-  -> io (Pool (K Connection schema))
+  -> io (Pool (K Connection db))
 createConnectionPool conninfo stripes idle maxResrc = liftBase $
   createPool (connectdb conninfo) finish stripes idle maxResrc
 
 -- | `Applicative` instance for `PoolPQ`.
-instance Monad m => Applicative (PoolPQ schema m) where
+instance Monad m => Applicative (PoolPQ db m) where
   pure x = PoolPQ $ \ _ -> pure x
   PoolPQ f <*> PoolPQ x = PoolPQ $ \ pool -> do
     f' <- f pool
@@ -99,55 +99,55 @@ instance Monad m => Applicative (PoolPQ schema m) where
     return $ f' x'
 
 -- | `Monad` instance for `PoolPQ`.
-instance Monad m => Monad (PoolPQ schema m) where
+instance Monad m => Monad (PoolPQ db m) where
   return = pure
   PoolPQ x >>= f = PoolPQ $ \ pool -> do
     x' <- x pool
     runPoolPQ (f x') pool
 
 -- | `MonadTrans` instance for `PoolPQ`.
-instance MonadTrans (PoolPQ schema) where
+instance MonadTrans (PoolPQ db) where
   lift m = PoolPQ $ \ _pool -> m
 
 -- | `MonadBase` instance for `PoolPQ`.
-instance MonadBase b m => MonadBase b (PoolPQ schema m) where
+instance MonadBase b m => MonadBase b (PoolPQ db m) where
   liftBase = lift . liftBase
 
 -- | `MonadPQ` instance for `PoolPQ`.
-instance MonadBaseControl IO io => MonadPQ schema (PoolPQ schema io) where
+instance MonadBaseControl IO io => MonadPQ db (PoolPQ db io) where
   manipulateParams manipulation params = PoolPQ $ \ pool -> do
     withResource pool $ \ conn -> do
-      (K result :: K (K Result ys) schema) <- flip unPQ conn $
+      (K result :: K (K Result ys) db) <- flip unPQ conn $
         manipulateParams manipulation params
       return result
   traversePrepared manipulation params = PoolPQ $ \ pool ->
     withResource pool $ \ conn -> do
-      (K result :: K (list (K Result ys)) schema) <- flip unPQ conn $
+      (K result :: K (list (K Result ys)) db) <- flip unPQ conn $
         traversePrepared manipulation params
       return result
   traversePrepared_ manipulation params = PoolPQ $ \ pool -> do
     withResource pool $ \ conn -> do
-      (_ :: K () schema) <- flip unPQ conn $
+      (_ :: K () db) <- flip unPQ conn $
         traversePrepared_ manipulation params
       return ()
   liftPQ m = PoolPQ $ \ pool ->
     withResource pool $ \ conn -> do
-      (K result :: K result schema) <- flip unPQ conn $
+      (K result :: K result db) <- flip unPQ conn $
         liftPQ m
       return result
 
 -- | A snapshot of the state of a `PoolPQ` computation.
-type PoolPQRun schema =
-  forall m x. Monad m => PoolPQ schema m x -> m x
+type PoolPQRun db =
+  forall m x. Monad m => PoolPQ db m x -> m x
 
 -- | Helper function in defining `MonadBaseControl` instance for `PoolPQ`.
-poolpqliftWith :: Functor m => (PoolPQRun schema -> m a) -> PoolPQ schema m a
+poolpqliftWith :: Functor m => (PoolPQRun db -> m a) -> PoolPQ db m a
 poolpqliftWith f = PoolPQ $ \ pool ->
   (f $ \ pq -> runPoolPQ pq pool)
 
 -- | `MonadBaseControl` instance for `PoolPQ`.
-instance MonadBaseControl b m => MonadBaseControl b (PoolPQ schema m) where
-  type StM (PoolPQ schema m) x = StM m x
+instance MonadBaseControl b m => MonadBaseControl b (PoolPQ db m) where
+  type StM (PoolPQ db m) x = StM m x
   liftBaseWith f =
     poolpqliftWith $ \ run -> liftBaseWith $ \ runInBase -> f $ runInBase . run
   restoreM = PoolPQ . const . restoreM

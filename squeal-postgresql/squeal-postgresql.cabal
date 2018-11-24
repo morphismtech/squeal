@@ -26,7 +26,7 @@ library
     Squeal.PostgreSQL.Definition
     Squeal.PostgreSQL.Expression
     Squeal.PostgreSQL.Manipulation
-    Squeal.PostgreSQL.Migration
+    -- Squeal.PostgreSQL.Migration
     Squeal.PostgreSQL.Pool
     Squeal.PostgreSQL.PQ
     Squeal.PostgreSQL.Render
