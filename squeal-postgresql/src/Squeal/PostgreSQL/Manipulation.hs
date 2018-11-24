@@ -232,7 +232,8 @@ INSERT statements
 insertRows
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , HasQualified sch tab db schema ('Table table)
+     , Has sch db schema
+     , Has tab schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to insert into
@@ -263,7 +264,8 @@ insertRows tab rw rws conflict returning = UnsafeManipulation $
 insertRow
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , HasQualified sch tab db schema ('Table table)
+     , Has sch db schema
+     , Has tab schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to insert into
@@ -277,7 +279,8 @@ insertRow tab rw = insertRows tab rw []
 -- | Insert multiple rows returning `Nil` and raising an error on conflicts.
 insertRows_
   :: ( SOP.SListI columns
-     , HasQualified sch tab db schema ('Table table)
+     , Has sch db schema
+     , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to insert into
   -> NP (Aliased (ColumnValue db '[] params)) columns -- ^ row to insert
@@ -289,7 +292,8 @@ insertRows_ tab rw rws =
 -- | Insert a single row returning `Nil` and raising an error on conflicts.
 insertRow_
   :: ( SOP.SListI columns
-     , HasQualified sch tab db schema ('Table table)
+     , Has sch db schema
+     , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to insert into
   -> NP (Aliased (ColumnValue db '[] params)) columns -- ^ row to insert
@@ -300,7 +304,8 @@ insertRow_ tab rw = insertRow tab rw OnConflictDoRaise (Returning Nil)
 insertQuery
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , HasQualified sch tab db schema ('Table table)
+     , Has sch db schema
+     , Has tab schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to insert into
@@ -318,7 +323,8 @@ insertQuery tab query conflict returning = UnsafeManipulation $
 -- | Insert a `Query` returning `Nil` and raising an error on conflicts.
 insertQuery_
   :: ( SOP.SListI columns
-     , HasQualified sch tab db schema ('Table table)
+     , Has sch db schema
+     , Has tab schema ('Table table)
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to insert into
   -> Query db params (TableToRow table)
@@ -427,7 +433,8 @@ UPDATE statements
 update
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , HasQualified sch tab db schema ('Table table)
+     , Has sch db schema
+     , Has tab schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to update
@@ -458,7 +465,8 @@ update tab columns wh returning = UnsafeManipulation $
 -- | Update a row returning `Nil`.
 update_
   :: ( SOP.SListI columns
-     , HasQualified sch tab db schema ('Table table)
+     , Has sch db schema
+     , Has tab schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to update
@@ -476,7 +484,8 @@ DELETE statements
 -- | Delete rows of a table.
 deleteFrom
   :: ( SOP.SListI results
-     , HasQualified sch tab db schema ('Table table)
+     , Has sch db schema
+     , Has tab schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to delete from
@@ -491,7 +500,7 @@ deleteFrom tab wh returning = UnsafeManipulation $
 
 -- | Delete rows returning `Nil`.
 deleteFrom_
-  :: ( HasQualified sch tab db schema ('Table table)
+  :: ( Has sch db schema, Has tab schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to delete from

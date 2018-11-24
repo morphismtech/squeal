@@ -484,7 +484,8 @@ row exprs = UnsafeExpression $ "ROW" <> parenthesized
 -- >>> printSQL $ i & field #complex #imaginary
 -- (ROW(0, 1)::"complex")."imaginary"
 field
-  :: ( HasQualified sch tydef db schema ('Typedef ('PGcomposite row))
+  :: ( Has sch db schema
+     , Has tydef schema ('Typedef ('PGcomposite row))
      , Has field row ty)
   => QualifiedAlias sch tydef -- ^ row type
   -> Alias field -- ^ field name
@@ -1613,7 +1614,7 @@ newtype TypeExpression (db :: DBType) (ty :: NullityType)
 
 -- | The enum or composite type in a `Typedef` can be expressed by its alias.
 typedef
-  :: HasQualified sch td db schema ('Typedef ty)
+  :: (Has sch db schema, Has td schema ('Typedef ty))
   => QualifiedAlias sch td
   -> TypeExpression db (nullity ty)
 typedef = UnsafeTypeExpression . renderQualifiedAlias
@@ -1621,7 +1622,7 @@ typedef = UnsafeTypeExpression . renderQualifiedAlias
 -- | The composite type corresponding to a `Table` definition can be expressed
 -- by its alias.
 typetable
-  :: HasQualified sch tab db schema ('Table table)
+  :: (Has sch db schema, Has tab schema ('Table table))
   => QualifiedAlias sch tab
   -> TypeExpression db (nullity ('PGcomposite (TableToRow table)))
 typetable = UnsafeTypeExpression . renderQualifiedAlias
@@ -1629,7 +1630,7 @@ typetable = UnsafeTypeExpression . renderQualifiedAlias
 -- | The composite type corresponding to a `View` definition can be expressed
 -- by its alias.
 typeview
-  :: HasQualified sch vw db schema ('View view)
+  :: (Has sch db schema, Has vw schema ('View view))
   => QualifiedAlias sch vw
   -> TypeExpression db (nullity ('PGcomposite view))
 typeview = UnsafeTypeExpression . renderQualifiedAlias

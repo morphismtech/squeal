@@ -184,7 +184,8 @@ in printSQL setup
 CREATE TABLE IF NOT EXISTS "tab" ("a" int NULL, "b" real NULL);
 -}
 createTableIfNotExists
-  :: ( HasQualified sch tab db schema ('Table (constraints :=> columns))
+  :: ( Has sch db schema
+     , Has tab schema ('Table (constraints :=> columns))
      , SOP.SListI columns
      , SOP.SListI constraints )
   => QualifiedAlias sch tab -- ^ the name of the table to add
@@ -273,7 +274,8 @@ let
 CREATE TABLE "tab" ("a" int NOT NULL, "b" int NOT NULL, CONSTRAINT "inequality" CHECK (("a" > "b")));
 -}
 check
-  :: ( HasQualified sch tab db schema ('Table table)
+  :: ( Has sch db schema
+     , Has tab schema ('Table table)
      , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify the subcolumns which are getting checked
@@ -307,7 +309,8 @@ let
 CREATE TABLE "tab" ("a" int NULL, "b" int NULL, CONSTRAINT "uq_a_b" UNIQUE ("a", "b"));
 -}
 unique
-  :: ( HasQualified sch tab db schema('Table table)
+  :: ( Has sch db schema
+     , Has tab schema('Table table)
      , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify subcolumns which together are unique for each row
@@ -340,7 +343,8 @@ let
 CREATE TABLE "tab" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_id" PRIMARY KEY ("id"));
 -}
 primaryKey
-  :: ( HasQualified sch tab db schema ('Table table)
+  :: ( Has sch db schema
+     , Has tab schema ('Table table)
      , HasAll aliases (TableToColumns table) subcolumns
      , AllNotNull subcolumns )
   => NP Alias aliases
@@ -456,8 +460,9 @@ type ForeignKeyed db
   columns refcolumns
   constraints cols
   reftys tys =
-    ( HasQualified sch child db schema ('Table table)
-    , HasQualified sch parent db schema ('Table reftable)
+    ( Has sch db schema
+    , Has child schema ('Table table)
+    , Has parent schema ('Table reftable)
     , HasAll columns (TableToColumns table) tys
     , reftable ~ (constraints :=> cols)
     , HasAll refcolumns cols reftys
@@ -518,7 +523,8 @@ DROP statements
 -- >>> printSQL definition
 -- DROP TABLE "muh_table";
 dropTable
-  :: HasQualified sch tab db schema ('Table table)
+  :: ( Has sch db schema
+     , Has tab schema ('Table table))
   => QualifiedAlias sch tab -- ^ table to remove
   -> Definition db (Alter sch (Drop tab schema) db)
 dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderQualifiedAlias tab <> ";"
@@ -529,7 +535,7 @@ ALTER statements
 
 -- | `alterTable` changes the definition of a table from the schema.
 alterTable
-  :: HasQualified sch tab db schema ('Table table0)
+  :: (Has sch db schema, Has tab schema ('Table table0))
   => QualifiedAlias sch tab -- ^ table to alter
   -> AlterTable sch tab db table1 -- ^ alteration to perform
   -> Definition db (Alter sch (Alter tab ('Table table1) schema) db)
@@ -575,7 +581,8 @@ newtype AlterTable
 -- ALTER TABLE "tab" ADD CONSTRAINT "positive" CHECK (("col" > 0));
 addConstraint
   :: ( KnownSymbol alias
-     , HasQualified sch tab db schema ('Table table0)
+     , Has sch db schema
+     , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (Create alias constraint constraints :=> columns) )
   => Alias alias
@@ -599,7 +606,8 @@ addConstraint alias constraint = UnsafeAlterTable $
 -- ALTER TABLE "tab" DROP CONSTRAINT "positive";
 dropConstraint
   :: ( KnownSymbol constraint
-     , HasQualified sch tab db schema ('Table table0)
+     , Has sch db schema
+     , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (Drop constraint constraints :=> columns) )
   => Alias constraint
@@ -638,7 +646,8 @@ class AddColumn ty where
   -- ALTER TABLE "tab" ADD COLUMN "col2" text NULL;
   addColumn
     :: ( KnownSymbol column
-       , HasQualified sch tab db schema ('Table table0)
+       , Has sch db schema
+       , Has tab schema ('Table table0)
        , table0 ~ (constraints :=> columns) )
     => Alias column -- ^ column to add
     -> ColumnTypeExpression db ty -- ^ type of the new column
@@ -666,7 +675,8 @@ instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 -- ALTER TABLE "tab" DROP COLUMN "col2";
 dropColumn
   :: ( KnownSymbol column
-     , HasQualified sch tab db schema ('Table table0)
+     , Has sch db schema
+     , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (constraints :=> Drop column columns) )
   => Alias column -- ^ column to remove
@@ -688,7 +698,8 @@ dropColumn column = UnsafeAlterTable $
 renameColumn
   :: ( KnownSymbol column0
      , KnownSymbol column1
-     , HasQualified sch tab db schema ('Table table0)
+     , Has sch db schema
+     , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (constraints :=> Rename column0 column1 columns) )
   => Alias column0 -- ^ column to rename
@@ -700,7 +711,8 @@ renameColumn column0 column1 = UnsafeAlterTable $
 -- | An `alterColumn` alters a single column.
 alterColumn
   :: ( KnownSymbol column
-     , HasQualified sch tab db schema ('Table table0)
+     , Has sch db schema
+     , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , Has column columns ty0
      , tables1 ~ (constraints :=> Alter column ty1 columns))
@@ -833,7 +845,7 @@ createView alias query = UnsafeDefinition $
 -- :}
 -- DROP VIEW "bc";
 dropView
-  :: HasQualified sch vw db schema ('View view)
+  :: (Has sch db schema, Has vw schema ('View view))
   => QualifiedAlias sch vw -- ^ view to remove
   -> Definition db (Alter sch (Drop vw schema) db)
 dropView vw = UnsafeDefinition $ "DROP VIEW" <+> renderQualifiedAlias vw <> ";"
@@ -938,7 +950,7 @@ instance (KnownSymbol alias, PGTyped schema ty)
 -- >>> printSQL (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))] '[])
 -- DROP TYPE "schwarma";
 dropType
-  :: HasQualified sch td db schema ('Typedef ty)
+  :: (Has sch db schema, Has td schema ('Typedef ty))
   => QualifiedAlias sch td
   -- ^ name of the user defined type
   -> Definition db (Alter sch (Drop td schema) db)

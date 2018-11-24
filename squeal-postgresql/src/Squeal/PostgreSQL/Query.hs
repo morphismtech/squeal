@@ -859,7 +859,7 @@ newtype FromClause db params from
 
 -- | A real `table` is a table from the schema.
 table
-  :: HasQualified sch tab db schema ('Table table)
+  :: (Has sch db schema, Has tab schema ('Table table))
   => Aliased (QualifiedAlias sch) (alias ::: tab)
   -> FromClause db params '[alias ::: TableToRow table]
 table (tab `As` alias) = UnsafeFromClause $
@@ -873,7 +873,7 @@ subquery = UnsafeFromClause . renderAliasedAs (parenthesized . renderQuery)
 
 -- | `view` derives a table from a `View`.
 view
-  :: HasQualified sch vw db schema ('View view)
+  :: (Has sch db schema, Has vw schema ('View view))
   => Aliased (QualifiedAlias sch) (alias ::: vw)
   -> FromClause db params '[alias ::: view]
 view (vw `As` alias) = UnsafeFromClause $

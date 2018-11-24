@@ -77,7 +77,6 @@ module Squeal.PostgreSQL.Schema
   , QualifiedAlias (..)
   , IsQualified (..)
   , renderQualifiedAlias
-  , HasQualified
     -- * Enumerated Labels
   , IsPGlabel (..)
   , PGlabel (..)
@@ -476,6 +475,7 @@ class IsQualified table column expression where
 instance IsQualified table column (Alias table, Alias column) where (!) = (,)
 
 data QualifiedAlias (qualifier :: Symbol) (alias :: Symbol) = QualifiedAlias
+  deriving (Eq,GHC.Generic,Ord,Show,NFData)
 instance (q ~ q', a ~ a') => IsQualified q a (QualifiedAlias q' a') where
   _!_ = QualifiedAlias
 instance (q' ~ "public", a ~ a') => IsLabel a (QualifiedAlias q' a') where
@@ -490,22 +490,6 @@ renderQualifiedAlias _ =
     alias = renderAlias (Alias @a)
   in
     if qualifier == "public" then alias else qualifier <> "." <> alias
-
-class (KnownSymbol qualifier, KnownSymbol alias) => HasQualified
-  (qualifier :: Symbol)
-  (alias :: Symbol)
-  (xss :: [(Symbol,[(Symbol, kind)])])
-  (xs :: [(Symbol,kind)])
-  (x :: kind)
-  | qualifier xss -> xs
-  , alias xs -> x where
-
-instance
-  ( KnownSymbol qualifier
-  , KnownSymbol alias
-  , Has qualifier xss xs
-  , Has alias xs x
-  ) => HasQualified qualifier alias xss xs x
 
 -- | @Elem@ is a promoted `Data.List.elem`.
 type family Elem x xs where
