@@ -246,7 +246,7 @@ class IndexedMonadTransPQ pq where
   pqEmbed
     :: Monad m
     => pq db0 db1 m x
-    -> pq (table ': db0) (table : db1) m x
+    -> pq (schema ': db0) (schema : db1) m x
 
   -- | Run a `Definition` with `LibPQ.exec`, we expect that libpq obeys the law
   --
