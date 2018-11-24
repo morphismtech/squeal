@@ -253,9 +253,9 @@ class KnownNat n => HasParameter
     parameter ty = UnsafeExpression $ parenthesized $
       "$" <> renderNat @n <+> "::"
         <+> renderTypeExpression ty
-instance {-# OVERLAPPING #-} HasParameter 1 schema (ty1:tys) ty1
-instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) schema params ty)
-  => HasParameter n schema (ty' : params) ty
+instance {-# OVERLAPPING #-} HasParameter 1 db (ty1:tys) ty1
+instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) db params ty)
+  => HasParameter n db (ty' : params) ty
 
 -- | `param` takes a `Nat` using type application and for basic types,
 -- infers a `TypeExpression`.
