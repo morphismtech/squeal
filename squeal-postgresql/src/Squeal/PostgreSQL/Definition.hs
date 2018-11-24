@@ -154,7 +154,7 @@ createTable
   => QualifiedAlias sch tab -- ^ the name of the table to add
   -> NP (Aliased (ColumnTypeExpression db0)) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression db1 table)) constraints
+  -> NP (Aliased (TableConstraintExpression sch tab db1)) constraints
     -- ^ constraints that must hold for the table
   -> Definition db0 db1
 createTable tab columns constraints = UnsafeDefinition $
@@ -190,7 +190,7 @@ createTableIfNotExists
   => QualifiedAlias sch tab -- ^ the name of the table to add
   -> NP (Aliased (ColumnTypeExpression db)) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression db table)) constraints
+  -> NP (Aliased (TableConstraintExpression sch tab db)) constraints
     -- ^ constraints that must hold for the table
   -> Definition db db
 createTableIfNotExists tab columns constraints = UnsafeDefinition $
@@ -204,9 +204,9 @@ renderCreation
      , SOP.SListI columns
      , SOP.SListI constraints )
   => QualifiedAlias sch tab -- ^ the name of the table to add
-  -> NP (Aliased (ColumnTypeExpression schema0)) columns
+  -> NP (Aliased (ColumnTypeExpression db0)) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression schema1 table)) constraints
+  -> NP (Aliased (TableConstraintExpression sch tab db1)) constraints
     -- ^ constraints that must hold for the table
   -> ByteString
 renderCreation tab columns constraints = renderQualifiedAlias tab
@@ -222,7 +222,7 @@ renderCreation tab columns constraints = renderQualifiedAlias tab
     renderColumnDef (ty `As` column) =
       renderAlias column <+> renderColumnTypeExpression ty
     renderConstraint
-      :: Aliased (TableConstraintExpression schema columns) constraint
+      :: Aliased (TableConstraintExpression sch tab db) constraint
       -> ByteString
     renderConstraint (constraint `As` alias) =
       "CONSTRAINT" <+> renderAlias alias <+> renderTableConstraintExpression constraint
@@ -240,9 +240,10 @@ renderCreation tab columns constraints = renderQualifiedAlias tab
 -- violate a constraint, an error is raised. This applies
 -- even if the value came from the default value definition.
 newtype TableConstraintExpression
+  (sch :: Symbol)
+  (tab :: Symbol)
   (db :: DBType)
-  (table :: Symbol)
-  (tableConstraint :: TableConstraint)
+  (constraint :: TableConstraint)
     = UnsafeTableConstraintExpression
     { renderTableConstraintExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
@@ -278,7 +279,7 @@ check
   -- ^ specify the subcolumns which are getting checked
   -> (forall t. Condition db '[t ::: subcolumns] 'Ungrouped '[])
   -- ^ a closed `Condition` on those subcolumns
-  -> TableConstraintExpression db tab ('Check aliases)
+  -> TableConstraintExpression sch tab db ('Check aliases)
 check _cols condition = UnsafeTableConstraintExpression $
   "CHECK" <+> parenthesized (renderExpression condition)
 
@@ -306,11 +307,11 @@ let
 CREATE TABLE "tab" ("a" int NULL, "b" int NULL, CONSTRAINT "uq_a_b" UNIQUE ("a", "b"));
 -}
 unique
-  :: ( Has alias schema ('Table table)
+  :: ( HasQualified sch tab db schema('Table table)
      , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify subcolumns which together are unique for each row
-  -> TableConstraintExpression db alias ('Unique aliases)
+  -> TableConstraintExpression sch tab db ('Unique aliases)
 unique columns = UnsafeTableConstraintExpression $
   "UNIQUE" <+> parenthesized (commaSeparated (renderAliases columns))
 
@@ -339,12 +340,12 @@ let
 CREATE TABLE "tab" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_id" PRIMARY KEY ("id"));
 -}
 primaryKey
-  :: ( Has alias schema ('Table table)
+  :: ( HasQualified sch tab db schema ('Table table)
      , HasAll aliases (TableToColumns table) subcolumns
      , AllNotNull subcolumns )
   => NP Alias aliases
   -- ^ specify the subcolumns which together form a primary key.
-  -> TableConstraintExpression db alias ('PrimaryKey aliases)
+  -> TableConstraintExpression sch tab db ('PrimaryKey aliases)
 primaryKey columns = UnsafeTableConstraintExpression $
   "PRIMARY KEY" <+> parenthesized (commaSeparated (renderAliases columns))
 
@@ -422,7 +423,7 @@ in printSQL setup
 CREATE TABLE "employees" ("id" serial, "name" text NOT NULL, "employer_id" integer NULL, CONSTRAINT "employees_pk" PRIMARY KEY ("id"), CONSTRAINT "employees_employer_fk" FOREIGN KEY ("employer_id") REFERENCES "employees" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 -}
 foreignKey
-  :: (ForeignKeyed schema child parent
+  :: (ForeignKeyed db sch schema child parent
         table reftable
         columns refcolumns
         constraints cols
@@ -437,7 +438,7 @@ foreignKey
   -- ^ what to do when reference is deleted
   -> OnUpdateClause
   -- ^ what to do when reference is updated
-  -> TableConstraintExpression db child
+  -> TableConstraintExpression sch child db
       ('ForeignKey columns parent refcolumns)
 foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
   "FOREIGN KEY" <+> parenthesized (commaSeparated (renderAliases keys))
@@ -447,14 +448,16 @@ foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
   <+> renderOnUpdateClause onupd
 
 -- | A constraint synonym between types involved in a foreign key constraint.
-type ForeignKeyed schema
+type ForeignKeyed db
+  sch
+  schema
   child parent
   table reftable
   columns refcolumns
   constraints cols
   reftys tys =
-    ( Has child schema ('Table table)
-    , Has parent schema ('Table reftable)
+    ( HasQualified sch child db schema ('Table table)
+    , HasQualified sch parent db schema ('Table reftable)
     , HasAll columns (TableToColumns table) tys
     , reftable ~ (constraints :=> cols)
     , HasAll refcolumns cols reftys
@@ -571,11 +574,11 @@ newtype AlterTable
 -- ALTER TABLE "tab" ADD CONSTRAINT "positive" CHECK (("col" > 0));
 addConstraint
   :: ( KnownSymbol alias
-     , Has tab schema ('Table table0)
+     , HasQualified sch tab db schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (Create alias constraint constraints :=> columns) )
   => Alias alias
-  -> TableConstraintExpression db tab constraint
+  -> TableConstraintExpression sch tab db constraint
   -- ^ constraint to add
   -> AlterTable tab table1 db
 addConstraint alias constraint = UnsafeAlterTable $
