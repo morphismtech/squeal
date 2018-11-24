@@ -54,6 +54,7 @@ module Squeal.PostgreSQL.Schema
   , TableType
   , SchemumType (..)
   , SchemaType
+  , DBType
     -- * Constraints
   , (:=>)
   , ColumnConstraint (..)
@@ -62,8 +63,10 @@ module Squeal.PostgreSQL.Schema
   , Uniquely
     -- * Aliases
   , (:::)
-  , Alias (Alias)
+  , Alias (..)
+  , IsLabel (..)
   , renderAlias
+  , renderAliasString
   , renderAliases
   , Aliased (As)
   , Aliasable (as)
@@ -71,9 +74,10 @@ module Squeal.PostgreSQL.Schema
   , Has
   , HasUnique
   , HasAll
-  , IsLabel (..)
+  , QualifiedAlias (..)
   , IsQualified (..)
-  , renderAliasString
+  , renderQualifiedAlias
+  , HasQualified
     -- * Enumerated Labels
   , IsPGlabel (..)
   , PGlabel (..)
@@ -471,6 +475,38 @@ class IsQualified table column expression where
   infixl 9 !
 instance IsQualified table column (Alias table, Alias column) where (!) = (,)
 
+data QualifiedAlias (qualifier :: Symbol) (alias :: Symbol) = QualifiedAlias
+instance (q ~ q', a ~ a') => IsQualified q a (QualifiedAlias q' a') where
+  _!_ = QualifiedAlias
+instance (a ~ a') => IsLabel a (QualifiedAlias "public" a') where
+  fromLabel = QualifiedAlias
+
+renderQualifiedAlias
+  :: forall q a. (KnownSymbol q, KnownSymbol a)
+  => QualifiedAlias q a -> ByteString
+renderQualifiedAlias _ =
+  let
+    qualifier = renderAlias (Alias @q)
+    alias = renderAlias (Alias @a)
+  in
+    if qualifier == "public" then alias else qualifier <> "." <> alias
+
+class (KnownSymbol qualifier, KnownSymbol alias) => HasQualified
+  (qualifier :: Symbol)
+  (alias :: Symbol)
+  (xss :: [(Symbol,[(Symbol, kind)])])
+  (xs :: [(Symbol,kind)])
+  (x :: kind)
+  | qualifier xss -> xs
+  , alias xs -> x where
+
+instance
+  ( KnownSymbol qualifier
+  , KnownSymbol alias
+  , Has qualifier xss xs
+  , Has alias xs x
+  ) => HasQualified qualifier alias xss xs x
+
 -- | @Elem@ is a promoted `Data.List.elem`.
 type family Elem x xs where
   Elem x '[] = 'False
@@ -656,6 +692,8 @@ type family Schema :: SchemaType where
 :}
 -}
 type SchemaType = [(Symbol,SchemumType)]
+
+type DBType = [(Symbol,SchemaType)]
 
 -- | `IsPGlabel` looks very much like the `IsLabel` class. Whereas
 -- the overloaded label, `fromLabel` is used for column references,
