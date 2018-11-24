@@ -57,7 +57,7 @@ import Squeal.PostgreSQL.Schema
 
 {- |
 A `Manipulation` is a statement which may modify data in the database,
-but does not alter the schema. Examples are inserts, updates and deletes.
+but does not alter its schemas. Examples are inserts, updates and deletes.
 A `Query` is also considered a `Manipulation` even though it does not modify data.
 
 simple insert:
@@ -254,7 +254,7 @@ insertRows tab rw rws conflict returning = UnsafeManipulation $
     <> renderReturningClause returning
     where
       renderAliasPart, renderColumnValuePart
-        :: Aliased (ColumnValue schema '[] params) ty -> ByteString
+        :: Aliased (ColumnValue db '[] params) ty -> ByteString
       renderAliasPart (_ `As` name) = renderAlias name
       renderColumnValuePart (value `As` _) = case value of
         Default -> "DEFAULT"
@@ -374,7 +374,7 @@ data ReturningClause
 -- | Render a `ReturningClause`.
 renderReturningClause
   :: SOP.SListI results
-  => ReturningClause schema params columns results
+  => ReturningClause db params columns results
   -> ByteString
 renderReturningClause = \case
   ReturningStar -> " RETURNING *"
@@ -402,7 +402,7 @@ data ConflictClause
 -- | Render a `ConflictClause`.
 renderConflictClause
   :: SOP.SListI (TableToColumns table)
-  => ConflictClause schema table params
+  => ConflictClause db table params
   -> ByteString
 renderConflictClause = \case
   OnConflictDoRaise -> ""
@@ -415,7 +415,7 @@ renderConflictClause = \case
         wh:whs -> " WHERE" <+> renderExpression (foldr (.&&) wh whs)
       where
         renderUpdate
-          :: Aliased (ColumnValue schema columns params) column
+          :: Aliased (ColumnValue db columns params) column
           -> Maybe ByteString
         renderUpdate = \case
           Same `As` _ -> Nothing
@@ -453,7 +453,7 @@ update tab columns wh returning = UnsafeManipulation $
   <> renderReturningClause returning
   where
     renderUpdate
-      :: Aliased (ColumnValue schema columns params) column
+      :: Aliased (ColumnValue db columns params) column
       -> Maybe ByteString
     renderUpdate = \case
       Same `As` _ -> Nothing
@@ -500,7 +500,8 @@ deleteFrom tab wh returning = UnsafeManipulation $
 
 -- | Delete rows returning `Nil`.
 deleteFrom_
-  :: ( Has sch db schema, Has tab schema ('Table table)
+  :: ( Has sch db schema
+     , Has tab schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to delete from
