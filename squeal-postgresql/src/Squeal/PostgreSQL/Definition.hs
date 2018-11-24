@@ -53,7 +53,7 @@ module Squeal.PostgreSQL.Definition
   , AlterTable (UnsafeAlterTable, renderAlterTable)
   , addConstraint
   , dropConstraint
-  , AddColumn (addColumn)
+  -- , AddColumn (addColumn)
   , dropColumn
   , renameColumn
   , alterColumn
@@ -153,9 +153,9 @@ createTable
      , schema1 ~ Create table ('Table (constraints :=> columns)) schema0
      , db1 ~ Alter sch schema1 db0 )
   => QualifiedAlias sch tab -- ^ the name of the table to add
-  -> NP (Aliased (ColumnTypeExpression schema0)) columns
+  -> NP (Aliased (ColumnTypeExpression db0)) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression schema1 table)) constraints
+  -> NP (Aliased (TableConstraintExpression db1 table)) constraints
     -- ^ constraints that must hold for the table
   -> Definition db0 db1
 createTable tab columns constraints = UnsafeDefinition $
@@ -189,9 +189,9 @@ createTableIfNotExists
      , SOP.SListI columns
      , SOP.SListI constraints )
   => QualifiedAlias sch tab -- ^ the name of the table to add
-  -> NP (Aliased (ColumnTypeExpression schema)) columns
+  -> NP (Aliased (ColumnTypeExpression db)) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression schema table)) constraints
+  -> NP (Aliased (TableConstraintExpression db table)) constraints
     -- ^ constraints that must hold for the table
   -> Definition db db
 createTableIfNotExists tab columns constraints = UnsafeDefinition $
@@ -241,7 +241,7 @@ renderCreation tab columns constraints = renderQualifiedAlias tab
 -- violate a constraint, an error is raised. This applies
 -- even if the value came from the default value definition.
 newtype TableConstraintExpression
-  (schema :: SchemaType)
+  (db :: DBType)
   (table :: Symbol)
   (tableConstraint :: TableConstraint)
     = UnsafeTableConstraintExpression
@@ -273,13 +273,13 @@ let
 CREATE TABLE "tab" ("a" int NOT NULL, "b" int NOT NULL, CONSTRAINT "inequality" CHECK (("a" > "b")));
 -}
 check
-  :: ( Has alias schema ('Table table)
+  :: ( HasQualified sch tab db schema ('Table table)
      , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify the subcolumns which are getting checked
-  -> (forall tab. Condition schema '[tab ::: subcolumns] 'Ungrouped '[])
+  -> (forall t. Condition db '[t ::: subcolumns] 'Ungrouped '[])
   -- ^ a closed `Condition` on those subcolumns
-  -> TableConstraintExpression schema alias ('Check aliases)
+  -> TableConstraintExpression db tab ('Check aliases)
 check _cols condition = UnsafeTableConstraintExpression $
   "CHECK" <+> parenthesized (renderExpression condition)
 
@@ -311,7 +311,7 @@ unique
      , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify subcolumns which together are unique for each row
-  -> TableConstraintExpression schema alias ('Unique aliases)
+  -> TableConstraintExpression db alias ('Unique aliases)
 unique columns = UnsafeTableConstraintExpression $
   "UNIQUE" <+> parenthesized (commaSeparated (renderAliases columns))
 
@@ -345,7 +345,7 @@ primaryKey
      , AllNotNull subcolumns )
   => NP Alias aliases
   -- ^ specify the subcolumns which together form a primary key.
-  -> TableConstraintExpression schema alias ('PrimaryKey aliases)
+  -> TableConstraintExpression db alias ('PrimaryKey aliases)
 primaryKey columns = UnsafeTableConstraintExpression $
   "PRIMARY KEY" <+> parenthesized (commaSeparated (renderAliases columns))
 
@@ -438,7 +438,7 @@ foreignKey
   -- ^ what to do when reference is deleted
   -> OnUpdateClause
   -- ^ what to do when reference is updated
-  -> TableConstraintExpression schema child
+  -> TableConstraintExpression db child
       ('ForeignKey columns parent refcolumns)
 foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
   "FOREIGN KEY" <+> parenthesized (commaSeparated (renderAliases keys))
@@ -529,7 +529,7 @@ ALTER statements
 alterTable
   :: HasQualified sch tab db schema ('Table table0)
   => QualifiedAlias sch tab -- ^ table to alter
-  -> AlterTable tab table1 schema -- ^ alteration to perform
+  -> AlterTable tab table1 db -- ^ alteration to perform
   -> Definition db (Alter sch (Alter tab ('Table table1) schema) db)
 alterTable tab alteration = UnsafeDefinition $
   "ALTER TABLE"
@@ -553,9 +553,9 @@ alterTableRename table0 table1 = UnsafeDefinition $
 -- | An `AlterTable` describes the alteration to perform on the columns
 -- of a table.
 newtype AlterTable
-  (alias :: Symbol)
+  (tab :: Symbol)
   (table :: TableType)
-  (schema :: SchemaType) =
+  (db :: DBType) =
     UnsafeAlterTable {renderAlterTable :: ByteString}
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
@@ -576,9 +576,9 @@ addConstraint
      , table0 ~ (constraints :=> columns)
      , table1 ~ (Create alias constraint constraints :=> columns) )
   => Alias alias
-  -> TableConstraintExpression schema tab constraint
+  -> TableConstraintExpression db tab constraint
   -- ^ constraint to add
-  -> AlterTable tab table1 schema
+  -> AlterTable tab table1 db
 addConstraint alias constraint = UnsafeAlterTable $
   "ADD" <+> "CONSTRAINT" <+> renderAlias alias
     <+> renderTableConstraintExpression constraint
@@ -601,10 +601,11 @@ dropConstraint
      , table1 ~ (Drop constraint constraints :=> columns) )
   => Alias constraint
   -- ^ constraint to drop
-  -> AlterTable tab table1 schema
+  -> AlterTable tab table1 db
 dropConstraint constraint = UnsafeAlterTable $
   "DROP" <+> "CONSTRAINT" <+> renderAlias constraint
 
+{---------FIX ADD COLUMN
 -- | An `AddColumn` is either @NULL@ or has @DEFAULT@.
 class AddColumn ty where
   -- | `addColumn` adds a new column, initially filled with whatever
@@ -635,16 +636,18 @@ class AddColumn ty where
   -- ALTER TABLE "tab" ADD COLUMN "col2" text NULL;
   addColumn
     :: ( KnownSymbol column
-       , Has tab schema ('Table table0)
+       , HasQualified sch tab db schema ('Table table0)
        , table0 ~ (constraints :=> columns)
        , table1 ~ (constraints :=> Create column ty columns) )
     => Alias column -- ^ column to add
-    -> ColumnTypeExpression schema ty -- ^ type of the new column
-    -> AlterTable tab table1 schema
+    -> ColumnTypeExpression db ty -- ^ type of the new column
+    -> AlterTable tab table1 db
   addColumn column ty = UnsafeAlterTable $
     "ADD COLUMN" <+> renderAlias column <+> renderColumnTypeExpression ty
 instance {-# OVERLAPPING #-} AddColumn ('Def :=> ty)
 instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
+
+-}
 
 -- | A `dropColumn` removes a column. Whatever data was in the column
 -- disappears. Table constraints involving the column are dropped, too.
@@ -668,7 +671,7 @@ dropColumn
      , table0 ~ (constraints :=> columns)
      , table1 ~ (constraints :=> Drop column columns) )
   => Alias column -- ^ column to remove
-  -> AlterTable tab table1 schema
+  -> AlterTable tab table1 db
 dropColumn column = UnsafeAlterTable $
   "DROP COLUMN" <+> renderAlias column
 
@@ -691,7 +694,7 @@ renameColumn
      , table1 ~ (constraints :=> Rename column0 column1 columns) )
   => Alias column0 -- ^ column to rename
   -> Alias column1 -- ^ what to rename the column
-  -> AlterTable tab table1 schema
+  -> AlterTable tab table1 db
 renameColumn column0 column1 = UnsafeAlterTable $
   "RENAME COLUMN" <+> renderAlias column0  <+> "TO" <+> renderAlias column1
 
@@ -703,13 +706,13 @@ alterColumn
      , Has column columns ty0
      , tables1 ~ (constraints :=> Alter column ty1 columns))
   => Alias column -- ^ column to alter
-  -> AlterColumn schema ty0 ty1 -- ^ alteration to perform
-  -> AlterTable tab table1 schema
+  -> AlterColumn db ty0 ty1 -- ^ alteration to perform
+  -> AlterTable tab table1 db
 alterColumn column alteration = UnsafeAlterTable $
   "ALTER COLUMN" <+> renderAlias column <+> renderAlterColumn alteration
 
 -- | An `AlterColumn` describes the alteration to perform on a single column.
-newtype AlterColumn (schema :: SchemaType) (ty0 :: ColumnType) (ty1 :: ColumnType) =
+newtype AlterColumn (db :: DBType) (ty0 :: ColumnType) (ty1 :: ColumnType) =
   UnsafeAlterColumn {renderAlterColumn :: ByteString}
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
@@ -811,7 +814,7 @@ alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 createView
   :: (KnownSymbol sch, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ the name of the view to add
-  -> Query schema '[] view
+  -> Query db '[] view
     -- ^ query
   -> Definition db (Alter sch (Create vw ('View view) schema) db)
 createView alias query = UnsafeDefinition $
@@ -892,7 +895,7 @@ createTypeComposite
   :: (KnownSymbol ty, Has sch db schema, SOP.SListI fields)
   => QualifiedAlias sch ty
   -- ^ name of the user defined composite type
-  -> NP (Aliased (TypeExpression schema)) fields
+  -> NP (Aliased (TypeExpression db)) fields
   -- ^ list of attribute names and data types
   -> Definition db (Alter sch (Create ty ('Typedef ('PGcomposite fields)) schema) db)
 createTypeComposite ty fields = UnsafeDefinition $
@@ -912,15 +915,15 @@ createTypeComposite ty fields = UnsafeDefinition $
 -- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 createTypeCompositeFrom
   :: forall hask sch ty db schema.
-  ( SOP.All (FieldTyped schema) (RowPG hask)
+  ( SOP.All (FieldTyped db) (RowPG hask)
   , KnownSymbol ty
   , Has sch db schema )
   => QualifiedAlias sch ty
   -- ^ name of the user defined composite type
   -> Definition db (Alter sch (Create ty ( 'Typedef (PG (Composite hask))) schema) db)
 createTypeCompositeFrom ty = createTypeComposite ty
-  (SOP.hcpure (SOP.Proxy :: SOP.Proxy (FieldTyped schema)) fieldtype
-    :: NP (Aliased (TypeExpression schema)) (RowPG hask))
+  (SOP.hcpure (SOP.Proxy :: SOP.Proxy (FieldTyped db)) fieldtype
+    :: NP (Aliased (TypeExpression db)) (RowPG hask))
 
 class FieldTyped schema ty where
   fieldtype :: Aliased (TypeExpression schema) ty
@@ -943,15 +946,15 @@ dropType
 dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderQualifiedAlias tydef <> ";"
 
 -- | `ColumnTypeExpression`s are used in `createTable` commands.
-newtype ColumnTypeExpression (schema :: SchemaType) (ty :: ColumnType)
+newtype ColumnTypeExpression (db :: DBType) (ty :: ColumnType)
   = UnsafeColumnTypeExpression { renderColumnTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 -- | used in `createTable` commands as a column constraint to note that
 -- @NULL@ may be present in a column
 nullable
-  :: TypeExpression schema (nullity ty)
-  -> ColumnTypeExpression schema ('NoDef :=> 'Null ty)
+  :: TypeExpression db (nullity ty)
+  -> ColumnTypeExpression db ('NoDef :=> 'Null ty)
 nullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
 
 -- | used in `createTable` commands as a column constraint to ensure

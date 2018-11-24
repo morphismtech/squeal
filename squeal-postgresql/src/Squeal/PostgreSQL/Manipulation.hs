@@ -197,23 +197,25 @@ WITH "deleted_rows" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RET
 -}
 
 newtype Manipulation
-  (schema :: SchemaType)
+  (db :: DBType)
   (params :: [NullityType])
   (columns :: RowType)
     = UnsafeManipulation { renderManipulation :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance RenderSQL (Manipulation schema params columns) where
+instance RenderSQL (Manipulation db params columns) where
   renderSQL = renderManipulation
+{--------------FIX WITH
+
 instance With Manipulation where
   with Done manip = manip
   with (cte :>> ctes) manip = UnsafeManipulation $
     "WITH" <+> renderCommonTableExpressions renderManipulation cte ctes
     <+> renderManipulation manip
-
+-}
 -- | Convert a `Query` into a `Manipulation`.
 queryStatement
-  :: Query schema params columns
-  -> Manipulation schema params columns
+  :: Query db params columns
+  -> Manipulation db params columns
 queryStatement q = UnsafeManipulation $ renderQuery q
 
 {-----------------------------------------
@@ -230,18 +232,18 @@ INSERT statements
 insertRows
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , Has tab schema ('Table table)
+     , HasQualified sch tab db schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
-  -> [NP (Aliased (ColumnValue schema '[] params)) columns] -- ^ more rows to insert
-  -> ConflictClause schema table params
+  => QualifiedAlias sch tab -- ^ table to insert into
+  -> NP (Aliased (ColumnValue db '[] params)) columns -- ^ row to insert
+  -> [NP (Aliased (ColumnValue db '[] params)) columns] -- ^ more rows to insert
+  -> ConflictClause db table params
   -- ^ what to do in case of constraint conflict
-  -> ReturningClause schema params row results -- ^ results to return
-  -> Manipulation schema params results
+  -> ReturningClause db params row results -- ^ results to return
+  -> Manipulation db params results
 insertRows tab rw rws conflict returning = UnsafeManipulation $
-  "INSERT" <+> "INTO" <+> renderAlias tab
+  "INSERT" <+> "INTO" <+> renderQualifiedAlias tab
     <+> parenthesized (renderCommaSeparated renderAliasPart rw)
     <+> "VALUES"
     <+> commaSeparated
@@ -261,54 +263,54 @@ insertRows tab rw rws conflict returning = UnsafeManipulation $
 insertRow
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , Has tab schema ('Table table)
+     , HasQualified sch tab db schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
-  -> ConflictClause schema table params
+  => QualifiedAlias sch tab -- ^ table to insert into
+  -> NP (Aliased (ColumnValue db '[] params)) columns -- ^ row to insert
+  -> ConflictClause db table params
   -- ^ what to do in case of constraint conflict
-  -> ReturningClause schema params row results -- ^ results to return
-  -> Manipulation schema params results
+  -> ReturningClause db params row results -- ^ results to return
+  -> Manipulation db params results
 insertRow tab rw = insertRows tab rw []
 
 -- | Insert multiple rows returning `Nil` and raising an error on conflicts.
 insertRows_
   :: ( SOP.SListI columns
-     , Has tab schema ('Table table)
+     , HasQualified sch tab db schema ('Table table)
      , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
-  -> [NP (Aliased (ColumnValue schema '[] params)) columns] -- ^ more rows to insert
-  -> Manipulation schema params '[]
+  => QualifiedAlias sch tab -- ^ table to insert into
+  -> NP (Aliased (ColumnValue db '[] params)) columns -- ^ row to insert
+  -> [NP (Aliased (ColumnValue db '[] params)) columns] -- ^ more rows to insert
+  -> Manipulation db params '[]
 insertRows_ tab rw rws =
   insertRows tab rw rws OnConflictDoRaise (Returning Nil)
 
 -- | Insert a single row returning `Nil` and raising an error on conflicts.
 insertRow_
   :: ( SOP.SListI columns
-     , Has tab schema ('Table table)
+     , HasQualified sch tab db schema ('Table table)
      , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
-  -> Manipulation schema params '[]
+  => QualifiedAlias sch tab -- ^ table to insert into
+  -> NP (Aliased (ColumnValue db '[] params)) columns -- ^ row to insert
+  -> Manipulation db params '[]
 insertRow_ tab rw = insertRow tab rw OnConflictDoRaise (Returning Nil)
 
 -- | Insert a `Query`.
 insertQuery
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , Has tab schema ('Table table)
+     , HasQualified sch tab db schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to insert into
-  -> Query schema params (TableToRow table)
-  -> ConflictClause schema table params
+  => QualifiedAlias sch tab -- ^ table to insert into
+  -> Query db params (TableToRow table)
+  -> ConflictClause db table params
   -- ^ what to do in case of constraint conflict
-  -> ReturningClause schema params row results -- ^ results to return
-  -> Manipulation schema params results
+  -> ReturningClause db params row results -- ^ results to return
+  -> Manipulation db params results
 insertQuery tab query conflict returning = UnsafeManipulation $
-  "INSERT" <+> "INTO" <+> renderAlias tab
+  "INSERT" <+> "INTO" <+> renderQualifiedAlias tab
     <+> renderQuery query
     <> renderConflictClause conflict
     <> renderReturningClause returning
@@ -316,11 +318,11 @@ insertQuery tab query conflict returning = UnsafeManipulation $
 -- | Insert a `Query` returning `Nil` and raising an error on conflicts.
 insertQuery_
   :: ( SOP.SListI columns
-     , Has tab schema ('Table table)
+     , HasQualified sch tab db schema ('Table table)
      , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to insert into
-  -> Query schema params (TableToRow table)
-  -> Manipulation schema params '[]
+  => QualifiedAlias sch tab -- ^ table to insert into
+  -> Query db params (TableToRow table)
+  -> Manipulation db params '[]
 insertQuery_ tab query =
   insertQuery tab query OnConflictDoRaise (Returning Nil)
 
@@ -330,16 +332,16 @@ insertQuery_ tab query =
 -- `Set` sets a value to be an `Expression`, which can refer to
 -- existing value in the row for an update.
 data ColumnValue
-  (schema :: SchemaType)
+  (db :: DBType)
   (columns :: RowType)
   (params :: [NullityType])
   (ty :: ColumnType)
   where
-    Same :: ColumnValue schema (column ': columns) params ty
-    Default :: ColumnValue schema columns params ('Def :=> ty)
+    Same :: ColumnValue db (column ': columns) params ty
+    Default :: ColumnValue db columns params ('Def :=> ty)
     Set
-      :: (forall table. Expression schema '[table ::: columns] 'Ungrouped params ty)
-      -> ColumnValue schema columns params (constraint :=> ty)
+      :: (forall table. Expression db '[table ::: columns] 'Ungrouped params ty)
+      -> ColumnValue db columns params (constraint :=> ty)
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
@@ -352,16 +354,16 @@ data ColumnValue
 -- in the row. Use @Returning Nil@ in the common case where no return
 -- values are desired.
 data ReturningClause
-  (schema :: SchemaType)
+  (db :: DBType)
   (params :: [NullityType])
   (row0 :: RowType)
   (row1 :: RowType)
   where
     ReturningStar
-      :: ReturningClause schema params row row
+      :: ReturningClause db params row row
     Returning
-      :: NP (Aliased (Expression schema '[table ::: row0] 'Ungrouped params)) row1
-      -> ReturningClause schema params row0 row1
+      :: NP (Aliased (Expression db '[table ::: row0] 'Ungrouped params)) row1
+      -> ReturningClause db params row0 row1
 
 -- | Render a `ReturningClause`.
 renderReturningClause
@@ -380,16 +382,16 @@ renderReturningClause = \case
 -- `OnConflictDoUpdate` updates the existing row that conflicts with the row
 -- proposed for insertion.
 data ConflictClause
-  (schema :: SchemaType)
+  (db :: DBType)
   (table :: TableType)
   (params :: [NullityType]) where
-    OnConflictDoRaise :: ConflictClause schema table params
-    OnConflictDoNothing :: ConflictClause schema table params
+    OnConflictDoRaise :: ConflictClause db table params
+    OnConflictDoNothing :: ConflictClause db table params
     OnConflictDoUpdate
       :: (row ~ TableToRow table, columns ~ TableToColumns table)
-      => NP (Aliased (ColumnValue schema row params)) columns
-      -> [Condition schema '[t ::: row] 'Ungrouped params]
-      -> ConflictClause schema table params
+      => NP (Aliased (ColumnValue db row params)) columns
+      -> [Condition db '[t ::: row] 'Ungrouped params]
+      -> ConflictClause db table params
 
 -- | Render a `ConflictClause`.
 renderConflictClause
@@ -425,19 +427,19 @@ UPDATE statements
 update
   :: ( SOP.SListI columns
      , SOP.SListI results
-     , Has tab schema ('Table table)
+     , HasQualified sch tab db schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue schema row params)) columns
+  => QualifiedAlias sch tab -- ^ table to update
+  -> NP (Aliased (ColumnValue db row params)) columns
   -- ^ modified values to replace old values
-  -> (forall t. Condition schema '[t ::: row] 'Ungrouped params)
+  -> (forall t. Condition db '[t ::: row] 'Ungrouped params)
   -- ^ condition under which to perform update on a row
-  -> ReturningClause schema params row results -- ^ results to return
-  -> Manipulation schema params results
+  -> ReturningClause db params row results -- ^ results to return
+  -> Manipulation db params results
 update tab columns wh returning = UnsafeManipulation $
   "UPDATE"
-  <+> renderAlias tab
+  <+> renderQualifiedAlias tab
   <+> "SET"
   <+> renderCommaSeparatedMaybe renderUpdate columns
   <+> "WHERE" <+> renderExpression wh
@@ -456,15 +458,15 @@ update tab columns wh returning = UnsafeManipulation $
 -- | Update a row returning `Nil`.
 update_
   :: ( SOP.SListI columns
-     , Has tab schema ('Table table)
+     , HasQualified sch tab db schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to update
-  -> NP (Aliased (ColumnValue schema row params)) columns
+  => QualifiedAlias sch tab -- ^ table to update
+  -> NP (Aliased (ColumnValue db row params)) columns
   -- ^ modified values to replace old values
-  -> (forall t. Condition schema '[t ::: row] 'Ungrouped params)
+  -> (forall t. Condition db '[t ::: row] 'Ungrouped params)
   -- ^ condition under which to perform update on a row
-  -> Manipulation schema params '[]
+  -> Manipulation db params '[]
 update_ tab columns wh = update tab columns wh (Returning Nil)
 
 {-----------------------------------------
@@ -474,26 +476,26 @@ DELETE statements
 -- | Delete rows of a table.
 deleteFrom
   :: ( SOP.SListI results
-     , Has tab schema ('Table table)
+     , HasQualified sch tab db schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to delete from
-  -> Condition schema '[tab ::: row] 'Ungrouped params
+  => QualifiedAlias sch tab -- ^ table to delete from
+  -> Condition db '[tab ::: row] 'Ungrouped params
   -- ^ condition under which to delete a row
-  -> ReturningClause schema params row results -- ^ results to return
-  -> Manipulation schema params results
+  -> ReturningClause db params row results -- ^ results to return
+  -> Manipulation db params results
 deleteFrom tab wh returning = UnsafeManipulation $
-  "DELETE FROM" <+> renderAlias tab
+  "DELETE FROM" <+> renderQualifiedAlias tab
   <+> "WHERE" <+> renderExpression wh
   <> renderReturningClause returning
 
 -- | Delete rows returning `Nil`.
 deleteFrom_
-  :: ( Has tab schema ('Table table)
+  :: ( HasQualified sch tab db schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to delete from
-  -> (forall t. Condition schema '[t ::: row] 'Ungrouped params)
+  => QualifiedAlias sch tab -- ^ table to delete from
+  -> (forall t. Condition db '[t ::: row] 'Ungrouped params)
   -- ^ condition under which to delete a row
-  -> Manipulation schema params '[]
+  -> Manipulation db params '[]
 deleteFrom_ tab wh = deleteFrom tab wh (Returning Nil)
