@@ -104,7 +104,7 @@ import Squeal.PostgreSQL.Schema
 statements
 -----------------------------------------}
 
--- | A `Definition` is a statement that changes the schema of the
+-- | A `Definition` is a statement that changes the schemas of the
 -- database, like a `createTable`, `dropTable`, or `alterTable` command.
 -- `Definition`s may be composed using the `>>>` operator.
 newtype Definition
@@ -219,7 +219,7 @@ renderCreation tab columns constraints = renderQualifiedAlias tab
                renderCommaSeparated renderConstraint constraints ) )
   <> ";"
   where
-    renderColumnDef :: Aliased (ColumnTypeExpression schema) x -> ByteString
+    renderColumnDef :: Aliased (ColumnTypeExpression db) x -> ByteString
     renderColumnDef (ty `As` column) =
       renderAlias column <+> renderColumnTypeExpression ty
     renderConstraint
@@ -741,8 +741,8 @@ newtype AlterColumn (db :: DBType) (ty0 :: ColumnType) (ty1 :: ColumnType) =
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" SET DEFAULT 5;
 setDefault
-  :: Expression schema '[] 'Ungrouped '[] ty -- ^ default value to set
-  -> AlterColumn schema (constraint :=> ty) ('Def :=> ty)
+  :: Expression db '[] 'Ungrouped '[] ty -- ^ default value to set
+  -> AlterColumn db (constraint :=> ty) ('Def :=> ty)
 setDefault expression = UnsafeAlterColumn $
   "SET DEFAULT" <+> renderExpression expression
 
@@ -757,7 +757,7 @@ setDefault expression = UnsafeAlterColumn $
 -- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" DROP DEFAULT;
-dropDefault :: AlterColumn schema ('Def :=> ty) ('NoDef :=> ty)
+dropDefault :: AlterColumn db ('Def :=> ty) ('NoDef :=> ty)
 dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 
 -- | A `setNotNull` adds a @NOT NULL@ constraint to a column.
@@ -774,7 +774,7 @@ dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" SET NOT NULL;
 setNotNull
-  :: AlterColumn schema (constraint :=> 'Null ty) (constraint :=> 'NotNull ty)
+  :: AlterColumn db (constraint :=> 'Null ty) (constraint :=> 'NotNull ty)
 setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 
 -- | A `dropNotNull` drops a @NOT NULL@ constraint from a column.
@@ -789,7 +789,7 @@ setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" DROP NOT NULL;
 dropNotNull
-  :: AlterColumn schema (constraint :=> 'NotNull ty) (constraint :=> 'Null ty)
+  :: AlterColumn db (constraint :=> 'NotNull ty) (constraint :=> 'Null ty)
 dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 
 -- | An `alterType` converts a column to a different data type.
@@ -806,7 +806,7 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 -- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" TYPE numeric NOT NULL;
-alterType :: ColumnTypeExpression schema ty -> AlterColumn schema ty0 ty
+alterType :: ColumnTypeExpression db ty -> AlterColumn db ty0 ty
 alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 
 -- | Create a view.
@@ -823,7 +823,7 @@ alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 -- :}
 -- CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
 createView
-  :: (KnownSymbol sch, KnownSymbol vw)
+  :: (KnownSymbol sch, KnownSymbol vw, Has sch db schema)
   => QualifiedAlias sch vw -- ^ the name of the view to add
   -> Query db '[] view
     -- ^ query
@@ -913,7 +913,7 @@ createTypeComposite ty fields = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderQualifiedAlias ty <+> "AS" <+> parenthesized
   (renderCommaSeparated renderField fields) <> ";"
   where
-    renderField :: Aliased (TypeExpression schema) x -> ByteString
+    renderField :: Aliased (TypeExpression db) x -> ByteString
     renderField (typ `As` alias) =
       renderAlias alias <+> renderTypeExpression typ
 
@@ -936,10 +936,10 @@ createTypeCompositeFrom ty = createTypeComposite ty
   (SOP.hcpure (SOP.Proxy :: SOP.Proxy (FieldTyped db)) fieldtype
     :: NP (Aliased (TypeExpression db)) (RowPG hask))
 
-class FieldTyped schema ty where
-  fieldtype :: Aliased (TypeExpression schema) ty
-instance (KnownSymbol alias, PGTyped schema ty)
-  => FieldTyped schema (alias ::: ty) where
+class FieldTyped db ty where
+  fieldtype :: Aliased (TypeExpression db) ty
+instance (KnownSymbol alias, PGTyped db ty)
+  => FieldTyped db (alias ::: ty) where
     fieldtype = pgtype `As` Alias
 
 -- | Drop a type.
@@ -971,33 +971,33 @@ nullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
 -- | used in `createTable` commands as a column constraint to ensure
 -- @NULL@ is not present in a column
 notNullable
-  :: TypeExpression schema (nullity ty)
-  -> ColumnTypeExpression schema ('NoDef :=> 'NotNull ty)
+  :: TypeExpression db (nullity ty)
+  -> ColumnTypeExpression db ('NoDef :=> 'NotNull ty)
 notNullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
 
 -- | used in `createTable` commands as a column constraint to give a default
 default_
-  :: Expression schema '[] 'Ungrouped '[] ty
-  -> ColumnTypeExpression schema ('NoDef :=> ty)
-  -> ColumnTypeExpression schema ('Def :=> ty)
+  :: Expression db '[] 'Ungrouped '[] ty
+  -> ColumnTypeExpression db ('NoDef :=> ty)
+  -> ColumnTypeExpression db ('Def :=> ty)
 default_ x ty = UnsafeColumnTypeExpression $
   renderColumnTypeExpression ty <+> "DEFAULT" <+> renderExpression x
 
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `PGint2`
 serial2, smallserial
-  :: ColumnTypeExpression schema ('Def :=> 'NotNull 'PGint2)
+  :: ColumnTypeExpression db ('Def :=> 'NotNull 'PGint2)
 serial2 = UnsafeColumnTypeExpression "serial2"
 smallserial = UnsafeColumnTypeExpression "smallserial"
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `PGint4`
 serial4, serial
-  :: ColumnTypeExpression schema ('Def :=> 'NotNull 'PGint4)
+  :: ColumnTypeExpression db ('Def :=> 'NotNull 'PGint4)
 serial4 = UnsafeColumnTypeExpression "serial4"
 serial = UnsafeColumnTypeExpression "serial"
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `PGint8`
 serial8, bigserial
-  :: ColumnTypeExpression schema ('Def :=> 'NotNull 'PGint8)
+  :: ColumnTypeExpression db ('Def :=> 'NotNull 'PGint8)
 serial8 = UnsafeColumnTypeExpression "serial8"
 bigserial = UnsafeColumnTypeExpression "bigserial"
