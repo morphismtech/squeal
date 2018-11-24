@@ -53,7 +53,7 @@ module Squeal.PostgreSQL.Definition
   , AlterTable (UnsafeAlterTable, renderAlterTable)
   , addConstraint
   , dropConstraint
-  -- , AddColumn (addColumn)
+  , AddColumn (addColumn)
   , dropColumn
   , renameColumn
   , alterColumn
@@ -531,7 +531,7 @@ ALTER statements
 alterTable
   :: HasQualified sch tab db schema ('Table table0)
   => QualifiedAlias sch tab -- ^ table to alter
-  -> AlterTable tab table1 db -- ^ alteration to perform
+  -> AlterTable sch tab db table1 -- ^ alteration to perform
   -> Definition db (Alter sch (Alter tab ('Table table1) schema) db)
 alterTable tab alteration = UnsafeDefinition $
   "ALTER TABLE"
@@ -555,9 +555,10 @@ alterTableRename table0 table1 = UnsafeDefinition $
 -- | An `AlterTable` describes the alteration to perform on the columns
 -- of a table.
 newtype AlterTable
+  (sch :: Symbol)
   (tab :: Symbol)
-  (table :: TableType)
-  (db :: DBType) =
+  (db :: DBType)
+  (table :: TableType) =
     UnsafeAlterTable {renderAlterTable :: ByteString}
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
@@ -580,7 +581,7 @@ addConstraint
   => Alias alias
   -> TableConstraintExpression sch tab db constraint
   -- ^ constraint to add
-  -> AlterTable tab table1 db
+  -> AlterTable sch tab db table1
 addConstraint alias constraint = UnsafeAlterTable $
   "ADD" <+> "CONSTRAINT" <+> renderAlias alias
     <+> renderTableConstraintExpression constraint
@@ -598,16 +599,15 @@ addConstraint alias constraint = UnsafeAlterTable $
 -- ALTER TABLE "tab" DROP CONSTRAINT "positive";
 dropConstraint
   :: ( KnownSymbol constraint
-     , Has tab schema ('Table table0)
+     , HasQualified sch tab db schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (Drop constraint constraints :=> columns) )
   => Alias constraint
   -- ^ constraint to drop
-  -> AlterTable tab table1 db
+  -> AlterTable sch tab db table1
 dropConstraint constraint = UnsafeAlterTable $
   "DROP" <+> "CONSTRAINT" <+> renderAlias constraint
 
-{---------FIX ADD COLUMN
 -- | An `AddColumn` is either @NULL@ or has @DEFAULT@.
 class AddColumn ty where
   -- | `addColumn` adds a new column, initially filled with whatever
@@ -639,17 +639,14 @@ class AddColumn ty where
   addColumn
     :: ( KnownSymbol column
        , HasQualified sch tab db schema ('Table table0)
-       , table0 ~ (constraints :=> columns)
-       , table1 ~ (constraints :=> Create column ty columns) )
+       , table0 ~ (constraints :=> columns) )
     => Alias column -- ^ column to add
     -> ColumnTypeExpression db ty -- ^ type of the new column
-    -> AlterTable tab table1 db
+    -> AlterTable sch tab db (constraints :=> Create column ty columns)
   addColumn column ty = UnsafeAlterTable $
     "ADD COLUMN" <+> renderAlias column <+> renderColumnTypeExpression ty
 instance {-# OVERLAPPING #-} AddColumn ('Def :=> ty)
 instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
-
--}
 
 -- | A `dropColumn` removes a column. Whatever data was in the column
 -- disappears. Table constraints involving the column are dropped, too.
@@ -669,11 +666,11 @@ instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 -- ALTER TABLE "tab" DROP COLUMN "col2";
 dropColumn
   :: ( KnownSymbol column
-     , Has tab schema ('Table table0)
+     , HasQualified sch tab db schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (constraints :=> Drop column columns) )
   => Alias column -- ^ column to remove
-  -> AlterTable tab table1 db
+  -> AlterTable sch tab db table1
 dropColumn column = UnsafeAlterTable $
   "DROP COLUMN" <+> renderAlias column
 
@@ -691,25 +688,25 @@ dropColumn column = UnsafeAlterTable $
 renameColumn
   :: ( KnownSymbol column0
      , KnownSymbol column1
-     , Has tab schema ('Table table0)
+     , HasQualified sch tab db schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (constraints :=> Rename column0 column1 columns) )
   => Alias column0 -- ^ column to rename
   -> Alias column1 -- ^ what to rename the column
-  -> AlterTable tab table1 db
+  -> AlterTable sch tab db table1
 renameColumn column0 column1 = UnsafeAlterTable $
   "RENAME COLUMN" <+> renderAlias column0  <+> "TO" <+> renderAlias column1
 
 -- | An `alterColumn` alters a single column.
 alterColumn
   :: ( KnownSymbol column
-     , Has tab schema ('Table table0)
+     , HasQualified sch tab db schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , Has column columns ty0
      , tables1 ~ (constraints :=> Alter column ty1 columns))
   => Alias column -- ^ column to alter
   -> AlterColumn db ty0 ty1 -- ^ alteration to perform
-  -> AlterTable tab table1 db
+  -> AlterTable sch tab db table1
 alterColumn column alteration = UnsafeAlterTable $
   "ALTER COLUMN" <+> renderAlias column <+> renderAlterColumn alteration
 
