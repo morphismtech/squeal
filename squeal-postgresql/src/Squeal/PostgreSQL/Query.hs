@@ -47,7 +47,7 @@ module Squeal.PostgreSQL.Query
   , except
   , exceptAll
     -- ** With
-  -- , With (with)
+  , With (with)
   , CommonTableExpression (..)
   , renderCommonTableExpression
   , renderCommonTableExpressions
@@ -1362,35 +1362,43 @@ rowGteAny = unsafeRowSubqueryExpression ">= ANY"
 -- | A `CommonTableExpression` is an auxiliary statement in a `with` clause.
 data CommonTableExpression statement
   (params :: [NullityType])
+  (db :: DBType)
   (schema0 :: SchemaType)
   (schema1 :: SchemaType) where
   CommonTableExpression
-    :: Aliased (statement schema params) (alias ::: cte)
+    :: Has "public" db schema
+    => Aliased (statement db params) (alias ::: cte)
     -> CommonTableExpression
-      statement params schema (alias ::: 'View cte ': schema)
-instance (KnownSymbol alias, schema1 ~ (alias ::: 'View cte ': schema))
-  => Aliasable alias
-    (statement schema params cte)
-    (CommonTableExpression statement params schema schema1) where
-      statement `as` alias = CommonTableExpression (statement `as` alias)
-instance (KnownSymbol alias, schema1 ~ (alias ::: 'View cte ': schema))
-  => Aliasable alias (statement schema params cte)
-    (AlignedList (CommonTableExpression statement params) schema schema1) where
-      statement `as` alias = single (statement `as` alias)
+      statement params db schema (alias ::: 'View cte ': schema)
+instance
+  ( KnownSymbol vw
+  , Has "public" db schema
+  , schema1 ~ (vw ::: 'View cte ': schema)
+  ) => Aliasable vw
+    (statement db params cte)
+    (CommonTableExpression statement params db schema schema1) where
+      statement `as` vw = CommonTableExpression (statement `as` vw)
+instance
+  ( KnownSymbol vw
+  , Has "public" db schema
+  , schema1 ~ (vw ::: 'View cte ': schema)
+  ) => Aliasable vw (statement db params cte)
+    (AlignedList (CommonTableExpression statement params db) schema schema1) where
+      statement `as` vw = single (statement `as` vw)
 
 -- | render a `CommonTableExpression`.
 renderCommonTableExpression
-  :: (forall sch ps row. statement ps sch row -> ByteString) -- ^ render statement
-  -> CommonTableExpression statement params schema0 schema1 -> ByteString
+  :: (forall db ps row. statement db ps row -> ByteString) -- ^ render statement
+  -> CommonTableExpression statement params db0 schema0 schema1 -> ByteString
 renderCommonTableExpression renderStatement
   (CommonTableExpression (statement `As` alias)) =
     renderAlias alias <+> "AS" <+> parenthesized (renderStatement statement)
 
 -- | render a non-empty `AlignedList` of `CommonTableExpression`s.
 renderCommonTableExpressions
-  :: (forall sch ps row. statement ps sch row -> ByteString) -- ^ render statement
-  -> CommonTableExpression statement params schema0 schema1
-  -> AlignedList (CommonTableExpression statement params) schema1 schema2
+  :: (forall db ps row. statement db ps row -> ByteString) -- ^ render statement
+  -> CommonTableExpression statement params db0 schema0 schema1
+  -> AlignedList (CommonTableExpression statement params db0) schema1 schema2
   -> ByteString
 renderCommonTableExpressions renderStatement cte ctes =
   renderCommonTableExpression renderStatement cte <> case ctes of
@@ -1398,22 +1406,19 @@ renderCommonTableExpressions renderStatement cte ctes =
     cte' :>> ctes' -> "," <+>
       renderCommonTableExpressions renderStatement cte' ctes'
 
-{---------------FIX WITH
-
 -- | `with` provides a way to write auxiliary statements for use in a larger query.
 -- These statements, referred to as `CommonTableExpression`s, can be thought of as
 -- defining temporary tables that exist just for one query.
 class With statement where
   with
-    :: AlignedList (CommonTableExpression statement params) schema0 schema1
+    :: Has "public" db0 schema0
+    => AlignedList (CommonTableExpression statement params db0) schema0 schema1
     -- ^ common table expressions
-    -> statement schema1 params row
+    -> statement (Alter "public" schema1 db0) params row
     -- ^ larger query
-    -> statement schema0 params row
+    -> statement db0 params row
 instance With Query where
-  with Done query = query
+  with Done query = UnsafeQuery $ renderQuery query
   with (cte :>> ctes) query = UnsafeQuery $
     "WITH" <+> renderCommonTableExpressions renderQuery cte ctes
       <+> renderQuery query
-
--}

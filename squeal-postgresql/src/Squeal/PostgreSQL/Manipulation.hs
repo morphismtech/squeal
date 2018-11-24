@@ -204,14 +204,12 @@ newtype Manipulation
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance RenderSQL (Manipulation db params columns) where
   renderSQL = renderManipulation
-{--------------FIX WITH
-
 instance With Manipulation where
-  with Done manip = manip
+  with Done manip = UnsafeManipulation $ renderManipulation manip
   with (cte :>> ctes) manip = UnsafeManipulation $
     "WITH" <+> renderCommonTableExpressions renderManipulation cte ctes
     <+> renderManipulation manip
--}
+
 -- | Convert a `Query` into a `Manipulation`.
 queryStatement
   :: Query db params columns
