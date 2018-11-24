@@ -478,7 +478,7 @@ instance IsQualified table column (Alias table, Alias column) where (!) = (,)
 data QualifiedAlias (qualifier :: Symbol) (alias :: Symbol) = QualifiedAlias
 instance (q ~ q', a ~ a') => IsQualified q a (QualifiedAlias q' a') where
   _!_ = QualifiedAlias
-instance (a ~ a') => IsLabel a (QualifiedAlias "public" a') where
+instance (q' ~ "public", a ~ a') => IsLabel a (QualifiedAlias q' a') where
   fromLabel = QualifiedAlias
 
 renderQualifiedAlias
