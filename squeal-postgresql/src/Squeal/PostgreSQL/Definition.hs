@@ -108,12 +108,12 @@ statements
 -- database, like a `createTable`, `dropTable`, or `alterTable` command.
 -- `Definition`s may be composed using the `>>>` operator.
 newtype Definition
-  (schema0 :: SchemaType)
-  (schema1 :: SchemaType)
+  (db0 :: DBType)
+  (db1 :: DBType)
   = UnsafeDefinition { renderDefinition :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
-instance RenderSQL (Definition schema0 schema1) where
+instance RenderSQL (Definition db0 db1) where
   renderSQL = renderDefinition
 
 instance Category Definition where
@@ -144,17 +144,20 @@ in printSQL setup
 CREATE TABLE "tab" ("a" int NULL, "b" real NULL);
 -}
 createTable
-  :: ( KnownSymbol table
+  :: ( KnownSymbol sch
+     , KnownSymbol tab
      , columns ~ (col ': cols)
      , SOP.SListI columns
      , SOP.SListI constraints
-     , schema1 ~ Create table ('Table (constraints :=> columns)) schema0 )
-  => Alias table -- ^ the name of the table to add
+     , Has sch db0 schema0
+     , schema1 ~ Create table ('Table (constraints :=> columns)) schema0
+     , db1 ~ Alter sch schema1 db0 )
+  => QualifiedAlias sch tab -- ^ the name of the table to add
   -> NP (Aliased (ColumnTypeExpression schema0)) columns
     -- ^ the names and datatype of each column
   -> NP (Aliased (TableConstraintExpression schema1 table)) constraints
     -- ^ constraints that must hold for the table
-  -> Definition schema0 schema1
+  -> Definition db0 db1
 createTable tab columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderCreation tab columns constraints
 
@@ -182,31 +185,32 @@ in printSQL setup
 CREATE TABLE IF NOT EXISTS "tab" ("a" int NULL, "b" real NULL);
 -}
 createTableIfNotExists
-  :: ( Has table schema ('Table (constraints :=> columns))
+  :: ( HasQualified sch tab db schema ('Table (constraints :=> columns))
      , SOP.SListI columns
      , SOP.SListI constraints )
-  => Alias table -- ^ the name of the table to add
+  => QualifiedAlias sch tab -- ^ the name of the table to add
   -> NP (Aliased (ColumnTypeExpression schema)) columns
     -- ^ the names and datatype of each column
   -> NP (Aliased (TableConstraintExpression schema table)) constraints
     -- ^ constraints that must hold for the table
-  -> Definition schema schema
+  -> Definition db db
 createTableIfNotExists tab columns constraints = UnsafeDefinition $
   "CREATE TABLE IF NOT EXISTS"
   <+> renderCreation tab columns constraints
 
 -- helper function for `createTable` and `createTableIfNotExists`
 renderCreation
-  :: ( KnownSymbol table
+  :: ( KnownSymbol sch
+     , KnownSymbol tab
      , SOP.SListI columns
      , SOP.SListI constraints )
-  => Alias table -- ^ the name of the table to add
+  => QualifiedAlias sch tab -- ^ the name of the table to add
   -> NP (Aliased (ColumnTypeExpression schema0)) columns
     -- ^ the names and datatype of each column
   -> NP (Aliased (TableConstraintExpression schema1 table)) constraints
     -- ^ constraints that must hold for the table
   -> ByteString
-renderCreation tab columns constraints = renderAlias tab
+renderCreation tab columns constraints = renderQualifiedAlias tab
   <+> parenthesized
     ( renderCommaSeparated renderColumnDef columns
       <> ( case constraints of
@@ -512,10 +516,10 @@ DROP statements
 -- >>> printSQL definition
 -- DROP TABLE "muh_table";
 dropTable
-  :: Has table schema ('Table t)
-  => Alias table -- ^ table to remove
-  -> Definition schema (Drop table schema)
-dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderAlias tab <> ";"
+  :: HasQualified sch tab db schema ('Table table)
+  => QualifiedAlias sch tab -- ^ table to remove
+  -> Definition db (Alter sch (Drop tab schema) db)
+dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderQualifiedAlias tab <> ";"
 
 {-----------------------------------------
 ALTER statements
@@ -523,13 +527,13 @@ ALTER statements
 
 -- | `alterTable` changes the definition of a table from the schema.
 alterTable
-  :: KnownSymbol alias
-  => Alias alias -- ^ table to alter
-  -> AlterTable alias table schema -- ^ alteration to perform
-  -> Definition schema (Alter alias ('Table table) schema)
+  :: HasQualified sch tab db schema ('Table table0)
+  => QualifiedAlias sch tab -- ^ table to alter
+  -> AlterTable tab table1 schema -- ^ alteration to perform
+  -> Definition db (Alter sch (Alter tab ('Table table1) schema) db)
 alterTable tab alteration = UnsafeDefinition $
   "ALTER TABLE"
-  <+> renderAlias tab
+  <+> renderQualifiedAlias tab
   <+> renderAlterTable alteration
   <> ";"
 
@@ -805,13 +809,13 @@ alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 -- :}
 -- CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
 createView
-  :: KnownSymbol view
-  => Alias view -- ^ the name of the view to add
-  -> Query schema '[] row
+  :: (KnownSymbol sch, KnownSymbol vw)
+  => QualifiedAlias sch vw -- ^ the name of the view to add
+  -> Query schema '[] view
     -- ^ query
-  -> Definition schema (Create view ('View row) schema)
+  -> Definition db (Alter sch (Create vw ('View view) schema) db)
 createView alias query = UnsafeDefinition $
-  "CREATE" <+> "VIEW" <+> renderAlias alias <+> "AS"
+  "CREATE" <+> "VIEW" <+> renderQualifiedAlias alias <+> "AS"
   <+> renderQuery query <> ";"
 
 -- | Drop a view.
@@ -827,24 +831,24 @@ createView alias query = UnsafeDefinition $
 -- :}
 -- DROP VIEW "bc";
 dropView
-  :: Has view schema ('View v)
-  => Alias view -- ^ view to remove
-  -> Definition schema (Drop view schema)
-dropView v = UnsafeDefinition $ "DROP VIEW" <+> renderAlias v <> ";"
+  :: HasQualified sch vw db schema ('View view)
+  => QualifiedAlias sch vw -- ^ view to remove
+  -> Definition db (Alter sch (Drop vw schema) db)
+dropView vw = UnsafeDefinition $ "DROP VIEW" <+> renderQualifiedAlias vw <> ";"
 
 -- | Enumerated types are created using the `createTypeEnum` command, for example
 --
 -- >>> printSQL $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy")
 -- CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
 createTypeEnum
-  :: (KnownSymbol enum, SOP.All KnownSymbol labels)
-  => Alias enum
+  :: (KnownSymbol enum, Has sch db schema, SOP.All KnownSymbol labels)
+  => QualifiedAlias sch enum
   -- ^ name of the user defined enumerated type
   -> NP PGlabel labels
   -- ^ labels of the enumerated type
-  -> Definition schema (Create enum ('Typedef ('PGenum labels)) schema)
+  -> Definition db (Alter sch (Create enum ('Typedef ('PGenum labels)) schema) db)
 createTypeEnum enum labels = UnsafeDefinition $
-  "CREATE" <+> "TYPE" <+> renderAlias enum <+> "AS" <+> "ENUM" <+>
+  "CREATE" <+> "TYPE" <+> renderQualifiedAlias enum <+> "AS" <+> "ENUM" <+>
   parenthesized (commaSeparated (renderLabels labels)) <> ";"
 
 -- | Enumerated types can also be generated from a Haskell type, for example
@@ -855,14 +859,14 @@ createTypeEnum enum labels = UnsafeDefinition $
 -- >>> printSQL $ createTypeEnumFrom @Schwarma #schwarma
 -- CREATE TYPE "schwarma" AS ENUM ('Beef', 'Lamb', 'Chicken');
 createTypeEnumFrom
-  :: forall hask enum schema.
+  :: forall hask sch enum db schema.
   ( SOP.Generic hask
   , SOP.All KnownSymbol (LabelsPG hask)
   , KnownSymbol enum
-  )
-  => Alias enum
+  , Has sch db schema )
+  => QualifiedAlias sch enum
   -- ^ name of the user defined enumerated type
-  -> Definition schema (Create enum ('Typedef (PG (Enumerated hask))) schema)
+  -> Definition db (Alter sch (Create enum ('Typedef (PG (Enumerated hask))) schema) db)
 createTypeEnumFrom enum = createTypeEnum enum
   (SOP.hpure label :: NP PGlabel (LabelsPG hask))
 
@@ -885,14 +889,14 @@ in printSQL setup
 CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 -}
 createTypeComposite
-  :: (KnownSymbol ty, SOP.SListI fields)
-  => Alias ty
+  :: (KnownSymbol ty, Has sch db schema, SOP.SListI fields)
+  => QualifiedAlias sch ty
   -- ^ name of the user defined composite type
   -> NP (Aliased (TypeExpression schema)) fields
   -- ^ list of attribute names and data types
-  -> Definition schema (Create ty ('Typedef ('PGcomposite fields)) schema)
+  -> Definition db (Alter sch (Create ty ('Typedef ('PGcomposite fields)) schema) db)
 createTypeComposite ty fields = UnsafeDefinition $
-  "CREATE" <+> "TYPE" <+> renderAlias ty <+> "AS" <+> parenthesized
+  "CREATE" <+> "TYPE" <+> renderQualifiedAlias ty <+> "AS" <+> parenthesized
   (renderCommaSeparated renderField fields) <> ";"
   where
     renderField :: Aliased (TypeExpression schema) x -> ByteString
@@ -907,12 +911,13 @@ createTypeComposite ty fields = UnsafeDefinition $
 -- >>> printSQL $ createTypeCompositeFrom @Complex #complex
 -- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 createTypeCompositeFrom
-  :: forall hask ty schema.
+  :: forall hask sch ty db schema.
   ( SOP.All (FieldTyped schema) (RowPG hask)
-  , KnownSymbol ty )
-  => Alias ty
+  , KnownSymbol ty
+  , Has sch db schema )
+  => QualifiedAlias sch ty
   -- ^ name of the user defined composite type
-  -> Definition schema (Create ty ( 'Typedef (PG (Composite hask))) schema)
+  -> Definition db (Alter sch (Create ty ( 'Typedef (PG (Composite hask))) schema) db)
 createTypeCompositeFrom ty = createTypeComposite ty
   (SOP.hcpure (SOP.Proxy :: SOP.Proxy (FieldTyped schema)) fieldtype
     :: NP (Aliased (TypeExpression schema)) (RowPG hask))
@@ -931,11 +936,11 @@ instance (KnownSymbol alias, PGTyped schema ty)
 -- >>> printSQL (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))] '[])
 -- DROP TYPE "schwarma";
 dropType
-  :: Has tydef schema ('Typedef ty)
-  => Alias tydef
+  :: HasQualified sch td db schema ('Typedef ty)
+  => QualifiedAlias sch td
   -- ^ name of the user defined type
-  -> Definition schema (Drop tydef schema)
-dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderAlias tydef <> ";"
+  -> Definition db (Alter sch (Drop td schema) db)
+dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderQualifiedAlias tydef <> ";"
 
 -- | `ColumnTypeExpression`s are used in `createTable` commands.
 newtype ColumnTypeExpression (schema :: SchemaType) (ty :: ColumnType)
