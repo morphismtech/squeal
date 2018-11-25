@@ -33,6 +33,8 @@ module Squeal.PostgreSQL.Definition
   , (>>>)
     -- * Tables
     -- ** Create
+  , createSchema
+  , createSchemaIfNotExists
   , createTable
   , createTableIfNotExists
   , TableConstraintExpression (..)
@@ -124,6 +126,21 @@ instance Category Definition where
 {-----------------------------------------
 CREATE statements
 -----------------------------------------}
+
+createSchema
+  :: KnownSymbol sch
+  => Alias sch
+  -> Definition db (Create sch '[] db)
+createSchema sch = UnsafeDefinition $
+  "CREATE" <+> "SCHEMA" <+> renderAlias sch <> ";"
+
+createSchemaIfNotExists
+  :: (KnownSymbol sch, Has sch db schema)
+  => Alias sch
+  -> Definition db db
+createSchemaIfNotExists sch = UnsafeDefinition $
+  "CREATE" <+> "SCHEMA" <+> "IF" <+> "NOT" <+> "EXISTS"
+  <+> renderAlias sch <> ";"
 
 {- | `createTable` adds a table to the schema.
 
