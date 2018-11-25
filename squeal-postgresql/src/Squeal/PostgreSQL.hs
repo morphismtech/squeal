@@ -37,8 +37,9 @@ type UsersColumns =
    , "name" ::: 'NoDef :=> 'NotNull 'PGtext ]
 type UsersConstraints = '[ "pk_users" ::: 'PrimaryKey '["id"] ]
 type EmailsColumns =
-  '[ "pk_emails"  ::: 'PrimaryKey '["id"]
-   , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"] ]
+  '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+   , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
+   , "email" ::: 'NoDef :=> 'Null 'PGtext ]
 type EmailsConstraints =
   '[ "pk_emails"  ::: 'PrimaryKey '["id"]
    , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"] ]

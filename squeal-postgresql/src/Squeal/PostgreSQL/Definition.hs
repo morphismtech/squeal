@@ -153,7 +153,7 @@ type Table = '[] :=>
 
 >>> :{
 let
-  setup :: Definition '[] '["tab" ::: 'Table Table]
+  setup :: Definition '["public" ::: '[]] '["public" ::: '["tab" ::: 'Table Table]]
   setup = createTable #tab
     (nullable int `as` #a :* nullable real `as` #b) Nil
 in printSQL setup
@@ -189,11 +189,11 @@ type Table = '[] :=>
    , "b" ::: 'NoDef :=> 'Null 'PGfloat4 ]
 :}
 
->>> type Schema = '["tab" ::: 'Table Table]
+>>> type DB = '["public" ::: '["tab" ::: 'Table Table]]
 
 >>> :{
 let
-  setup :: Definition Schema Schema
+  setup :: Definition DB DB
   setup = createTableIfNotExists #tab
     (nullable int `as` #a :* nullable real `as` #b) Nil
 in printSQL setup
@@ -280,7 +280,7 @@ type Schema = '[
 
 >>> :{
 let
-  definition :: Definition '[] Schema
+  definition :: Definition '["public" ::: '[]] '["public" ::: Schema]
   definition = createTable #tab
     ( (int & notNullable) `as` #a :*
       (int & notNullable) `as` #b )
@@ -315,7 +315,7 @@ type Schema = '[
 
 >>> :{
 let
-  definition :: Definition '[] Schema
+  definition :: Definition '["public" ::: '[]] '["public" ::: Schema]
   definition = createTable #tab
     ( (int & nullable) `as` #a :*
       (int & nullable) `as` #b )
@@ -345,11 +345,12 @@ type Schema = '[
     "id" ::: 'Def :=> 'NotNull 'PGint4,
     "name" ::: 'NoDef :=> 'NotNull 'PGtext
   ])]
+type DB = '["public" ::: Schema]
 :}
 
 >>> :{
 let
-  definition :: Definition '[] Schema
+  definition :: Definition '["public" ::: '[]] DB
   definition = createTable #tab
     ( serial `as` #id :*
       (text & notNullable) `as` #name )
@@ -395,7 +396,7 @@ type Schema =
 
 >>> :{
 let
-  setup :: Definition '[] Schema
+  setup :: Definition '["public" ::: '[]] '["public" ::: Schema]
   setup =
    createTable #users
      ( serial `as` #id :*
@@ -430,7 +431,7 @@ type Schema =
 
 >>> :{
 let
-  setup :: Definition '[] Schema
+  setup :: Definition '["public" ::: '[]] '["public" ::: Schema]
   setup =
    createTable #employees
      ( serial `as` #id :*
@@ -533,7 +534,7 @@ DROP statements
 --
 -- >>> :{
 -- let
---   definition :: Definition '["muh_table" ::: 'Table t] '[]
+--   definition :: Definition '["public" ::: '["muh_table" ::: 'Table t]] '["public" ::: '[]]
 --   definition = dropTable #muh_table
 -- :}
 --
@@ -591,7 +592,7 @@ newtype AlterTable
 -- let
 --   definition :: Definition
 --     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]]
---     '["public" ::: '["tab" ::: 'Table ('["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]]
+--     '["public" ::: '["tab" ::: 'Table ('["positive" ::: 'Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]]
 --   definition = alterTable #tab (addConstraint #positive (check #col (#col .> 0)))
 -- in printSQL definition
 -- :}

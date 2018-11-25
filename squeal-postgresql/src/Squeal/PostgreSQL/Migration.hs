@@ -31,7 +31,7 @@ type EmailsTable =
 
 >>> :{
 let
-  makeUsers :: Migration IO '[] '["users" ::: 'Table UsersTable]
+  makeUsers :: Migration IO '["public" ::: '[]] '["public" ::: '["users" ::: 'Table UsersTable]]
   makeUsers = Migration
     { name = "make users table"
     , up = void . define $
@@ -45,8 +45,8 @@ let
 
 >>> :{
 let
-  makeEmails :: Migration IO '["users" ::: 'Table UsersTable]
-    '["users" ::: 'Table UsersTable, "emails" ::: 'Table EmailsTable]
+  makeEmails :: Migration IO '["public" ::: '["users" ::: 'Table UsersTable]]
+    '["public" ::: '["users" ::: 'Table UsersTable, "emails" ::: 'Table EmailsTable]]
   makeEmails = Migration
     { name = "make emails table"
     , up = void . define $
@@ -68,10 +68,10 @@ Now that we have a couple migrations we can chain them together.
 >>> :{
 let
   numMigrations
-    :: Has "schema_migrations" schema ('Table MigrationsTable)
-    => PQ schema schema IO ()
+    :: Has "migrations" db MigrationsSchema
+    => PQ db db IO ()
   numMigrations = do
-    result <- runQuery (selectStar (from (table (#schema_migrations `as` #m))))
+    result <- runQuery (selectStar (from (table (#migrations ! #schema_migrations `as` #m))))
     num <- ntuples result
     liftBase $ print num
 :}
