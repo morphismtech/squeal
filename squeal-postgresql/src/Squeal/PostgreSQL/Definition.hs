@@ -590,8 +590,8 @@ newtype AlterTable
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
---     '["tab" ::: 'Table ('["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]]
+--     '["public" ::: '["tab" ::: 'Table ('["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]]
 --   definition = alterTable #tab (addConstraint #positive (check #col (#col .> 0)))
 -- in printSQL definition
 -- :}
@@ -615,8 +615,8 @@ addConstraint alias constraint = UnsafeAlterTable $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: 'Table ('["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
---     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
+--     '["public" ::: '["tab" ::: 'Table ('["positive" ::: Check '["col"]] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]]
 --   definition = alterTable #tab (dropConstraint #positive)
 -- in printSQL definition
 -- :}
@@ -641,10 +641,10 @@ class AddColumn ty where
   -- >>> :{
   -- let
   --   definition :: Definition
-  --     '["tab" ::: 'Table ('[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4])]
-  --     '["tab" ::: 'Table ('[] :=>
+  --     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4])]]
+  --     '["public" ::: '["tab" ::: 'Table ('[] :=>
   --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
-  --         , "col2" ::: 'Def :=> 'Null 'PGtext ])]
+  --         , "col2" ::: 'Def :=> 'Null 'PGtext ])]]
   --   definition = alterTable #tab (addColumn #col2 (text & nullable & default_ "foo"))
   -- in printSQL definition
   -- :}
@@ -653,10 +653,10 @@ class AddColumn ty where
   -- >>> :{
   -- let
   --   definition :: Definition
-  --     '["tab" ::: 'Table ('[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4])]
-  --     '["tab" ::: 'Table ('[] :=>
+  --     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4])]]
+  --     '["public" ::: '["tab" ::: 'Table ('[] :=>
   --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
-  --         , "col2" ::: 'NoDef :=> 'Null 'PGtext ])]
+  --         , "col2" ::: 'NoDef :=> 'Null 'PGtext ])]]
   --   definition = alterTable #tab (addColumn #col2 (text & nullable))
   -- in printSQL definition
   -- :}
@@ -682,10 +682,10 @@ instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: 'Table ('[] :=>
+--     '["public" ::: '["tab" ::: 'Table ('[] :=>
 --        '[ "col1" ::: 'NoDef :=> 'Null 'PGint4
---         , "col2" ::: 'NoDef :=> 'Null 'PGtext ])]
---     '["tab" ::: 'Table ('[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4])]
+--         , "col2" ::: 'NoDef :=> 'Null 'PGtext ])]]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col1" ::: 'NoDef :=> 'Null 'PGint4])]]
 --   definition = alterTable #tab (dropColumn #col2)
 -- in printSQL definition
 -- :}
@@ -706,8 +706,8 @@ dropColumn column = UnsafeAlterTable $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: 'Table ('[] :=> '["foo" ::: 'NoDef :=> 'Null 'PGint4])]
---     '["tab" ::: 'Table ('[] :=> '["bar" ::: 'NoDef :=> 'Null 'PGint4])]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["foo" ::: 'NoDef :=> 'Null 'PGint4])]]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["bar" ::: 'NoDef :=> 'Null 'PGint4])]]
 --   definition = alterTable #tab (renameColumn #foo #bar)
 -- in printSQL definition
 -- :}
@@ -751,8 +751,8 @@ newtype AlterColumn (db :: DBType) (ty0 :: ColumnType) (ty1 :: ColumnType) =
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
---     '["tab" ::: 'Table ('[] :=> '["col" ::: 'Def :=> 'Null 'PGint4])]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'Def :=> 'Null 'PGint4])]]
 --   definition = alterTable #tab (alterColumn #col (setDefault 5))
 -- in printSQL definition
 -- :}
@@ -768,8 +768,8 @@ setDefault expression = UnsafeAlterColumn $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: 'Table ('[] :=> '["col" ::: 'Def :=> 'Null 'PGint4])]
---     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'Def :=> 'Null 'PGint4])]]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
 --   definition = alterTable #tab (alterColumn #col dropDefault)
 -- in printSQL definition
 -- :}
@@ -784,8 +784,8 @@ dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
---     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]]
 --   definition = alterTable #tab (alterColumn #col setNotNull)
 -- in printSQL definition
 -- :}
@@ -799,8 +799,8 @@ setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
---     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
 --   definition = alterTable #tab (alterColumn #col dropNotNull)
 -- in printSQL definition
 -- :}
@@ -816,8 +816,8 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 -- >>> :{
 -- let
 --   definition :: Definition
---     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]
---     '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGnumeric])]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint4])]]
+--     '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGnumeric])]]
 --   definition =
 --     alterTable #tab (alterColumn #col (alterType (numeric & notNullable)))
 -- in printSQL definition
@@ -831,9 +831,9 @@ alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 -- >>> :{
 -- let
 --   definition :: Definition
---     '[ "abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])]
---     '[ "abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])
---      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]
+--     '[ "public" ::: '["abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])]]
+--     '[ "public" ::: '["abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])
+--      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]]
 --   definition =
 --     createView #bc (select (#b :* #c) (from (table #abc)))
 -- in printSQL definition
@@ -854,9 +854,9 @@ createView alias query = UnsafeDefinition $
 -- >>> :{
 -- let
 --   definition :: Definition
---     '[ "abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])
---      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]
---     '[ "abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])]
+--     '[ "public" ::: '["abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])
+--      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]]
+--     '[ "public" ::: '["abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])]]
 --   definition = dropView #bc
 -- in printSQL definition
 -- :}
@@ -869,7 +869,7 @@ dropView vw = UnsafeDefinition $ "DROP VIEW" <+> renderQualifiedAlias vw <> ";"
 
 -- | Enumerated types are created using the `createTypeEnum` command, for example
 --
--- >>> printSQL $ createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy")
+-- >>> printSQL $ (createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy") :: Definition '["public" ::: '[]] '["public" ::: '["mood" ::: 'Typedef ('PGenum '["sad","ok","happy"])]])
 -- CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
 createTypeEnum
   :: (KnownSymbol enum, Has sch db schema, SOP.All KnownSymbol labels)
@@ -887,7 +887,13 @@ createTypeEnum enum labels = UnsafeDefinition $
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance SOP.Generic Schwarma
 -- >>> instance SOP.HasDatatypeInfo Schwarma
--- >>> printSQL $ createTypeEnumFrom @Schwarma #schwarma
+-- >>> :{
+-- let
+--   createSchwarma :: Definition '["public" ::: '[]] '["public" ::: '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))]]
+--   createSchwarma = createTypeEnumFrom @Schwarma #schwarma
+-- in
+--   printSQL createSchwarma
+-- :}
 -- CREATE TYPE "schwarma" AS ENUM ('Beef', 'Lamb', 'Chicken');
 createTypeEnumFrom
   :: forall hask sch enum db schema.
@@ -912,7 +918,7 @@ type PGcomplex = 'PGcomposite
 
 >>> :{
 let
-  setup :: Definition '[] '["complex" ::: 'Typedef PGcomplex]
+  setup :: Definition '["public" ::: '[]] '["public" ::: '["complex" ::: 'Typedef PGcomplex]]
   setup = createTypeComposite #complex
     (float8 `as` #real :* float8 `as` #imaginary)
 in printSQL setup
@@ -939,7 +945,14 @@ createTypeComposite ty fields = UnsafeDefinition $
 -- >>> data Complex = Complex {real :: Double, imaginary :: Double} deriving GHC.Generic
 -- >>> instance SOP.Generic Complex
 -- >>> instance SOP.HasDatatypeInfo Complex
--- >>> printSQL $ createTypeCompositeFrom @Complex #complex
+-- >>> type DB = '["public" ::: '["complex" ::: 'Typedef (PG (Composite Complex))]]
+-- >>> :{
+-- let
+--   createComplex :: Definition '["public" ::: '[]] DB
+--   createComplex = createTypeCompositeFrom @Complex #complex
+-- in
+--   printSQL createComplex
+-- :}
 -- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 createTypeCompositeFrom
   :: forall hask sch ty db schema.
@@ -964,7 +977,7 @@ instance (KnownSymbol alias, PGTyped db ty)
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance SOP.Generic Schwarma
 -- >>> instance SOP.HasDatatypeInfo Schwarma
--- >>> printSQL (dropType #schwarma :: Definition '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))] '[])
+-- >>> printSQL (dropType #schwarma :: Definition '["public" ::: '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))]] '["public" ::: '[]])
 -- DROP TYPE "schwarma";
 dropType
   :: (Has sch db schema, Has td schema ('Typedef ty))

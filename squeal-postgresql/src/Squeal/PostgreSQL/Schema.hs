@@ -495,7 +495,7 @@ renderQualifiedAlias _ =
     qualifier = renderAlias (Alias @q)
     alias = renderAlias (Alias @a)
   in
-    if qualifier == "public" then alias else qualifier <> "." <> alias
+    if qualifier == "\"public\"" then alias else qualifier <> "." <> alias
 
 -- | @Elem@ is a promoted `Data.List.elem`.
 type family Elem x xs where

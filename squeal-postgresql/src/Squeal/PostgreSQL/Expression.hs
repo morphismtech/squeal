@@ -484,7 +484,7 @@ row exprs = UnsafeExpression $ "ROW" <> parenthesized
 --
 -- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression DB from grp params ('NotNull Complex)
 -- >>> printSQL $ i & field #complex #imaginary
--- (ROW(0, 1)::"public"."complex")."imaginary"
+-- (ROW(0, 1)::"complex")."imaginary"
 field
   :: ( Has sch db schema
      , Has tydef schema ('Typedef ('PGcomposite row))
