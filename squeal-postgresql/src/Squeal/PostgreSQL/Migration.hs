@@ -265,6 +265,7 @@ createMigrations
   :: Has "migrations" db MigrationsSchema
   => Definition db db
 createMigrations =
+  createSchemaIfNotExists #migrations >>>
   createTableIfNotExists (#migrations ! #schema_migrations)
     ( (text & notNullable) `as` #name :*
       (timestampWithTimeZone & notNullable & default_ currentTimestamp)

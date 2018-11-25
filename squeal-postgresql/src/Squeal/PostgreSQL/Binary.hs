@@ -114,7 +114,7 @@ type Schema =
 
 >>> :{
 let
-  setup :: Definition '[] Schema
+  setup :: Definition '["public" ::: '[]] '["public" ::: Schema]
   setup =
     createTypeEnumFrom @Schwarma #schwarma >>>
     createTypeCompositeFrom @Person #person
@@ -146,7 +146,7 @@ Once again, define a round trip query.
 
 >>> :{
 let
-  roundTrip :: Query Schema (TuplePG Row) (RowPG Row)
+  roundTrip :: Query '["public" ::: Schema] (TuplePG Row) (RowPG Row)
   roundTrip = values_ $
     parameter @1 (typedef #schwarma) `as` #schwarma :*
     parameter @2 (typedef #person)   `as` #person1  :*
@@ -157,7 +157,7 @@ Finally, we can drop our type definitions.
 
 >>> :{
 let
-  teardown :: Definition Schema '[]
+  teardown :: Definition '["public" ::: Schema] '["public" ::: '[]]
   teardown = dropType #schwarma >>> dropType #person
 :}
 
