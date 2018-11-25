@@ -147,7 +147,7 @@ simple query:
 >>> :{
 let
   query :: Query
-    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
+    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar (from (table #tab))
@@ -160,9 +160,9 @@ restricted query:
 >>> :{
 let
   query :: Query
-    '[ "tab" ::: 'Table ('[] :=>
+    '[ "public" ::: '[ "tab" ::: 'Table ('[] :=>
        '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
+        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]]
     '[]
     '[ "sum" ::: 'NotNull 'PGint4
      , "col1" ::: 'NotNull 'PGint4 ]
@@ -181,7 +181,7 @@ subquery:
 >>> :{
 let
   query :: Query
-    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
+    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
     '[]
     '["col" ::: 'Null 'PGint4]
   query =
@@ -196,7 +196,7 @@ limits and offsets:
 >>> :{
 let
   query :: Query
-    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
+    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar
@@ -210,7 +210,7 @@ parameterized query:
 >>> :{
 let
   query :: Query
-    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGfloat8])]
+    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGfloat8])]]
     '[ 'NotNull 'PGfloat8]
     '["col" ::: 'NotNull 'PGfloat8]
   query = selectStar
@@ -224,9 +224,9 @@ aggregation query:
 >>> :{
 let
   query :: Query
-    '[ "tab" ::: 'Table ('[] :=>
+    '["public" ::: '[ "tab" ::: 'Table ('[] :=>
        '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
+        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]]
     '[]
     '[ "sum" ::: 'NotNull 'PGint4
      , "col1" ::: 'NotNull 'PGint4 ]
@@ -244,7 +244,7 @@ sorted query:
 >>> :{
 let
   query :: Query
-    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
+    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectStar
@@ -259,7 +259,7 @@ joins:
 >>> :{
 let
   query :: Query
-    '[ "orders" ::: 'Table (
+    '["public" ::: '[ "orders" ::: 'Table (
          '["pk_orders" ::: PrimaryKey '["id"]
           ,"fk_customers" ::: ForeignKey '["customer_id"] "customers" '["id"]
           ,"fk_shippers" ::: ForeignKey '["shipper_id"] "shippers" '["id"]] :=>
@@ -278,7 +278,7 @@ let
          '[ "id" ::: 'NoDef :=> 'NotNull 'PGint4
           , "name" ::: 'NoDef :=> 'NotNull 'PGtext
           ])
-     ]
+     ]]
     '[]
     '[ "order_price" ::: 'NotNull 'PGfloat4
      , "customer_name" ::: 'NotNull 'PGtext
@@ -302,7 +302,7 @@ self-join:
 >>> :{
 let
   query :: Query
-    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
+    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
     '[]
     '["col" ::: 'Null 'PGint4]
   query = selectDotStar #t1
@@ -315,7 +315,7 @@ value queries:
 
 >>> :{
 let
-  query :: Query '[] '[] '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+  query :: Query db '[] '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
   query = values (1 `as` #foo :* true `as` #bar) [2 `as` #foo :* false `as` #bar]
 in printSQL query
 :}
@@ -326,7 +326,7 @@ set operations:
 >>> :{
 let
   query :: Query
-    '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]
+    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
     '[]
     '["col" ::: 'Null 'PGint4]
   query =
@@ -342,9 +342,9 @@ with queries:
 >>> :{
 let
   query :: Query
-    '[ "t1" ::: 'View
+    '["public" ::: '[ "t1" ::: 'View
        '[ "c1" ::: 'NotNull 'PGtext
-        , "c2" ::: 'NotNull 'PGtext] ]
+        , "c2" ::: 'NotNull 'PGtext] ]]
     '[]
     '[ "c1" ::: 'NotNull 'PGtext
      , "c2" ::: 'NotNull 'PGtext ]

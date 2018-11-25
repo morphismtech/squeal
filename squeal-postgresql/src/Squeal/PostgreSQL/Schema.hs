@@ -480,6 +480,12 @@ instance (q ~ q', a ~ a') => IsQualified q a (QualifiedAlias q' a') where
   _!_ = QualifiedAlias
 instance (q' ~ "public", a ~ a') => IsLabel a (QualifiedAlias q' a') where
   fromLabel = QualifiedAlias
+instance (q ~ q', a ~ a', KnownSymbol a') =>
+  IsQualified q a (Aliased (QualifiedAlias q') (a' ::: a')) where
+    _!_ = QualifiedAlias `As` Alias
+instance (q' ~ "public", a ~ a', KnownSymbol a') =>
+  IsLabel a (Aliased (QualifiedAlias q') (a' ::: a')) where
+    fromLabel = QualifiedAlias `As` Alias
 
 renderQualifiedAlias
   :: forall q a. (KnownSymbol q, KnownSymbol a)

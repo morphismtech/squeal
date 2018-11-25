@@ -244,7 +244,7 @@ class KnownNat n => HasParameter
   | n params -> ty where
     -- | `parameter` takes a `Nat` using type application and a `TypeExpression`.
     --
-    -- >>> let expr = parameter @1 int4 :: Expression sch rels grp '[ 'Null 'PGint4] ('Null 'PGint4)
+    -- >>> let expr = parameter @1 int4 :: Expression db from grp '[ 'Null 'PGint4] ('Null 'PGint4)
     -- >>> printSQL expr
     -- ($1 :: int4)
     parameter
@@ -260,7 +260,7 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) db params ty)
 -- | `param` takes a `Nat` using type application and for basic types,
 -- infers a `TypeExpression`.
 --
--- >>> let expr = param @1 :: Expression sch rels grp '[ 'Null 'PGint4] ('Null 'PGint4)
+-- >>> let expr = param @1 :: Expression db from grp '[ 'Null 'PGint4] ('Null 'PGint4)
 -- >>> printSQL expr
 -- ($1 :: int4)
 param
@@ -419,7 +419,7 @@ matchNull y f x = ifThenElse (isNull x) y
 `nullIf` gives @NULL@.
 
 >>> :set -XTypeApplications -XDataKinds
->>> let expr = nullIf false (param @1) :: Expression db rels grp '[ 'NotNull 'PGbool] ('Null 'PGbool)
+>>> let expr = nullIf false (param @1) :: Expression db from grp '[ 'NotNull 'PGbool] ('Null 'PGbool)
 >>> printSQL expr
 NULL IF (FALSE, ($1 :: bool))
 -}
@@ -463,7 +463,7 @@ instance (KnownSymbol label, label `In` labels) => IsPGlabel label
 --    , "imaginary" ::: 'NotNull 'PGfloat8 ]
 -- :}
 --
--- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression '[] '[] 'Ungrouped '[] ('NotNull Complex)
+-- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression db from grp params ('NotNull Complex)
 -- >>> printSQL i
 -- ROW(0, 1)
 row
@@ -478,11 +478,13 @@ row exprs = UnsafeExpression $ "ROW" <> parenthesized
 -- type Complex = 'PGcomposite
 --   '[ "real"      ::: 'NotNull 'PGfloat8
 --    , "imaginary" ::: 'NotNull 'PGfloat8 ]
+-- type Schema = '["complex" ::: 'Typedef Complex]
+-- type DB = '["public" ::: Schema]
 -- :}
 --
--- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression '["complex" ::: 'Typedef Complex] '[] 'Ungrouped '[] ('NotNull Complex)
+-- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression DB from grp params ('NotNull Complex)
 -- >>> printSQL $ i & field #complex #imaginary
--- (ROW(0, 1)::"complex")."imaginary"
+-- (ROW(0, 1)::"public"."complex")."imaginary"
 field
   :: ( Has sch db schema
      , Has tydef schema ('Typedef ('PGcomposite row))
