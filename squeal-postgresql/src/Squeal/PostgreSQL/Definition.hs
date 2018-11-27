@@ -827,24 +827,24 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 alterType :: ColumnTypeExpression db ty -> AlterColumn db ty0 ty
 alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
 
--- | Create a view.
---
--- >>> :{
--- let
---   definition :: Definition
---     '[ "public" ::: '["abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])]]
---     '[ "public" ::: '["abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])
---      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]]
---   definition =
---     createView #bc (select (#b :* #c) (from (table #abc)))
--- in printSQL definition
--- :}
--- CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
+{- | Create a view.
+>>> type ABC = '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4]
+>>> type BC = '["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4]
+>>> :{
+let
+  definition :: Definition
+    '[ "public" ::: '["abc" ::: 'Table ('[] :=> ABC)]]
+    '[ "public" ::: '["abc" ::: 'Table ('[] :=> ABC), "bc"  ::: 'View BC]]
+  definition =
+    createView #bc (select (#b :* #c) (from (table #abc)))
+in printSQL definition
+:}
+CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
+-}
 createView
   :: (KnownSymbol sch, KnownSymbol vw, Has sch db schema)
   => QualifiedAlias sch vw -- ^ the name of the view to add
-  -> Query db '[] view
-    -- ^ query
+  -> Query db '[] view -- ^ query
   -> Definition db (Alter sch (Create vw ('View view) schema) db)
 createView alias query = UnsafeDefinition $
   "CREATE" <+> "VIEW" <+> renderQualifiedAlias alias <+> "AS"
