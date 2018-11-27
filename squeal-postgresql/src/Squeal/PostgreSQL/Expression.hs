@@ -88,6 +88,7 @@ module Squeal.PostgreSQL.Expression
   , upper
   , charLength
   , like
+  , ilike
     -- ** Json
     -- *** Json and Jsonb operators
   , (.->)
@@ -954,6 +955,19 @@ like
   -- ^ pattern
   -> Expression schema from grouping params (nullity 'PGbool)
 like = unsafeBinaryOp "LIKE"
+
+-- | The key word ILIKE can be used instead of LIKE to make the
+-- match case-insensitive according to the active locale.
+--
+-- >>> printSQL $ "abc" `ilike` "a%"
+-- (E'abc' ILIKE E'a%')
+ilike
+  :: Expression schema from grouping params (nullity 'PGtext)
+  -- ^ string
+  -> Expression schema from grouping params (nullity 'PGtext)
+  -- ^ pattern
+  -> Expression schema from grouping params (nullity 'PGbool)
+ilike = unsafeBinaryOp "ILIKE"
 
 {-----------------------------------------
  -- json and jsonb support
