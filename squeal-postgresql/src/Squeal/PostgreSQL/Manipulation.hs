@@ -27,6 +27,7 @@ module Squeal.PostgreSQL.Manipulation
   , ColumnValue (..)
   , ReturningClause (ReturningStar, Returning)
   , ConflictClause (OnConflictDoRaise, OnConflictDoNothing, OnConflictDoUpdate)
+  , UsingClause (..)
     -- * Insert
   , insertRows
   , insertRow
@@ -42,6 +43,7 @@ module Squeal.PostgreSQL.Manipulation
     -- * Delete
   , deleteFrom
   , deleteFrom_
+  , also
   ) where
 
 import Control.DeepSeq
@@ -173,10 +175,37 @@ let
        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])] '[]
     '[ "col1" ::: 'NotNull 'PGint4
      , "col2" ::: 'NotNull 'PGint4 ]
-  manipulation = deleteFrom #tab (#col1 .== #col2) ReturningStar
+  manipulation = deleteFrom #tab NoUsing (#col1 .== #col2) ReturningStar
 in printSQL manipulation
 :}
 DELETE FROM "tab" WHERE ("col1" = "col2") RETURNING *
+
+delete and using clause:
+
+>>> :{
+let
+  manipulation :: Manipulation
+    '[ "tab" ::: 'Table ('[] :=>
+      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
+       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
+       ])
+     , "other_tab" ::: 'Table ('[] :=>
+      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
+       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
+       ])
+     , "third_tab" ::: 'Table ('[] :=>
+       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
+        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
+        ])
+     ] '[] '[]
+  manipulation =
+    deleteFrom #tab (Using (table #other_tab & also (table #third_tab)))
+    ( (#tab ! #col2 .== #other_tab ! #col2)
+    .&& (#tab ! #col2 .== #third_tab ! #col2) )
+    (Returning Nil)
+in printSQL manipulation
+:}
+DELETE FROM "tab" USING "other_tab" AS "other_tab", "third_tab" AS "third_tab" WHERE (("tab"."col2" = "other_tab"."col2") AND ("tab"."col2" = "third_tab"."col2"))
 
 with manipulation:
 
@@ -189,7 +218,7 @@ let
      , "products_deleted" ::: 'Table ProductsTable
      ] '[ 'NotNull 'PGdate] '[]
   manipulation = with
-    (deleteFrom #products (#date .< param @1) ReturningStar `as` #deleted_rows)
+    (deleteFrom #products NoUsing (#date .< param @1) ReturningStar `as` #deleted_rows)
     (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `as` #t)))))
 in printSQL manipulation
 :}
@@ -471,21 +500,33 @@ update_ tab columns wh = update tab columns wh (Returning Nil)
 DELETE statements
 -----------------------------------------}
 
--- | Delete rows of a table.
+data UsingClause schema params from where
+  NoUsing :: UsingClause schema params '[]
+  Using
+    :: FromClause schema params from
+    -> UsingClause schema params from
+
+-- | Delete rows from a table.
 deleteFrom
   :: ( SOP.SListI results
      , Has tab schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
-  -> Condition schema '[tab ::: row] 'Ungrouped params
+  -> UsingClause schema params from
+  -- ^-- tables to add to the scope - more tables can be added through `also`.
+  -> Condition schema (tab ::: row ': from) 'Ungrouped params
   -- ^ condition under which to delete a row
   -> ReturningClause schema params row results -- ^ results to return
   -> Manipulation schema params results
-deleteFrom tab wh returning = UnsafeManipulation $
-  "DELETE FROM" <+> renderAlias tab
-  <+> "WHERE" <+> renderExpression wh
-  <> renderReturningClause returning
+deleteFrom tgt uses cond returning =
+  let renderUsing NoUsing = mempty
+      renderUsing (Using fc) = "USING" <+> renderFromClause fc <> " "
+  in UnsafeManipulation $
+    "DELETE FROM" <+> renderAlias tgt
+    <+> renderUsing uses
+    <> "WHERE" <+> renderExpression cond
+    <> renderReturningClause returning
 
 -- | Delete rows returning `Nil`.
 deleteFrom_
@@ -493,7 +534,23 @@ deleteFrom_
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => Alias tab -- ^ table to delete from
-  -> (forall t. Condition schema '[t ::: row] 'Ungrouped params)
+  -> UsingClause schema params from
+  -- ^-- tables to add to the scope - more tables can be added through `also`.
+  -> Condition schema (tab ::: row ': from) 'Ungrouped params
   -- ^ condition under which to delete a row
   -> Manipulation schema params '[]
-deleteFrom_ tab wh = deleteFrom tab wh (Returning Nil)
+deleteFrom_ tab uses wh = deleteFrom tab uses wh (Returning Nil)
+
+-- | This has the behaviour of a cartesian product, taking all
+-- possible combinations between @left@ and @right@ - exactly like a
+-- CROSS JOIN. Used when no "CROSS JOIN" syntax is required but simply
+-- a comma separated list of tables. Typical case is the `USING` clause
+-- of a DELETE query.
+also
+  :: FromClause schema params right
+  -- ^ right
+  -> FromClause schema params left
+  -- ^ left
+  -> FromClause schema params (Join left right)
+also right left = UnsafeFromClause $
+  renderFromClause left <> "," <+> renderFromClause right
