@@ -349,8 +349,8 @@ let
     '[ "c1" ::: 'NotNull 'PGtext
      , "c2" ::: 'NotNull 'PGtext ]
   query = with (
-    selectStar (from (view #t1)) `as` #t2 :>>
-    selectStar (from (view #t2)) `as` #t3
+    CommonTableExpression (selectStar (from (view #t1)) `as` #t2) :>>
+    CommonTableExpression (selectStar (from (view #t2)) `as` #t3) :>> Done
     ) (selectStar (from (view #t3)))
 in printSQL query
 :}
@@ -1362,34 +1362,33 @@ rowGteAny = unsafeRowSubqueryExpression ">= ANY"
 -- | A `CommonTableExpression` is an auxiliary statement in a `with` clause.
 data CommonTableExpression statement
   (params :: [NullityType])
-  (db :: DBType)
-  (schema0 :: SchemaType)
-  (schema1 :: SchemaType) where
+  (db0 :: DBType)
+  (db1 :: DBType) where
   CommonTableExpression
-    :: Has "public" db schema
+    :: ( Has "public" db schema
+       , Alter "public" (alias ::: 'View cte ': schema) db ~ db1 )
     => Aliased (statement db params) (alias ::: cte)
-    -> CommonTableExpression
-      statement params db schema (alias ::: 'View cte ': schema)
-instance
-  ( KnownSymbol vw
-  , Has "public" db schema
-  , schema1 ~ (vw ::: 'View cte ': schema)
-  ) => Aliasable vw
-    (statement db params cte)
-    (CommonTableExpression statement params db schema schema1) where
-      statement `as` vw = CommonTableExpression (statement `as` vw)
-instance
-  ( KnownSymbol vw
-  , Has "public" db schema
-  , schema1 ~ (vw ::: 'View cte ': schema)
-  ) => Aliasable vw (statement db params cte)
-    (AlignedList (CommonTableExpression statement params db) schema schema1) where
-      statement `as` vw = single (statement `as` vw)
+    -> CommonTableExpression statement params db db1
+-- instance
+--   ( KnownSymbol vw
+--   , Has "public" db schema
+--   , Alter "public" (vw ::: 'View cte ': schema) db ~ db1
+--   ) => Aliasable vw
+--     (statement db params cte)
+--     (CommonTableExpression statement params db db1) where
+--       statement `as` vw = CommonTableExpression (statement `as` vw)
+-- instance
+--   ( KnownSymbol vw
+--   , Has "public" db schema
+--   , Alter "public" (vw ::: 'View cte ': schema) db ~ db1
+--   ) => Aliasable vw (statement db params cte)
+--     (AlignedList (CommonTableExpression statement params) db db1) where
+--       statement `as` vw = single (statement `as` vw)
 
 -- | render a `CommonTableExpression`.
 renderCommonTableExpression
   :: (forall db ps row. statement db ps row -> ByteString) -- ^ render statement
-  -> CommonTableExpression statement params db0 schema0 schema1 -> ByteString
+  -> CommonTableExpression statement params db0 db1 -> ByteString
 renderCommonTableExpression renderStatement
   (CommonTableExpression (statement `As` alias)) =
     renderAlias alias <+> "AS" <+> parenthesized (renderStatement statement)
@@ -1397,8 +1396,8 @@ renderCommonTableExpression renderStatement
 -- | render a non-empty `AlignedList` of `CommonTableExpression`s.
 renderCommonTableExpressions
   :: (forall db ps row. statement db ps row -> ByteString) -- ^ render statement
-  -> CommonTableExpression statement params db0 schema0 schema1
-  -> AlignedList (CommonTableExpression statement params db0) schema1 schema2
+  -> CommonTableExpression statement params db0 db1
+  -> AlignedList (CommonTableExpression statement params) db1 db2
   -> ByteString
 renderCommonTableExpressions renderStatement cte ctes =
   renderCommonTableExpression renderStatement cte <> case ctes of
@@ -1412,9 +1411,9 @@ renderCommonTableExpressions renderStatement cte ctes =
 class With statement where
   with
     :: Has "public" db0 schema0
-    => AlignedList (CommonTableExpression statement params db0) schema0 schema1
+    => AlignedList (CommonTableExpression statement params) db0 db1
     -- ^ common table expressions
-    -> statement (Alter "public" schema1 db0) params row
+    -> statement db1 params row
     -- ^ larger query
     -> statement db0 params row
 instance With Query where

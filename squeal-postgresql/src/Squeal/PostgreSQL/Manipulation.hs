@@ -189,7 +189,7 @@ let
      , "products_deleted" ::: 'Table ProductsTable
      ]] '[ 'NotNull 'PGdate] '[]
   manipulation = with
-    (deleteFrom #products (#date .< param @1) ReturningStar `as` #deleted_rows)
+    (CommonTableExpression (deleteFrom #products (#date .< param @1) ReturningStar `as` #deleted_rows) :>> Done)
     (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `as` #t)))))
 in printSQL manipulation
 :}
