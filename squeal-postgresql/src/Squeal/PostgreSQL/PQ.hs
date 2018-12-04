@@ -124,7 +124,7 @@ To specify the schema you wish to connect with, use type application.
 >>> type Schema = '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint2]]
 >>> :set -XTypeApplications
 >>> :set -XOverloadedStrings
->>> conn <- connectdbs @Schema "host=localhost port=5432 schemasname=exampleschemas"
+>>> conn <- connectdb @Schema "host=localhost port=5432 dbname=exampledb"
 
 Note that, for now, squeal doesn't offer any protection from connecting
 with the wrong schema!
@@ -140,7 +140,7 @@ connectdb = fmap K . liftBase . LibPQ.connectdb
 finish :: MonadBase IO io => K LibPQ.Connection schemas -> io ()
 finish = liftBase . LibPQ.finish . unK
 
--- | Do `connectdbs` and `finish` before and after a computation.
+-- | Do `connectdb` and `finish` before and after a computation.
 withConnection
   :: forall schemas0 schemas1 io x
    . MonadBaseControl IO io

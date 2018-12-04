@@ -46,7 +46,8 @@ type EmailsConstraints =
 type Schema =
   '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns)
    , "emails" ::: 'Table (EmailsConstraints :=> EmailsColumns) ]
-type DB = '[ "public" ::: Schema ]
+type Schemas = Public Schema
+type DB = DBof Schemas
 :}
 
 Notice the use of type operators.
@@ -68,7 +69,7 @@ labels to refer to named tables and columns in our schema.
 
 >>> :{
 let
-  setup :: Definition '["public" ::: '[]] DB
+  setup :: Definition (Public '[]) Schemas
   setup = 
     createTable #users
       ( serial `as` #id :*
@@ -89,14 +90,14 @@ We can easily see the generated SQL is unsurprising looking.
 CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));
 CREATE TABLE "emails" ("id" serial, "user_id" int NOT NULL, "email" text NULL, CONSTRAINT "pk_emails" PRIMARY KEY ("id"), CONSTRAINT "fk_user_id" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 
-Notice that @setup@ starts with an empty public schema @'["public" ::: '[]]@ and produces @DB@.
+Notice that @setup@ starts with an empty public schema @(Public '[])@ and produces @Schemas@.
 In our `createTable` commands we included `TableConstraint`s to define
 primary and foreign keys, making them somewhat complex. Our @teardown@
 `Definition` is simpler.
 
 >>> :{
 let
-  teardown :: Definition DB '["public" ::: '[]]
+  teardown :: Definition Schemas (Public '[])
   teardown = dropTable #emails >>> dropTable #users
 :}
 
@@ -190,7 +191,7 @@ transformer and when the schema doesn't change we can use `Monad` and
 
 >>> :{
 let
-  session :: PQ DB DB IO ()
+  session :: PQ Schemas Schemas IO ()
   session = do
     idResults <- traversePrepared insertUser (Only . userName <$> users)
     ids <- traverse (fmap fromOnly . getRow 0) idResults

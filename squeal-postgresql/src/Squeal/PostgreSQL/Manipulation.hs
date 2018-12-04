@@ -62,12 +62,12 @@ A `Query` is also considered a `Manipulation` even though it does not modify dat
 
 simple insert:
 
+>>> type Columns = '["col1" ::: 'NoDef :=> 'Null 'PGint4, "col2" ::: 'Def :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> type Schemas = (Public Schema)
 >>> :{
 let
-  manipulation :: Manipulation
-    '[ "public" ::: '["tab" ::: 'Table ('[] :=>
-      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'Def :=> 'NotNull 'PGint4 ])]] '[] '[]
+  manipulation :: Manipulation (DBof Schemas) '[] '[]
   manipulation =
     insertRow_ #tab (Set 2 `as` #col1 :* Default `as` #col2)
 in printSQL manipulation
@@ -76,13 +76,11 @@ INSERT INTO "tab" ("col1", "col2") VALUES (2, DEFAULT)
 
 parameterized insert:
 
+>>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  manipulation :: Manipulation
-    '[ "public" ::: '["tab" ::: 'Table ('[] :=>
-      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]]
-    '[ 'NotNull 'PGint4, 'NotNull 'PGint4 ] '[]
+  manipulation :: Manipulation (DBof (Public Schema)) '[ 'NotNull 'PGint4, 'NotNull 'PGint4 ] '[]
   manipulation =
     insertRow_ #tab
       (Set (param @1) `as` #col1 :* Set (param @2) `as` #col2)
@@ -94,27 +92,21 @@ returning insert:
 
 >>> :{
 let
-  manipulation :: Manipulation
-    '[ "public" ::: '["tab" ::: 'Table ('[] :=>
-      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'Def :=> 'NotNull 'PGint4 ])]] '[]
-    '["fromOnly" ::: 'NotNull 'PGint4]
+  manipulation :: Manipulation (DBof (Public Schema)) '[] '["fromOnly" ::: 'NotNull 'PGint4]
   manipulation =
-    insertRow #tab (Set 2 `as` #col1 :* Default `as` #col2)
+    insertRow #tab (Set 2 `as` #col1 :* Set 3 `as` #col2)
       OnConflictDoRaise (Returning (#col1 `as` #fromOnly))
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (2, DEFAULT) RETURNING "col1" AS "fromOnly"
+INSERT INTO "tab" ("col1", "col2") VALUES (2, 3) RETURNING "col1" AS "fromOnly"
 
 upsert:
 
+>>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  manipulation :: Manipulation
-    '[ "public" ::: '["tab" ::: 'Table ('[] :=>
-      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]]
-    '[] '[ "sum" ::: 'NotNull 'PGint4]
+  manipulation :: Manipulation (DBof (Public Schema)) '[] '[ "sum" ::: 'NotNull 'PGint4]
   manipulation =
     insertRows #tab
       (Set 2 `as` #col1 :* Set 4 `as` #col2)
@@ -131,31 +123,17 @@ query insert:
 
 >>> :{
 let
-  manipulation :: Manipulation
-    '[ "public" ::: '["tab" ::: 'Table ('[] :=>
-      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
-       ])
-     , "other_tab" ::: 'Table ('[] :=>
-      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4
-       ])
-     ]] '[] '[]
-  manipulation =
-    insertQuery_ #tab
-      (selectStar (from (table (#other_tab `as` #t))))
+  manipulation :: Manipulation (DBof (Public Schema)) '[] '[]
+  manipulation = insertQuery_ #tab (selectStar (from (table #tab)))
 in printSQL manipulation
 :}
-INSERT INTO "tab" SELECT * FROM "other_tab" AS "t"
+INSERT INTO "tab" SELECT * FROM "tab" AS "tab"
 
 update:
 
 >>> :{
 let
-  manipulation :: Manipulation
-    '[ "public" ::: '["tab" ::: 'Table ('[] :=>
-      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]] '[] '[]
+  manipulation :: Manipulation (DBof (Public Schema)) '[] '[]
   manipulation =
     update_ #tab (Set 2 `as` #col1 :* Same `as` #col2)
       (#col1 ./= #col2)
@@ -167,10 +145,7 @@ delete:
 
 >>> :{
 let
-  manipulation :: Manipulation
-    '[ "public" ::: '["tab" ::: 'Table ('[] :=>
-      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]] '[]
+  manipulation :: Manipulation (DBof (Public Schema)) '[]
     '[ "col1" ::: 'NotNull 'PGint4
      , "col2" ::: 'NotNull 'PGint4 ]
   manipulation = deleteFrom #tab (#col1 .== #col2) ReturningStar
@@ -180,20 +155,17 @@ DELETE FROM "tab" WHERE ("col1" = "col2") RETURNING *
 
 with manipulation:
 
->>> type ProductsTable = '[] :=> '["product" ::: 'NoDef :=> 'NotNull 'PGtext, "date" ::: 'Def :=> 'NotNull 'PGdate]
-
+>>> type ProductsColumns = '["product" ::: 'NoDef :=> 'NotNull 'PGtext, "date" ::: 'Def :=> 'NotNull 'PGdate]
+>>> type ProductsSchema = '["products" ::: 'Table ('[] :=> ProductsColumns), "products_deleted" ::: 'Table ('[] :=> ProductsColumns)]
 >>> :{
 let
-  manipulation :: Manipulation
-    '[ "public" ::: '["products" ::: 'Table ProductsTable
-     , "products_deleted" ::: 'Table ProductsTable
-     ]] '[ 'NotNull 'PGdate] '[]
+  manipulation :: Manipulation (DBof (Public ProductsSchema)) '[ 'NotNull 'PGdate] '[]
   manipulation = with
-    (CommonTableExpression (deleteFrom #products (#date .< param @1) ReturningStar `as` #deleted_rows) :>> Done)
-    (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `as` #t)))))
+    (deleteFrom #products (#date .< param @1) ReturningStar `as` #del)
+    (insertQuery_ #products_deleted (selectStar (from (common (#del)))))
 in printSQL manipulation
 :}
-WITH "deleted_rows" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "deleted_rows" AS "t"
+WITH "del" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "del" AS "del"
 -}
 
 newtype Manipulation

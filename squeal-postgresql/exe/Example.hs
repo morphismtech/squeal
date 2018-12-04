@@ -6,8 +6,6 @@
   , OverloadedStrings
   , OverloadedLists
   , TypeApplications
-  , TypeFamilies
-  , TypeInType
   , TypeOperators
 #-}
 
@@ -43,11 +41,11 @@ type Schema =
         ])
    ]
 
-type family Schemas0 :: SchemasType where Schemas0 = '["public" ::: '[]]
-type family Schemas :: SchemasType where Schemas = '["public" ::: Schema]
-type DB = '[] :=> Schemas
+type Schemas = Public Schema
 
-setup :: Definition Schemas0 Schemas
+type DB = DBof Schemas
+
+setup :: Definition (Public '[]) Schemas
 setup = 
   createTable #users
     ( serial `as` #id :*
@@ -63,7 +61,7 @@ setup =
       foreignKey #user_id #users #id
         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
 
-teardown :: Definition Schemas Schemas0
+teardown :: Definition Schemas (Public '[])
 teardown = dropTable #emails >>> dropTable #users
 
 insertUser :: Manipulation DB '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]

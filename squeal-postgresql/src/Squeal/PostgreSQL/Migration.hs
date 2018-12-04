@@ -31,7 +31,7 @@ type EmailsTable =
 
 >>> :{
 let
-  makeUsers :: Migration IO '["public" ::: '[]] '["public" ::: '["users" ::: 'Table UsersTable]]
+  makeUsers :: Migration IO (Public '[]) '["public" ::: '["users" ::: 'Table UsersTable]]
   makeUsers = Migration
     { name = "make users table"
     , up = void . define $
@@ -77,7 +77,7 @@ let
 :}
 
 >>> :{
-withConnection "host=localhost port=5432 schemasname=exampleschemas" $
+withConnection "host=localhost port=5432 dbname=exampledb" $
   manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
     -- suppress notices
   & pqThen (migrateUp migrations)

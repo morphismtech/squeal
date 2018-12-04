@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeInType            #-}
 {-# LANGUAGE TypeOperators         #-}
 module ExceptionHandling
   ( specs
@@ -45,7 +46,9 @@ type Schema =
         ])
    ]
 
-type DB = '["public" ::: Schema]
+type Schemas = Public Schema
+
+type DB = DBof Schemas
 
 data User =
   User { userName  :: Text
@@ -61,7 +64,7 @@ insertUser = insertRows #users
   (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec) []
   OnConflictDoRaise (Returning (#id `as` #fromOnly))
 
-setup :: Definition '["public" ::: '[]] DB
+setup :: Definition (Public '[]) Schemas
 setup =
   createTable #users
     ( serial `as` #id :*
@@ -78,10 +81,10 @@ setup =
       foreignKey #user_id #users #id
         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
 
-teardown :: Definition DB '["public" ::: '[]]
+teardown :: Definition Schemas (Public '[])
 teardown = dropTable #emails >>> dropTable #users
 
-migration :: Migration IO '["public" ::: '[]] DB
+migration :: Migration IO (Public '[]) Schemas
 migration = Migration { name = "test"
                       , up = void $ define setup
                       , down = void $ define teardown }
@@ -100,10 +103,10 @@ connectionString = "host=localhost port=5432 dbname=exampledb"
 testUser :: User
 testUser = User "TestUser" Nothing []
 
-newUser :: (MonadBase IO m, MonadPQ DB m) => User -> m ()
+newUser :: (MonadBase IO m, MonadPQ Schemas m) => User -> m ()
 newUser u = void $ manipulateParams insertUser (userName u, userVec u)
 
-insertUserTwice :: (MonadBase IO m, MonadPQ DB m) => m ()
+insertUserTwice :: (MonadBase IO m, MonadPQ Schemas m) => m ()
 insertUserTwice = newUser testUser >> newUser testUser
 
 specs :: SpecWith ()

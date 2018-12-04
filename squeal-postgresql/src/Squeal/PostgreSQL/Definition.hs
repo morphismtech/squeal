@@ -153,7 +153,7 @@ type Table = '[] :=>
 
 >>> :{
 let
-  setup :: Definition '["public" ::: '[]] '["public" ::: '["tab" ::: 'Table Table]]
+  setup :: Definition (Public '[]) (Public '["tab" ::: 'Table Table])
   setup = createTable #tab
     (nullable int `as` #a :* nullable real `as` #b) Nil
 in printSQL setup
@@ -189,11 +189,11 @@ type Table = '[] :=>
    , "b" ::: 'NoDef :=> 'Null 'PGfloat4 ]
 :}
 
->>> type DB = '["public" ::: '["tab" ::: 'Table Table]]
+>>> type Schemas = Public '["tab" ::: 'Table Table]
 
 >>> :{
 let
-  setup :: Definition DB DB
+  setup :: Definition Schemas Schemas
   setup = createTableIfNotExists #tab
     (nullable int `as` #a :* nullable real `as` #b) Nil
 in printSQL setup
@@ -280,7 +280,7 @@ type Schema = '[
 
 >>> :{
 let
-  definition :: Definition '["public" ::: '[]] '["public" ::: Schema]
+  definition :: Definition (Public '[]) (Public Schema)
   definition = createTable #tab
     ( (int & notNullable) `as` #a :*
       (int & notNullable) `as` #b )
@@ -315,7 +315,7 @@ type Schema = '[
 
 >>> :{
 let
-  definition :: Definition '["public" ::: '[]] '["public" ::: Schema]
+  definition :: Definition (Public '[]) (Public Schema)
   definition = createTable #tab
     ( (int & nullable) `as` #a :*
       (int & nullable) `as` #b )
@@ -345,12 +345,11 @@ type Schema = '[
     "id" ::: 'Def :=> 'NotNull 'PGint4,
     "name" ::: 'NoDef :=> 'NotNull 'PGtext
   ])]
-type DB = '["public" ::: Schema]
 :}
 
 >>> :{
 let
-  definition :: Definition '["public" ::: '[]] DB
+  definition :: Definition (Public '[]) (Public Schema)
   definition = createTable #tab
     ( serial `as` #id :*
       (text & notNullable) `as` #name )
@@ -396,7 +395,7 @@ type Schema =
 
 >>> :{
 let
-  setup :: Definition '["public" ::: '[]] '["public" ::: Schema]
+  setup :: Definition (Public '[]) (Public Schema)
   setup =
    createTable #users
      ( serial `as` #id :*
@@ -431,7 +430,7 @@ type Schema =
 
 >>> :{
 let
-  setup :: Definition '["public" ::: '[]] '["public" ::: Schema]
+  setup :: Definition (Public '[]) (Public Schema)
   setup =
    createTable #employees
      ( serial `as` #id :*
@@ -534,7 +533,7 @@ DROP statements
 --
 -- >>> :{
 -- let
---   definition :: Definition '["public" ::: '["muh_table" ::: 'Table t]] '["public" ::: '[]]
+--   definition :: Definition '["public" ::: '["muh_table" ::: 'Table t]] (Public '[])
 --   definition = dropTable #muh_table
 -- :}
 --
@@ -870,7 +869,7 @@ dropView vw = UnsafeDefinition $ "DROP VIEW" <+> renderQualifiedAlias vw <> ";"
 
 -- | Enumerated types are created using the `createTypeEnum` command, for example
 --
--- >>> printSQL $ (createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy") :: Definition '["public" ::: '[]] '["public" ::: '["mood" ::: 'Typedef ('PGenum '["sad","ok","happy"])]])
+-- >>> printSQL $ (createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy") :: Definition (Public '[]) '["public" ::: '["mood" ::: 'Typedef ('PGenum '["sad","ok","happy"])]])
 -- CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
 createTypeEnum
   :: (KnownSymbol enum, Has sch schemas schema, SOP.All KnownSymbol labels)
@@ -890,7 +889,7 @@ createTypeEnum enum labels = UnsafeDefinition $
 -- >>> instance SOP.HasDatatypeInfo Schwarma
 -- >>> :{
 -- let
---   createSchwarma :: Definition '["public" ::: '[]] '["public" ::: '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))]]
+--   createSchwarma :: Definition (Public '[]) '["public" ::: '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))]]
 --   createSchwarma = createTypeEnumFrom @Schwarma #schwarma
 -- in
 --   printSQL createSchwarma
@@ -919,7 +918,7 @@ type PGcomplex = 'PGcomposite
 
 >>> :{
 let
-  setup :: Definition '["public" ::: '[]] '["public" ::: '["complex" ::: 'Typedef PGcomplex]]
+  setup :: Definition (Public '[]) '["public" ::: '["complex" ::: 'Typedef PGcomplex]]
   setup = createTypeComposite #complex
     (float8 `as` #real :* float8 `as` #imaginary)
 in printSQL setup
@@ -946,10 +945,10 @@ createTypeComposite ty fields = UnsafeDefinition $
 -- >>> data Complex = Complex {real :: Double, imaginary :: Double} deriving GHC.Generic
 -- >>> instance SOP.Generic Complex
 -- >>> instance SOP.HasDatatypeInfo Complex
--- >>> type DB = '["public" ::: '["complex" ::: 'Typedef (PG (Composite Complex))]]
+-- >>> type Schema = '["complex" ::: 'Typedef (PG (Composite Complex))]
 -- >>> :{
 -- let
---   createComplex :: Definition '["public" ::: '[]] DB
+--   createComplex :: Definition (Public '[]) (Public Schema)
 --   createComplex = createTypeCompositeFrom @Complex #complex
 -- in
 --   printSQL createComplex
@@ -978,7 +977,7 @@ instance (KnownSymbol alias, PGTyped schemas ty)
 -- >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
 -- >>> instance SOP.Generic Schwarma
 -- >>> instance SOP.HasDatatypeInfo Schwarma
--- >>> printSQL (dropType #schwarma :: Definition '["public" ::: '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))]] '["public" ::: '[]])
+-- >>> printSQL (dropType #schwarma :: Definition '["public" ::: '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))]] (Public '[]))
 -- DROP TYPE "schwarma";
 dropType
   :: (Has sch schemas schema, Has td schema ('Typedef ty))

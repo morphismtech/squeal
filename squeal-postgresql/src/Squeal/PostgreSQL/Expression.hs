@@ -243,7 +243,7 @@ class KnownNat n => HasParameter
   | n params -> ty where
     -- | `parameter` takes a `Nat` using type application and a `TypeExpression`.
     --
-    -- >>> let expr = parameter @1 int4 :: Expression db from grp '[ 'Null 'PGint4] ('Null 'PGint4)
+    -- >>> let expr = parameter @1 int4 :: Expression (DBof schemas) from grp '[ 'Null 'PGint4] ('Null 'PGint4)
     -- >>> printSQL expr
     -- ($1 :: int4)
     parameter
@@ -259,14 +259,14 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
 -- | `param` takes a `Nat` using type application and for basic types,
 -- infers a `TypeExpression`.
 --
--- >>> let expr = param @1 :: Expression db from grp '[ 'Null 'PGint4] ('Null 'PGint4)
+-- >>> let expr = param @1 :: Expression (commons :=> schemas) from grp '[ 'Null 'PGint4] ('Null 'PGint4)
 -- >>> printSQL expr
 -- ($1 :: int4)
 param
-  :: forall n commons schemas params from grouping ty
-   . (PGTyped schemas ty, HasParameter n params ty)
-  => Expression (commons :=> schemas) from grouping params ty -- ^ param
-param = parameter @n pgtype
+  :: forall n db commons schemas params from grouping ty
+   . (db ~ (commons :=> schemas), PGTyped schemas ty, HasParameter n params ty)
+  => Expression db from grouping params ty -- ^ param
+param = parameter @n (pgtype @schemas)
 
 instance (HasUnique table from columns, Has column columns ty)
   => IsLabel column (Expression db from 'Ungrouped params ty) where
@@ -418,7 +418,7 @@ matchNull y f x = ifThenElse (isNull x) y
 `nullIf` gives @NULL@.
 
 >>> :set -XTypeApplications -XDataKinds
->>> let expr = nullIf false (param @1) :: Expression db from grp '[ 'NotNull 'PGbool] ('Null 'PGbool)
+>>> let expr = nullIf false (param @1) :: Expression (commons :=> schema) from grp '[ 'NotNull 'PGbool] ('Null 'PGbool)
 >>> printSQL expr
 NULL IF (FALSE, ($1 :: bool))
 -}
@@ -478,7 +478,7 @@ row exprs = UnsafeExpression $ "ROW" <> parenthesized
 --   '[ "real"      ::: 'NotNull 'PGfloat8
 --    , "imaginary" ::: 'NotNull 'PGfloat8 ]
 -- type Schema = '["complex" ::: 'Typedef Complex]
--- type DB = '["public" ::: Schema]
+-- type DB = DBof (Public Schema)
 -- :}
 --
 -- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression DB from grp params ('NotNull Complex)
@@ -505,7 +505,7 @@ instance Monoid
     mempty = array []
     mappend = (<>)
 
--- | >>> let expr = greatest currentTimestamp [param @1] :: Expression sch rels grp '[ 'NotNull 'PGtimestamptz] ('NotNull 'PGtimestamptz)
+-- | >>> let expr = greatest currentTimestamp [param @1] :: Expression (commons :=> schemas) rels grp '[ 'NotNull 'PGtimestamptz] ('NotNull 'PGtimestamptz)
 -- >>> printSQL expr
 -- GREATEST(CURRENT_TIMESTAMP, ($1 :: timestamp with time zone))
 greatest
