@@ -55,7 +55,9 @@ module Squeal.PostgreSQL.Schema
   , SchemumType (..)
   , SchemaType
   , SchemasType
+  , Public
   , DBType
+  , DBof
     -- * Constraints
   , (:=>)
   , ColumnConstraint (..)
@@ -686,7 +688,12 @@ type SchemaType = [(Symbol,SchemumType)]
 
 type SchemasType = [(Symbol,SchemaType)]
 
+type family Public (schema :: SchemaType) :: SchemasType
+  where Public schema = '["public" ::: schema]
+
 type DBType = (FromType,SchemasType)
+
+type family DBof :: SchemasType -> DBType where DBof = '(,) '[]
 
 -- | `IsPGlabel` looks very much like the `IsLabel` class. Whereas
 -- the overloaded label, `fromLabel` is used for column references,
