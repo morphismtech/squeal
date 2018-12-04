@@ -12,7 +12,7 @@ First, we need some language extensions because Squeal uses modern GHC
 features.
 
 >>> :set -XDataKinds -XDeriveGeneric -XOverloadedLabels
->>> :set -XOverloadedStrings -XTypeApplications -XTypeOperators
+>>> :set -XOverloadedStrings -XTypeApplications -XTypeOperators -XGADTs
  
 We'll need some imports.
 
@@ -117,25 +117,18 @@ of our inserts.
 
 >>> :{
 let
-  insertUser :: Manipulation Schema '[ 'NotNull 'PGtext ] '[ "fromOnly" ::: 'NotNull 'PGint4 ]
-  insertUser = insertInto #users
-    (Values_ (defaultAs #id :* param @1 `as` #name))
-    (OnConflict (OnConstraint #pk_users) DoNothing) (Returning (#id `as` #fromOnly))
-:}
-
->>> :{
-let
-  insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
-  insertEmail = insertInto #emails
-    (Values_ (defaultAs #id :* param @1 `as` #user_id :* param @2 `as` #email))
-    (OnConflict (OnConstraint #pk_emails) DoNothing) (Returning Nil)
+  insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'Null 'PGtext ] '[]
+  insertUser = with (u `as` #u) e
+    where
+      u = insertInto #users
+        (Values_ (defaultAs #id :* param @1 `as` #name))
+        OnConflictDoRaise (Returning (#id :* param @2 `as` #email))
+      e = insertInto_ #emails
+        (Select (defaultAs #id :* #u ! #id `as` #user_id :* #u ! #email) (from (view #u)))
 :}
 
 >>> printSQL insertUser
-INSERT INTO "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) ON CONFLICT ON CONSTRAINT "pk_users" DO NOTHING RETURNING "id" AS "fromOnly"
-
->>> printSQL insertEmail
-INSERT INTO "emails" ("id", "user_id", "email") VALUES (DEFAULT, ($1 :: int4), ($2 :: text)) ON CONFLICT ON CONSTRAINT "pk_emails" DO NOTHING
+WITH "u" AS (INSERT INTO "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) RETURNING "id" AS "id", ($2 :: text) AS "email") INSERT INTO "emails" ("user_id", "email") SELECT "u"."id", "u"."email" FROM "u" AS "u"
 
 Next we write a `Query` to retrieve users from the database. We're not
 interested in the ids here, just the usernames and email addresses. We
@@ -191,9 +184,7 @@ transformer and when the schema doesn't change we can use `Monad` and
 let
   session :: PQ Schema Schema IO ()
   session = do
-    idResults <- traversePrepared insertUser (Only . userName <$> users)
-    ids <- traverse (fmap fromOnly . getRow 0) idResults
-    traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
+    _ <- traversePrepared_ insertUser users
     usersResult <- runQuery getUsers
     usersRows <- getRows usersResult
     liftBase $ print (usersRows :: [User])

@@ -318,12 +318,20 @@ renderQueryClause = \case
           ( parenthesized
           . renderCommaSeparated renderValuePart <$> row0 : rows )
   Select row0 tab ->
-    parenthesized (renderCommaSeparated renderAliasPart row0)
+    parenthesized (renderCommaSeparatedMaybe renderAliasPartMaybe row0)
     <+> "SELECT"
-    <+> renderCommaSeparated renderValuePart row0
+    <+> renderCommaSeparatedMaybe renderValuePartMaybe row0
     <+> renderTableExpression tab
   Subquery qry -> renderQuery qry
   where
+    renderAliasPartMaybe, renderValuePartMaybe
+      :: ColumnExpression schema from grp params column -> Maybe ByteString
+    renderAliasPartMaybe = \case
+      DefaultAs _ -> Nothing
+      Specific (_ `As` name) -> Just $ renderAlias name
+    renderValuePartMaybe = \case
+      DefaultAs _ -> Nothing
+      Specific (value `As` _) -> Just $ renderExpression value
     renderAliasPart, renderValuePart
       :: ColumnExpression schema from grp params column -> ByteString
     renderAliasPart = \case
