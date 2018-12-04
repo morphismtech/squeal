@@ -504,6 +504,10 @@ instance (MonadBase b m, schema0 ~ schema1)
   => MonadBase b (PQ schema0 schema1 m) where
   liftBase = lift . liftBase
 
+instance (MonadIO m, schema0 ~ schema1)
+  => MonadIO (PQ schema0 schema1 m) where
+  liftIO = lift . liftIO
+
 -- | A snapshot of the state of a `PQ` computation.
 type PQRun schema =
   forall m x. Monad m => PQ schema schema m x -> m (K x schema)
