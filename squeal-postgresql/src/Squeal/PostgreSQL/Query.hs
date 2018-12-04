@@ -81,6 +81,7 @@ module Squeal.PostgreSQL.Query
   , table
   , subquery
   , view
+  , common
   , crossJoin
   , innerJoin
   , leftOuterJoin
@@ -144,12 +145,11 @@ is called a `Query`. Let's see some examples of queries.
 
 simple query:
 
+>>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  query :: Query
-    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
-    '[]
-    '["col" ::: 'Null 'PGint4]
+  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
   query = selectStar (from (table #tab))
 in printSQL query
 :}
@@ -159,16 +159,9 @@ restricted query:
 
 >>> :{
 let
-  query :: Query
-    '[ "public" ::: '[ "tab" ::: 'Table ('[] :=>
-       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]]
-    '[]
-    '[ "sum" ::: 'NotNull 'PGint4
-     , "col1" ::: 'NotNull 'PGint4 ]
+  query :: Query (DBof (Public Schema)) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4]
   query =
-    select
-      ((#col1 + #col2) `as` #sum :* #col1)
+    select ((#col1 + #col2) `as` #sum :* #col1)
       ( from (table #tab)
         & where_ (#col1 .> #col2)
         & where_ (#col2 .> 0) )
@@ -180,13 +173,8 @@ subquery:
 
 >>> :{
 let
-  query :: Query
-    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
-    '[]
-    '["col" ::: 'Null 'PGint4]
-  query =
-    selectStar
-      (from (subquery (selectStar (from (table #tab)) `as` #sub)))
+  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query = selectStar (from (subquery (selectStar (from (table #tab)) `as` #sub)))
 in printSQL query
 :}
 SELECT * FROM (SELECT * FROM "tab" AS "tab") AS "sub"
@@ -195,12 +183,8 @@ limits and offsets:
 
 >>> :{
 let
-  query :: Query
-    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
-    '[]
-    '["col" ::: 'Null 'PGint4]
-  query = selectStar
-    (from (table #tab) & limit 100 & offset 2 & limit 50 & offset 2)
+  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query = selectStar (from (table #tab) & limit 100 & offset 2 & limit 50 & offset 2)
 in printSQL query
 :}
 SELECT * FROM "tab" AS "tab" LIMIT 50 OFFSET 4
@@ -209,27 +193,17 @@ parameterized query:
 
 >>> :{
 let
-  query :: Query
-    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGfloat8])]]
-    '[ 'NotNull 'PGfloat8]
-    '["col" ::: 'NotNull 'PGfloat8]
-  query = selectStar
-    (from (table #tab) & where_ (#col .> param @1))
+  query :: Query (DBof (Public Schema)) '[ 'NotNull 'PGint4] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query = selectStar (from (table #tab) & where_ (#col1 .> param @1))
 in printSQL query
 :}
-SELECT * FROM "tab" AS "tab" WHERE ("col" > ($1 :: float8))
+SELECT * FROM "tab" AS "tab" WHERE ("col1" > ($1 :: int4))
 
 aggregation query:
 
 >>> :{
 let
-  query :: Query
-    '["public" ::: '[ "tab" ::: 'Table ('[] :=>
-       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]]
-    '[]
-    '[ "sum" ::: 'NotNull 'PGint4
-     , "col1" ::: 'NotNull 'PGint4 ]
+  query :: Query (DBof (Public Schema)) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4 ]
   query =
     select (sum_ #col2 `as` #sum :* #col1)
     ( from (table (#tab `as` #table1))
@@ -243,42 +217,43 @@ sorted query:
 
 >>> :{
 let
-  query :: Query
-    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
-    '[]
-    '["col" ::: 'Null 'PGint4]
-  query = selectStar
-    (from (table #tab) & orderBy [#col & AscNullsFirst])
+  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query = selectStar (from (table #tab) & orderBy [#col1 & Asc])
 in printSQL query
 :}
-SELECT * FROM "tab" AS "tab" ORDER BY "col" ASC NULLS FIRST
+SELECT * FROM "tab" AS "tab" ORDER BY "col1" ASC
 
 joins:
 
 >>> :set -XFlexibleContexts
 >>> :{
+type OrdersColumns =
+  '[ "id"         ::: 'NoDef :=> 'NotNull 'PGint4
+  , "price"       ::: 'NoDef :=> 'NotNull 'PGfloat4
+  , "customer_id" ::: 'NoDef :=> 'NotNull 'PGint4
+  , "shipper_id"  ::: 'NoDef :=> 'NotNull 'PGint4
+  ]
+:}
+
+>>> :{
+type OrdersConstraints =
+  '["pk_orders" ::: PrimaryKey '["id"]
+  ,"fk_customers" ::: ForeignKey '["customer_id"] "customers" '["id"]
+  ,"fk_shippers" ::: ForeignKey '["shipper_id"] "shippers" '["id"] ]
+:}
+
+>>> type NamesColumns = '["id" ::: 'NoDef :=> 'NotNull 'PGint4, "name" ::: 'NoDef :=> 'NotNull 'PGtext]
+>>> type NamesConstraints = '["pk_customers" ::: PrimaryKey '["id"]]
+>>> :{
+type OrdersSchema =
+  '[ "orders"   ::: 'Table (OrdersConstraints :=> OrdersColumns)
+  , "customers" ::: 'Table (NamesConstraints :=> NamesColumns)
+  , "shippers" ::: 'Table (NamesConstraints :=> NamesColumns) ]
+:}
+
+>>> :{
 let
-  query :: Query
-    '["public" ::: '[ "orders" ::: 'Table (
-         '["pk_orders" ::: PrimaryKey '["id"]
-          ,"fk_customers" ::: ForeignKey '["customer_id"] "customers" '["id"]
-          ,"fk_shippers" ::: ForeignKey '["shipper_id"] "shippers" '["id"]] :=>
-         '[ "id"    ::: 'NoDef :=> 'NotNull 'PGint4
-          , "price"   ::: 'NoDef :=> 'NotNull 'PGfloat4
-          , "customer_id" ::: 'NoDef :=> 'NotNull 'PGint4
-          , "shipper_id"  ::: 'NoDef :=> 'NotNull 'PGint4
-          ])
-     , "customers" ::: 'Table (
-         '["pk_customers" ::: PrimaryKey '["id"]] :=>
-         '[ "id" ::: 'NoDef :=> 'NotNull 'PGint4
-          , "name" ::: 'NoDef :=> 'NotNull 'PGtext
-          ])
-     , "shippers" ::: 'Table (
-         '["pk_shippers" ::: PrimaryKey '["id"]] :=>
-         '[ "id" ::: 'NoDef :=> 'NotNull 'PGint4
-          , "name" ::: 'NoDef :=> 'NotNull 'PGtext
-          ])
-     ]]
+  query :: Query (DBof (Public OrdersSchema))
     '[]
     '[ "order_price" ::: 'NotNull 'PGfloat4
      , "customer_name" ::: 'NotNull 'PGtext
@@ -301,12 +276,8 @@ self-join:
 
 >>> :{
 let
-  query :: Query
-    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
-    '[]
-    '["col" ::: 'Null 'PGint4]
-  query = selectDotStar #t1
-    (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
+  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query = selectDotStar #t1 (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
 in printSQL query
 :}
 SELECT "t1".* FROM "tab" AS "t1" CROSS JOIN "tab" AS "t2"
@@ -325,14 +296,8 @@ set operations:
 
 >>> :{
 let
-  query :: Query
-    '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])]]
-    '[]
-    '["col" ::: 'Null 'PGint4]
-  query =
-    selectStar (from (table #tab))
-    `unionAll`
-    selectStar (from (table #tab))
+  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query = selectStar (from (table #tab)) `unionAll` selectStar (from (table #tab))
 in printSQL query
 :}
 (SELECT * FROM "tab" AS "tab") UNION ALL (SELECT * FROM "tab" AS "tab")
@@ -341,20 +306,14 @@ with queries:
 
 >>> :{
 let
-  query :: Query
-    '["public" ::: '[ "t1" ::: 'View
-       '[ "c1" ::: 'NotNull 'PGtext
-        , "c2" ::: 'NotNull 'PGtext] ]]
-    '[]
-    '[ "c1" ::: 'NotNull 'PGtext
-     , "c2" ::: 'NotNull 'PGtext ]
+  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
   query = with (
-    CommonTableExpression (selectStar (from (view #t1)) `as` #t2) :>>
-    CommonTableExpression (selectStar (from (view #t2)) `as` #t3) :>> Done
-    ) (selectStar (from (view #t3)))
+    selectStar (from (table #tab)) `as` #cte1 :>>
+    selectStar (from (common #cte1)) `as` #cte2
+    ) (selectStar (from (common #cte2)))
 in printSQL query
 :}
-WITH "t2" AS (SELECT * FROM "t1" AS "t1"), "t3" AS (SELECT * FROM "t2" AS "t2") SELECT * FROM "t3" AS "t3"
+WITH "cte1" AS (SELECT * FROM "tab" AS "tab"), "cte2" AS (SELECT * FROM "cte1" AS "cte1") SELECT * FROM "cte2" AS "cte2"
 -}
 newtype Query
   (db :: DBType)
@@ -515,7 +474,7 @@ selectDistinctDotStar rel tab = UnsafeQuery $
 -- but it can be used on its own.
 --
 -- >>> type Row = '["a" ::: 'NotNull 'PGint4, "b" ::: 'NotNull 'PGtext]
--- >>> let query = values (1 `as` #a :* "one" `as` #b) [] :: Query '[] '[] Row
+-- >>> let query = values (1 `as` #a :* "one" `as` #b) [] :: Query db '[] Row
 -- >>> printSQL query
 -- SELECT * FROM (VALUES (1, E'one')) AS t ("a", "b")
 values
@@ -879,6 +838,13 @@ view
 view (vw `As` alias) = UnsafeFromClause $
   renderQualifiedAlias vw <+> "AS" <+> renderAlias alias
 
+common
+  :: Has cte commons common
+  => Aliased Alias (alias ::: cte)
+  -> FromClause (commons :=> schemas) params '[alias ::: common]
+common (cte `As` alias) = UnsafeFromClause $
+  renderAlias cte <+> "AS" <+> renderAlias alias
+
 {- | @left & crossJoin right@. For every possible combination of rows from
     @left@ and @right@ (i.e., a Cartesian product), the joined table will contain
     a row consisting of all columns in @left@ followed by all columns in @right@.
@@ -1132,7 +1098,7 @@ is `true` if any equal subquery row is found.
 The result is `false` if no equal row is found
 (including the case where the subquery returns no rows).
 
->>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+>>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 >>> printSQL $ myRow `rowIn` values_ myRow
 ROW(1, FALSE) IN (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 -}
@@ -1151,7 +1117,7 @@ eqAll
   -> Expression db from grp params (nullity 'PGbool)
 eqAll = unsafeSubqueryExpression "= ALL"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowEqAll` values_ myRow
 -- ROW(1, FALSE) = ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowEqAll
@@ -1169,7 +1135,7 @@ eqAny
   -> Expression db from grp params (nullity 'PGbool)
 eqAny = unsafeSubqueryExpression "= ANY"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowEqAny` values_ myRow
 -- ROW(1, FALSE) = ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowEqAny
@@ -1187,7 +1153,7 @@ neqAll
   -> Expression db from grp params (nullity 'PGbool)
 neqAll = unsafeSubqueryExpression "<> ALL"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowNeqAll` values_ myRow
 -- ROW(1, FALSE) <> ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowNeqAll
@@ -1205,7 +1171,7 @@ neqAny
   -> Expression db from grp params (nullity 'PGbool)
 neqAny = unsafeSubqueryExpression "<> ANY"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowNeqAny` values_ myRow
 -- ROW(1, FALSE) <> ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowNeqAny
@@ -1223,7 +1189,7 @@ allLt
   -> Expression db from grp params (nullity 'PGbool)
 allLt = unsafeSubqueryExpression "ALL <"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowLtAll` values_ myRow
 -- ROW(1, FALSE) ALL < (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowLtAll
@@ -1241,7 +1207,7 @@ ltAny
   -> Expression db from grp params (nullity 'PGbool)
 ltAny = unsafeSubqueryExpression "ANY <"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowLtAll` values_ myRow
 -- ROW(1, FALSE) ALL < (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowLtAny
@@ -1259,7 +1225,7 @@ lteAll
   -> Expression db from grp params (nullity 'PGbool)
 lteAll = unsafeSubqueryExpression "<= ALL"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowLteAll` values_ myRow
 -- ROW(1, FALSE) <= ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowLteAll
@@ -1277,7 +1243,7 @@ lteAny
   -> Expression db from grp params (nullity 'PGbool)
 lteAny = unsafeSubqueryExpression "<= ANY"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowLteAny` values_ myRow
 -- ROW(1, FALSE) <= ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowLteAny
@@ -1295,7 +1261,7 @@ gtAll
   -> Expression db from grp params (nullity 'PGbool)
 gtAll = unsafeSubqueryExpression "> ALL"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowGtAll` values_ myRow
 -- ROW(1, FALSE) > ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowGtAll
@@ -1313,7 +1279,7 @@ gtAny
   -> Expression db from grp params (nullity 'PGbool)
 gtAny = unsafeSubqueryExpression "> ANY"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowGtAny` values_ myRow
 -- ROW(1, FALSE) > ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowGtAny
@@ -1331,7 +1297,7 @@ gteAll
   -> Expression db from grp params (nullity 'PGbool)
 gteAll = unsafeSubqueryExpression ">= ALL"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowGteAll` values_ myRow
 -- ROW(1, FALSE) >= ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowGteAll
@@ -1349,7 +1315,7 @@ gteAny
   -> Expression db from grp params (nullity 'PGbool)
 gteAny = unsafeSubqueryExpression ">= ANY"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression '[] '[] 'Ungrouped '[])) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowGteAny` values_ myRow
 -- ROW(1, FALSE) >= ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowGteAny
