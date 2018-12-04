@@ -68,8 +68,8 @@ Now that we have a couple migrations we can chain them together.
 >>> :{
 let
   numMigrations
-    :: Has "migrations" db MigrationsSchema
-    => PQ db db IO ()
+    :: Has "migrations" schemas MigrationsSchema
+    => PQ schemas schemas IO ()
   numMigrations = do
     result <- runQuery (selectStar (from (table (#migrations ! #schema_migrations `as` #m))))
     num <- ntuples result
@@ -77,7 +77,7 @@ let
 :}
 
 >>> :{
-withConnection "host=localhost port=5432 dbname=exampledb" $
+withConnection "host=localhost port=5432 schemasname=exampleschemas" $
   manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
     -- suppress notices
   & pqThen (migrateUp migrations)
@@ -124,11 +124,11 @@ import Squeal.PostgreSQL
 
 -- | A `Migration` should contain an inverse pair of
 -- `up` and `down` instructions and a unique `name`.
-data Migration io db0 db1 = Migration
+data Migration io schemas0 schemas1 = Migration
   { name :: Text -- ^ The `name` of a `Migration`.
     -- Each `name` in a `Migration` should be unique.
-  , up :: PQ db0 db1 io () -- ^ The `up` instruction of a `Migration`.
-  , down :: PQ db1 db0 io () -- ^ The `down` instruction of a `Migration`.
+  , up :: PQ schemas0 schemas1 io () -- ^ The `up` instruction of a `Migration`.
+  , down :: PQ schemas1 schemas0 io () -- ^ The `down` instruction of a `Migration`.
   }
 
 -- | Run `Migration`s by creating the `MigrationsTable`
@@ -137,10 +137,10 @@ data Migration io db0 db1 = Migration
 -- execute the `Migration` and insert its row in the `MigrationsTable`.
 migrateUp
   :: MonadBaseControl IO io
-  => AlignedList (Migration io) db0 db1 -- ^ migrations to run
+  => AlignedList (Migration io) schemas0 schemas1 -- ^ migrations to run
   -> PQ
-    ("migrations" ::: MigrationsSchema ': db0)
-    ("migrations" ::: MigrationsSchema ': db1)
+    ("migrations" ::: MigrationsSchema ': schemas0)
+    ("migrations" ::: MigrationsSchema ': schemas1)
     io ()
 migrateUp migration =
   define createMigrations
@@ -150,10 +150,10 @@ migrateUp migration =
 
     upMigrations
       :: MonadBaseControl IO io
-      => AlignedList (Migration io) db0 db1
+      => AlignedList (Migration io) schemas0 schemas1
       -> PQ
-        ("migrations" ::: MigrationsSchema ': db0)
-        ("migrations" ::: MigrationsSchema ': db1)
+        ("migrations" ::: MigrationsSchema ': schemas0)
+        ("migrations" ::: MigrationsSchema ': schemas1)
         io ()
     upMigrations = \case
       Done -> return ()
@@ -161,9 +161,9 @@ migrateUp migration =
 
     upMigration
       :: MonadBase IO io
-      => Migration io db0 db1 -> PQ
-        ("migrations" ::: MigrationsSchema ': db0)
-        ("migrations" ::: MigrationsSchema ': db1)
+      => Migration io schemas0 schemas1 -> PQ
+        ("migrations" ::: MigrationsSchema ': schemas0)
+        ("migrations" ::: MigrationsSchema ': schemas1)
         io ()
     upMigration step =
       queryExecuted step
@@ -178,9 +178,9 @@ migrateUp migration =
 
     queryExecuted
       :: MonadBase IO io
-      => Migration io db0 db1 -> PQ
-        ("migrations" ::: MigrationsSchema ': db0)
-        ("migrations" ::: MigrationsSchema ': db0)
+      => Migration io schemas0 schemas1 -> PQ
+        ("migrations" ::: MigrationsSchema ': schemas0)
+        ("migrations" ::: MigrationsSchema ': schemas0)
         io Row
     queryExecuted step = do
       result <- runQueryParams selectMigration (Only (name step))
@@ -193,10 +193,10 @@ migrateUp migration =
 -- rewind the `Migration` and delete its row in the `MigrationsTable`.
 migrateDown
   :: MonadBaseControl IO io
-  => AlignedList (Migration io) db0 db1 -- ^ migrations to rewind
+  => AlignedList (Migration io) schemas0 schemas1 -- ^ migrations to rewind
   -> PQ
-    ("migrations" ::: MigrationsSchema ': db1)
-    ("migrations" ::: MigrationsSchema ': db0)
+    ("migrations" ::: MigrationsSchema ': schemas1)
+    ("migrations" ::: MigrationsSchema ': schemas0)
     io ()
 migrateDown migrations =
   define createMigrations
@@ -206,9 +206,9 @@ migrateDown migrations =
 
     downMigrations
       :: MonadBaseControl IO io
-      => AlignedList (Migration io) db0 db1 -> PQ
-        ("migrations" ::: MigrationsSchema ': db1)
-        ("migrations" ::: MigrationsSchema ': db0)
+      => AlignedList (Migration io) schemas0 schemas1 -> PQ
+        ("migrations" ::: MigrationsSchema ': schemas1)
+        ("migrations" ::: MigrationsSchema ': schemas0)
         io ()
     downMigrations = \case
       Done -> return ()
@@ -216,9 +216,9 @@ migrateDown migrations =
 
     downMigration
       :: MonadBase IO io
-      => Migration io db0 db1 -> PQ
-        ("migrations" ::: MigrationsSchema ': db1)
-        ("migrations" ::: MigrationsSchema ': db0)
+      => Migration io schemas0 schemas1 -> PQ
+        ("migrations" ::: MigrationsSchema ': schemas1)
+        ("migrations" ::: MigrationsSchema ': schemas0)
         io ()
     downMigration step =
       queryExecuted step
@@ -233,9 +233,9 @@ migrateDown migrations =
 
     queryExecuted
       :: MonadBase IO io
-      => Migration io db0 db1 -> PQ
-        ("migrations" ::: MigrationsSchema ': db1)
-        ("migrations" ::: MigrationsSchema ': db1)
+      => Migration io schemas0 schemas1 -> PQ
+        ("migrations" ::: MigrationsSchema ': schemas1)
+        ("migrations" ::: MigrationsSchema ': schemas1)
         io Row
     queryExecuted step = do
       result <- runQueryParams selectMigration (Only (name step))
@@ -262,8 +262,8 @@ type MigrationsSchema = '["schema_migrations" ::: 'Table MigrationsTable]
 
 -- | Creates a `MigrationsTable` if it does not already exist.
 createMigrations
-  :: Has "migrations" db MigrationsSchema
-  => Definition db db
+  :: Has "migrations" schemas MigrationsSchema
+  => Definition schemas schemas
 createMigrations =
   createSchemaIfNotExists #migrations >>>
   createTableIfNotExists (#migrations ! #schema_migrations)
@@ -274,23 +274,23 @@ createMigrations =
 
 -- | Inserts a `Migration` into the `MigrationsTable`
 insertMigration
-  :: Has "migrations" db MigrationsSchema
-  => Manipulation db '[ 'NotNull 'PGtext] '[]
+  :: Has "migrations" schemas MigrationsSchema
+  => Manipulation ('[] :=> schemas) '[ 'NotNull 'PGtext] '[]
 insertMigration = insertRow_ (#migrations ! #schema_migrations)
   ( Set (param @1) `as` #name :*
     Default `as` #executed_at )
 
 -- | Deletes a `Migration` from the `MigrationsTable`
 deleteMigration
-  :: Has "migrations" db MigrationsSchema
-  => Manipulation db '[ 'NotNull 'PGtext ] '[]
+  :: Has "migrations" schemas MigrationsSchema
+  => Manipulation ('[] :=> schemas) '[ 'NotNull 'PGtext ] '[]
 deleteMigration = deleteFrom_ (#migrations ! #schema_migrations) (#name .== param @1)
 
 -- | Selects a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was executed.
 selectMigration
-  :: Has "migrations" db MigrationsSchema
-  => Query db '[ 'NotNull 'PGtext ]
+  :: Has "migrations" schemas MigrationsSchema
+  => Query ('[] :=> schemas) '[ 'NotNull 'PGtext ]
     '[ "executed_at" ::: 'NotNull 'PGtimestamptz ]
 selectMigration = select
   (#executed_at `as` #executed_at)

@@ -6,6 +6,8 @@
   , OverloadedStrings
   , OverloadedLists
   , TypeApplications
+  , TypeFamilies
+  , TypeInType
   , TypeOperators
 #-}
 
@@ -41,9 +43,11 @@ type Schema =
         ])
    ]
 
-type DB = '["public" ::: Schema]
+type family Schemas0 :: SchemasType where Schemas0 = '["public" ::: '[]]
+type family Schemas :: SchemasType where Schemas = '["public" ::: Schema]
+type DB = '[] :=> Schemas
 
-setup :: Definition '["public" ::: '[]] DB
+setup :: Definition Schemas0 Schemas
 setup = 
   createTable #users
     ( serial `as` #id :*
@@ -59,7 +63,7 @@ setup =
       foreignKey #user_id #users #id
         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
 
-teardown :: Definition DB '["public" ::: '[]]
+teardown :: Definition Schemas Schemas0
 teardown = dropTable #emails >>> dropTable #users
 
 insertUser :: Manipulation DB '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
@@ -97,7 +101,7 @@ users =
   , User "Carole" (Just "carole@hotmail.com") [Just 3]
   ]
 
-session :: (MonadBase IO pq, MonadPQ DB pq) => pq ()
+session :: (MonadBase IO pq, MonadPQ Schemas pq) => pq ()
 session = do
   liftBase $ Char8.putStrLn "manipulating"
   idResults <- traversePrepared insertUser ([(userName user, userVec user) | user <- users])

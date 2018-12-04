@@ -238,7 +238,6 @@ refer to the out-of-line data values.
 -}
 class KnownNat n => HasParameter
   (n :: Nat)
-  (db :: DBType)
   (params :: [NullityType])
   (ty :: NullityType)
   | n params -> ty where
@@ -248,14 +247,14 @@ class KnownNat n => HasParameter
     -- >>> printSQL expr
     -- ($1 :: int4)
     parameter
-      :: TypeExpression db ty
-      -> Expression db from grouping params ty
+      :: TypeExpression schemas ty
+      -> Expression (commons :=> schemas) from grouping params ty
     parameter ty = UnsafeExpression $ parenthesized $
       "$" <> renderNat @n <+> "::"
         <+> renderTypeExpression ty
-instance {-# OVERLAPPING #-} HasParameter 1 db (ty1:tys) ty1
-instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) db params ty)
-  => HasParameter n db (ty' : params) ty
+instance {-# OVERLAPPING #-} HasParameter 1 (ty1:tys) ty1
+instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
+  => HasParameter n (ty' : params) ty
 
 -- | `param` takes a `Nat` using type application and for basic types,
 -- infers a `TypeExpression`.
@@ -264,9 +263,9 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) db params ty)
 -- >>> printSQL expr
 -- ($1 :: int4)
 param
-  :: forall n db params from grouping ty
-   . (PGTyped db ty, HasParameter n db params ty)
-  => Expression db from grouping params ty -- ^ param
+  :: forall n commons schemas params from grouping ty
+   . (PGTyped schemas ty, HasParameter n params ty)
+  => Expression (commons :=> schemas) from grouping params ty -- ^ param
 param = parameter @n pgtype
 
 instance (HasUnique table from columns, Has column columns ty)
@@ -486,13 +485,13 @@ row exprs = UnsafeExpression $ "ROW" <> parenthesized
 -- >>> printSQL $ i & field #complex #imaginary
 -- (ROW(0, 1)::"complex")."imaginary"
 field
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , Has tydef schema ('Typedef ('PGcomposite row))
      , Has field row ty)
   => QualifiedAlias sch tydef -- ^ row type
   -> Alias field -- ^ field name
-  -> Expression db from grouping params ('NotNull ('PGcomposite row))
-  -> Expression db from grouping params ty
+  -> Expression (commons :=> schemas) from grouping params ('NotNull ('PGcomposite row))
+  -> Expression (commons :=> schemas) from grouping params ty
 field td fld expr = UnsafeExpression $
   parenthesized (renderExpression expr <> "::" <> renderQualifiedAlias td)
     <> "." <> renderAlias fld
@@ -633,11 +632,11 @@ atan2_ y x = UnsafeExpression $
 -- | >>> printSQL $ true & cast int4
 -- (TRUE :: int4)
 cast
-  :: TypeExpression db ty1
+  :: TypeExpression schemas ty1
   -- ^ type to cast as
-  -> Expression db from grouping params ty0
+  -> Expression (commons :=> schemas) from grouping params ty0
   -- ^ value to convert
-  -> Expression db from grouping params ty1
+  -> Expression (commons :=> schemas) from grouping params ty1
 cast ty x = UnsafeExpression $ parenthesized $
   renderExpression x <+> "::" <+> renderTypeExpression ty
 
@@ -1090,14 +1089,14 @@ Table 9.45: JSON creation functions
 -- | Literal binary JSON
 jsonbLit
   :: JSON.ToJSON x
-  => x -> Expression db from grouping params (nullity 'PGjsonb)
+  => x -> Expression (commons :=> schemas) from grouping params (nullity 'PGjsonb)
 jsonbLit = cast jsonb . UnsafeExpression
   . singleQuotedUtf8 . toStrict . JSON.encode
 
 -- | Literal JSON
 jsonLit
   :: JSON.ToJSON x
-  => x -> Expression db from grouping params (nullity 'PGjson)
+  => x -> Expression (commons :=> schemas) from grouping params (nullity 'PGjson)
 jsonLit = cast json . UnsafeExpression
   . singleQuotedUtf8 . toStrict . JSON.encode
 
@@ -1610,31 +1609,31 @@ type expressions
 -----------------------------------------}
 
 -- | `TypeExpression`s are used in `cast`s and `createTable` commands.
-newtype TypeExpression (db :: DBType) (ty :: NullityType)
+newtype TypeExpression (schemas :: SchemasType) (ty :: NullityType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
 -- | The enum or composite type in a `Typedef` can be expressed by its alias.
 typedef
-  :: (Has sch db schema, Has td schema ('Typedef ty))
+  :: (Has sch schemas schema, Has td schema ('Typedef ty))
   => QualifiedAlias sch td
-  -> TypeExpression db (nullity ty)
+  -> TypeExpression schemas (nullity ty)
 typedef = UnsafeTypeExpression . renderQualifiedAlias
 
 -- | The composite type corresponding to a `Table` definition can be expressed
 -- by its alias.
 typetable
-  :: (Has sch db schema, Has tab schema ('Table table))
+  :: (Has sch schemas schema, Has tab schema ('Table table))
   => QualifiedAlias sch tab
-  -> TypeExpression db (nullity ('PGcomposite (TableToRow table)))
+  -> TypeExpression schemas (nullity ('PGcomposite (TableToRow table)))
 typetable = UnsafeTypeExpression . renderQualifiedAlias
 
 -- | The composite type corresponding to a `View` definition can be expressed
 -- by its alias.
 typeview
-  :: (Has sch db schema, Has vw schema ('View view))
+  :: (Has sch schemas schema, Has vw schema ('View view))
   => QualifiedAlias sch vw
-  -> TypeExpression db (nullity ('PGcomposite view))
+  -> TypeExpression schemas (nullity ('PGcomposite view))
 typeview = UnsafeTypeExpression . renderQualifiedAlias
 
 -- | logical Boolean (true/false)

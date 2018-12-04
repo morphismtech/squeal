@@ -52,7 +52,7 @@ import Squeal.PostgreSQL.Schema
 
 -- | Run a schema invariant computation `transactionally`.
 transactionally
-  :: (MonadBaseControl IO tx, MonadPQ db tx)
+  :: (MonadBaseControl IO tx, MonadPQ schemas tx)
   => TransactionMode
   -> tx x -- ^ run inside a transaction
   -> tx x
@@ -64,30 +64,30 @@ transactionally mode tx = mask $ \restore -> do
 
 -- | Run a schema invariant computation `transactionally_` in `defaultMode`.
 transactionally_
-  :: (MonadBaseControl IO tx, MonadPQ db tx)
+  :: (MonadBaseControl IO tx, MonadPQ schemas tx)
   => tx x -- ^ run inside a transaction
   -> tx x
 transactionally_ = transactionally defaultMode
 
 -- | @BEGIN@ a transaction.
-begin :: MonadPQ db tx => TransactionMode -> tx (K Result ('[] :: RowType))
+begin :: MonadPQ schemas tx => TransactionMode -> tx (K Result ('[] :: RowType))
 begin mode = manipulate . UnsafeManipulation $
   "BEGIN" <+> renderTransactionMode mode <> ";"
 
 -- | @COMMIT@ a schema invariant transaction.
-commit :: MonadPQ db tx => tx (K Result ('[] :: RowType))
+commit :: MonadPQ schemas tx => tx (K Result ('[] :: RowType))
 commit = manipulate $ UnsafeManipulation "COMMIT;"
 
 -- | @ROLLBACK@ a schema invariant transaction.
-rollback :: MonadPQ db tx => tx (K Result ('[] :: RowType))
+rollback :: MonadPQ schemas tx => tx (K Result ('[] :: RowType))
 rollback = manipulate $ UnsafeManipulation "ROLLBACK;"
 
 -- | Run a schema changing computation `transactionallySchema`.
 transactionallySchema
   :: MonadBaseControl IO io
   => TransactionMode
-  -> PQ db0 db1 io x
-  -> PQ db0 db1 io x
+  -> PQ schemas0 schemas1 io x
+  -> PQ schemas0 schemas1 io x
 transactionallySchema mode u = PQ $ \ conn -> mask $ \ restore -> do
   _ <- liftBase . LibPQ.exec (unK conn) $
     "BEGIN" <+> renderTransactionMode mode <> ";"
@@ -99,8 +99,8 @@ transactionallySchema mode u = PQ $ \ conn -> mask $ \ restore -> do
 -- | Run a schema changing computation `transactionallySchema_` in `DefaultMode`.
 transactionallySchema_
   :: MonadBaseControl IO io
-  => PQ db0 db1 io x
-  -> PQ db0 db1 io x
+  => PQ schemas0 schemas1 io x
+  -> PQ schemas0 schemas1 io x
 transactionallySchema_ = transactionallySchema defaultMode
 
 -- | The available transaction characteristics are the transaction `IsolationLevel`,

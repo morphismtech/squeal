@@ -757,9 +757,9 @@ jsonbObjectKeys = unsafeSetOfFunction "jsonb_object_keys"
 
 unsafePopulateFunction
   :: ByteString
-  -> TypeExpression db (nullity ('PGcomposite row))
-  -> Expression db '[] 'Ungrouped params ty
-  -> Query db params row
+  -> TypeExpression schemas (nullity ('PGcomposite row))
+  -> Expression (commons :=> schemas) '[] 'Ungrouped params ty
+  -> Query (commons :=> schemas) params row
 unsafePopulateFunction fun ty expr = UnsafeQuery $
   "SELECT * FROM " <> fun <> "("
     <> "null::" <> renderTypeExpression ty <> ", "
@@ -768,42 +768,42 @@ unsafePopulateFunction fun ty expr = UnsafeQuery $
 -- | Expands the JSON expression to a row whose columns match the record
 -- type defined by the given table.
 jsonPopulateRecord
-  :: TypeExpression db (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression db '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
-  -> Query db params row
+  :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
+  -> Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
+  -> Query (commons :=> schemas) params row
 jsonPopulateRecord = unsafePopulateFunction "json_populate_record"
 
 -- | Expands the binary JSON expression to a row whose columns match the record
 -- type defined by the given table.
 jsonbPopulateRecord
-  :: TypeExpression db (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression db '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
-  -> Query db params row
+  :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
+  -> Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
+  -> Query (commons :=> schemas) params row
 jsonbPopulateRecord = unsafePopulateFunction "jsonb_populate_record"
 
 -- | Expands the outermost array of objects in the given JSON expression to a
 -- set of rows whose columns match the record type defined by the given table.
 jsonPopulateRecordSet
-  :: TypeExpression db (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression db '[] 'Ungrouped params (nullity 'PGjson) -- ^ json array
-  -> Query db params row
+  :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
+  -> Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjson) -- ^ json array
+  -> Query (commons :=> schemas) params row
 jsonPopulateRecordSet = unsafePopulateFunction "json_populate_record_set"
 
 -- | Expands the outermost array of objects in the given binary JSON expression
 -- to a set of rows whose columns match the record type defined by the given
 -- table.
 jsonbPopulateRecordSet
-  :: TypeExpression db (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression db '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb array
-  -> Query db params row
+  :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
+  -> Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb array
+  -> Query (commons :=> schemas) params row
 jsonbPopulateRecordSet = unsafePopulateFunction "jsonb_populate_record_set"
 
 unsafeRecordFunction
   :: (SListI record, json `In` PGJsonType)
   => ByteString
-  -> Expression db '[] 'Ungrouped params (nullity json)
-  -> NP (Aliased (TypeExpression db)) record
-  -> Query db params record
+  -> Expression (commons :=> schemas) '[] 'Ungrouped params (nullity json)
+  -> NP (Aliased (TypeExpression schemas)) record
+  -> Query (commons :=> schemas) params record
 unsafeRecordFunction fun expr types = UnsafeQuery $
   "SELECT * FROM " <> fun <> "("
     <> renderExpression expr <> ")"
@@ -816,33 +816,33 @@ unsafeRecordFunction fun expr types = UnsafeQuery $
 -- | Builds an arbitrary record from a JSON object.
 jsonToRecord
   :: SListI record
-  => Expression db '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
-  -> NP (Aliased (TypeExpression db)) record -- ^ record types
-  -> Query db params record
+  => Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
+  -> NP (Aliased (TypeExpression schemas)) record -- ^ record types
+  -> Query (commons :=> schemas) params record
 jsonToRecord = unsafeRecordFunction "json_to_record"
 
 -- | Builds an arbitrary record from a binary JSON object.
 jsonbToRecord
   :: SListI record
-  => Expression db '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
-  -> NP (Aliased (TypeExpression db)) record -- ^ record types
-  -> Query db params record
+  => Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
+  -> NP (Aliased (TypeExpression schemas)) record -- ^ record types
+  -> Query (commons :=> schemas) params record
 jsonbToRecord = unsafeRecordFunction "jsonb_to_record"
 
 -- | Builds an arbitrary set of records from a JSON array of objects.
 jsonToRecordSet
   :: SListI record
-  => Expression db '[] 'Ungrouped params (nullity 'PGjson) -- ^ json array
-  -> NP (Aliased (TypeExpression db)) record -- ^ record types
-  -> Query db params record
+  => Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjson) -- ^ json array
+  -> NP (Aliased (TypeExpression schemas)) record -- ^ record types
+  -> Query (commons :=> schemas) params record
 jsonToRecordSet = unsafeRecordFunction "json_to_record_set"
 
 -- | Builds an arbitrary set of records from a binary JSON array of objects.
 jsonbToRecordSet
   :: SListI record
-  => Expression db '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb array
-  -> NP (Aliased (TypeExpression db)) record -- ^ record types
-  -> Query db params record
+  => Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb array
+  -> NP (Aliased (TypeExpression schemas)) record -- ^ record types
+  -> Query (commons :=> schemas) params record
 jsonbToRecordSet = unsafeRecordFunction "jsonb_to_record_set"
 
 {-----------------------------------------
@@ -859,9 +859,9 @@ newtype FromClause db params from
 
 -- | A real `table` is a table from the database.
 table
-  :: (Has sch db schema, Has tab schema ('Table table))
+  :: (Has sch schemas schema, Has tab schema ('Table table))
   => Aliased (QualifiedAlias sch) (alias ::: tab)
-  -> FromClause db params '[alias ::: TableToRow table]
+  -> FromClause (commons :=> schemas) params '[alias ::: TableToRow table]
 table (tab `As` alias) = UnsafeFromClause $
   renderQualifiedAlias tab <+> "AS" <+> renderAlias alias
 
@@ -873,9 +873,9 @@ subquery = UnsafeFromClause . renderAliasedAs (parenthesized . renderQuery)
 
 -- | `view` derives a table from a `View`.
 view
-  :: (Has sch db schema, Has vw schema ('View view))
+  :: (Has sch schemas schema, Has vw schema ('View view))
   => Aliased (QualifiedAlias sch) (alias ::: vw)
-  -> FromClause db params '[alias ::: view]
+  -> FromClause (commons :=> schemas) params '[alias ::: view]
 view (vw `As` alias) = UnsafeFromClause $
   renderQualifiedAlias vw <+> "AS" <+> renderAlias alias
 
@@ -1365,18 +1365,25 @@ data CommonTableExpression statement
   (db0 :: DBType)
   (db1 :: DBType) where
   CommonTableExpression
-    :: ( Has "public" db schema
-       , Alter "public" (alias ::: 'View cte ': schema) db ~ db1 )
-    => Aliased (statement db params) (alias ::: cte)
-    -> CommonTableExpression statement params db db1
--- instance
---   ( KnownSymbol vw
---   , Has "public" db schema
---   , Alter "public" (vw ::: 'View cte ': schema) db ~ db1
---   ) => Aliasable vw
---     (statement db params cte)
---     (CommonTableExpression statement params db db1) where
---       statement `as` vw = CommonTableExpression (statement `as` vw)
+    :: Aliased (statement (commons :=> schemas) params) (cte ::: common)
+    -> CommonTableExpression statement params
+      (commons :=> schemas) ((cte ::: common ': commons) :=> schemas)
+instance
+  ( KnownSymbol cte
+  , db0 ~ (commons :=> schemas)
+  , db1 ~ ((cte ::: common ': commons) :=> schemas)
+  ) => Aliasable cte
+    (statement db0 params common)
+    (CommonTableExpression statement params db0 db1) where
+      statement `as` cte = CommonTableExpression (statement `as` cte)
+instance
+  ( KnownSymbol cte
+  , db0 ~ (commons :=> schemas)
+  , db1 ~ ((cte ::: common ': commons) :=> schemas)
+  ) => Aliasable cte
+    (statement db0 params common)
+    (AlignedList (CommonTableExpression statement params) db0 db1) where
+      statement `as` cte = single (statement `as` cte)
 -- instance
 --   ( KnownSymbol vw
 --   , Has "public" db schema
@@ -1410,8 +1417,7 @@ renderCommonTableExpressions renderStatement cte ctes =
 -- defining temporary tables that exist just for one query.
 class With statement where
   with
-    :: Has "public" db0 schema0
-    => AlignedList (CommonTableExpression statement params) db0 db1
+    :: AlignedList (CommonTableExpression statement params) db0 db1
     -- ^ common table expressions
     -> statement db1 params row
     -- ^ larger query
