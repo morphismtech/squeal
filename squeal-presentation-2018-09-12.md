@@ -1,46 +1,8 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Title</title>
-    <meta charset="utf-8">
-    <style>
-        @import url(https://fonts.googleapis.com/css?family=PT+Sans+Narrow);
-        @import url(https://fonts.googleapis.com/css?family=Montserrat:400,700,400italic);
-        @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
-
-        body { font-family: 'Montserrat'; }
-        h1, h2, h3 {
-        font-family: 'PT Sans Narrow';
-        font-weight: normal;
-        }
-
-        .note {
-           background-color: #ccc;
-           padding: 1rem;
-           border-radius: 4px;
-        }
-        .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
-
-        .signature {
-            position: absolute;
-            top: 1%;
-            right: 1%;
-            font-size:.6em;
-            opacity: .5;
-        }
-        </style>
-        </head>
-        <body>
-            <textarea id="source">
-
-class: center, middle
-count: false
-
 # Squeal
 
 _A bridge between SQL and Haskell_
 
-.signature[2018/09/12 - by @Raveline]
+by [@Raveline](https://github.com/raveline)
 
 ---
 
@@ -62,9 +24,6 @@ Using `postgresql-simple` you have a typical "Trial, error, despair" workflow:
 
 ---
 
-class: center, middle
-count: false
-
 ![Can't take this anymore](http://gif.eraveline.eu/static/img/0x16e.gif)
 
 ---
@@ -85,9 +44,6 @@ However, it's not an ORM. There's no caching, lazy loading - you retain control 
 
 ---
 
-class: center, middle
-count: false
-
 # Part I. Schema & migration
 
 ---
@@ -107,16 +63,13 @@ type Schema = '[ "mp" ::: 'Table MemberOfParliament
                , "groupp" ::: 'Table ParliamentGroup ]
 ```
 
---
+---
 
-.note[*
-We need the `DataKinds` extension to be able to express heterogenous lists containing
-specific types like this one.
+> _note_ We need the `DataKinds` extension to be able to express heterogenous lists containing
+> specific types like this one.
 
-*
-You can perfectly call your table "group" and not "groupp" even though it is a
-keyword in SQL - Squeal queries will be properly escaped.
-]
+> You can perfectly call your table "group" and not "groupp" even though it is a
+> keyword in SQL - Squeal queries will be properly escaped.
 
 ---
 
@@ -139,16 +92,12 @@ type ParliamentaryGroup =
 
 - Let's split constraints and column to study the syntax a bit more.
 
---
-
-.note[*
-We are using `:::` and `:=>` to quickly express associations when writing
-our schema. We need the `TypeOperators` extension.]
-
 ---
 
-class: center, middle
-count: false
+> _note_ We are using `:::` and `:=>` to quickly express associations when writing
+> our schema. We need the `TypeOperators` extension.]
+
+---
 
 ![What does this means ?!](http://gif.eraveline.eu/static/img/0x27e.gif)
 
@@ -195,10 +144,10 @@ type MpCols =
 
     * the type (obviously).
 
---
+---
 
-.note[*
-GHC is already helping. If I named the "mp_id" column differently, GHC would yell because I promised a primary key constraint on a column named `mp_id`, so there must be one.]
+> _note_ GHC is already helping. If I named the "mp_id" column differently,
+> GHC would yell because I promised a primary key constraint on a column named `mp_id`, so there must be one.]
 
 ---
 
@@ -208,7 +157,7 @@ GHC is already helping. If I named the "mp_id" column differently, GHC would yel
 
 - But before we play with this schema, we need to implement it.
 
---
+---
 
 ```haskell
 setup :: Definition '[] Schema
@@ -240,15 +189,14 @@ setup =
 
 - You use `>>>` to compose table creation.
 
-- Note that the compiler will catch any mistype between Schema and
-definition; wrong nullability, wrong type, wrong name, etc.
+> _note_ The compiler will catch any mistype between Schema and
+> definition; wrong nullability, wrong type, wrong name, etc.
 
---
+---
 
-.note[*
-You'll also need `OverloadedLabels`, for naming stuff.
-This is mostly to avoid having to write manual proxies all
-the time and for convenience.]
+> _note_ You'll also need `OverloadedLabels`, for naming stuff.
+> This is mostly to avoid having to write manual proxies all
+> the time and for convenience.
 
 ---
 
@@ -283,8 +231,8 @@ tearDown :: Definition Schema '[]
 tearDown = dropTable #mp >>> dropTable #groupp
 ```
 
-- Note that GHC will also detect the _proper_ order of what you typed in
-  downgrade and upgrade should there be any conflict (with foreign keys).
+> _note_ GHC will also detect the _proper_ order of what you typed in
+> downgrade and upgrade should there be any conflict (with foreign keys).
 
 ```haskell
 initDB :: Migration IO '[] Schema
@@ -314,15 +262,9 @@ main = do
 
 ---
 
-class: center, middle
-count: false
-
 ![That was easy](http://gif.eraveline.eu/static/img/0x47f.gif)
 
 ---
-
-class: center, middle
-count: false
 
 # Part II. Insertions
 
@@ -369,9 +311,8 @@ data MemberOfParliament =
                      , lastName :: Text }
 ```
 
-- You'll note that we didn't use anything from Squeal.
-
-- The model can be entirely separated from the persistence layer.
+> _note_ We didn't use anything from Squeal.
+> The model can be entirely separated from the persistence layer.
 
 ---
 
@@ -386,7 +327,7 @@ type GroupInsertionParams = '[ 'NotNull 'PGuuid
 
 - Params are not named, but they are indexed. You just need nullability and type.
 
---
+---
 
 ```haskell
 groupInsertion :: Manipulation Schema GroupInsertionParams '[]
@@ -395,7 +336,7 @@ groupInsertion =
                      :* Set (param @2) `as` #name )
 ```
 
---
+---
 
 - `TypeApplication` lets us use the index of parameters (counting from 1).
 
@@ -410,19 +351,19 @@ _Inserting a Member of Parliament_
 
 - We could create a naive query that takes MP uuid, first name, last name and group uuid...
 
---
+---
 
 - But that's boring. So let's use the `INSERT INTO ... SELECT`.
 
---
+---
 
 - We will build a query that will return as constants our MP's uuid, first name and last name...
 
---
+---
 
 - ... and fetch the uuid of a group given the name of the group.
 
---
+---
 
 - There's a `insertQuery` utility function for that. All we have to do is write the `select` !
 
@@ -572,15 +513,10 @@ insertParliament = traverse_ insertGroup
 
 ---
 
-class: center, middle
-count: false
-
 ![Very simple](https://media1.tenor.com/images/0188c63209aced59f1583e1ca94e509e/tenor.gif?itemid=3550689)
 
 
 ---
-
-class: center, middle
 
 # Part III. Selects
 
@@ -653,7 +589,7 @@ type BaseParliamentSelection =
    , "m" ::: TableToRow MpCols ]
 ```
 
-- Note that we've also put everything with table aliases: "g" and "m".
+> _note_ We've also put everything with table aliases: "g" and "m".
 
 ---
 
@@ -831,15 +767,9 @@ getGroupMembers =
 
 ---
 
-class: center, middle
-count: false
-
 ![Eazy](https://media.tenor.com/images/8fc7c4077efe11b4a3a3b9ae4e643e87/tenor.gif)
 
 ---
-
-class: center, middle
-count: false
 
 # Conclusion
 
@@ -860,17 +790,5 @@ count: false
 - Typesafe. 'nuff said.
 
 ---
-class: center, middle
-count: false
 
 # Thank you !
-
-
-    </textarea>
-    <script src="https://remarkjs.com/downloads/remark-latest.min.js">
-    </script>
-    <script>
-    var slideshow = remark.create({countIncrementalSlides: false});
-    </script>
-  </body>
-</html>
