@@ -284,7 +284,7 @@ insertMigration = insertRow_ (#migrations ! #schema_migrations)
 deleteMigration
   :: Has "migrations" schemas MigrationsSchema
   => Manipulation ('[] :=> schemas) '[ 'NotNull 'PGtext ] '[]
-deleteMigration = deleteFrom_ (#migrations ! #schema_migrations) (#name .== param @1)
+deleteMigration = deleteFrom_ (#migrations ! #schema_migrations) NoUsing (#name .== param @1)
 
 -- | Selects a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was executed.

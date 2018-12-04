@@ -27,6 +27,7 @@ module Squeal.PostgreSQL.Manipulation
   , ColumnValue (..)
   , ReturningClause (ReturningStar, Returning)
   , ConflictClause (OnConflictDoRaise, OnConflictDoNothing, OnConflictDoUpdate)
+  , UsingClause (..)
     -- * Insert
   , insertRows
   , insertRow
@@ -42,6 +43,7 @@ module Squeal.PostgreSQL.Manipulation
     -- * Delete
   , deleteFrom
   , deleteFrom_
+  , also
   ) where
 
 import Control.DeepSeq
@@ -148,10 +150,30 @@ let
   manipulation :: Manipulation (DBof (Public Schema)) '[]
     '[ "col1" ::: 'NotNull 'PGint4
      , "col2" ::: 'NotNull 'PGint4 ]
-  manipulation = deleteFrom #tab (#col1 .== #col2) ReturningStar
+  manipulation = deleteFrom #tab NoUsing (#col1 .== #col2) ReturningStar
 in printSQL manipulation
 :}
 DELETE FROM "tab" WHERE ("col1" = "col2") RETURNING *
+
+delete and using clause:
+
+>>> :{
+type Schema3 =
+  '[ "tab" ::: 'Table ('[] :=> Columns)
+  , "other_tab" ::: 'Table ('[] :=> Columns)
+  , "third_tab" ::: 'Table ('[] :=> Columns) ]
+:}
+
+>>> :{
+let
+  manipulation :: Manipulation (DBof (Public Schema3)) '[] '[]
+  manipulation =
+    deleteFrom_ #tab (Using (table #other_tab & also (table #third_tab)))
+    ( (#tab ! #col2 .== #other_tab ! #col2)
+    .&& (#tab ! #col2 .== #third_tab ! #col2) )
+in printSQL manipulation
+:}
+DELETE FROM "tab" USING "other_tab" AS "other_tab", "third_tab" AS "third_tab" WHERE (("tab"."col2" = "other_tab"."col2") AND ("tab"."col2" = "third_tab"."col2"))
 
 with manipulation:
 
@@ -161,7 +183,7 @@ with manipulation:
 let
   manipulation :: Manipulation (DBof (Public ProductsSchema)) '[ 'NotNull 'PGdate] '[]
   manipulation = with
-    (deleteFrom #products (#date .< param @1) ReturningStar `as` #del)
+    (deleteFrom #products NoUsing (#date .< param @1) ReturningStar `as` #del)
     (insertQuery_ #products_deleted (selectStar (from (common (#del)))))
 in printSQL manipulation
 :}
@@ -459,7 +481,13 @@ update_ tab columns wh = update tab columns wh (Returning Nil)
 DELETE statements
 -----------------------------------------}
 
--- | Delete rows of a table.
+data UsingClause db params from where
+  NoUsing :: UsingClause db params '[]
+  Using
+    :: FromClause db params from
+    -> UsingClause db params from
+
+-- | Delete rows from a table.
 deleteFrom
   :: ( SOP.SListI results
      , db ~ (commons :=> schemas)
@@ -468,12 +496,17 @@ deleteFrom
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to delete from
-  -> Condition db '[tab ::: row] 'Ungrouped params
+  -> UsingClause db params from
+  -> Condition db (tab ::: row ': from) 'Ungrouped params
   -- ^ condition under which to delete a row
   -> ReturningClause db params row results -- ^ results to return
   -> Manipulation db params results
-deleteFrom tab wh returning = UnsafeManipulation $
-  "DELETE FROM" <+> renderQualifiedAlias tab
+deleteFrom tab using wh returning = UnsafeManipulation $
+  "DELETE FROM"
+  <+> renderQualifiedAlias tab
+  <> case using of
+    NoUsing -> ""
+    Using tables -> " USING" <+> renderFromClause tables
   <+> "WHERE" <+> renderExpression wh
   <> renderReturningClause returning
 
@@ -485,7 +518,22 @@ deleteFrom_
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to delete from
-  -> (forall t. Condition db '[t ::: row] 'Ungrouped params)
+  -> UsingClause db params from
+  -> Condition db (tab ::: row ': from) 'Ungrouped params
   -- ^ condition under which to delete a row
   -> Manipulation db params '[]
-deleteFrom_ tab wh = deleteFrom tab wh (Returning Nil)
+deleteFrom_ tab uses wh = deleteFrom tab uses wh (Returning Nil)
+
+-- | This has the behaviour of a cartesian product, taking all
+-- possible combinations between @left@ and @right@ - exactly like a
+-- CROSS JOIN. Used when no "CROSS JOIN" syntax is required but simply
+-- a comma separated list of tables. Typical case is the `USING` clause
+-- of a DELETE query.
+also
+  :: FromClause schema params right
+  -- ^ right
+  -> FromClause schema params left
+  -- ^ left
+  -> FromClause schema params (Join left right)
+also right left = UnsafeFromClause $
+  renderFromClause left <> "," <+> renderFromClause right
