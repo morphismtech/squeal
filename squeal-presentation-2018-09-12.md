@@ -1,46 +1,8 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Title</title>
-    <meta charset="utf-8">
-    <style>
-        @import url(https://fonts.googleapis.com/css?family=PT+Sans+Narrow);
-        @import url(https://fonts.googleapis.com/css?family=Montserrat:400,700,400italic);
-        @import url(https://fonts.googleapis.com/css?family=Ubuntu+Mono:400,700,400italic);
-
-        body { font-family: 'Montserrat'; }
-        h1, h2, h3 {
-        font-family: 'PT Sans Narrow';
-        font-weight: normal;
-        }
-
-        .note {
-           background-color: #ccc;
-           padding: 1rem;
-           border-radius: 4px;
-        }
-        .remark-code, .remark-inline-code { font-family: 'Ubuntu Mono'; }
-
-        .signature {
-            position: absolute;
-            top: 1%;
-            right: 1%;
-            font-size:.6em;
-            opacity: .5;
-        }
-        </style>
-        </head>
-        <body>
-            <textarea id="source">
-
-class: center, middle
-count: false
-
 # Squeal
 
 _A bridge between SQL and Haskell_
 
-.signature[2018/09/12 - by @Raveline]
+by [@Raveline](https://github.com/raveline)
 
 ---
 
@@ -62,9 +24,6 @@ Using `postgresql-simple` you have a typical "Trial, error, despair" workflow:
 
 ---
 
-class: center, middle
-count: false
-
 ![Can't take this anymore](http://gif.eraveline.eu/static/img/0x16e.gif)
 
 ---
@@ -84,9 +43,6 @@ Squeal provides several eDSL to make your SQL typesafe:
 However, it's not an ORM. There's no caching, lazy loading - you retain control over your memory. Also, joins - and mostly aggregation after joins - have to be handled manually.
 
 ---
-
-class: center, middle
-count: false
 
 # Part I. Schema & migration
 
@@ -146,9 +102,6 @@ We are using `:::` and `:=>` to quickly express associations when writing
 our schema. We need the `TypeOperators` extension.]
 
 ---
-
-class: center, middle
-count: false
 
 ![What does this means ?!](http://gif.eraveline.eu/static/img/0x27e.gif)
 
@@ -314,15 +267,9 @@ main = do
 
 ---
 
-class: center, middle
-count: false
-
 ![That was easy](http://gif.eraveline.eu/static/img/0x47f.gif)
 
 ---
-
-class: center, middle
-count: false
 
 # Part II. Insertions
 
@@ -572,15 +519,10 @@ insertParliament = traverse_ insertGroup
 
 ---
 
-class: center, middle
-count: false
-
 ![Very simple](https://media1.tenor.com/images/0188c63209aced59f1583e1ca94e509e/tenor.gif?itemid=3550689)
 
 
 ---
-
-class: center, middle
 
 # Part III. Selects
 
@@ -831,15 +773,9 @@ getGroupMembers =
 
 ---
 
-class: center, middle
-count: false
-
 ![Eazy](https://media.tenor.com/images/8fc7c4077efe11b4a3a3b9ae4e643e87/tenor.gif)
 
 ---
-
-class: center, middle
-count: false
 
 # Conclusion
 
@@ -860,17 +796,5 @@ count: false
 - Typesafe. 'nuff said.
 
 ---
-class: center, middle
-count: false
 
 # Thank you !
-
-
-    </textarea>
-    <script src="https://remarkjs.com/downloads/remark-latest.min.js">
-    </script>
-    <script>
-    var slideshow = remark.create({countIncrementalSlides: false});
-    </script>
-  </body>
-</html>
