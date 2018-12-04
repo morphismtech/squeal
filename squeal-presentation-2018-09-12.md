@@ -63,16 +63,13 @@ type Schema = '[ "mp" ::: 'Table MemberOfParliament
                , "groupp" ::: 'Table ParliamentGroup ]
 ```
 
---
+---
 
-.note[*
-We need the `DataKinds` extension to be able to express heterogenous lists containing
-specific types like this one.
+> _note_ We need the `DataKinds` extension to be able to express heterogenous lists containing
+> specific types like this one.
 
-*
-You can perfectly call your table "group" and not "groupp" even though it is a
-keyword in SQL - Squeal queries will be properly escaped.
-]
+> You can perfectly call your table "group" and not "groupp" even though it is a
+> keyword in SQL - Squeal queries will be properly escaped.
 
 ---
 
@@ -95,11 +92,10 @@ type ParliamentaryGroup =
 
 - Let's split constraints and column to study the syntax a bit more.
 
---
+---
 
-.note[*
-We are using `:::` and `:=>` to quickly express associations when writing
-our schema. We need the `TypeOperators` extension.]
+> _note_ We are using `:::` and `:=>` to quickly express associations when writing
+> our schema. We need the `TypeOperators` extension.]
 
 ---
 
@@ -148,10 +144,10 @@ type MpCols =
 
     * the type (obviously).
 
---
+---
 
-.note[*
-GHC is already helping. If I named the "mp_id" column differently, GHC would yell because I promised a primary key constraint on a column named `mp_id`, so there must be one.]
+> _note_ GHC is already helping. If I named the "mp_id" column differently,
+> GHC would yell because I promised a primary key constraint on a column named `mp_id`, so there must be one.]
 
 ---
 
@@ -161,7 +157,7 @@ GHC is already helping. If I named the "mp_id" column differently, GHC would yel
 
 - But before we play with this schema, we need to implement it.
 
---
+---
 
 ```haskell
 setup :: Definition '[] Schema
@@ -193,15 +189,14 @@ setup =
 
 - You use `>>>` to compose table creation.
 
-- Note that the compiler will catch any mistype between Schema and
-definition; wrong nullability, wrong type, wrong name, etc.
+> _note_ The compiler will catch any mistype between Schema and
+> definition; wrong nullability, wrong type, wrong name, etc.
 
---
+---
 
-.note[*
-You'll also need `OverloadedLabels`, for naming stuff.
-This is mostly to avoid having to write manual proxies all
-the time and for convenience.]
+> _note_ You'll also need `OverloadedLabels`, for naming stuff.
+> This is mostly to avoid having to write manual proxies all
+> the time and for convenience.
 
 ---
 
@@ -236,8 +231,8 @@ tearDown :: Definition Schema '[]
 tearDown = dropTable #mp >>> dropTable #groupp
 ```
 
-- Note that GHC will also detect the _proper_ order of what you typed in
-  downgrade and upgrade should there be any conflict (with foreign keys).
+> _note_ GHC will also detect the _proper_ order of what you typed in
+> downgrade and upgrade should there be any conflict (with foreign keys).
 
 ```haskell
 initDB :: Migration IO '[] Schema
@@ -316,9 +311,8 @@ data MemberOfParliament =
                      , lastName :: Text }
 ```
 
-- You'll note that we didn't use anything from Squeal.
-
-- The model can be entirely separated from the persistence layer.
+> _note_ We didn't use anything from Squeal.
+> The model can be entirely separated from the persistence layer.
 
 ---
 
@@ -333,7 +327,7 @@ type GroupInsertionParams = '[ 'NotNull 'PGuuid
 
 - Params are not named, but they are indexed. You just need nullability and type.
 
---
+---
 
 ```haskell
 groupInsertion :: Manipulation Schema GroupInsertionParams '[]
@@ -342,7 +336,7 @@ groupInsertion =
                      :* Set (param @2) `as` #name )
 ```
 
---
+---
 
 - `TypeApplication` lets us use the index of parameters (counting from 1).
 
@@ -357,19 +351,19 @@ _Inserting a Member of Parliament_
 
 - We could create a naive query that takes MP uuid, first name, last name and group uuid...
 
---
+---
 
 - But that's boring. So let's use the `INSERT INTO ... SELECT`.
 
---
+---
 
 - We will build a query that will return as constants our MP's uuid, first name and last name...
 
---
+---
 
 - ... and fetch the uuid of a group given the name of the group.
 
---
+---
 
 - There's a `insertQuery` utility function for that. All we have to do is write the `select` !
 
@@ -595,7 +589,7 @@ type BaseParliamentSelection =
    , "m" ::: TableToRow MpCols ]
 ```
 
-- Note that we've also put everything with table aliases: "g" and "m".
+> _note_ We've also put everything with table aliases: "g" and "m".
 
 ---
 
