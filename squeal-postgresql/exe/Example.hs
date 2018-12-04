@@ -62,16 +62,14 @@ teardown = dropTable #emails >>> dropTable #users
 
 insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
-insertUser = insertRows #users
-  (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec) []
-  OnConflictDoNothing (Returning (#id `as` #fromOnly))
+insertUser = insertInto #users
+  (Values_ (defaultAs #id :* param @1 `as` #name :* param @2 `as` #vec))
+  (OnConflict (OnConstraint #pk_users) DoNothing) (Returning (#id `as` #fromOnly))
 
 insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
-insertEmail = insertRows #emails
-  ( Default `as` #id :*
-    Set (param @1) `as` #user_id :*
-    Set (param @2) `as` #email ) []
-  OnConflictDoNothing (Returning Nil)
+insertEmail = insertInto #emails
+  (Values_ (defaultAs #id :* param @1 `as` #user_id :* param @2 `as` #email))
+  (OnConflict (OnConstraint #pk_emails) DoNothing) (Returning Nil)
 
 getUsers :: Query Schema '[]
   '[ "userName" ::: 'NotNull 'PGtext

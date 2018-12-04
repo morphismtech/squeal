@@ -17,6 +17,7 @@ Squeal data manipulation language.
   , LambdaCase
   , MultiParamTypeClasses
   , OverloadedStrings
+  , PatternSynonyms
   , RankNTypes
   , TypeFamilies
   , TypeInType
@@ -27,22 +28,24 @@ Squeal data manipulation language.
 
 module Squeal.PostgreSQL.Manipulation
   ( -- * Manipulation
-    Manipulation (UnsafeManipulation, renderManipulation)
+    Manipulation (..)
   , queryStatement
-  , ColumnValue (..)
-  , ReturningClause (ReturningStar, Returning)
-  , ConflictClause (OnConflictDoRaise, OnConflictDoNothing, OnConflictDoUpdate)
+  , QueryClause (..)
+  , pattern Values_
+  , DefaultAliasable (..)
+  , ColumnExpression (..)
+  , ReturningClause (..)
+  , ConflictClause (..)
+  , ConflictTarget (..)
+  , ConflictAction (..)
   , UsingClause (..)
-  , ConflictTarget (OnConstraint, UniqueIndexOn)
     -- * Insert
-  , insertRows
-  , insertRow
-  , insertRows_
-  , insertRow_
-  , insertQuery
-  , insertQuery_
+  , insertInto
+  , insertInto_
   , renderReturningClause
   , renderConflictClause
+  , renderConflictTarget
+  , renderConflictAction
     -- * Update
   , update
   , update_
@@ -258,126 +261,125 @@ queryStatement q = UnsafeManipulation $ renderQuery q
 INSERT statements
 -----------------------------------------}
 
--- | Insert multiple rows.
---
--- When a table is created, it contains no data. The first thing to do
--- before a database can be of much use is to insert data. Data is
--- conceptually inserted one row at a time. Of course you can also insert
--- more than one row, but there is no way to insert less than one row.
--- Even if you know only some column values, a complete row must be created.
-insertRows
-  :: ( SOP.SListI columns
-     , SOP.SListI results
-     , Has tab schema ('Table table)
+{- |
+When a table is created, it contains no data. The first thing to do
+before a database can be of much use is to insert data. Data is
+conceptually inserted one row at a time. Of course you can also insert
+more than one row, but there is no way to insert less than one row.
+Even if you know only some column values, a complete row must be created.
+-}
+insertInto
+  :: ( Has tab schema ('Table table)
+     , columns ~ TableToColumns table
      , row ~ TableToRow table
-     , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
-  -> [NP (Aliased (ColumnValue schema '[] params)) columns] -- ^ more rows to insert
-  -> ConflictClause schema table params
-  -- ^ what to do in case of constraint conflict
-  -> ReturningClause schema params row results -- ^ results to return
-  -> Manipulation schema params results
-insertRows tab rw rws conflict returning = UnsafeManipulation $
+     , SOP.SListI columns
+     , SOP.SListI result )
+  => Alias tab
+  -> QueryClause schema params columns
+  -> ConflictClause schema params table
+  -> ReturningClause schema params row result
+  -> Manipulation schema params result
+insertInto tab qry conflict ret = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderAlias tab
-    <>  renderConflictAlias conflict
-    <+> parenthesized (renderCommaSeparated renderAliasPart rw)
+  <+> renderQueryClause qry
+  <> renderConflictClause conflict
+  <> renderReturningClause ret
+
+insertInto_
+  :: ( Has tab schema ('Table table)
+     , columns ~ TableToColumns table
+     , row ~ TableToRow table
+     , SOP.SListI columns )
+  => Alias tab
+  -> QueryClause schema params columns
+  -> Manipulation schema params '[]
+insertInto_ tab qry =
+  insertInto tab qry OnConflictDoRaise (Returning Nil)
+
+data QueryClause schema params columns where
+  Values
+    :: SOP.SListI columns
+    => NP (ColumnExpression schema '[] 'Ungrouped params) columns
+    -> [NP (ColumnExpression schema '[] 'Ungrouped params) columns]
+    -> QueryClause schema params columns
+  Select
+    :: SOP.SListI columns
+    => NP (ColumnExpression schema from grp params) columns
+    -> TableExpression schema params from grp
+    -> QueryClause schema params columns
+  Subquery
+    :: ColumnsToRow columns ~ row
+    => Query schema params row
+    -> QueryClause schema params columns
+
+renderQueryClause
+  :: QueryClause schema params columns
+  -> ByteString
+renderQueryClause = \case
+  Values row0 rows ->
+    parenthesized (renderCommaSeparated renderAliasPart row0)
     <+> "VALUES"
     <+> commaSeparated
           ( parenthesized
-          . renderCommaSeparated renderColumnValuePart <$> rw:rws )
-    <> renderConflictClause conflict
-    <> renderReturningClause returning
-    where
-      renderAliasPart, renderColumnValuePart
-        :: Aliased (ColumnValue schema '[] params) ty -> ByteString
-      renderAliasPart (_ `As` name) = renderAlias name
-      renderColumnValuePart (value `As` _) = case value of
-        Default -> "DEFAULT"
-        Set expression -> renderExpression expression
-
--- | Insert a single row.
-insertRow
-  :: ( SOP.SListI columns
-     , SOP.SListI results
-     , Has tab schema ('Table table)
-     , row ~ TableToRow table
-     , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
-  -> ConflictClause schema table params
-  -- ^ what to do in case of constraint conflict
-  -> ReturningClause schema params row results -- ^ results to return
-  -> Manipulation schema params results
-insertRow tab rw = insertRows tab rw []
-
--- | Insert multiple rows returning `Nil` and raising an error on conflicts.
-insertRows_
-  :: ( SOP.SListI columns
-     , Has tab schema ('Table table)
-     , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
-  -> [NP (Aliased (ColumnValue schema '[] params)) columns] -- ^ more rows to insert
-  -> Manipulation schema params '[]
-insertRows_ tab rw rws =
-  insertRows tab rw rws OnConflictDoRaise (Returning Nil)
-
--- | Insert a single row returning `Nil` and raising an error on conflicts.
-insertRow_
-  :: ( SOP.SListI columns
-     , Has tab schema ('Table table)
-     , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to insert into
-  -> NP (Aliased (ColumnValue schema '[] params)) columns -- ^ row to insert
-  -> Manipulation schema params '[]
-insertRow_ tab rw = insertRow tab rw OnConflictDoRaise (Returning Nil)
-
--- | Insert a `Query`.
-insertQuery
-  :: ( SOP.SListI columns
-     , SOP.SListI results
-     , Has tab schema ('Table table)
-     , row ~ TableToRow table
-     , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to insert into
-  -> Query schema params (TableToRow table)
-  -> ConflictClause schema table params
-  -- ^ what to do in case of constraint conflict
-  -> ReturningClause schema params row results -- ^ results to return
-  -> Manipulation schema params results
-insertQuery tab query conflict returning = UnsafeManipulation $
-  "INSERT" <+> "INTO" <+> renderAlias tab
-    <> renderConflictAlias conflict
-    <+> renderQuery query
-    <> renderConflictClause conflict
-    <> renderReturningClause returning
-
--- | Insert a `Query` returning `Nil` and raising an error on conflicts.
-insertQuery_
-  :: ( SOP.SListI columns
-     , Has tab schema ('Table table)
-     , columns ~ TableToColumns table )
-  => Alias tab -- ^ table to insert into
-  -> Query schema params (TableToRow table)
-  -> Manipulation schema params '[]
-insertQuery_ tab query =
-  insertQuery tab query OnConflictDoRaise (Returning Nil)
-
--- | `ColumnValue`s are values to insert or update in a row.
--- `Default` inserts or updates with the @DEFAULT@ value.
--- `Set` sets a value to be an `Expression`, which can refer to
--- existing value in the row for an update.
-data ColumnValue
-  (schema :: SchemaType)
-  (tables :: FromType)
-  (params :: [NullityType])
-  (ty :: ColumnType)
+          . renderCommaSeparated renderValuePart <$> row0 : rows )
+  Select row0 tab ->
+    parenthesized (renderCommaSeparated renderAliasPart row0)
+    <+> "SELECT"
+    <+> renderCommaSeparated renderValuePart row0
+    <+> renderTableExpression tab
+  Subquery qry -> renderQuery qry
   where
-    Default :: ColumnValue schema tables params ('Def :=> ty)
-    Set
-      :: Expression schema tables 'Ungrouped params ty
-      -> ColumnValue schema tables params (constraint :=> ty)
+    renderAliasPart, renderValuePart
+      :: ColumnExpression schema from grp params column -> ByteString
+    renderAliasPart = \case
+      DefaultAs name -> renderAlias name
+      Specific (_ `As` name) -> renderAlias name
+    renderValuePart = \case
+      DefaultAs _ -> "DEFAULT"
+      Specific (value `As` _) -> renderExpression value
+
+pattern Values_
+  :: SOP.SListI columns
+  => NP (ColumnExpression schema '[] 'Ungrouped params) columns
+  -> QueryClause schema params columns
+pattern Values_ vals = Values vals []
+
+data ColumnExpression schema from grp params column where
+  DefaultAs
+    :: KnownSymbol col
+    => Alias col
+    -> ColumnExpression schema from grp params (col ::: 'Def :=> ty)
+  Specific
+    :: Aliased (Expression schema from grp params) (col ::: ty)
+    -> ColumnExpression schema from grp params (col ::: defness :=> ty)
+
+instance (KnownSymbol alias, column ~ (alias ::: defness :=> ty))
+  => Aliasable alias
+       (Expression schema from grp params ty)
+       (ColumnExpression schema from grp params column)
+      where
+        expression `as` alias = Specific (expression `As` alias)
+instance (KnownSymbol alias, columns ~ '[alias ::: defness :=> ty])
+  => Aliasable alias
+       (Expression schema from grp params ty)
+       (NP (ColumnExpression schema from grp params) columns)
+      where
+        expression `as` alias = expression `as` alias :* Nil
+instance (KnownSymbol col, column ~ (col ::: 'Def :=> ty))
+  => DefaultAliasable col (ColumnExpression schema from grp params column) where
+    defaultAs = DefaultAs
+instance (KnownSymbol col, columns ~ '[col ::: 'Def :=> ty])
+  => DefaultAliasable col (NP (ColumnExpression schema from grp params) columns) where
+    defaultAs col = defaultAs col :* Nil
+
+renderColumnExpression
+  :: ColumnExpression schema from grp params column
+  -> ByteString
+renderColumnExpression = \case
+  DefaultAs col ->
+    renderAlias col <+> "=" <+> "DEFAULT"
+  Specific (expression `As` col) ->
+    renderAlias col <+> "=" <+> renderExpression expression
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
@@ -417,74 +419,61 @@ renderReturningClause = \case
 -- `OnConflictDoNothing` simply avoids inserting a row.
 -- `OnConflictDoUpdate` updates the existing row that conflicts with the row
 -- proposed for insertion.
-data ConflictClause
-  (schema :: SchemaType)
-  (table :: TableType)
-  (params :: [NullityType]) where
-    OnConflictDoRaise :: ConflictClause schema table params
-    OnConflictDoNothing :: ConflictClause schema table params
-    OnConflictDoUpdate
-      :: ( row ~ TableToRow table, SOP.SListI columns, columns ~ (col0 ': cols)
-         , OrderedSubsetOf (TableToColumns table) columns )
-      => ConflictTarget table
-      -> NP (Aliased (ColumnValue schema '["existing" ::: row, "excluded" ::: row] params)) columns
-      -> [Condition schema '["existing" ::: row, "excluded" ::: row] 'Ungrouped params]
-      -> ConflictClause schema table params
-
--- | A `ConflictTarget` specifies the constraint violation that triggers an
--- `OnConflictDoUpdate`.
-data ConflictTarget (table :: TableType) where
-  -- | An explicitly named constraint.
-  OnConstraint
-    :: (Has constraintName constraints constraint)
-    => Alias constraintName
-    -> ConflictTarget '(constraints, columns)
-  -- | Match each unique index with precisely the following columns.
-  UniqueIndexOn
-    :: ( HasAll columnNames columns columnTypes
-       , SOP.All KnownSymbol columnNames )
-    => NP Alias columnNames
-    -> ConflictTarget '(constraints, columns)
-
--- | Render any table alias required for a `ConflictClause`.
-renderConflictAlias :: ConflictClause schema table params -> ByteString
-renderConflictAlias = \case
-  OnConflictDoUpdate _ _ _ -> " AS existing"
-  _                        -> ""
+data ConflictClause schema params table where
+  OnConflictDoRaise :: ConflictClause schema params table
+  OnConflict
+    :: ConflictTarget constraints
+    -> ConflictAction schema params columns
+    -> ConflictClause schema params (constraints :=> columns)
 
 -- | Render a `ConflictClause`.
 renderConflictClause
   :: SOP.SListI (TableToColumns table)
-  => ConflictClause schema table params
+  => ConflictClause schema params table
   -> ByteString
 renderConflictClause = \case
   OnConflictDoRaise -> ""
-  OnConflictDoNothing -> " ON CONFLICT DO NOTHING"
-  OnConflictDoUpdate target updates whs'
-    -> " ON CONFLICT"
-      <+> renderTarget target
-      <+> "DO UPDATE SET"
-      <+> renderCommaSeparated renderUpdate updates
+  OnConflict target action -> " ON CONFLICT"
+    <+> renderConflictTarget target <+> renderConflictAction action
+
+data ConflictAction schema params columns where
+  DoNothing :: ConflictAction schema params columns
+  DoUpdate
+    :: ( row ~ ColumnsToRow columns
+       , SOP.SListI columns
+       , columns ~ (col0 ': cols)
+       , SOP.All (HasIn columns) subcolumns
+       , AllUnique subcolumns )
+    => NP (ColumnExpression schema '[t ::: row] 'Ungrouped params) subcolumns
+    -> [Condition schema '[t ::: row] 'Ungrouped params]
+    -> ConflictAction schema params columns
+
+renderConflictAction
+  :: ConflictAction schema params columns
+  -> ByteString
+renderConflictAction = \case
+  DoNothing -> "DO NOTHING"
+  DoUpdate updates whs'
+    -> "DO UPDATE SET"
+      <+> renderCommaSeparated renderColumnExpression updates
       <> case whs' of
         [] -> ""
         wh:whs -> " WHERE" <+> renderExpression (foldr (.&&) wh whs)
-      where
-        renderUpdate
-          :: Aliased (ColumnValue schema columns params) column
-          -> ByteString
-        renderUpdate = \case
-          Default `As` column ->
-            renderAlias column <+> "=" <+> "DEFAULT"
-          Set expression `As` column ->
-            renderAlias column <+> "=" <+> renderExpression expression
-        renderTarget
-          :: ConflictTarget table
-          -> ByteString
-        renderTarget = \case
-          OnConstraint name ->
-            "ON CONSTRAINT" <+> renderAlias name
-          UniqueIndexOn columns ->
-            parenthesized (commaSeparated (renderAliases columns))
+
+-- | A `ConflictTarget` specifies the constraint violation that triggers a
+-- `ConflictAction`.
+data ConflictTarget constraints where
+  OnConstraint
+    :: Has con constraints constraint
+    => Alias con
+    -> ConflictTarget constraints
+
+-- | Render a `ConflictTarget`
+renderConflictTarget
+  :: ConflictTarget constraints
+  -> ByteString
+renderConflictTarget (OnConstraint con) =
+  "ON" <+> "CONSTRAINT" <+> renderAlias con
 
 {-----------------------------------------
 UPDATE statements
@@ -517,12 +506,13 @@ update
      , SOP.SListI results
      , Has tab schema ('Table table)
      , row ~ TableToRow table
-     , columns ~ (col0 ': cols)
-     , OrderedSubsetOf (TableToColumns table) columns )
+     , columns ~ TableToColumns table
+     , SOP.All (HasIn columns) subcolumns
+     , AllUnique subcolumns )
   => Alias tab -- ^ table to update
-  -> (forall t. NP (Aliased (ColumnValue schema '[t ::: row] params)) columns)
+  -> NP (ColumnExpression schema '[tab ::: row] 'Ungrouped params) subcolumns
   -- ^ modified values to replace old values
-  -> (forall t. Condition schema '[t ::: row] 'Ungrouped params)
+  -> Condition schema '[tab ::: row] 'Ungrouped params
   -- ^ condition under which to perform update on a row
   -> ReturningClause schema params row results -- ^ results to return
   -> Manipulation schema params results
@@ -530,30 +520,22 @@ update tab columns wh returning = UnsafeManipulation $
   "UPDATE"
   <+> renderAlias tab
   <+> "SET"
-  <+> renderCommaSeparated renderUpdate columns
+  <+> renderCommaSeparated renderColumnExpression columns
   <+> "WHERE" <+> renderExpression wh
   <> renderReturningClause returning
-  where
-    renderUpdate
-      :: Aliased (ColumnValue schema columns params) column
-      -> ByteString
-    renderUpdate = \case
-      Default `As` column ->
-        renderAlias column <+> "=" <+> "DEFAULT"
-      Set expression `As` column ->
-        renderAlias column <+> "=" <+> renderExpression expression
 
 -- | Update a row returning `Nil`.
 update_
   :: ( SOP.SListI columns
      , Has tab schema ('Table table)
      , row ~ TableToRow table
-     , columns ~ (col0 ': cols)
-     , OrderedSubsetOf (TableToColumns table) columns )
+     , columns ~ TableToColumns table
+     , SOP.All (HasIn columns) subcolumns
+     , AllUnique subcolumns )
   => Alias tab -- ^ table to update
-  -> (forall t. NP (Aliased (ColumnValue schema '[t ::: row] params)) columns)
+  -> NP (ColumnExpression schema '[tab ::: row] 'Ungrouped params) subcolumns
   -- ^ modified values to replace old values
-  -> (forall t. Condition schema '[t ::: row] 'Ungrouped params)
+  -> Condition schema '[tab ::: row] 'Ungrouped params
   -- ^ condition under which to perform update on a row
   -> Manipulation schema params '[]
 update_ tab columns wh = update tab columns wh (Returning Nil)
