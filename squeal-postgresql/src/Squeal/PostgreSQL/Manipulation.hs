@@ -19,6 +19,8 @@ Squeal data manipulation language.
   , OverloadedStrings
   , PatternSynonyms
   , RankNTypes
+  , ScopedTypeVariables
+  , TypeApplications
   , TypeFamilies
   , TypeInType
   , TypeOperators
@@ -349,21 +351,68 @@ data ColumnExpression schema from grp params column where
 instance (KnownSymbol alias, column ~ (alias ::: defness :=> ty))
   => Aliasable alias
        (Expression schema from grp params ty)
-       (ColumnExpression schema from grp params column)
-      where
-        expression `as` alias = Specific (expression `As` alias)
+       (ColumnExpression schema from grp params column) where
+         expression `as` alias = Specific (expression `As` alias)
 instance (KnownSymbol alias, columns ~ '[alias ::: defness :=> ty])
   => Aliasable alias
        (Expression schema from grp params ty)
-       (NP (ColumnExpression schema from grp params) columns)
-      where
-        expression `as` alias = expression `as` alias :* Nil
+       (NP (ColumnExpression schema from grp params) columns) where
+         expression `as` alias = expression `as` alias :* Nil
 instance (KnownSymbol col, column ~ (col ::: 'Def :=> ty))
   => DefaultAliasable col (ColumnExpression schema from grp params column) where
     defaultAs = DefaultAs
 instance (KnownSymbol col, columns ~ '[col ::: 'Def :=> ty])
   => DefaultAliasable col (NP (ColumnExpression schema from grp params) columns) where
     defaultAs col = defaultAs col :* Nil
+
+instance (HasUnique table from columns, Has column columns ty, colty ~ (column ::: defness :=> ty))
+  => IsLabel column (ColumnExpression schema from 'Ungrouped params colty) where
+    fromLabel = fromLabel @column `as` Alias
+instance (HasUnique table from columns, Has column columns ty, columnLabel ~ column, coltys ~ '[column ::: defness :=> ty])
+  => IsLabel columnLabel
+    (NP (ColumnExpression schema from 'Ungrouped params) coltys) where
+    fromLabel = fromLabel @column `as` Alias
+
+instance (Has table from columns, Has column columns ty, colty ~ (column ::: defness :=> ty))
+  => IsQualified table column (ColumnExpression schema from 'Ungrouped params colty) where
+    tab ! column = tab ! column `as` column
+instance (Has table from columns, Has column columns ty, coltys ~ '[column ::: defness :=> ty])
+  => IsQualified table column (NP (ColumnExpression schema from 'Ungrouped params) coltys) where
+    tab ! column = tab ! column `as` column
+
+instance
+  ( HasUnique table from columns
+  , Has column columns ty
+  , GroupedBy table column bys
+  , colty ~ (column ::: defness :=> ty)
+  ) => IsLabel column
+    (ColumnExpression schema from ('Grouped bys) params colty) where
+      fromLabel = fromLabel @column `as` Alias
+instance
+  ( HasUnique table from columns
+  , Has column columns ty
+  , GroupedBy table column bys
+  , coltys ~ '[column ::: defness :=> ty]
+  ) => IsLabel column
+    (NP (ColumnExpression schema from ('Grouped bys) params) coltys) where
+      fromLabel = fromLabel @column `as` Alias
+
+instance
+  ( Has table from columns
+  , Has column columns ty
+  , GroupedBy table column bys
+  , colty ~ (column ::: defness :=> ty)
+  ) => IsQualified table column
+    (ColumnExpression schema from ('Grouped bys) params colty) where
+      tab ! column = tab ! column `as` column
+instance
+  ( Has table from columns
+  , Has column columns ty
+  , GroupedBy table column bys
+  , coltys ~ '[column ::: defness :=> ty]
+  ) => IsQualified table column
+    (NP (ColumnExpression schema from ('Grouped bys) params) coltys) where
+      tab ! column = tab ! column :* Nil
 
 renderColumnExpression
   :: ColumnExpression schema from grp params column
