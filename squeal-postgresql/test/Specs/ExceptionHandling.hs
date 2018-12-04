@@ -55,8 +55,8 @@ instance SOP.HasDatatypeInfo User
 
 insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
-insertUser = insertRows #users
-  (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec) []
+insertUser = insertInto #users
+  (Values_ (defaultAs #id :* param @1 `as` #name :* param @2 `as` #vec))
   OnConflictDoRaise (Returning (#id `as` #fromOnly))
 
 setup :: Definition '[] Schema

@@ -82,7 +82,7 @@ let
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
        , "col2" ::: 'Def :=> 'NotNull 'PGint4 ])] '[] '[]
   manipulation =
-    insertRow_ #tab (Set 2 `as` #col1 :* Default `as` #col2)
+    insertInto_ #tab (Values_ (2 `as` #col1 :* defaultAs #col2))
 in printSQL manipulation
 :}
 INSERT INTO "tab" ("col1", "col2") VALUES (2, DEFAULT)
@@ -97,8 +97,7 @@ let
        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
     '[ 'NotNull 'PGint4, 'NotNull 'PGint4 ] '[]
   manipulation =
-    insertRow_ #tab
-      (Set (param @1) `as` #col1 :* Set (param @2) `as` #col2)
+    insertInto_ #tab (Values_ (param @1 `as` #col1 :* param @2 `as` #col2))
 in printSQL manipulation
 :}
 INSERT INTO "tab" ("col1", "col2") VALUES (($1 :: int4), ($2 :: int4))
@@ -113,7 +112,7 @@ let
        , "col2" ::: 'Def :=> 'NotNull 'PGint4 ])] '[]
     '["fromOnly" ::: 'NotNull 'PGint4]
   manipulation =
-    insertRow #tab (Set 2 `as` #col1 :* Default `as` #col2)
+    insertInto #tab (Values_ (2 `as` #col1 :* defaultAs #col2))
       OnConflictDoRaise (Returning (#col1 `as` #fromOnly))
 in printSQL manipulation
 :}
@@ -124,22 +123,18 @@ upsert:
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: 'Table ('[] :=>
+    '[ "tab" ::: 'Table ('["uq" ::: 'Unique '["col1"]] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
     '[] '[ "sum" ::: 'NotNull 'PGint4]
   manipulation =
-    insertRows #tab
-      (Set 2 `as` #col1 :* Set 4 `as` #col2)
-      [Set 6 `as` #col1 :* Set 8 `as` #col2]
-      (OnConflictDoUpdate
-        (UniqueIndexOn #col1)
-        (Set 2 `as` #col1)
-        [#existing ! #col1 .== #excluded ! #col2])
-      (Returning $ (#col1 + #col2) `as` #sum)
+    insertInto #tab
+      (Values (2 `as` #col1 :* 4 `as` #col2) [6 `as` #col1 :* 8 `as` #col2])
+      (OnConflict (OnConstraint #uq) (DoUpdate (2 `as` #col1) [#col1 .== #col2]))
+      (Returning ((#col1 + #col2) `as` #sum))
 in printSQL manipulation
 :}
-INSERT INTO "tab" AS existing ("col1", "col2") VALUES (2, 4), (6, 8) ON CONFLICT ("col1") DO UPDATE SET "col1" = 2 WHERE ("existing"."col1" = "excluded"."col2") RETURNING ("col1" + "col2") AS "sum"
+INSERT INTO "tab" ("col1", "col2") VALUES (2, 4), (6, 8) ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "col1" = 2 WHERE ("col1" = "col2") RETURNING ("col1" + "col2") AS "sum"
 
 query insert:
 
@@ -156,8 +151,8 @@ let
        ])
      ] '[] '[]
   manipulation =
-    insertQuery_ #tab
-      (selectStar (from (table (#other_tab `as` #t))))
+    insertInto_ #tab
+      (Subquery (selectStar (from (table (#other_tab `as` #t)))))
 in printSQL manipulation
 :}
 INSERT INTO "tab" SELECT * FROM "other_tab" AS "t"
@@ -170,9 +165,7 @@ let
     '[ "tab" ::: 'Table ('[] :=>
       '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
        , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])] '[] '[]
-  manipulation =
-    update_ #tab (Set 2 `as` #col1)
-      (#col1 ./= #col2)
+  manipulation = update_ #tab (2 `as` #col1) (#col1 ./= #col2)
 in printSQL manipulation
 :}
 UPDATE "tab" SET "col1" = 2 WHERE ("col1" <> "col2")
@@ -230,11 +223,11 @@ let
      , "products_deleted" ::: 'Table ProductsTable
      ] '[ 'NotNull 'PGdate] '[]
   manipulation = with
-    (deleteFrom #products NoUsing (#date .< param @1) ReturningStar `as` #deleted_rows)
-    (insertQuery_ #products_deleted (selectStar (from (view (#deleted_rows `as` #t)))))
+    (deleteFrom #products NoUsing (#date .< param @1) ReturningStar `as` #del)
+    (insertInto_ #products_deleted (Subquery (selectStar (from (view #del)))))
 in printSQL manipulation
 :}
-WITH "deleted_rows" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "deleted_rows" AS "t"
+WITH "del" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "del" AS "del"
 -}
 
 newtype Manipulation
