@@ -125,18 +125,19 @@ upsert:
 >>> :{
 let
   manipulation :: Manipulation
-    '[ "tab" ::: 'Table ('["uq" ::: 'Unique '["col1"]] :=>
-      '[ "col1" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "col2" ::: 'NoDef :=> 'NotNull 'PGint4 ])]
-    '[] '[ "sum" ::: 'NotNull 'PGint4]
+    '[ "customers" ::: 'Table ('["uq" ::: 'Unique '["name"]] :=>
+      '[ "name" ::: 'NoDef :=> 'NotNull 'PGtext
+       , "email" ::: 'NoDef :=> 'NotNull 'PGtext ])]
+    '[] '[]
   manipulation =
-    insertInto #tab
-      (Values (2 `as` #col1 :* 4 `as` #col2) [6 `as` #col1 :* 8 `as` #col2])
-      (OnConflict (OnConstraint #uq) (DoUpdate (2 `as` #col1) [#col1 .== #col2]))
-      (Returning ((#col1 + #col2) `as` #sum))
+    insertInto #customers
+      (Values_ ("John Smith" `as` #name :* "john@smith.com" `as` #email))
+      (OnConflict (OnConstraint #uq)
+        (DoUpdate (((#excluded ! #email) <> ";" <> (#customers ! #email)) `as` #email) []))
+      (Returning Nil)
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (2, 4), (6, 8) ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "col1" = 2 WHERE ("col1" = "col2") RETURNING ("col1" + "col2") AS "sum"
+INSERT INTO "customers" ("name", "email") VALUES (E'John Smith', E'john@smith.com') ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || (E';' || "customers"."email"))
 
 query insert:
 
@@ -271,7 +272,7 @@ insertInto
      , SOP.SListI result )
   => Alias tab
   -> QueryClause schema params columns
-  -> ConflictClause schema params table
+  -> ConflictClause tab schema params table
   -> ReturningClause schema params row result
   -> Manipulation schema params result
 insertInto tab qry conflict ret = UnsafeManipulation $
@@ -469,37 +470,37 @@ renderReturningClause = \case
 -- `OnConflictDoNothing` simply avoids inserting a row.
 -- `OnConflictDoUpdate` updates the existing row that conflicts with the row
 -- proposed for insertion.
-data ConflictClause schema params table where
-  OnConflictDoRaise :: ConflictClause schema params table
+data ConflictClause tab schema params table where
+  OnConflictDoRaise :: ConflictClause tab schema params table
   OnConflict
     :: ConflictTarget constraints
-    -> ConflictAction schema params columns
-    -> ConflictClause schema params (constraints :=> columns)
+    -> ConflictAction tab schema params columns
+    -> ConflictClause tab schema params (constraints :=> columns)
 
 -- | Render a `ConflictClause`.
 renderConflictClause
   :: SOP.SListI (TableToColumns table)
-  => ConflictClause schema params table
+  => ConflictClause tab schema params table
   -> ByteString
 renderConflictClause = \case
   OnConflictDoRaise -> ""
   OnConflict target action -> " ON CONFLICT"
     <+> renderConflictTarget target <+> renderConflictAction action
 
-data ConflictAction schema params columns where
-  DoNothing :: ConflictAction schema params columns
+data ConflictAction tab schema params columns where
+  DoNothing :: ConflictAction tab schema params columns
   DoUpdate
     :: ( row ~ ColumnsToRow columns
        , SOP.SListI columns
        , columns ~ (col0 ': cols)
        , SOP.All (HasIn columns) subcolumns
        , AllUnique subcolumns )
-    => NP (ColumnExpression schema '[t ::: row] 'Ungrouped params) subcolumns
-    -> [Condition schema '[t ::: row] 'Ungrouped params]
-    -> ConflictAction schema params columns
+    => NP (ColumnExpression schema '[tab ::: row, "excluded" ::: row] 'Ungrouped params) subcolumns
+    -> [Condition schema '[tab ::: row, "excluded" ::: row] 'Ungrouped params]
+    -> ConflictAction tab schema params columns
 
 renderConflictAction
-  :: ConflictAction schema params columns
+  :: ConflictAction tab schema params columns
   -> ByteString
 renderConflictAction = \case
   DoNothing -> "DO NOTHING"
