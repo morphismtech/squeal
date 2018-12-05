@@ -32,26 +32,27 @@ The first step is to define the schema of our database. This is where
 we use @DataKinds@ and @TypeOperators@.
 
 >>> :{
+type UsersColumns =
+  '[ "id"   :::   'Def :=> 'NotNull 'PGint4
+   , "name" ::: 'NoDef :=> 'NotNull 'PGtext ]
+type UsersConstraints = '[ "pk_users" ::: 'PrimaryKey '["id"] ]
+type EmailsColumns =
+  '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+   , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
+   , "email" ::: 'NoDef :=> 'Null 'PGtext ]
+type EmailsConstraints =
+  '[ "pk_emails"  ::: 'PrimaryKey '["id"]
+   , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"] ]
 type Schema =
-  '[ "users" ::: 'Table (
-      '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
-      '[ "id"   :::   'Def :=> 'NotNull 'PGint4
-       , "name" ::: 'NoDef :=> 'NotNull 'PGtext
-       ])
-  , "emails" ::: 'Table (
-      '[ "pk_emails"  ::: 'PrimaryKey '["id"]
-       , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
-       ] :=>
-      '[ "id"      :::   'Def :=> 'NotNull 'PGint4
-       , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "email"   ::: 'NoDef :=>    'Null 'PGtext
-       ])
-  ]
+  '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns)
+   , "emails" ::: 'Table (EmailsConstraints :=> EmailsColumns) ]
+type Schemas = Public Schema
+type DB = DBof Schemas
 :}
 
 Notice the use of type operators.
 
-`:::` is used to pair an alias `GHC.TypeLits.Symbol` with a `SchemumType`,
+`:::` is used to pair an alias `GHC.TypeLits.Symbol` with a `SchemasType`, a `SchemumType`,
 a `TableConstraint` or a `ColumnType`. It is intended to connote Haskell's @::@
 operator.
 
@@ -68,7 +69,7 @@ labels to refer to named tables and columns in our schema.
 
 >>> :{
 let
-  setup :: Definition '[] Schema
+  setup :: Definition (Public '[]) Schemas
   setup = 
     createTable #users
       ( serial `as` #id :*
@@ -89,14 +90,14 @@ We can easily see the generated SQL is unsurprising looking.
 CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));
 CREATE TABLE "emails" ("id" serial, "user_id" int NOT NULL, "email" text NULL, CONSTRAINT "pk_emails" PRIMARY KEY ("id"), CONSTRAINT "fk_user_id" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 
-Notice that @setup@ starts with an empty schema @'[]@ and produces @Schema@.
+Notice that @setup@ starts with an empty public schema @(Public '[])@ and produces @Schemas@.
 In our `createTable` commands we included `TableConstraint`s to define
 primary and foreign keys, making them somewhat complex. Our @teardown@
 `Definition` is simpler.
 
 >>> :{
 let
-  teardown :: Definition Schema '[]
+  teardown :: Definition Schemas (Public '[])
   teardown = dropTable #emails >>> dropTable #users
 :}
 
@@ -117,7 +118,7 @@ of our inserts.
 
 >>> :{
 let
-  insertUser :: Manipulation Schema '[ 'NotNull 'PGtext ] '[ "fromOnly" ::: 'NotNull 'PGint4 ]
+  insertUser :: Manipulation DB '[ 'NotNull 'PGtext ] '[ "fromOnly" ::: 'NotNull 'PGint4 ]
   insertUser = insertRow #users
     (Default `as` #id :* Set (param @1) `as` #name)
     OnConflictDoNothing (Returning (#id `as` #fromOnly))
@@ -125,7 +126,7 @@ let
 
 >>> :{
 let
-  insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
+  insertEmail :: Manipulation DB '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
   insertEmail = insertRow #emails
     ( Default `as` #id :*
       Set (param @1) `as` #user_id :*
@@ -145,7 +146,7 @@ need to use an inner join to get the right result. A `Query` is like a
 
 >>> :{
 let
-  getUsers :: Query Schema '[]
+  getUsers :: Query DB '[]
     '[ "userName"  ::: 'NotNull 'PGtext
      , "userEmail" :::    'Null 'PGtext ]
   getUsers = select
@@ -190,7 +191,7 @@ transformer and when the schema doesn't change we can use `Monad` and
 
 >>> :{
 let
-  session :: PQ Schema Schema IO ()
+  session :: PQ Schemas Schemas IO ()
   session = do
     idResults <- traversePrepared insertUser (Only . userName <$> users)
     ids <- traverse (fmap fromOnly . getRow 0) idResults
