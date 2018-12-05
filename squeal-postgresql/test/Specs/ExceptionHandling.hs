@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeInType            #-}
 {-# LANGUAGE TypeOperators         #-}
 module ExceptionHandling
   ( specs
@@ -45,6 +46,10 @@ type Schema =
         ])
    ]
 
+type Schemas = Public Schema
+
+type DB = DBof Schemas
+
 data User =
   User { userName  :: Text
        , userEmail :: Maybe Text
@@ -53,13 +58,13 @@ data User =
 instance SOP.Generic User
 instance SOP.HasDatatypeInfo User
 
-insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
+insertUser :: Manipulation DB '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
 insertUser = insertInto #users
   (Values_ (defaultAs #id :* param @1 `as` #name :* param @2 `as` #vec))
   OnConflictDoRaise (Returning (#id `as` #fromOnly))
 
-setup :: Definition '[] Schema
+setup :: Definition (Public '[]) Schemas
 setup =
   createTable #users
     ( serial `as` #id :*
@@ -76,10 +81,10 @@ setup =
       foreignKey #user_id #users #id
         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
 
-teardown :: Definition Schema '[]
+teardown :: Definition Schemas (Public '[])
 teardown = dropTable #emails >>> dropTable #users
 
-migration :: Migration IO '[] Schema
+migration :: Migration IO (Public '[]) Schemas
 migration = Migration { name = "test"
                       , up = void $ define setup
                       , down = void $ define teardown }
@@ -100,10 +105,10 @@ connectionString = "host=localhost port=5432 dbname=exampledb"
 testUser :: User
 testUser = User "TestUser" Nothing []
 
-newUser :: (MonadBase IO m, MonadPQ Schema m) => User -> m ()
+newUser :: (MonadBase IO m, MonadPQ Schemas m) => User -> m ()
 newUser u = void $ manipulateParams insertUser (userName u, userVec u)
 
-insertUserTwice :: (MonadBase IO m, MonadPQ Schema m) => m ()
+insertUserTwice :: (MonadBase IO m, MonadPQ Schemas m) => m ()
 insertUserTwice = newUser testUser >> newUser testUser
 
 specs :: SpecWith ()

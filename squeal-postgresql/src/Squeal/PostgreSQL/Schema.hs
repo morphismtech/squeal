@@ -54,6 +54,10 @@ module Squeal.PostgreSQL.Schema
   , TableType
   , SchemumType (..)
   , SchemaType
+  , SchemasType
+  , Public
+  , DBType
+  , DBof
     -- * Constraints
   , (:=>)
   , ColumnConstraint (..)
@@ -62,8 +66,10 @@ module Squeal.PostgreSQL.Schema
   , Uniquely
     -- * Aliases
   , (:::)
-  , Alias (Alias)
+  , Alias (..)
+  , IsLabel (..)
   , renderAlias
+  , renderAliasString
   , renderAliases
   , Aliased (As)
   , Aliasable (as)
@@ -71,13 +77,13 @@ module Squeal.PostgreSQL.Schema
   , Has
   , HasUnique
   , HasAll
-  , IsLabel (..)
+  , QualifiedAlias (..)
   , IsQualified (..)
-  , renderAliasString
   , HasIn
   , IsNotElem
   , AllUnique
   , DefaultAliasable (..)
+  , renderQualifiedAlias
     -- * Enumerated Labels
   , IsPGlabel (..)
   , PGlabel (..)
@@ -495,6 +501,29 @@ class IsQualified table column expression where
   infixl 9 !
 instance IsQualified table column (Alias table, Alias column) where (!) = (,)
 
+data QualifiedAlias (qualifier :: Symbol) (alias :: Symbol) = QualifiedAlias
+  deriving (Eq,GHC.Generic,Ord,Show,NFData)
+instance (q ~ q', a ~ a') => IsQualified q a (QualifiedAlias q' a') where
+  _!_ = QualifiedAlias
+instance (q' ~ "public", a ~ a') => IsLabel a (QualifiedAlias q' a') where
+  fromLabel = QualifiedAlias
+instance (q0 ~ q1, a0 ~ a1, a1 ~ a2, KnownSymbol a2) =>
+  IsQualified q0 a0 (Aliased (QualifiedAlias q1) (a1 ::: a2)) where
+    _!_ = QualifiedAlias `As` Alias
+instance (q ~ "public", a0 ~ a1, a1 ~ a2, KnownSymbol a2) =>
+  IsLabel a0 (Aliased (QualifiedAlias q) (a1 ::: a2)) where
+    fromLabel = QualifiedAlias `As` Alias
+
+renderQualifiedAlias
+  :: forall q a. (KnownSymbol q, KnownSymbol a)
+  => QualifiedAlias q a -> ByteString
+renderQualifiedAlias _ =
+  let
+    qualifier = renderAlias (Alias @q)
+    alias = renderAlias (Alias @a)
+  in
+    if qualifier == "\"public\"" then alias else qualifier <> "." <> alias
+
 -- | @Elem@ is a promoted `Data.List.elem`.
 type family Elem x xs where
   Elem x '[] = 'False
@@ -680,6 +709,15 @@ type family Schema :: SchemaType where
 :}
 -}
 type SchemaType = [(Symbol,SchemumType)]
+
+type SchemasType = [(Symbol,SchemaType)]
+
+type family Public (schema :: SchemaType) :: SchemasType
+  where Public schema = '["public" ::: schema]
+
+type DBType = (FromType,SchemasType)
+
+type family DBof :: SchemasType -> DBType where DBof = '(,) '[]
 
 -- | `IsPGlabel` looks very much like the `IsLabel` class. Whereas
 -- the overloaded label, `fromLabel` is used for column references,

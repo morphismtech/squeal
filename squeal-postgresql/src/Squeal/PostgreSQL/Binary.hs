@@ -27,7 +27,7 @@ round trip query.
 >>> instance HasDatatypeInfo Row
 >>> :{
 let
-  roundTrip :: Query '[] (TuplePG Row) (RowPG Row)
+  roundTrip :: Query (DBof (Public '[])) (TuplePG Row) (RowPG Row)
   roundTrip = values_ $
     parameter @1 int2 `as` #col1 :*
     parameter @2 text `as` #col2 :*
@@ -68,7 +68,7 @@ Once again, we define a simple round trip query.
 
 >>> :{
 let
-  roundTrip :: Query '[] (TuplePG Row) (RowPG Row)
+  roundTrip :: Query (DBof (Public '[])) (TuplePG Row) (RowPG Row)
   roundTrip = values_ $
     parameter @1 (int2 & vararray)                  `as` #col1 :*
     parameter @2 (int2 & fixarray @2)               `as` #col2 :*
@@ -114,7 +114,7 @@ type Schema =
 
 >>> :{
 let
-  setup :: Definition '[] Schema
+  setup :: Definition (Public '[]) (Public Schema)
   setup =
     createTypeEnumFrom @Schwarma #schwarma >>>
     createTypeCompositeFrom @Person #person
@@ -146,7 +146,7 @@ Once again, define a round trip query.
 
 >>> :{
 let
-  roundTrip :: Query Schema (TuplePG Row) (RowPG Row)
+  roundTrip :: Query (DBof (Public Schema)) (TuplePG Row) (RowPG Row)
   roundTrip = values_ $
     parameter @1 (typedef #schwarma) `as` #schwarma :*
     parameter @2 (typedef #person)   `as` #person1  :*
@@ -157,7 +157,7 @@ Finally, we can drop our type definitions.
 
 >>> :{
 let
-  teardown :: Definition Schema '[]
+  teardown :: Definition (Public Schema) (Public '[])
   teardown = dropType #schwarma >>> dropType #person
 :}
 

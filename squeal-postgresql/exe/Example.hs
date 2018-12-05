@@ -41,7 +41,11 @@ type Schema =
         ])
    ]
 
-setup :: Definition '[] Schema
+type Schemas = Public Schema
+
+type DB = DBof Schemas
+
+setup :: Definition (Public '[]) Schemas
 setup = 
   createTable #users
     ( serial `as` #id :*
@@ -57,21 +61,21 @@ setup =
       foreignKey #user_id #users #id
         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
 
-teardown :: Definition Schema '[]
+teardown :: Definition Schemas (Public '[])
 teardown = dropTable #emails >>> dropTable #users
 
-insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
+insertUser :: Manipulation DB '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
 insertUser = insertInto #users
   (Values_ (defaultAs #id :* param @1 `as` #name :* param @2 `as` #vec))
   (OnConflict (OnConstraint #pk_users) DoNothing) (Returning (#id `as` #fromOnly))
 
-insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
+insertEmail :: Manipulation DB '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
 insertEmail = insertInto #emails
   (Values_ (defaultAs #id :* param @1 `as` #user_id :* param @2 `as` #email))
   (OnConflict (OnConstraint #pk_emails) DoNothing) (Returning Nil)
 
-getUsers :: Query Schema '[]
+getUsers :: Query DB '[]
   '[ "userName" ::: 'NotNull 'PGtext
    , "userEmail" ::: 'Null 'PGtext
    , "userVec" ::: 'NotNull ('PGvararray ('Null 'PGint2))]
@@ -93,7 +97,7 @@ users =
   , User "Carole" (Just "carole@hotmail.com") [Just 3]
   ]
 
-session :: (MonadBase IO pq, MonadPQ Schema pq) => pq ()
+session :: (MonadBase IO pq, MonadPQ Schemas pq) => pq ()
 session = do
   liftBase $ Char8.putStrLn "manipulating"
   idResults <- traversePrepared insertUser ([(userName user, userVec user) | user <- users])
