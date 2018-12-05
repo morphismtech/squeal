@@ -198,7 +198,7 @@ newtype Manipulation
 instance RenderSQL (Manipulation db params columns) where
   renderSQL = renderManipulation
 instance With Manipulation where
-  with Done manip = UnsafeManipulation $ renderManipulation manip
+  with Done manip = manip
   with (cte :>> ctes) manip = UnsafeManipulation $
     "WITH" <+> renderCommonTableExpressions renderManipulation cte ctes
     <+> renderManipulation manip

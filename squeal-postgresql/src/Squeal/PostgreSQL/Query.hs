@@ -1383,7 +1383,7 @@ class With statement where
     -- ^ larger query
     -> statement db0 params row
 instance With Query where
-  with Done query = UnsafeQuery $ renderQuery query
+  with Done query = query
   with (cte :>> ctes) query = UnsafeQuery $
     "WITH" <+> renderCommonTableExpressions renderQuery cte ctes
       <+> renderQuery query
