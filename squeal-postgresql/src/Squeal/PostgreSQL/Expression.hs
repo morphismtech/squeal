@@ -1651,125 +1651,125 @@ typeview
 typeview = UnsafeTypeExpression . renderQualifiedAlias
 
 -- | logical Boolean (true/false)
-bool :: TypeExpression db (nullity 'PGbool)
+bool :: TypeExpression schemas (nullity 'PGbool)
 bool = UnsafeTypeExpression "bool"
 -- | signed two-byte integer
-int2, smallint :: TypeExpression db (nullity 'PGint2)
+int2, smallint :: TypeExpression schemas (nullity 'PGint2)
 int2 = UnsafeTypeExpression "int2"
 smallint = UnsafeTypeExpression "smallint"
 -- | signed four-byte integer
-int4, int, integer :: TypeExpression db (nullity 'PGint4)
+int4, int, integer :: TypeExpression schemas (nullity 'PGint4)
 int4 = UnsafeTypeExpression "int4"
 int = UnsafeTypeExpression "int"
 integer = UnsafeTypeExpression "integer"
 -- | signed eight-byte integer
-int8, bigint :: TypeExpression db (nullity 'PGint8)
+int8, bigint :: TypeExpression schemas (nullity 'PGint8)
 int8 = UnsafeTypeExpression "int8"
 bigint = UnsafeTypeExpression "bigint"
 -- | arbitrary precision numeric type
-numeric :: TypeExpression db (nullity 'PGnumeric)
+numeric :: TypeExpression schemas (nullity 'PGnumeric)
 numeric = UnsafeTypeExpression "numeric"
 -- | single precision floating-point number (4 bytes)
-float4, real :: TypeExpression db (nullity 'PGfloat4)
+float4, real :: TypeExpression schemas (nullity 'PGfloat4)
 float4 = UnsafeTypeExpression "float4"
 real = UnsafeTypeExpression "real"
 -- | double precision floating-point number (8 bytes)
-float8, doublePrecision :: TypeExpression db (nullity 'PGfloat8)
+float8, doublePrecision :: TypeExpression schemas (nullity 'PGfloat8)
 float8 = UnsafeTypeExpression "float8"
 doublePrecision = UnsafeTypeExpression "double precision"
 -- | variable-length character string
-text :: TypeExpression db (nullity 'PGtext)
+text :: TypeExpression schemas (nullity 'PGtext)
 text = UnsafeTypeExpression "text"
 -- | fixed-length character string
 char, character
-  :: forall n db nullity. (KnownNat n, 1 <= n)
-  => TypeExpression db (nullity ('PGchar n))
+  :: forall n schemas nullity. (KnownNat n, 1 <= n)
+  => TypeExpression schemas (nullity ('PGchar n))
 char = UnsafeTypeExpression $ "char(" <> renderNat @n <> ")"
 character = UnsafeTypeExpression $  "character(" <> renderNat @n <> ")"
 -- | variable-length character string
 varchar, characterVarying
-  :: forall n db nullity. (KnownNat n, 1 <= n)
-  => TypeExpression db (nullity ('PGvarchar n))
+  :: forall n schemas nullity. (KnownNat n, 1 <= n)
+  => TypeExpression schemas (nullity ('PGvarchar n))
 varchar = UnsafeTypeExpression $ "varchar(" <> renderNat @n <> ")"
 characterVarying = UnsafeTypeExpression $
   "character varying(" <> renderNat @n <> ")"
 -- | binary data ("byte array")
-bytea :: TypeExpression db (nullity 'PGbytea)
+bytea :: TypeExpression schemas (nullity 'PGbytea)
 bytea = UnsafeTypeExpression "bytea"
 -- | date and time (no time zone)
-timestamp :: TypeExpression db (nullity 'PGtimestamp)
+timestamp :: TypeExpression schemas (nullity 'PGtimestamp)
 timestamp = UnsafeTypeExpression "timestamp"
 -- | date and time, including time zone
-timestampWithTimeZone :: TypeExpression db (nullity 'PGtimestamptz)
+timestampWithTimeZone :: TypeExpression schemas (nullity 'PGtimestamptz)
 timestampWithTimeZone = UnsafeTypeExpression "timestamp with time zone"
 -- | calendar date (year, month, day)
-date :: TypeExpression db (nullity 'PGdate)
+date :: TypeExpression schemas (nullity 'PGdate)
 date = UnsafeTypeExpression "date"
 -- | time of day (no time zone)
-time :: TypeExpression db (nullity 'PGtime)
+time :: TypeExpression schemas (nullity 'PGtime)
 time = UnsafeTypeExpression "time"
 -- | time of day, including time zone
-timeWithTimeZone :: TypeExpression db (nullity 'PGtimetz)
+timeWithTimeZone :: TypeExpression schemas (nullity 'PGtimetz)
 timeWithTimeZone = UnsafeTypeExpression "time with time zone"
 -- | time span
-interval :: TypeExpression db (nullity 'PGinterval)
+interval :: TypeExpression schemas (nullity 'PGinterval)
 interval = UnsafeTypeExpression "interval"
 -- | universally unique identifier
-uuid :: TypeExpression db (nullity 'PGuuid)
+uuid :: TypeExpression schemas (nullity 'PGuuid)
 uuid = UnsafeTypeExpression "uuid"
 -- | IPv4 or IPv6 host address
-inet :: TypeExpression db (nullity 'PGinet)
+inet :: TypeExpression schemas (nullity 'PGinet)
 inet = UnsafeTypeExpression "inet"
 -- | textual JSON data
-json :: TypeExpression db (nullity 'PGjson)
+json :: TypeExpression schemas (nullity 'PGjson)
 json = UnsafeTypeExpression "json"
 -- | binary JSON data, decomposed
-jsonb :: TypeExpression db (nullity 'PGjsonb)
+jsonb :: TypeExpression schemas (nullity 'PGjsonb)
 jsonb = UnsafeTypeExpression "jsonb"
 -- | variable length array
 vararray
-  :: TypeExpression db pg
-  -> TypeExpression db (nullity ('PGvararray pg))
+  :: TypeExpression schemas pg
+  -> TypeExpression schemas (nullity ('PGvararray pg))
 vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
 -- | fixed length array
 --
 -- >>> renderTypeExpression (fixarray @2 json)
 -- "json[2]"
 fixarray
-  :: forall n db nullity pg. KnownNat n
-  => TypeExpression db pg
-  -> TypeExpression db (nullity ('PGfixarray n pg))
+  :: forall n schemas nullity pg. KnownNat n
+  => TypeExpression schemas pg
+  -> TypeExpression schemas (nullity ('PGfixarray n pg))
 fixarray ty = UnsafeTypeExpression $
   renderTypeExpression ty <> "[" <> renderNat @n <> "]"
 
 -- | `pgtype` is a demoted version of a `PGType`
-class PGTyped db (ty :: NullityType) where
-  pgtype :: TypeExpression db ty
-instance PGTyped db (nullity 'PGbool) where pgtype = bool
-instance PGTyped db (nullity 'PGint2) where pgtype = int2
-instance PGTyped db (nullity 'PGint4) where pgtype = int4
-instance PGTyped db (nullity 'PGint8) where pgtype = int8
-instance PGTyped db (nullity 'PGnumeric) where pgtype = numeric
-instance PGTyped db (nullity 'PGfloat4) where pgtype = float4
-instance PGTyped db (nullity 'PGfloat8) where pgtype = float8
-instance PGTyped db (nullity 'PGtext) where pgtype = text
+class PGTyped schemas (ty :: NullityType) where
+  pgtype :: TypeExpression schemas ty
+instance PGTyped schemas (nullity 'PGbool) where pgtype = bool
+instance PGTyped schemas (nullity 'PGint2) where pgtype = int2
+instance PGTyped schemas (nullity 'PGint4) where pgtype = int4
+instance PGTyped schemas (nullity 'PGint8) where pgtype = int8
+instance PGTyped schemas (nullity 'PGnumeric) where pgtype = numeric
+instance PGTyped schemas (nullity 'PGfloat4) where pgtype = float4
+instance PGTyped schemas (nullity 'PGfloat8) where pgtype = float8
+instance PGTyped schemas (nullity 'PGtext) where pgtype = text
 instance (KnownNat n, 1 <= n)
-  => PGTyped db (nullity ('PGchar n)) where pgtype = char @n
+  => PGTyped schemas (nullity ('PGchar n)) where pgtype = char @n
 instance (KnownNat n, 1 <= n)
-  => PGTyped db (nullity ('PGvarchar n)) where pgtype = varchar @n
-instance PGTyped db (nullity 'PGbytea) where pgtype = bytea
-instance PGTyped db (nullity 'PGtimestamp) where pgtype = timestamp
-instance PGTyped db (nullity 'PGtimestamptz) where pgtype = timestampWithTimeZone
-instance PGTyped db (nullity 'PGdate) where pgtype = date
-instance PGTyped db (nullity 'PGtime) where pgtype = time
-instance PGTyped db (nullity 'PGtimetz) where pgtype = timeWithTimeZone
-instance PGTyped db (nullity 'PGinterval) where pgtype = interval
-instance PGTyped db (nullity 'PGuuid) where pgtype = uuid
-instance PGTyped db (nullity 'PGjson) where pgtype = json
-instance PGTyped db (nullity 'PGjsonb) where pgtype = jsonb
-instance PGTyped db ty
-  => PGTyped db (nullity ('PGvararray ty)) where
-    pgtype = vararray (pgtype @db @ty)
-instance (KnownNat n, PGTyped db ty)
-  => PGTyped db (nullity ('PGfixarray n ty)) where
-    pgtype = fixarray @n (pgtype @db @ty)
+  => PGTyped schemas (nullity ('PGvarchar n)) where pgtype = varchar @n
+instance PGTyped schemas (nullity 'PGbytea) where pgtype = bytea
+instance PGTyped schemas (nullity 'PGtimestamp) where pgtype = timestamp
+instance PGTyped schemas (nullity 'PGtimestamptz) where pgtype = timestampWithTimeZone
+instance PGTyped schemas (nullity 'PGdate) where pgtype = date
+instance PGTyped schemas (nullity 'PGtime) where pgtype = time
+instance PGTyped schemas (nullity 'PGtimetz) where pgtype = timeWithTimeZone
+instance PGTyped schemas (nullity 'PGinterval) where pgtype = interval
+instance PGTyped schemas (nullity 'PGuuid) where pgtype = uuid
+instance PGTyped schemas (nullity 'PGjson) where pgtype = json
+instance PGTyped schemas (nullity 'PGjsonb) where pgtype = jsonb
+instance PGTyped schemas ty
+  => PGTyped schemas (nullity ('PGvararray ty)) where
+    pgtype = vararray (pgtype @schemas @ty)
+instance (KnownNat n, PGTyped schemas ty)
+  => PGTyped schemas (nullity ('PGfixarray n ty)) where
+    pgtype = fixarray @n (pgtype @schemas @ty)
