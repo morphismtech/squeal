@@ -21,11 +21,9 @@ Squeal data manipulation language.
   , RankNTypes
   , ScopedTypeVariables
   , TypeApplications
-  , TypeFamilies
   , TypeInType
   , TypeOperators
   , UndecidableInstances
-  , UndecidableSuperClasses
 #-}
 
 module Squeal.PostgreSQL.Manipulation
@@ -59,8 +57,7 @@ module Squeal.PostgreSQL.Manipulation
 
 import Control.DeepSeq
 import Data.ByteString hiding (foldr)
-import Data.Kind (Constraint)
-import GHC.TypeLits (ErrorMessage (..), KnownSymbol, Symbol, TypeError)
+import GHC.TypeLits (KnownSymbol)
 
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
@@ -498,26 +495,6 @@ renderConflictTarget (OnConstraint con) =
 {-----------------------------------------
 UPDATE statements
 -----------------------------------------}
-
--- In order to guide type inference, also enforces that a key appearing in
--- the common subset prefix of both sup and sub maps to the same value (type).
-type family OrderedSubsetOf'
-    (origSup :: [(Symbol, a)]) (origSub :: [(Symbol, a)])
-    (sup     :: [(Symbol, a)]) (sub     :: [(Symbol, a)])
-    :: Constraint where
-  OrderedSubsetOf' _ _ _ '[] = ()
-  OrderedSubsetOf' sup sub ('(xk, xv) ': xs) ('(xk, yv) ': ys) =
-    (xv ~ yv, OrderedSubsetOf' sup sub xs ys)
-  OrderedSubsetOf' sup sub (x ': xs) (y ': ys) =
-    OrderedSubsetOf' sup sub xs (y ': ys)
-  OrderedSubsetOf' sup sub '[] _ = TypeError
-    (     'Text "The type"
-    ':$$: 'ShowType sub
-    ':$$: 'Text "is not an ordered subset of"
-    ':$$: 'ShowType sup)
-
-class    (OrderedSubsetOf' sup sub sup sub) => OrderedSubsetOf sup sub where
-instance (OrderedSubsetOf' sup sub sup sub) => OrderedSubsetOf sup sub where
 
 -- | An `update` command changes the values of the specified columns
 -- in all rows that satisfy the condition.
