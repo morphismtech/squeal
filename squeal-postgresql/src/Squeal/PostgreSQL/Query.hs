@@ -243,12 +243,13 @@ type OrdersConstraints =
 :}
 
 >>> type NamesColumns = '["id" ::: 'NoDef :=> 'NotNull 'PGint4, "name" ::: 'NoDef :=> 'NotNull 'PGtext]
->>> type NamesConstraints = '["pk_customers" ::: PrimaryKey '["id"]]
+>>> type CustomersConstraints = '["pk_customers" ::: PrimaryKey '["id"]]
+>>> type ShippersConstraints = '["pk_shippers" ::: PrimaryKey '["id"]]
 >>> :{
 type OrdersSchema =
   '[ "orders"   ::: 'Table (OrdersConstraints :=> OrdersColumns)
-  , "customers" ::: 'Table (NamesConstraints :=> NamesColumns)
-  , "shippers" ::: 'Table (NamesConstraints :=> NamesColumns) ]
+  , "customers" ::: 'Table (CustomersConstraints :=> NamesColumns)
+  , "shippers" ::: 'Table (ShippersConstraints :=> NamesColumns) ]
 :}
 
 >>> :{
