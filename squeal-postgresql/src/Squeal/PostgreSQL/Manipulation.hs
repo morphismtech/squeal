@@ -66,10 +66,9 @@ simple insert:
 
 >>> type Columns = '["col1" ::: 'NoDef :=> 'Null 'PGint4, "col2" ::: 'Def :=> 'NotNull 'PGint4]
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
->>> type Schemas = (Public Schema)
 >>> :{
 let
-  manipulation :: Manipulation (DBof Schemas) '[] '[]
+  manipulation :: Manipulation (DBof (Public Schemas)) '[] '[]
   manipulation =
     insertRow_ #tab (Set 2 `as` #col1 :* Default `as` #col2)
 in printSQL manipulation
