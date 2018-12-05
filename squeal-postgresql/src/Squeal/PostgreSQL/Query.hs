@@ -1351,13 +1351,6 @@ instance
     (statement db0 params common)
     (AlignedList (CommonTableExpression statement params) db0 db1) where
       statement `as` cte = single (statement `as` cte)
--- instance
---   ( KnownSymbol vw
---   , Has "public" db schema
---   , Alter "public" (vw ::: 'View cte ': schema) db ~ db1
---   ) => Aliasable vw (statement db params cte)
---     (AlignedList (CommonTableExpression statement params) db db1) where
---       statement `as` vw = single (statement `as` vw)
 
 -- | render a `CommonTableExpression`.
 renderCommonTableExpression
