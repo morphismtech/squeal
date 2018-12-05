@@ -68,7 +68,7 @@ simple insert:
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  manipulation :: Manipulation (DBof (Public Schemas)) '[] '[]
+  manipulation :: Manipulation (DBof (Public Schema)) '[] '[]
   manipulation =
     insertRow_ #tab (Set 2 `as` #col1 :* Default `as` #col2)
 in printSQL manipulation
