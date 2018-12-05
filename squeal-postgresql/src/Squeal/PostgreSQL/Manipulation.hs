@@ -295,7 +295,7 @@ renderQueryClause = \case
   Subquery qry -> renderQuery qry
   where
     renderAliasPartMaybe, renderValuePartMaybe
-      :: ColumnExpression schema from grp params column -> Maybe ByteString
+      :: ColumnExpression db from grp params column -> Maybe ByteString
     renderAliasPartMaybe = \case
       DefaultAs _ -> Nothing
       Specific (_ `As` name) -> Just $ renderAlias name
@@ -303,7 +303,7 @@ renderQueryClause = \case
       DefaultAs _ -> Nothing
       Specific (value `As` _) -> Just $ renderExpression value
     renderAliasPart, renderValuePart
-      :: ColumnExpression schema from grp params column -> ByteString
+      :: ColumnExpression db from grp params column -> ByteString
     renderAliasPart = \case
       DefaultAs name -> renderAlias name
       Specific (_ `As` name) -> renderAlias name
@@ -313,67 +313,67 @@ renderQueryClause = \case
 
 pattern Values_
   :: SOP.SListI columns
-  => NP (ColumnExpression schema '[] 'Ungrouped params) columns
-  -> QueryClause schema params columns
+  => NP (ColumnExpression db '[] 'Ungrouped params) columns
+  -> QueryClause db params columns
 pattern Values_ vals = Values vals []
 
-data ColumnExpression schema from grp params column where
+data ColumnExpression db from grp params column where
   DefaultAs
     :: KnownSymbol col
     => Alias col
-    -> ColumnExpression schema from grp params (col ::: 'Def :=> ty)
+    -> ColumnExpression db from grp params (col ::: 'Def :=> ty)
   Specific
-    :: Aliased (Expression schema from grp params) (col ::: ty)
-    -> ColumnExpression schema from grp params (col ::: defness :=> ty)
+    :: Aliased (Expression db from grp params) (col ::: ty)
+    -> ColumnExpression db from grp params (col ::: defness :=> ty)
 
-instance (KnownSymbol alias, column ~ (alias ::: defness :=> ty))
-  => Aliasable alias
-       (Expression schema from grp params ty)
-       (ColumnExpression schema from grp params column) where
-         expression `as` alias = Specific (expression `As` alias)
-instance (KnownSymbol alias, columns ~ '[alias ::: defness :=> ty])
-  => Aliasable alias
-       (Expression schema from grp params ty)
-       (NP (ColumnExpression schema from grp params) columns) where
-         expression `as` alias = expression `as` alias :* Nil
+instance (KnownSymbol col, column ~ (col ::: defness :=> ty))
+  => Aliasable col
+       (Expression db from grp params ty)
+       (ColumnExpression db from grp params column) where
+         expression `as` col = Specific (expression `As` col)
+instance (KnownSymbol col, columns ~ '[col ::: defness :=> ty])
+  => Aliasable col
+       (Expression db from grp params ty)
+       (NP (ColumnExpression db from grp params) columns) where
+         expression `as` col = expression `as` col :* Nil
 instance (KnownSymbol col, column ~ (col ::: 'Def :=> ty))
-  => DefaultAliasable col (ColumnExpression schema from grp params column) where
+  => DefaultAliasable col (ColumnExpression db from grp params column) where
     defaultAs = DefaultAs
 instance (KnownSymbol col, columns ~ '[col ::: 'Def :=> ty])
-  => DefaultAliasable col (NP (ColumnExpression schema from grp params) columns) where
+  => DefaultAliasable col (NP (ColumnExpression db from grp params) columns) where
     defaultAs col = defaultAs col :* Nil
 
-instance (HasUnique table from columns, Has column columns ty, colty ~ (column ::: defness :=> ty))
-  => IsLabel column (ColumnExpression schema from 'Ungrouped params colty) where
-    fromLabel = fromLabel @column `as` Alias
-instance (HasUnique table from columns, Has column columns ty, columnLabel ~ column, coltys ~ '[column ::: defness :=> ty])
-  => IsLabel columnLabel
-    (NP (ColumnExpression schema from 'Ungrouped params) coltys) where
-    fromLabel = fromLabel @column `as` Alias
+instance (HasUnique tab from row, Has col row ty, colty ~ (col ::: defness :=> ty))
+  => IsLabel col (ColumnExpression db from 'Ungrouped params colty) where
+    fromLabel = fromLabel @col `as` Alias
+instance (HasUnique tab from row, Has col row ty, coltys ~ '[col ::: defness :=> ty])
+  => IsLabel col
+    (NP (ColumnExpression db from 'Ungrouped params) coltys) where
+    fromLabel = fromLabel @col `as` Alias
 
-instance (Has table from columns, Has column columns ty, colty ~ (column ::: defness :=> ty))
-  => IsQualified table column (ColumnExpression schema from 'Ungrouped params colty) where
-    tab ! column = tab ! column `as` column
-instance (Has table from columns, Has column columns ty, coltys ~ '[column ::: defness :=> ty])
-  => IsQualified table column (NP (ColumnExpression schema from 'Ungrouped params) coltys) where
-    tab ! column = tab ! column `as` column
+instance (Has tab from row, Has col row ty, colty ~ (col ::: defness :=> ty))
+  => IsQualified tab col (ColumnExpression db from 'Ungrouped params colty) where
+    tab ! col = tab ! col `as` col
+instance (Has tab from row, Has col row ty, coltys ~ '[col ::: defness :=> ty])
+  => IsQualified tab col (NP (ColumnExpression db from 'Ungrouped params) coltys) where
+    tab ! col = tab ! col `as` col
 
 instance
-  ( HasUnique table from columns
-  , Has column columns ty
-  , GroupedBy table column bys
-  , colty ~ (column ::: defness :=> ty)
-  ) => IsLabel column
-    (ColumnExpression schema from ('Grouped bys) params colty) where
-      fromLabel = fromLabel @column `as` Alias
+  ( HasUnique tab from row
+  , Has col row ty
+  , GroupedBy tab col bys
+  , colty ~ (col ::: defness :=> ty)
+  ) => IsLabel col
+    (ColumnExpression db from ('Grouped bys) params colty) where
+      fromLabel = fromLabel @col `as` Alias
 instance
-  ( HasUnique table from columns
-  , Has column columns ty
-  , GroupedBy table column bys
-  , coltys ~ '[column ::: defness :=> ty]
-  ) => IsLabel column
-    (NP (ColumnExpression schema from ('Grouped bys) params) coltys) where
-      fromLabel = fromLabel @column `as` Alias
+  ( HasUnique tab from row
+  , Has col row ty
+  , GroupedBy tab col bys
+  , coltys ~ '[col ::: defness :=> ty]
+  ) => IsLabel col
+    (NP (ColumnExpression db from ('Grouped bys) params) coltys) where
+      fromLabel = fromLabel @col `as` Alias
 
 instance
   ( Has tab from row

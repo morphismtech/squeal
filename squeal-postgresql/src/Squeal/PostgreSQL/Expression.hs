@@ -274,11 +274,11 @@ instance (HasUnique tab from row, Has col row ty)
     fromLabel = UnsafeExpression $ renderAlias (Alias @col)
 instance (HasUnique tab from row, Has col row ty, column ~ (col ::: ty))
   => IsLabel col
-    (Aliased (Expression schema from 'Ungrouped params) column) where
+    (Aliased (Expression db from 'Ungrouped params) column) where
     fromLabel = fromLabel @col `As` Alias
 instance (HasUnique tab from row, Has col row ty, columns ~ '[col ::: ty])
   => IsLabel col
-    (NP (Aliased (Expression schema from 'Ungrouped params)) columns) where
+    (NP (Aliased (Expression db from 'Ungrouped params)) columns) where
     fromLabel = fromLabel @col :* Nil
 
 instance (Has tab from row, Has col row ty)
@@ -965,11 +965,11 @@ like = unsafeBinaryOp "LIKE"
 -- >>> printSQL $ "abc" `ilike` "a%"
 -- (E'abc' ILIKE E'a%')
 ilike
-  :: Expression schema from grouping params (nullity 'PGtext)
+  :: Expression db from grouping params (nullity 'PGtext)
   -- ^ string
-  -> Expression schema from grouping params (nullity 'PGtext)
+  -> Expression db from grouping params (nullity 'PGtext)
   -- ^ pattern
-  -> Expression schema from grouping params (nullity 'PGbool)
+  -> Expression db from grouping params (nullity 'PGbool)
 ilike = unsafeBinaryOp "ILIKE"
 
 {-----------------------------------------
