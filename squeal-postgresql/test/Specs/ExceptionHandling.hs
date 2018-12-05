@@ -86,11 +86,13 @@ migration = Migration { name = "test"
 
 setupDB :: IO ()
 setupDB = void . withConnection connectionString $
-  migrateUp $ single migration
+  manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
+  & pqThen (migrateUp (single migration))
 
 dropDB :: IO ()
 dropDB = void . withConnection connectionString $
-  migrateDown $ single migration
+  manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
+  & pqThen (migrateDown (single migration))
 
 connectionString :: Char8.ByteString
 connectionString = "host=localhost port=5432 dbname=exampledb"
