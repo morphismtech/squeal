@@ -60,8 +60,8 @@ instance SOP.HasDatatypeInfo User
 
 insertUser :: Manipulation DB '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
-insertUser = insertRows #users
-  (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec) []
+insertUser = insertInto #users
+  (Values_ (defaultAs #id :* param @1 `as` #name :* param @2 `as` #vec))
   OnConflictDoRaise (Returning (#id `as` #fromOnly))
 
 setup :: Definition (Public '[]) Schemas
@@ -91,11 +91,13 @@ migration = Migration { name = "test"
 
 setupDB :: IO ()
 setupDB = void . withConnection connectionString $
-  migrateUp $ single migration
+  manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
+  & pqThen (migrateUp (single migration))
 
 dropDB :: IO ()
 dropDB = void . withConnection connectionString $
-  migrateDown $ single migration
+  manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
+  & pqThen (migrateDown (single migration))
 
 connectionString :: Char8.ByteString
 connectionString = "host=localhost port=5432 dbname=exampledb"

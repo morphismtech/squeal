@@ -16,7 +16,6 @@ Rendering helper functions.
   , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
-  , TypeApplications
 #-}
 
 module Squeal.PostgreSQL.Render
@@ -37,7 +36,7 @@ module Squeal.PostgreSQL.Render
 
 import Control.Monad.Base
 import Data.ByteString (ByteString)
-import Data.Maybe
+import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Generics.SOP

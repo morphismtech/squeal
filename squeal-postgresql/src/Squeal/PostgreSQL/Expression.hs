@@ -269,30 +269,30 @@ param
   => Expression db from grouping params ty -- ^ param
 param = parameter @n (pgtype @schemas)
 
-instance (HasUnique table from columns, Has column columns ty)
-  => IsLabel column (Expression db from 'Ungrouped params ty) where
-    fromLabel = UnsafeExpression $ renderAlias (Alias @column)
-instance (HasUnique table from columns, Has column columns ty)
-  => IsLabel column
-    (Aliased (Expression db from 'Ungrouped params) (column ::: ty)) where
-    fromLabel = fromLabel @column `As` Alias @column
-instance (HasUnique table from columns, Has column columns ty)
-  => IsLabel column
-    (NP (Aliased (Expression db from 'Ungrouped params)) '[column ::: ty]) where
-    fromLabel = fromLabel @column :* Nil
+instance (HasUnique tab from row, Has col row ty)
+  => IsLabel col (Expression db from 'Ungrouped params ty) where
+    fromLabel = UnsafeExpression $ renderAlias (Alias @col)
+instance (HasUnique tab from row, Has col row ty, column ~ (col ::: ty))
+  => IsLabel col
+    (Aliased (Expression db from 'Ungrouped params) column) where
+    fromLabel = fromLabel @col `As` Alias
+instance (HasUnique tab from row, Has col row ty, columns ~ '[col ::: ty])
+  => IsLabel col
+    (NP (Aliased (Expression db from 'Ungrouped params)) columns) where
+    fromLabel = fromLabel @col :* Nil
 
-instance (Has table from columns, Has column columns ty)
-  => IsQualified table column (Expression db from 'Ungrouped params ty) where
-    table ! column = UnsafeExpression $
-      renderAlias table <> "." <> renderAlias column
-instance (Has table from columns, Has column columns ty)
-  => IsQualified table column
-    (Aliased (Expression db from 'Ungrouped params) (column ::: ty)) where
-    table ! column = table ! column `As` column
-instance (Has table from columns, Has column columns ty)
-  => IsQualified table column
-    (NP (Aliased (Expression db from 'Ungrouped params)) '[column ::: ty]) where
-    table ! column = table ! column :* Nil
+instance (Has tab from row, Has col row ty)
+  => IsQualified tab col (Expression db from 'Ungrouped params ty) where
+    tab ! col = UnsafeExpression $
+      renderAlias tab <> "." <> renderAlias col
+instance (Has tab from row, Has col row ty, column ~ (col ::: ty))
+  => IsQualified tab col
+    (Aliased (Expression db from 'Ungrouped params) column) where
+    tab ! col = tab ! col `As` col
+instance (Has tab from row, Has col row ty, columns ~ '[col ::: ty])
+  => IsQualified tab col
+    (NP (Aliased (Expression db from 'Ungrouped params)) columns) where
+    tab ! col = tab ! col :* Nil
 
 instance
   ( HasUnique table from columns
@@ -965,11 +965,11 @@ like = unsafeBinaryOp "LIKE"
 -- >>> printSQL $ "abc" `ilike` "a%"
 -- (E'abc' ILIKE E'a%')
 ilike
-  :: Expression schema from grouping params (nullity 'PGtext)
+  :: Expression db from grouping params (nullity 'PGtext)
   -- ^ string
-  -> Expression schema from grouping params (nullity 'PGtext)
+  -> Expression db from grouping params (nullity 'PGtext)
   -- ^ pattern
-  -> Expression schema from grouping params (nullity 'PGbool)
+  -> Expression db from grouping params (nullity 'PGbool)
 ilike = unsafeBinaryOp "ILIKE"
 
 {-----------------------------------------

@@ -276,9 +276,8 @@ createMigrations =
 insertMigration
   :: Has "migrations" schemas MigrationsSchema
   => Manipulation ('[] :=> schemas) '[ 'NotNull 'PGtext] '[]
-insertMigration = insertRow_ (#migrations ! #schema_migrations)
-  ( Set (param @1) `as` #name :*
-    Default `as` #executed_at )
+insertMigration = insertInto_ (#migrations ! #schema_migrations) . Values_ $
+  (param @1) `as` #name :* defaultAs #executed_at
 
 -- | Deletes a `Migration` from the `MigrationsTable`
 deleteMigration

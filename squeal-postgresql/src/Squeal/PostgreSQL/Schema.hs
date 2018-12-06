@@ -79,6 +79,10 @@ module Squeal.PostgreSQL.Schema
   , HasAll
   , QualifiedAlias (..)
   , IsQualified (..)
+  , HasIn
+  , IsNotElem
+  , AllUnique
+  , DefaultAliasable (..)
   , renderQualifiedAlias
     -- * Enumerated Labels
   , IsPGlabel (..)
@@ -123,6 +127,7 @@ module Squeal.PostgreSQL.Schema
   , NullifyFrom
     -- * Table Conversions
   , TableToColumns
+  , ColumnsToRow
   , TableToRow
   ) where
 
@@ -419,9 +424,9 @@ class KnownSymbol alias => Aliasable alias expression aliased
   | aliased -> expression
   , aliased -> alias
   where as :: expression -> Alias alias -> aliased
-instance (KnownSymbol alias, alias ~ alias1) => Aliasable alias
+instance (KnownSymbol alias, aliased ~ (alias ::: ty)) => Aliasable alias
   (expression ty)
-  (Aliased expression (alias1 ::: ty))
+  (Aliased expression aliased)
     where
       as = As
 instance (KnownSymbol alias, tys ~ '[alias ::: ty]) => Aliasable alias
@@ -454,6 +459,25 @@ instance {-# OVERLAPPING #-} KnownSymbol alias
   => Has alias (alias ::: field ': fields) field
 instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
   => Has alias (field' ': fields) field
+
+class HasIn fields (x :: (Symbol, a)) where
+instance (Has alias fields field) => HasIn fields '(alias, field) where
+
+-- | Utility class for `AllUnique` to provide nicer error messages.
+class IsNotElem x isElem where
+instance IsNotElem x 'False where
+instance (TypeError (      'Text "Cannot assign to "
+                      ':<>: 'ShowType alias
+                      ':<>: 'Text " more than once"))
+   => IsNotElem '(alias, a) 'True where
+ -- | No elem of @xs@ appears more than once, in the context of assignment.
+class AllUnique (xs :: [(Symbol, a)]) where
+instance AllUnique '[] where
+instance (IsNotElem x (Elem x xs), AllUnique xs) => AllUnique (x ': xs) where
+
+class KnownSymbol alias
+  => DefaultAliasable alias aliased | aliased -> alias where
+    defaultAs :: Alias alias -> aliased
 
 -- | `HasAll` extends `Has` to take lists of @aliases@ and @fields@ and infer
 -- a list of @subfields@.
