@@ -94,9 +94,6 @@ module Squeal.PostgreSQL.Query
   , renderGroupByClause
   , HavingClause (NoHaving, Having)
   , renderHavingClause
-    -- * Sorting
-  , SortExpression (..)
-  , renderSortExpression
     -- * Subquery Expressions
   , in_
   , rowIn
@@ -1012,51 +1009,6 @@ renderHavingClause = \case
   Having [] -> ""
   Having conditions ->
     " HAVING" <+> commaSeparated (renderExpression <$> conditions)
-
-{-----------------------------------------
-Sorting
------------------------------------------}
-
--- | `SortExpression`s are used by `sortBy` to optionally sort the results
--- of a `Query`. `Asc` or `Desc` set the sort direction of a `NotNull` result
--- column to ascending or descending. Ascending order puts smaller values
--- first, where "smaller" is defined in terms of the `.<` operator. Similarly,
--- descending order is determined with the `.>` operator. `AscNullsFirst`,
--- `AscNullsLast`, `DescNullsFirst` and `DescNullsLast` options are used to
--- determine whether nulls appear before or after non-null values in the sort
--- ordering of a `Null` result column.
-data SortExpression db from grouping params where
-    Asc
-      :: Expression db from grouping params ('NotNull ty)
-      -> SortExpression db from grouping params
-    Desc
-      :: Expression db from grouping params ('NotNull ty)
-      -> SortExpression db from grouping params
-    AscNullsFirst
-      :: Expression db from grouping params  ('Null ty)
-      -> SortExpression db from grouping params
-    AscNullsLast
-      :: Expression db from grouping params  ('Null ty)
-      -> SortExpression db from grouping params
-    DescNullsFirst
-      :: Expression db from grouping params  ('Null ty)
-      -> SortExpression db from grouping params
-    DescNullsLast
-      :: Expression db from grouping params  ('Null ty)
-      -> SortExpression db from grouping params
-deriving instance Show (SortExpression db from grouping params)
-
--- | Render a `SortExpression`.
-renderSortExpression :: SortExpression db from grouping params -> ByteString
-renderSortExpression = \case
-  Asc expression -> renderExpression expression <+> "ASC"
-  Desc expression -> renderExpression expression <+> "DESC"
-  AscNullsFirst expression -> renderExpression expression
-    <+> "ASC NULLS FIRST"
-  DescNullsFirst expression -> renderExpression expression
-    <+> "DESC NULLS FIRST"
-  AscNullsLast expression -> renderExpression expression <+> "ASC NULLS LAST"
-  DescNullsLast expression -> renderExpression expression <+> "DESC NULLS LAST"
 
 unsafeSubqueryExpression
   :: ByteString
