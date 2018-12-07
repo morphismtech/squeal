@@ -261,13 +261,13 @@ insertInto_ tab qry =
 data QueryClause db params columns where
   Values
     :: SOP.SListI columns
-    => NP (ColumnExpression db '[] 'Ungrouped params) columns
-    -> [NP (ColumnExpression db '[] 'Ungrouped params) columns]
+    => NP (ColumnExpression db params 'Ungrouped '[]) columns
+    -> [NP (ColumnExpression db params 'Ungrouped '[]) columns]
     -> QueryClause db params columns
   Select
     :: SOP.SListI columns
-    => NP (ColumnExpression db from grp params) columns
-    -> TableExpression db params from grp
+    => NP (ColumnExpression db params grp from) columns
+    -> TableExpression db params grp from
     -> QueryClause db params columns
   Subquery
     :: ColumnsToRow columns ~ row
@@ -292,7 +292,7 @@ renderQueryClause = \case
   Subquery qry -> renderQuery qry
   where
     renderAliasPartMaybe, renderValuePartMaybe
-      :: ColumnExpression db from grp params column -> Maybe ByteString
+      :: ColumnExpression db params grp from column -> Maybe ByteString
     renderAliasPartMaybe = \case
       DefaultAs _ -> Nothing
       Specific (_ `As` name) -> Just $ renderAlias name
@@ -300,7 +300,7 @@ renderQueryClause = \case
       DefaultAs _ -> Nothing
       Specific (value `As` _) -> Just $ renderExpression value
     renderAliasPart, renderValuePart
-      :: ColumnExpression db from grp params column -> ByteString
+      :: ColumnExpression db params grp from column -> ByteString
     renderAliasPart = \case
       DefaultAs name -> renderAlias name
       Specific (_ `As` name) -> renderAlias name
@@ -310,87 +310,87 @@ renderQueryClause = \case
 
 pattern Values_
   :: SOP.SListI columns
-  => NP (ColumnExpression db '[] 'Ungrouped params) columns
+  => NP (ColumnExpression db params 'Ungrouped '[]) columns
   -> QueryClause db params columns
 pattern Values_ vals = Values vals []
 
-data ColumnExpression db from grp params column where
+data ColumnExpression db params grp from column where
   DefaultAs
     :: KnownSymbol col
     => Alias col
-    -> ColumnExpression db from grp params (col ::: 'Def :=> ty)
+    -> ColumnExpression db params grp from (col ::: 'Def :=> ty)
   Specific
-    :: Aliased (Expression db from grp params) (col ::: ty)
-    -> ColumnExpression db from grp params (col ::: defness :=> ty)
+    :: Aliased (Expression db params grp from) (col ::: ty)
+    -> ColumnExpression db params grp from (col ::: defness :=> ty)
 
 instance (KnownSymbol col, column ~ (col ::: defness :=> ty))
   => Aliasable col
-       (Expression db from grp params ty)
-       (ColumnExpression db from grp params column) where
+       (Expression db params grp from ty)
+       (ColumnExpression db params grp from column) where
          expression `as` col = Specific (expression `As` col)
 instance (KnownSymbol col, columns ~ '[col ::: defness :=> ty])
   => Aliasable col
-       (Expression db from grp params ty)
-       (NP (ColumnExpression db from grp params) columns) where
+       (Expression db params grp from ty)
+       (NP (ColumnExpression db params grp from) columns) where
          expression `as` col = expression `as` col :* Nil
 instance (KnownSymbol col, column ~ (col ::: 'Def :=> ty))
-  => DefaultAliasable col (ColumnExpression db from grp params column) where
+  => DefaultAliasable col (ColumnExpression db params grp from column) where
     defaultAs = DefaultAs
 instance (KnownSymbol col, columns ~ '[col ::: 'Def :=> ty])
-  => DefaultAliasable col (NP (ColumnExpression db from grp params) columns) where
+  => DefaultAliasable col (NP (ColumnExpression db params grp from) columns) where
     defaultAs col = defaultAs col :* Nil
 
-instance (HasUnique tab from row, Has col row ty, colty ~ (col ::: defness :=> ty))
-  => IsLabel col (ColumnExpression db from 'Ungrouped params colty) where
+instance (HasUnique tab from row, Has col row ty, column ~ (col ::: defness :=> ty))
+  => IsLabel col (ColumnExpression db params 'Ungrouped from column) where
     fromLabel = fromLabel @col `as` Alias
-instance (HasUnique tab from row, Has col row ty, coltys ~ '[col ::: defness :=> ty])
+instance (HasUnique tab from row, Has col row ty, columns ~ '[col ::: defness :=> ty])
   => IsLabel col
-    (NP (ColumnExpression db from 'Ungrouped params) coltys) where
+    (NP (ColumnExpression db params 'Ungrouped from) columns) where
     fromLabel = fromLabel @col `as` Alias
 
-instance (Has tab from row, Has col row ty, colty ~ (col ::: defness :=> ty))
-  => IsQualified tab col (ColumnExpression db from 'Ungrouped params colty) where
+instance (Has tab from row, Has col row ty, column ~ (col ::: defness :=> ty))
+  => IsQualified tab col (ColumnExpression db params 'Ungrouped from column) where
     tab ! col = tab ! col `as` col
-instance (Has tab from row, Has col row ty, coltys ~ '[col ::: defness :=> ty])
-  => IsQualified tab col (NP (ColumnExpression db from 'Ungrouped params) coltys) where
+instance (Has tab from row, Has col row ty, columns ~ '[col ::: defness :=> ty])
+  => IsQualified tab col (NP (ColumnExpression db params 'Ungrouped from) columns) where
     tab ! col = tab ! col `as` col
 
 instance
   ( HasUnique tab from row
   , Has col row ty
   , GroupedBy tab col bys
-  , colty ~ (col ::: defness :=> ty)
+  , column ~ (col ::: defness :=> ty)
   ) => IsLabel col
-    (ColumnExpression db from ('Grouped bys) params colty) where
+    (ColumnExpression db params ('Grouped bys) from column) where
       fromLabel = fromLabel @col `as` Alias
 instance
   ( HasUnique tab from row
   , Has col row ty
   , GroupedBy tab col bys
-  , coltys ~ '[col ::: defness :=> ty]
+  , columns ~ '[col ::: defness :=> ty]
   ) => IsLabel col
-    (NP (ColumnExpression db from ('Grouped bys) params) coltys) where
+    (NP (ColumnExpression db params ('Grouped bys) from) columns) where
       fromLabel = fromLabel @col `as` Alias
 
 instance
   ( Has tab from row
   , Has col row ty
   , GroupedBy tab col bys
-  , colty ~ (col ::: defness :=> ty)
+  , column ~ (col ::: defness :=> ty)
   ) => IsQualified tab col
-    (ColumnExpression db from ('Grouped bys) params colty) where
+    (ColumnExpression db params ('Grouped bys) from column) where
       tab ! col = tab ! col `as` col
 instance
   ( Has tab from row
   , Has col row ty
   , GroupedBy tab col bys
-  , coltys ~ '[col ::: defness :=> ty]
+  , columns ~ '[col ::: defness :=> ty]
   ) => IsQualified tab col
-    (NP (ColumnExpression db from ('Grouped bys) params) coltys) where
+    (NP (ColumnExpression db params ('Grouped bys) from) columns) where
       tab ! col = tab ! col :* Nil
 
 renderColumnExpression
-  :: ColumnExpression db from grp params column
+  :: ColumnExpression db params grp from column
   -> ByteString
 renderColumnExpression = \case
   DefaultAs col ->
@@ -417,7 +417,7 @@ data ReturningClause
     ReturningStar
       :: ReturningClause db params row row
     Returning
-      :: NP (Aliased (Expression db '[table ::: row0] 'Ungrouped params)) row1
+      :: NP (Aliased (Expression db params 'Ungrouped '[tab ::: row0])) row1
       -> ReturningClause db params row0 row1
 
 -- | Render a `ReturningClause`.
@@ -461,8 +461,8 @@ data ConflictAction tab db params columns where
        , columns ~ (col0 ': cols)
        , SOP.All (HasIn columns) subcolumns
        , AllUnique subcolumns )
-    => NP (ColumnExpression db '[tab ::: row, "excluded" ::: row] 'Ungrouped params) subcolumns
-    -> [Condition db '[tab ::: row, "excluded" ::: row] 'Ungrouped params]
+    => NP (ColumnExpression db params 'Ungrouped '[tab ::: row, "excluded" ::: row]) subcolumns
+    -> [Condition db params 'Ungrouped '[tab ::: row, "excluded" ::: row]]
     -> ConflictAction tab db params columns
 
 renderConflictAction
@@ -509,9 +509,9 @@ update
      , SOP.All (HasIn columns) subcolumns
      , AllUnique subcolumns )
   => QualifiedAlias sch tab -- ^ table to update
-  -> NP (ColumnExpression db '[tab ::: row] 'Ungrouped params) subcolumns
+  -> NP (ColumnExpression db params 'Ungrouped '[tab ::: row]) subcolumns
   -- ^ modified values to replace old values
-  -> Condition db '[tab ::: row] 'Ungrouped params
+  -> Condition db params 'Ungrouped '[tab ::: row]
   -- ^ condition under which to perform update on a row
   -> ReturningClause db params row results -- ^ results to return
   -> Manipulation db params results
@@ -534,9 +534,9 @@ update_
      , SOP.All (HasIn columns) subcolumns
      , AllUnique subcolumns )
   => QualifiedAlias sch tab -- ^ table to update
-  -> NP (ColumnExpression db '[tab ::: row] 'Ungrouped params) subcolumns
+  -> NP (ColumnExpression db params 'Ungrouped '[tab ::: row]) subcolumns
   -- ^ modified values to replace old values
-  -> Condition db '[tab ::: row] 'Ungrouped params
+  -> Condition db params 'Ungrouped '[tab ::: row]
   -- ^ condition under which to perform update on a row
   -> Manipulation db params '[]
 update_ tab columns wh = update tab columns wh (Returning Nil)
@@ -561,7 +561,7 @@ deleteFrom
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to delete from
   -> UsingClause db params from
-  -> Condition db (tab ::: row ': from) 'Ungrouped params
+  -> Condition db params 'Ungrouped (tab ::: row ': from)
   -- ^ condition under which to delete a row
   -> ReturningClause db params row results -- ^ results to return
   -> Manipulation db params results
@@ -583,7 +583,7 @@ deleteFrom_
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to delete from
   -> UsingClause db params from
-  -> Condition db (tab ::: row ': from) 'Ungrouped params
+  -> Condition db params 'Ungrouped (tab ::: row ': from)
   -- ^ condition under which to delete a row
   -> Manipulation db params '[]
 deleteFrom_ tab uses wh = deleteFrom tab uses wh (Returning Nil)

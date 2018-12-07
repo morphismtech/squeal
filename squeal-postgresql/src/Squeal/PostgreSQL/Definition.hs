@@ -296,7 +296,7 @@ check
      , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify the subcolumns which are getting checked
-  -> (forall t. Condition ('[] :=> schemas) '[t ::: subcolumns] 'Ungrouped '[])
+  -> (forall t. Condition ('[] :=> schemas) '[] 'Ungrouped '[t ::: subcolumns])
   -- ^ a closed `Condition` on those subcolumns
   -> TableConstraintExpression sch tab schemas ('Check aliases)
 check _cols condition = UnsafeTableConstraintExpression $
