@@ -447,7 +447,7 @@ instance RenderSQL (Selection db params grp from row) where
 -- | the `TableExpression` in the `select` command constructs an intermediate
 -- virtual table by possibly combining tables, views, eliminating rows,
 -- grouping, etc. This table is finally passed on to processing by
--- the select list. The select list determines which columns of
+-- the select list. The `Selection` determines which columns of
 -- the intermediate table are actually output.
 select
   :: (SListI row, row ~ (x ': xs))
