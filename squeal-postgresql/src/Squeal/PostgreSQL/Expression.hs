@@ -452,7 +452,7 @@ index n expr = UnsafeExpression $
 
 instance (KnownSymbol label, label `In` labels) => IsPGlabel label
   (Expression db params grp from (nullity ('PGenum labels))) where
-  label = UnsafeExpression $ renderLabel (PGlabel @label)
+  label = UnsafeExpression $ renderSQL (PGlabel @label)
 
 -- | A row constructor is an expression that builds a row value
 -- (also called a composite value) using values for its member fields.
@@ -494,7 +494,7 @@ field
   -> Expression (commons :=> schemas) params grp from ('NotNull ('PGcomposite row))
   -> Expression (commons :=> schemas) params grp from ty
 field td fld expr = UnsafeExpression $
-  parenthesized (renderSQL expr <> "::" <> renderQualifiedAlias td)
+  parenthesized (renderSQL expr <> "::" <> renderSQL td)
     <> "." <> renderSQL fld
 
 instance Semigroup
@@ -1637,7 +1637,7 @@ typedef
   :: (Has sch schemas schema, Has td schema ('Typedef ty))
   => QualifiedAlias sch td
   -> TypeExpression schemas (nullity ty)
-typedef = UnsafeTypeExpression . renderQualifiedAlias
+typedef = UnsafeTypeExpression . renderSQL
 
 -- | The composite type corresponding to a `Table` definition can be expressed
 -- by its alias.
@@ -1645,7 +1645,7 @@ typetable
   :: (Has sch schemas schema, Has tab schema ('Table table))
   => QualifiedAlias sch tab
   -> TypeExpression schemas (nullity ('PGcomposite (TableToRow table)))
-typetable = UnsafeTypeExpression . renderQualifiedAlias
+typetable = UnsafeTypeExpression . renderSQL
 
 -- | The composite type corresponding to a `View` definition can be expressed
 -- by its alias.
@@ -1653,7 +1653,7 @@ typeview
   :: (Has sch schemas schema, Has vw schema ('View view))
   => QualifiedAlias sch vw
   -> TypeExpression schemas (nullity ('PGcomposite view))
-typeview = UnsafeTypeExpression . renderQualifiedAlias
+typeview = UnsafeTypeExpression . renderSQL
 
 -- | logical Boolean (true/false)
 bool :: TypeExpression schemas (nullity 'PGbool)

@@ -70,7 +70,7 @@ module Squeal.PostgreSQL.Schema
   , IsLabel (..)
   , Aliased (As)
   , Aliasable (as)
-  , renderAliasedAs
+  , renderAliased
   , Has
   , HasUnique
   , HasAll
@@ -80,12 +80,9 @@ module Squeal.PostgreSQL.Schema
   , IsNotElem
   , AllUnique
   , DefaultAliasable (..)
-  , renderQualifiedAlias
     -- * Enumerated Labels
   , IsPGlabel (..)
   , PGlabel (..)
-  , renderLabel
-  , renderLabels
   , LabelsPG
     -- * Grouping
   , Grouping (..)
@@ -374,14 +371,14 @@ instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
 instance aliases ~ '[alias] => IsLabel alias (NP Alias aliases) where
   fromLabel = fromLabel :* Nil
--- | >>> renderSQL #jimbob
--- "\"jimbob\""
+-- | >>> printSQL (#jimbob :: Alias "jimbob")
+-- "jimbob"
 instance KnownSymbol alias => RenderSQL (Alias alias) where
   renderSQL = doubleQuoted . fromString . symbolVal
 
 -- | >>> import Generics.SOP (NP(..))
--- >>> renderAliases (#jimbob :* #kandi)
--- ["\"jimbob\"","\"kandi\""]
+-- >>> printSQL (#jimbob :* #kandi :: NP Alias '["jimbob", "kandi"])
+-- "jimbob", "kandi"
 instance All KnownSymbol aliases => RenderSQL (NP Alias aliases) where
   renderSQL
     = commaSeparated
@@ -427,13 +424,13 @@ instance (KnownSymbol alias, tys ~ '[alias ::: ty]) => Aliasable alias
       expression `as` alias = expression `As` alias :* Nil
 
 -- | >>> let renderMaybe = fromString . maybe "Nothing" (const "Just")
--- >>> renderAliasedAs renderMaybe (Just (3::Int) `As` #an_int)
+-- >>> renderAliased renderMaybe (Just (3::Int) `As` #an_int)
 -- "Just AS \"an_int\""
-renderAliasedAs
+renderAliased
   :: (forall ty. expression ty -> ByteString)
   -> Aliased expression aliased
   -> ByteString
-renderAliasedAs render (expression `As` alias) =
+renderAliased render (expression `As` alias) =
   render expression <> " AS " <> renderSQL alias
 
 -- | @HasUnique alias fields field@ is a constraint that proves that
@@ -505,15 +502,14 @@ instance (q ~ "public", a0 ~ a1, a1 ~ a2, KnownSymbol a2) =>
   IsLabel a0 (Aliased (QualifiedAlias q) (a1 ::: a2)) where
     fromLabel = QualifiedAlias `As` Alias
 
-renderQualifiedAlias
-  :: forall q a. (KnownSymbol q, KnownSymbol a)
-  => QualifiedAlias q a -> ByteString
-renderQualifiedAlias _ =
-  let
-    qualifier = renderSQL (Alias @q)
-    alias = renderSQL (Alias @a)
-  in
-    if qualifier == "\"public\"" then alias else qualifier <> "." <> alias
+instance (KnownSymbol q, KnownSymbol a)
+  => RenderSQL (QualifiedAlias q a) where
+    renderSQL _ =
+      let
+        qualifier = renderSQL (Alias @q)
+        alias = renderSQL (Alias @a)
+      in
+        if qualifier == "\"public\"" then alias else qualifier <> "." <> alias
 
 -- | @Elem@ is a promoted `Data.List.elem`.
 type family Elem x xs where
@@ -721,15 +717,13 @@ instance labels ~ '[label]
   => IsPGlabel label (NP PGlabel labels) where label = PGlabel :* Nil
 -- | A `PGlabel` unit type with an `IsPGlabel` instance
 data PGlabel (label :: Symbol) = PGlabel
--- | Renders a label
-renderLabel :: KnownSymbol label => proxy label -> ByteString
-renderLabel (_ :: proxy label) =
-  "\'" <> renderSymbol @label <> "\'"
--- | Renders a list of labels
-renderLabels
-  :: All KnownSymbol labels => NP PGlabel labels -> [ByteString]
-renderLabels = hcollapse
-  . hcmap (Proxy @KnownSymbol) (K . renderLabel)
+instance KnownSymbol label => RenderSQL (PGlabel label) where
+  renderSQL _ = "\'" <> renderSymbol @label <> "\'"
+instance All KnownSymbol labels => RenderSQL (NP PGlabel labels) where
+  renderSQL
+    = commaSeparated
+    . hcollapse
+    . hcmap (Proxy @KnownSymbol) (K . renderSQL)
 
 {- | The `PG` type family embeds a subset of Haskell types
 as Postgres types. As an open type family, `PG` is extensible.

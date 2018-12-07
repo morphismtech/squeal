@@ -97,7 +97,6 @@ module Squeal.PostgreSQL.Query
   , renderHavingClause
     -- * Sorting
   , SortExpression (..)
-  , renderSortExpression
     -- * Subquery Expressions
   , in_
   , rowIn
@@ -439,7 +438,7 @@ instance
 
 instance RenderSQL (Selection db params grp from row) where
   renderSQL = \case
-    List list -> renderCommaSeparated (renderAliasedAs renderSQL) list
+    List list -> renderCommaSeparated (renderAliased renderSQL) list
     Star -> "*"
     DotStar tab -> renderSQL tab <> ".*"
     Also right left -> renderSQL left <> ", " <> renderSQL right
@@ -609,7 +608,7 @@ renderTableExpression
       renderOrderByClause = \case
         [] -> ""
         srts -> " ORDER BY"
-          <+> commaSeparated (renderSortExpression <$> srts)
+          <+> commaSeparated (renderSQL <$> srts)
       renderLimits = \case
         [] -> ""
         lims -> " LIMIT" <+> fromString (show (minimum lims))
@@ -845,13 +844,13 @@ table
   => Aliased (QualifiedAlias sch) (alias ::: tab)
   -> FromClause (commons :=> schemas) params '[alias ::: TableToRow table]
 table (tab `As` alias) = UnsafeFromClause $
-  renderQualifiedAlias tab <+> "AS" <+> renderSQL alias
+  renderSQL tab <+> "AS" <+> renderSQL alias
 
 -- | `subquery` derives a table from a `Query`.
 subquery
   :: Aliased (Query db params) query
   -> FromClause db params '[query]
-subquery = UnsafeFromClause . renderAliasedAs (parenthesized . renderQuery)
+subquery = UnsafeFromClause . renderAliased (parenthesized . renderQuery)
 
 -- | `view` derives a table from a `View`.
 view
@@ -859,7 +858,7 @@ view
   => Aliased (QualifiedAlias sch) (alias ::: vw)
   -> FromClause (commons :=> schemas) params '[alias ::: view]
 view (vw `As` alias) = UnsafeFromClause $
-  renderQualifiedAlias vw <+> "AS" <+> renderSQL alias
+  renderSQL vw <+> "AS" <+> renderSQL alias
 
 common
   :: Has cte commons common
@@ -1069,16 +1068,16 @@ data SortExpression db params grp from where
 deriving instance Show (SortExpression db params grp from)
 
 -- | Render a `SortExpression`.
-renderSortExpression :: SortExpression db params grp from -> ByteString
-renderSortExpression = \case
-  Asc expression -> renderSQL expression <+> "ASC"
-  Desc expression -> renderSQL expression <+> "DESC"
-  AscNullsFirst expression -> renderSQL expression
-    <+> "ASC NULLS FIRST"
-  DescNullsFirst expression -> renderSQL expression
-    <+> "DESC NULLS FIRST"
-  AscNullsLast expression -> renderSQL expression <+> "ASC NULLS LAST"
-  DescNullsLast expression -> renderSQL expression <+> "DESC NULLS LAST"
+instance RenderSQL (SortExpression db params grp from) where
+  renderSQL = \case
+    Asc expression -> renderSQL expression <+> "ASC"
+    Desc expression -> renderSQL expression <+> "DESC"
+    AscNullsFirst expression -> renderSQL expression
+      <+> "ASC NULLS FIRST"
+    DescNullsFirst expression -> renderSQL expression
+      <+> "DESC NULLS FIRST"
+    AscNullsLast expression -> renderSQL expression <+> "ASC NULLS LAST"
+    DescNullsLast expression -> renderSQL expression <+> "DESC NULLS LAST"
 
 unsafeSubqueryExpression
   :: ByteString

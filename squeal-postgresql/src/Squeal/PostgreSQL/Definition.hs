@@ -119,7 +119,7 @@ instance RenderSQL (Definition schemas0 schemas1) where
 instance Category Definition where
   id = UnsafeDefinition ";"
   ddl1 . ddl0 = UnsafeDefinition $
-    renderDefinition ddl0 <> "\n" <> renderDefinition ddl1
+    renderSQL ddl0 <> "\n" <> renderSQL ddl1
 
 {-----------------------------------------
 CREATE statements
@@ -225,7 +225,7 @@ renderCreation
   -> NP (Aliased (TableConstraintExpression sch tab schemas1)) constraints
     -- ^ constraints that must hold for the table
   -> ByteString
-renderCreation tab columns constraints = renderQualifiedAlias tab
+renderCreation tab columns constraints = renderSQL tab
   <+> parenthesized
     ( renderCommaSeparated renderColumnDef columns
       <> ( case constraints of
@@ -241,7 +241,7 @@ renderCreation tab columns constraints = renderQualifiedAlias tab
       :: Aliased (TableConstraintExpression sch tab schemas) constraint
       -> ByteString
     renderConstraint (constraint `As` alias) =
-      "CONSTRAINT" <+> renderSQL alias <+> renderTableConstraintExpression constraint
+      "CONSTRAINT" <+> renderSQL alias <+> renderSQL constraint
 
 -- | Data types are a way to limit the kind of data that can be stored in a
 -- table. For many applications, however, the constraint they provide is
@@ -263,6 +263,9 @@ newtype TableConstraintExpression
     = UnsafeTableConstraintExpression
     { renderTableConstraintExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
+instance RenderSQL
+  (TableConstraintExpression sch tab schemas constraint) where
+    renderSQL = renderTableConstraintExpression
 
 {-| A `check` constraint is the most generic `TableConstraint` type.
 It allows you to specify that the value in a certain column must satisfy
@@ -298,7 +301,7 @@ check
   -- ^ a closed `Condition` on those subcolumns
   -> TableConstraintExpression sch tab schemas ('Check aliases)
 check _cols condition = UnsafeTableConstraintExpression $
-  "CHECK" <+> parenthesized (renderExpression condition)
+  "CHECK" <+> parenthesized (renderSQL condition)
 
 {-| A `unique` constraint ensure that the data contained in a column,
 or a group of columns, is unique among all the rows in the table.
@@ -541,7 +544,7 @@ dropTable
      , Has tab schema ('Table table))
   => QualifiedAlias sch tab -- ^ table to remove
   -> Definition schemas (Alter sch (Drop tab schema) schemas)
-dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderQualifiedAlias tab <> ";"
+dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderSQL tab <> ";"
 
 {-----------------------------------------
 ALTER statements
@@ -555,7 +558,7 @@ alterTable
   -> Definition schemas (Alter sch (Alter tab ('Table table1) schema) schemas)
 alterTable tab alteration = UnsafeDefinition $
   "ALTER TABLE"
-  <+> renderQualifiedAlias tab
+  <+> renderSQL tab
   <+> renderAlterTable alteration
   <> ";"
 
@@ -605,7 +608,7 @@ addConstraint
   -> AlterTable sch tab schemas table1
 addConstraint alias constraint = UnsafeAlterTable $
   "ADD" <+> "CONSTRAINT" <+> renderSQL alias
-    <+> renderTableConstraintExpression constraint
+    <+> renderSQL constraint
 
 -- | A `dropConstraint` drops a table constraint.
 --
@@ -843,7 +846,7 @@ createView
   -> Query ('[] :=> schemas) '[] view -- ^ query
   -> Definition schemas (Alter sch (Create vw ('View view) schema) schemas)
 createView alias query = UnsafeDefinition $
-  "CREATE" <+> "VIEW" <+> renderQualifiedAlias alias <+> "AS"
+  "CREATE" <+> "VIEW" <+> renderSQL alias <+> "AS"
   <+> renderQuery query <> ";"
 
 -- | Drop a view.
@@ -862,7 +865,7 @@ dropView
   :: (Has sch schemas schema, Has vw schema ('View view))
   => QualifiedAlias sch vw -- ^ view to remove
   -> Definition schemas (Alter sch (Drop vw schema) schemas)
-dropView vw = UnsafeDefinition $ "DROP VIEW" <+> renderQualifiedAlias vw <> ";"
+dropView vw = UnsafeDefinition $ "DROP VIEW" <+> renderSQL vw <> ";"
 
 -- | Enumerated types are created using the `createTypeEnum` command, for example
 --
@@ -876,8 +879,8 @@ createTypeEnum
   -- ^ labels of the enumerated type
   -> Definition schemas (Alter sch (Create enum ('Typedef ('PGenum labels)) schema) schemas)
 createTypeEnum enum labels = UnsafeDefinition $
-  "CREATE" <+> "TYPE" <+> renderQualifiedAlias enum <+> "AS" <+> "ENUM" <+>
-  parenthesized (commaSeparated (renderLabels labels)) <> ";"
+  "CREATE" <+> "TYPE" <+> renderSQL enum <+> "AS" <+> "ENUM" <+>
+  parenthesized (renderSQL labels) <> ";"
 
 -- | Enumerated types can also be generated from a Haskell type, for example
 --
@@ -930,7 +933,7 @@ createTypeComposite
   -- ^ list of attribute names and data types
   -> Definition schemas (Alter sch (Create ty ('Typedef ('PGcomposite fields)) schema) schemas)
 createTypeComposite ty fields = UnsafeDefinition $
-  "CREATE" <+> "TYPE" <+> renderQualifiedAlias ty <+> "AS" <+> parenthesized
+  "CREATE" <+> "TYPE" <+> renderSQL ty <+> "AS" <+> parenthesized
   (renderCommaSeparated renderField fields) <> ";"
   where
     renderField :: Aliased (TypeExpression schemas) x -> ByteString
@@ -981,7 +984,7 @@ dropType
   => QualifiedAlias sch td
   -- ^ name of the user defined type
   -> Definition schemas (Alter sch (Drop td schema) schemas)
-dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderQualifiedAlias tydef <> ";"
+dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderSQL tydef <> ";"
 
 -- | `ColumnTypeExpression`s are used in `createTable` commands.
 newtype ColumnTypeExpression (schemas :: SchemasType) (ty :: ColumnType)

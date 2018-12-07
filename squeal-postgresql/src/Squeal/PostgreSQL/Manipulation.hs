@@ -240,7 +240,7 @@ insertInto
   -> ReturningClause db params '[tab ::: row0] row1
   -> Manipulation db params row1
 insertInto tab qry conflict ret = UnsafeManipulation $
-  "INSERT" <+> "INTO" <+> renderQualifiedAlias tab
+  "INSERT" <+> "INTO" <+> renderSQL tab
   <+> renderQueryClause qry
   <> renderConflictClause conflict
   <> renderSQL ret
@@ -508,7 +508,7 @@ update
   -> Manipulation db params row1
 update tab columns wh returning = UnsafeManipulation $
   "UPDATE"
-  <+> renderQualifiedAlias tab
+  <+> renderSQL tab
   <+> "SET"
   <+> renderCommaSeparated renderColumnExpression columns
   <+> "WHERE" <+> renderExpression wh
@@ -558,7 +558,7 @@ deleteFrom
   -> Manipulation db params row1
 deleteFrom tab using wh returning = UnsafeManipulation $
   "DELETE FROM"
-  <+> renderQualifiedAlias tab
+  <+> renderSQL tab
   <> case using of
     NoUsing -> ""
     Using tables -> " USING" <+> renderFromClause tables
