@@ -79,7 +79,7 @@ getUsers :: Query DB '[]
   '[ "userName" ::: 'NotNull 'PGtext
    , "userEmail" ::: 'Null 'PGtext
    , "userVec" ::: 'NotNull ('PGvararray ('Null 'PGint2))]
-getUsers = select
+getUsers = select_
   (#u ! #name `as` #userName :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)
   ( from (table (#users `as` #u)
     & innerJoin (table (#emails `as` #e))

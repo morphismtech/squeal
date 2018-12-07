@@ -291,7 +291,7 @@ selectMigration
   :: Has "migrations" schemas MigrationsSchema
   => Query ('[] :=> schemas) '[ 'NotNull 'PGtext ]
     '[ "executed_at" ::: 'NotNull 'PGtimestamptz ]
-selectMigration = select
+selectMigration = select_
   (#executed_at `as` #executed_at)
   ( from (table ((#migrations ! #schema_migrations) `as` #m))
     & where_ (#name .== param @1))

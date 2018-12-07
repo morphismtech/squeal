@@ -31,11 +31,9 @@ module Squeal.PostgreSQL.Query
     Query (UnsafeQuery, renderQuery)
     -- ** Select
   , select
+  , select_
   , selectDistinct
-  , selectStar
-  , selectDistinctStar
-  , selectDotStar
-  , selectDistinctDotStar
+  , selectDistinct_
     -- ** Values
   , values
   , values_
@@ -394,80 +392,76 @@ q1 `exceptAll` q2 = UnsafeQuery $
 SELECT queries
 -----------------------------------------}
 
+data Selection db params grp from row where
+  List
+    :: SListI row
+    => NP (Aliased (Expression db params grp from)) row
+    -> Selection db params grp from row
+  Star
+    :: HasUnique tab from row
+    => Selection db params 'Ungrouped from row
+  DotStar
+    :: Has tab from row
+    => Alias tab
+    -> Selection db params 'Ungrouped from row
+  Also
+    :: Selection db params grp from right
+    -> Selection db params grp from left
+    -> Selection db params grp from (Join left right)
+
+instance RenderSQL (Selection db params grp from row) where
+  renderSQL = \case
+    List list -> renderCommaSeparated (renderAliasedAs renderExpression) list
+    Star -> "*"
+    DotStar tab -> renderAlias tab <> ".*"
+    Also right left -> renderSQL left <> ", " <> renderSQL right
+
 -- | the `TableExpression` in the `select` command constructs an intermediate
 -- virtual table by possibly combining tables, views, eliminating rows,
 -- grouping, etc. This table is finally passed on to processing by
 -- the select list. The select list determines which columns of
 -- the intermediate table are actually output.
 select
-  :: (SListI columns, columns ~ (col ': cols))
-  => NP (Aliased (Expression db params grp from)) columns
+  :: (SListI row, row ~ (x ': xs))
+  => Selection db params grp from row
   -- ^ select list
   -> TableExpression db params grp from
   -- ^ intermediate virtual table
-  -> Query db params columns
-select list rels = UnsafeQuery $
+  -> Query db params row
+select selection tabexpr = UnsafeQuery $
   "SELECT"
-  <+> renderCommaSeparated (renderAliasedAs renderExpression) list
-  <+> renderTableExpression rels
+  <+> renderSQL selection
+  <+> renderTableExpression tabexpr
+
+select_
+  :: (SListI row, row ~ (x ': xs))
+  => NP (Aliased (Expression db params grp from)) row
+  -> TableExpression db params grp from
+  -> Query db params row
+select_ list = select (List list)
 
 -- | After the select list has been processed, the result table can
 -- be subject to the elimination of duplicate rows using `selectDistinct`.
 selectDistinct
+  :: (SListI columns, columns ~ (col ': cols))
+  => Selection db params 'Ungrouped from columns
+  -- ^ select list
+  -> TableExpression db params 'Ungrouped from
+  -- ^ intermediate virtual table
+  -> Query db params columns
+selectDistinct selection tabexpr = UnsafeQuery $
+  "SELECT DISTINCT"
+  <+> renderSQL selection
+  <+> renderTableExpression tabexpr
+
+selectDistinct_
   :: (SListI columns, columns ~ (col ': cols))
   => NP (Aliased (Expression db params 'Ungrouped from)) columns
   -- ^ select list
   -> TableExpression db params 'Ungrouped from
   -- ^ intermediate virtual table
   -> Query db params columns
-selectDistinct list rels = UnsafeQuery $
-  "SELECT DISTINCT"
-  <+> renderCommaSeparated (renderAliasedAs renderExpression) list
-  <+> renderTableExpression rels
-
--- | The simplest kind of query is `selectStar` which emits all columns
--- that the table expression produces.
-selectStar
-  :: HasUnique table from columns
-  => TableExpression db params 'Ungrouped from
-  -- ^ intermediate virtual table
-  -> Query db params columns
-selectStar rels = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression rels
-
--- | A `selectDistinctStar` emits all columns that the table expression
--- produces and eliminates duplicate rows.
-selectDistinctStar
-  :: HasUnique table from columns
-  => TableExpression db params 'Ungrouped from
-  -- ^ intermediate virtual table
-  -> Query db params columns
-selectDistinctStar rels = UnsafeQuery $
-  "SELECT DISTINCT" <+> "*" <+> renderTableExpression rels
-
--- | When working with multiple tables, it can also be useful to ask
--- for all the columns of a particular table, using `selectDotStar`.
-selectDotStar
-  :: Has table from columns
-  => Alias table
-  -- ^ particular virtual subtable
-  -> TableExpression db params 'Ungrouped from
-  -- ^ intermediate virtual table
-  -> Query db params columns
-selectDotStar rel tab = UnsafeQuery $
-  "SELECT" <+> renderAlias rel <> ".*" <+> renderTableExpression tab
-
--- | A `selectDistinctDotStar` asks for all the columns of a particular table,
--- and eliminates duplicate rows.
-selectDistinctDotStar
-  :: Has table from columns
-  => Alias table
-  -- ^ particular virtual table
-  -> TableExpression db params 'Ungrouped from
-  -- ^ intermediate virtual table
-  -> Query db params columns
-selectDistinctDotStar rel tab = UnsafeQuery $
-  "SELECT DISTINCT" <+> renderAlias rel <> ".*"
-  <+> renderTableExpression tab
+selectDistinct_ list = select (List list)
 
 -- | `values` computes a row value or set of row values
 -- specified by value expressions. It is most commonly used
