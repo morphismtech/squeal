@@ -35,6 +35,7 @@ module Squeal.PostgreSQL.Manipulation
   , DefaultAliasable (..)
   , ColumnExpression (..)
   , ReturningClause (..)
+  , pattern Returning_
   , ConflictClause (..)
   , ConflictTarget (..)
   , ConflictAction (..)
@@ -42,7 +43,6 @@ module Squeal.PostgreSQL.Manipulation
     -- * Insert
   , insertInto
   , insertInto_
-  , renderReturningClause
   , renderConflictClause
   , renderConflictTarget
   , renderConflictAction
@@ -231,19 +231,19 @@ insertInto
      , Has sch schemas schema
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table
-     , row ~ TableToRow table
+     , row0 ~ TableToRow table
      , SOP.SListI columns
-     , SOP.SListI result )
+     , SOP.SListI row1 )
   => QualifiedAlias sch tab
   -> QueryClause db params columns
   -> ConflictClause tab db params table
-  -> ReturningClause db params row result
-  -> Manipulation db params result
+  -> ReturningClause db params '[tab ::: row0] row1
+  -> Manipulation db params row1
 insertInto tab qry conflict ret = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderQualifiedAlias tab
   <+> renderQueryClause qry
   <> renderConflictClause conflict
-  <> renderReturningClause ret
+  <> renderSQL ret
 
 insertInto_
   :: ( db ~ (commons :=> schemas)
@@ -256,7 +256,7 @@ insertInto_
   -> QueryClause db params columns
   -> Manipulation db params '[]
 insertInto_ tab qry =
-  insertInto tab qry OnConflictDoRaise (Returning Nil)
+  insertInto tab qry OnConflictDoRaise (Returning_ Nil)
 
 data QueryClause db params columns where
   Values
@@ -408,28 +408,17 @@ renderColumnExpression = \case
 -- the row will not be returned. `ReturningStar` will return all columns
 -- in the row. Use @Returning Nil@ in the common case where no return
 -- values are desired.
-data ReturningClause
-  (db :: DBType)
-  (params :: [NullityType])
-  (row0 :: RowType)
-  (row1 :: RowType)
-  where
-    ReturningStar
-      :: ReturningClause db params row row
-    Returning
-      :: NP (Aliased (Expression db params 'Ungrouped '[tab ::: row0])) row1
-      -> ReturningClause db params row0 row1
+newtype ReturningClause db params from row =
+  Returning (Selection db params 'Ungrouped from row)
 
--- | Render a `ReturningClause`.
-renderReturningClause
-  :: SOP.SListI results
-  => ReturningClause db params columns results
-  -> ByteString
-renderReturningClause = \case
-  ReturningStar -> " RETURNING *"
-  Returning Nil -> ""
-  Returning results -> " RETURNING"
-    <+> renderCommaSeparated (renderAliasedAs renderExpression) results
+instance RenderSQL (ReturningClause db params from row) where
+  renderSQL (Returning selection) = "RETURNING" <+> renderSQL selection
+
+pattern Returning_
+  :: SOP.SListI row
+  => NP (Aliased (Expression db params 'Ungrouped from)) row
+  -> ReturningClause db params from row
+pattern Returning_ list = Returning (List list)
 
 -- | A `ConflictClause` specifies an action to perform upon a constraint
 -- violation. `OnConflictDoRaise` will raise an error.
@@ -500,28 +489,28 @@ UPDATE statements
 -- in all rows that satisfy the condition.
 update
   :: ( SOP.SListI columns
-     , SOP.SListI results
+     , SOP.SListI row1
      , db ~ (commons :=> schemas)
      , Has sch schemas schema
      , Has tab schema ('Table table)
-     , row ~ TableToRow table
+     , row0 ~ TableToRow table
      , columns ~ TableToColumns table
      , SOP.All (HasIn columns) subcolumns
      , AllUnique subcolumns )
   => QualifiedAlias sch tab -- ^ table to update
-  -> NP (ColumnExpression db params 'Ungrouped '[tab ::: row]) subcolumns
+  -> NP (ColumnExpression db params 'Ungrouped '[tab ::: row0]) subcolumns
   -- ^ modified values to replace old values
-  -> Condition db params 'Ungrouped '[tab ::: row]
+  -> Condition db params 'Ungrouped '[tab ::: row0]
   -- ^ condition under which to perform update on a row
-  -> ReturningClause db params row results -- ^ results to return
-  -> Manipulation db params results
+  -> ReturningClause db params '[tab ::: row0] row1 -- ^ results to return
+  -> Manipulation db params row1
 update tab columns wh returning = UnsafeManipulation $
   "UPDATE"
   <+> renderQualifiedAlias tab
   <+> "SET"
   <+> renderCommaSeparated renderColumnExpression columns
   <+> "WHERE" <+> renderExpression wh
-  <> renderReturningClause returning
+  <> renderSQL returning
 
 -- | Update a row returning `Nil`.
 update_
@@ -539,7 +528,7 @@ update_
   -> Condition db params 'Ungrouped '[tab ::: row]
   -- ^ condition under which to perform update on a row
   -> Manipulation db params '[]
-update_ tab columns wh = update tab columns wh (Returning Nil)
+update_ tab columns wh = update tab columns wh (Returning_ Nil)
 
 {-----------------------------------------
 DELETE statements
@@ -553,18 +542,18 @@ data UsingClause db params from where
 
 -- | Delete rows from a table.
 deleteFrom
-  :: ( SOP.SListI results
+  :: ( SOP.SListI row1
      , db ~ (commons :=> schemas)
      , Has sch schemas schema
      , Has tab schema ('Table table)
-     , row ~ TableToRow table
+     , row0 ~ TableToRow table
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to delete from
   -> UsingClause db params from
-  -> Condition db params 'Ungrouped (tab ::: row ': from)
+  -> Condition db params 'Ungrouped (tab ::: row0 ': from)
   -- ^ condition under which to delete a row
-  -> ReturningClause db params row results -- ^ results to return
-  -> Manipulation db params results
+  -> ReturningClause db params '[tab ::: row0] row1 -- ^ results to return
+  -> Manipulation db params row1
 deleteFrom tab using wh returning = UnsafeManipulation $
   "DELETE FROM"
   <+> renderQualifiedAlias tab
@@ -572,7 +561,7 @@ deleteFrom tab using wh returning = UnsafeManipulation $
     NoUsing -> ""
     Using tables -> " USING" <+> renderFromClause tables
   <+> "WHERE" <+> renderExpression wh
-  <> renderReturningClause returning
+  <> renderSQL returning
 
 -- | Delete rows returning `Nil`.
 deleteFrom_
@@ -586,7 +575,7 @@ deleteFrom_
   -> Condition db params 'Ungrouped (tab ::: row ': from)
   -- ^ condition under which to delete a row
   -> Manipulation db params '[]
-deleteFrom_ tab uses wh = deleteFrom tab uses wh (Returning Nil)
+deleteFrom_ tab uses wh = deleteFrom tab uses wh (Returning_ Nil)
 
 -- | This has the behaviour of a cartesian product, taking all
 -- possible combinations between @left@ and @right@ - exactly like a

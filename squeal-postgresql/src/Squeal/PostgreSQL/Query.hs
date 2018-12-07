@@ -18,7 +18,9 @@ Squeal queries.
   , LambdaCase
   , MultiParamTypeClasses
   , OverloadedStrings
+  , ScopedTypeVariables
   , StandaloneDeriving
+  , TypeApplications
   , TypeFamilies
   , TypeInType
   , TypeOperators
@@ -34,6 +36,7 @@ module Squeal.PostgreSQL.Query
   , select_
   , selectDistinct
   , selectDistinct_
+  , Selection (..)
     -- ** Values
   , values
   , values_
@@ -408,6 +411,31 @@ data Selection db params grp from row where
     :: Selection db params grp from right
     -> Selection db params grp from left
     -> Selection db params grp from (Join left right)
+instance (KnownSymbol col, row ~ '[col ::: ty])
+  => Aliasable col
+    (Expression db params grp from ty)
+    (Selection db params grp from row) where
+      expr `as` col = List (expr `as` col)
+instance (Has tab from row0, Has col row0 ty, row1 ~ '[col ::: ty])
+  => IsQualified tab col (Selection db params 'Ungrouped from row1) where
+    tab ! col = tab ! col `as` col
+instance
+  ( Has tab from row0
+  , Has col row0 ty
+  , row1 ~ '[col ::: ty]
+  , GroupedBy tab col bys )
+  => IsQualified tab col (Selection db params ('Grouped bys) from row1) where
+    tab ! col = tab ! col `as` col
+instance (HasUnique tab from row0, Has col row0 ty, row1 ~ '[col ::: ty])
+  => IsLabel col (Selection db params 'Ungrouped from row1) where
+    fromLabel = fromLabel @col `as` Alias
+instance
+  ( HasUnique tab from row0
+  , Has col row0 ty
+  , row1 ~ '[col ::: ty]
+  , GroupedBy tab col bys )
+  => IsLabel col (Selection db params ('Grouped bys) from row1) where
+    fromLabel = fromLabel @col `as` Alias
 
 instance RenderSQL (Selection db params grp from row) where
   renderSQL = \case
