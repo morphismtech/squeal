@@ -73,7 +73,6 @@ module Squeal.PostgreSQL.Query
   , where_
   , groupBy
   , having
-  , orderBy
   , limit
   , offset
     -- * From Clauses
@@ -639,11 +638,8 @@ having hv rels = rels
 
 -- | An `orderBy` is an endomorphism of `TableExpression`s which appends an
 -- ordering to the right of the `orderByClause`.
-orderBy
-  :: [SortExpression db from grouping params] -- ^ sort expressions
-  -> TableExpression db params from grouping
-  -> TableExpression db params from grouping
-orderBy srts rels = rels {orderByClause = orderByClause rels ++ srts}
+instance OrderBy TableExpression where
+  orderBy sorts tabexpr = tabexpr {orderByClause = orderByClause tabexpr ++ sorts}
 
 -- | A `limit` is an endomorphism of `TableExpression`s which adds to the
 -- `limitClause`.

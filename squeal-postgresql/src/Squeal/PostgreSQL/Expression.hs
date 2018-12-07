@@ -150,6 +150,7 @@ module Squeal.PostgreSQL.Expression
     -- * Sorting
   , SortExpression (..)
   , renderSortExpression
+  , OrderBy (..)
     -- * Types
   , TypeExpression (UnsafeTypeExpression, renderTypeExpression)
   , PGTyped (pgtype)
@@ -1647,18 +1648,27 @@ rank = UnsafeExpression "rank()"
 over
   :: Aggregatable agg
   => Expression db from agg params ty
-  -> WindowDefinition db from grp params
+  -> WindowDefinition db params from grp
   -> Expression db from grp params ty
 over expr windef = UnsafeExpression $
   renderExpression expr <+> "OVER"
   <+> parenthesized (renderWindowDefinition windef)
 
-data WindowDefinition db from grp params where
+data WindowDefinition db params from grp where
   WindowDefinition
     :: SListI bys
     => NP (Expression db from grp params) bys
     -> [SortExpression db from grp params]
-    -> WindowDefinition db from grp params
+    -> WindowDefinition db params from grp
+
+class OrderBy expr where
+  orderBy
+    :: [SortExpression db from grp params]
+    -> expr db params from grp
+    -> expr db params from grp
+instance OrderBy WindowDefinition where
+  orderBy sortsR (WindowDefinition parts sortsL)
+    = WindowDefinition parts (sortsL ++ sortsR)
 
 renderWindowDefinition
   :: WindowDefinition db from grp params
@@ -1677,7 +1687,7 @@ renderWindowDefinition (WindowDefinition part ord) =
 partitionBy
   :: SListI bys
   => NP (Expression db from grp params) bys
-  -> WindowDefinition db from grp params
+  -> WindowDefinition db params from grp
 partitionBy bys = WindowDefinition bys []
 
 {-----------------------------------------
