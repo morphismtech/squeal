@@ -439,7 +439,7 @@ instance
 
 instance RenderSQL (Selection db params grp from row) where
   renderSQL = \case
-    List list -> renderCommaSeparated (renderAliasedAs renderExpression) list
+    List list -> renderCommaSeparated (renderAliasedAs renderSQL) list
     Star -> "*"
     DotStar tab -> renderSQL tab <> ".*"
     Also right left -> renderSQL left <> ", " <> renderSQL right
@@ -519,7 +519,7 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
     renderSQLPart, renderValuePart
       :: Aliased (Expression db params 'Ungrouped '[] ) ty -> ByteString
     renderSQLPart (_ `As` name) = renderSQL name
-    renderValuePart (value `As` _) = renderExpression value
+    renderValuePart (value `As` _) = renderSQL value
 
 -- | `values_` computes a row value or set of row values
 -- specified by value expressions.
@@ -604,8 +604,8 @@ renderTableExpression
     where
       renderWheres = \case
         [] -> ""
-        wh:[] -> " WHERE" <+> renderExpression wh
-        wh:whs -> " WHERE" <+> renderExpression (foldr (.&&) wh whs)
+        wh:[] -> " WHERE" <+> renderSQL wh
+        wh:whs -> " WHERE" <+> renderSQL (foldr (.&&) wh whs)
       renderOrderByClause = \case
         [] -> ""
         srts -> " ORDER BY"
@@ -695,7 +695,7 @@ unsafeSetOfFunction
   -> Expression db params 'Ungrouped '[]  ty
   -> Query db params row
 unsafeSetOfFunction fun expr = UnsafeQuery $
-  "SELECT * FROM " <> fun <> "(" <> renderExpression expr <> ")"
+  "SELECT * FROM " <> fun <> "(" <> renderSQL expr <> ")"
 
 -- | Expands the outermost JSON object into a set of key/value pairs.
 jsonEach
@@ -744,8 +744,8 @@ unsafePopulateFunction
   -> Query (commons :=> schemas) params row
 unsafePopulateFunction fun ty expr = UnsafeQuery $
   "SELECT * FROM " <> fun <> "("
-    <> "null::" <> renderTypeExpression ty <> ", "
-    <> renderExpression expr <> ")"
+    <> "null::" <> renderSQL ty <> ", "
+    <> renderSQL expr <> ")"
 
 -- | Expands the JSON expression to a row whose columns match the record
 -- type defined by the given table.
@@ -788,12 +788,12 @@ unsafeRecordFunction
   -> Query (commons :=> schemas) params record
 unsafeRecordFunction fun expr types = UnsafeQuery $
   "SELECT * FROM " <> fun <> "("
-    <> renderExpression expr <> ")"
+    <> renderSQL expr <> ")"
     <+> "AS" <+> "x" <> parenthesized (renderCommaSeparated renderTy types)
     where
       renderTy :: Aliased (TypeExpression db) ty -> ByteString
       renderTy (ty `As` alias) =
-        renderSQL alias <+> renderTypeExpression ty
+        renderSQL alias <+> renderSQL ty
 
 -- | Builds an arbitrary record from a JSON object.
 jsonToRecord
@@ -896,7 +896,7 @@ innerJoin
   -> FromClause db params (Join left right)
 innerJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "INNER JOIN" <+> renderFromClause right
-  <+> "ON" <+> renderExpression on
+  <+> "ON" <+> renderSQL on
 
 {- | @left & leftOuterJoin right on@. First, an inner join is performed.
     Then, for each row in @left@ that does not satisfy the @on@ condition with
@@ -913,7 +913,7 @@ leftOuterJoin
   -> FromClause db params (Join left (NullifyFrom right))
 leftOuterJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "LEFT OUTER JOIN" <+> renderFromClause right
-  <+> "ON" <+> renderExpression on
+  <+> "ON" <+> renderSQL on
 
 {- | @left & rightOuterJoin right on@. First, an inner join is performed.
     Then, for each row in @right@ that does not satisfy the @on@ condition with
@@ -931,7 +931,7 @@ rightOuterJoin
   -> FromClause db params (Join (NullifyFrom left) right)
 rightOuterJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "RIGHT OUTER JOIN" <+> renderFromClause right
-  <+> "ON" <+> renderExpression on
+  <+> "ON" <+> renderSQL on
 
 {- | @left & fullOuterJoin right on@. First, an inner join is performed.
     Then, for each row in @left@ that does not satisfy the @on@ condition with
@@ -951,7 +951,7 @@ fullOuterJoin
       (Join (NullifyFrom left) (NullifyFrom right))
 fullOuterJoin right on left = UnsafeFromClause $
   renderFromClause left <+> "FULL OUTER JOIN" <+> renderFromClause right
-  <+> "ON" <+> renderExpression on
+  <+> "ON" <+> renderSQL on
 
 {-----------------------------------------
 Grouping
@@ -1033,7 +1033,7 @@ renderHavingClause = \case
   NoHaving -> ""
   Having [] -> ""
   Having conditions ->
-    " HAVING" <+> commaSeparated (renderExpression <$> conditions)
+    " HAVING" <+> commaSeparated (renderSQL <$> conditions)
 
 {-----------------------------------------
 Sorting
@@ -1071,14 +1071,14 @@ deriving instance Show (SortExpression db params grp from)
 -- | Render a `SortExpression`.
 renderSortExpression :: SortExpression db params grp from -> ByteString
 renderSortExpression = \case
-  Asc expression -> renderExpression expression <+> "ASC"
-  Desc expression -> renderExpression expression <+> "DESC"
-  AscNullsFirst expression -> renderExpression expression
+  Asc expression -> renderSQL expression <+> "ASC"
+  Desc expression -> renderSQL expression <+> "DESC"
+  AscNullsFirst expression -> renderSQL expression
     <+> "ASC NULLS FIRST"
-  DescNullsFirst expression -> renderExpression expression
+  DescNullsFirst expression -> renderSQL expression
     <+> "DESC NULLS FIRST"
-  AscNullsLast expression -> renderExpression expression <+> "ASC NULLS LAST"
-  DescNullsLast expression -> renderExpression expression <+> "DESC NULLS LAST"
+  AscNullsLast expression -> renderSQL expression <+> "ASC NULLS LAST"
+  DescNullsLast expression -> renderSQL expression <+> "DESC NULLS LAST"
 
 unsafeSubqueryExpression
   :: ByteString
@@ -1086,7 +1086,7 @@ unsafeSubqueryExpression
   -> Query db params '[alias ::: ty]
   -> Expression db params grp from (nullity 'PGbool)
 unsafeSubqueryExpression op x q = UnsafeExpression $
-  renderExpression x <+> op <+> parenthesized (renderQuery q)
+  renderSQL x <+> op <+> parenthesized (renderQuery q)
 
 unsafeRowSubqueryExpression
   :: SListI row
@@ -1095,7 +1095,7 @@ unsafeRowSubqueryExpression
   -> Query db params row
   -> Expression db params grp from (nullity 'PGbool)
 unsafeRowSubqueryExpression op xs q = UnsafeExpression $
-  renderExpression (row xs) <+> op <+> parenthesized (renderQuery q)
+  renderSQL (row xs) <+> op <+> parenthesized (renderQuery q)
 
 -- | The right-hand side is a sub`Query`, which must return exactly one column.
 -- The left-hand expression is evaluated and compared to each row of the

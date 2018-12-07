@@ -68,8 +68,6 @@ module Squeal.PostgreSQL.Schema
   , (:::)
   , Alias (..)
   , IsLabel (..)
-  , renderAliasString
-  , renderAliases
   , Aliased (As)
   , Aliasable (as)
   , renderAliasedAs
@@ -381,18 +379,14 @@ instance aliases ~ '[alias] => IsLabel alias (NP Alias aliases) where
 instance KnownSymbol alias => RenderSQL (Alias alias) where
   renderSQL = doubleQuoted . fromString . symbolVal
 
--- | >>> renderAliasString #ohmahgerd
--- "'ohmahgerd'"
-renderAliasString :: KnownSymbol alias => Alias alias -> ByteString
-renderAliasString = singleQuotedText . fromString . symbolVal
-
 -- | >>> import Generics.SOP (NP(..))
 -- >>> renderAliases (#jimbob :* #kandi)
 -- ["\"jimbob\"","\"kandi\""]
-renderAliases
-  :: All KnownSymbol aliases => NP Alias aliases -> [ByteString]
-renderAliases = hcollapse
-  . hcmap (Proxy @KnownSymbol) (K . renderSQL)
+instance All KnownSymbol aliases => RenderSQL (NP Alias aliases) where
+  renderSQL
+    = commaSeparated
+    . hcollapse
+    . hcmap (Proxy @KnownSymbol) (K . renderSQL)
 
 -- | The `As` operator is used to name an expression. `As` is like a demoted
 -- version of `:::`.

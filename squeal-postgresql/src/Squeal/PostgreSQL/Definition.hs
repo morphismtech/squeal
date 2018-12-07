@@ -331,7 +331,7 @@ unique
   -- ^ specify subcolumns which together are unique for each row
   -> TableConstraintExpression sch tab schemas ('Unique aliases)
 unique columns = UnsafeTableConstraintExpression $
-  "UNIQUE" <+> parenthesized (commaSeparated (renderAliases columns))
+  "UNIQUE" <+> parenthesized (renderSQL columns)
 
 {-| A `primaryKey` constraint indicates that a column, or group of columns,
 can be used as a unique identifier for rows in the table.
@@ -366,7 +366,7 @@ primaryKey
   -- ^ specify the subcolumns which together form a primary key.
   -> TableConstraintExpression sch tab schemas ('PrimaryKey aliases)
 primaryKey columns = UnsafeTableConstraintExpression $
-  "PRIMARY KEY" <+> parenthesized (commaSeparated (renderAliases columns))
+  "PRIMARY KEY" <+> parenthesized (renderSQL columns)
 
 {-| A `foreignKey` specifies that the values in a column
 (or a group of columns) must match the values appearing in some row of
@@ -460,9 +460,9 @@ foreignKey
   -> TableConstraintExpression sch child schemas
       ('ForeignKey columns parent refcolumns)
 foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
-  "FOREIGN KEY" <+> parenthesized (commaSeparated (renderAliases keys))
+  "FOREIGN KEY" <+> parenthesized (renderSQL keys)
   <+> "REFERENCES" <+> renderSQL parent
-  <+> parenthesized (commaSeparated (renderAliases refs))
+  <+> parenthesized (renderSQL refs)
   <+> renderSQL ondel
   <+> renderSQL onupd
 
@@ -935,7 +935,7 @@ createTypeComposite ty fields = UnsafeDefinition $
   where
     renderField :: Aliased (TypeExpression schemas) x -> ByteString
     renderField (typ `As` alias) =
-      renderSQL alias <+> renderTypeExpression typ
+      renderSQL alias <+> renderSQL typ
 
 -- | Composite types can also be generated from a Haskell type, for example
 --
@@ -995,14 +995,14 @@ instance RenderSQL (ColumnTypeExpression schemas ty) where
 nullable
   :: TypeExpression schemas (nullity ty)
   -> ColumnTypeExpression schemas ('NoDef :=> 'Null ty)
-nullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
+nullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NULL"
 
 -- | used in `createTable` commands as a column constraint to ensure
 -- @NULL@ is not present in a column
 notNullable
   :: TypeExpression schemas (nullity ty)
   -> ColumnTypeExpression schemas ('NoDef :=> 'NotNull ty)
-notNullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
+notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
 
 -- | used in `createTable` commands as a column constraint to give a default
 default_

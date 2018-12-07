@@ -31,7 +31,7 @@ Squeal expressions are the atoms used to build statements.
 
 module Squeal.PostgreSQL.Expression
   ( -- * Expression
-    Expression (UnsafeExpression, renderExpression)
+    Expression (..)
   , HasParameter (parameter)
   , param
     -- ** Null
@@ -142,8 +142,8 @@ module Squeal.PostgreSQL.Expression
   , every, everyDistinct
   , max_, maxDistinct, min_, minDistinct
     -- * Types
-  , TypeExpression (UnsafeTypeExpression, renderTypeExpression)
-  , PGTyped (pgtype)
+  , TypeExpression (..)
+  , PGTyped (..)
   , typedef
   , typetable
   , typeview
@@ -252,7 +252,7 @@ class KnownNat n => HasParameter
       -> Expression (commons :=> schemas) params grp from ty
     parameter ty = UnsafeExpression $ parenthesized $
       "$" <> renderNat @n <+> "::"
-        <+> renderTypeExpression ty
+        <+> renderSQL ty
 instance {-# OVERLAPPING #-} HasParameter 1 (ty1:tys) ty1
 instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
   => HasParameter n (ty' : params) ty
@@ -357,7 +357,7 @@ null_ = UnsafeExpression "NULL"
 notNull
   :: Expression db rels grouping params ('NotNull ty)
   -> Expression db rels grouping params ('Null ty)
-notNull = UnsafeExpression . renderExpression
+notNull = UnsafeExpression . renderSQL
 
 -- | return the leftmost value which is not NULL
 --
@@ -371,7 +371,7 @@ coalesce
   -> Expression db params grp from ('NotNull ty)
 coalesce nullxs notNullx = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
-    ((renderExpression <$> nullxs) <> [renderExpression notNullx]))
+    ((renderSQL <$> nullxs) <> [renderSQL notNullx]))
 
 -- | analagous to `Data.Maybe.fromMaybe` using @COALESCE@
 --
@@ -390,7 +390,7 @@ isNull
   :: Expression db params grp from ('Null ty)
   -- ^ possibly @NULL@
   -> Condition db params grp from
-isNull x = UnsafeExpression $ renderExpression x <+> "IS NULL"
+isNull x = UnsafeExpression $ renderSQL x <+> "IS NULL"
 
 -- | >>> printSQL $ null_ & isNotNull
 -- NULL IS NOT NULL
@@ -398,7 +398,7 @@ isNotNull
   :: Expression db params grp from ('Null ty)
   -- ^ possibly @NULL@
   -> Condition db params grp from
-isNotNull x = UnsafeExpression $ renderExpression x <+> "IS NOT NULL"
+isNotNull x = UnsafeExpression $ renderSQL x <+> "IS NOT NULL"
 
 -- | analagous to `maybe` using @IS NULL@
 --
@@ -413,7 +413,7 @@ matchNull
   -> Expression db params grp from ('Null ty)
   -> Expression db params grp from (nullty)
 matchNull y f x = ifThenElse (isNull x) y
-  (f (UnsafeExpression (renderExpression x)))
+  (f (UnsafeExpression (renderSQL x)))
 
 {-| right inverse to `fromNull`, if its arguments are equal then
 `nullIf` gives @NULL@.
@@ -430,7 +430,7 @@ nullIf
   -- ^ @NULL@ is absent
   -> Expression db params grp from ('Null ty)
 nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
-  (renderExpression x <> ", " <> renderExpression y)
+  (renderSQL x <> ", " <> renderSQL y)
 
 -- | >>> printSQL $ array [null_, false, true]
 -- ARRAY[NULL, FALSE, TRUE]
@@ -439,7 +439,7 @@ array
   -- ^ array elements
   -> Expression db params grp from (nullity ('PGvararray ty))
 array xs = UnsafeExpression $
-  "ARRAY[" <> commaSeparated (renderExpression <$> xs) <> "]"
+  "ARRAY[" <> commaSeparated (renderSQL <$> xs) <> "]"
 
 -- | >>> printSQL $ array [null_, false, true] & index 2
 -- (ARRAY[NULL, FALSE, TRUE])[2]
@@ -448,7 +448,7 @@ index
   -> Expression db params grp from (nullity ('PGvararray ty)) -- ^ array
   -> Expression db params grp from (NullifyType ty)
 index n expr = UnsafeExpression $
-  parenthesized (renderExpression expr) <> "[" <> fromString (show n) <> "]"
+  parenthesized (renderSQL expr) <> "[" <> fromString (show n) <> "]"
 
 instance (KnownSymbol label, label `In` labels) => IsPGlabel label
   (Expression db params grp from (nullity ('PGenum labels))) where
@@ -472,7 +472,7 @@ row
   -- ^ zero or more expressions for the row field values
   -> Expression db params grp from (nullity ('PGcomposite row))
 row exprs = UnsafeExpression $ "ROW" <> parenthesized
-  (renderCommaSeparated (\ (expr `As` _) -> renderExpression expr) exprs)
+  (renderCommaSeparated (\ (expr `As` _) -> renderSQL expr) exprs)
 
 -- | >>> :{
 -- type Complex = 'PGcomposite
@@ -494,7 +494,7 @@ field
   -> Expression (commons :=> schemas) params grp from ('NotNull ('PGcomposite row))
   -> Expression (commons :=> schemas) params grp from ty
 field td fld expr = UnsafeExpression $
-  parenthesized (renderExpression expr <> "::" <> renderQualifiedAlias td)
+  parenthesized (renderSQL expr <> "::" <> renderQualifiedAlias td)
     <> "." <> renderSQL fld
 
 instance Semigroup
@@ -516,7 +516,7 @@ greatest
   -- ^ or more
   -> Expression db params grp from (nullty)
 greatest x xs = UnsafeExpression $ "GREATEST("
-  <> commaSeparated (renderExpression <$> (x:xs)) <> ")"
+  <> commaSeparated (renderSQL <$> (x:xs)) <> ")"
 
 -- | >>> printSQL $ least currentTimestamp [null_]
 -- LEAST(CURRENT_TIMESTAMP, NULL)
@@ -527,7 +527,7 @@ least
   -- ^ or more
   -> Expression db params grp from (nullty)
 least x xs = UnsafeExpression $ "LEAST("
-  <> commaSeparated (renderExpression <$> (x:xs)) <> ")"
+  <> commaSeparated (renderSQL <$> (x:xs)) <> ")"
 
 -- | >>> printSQL $ unsafeBinaryOp "OR" true false
 -- (TRUE OR FALSE)
@@ -538,7 +538,7 @@ unsafeBinaryOp
   -> Expression db params grp from (ty1)
   -> Expression db params grp from (ty2)
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
-  renderExpression x <+> op <+> renderExpression y
+  renderSQL x <+> op <+> renderSQL y
 
 -- | >>> printSQL $ unsafeUnaryOp "NOT" true
 -- (NOT TRUE)
@@ -548,7 +548,7 @@ unsafeUnaryOp
   -> Expression db params grp from (ty0)
   -> Expression db params grp from (ty1)
 unsafeUnaryOp op x = UnsafeExpression $ parenthesized $
-  op <+> renderExpression x
+  op <+> renderSQL x
 
 -- | >>> printSQL $ unsafeFunction "f" true
 -- f(TRUE)
@@ -558,7 +558,7 @@ unsafeFunction
   -> Expression db params grp from (xty)
   -> Expression db params grp from (yty)
 unsafeFunction fun x = UnsafeExpression $
-  fun <> parenthesized (renderExpression x)
+  fun <> parenthesized (renderSQL x)
 
 -- | Helper for defining variadic functions.
 unsafeVariadicFunction
@@ -568,7 +568,7 @@ unsafeVariadicFunction
   -> NP (Expression db params grp from) elems
   -> Expression db params grp from ret
 unsafeVariadicFunction fun x = UnsafeExpression $
-  fun <> parenthesized (commaSeparated (hcollapse (hmap (K . renderExpression) x)))
+  fun <> parenthesized (commaSeparated (hcollapse (hmap (K . renderSQL) x)))
 
 instance ty `In` PGNum
   => Num (Expression db params grp from (nullity ty)) where
@@ -594,7 +594,7 @@ instance (ty `In` PGNum, ty `In` PGFloating) => Floating
     log = unsafeFunction "ln"
     sqrt = unsafeFunction "sqrt"
     b ** x = UnsafeExpression $
-      "power(" <> renderExpression b <> ", " <> renderExpression x <> ")"
+      "power(" <> renderSQL b <> ", " <> renderSQL x <> ")"
     logBase b y = log y / log b
     sin = unsafeFunction "sin"
     cos = unsafeFunction "cos"
@@ -624,7 +624,7 @@ atan2_
   -- ^ denominator
   -> Expression db params grp from (nullity float)
 atan2_ y x = UnsafeExpression $
-  "atan2(" <> renderExpression y <> ", " <> renderExpression x <> ")"
+  "atan2(" <> renderSQL y <> ", " <> renderSQL x <> ")"
 
 -- When a `cast` is applied to an `Expression` of a known type, it
 -- represents a run-time type conversion. The cast will succeed only if a
@@ -639,7 +639,7 @@ cast
   -- ^ value to convert
   -> Expression (commons :=> schemas) params grp from ty1
 cast ty x = UnsafeExpression $ parenthesized $
-  renderExpression x <+> "::" <+> renderTypeExpression ty
+  renderSQL x <+> "::" <+> renderSQL ty
 
 -- | integer division, truncates the result
 --
@@ -779,12 +779,12 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   [ "CASE"
   , mconcat
     [ mconcat
-      [ " WHEN ", renderExpression when_
-      , " THEN ", renderExpression then_
+      [ " WHEN ", renderSQL when_
+      , " THEN ", renderSQL then_
       ]
     | (when_,then_) <- whenThens
     ]
-  , " ELSE ", renderExpression else_
+  , " ELSE ", renderSQL else_
   , " END"
   ]
 
@@ -1173,7 +1173,10 @@ unsafeRowFunction
 unsafeRowFunction =
   (`appEndo` []) . hcfoldMap (Proxy :: Proxy Top)
   (\(col `As` name) -> Endo $ \xs ->
-      renderAliasString name : renderExpression col : xs)
+      renderAliasString name : renderSQL col : xs)
+  where
+    renderAliasString :: KnownSymbol alias => Alias alias -> ByteString
+    renderAliasString = singleQuotedText . fromString . symbolVal
 
 -- | Builds a possibly-heterogeneously-typed JSON object out of a variadic
 -- argument list. The elements of the argument list must alternate between text
@@ -1381,7 +1384,7 @@ unsafeAggregate
   -> Expression db from 'Ungrouped params (xty)
   -> Expression db from ('Grouped bys) params (yty)
 unsafeAggregate fun x = UnsafeExpression $ mconcat
-  [fun, "(", renderExpression x, ")"]
+  [fun, "(", renderSQL x, ")"]
 
 -- | escape hatch to define aggregate functions over distinct values
 unsafeAggregateDistinct
@@ -1389,7 +1392,7 @@ unsafeAggregateDistinct
   -> Expression db from 'Ungrouped params (xty)
   -> Expression db from ('Grouped bys) params (yty)
 unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
-  [fun, "(DISTINCT ", renderExpression x, ")"]
+  [fun, "(DISTINCT ", renderSQL x, ")"]
 
 -- | >>> :{
 -- let
@@ -1626,6 +1629,8 @@ type expressions
 newtype TypeExpression (schemas :: SchemasType) (ty :: NullityType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
+instance RenderSQL (TypeExpression schemas ty) where
+  renderSQL = renderTypeExpression
 
 -- | The enum or composite type in a `Typedef` can be expressed by its alias.
 typedef
@@ -1730,17 +1735,17 @@ jsonb = UnsafeTypeExpression "jsonb"
 vararray
   :: TypeExpression schemas pg
   -> TypeExpression schemas (nullity ('PGvararray pg))
-vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
+vararray ty = UnsafeTypeExpression $ renderSQL ty <> "[]"
 -- | fixed length array
 --
--- >>> renderTypeExpression (fixarray @2 json)
+-- >>> renderSQL (fixarray @2 json)
 -- "json[2]"
 fixarray
   :: forall n schemas nullity pg. KnownNat n
   => TypeExpression schemas pg
   -> TypeExpression schemas (nullity ('PGfixarray n pg))
 fixarray ty = UnsafeTypeExpression $
-  renderTypeExpression ty <> "[" <> renderNat @n <> "]"
+  renderSQL ty <> "[" <> renderNat @n <> "]"
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped schemas (ty :: NullityType) where
