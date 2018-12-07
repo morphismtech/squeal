@@ -71,7 +71,7 @@ let
     :: Has "migrations" schemas MigrationsSchema
     => PQ schemas schemas IO ()
   numMigrations = do
-    result <- runQuery (selectStar (from (table (#migrations ! #schema_migrations `as` #m))))
+    result <- runQuery (select Star (from (table (#migrations ! #schema_migrations `as` #m))))
     num <- ntuples result
     liftBase $ print num
 :}

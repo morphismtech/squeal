@@ -68,7 +68,6 @@ module Squeal.PostgreSQL.Schema
   , (:::)
   , Alias (..)
   , IsLabel (..)
-  , renderAlias
   , renderAliasString
   , renderAliases
   , Aliased (As)
@@ -377,12 +376,10 @@ instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
 instance aliases ~ '[alias] => IsLabel alias (NP Alias aliases) where
   fromLabel = fromLabel :* Nil
-instance KnownSymbol alias => RenderSQL (Alias alias) where renderSQL = renderAlias
-
--- | >>> renderAlias #jimbob
+-- | >>> renderSQL #jimbob
 -- "\"jimbob\""
-renderAlias :: KnownSymbol alias => Alias alias -> ByteString
-renderAlias = doubleQuoted . fromString . symbolVal
+instance KnownSymbol alias => RenderSQL (Alias alias) where
+  renderSQL = doubleQuoted . fromString . symbolVal
 
 -- | >>> renderAliasString #ohmahgerd
 -- "'ohmahgerd'"
@@ -395,7 +392,7 @@ renderAliasString = singleQuotedText . fromString . symbolVal
 renderAliases
   :: All KnownSymbol aliases => NP Alias aliases -> [ByteString]
 renderAliases = hcollapse
-  . hcmap (Proxy @KnownSymbol) (K . renderAlias)
+  . hcmap (Proxy @KnownSymbol) (K . renderSQL)
 
 -- | The `As` operator is used to name an expression. `As` is like a demoted
 -- version of `:::`.
@@ -443,7 +440,7 @@ renderAliasedAs
   -> Aliased expression aliased
   -> ByteString
 renderAliasedAs render (expression `As` alias) =
-  render expression <> " AS " <> renderAlias alias
+  render expression <> " AS " <> renderSQL alias
 
 -- | @HasUnique alias fields field@ is a constraint that proves that
 -- @fields@ is a singleton of @alias ::: field@.
@@ -519,8 +516,8 @@ renderQualifiedAlias
   => QualifiedAlias q a -> ByteString
 renderQualifiedAlias _ =
   let
-    qualifier = renderAlias (Alias @q)
-    alias = renderAlias (Alias @a)
+    qualifier = renderSQL (Alias @q)
+    alias = renderSQL (Alias @a)
   in
     if qualifier == "\"public\"" then alias else qualifier <> "." <> alias
 

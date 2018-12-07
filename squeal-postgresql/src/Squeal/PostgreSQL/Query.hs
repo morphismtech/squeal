@@ -151,7 +151,7 @@ simple query:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectStar (from (table #tab))
+  query = select Star (from (table #tab))
 in printSQL query
 :}
 SELECT * FROM "tab" AS "tab"
@@ -162,7 +162,7 @@ restricted query:
 let
   query :: Query (DBof (Public Schema)) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4]
   query =
-    select ((#col1 + #col2) `as` #sum :* #col1)
+    select_ ((#col1 + #col2) `as` #sum :* #col1)
       ( from (table #tab)
         & where_ (#col1 .> #col2)
         & where_ (#col2 .> 0) )
@@ -175,7 +175,7 @@ subquery:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectStar (from (subquery (selectStar (from (table #tab)) `as` #sub)))
+  query = select Star (from (subquery (select Star (from (table #tab)) `as` #sub)))
 in printSQL query
 :}
 SELECT * FROM (SELECT * FROM "tab" AS "tab") AS "sub"
@@ -185,7 +185,7 @@ limits and offsets:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectStar (from (table #tab) & limit 100 & offset 2 & limit 50 & offset 2)
+  query = select Star (from (table #tab) & limit 100 & offset 2 & limit 50 & offset 2)
 in printSQL query
 :}
 SELECT * FROM "tab" AS "tab" LIMIT 50 OFFSET 4
@@ -195,7 +195,7 @@ parameterized query:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[ 'NotNull 'PGint4] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectStar (from (table #tab) & where_ (#col1 .> param @1))
+  query = select Star (from (table #tab) & where_ (#col1 .> param @1))
 in printSQL query
 :}
 SELECT * FROM "tab" AS "tab" WHERE ("col1" > ($1 :: int4))
@@ -206,7 +206,7 @@ aggregation query:
 let
   query :: Query (DBof (Public Schema)) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4 ]
   query =
-    select (sum_ #col2 `as` #sum :* #col1)
+    select_ (sum_ #col2 `as` #sum :* #col1)
     ( from (table (#tab `as` #table1))
       & groupBy #col1
       & having (#col1 + sum_ #col2 .> 1) )
@@ -219,7 +219,7 @@ sorted query:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectStar (from (table #tab) & orderBy [#col1 & Asc])
+  query = select Star (from (table #tab) & orderBy [#col1 & Asc])
 in printSQL query
 :}
 SELECT * FROM "tab" AS "tab" ORDER BY "col1" ASC
@@ -261,7 +261,7 @@ let
      , "customer_name" ::: 'NotNull 'PGtext
      , "shipper_name" ::: 'NotNull 'PGtext
      ]
-  query = select
+  query = select_
     ( #o ! #price `as` #order_price :*
       #c ! #name `as` #customer_name :*
       #s ! #name `as` #shipper_name )
@@ -279,7 +279,7 @@ self-join:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectDotStar #t1 (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
+  query = select (#t1 & DotStar) (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
 in printSQL query
 :}
 SELECT "t1".* FROM "tab" AS "t1" CROSS JOIN "tab" AS "t2"
@@ -299,7 +299,7 @@ set operations:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectStar (from (table #tab)) `unionAll` selectStar (from (table #tab))
+  query = select Star (from (table #tab)) `unionAll` select Star (from (table #tab))
 in printSQL query
 :}
 (SELECT * FROM "tab" AS "tab") UNION ALL (SELECT * FROM "tab" AS "tab")
@@ -310,9 +310,9 @@ with queries:
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
   query = with (
-    selectStar (from (table #tab)) `as` #cte1 :>>
-    selectStar (from (common #cte1)) `as` #cte2
-    ) (selectStar (from (common #cte2)))
+    select Star (from (table #tab)) `as` #cte1 :>>
+    select Star (from (common #cte1)) `as` #cte2
+    ) (select Star (from (common #cte2)))
 in printSQL query
 :}
 WITH "cte1" AS (SELECT * FROM "tab" AS "tab"), "cte2" AS (SELECT * FROM "cte1" AS "cte1") SELECT * FROM "cte2" AS "cte2"
@@ -441,7 +441,7 @@ instance RenderSQL (Selection db params grp from row) where
   renderSQL = \case
     List list -> renderCommaSeparated (renderAliasedAs renderExpression) list
     Star -> "*"
-    DotStar tab -> renderAlias tab <> ".*"
+    DotStar tab -> renderSQL tab <> ".*"
     Also right left -> renderSQL left <> ", " <> renderSQL right
 
 -- | the `TableExpression` in the `select` command constructs an intermediate
@@ -514,11 +514,11 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
         ( parenthesized
         . renderCommaSeparated renderValuePart <$> rw:rws )
     ) <+> "AS t"
-  <+> parenthesized (renderCommaSeparated renderAliasPart rw)
+  <+> parenthesized (renderCommaSeparated renderSQLPart rw)
   where
-    renderAliasPart, renderValuePart
+    renderSQLPart, renderValuePart
       :: Aliased (Expression db params 'Ungrouped '[] ) ty -> ByteString
-    renderAliasPart (_ `As` name) = renderAlias name
+    renderSQLPart (_ `As` name) = renderSQL name
     renderValuePart (value `As` _) = renderExpression value
 
 -- | `values_` computes a row value or set of row values
@@ -793,7 +793,7 @@ unsafeRecordFunction fun expr types = UnsafeQuery $
     where
       renderTy :: Aliased (TypeExpression db) ty -> ByteString
       renderTy (ty `As` alias) =
-        renderAlias alias <+> renderTypeExpression ty
+        renderSQL alias <+> renderTypeExpression ty
 
 -- | Builds an arbitrary record from a JSON object.
 jsonToRecord
@@ -845,7 +845,7 @@ table
   => Aliased (QualifiedAlias sch) (alias ::: tab)
   -> FromClause (commons :=> schemas) params '[alias ::: TableToRow table]
 table (tab `As` alias) = UnsafeFromClause $
-  renderQualifiedAlias tab <+> "AS" <+> renderAlias alias
+  renderQualifiedAlias tab <+> "AS" <+> renderSQL alias
 
 -- | `subquery` derives a table from a `Query`.
 subquery
@@ -859,14 +859,14 @@ view
   => Aliased (QualifiedAlias sch) (alias ::: vw)
   -> FromClause (commons :=> schemas) params '[alias ::: view]
 view (vw `As` alias) = UnsafeFromClause $
-  renderQualifiedAlias vw <+> "AS" <+> renderAlias alias
+  renderQualifiedAlias vw <+> "AS" <+> renderSQL alias
 
 common
   :: Has cte commons common
   => Aliased Alias (alias ::: cte)
   -> FromClause (commons :=> schemas) params '[alias ::: common]
 common (cte `As` alias) = UnsafeFromClause $
-  renderAlias cte <+> "AS" <+> renderAlias alias
+  renderSQL cte <+> "AS" <+> renderSQL alias
 
 {- | @left & crossJoin right@. For every possible combination of rows from
     @left@ and @right@ (i.e., a Cartesian product), the joined table will contain
@@ -991,8 +991,8 @@ instance (Has rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
 -- | Renders a `By`.
 renderBy :: By from by -> ByteString
 renderBy = \case
-  By1 column -> renderAlias column
-  By2 rel column -> renderAlias rel <> "." <> renderAlias column
+  By1 column -> renderSQL column
+  By2 rel column -> renderSQL rel <> "." <> renderSQL column
 
 -- | A `GroupByClause` indicates the `Grouping` of a `TableExpression`.
 -- A `NoGroups` indicates `Ungrouped` while a `Group` indicates `Grouped`.
@@ -1380,7 +1380,7 @@ renderCommonTableExpression
   -> CommonTableExpression statement params db0 db1 -> ByteString
 renderCommonTableExpression renderStatement
   (CommonTableExpression (statement `As` alias)) =
-    renderAlias alias <+> "AS" <+> parenthesized (renderStatement statement)
+    renderSQL alias <+> "AS" <+> parenthesized (renderStatement statement)
 
 -- | render a non-empty `AlignedList` of `CommonTableExpression`s.
 renderCommonTableExpressions

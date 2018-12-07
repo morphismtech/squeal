@@ -123,7 +123,7 @@ let
       (Values_ ("John Smith" `as` #name :* "john@smith.com" `as` #email))
       (OnConflict (OnConstraint #uq)
         (DoUpdate (((#excluded ! #email) <> "; " <> (#customers ! #email)) `as` #email) []))
-      (Returning Nil)
+      (Returning_ Nil)
 in printSQL manipulation
 :}
 INSERT INTO "customers" ("name", "email") VALUES (E'John Smith', E'john@smith.com') ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || (E'; ' || "customers"."email"))
@@ -133,7 +133,7 @@ query insert:
 >>> :{
 let
   manipulation :: Manipulation (DBof (Public Schema)) '[] '[]
-  manipulation = insertInto_ #tab (Subquery (selectStar (from (table #tab))))
+  manipulation = insertInto_ #tab (Subquery (select Star (from (table #tab))))
 in printSQL manipulation
 :}
 INSERT INTO "tab" SELECT * FROM "tab" AS "tab"
@@ -155,7 +155,7 @@ let
   manipulation :: Manipulation (DBof (Public Schema)) '[]
     '[ "col1" ::: 'NotNull 'PGint4
      , "col2" ::: 'NotNull 'PGint4 ]
-  manipulation = deleteFrom #tab NoUsing (#col1 .== #col2) ReturningStar
+  manipulation = deleteFrom #tab NoUsing (#col1 .== #col2) (Returning Star)
 in printSQL manipulation
 :}
 DELETE FROM "tab" WHERE ("col1" = "col2") RETURNING *
@@ -188,8 +188,8 @@ with manipulation:
 let
   manipulation :: Manipulation (DBof (Public ProductsSchema)) '[ 'NotNull 'PGdate] '[]
   manipulation = with
-    (deleteFrom #products NoUsing (#date .< param @1) ReturningStar `as` #del)
-    (insertInto_ #products_deleted (Subquery (selectStar (from (common #del)))))
+    (deleteFrom #products NoUsing (#date .< param @1) (Returning Star) `as` #del)
+    (insertInto_ #products_deleted (Subquery (select Star (from (common #del)))))
 in printSQL manipulation
 :}
 WITH "del" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "del" AS "del"
@@ -279,31 +279,31 @@ renderQueryClause
   -> ByteString
 renderQueryClause = \case
   Values row0 rows ->
-    parenthesized (renderCommaSeparated renderAliasPart row0)
+    parenthesized (renderCommaSeparated renderSQLPart row0)
     <+> "VALUES"
     <+> commaSeparated
           ( parenthesized
           . renderCommaSeparated renderValuePart <$> row0 : rows )
   Select row0 tab ->
-    parenthesized (renderCommaSeparatedMaybe renderAliasPartMaybe row0)
+    parenthesized (renderCommaSeparatedMaybe renderSQLPartMaybe row0)
     <+> "SELECT"
     <+> renderCommaSeparatedMaybe renderValuePartMaybe row0
     <+> renderTableExpression tab
   Subquery qry -> renderQuery qry
   where
-    renderAliasPartMaybe, renderValuePartMaybe
+    renderSQLPartMaybe, renderValuePartMaybe
       :: ColumnExpression db params grp from column -> Maybe ByteString
-    renderAliasPartMaybe = \case
+    renderSQLPartMaybe = \case
       DefaultAs _ -> Nothing
-      Specific (_ `As` name) -> Just $ renderAlias name
+      Specific (_ `As` name) -> Just $ renderSQL name
     renderValuePartMaybe = \case
       DefaultAs _ -> Nothing
       Specific (value `As` _) -> Just $ renderExpression value
-    renderAliasPart, renderValuePart
+    renderSQLPart, renderValuePart
       :: ColumnExpression db params grp from column -> ByteString
-    renderAliasPart = \case
-      DefaultAs name -> renderAlias name
-      Specific (_ `As` name) -> renderAlias name
+    renderSQLPart = \case
+      DefaultAs name -> renderSQL name
+      Specific (_ `As` name) -> renderSQL name
     renderValuePart = \case
       DefaultAs _ -> "DEFAULT"
       Specific (value `As` _) -> renderExpression value
@@ -394,9 +394,9 @@ renderColumnExpression
   -> ByteString
 renderColumnExpression = \case
   DefaultAs col ->
-    renderAlias col <+> "=" <+> "DEFAULT"
+    renderSQL col <+> "=" <+> "DEFAULT"
   Specific (expression `As` col) ->
-    renderAlias col <+> "=" <+> renderExpression expression
+    renderSQL col <+> "=" <+> renderExpression expression
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
@@ -412,7 +412,9 @@ newtype ReturningClause db params from row =
   Returning (Selection db params 'Ungrouped from row)
 
 instance RenderSQL (ReturningClause db params from row) where
-  renderSQL (Returning selection) = "RETURNING" <+> renderSQL selection
+  renderSQL = \case
+    Returning (List Nil) -> ""
+    Returning selection -> " RETURNING" <+> renderSQL selection
 
 pattern Returning_
   :: SOP.SListI row
@@ -479,7 +481,7 @@ renderConflictTarget
   :: ConflictTarget constraints
   -> ByteString
 renderConflictTarget (OnConstraint con) =
-  "ON" <+> "CONSTRAINT" <+> renderAlias con
+  "ON" <+> "CONSTRAINT" <+> renderSQL con
 
 {-----------------------------------------
 UPDATE statements

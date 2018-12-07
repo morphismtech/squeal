@@ -244,7 +244,7 @@ class KnownNat n => HasParameter
   | n params -> ty where
     -- | `parameter` takes a `Nat` using type application and a `TypeExpression`.
     --
-    -- >>> let expr = parameter @1 int4 :: Expression (DBof schemas) from grp '[ 'Null 'PGint4] ('Null 'PGint4)
+    -- >>> let expr = parameter @1 int4 :: Expression (DBof schemas) '[ 'Null 'PGint4] grp from ('Null 'PGint4)
     -- >>> printSQL expr
     -- ($1 :: int4)
     parameter
@@ -260,7 +260,7 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
 -- | `param` takes a `Nat` using type application and for basic types,
 -- infers a `TypeExpression`.
 --
--- >>> let expr = param @1 :: Expression (commons :=> schemas) from grp '[ 'Null 'PGint4] ('Null 'PGint4)
+-- >>> let expr = param @1 :: Expression (commons :=> schemas) '[ 'Null 'PGint4] grp from ('Null 'PGint4)
 -- >>> printSQL expr
 -- ($1 :: int4)
 param
@@ -271,7 +271,7 @@ param = parameter @n (pgtype @schemas)
 
 instance (HasUnique tab from row, Has col row ty)
   => IsLabel col (Expression db params 'Ungrouped from ty) where
-    fromLabel = UnsafeExpression $ renderAlias (Alias @col)
+    fromLabel = UnsafeExpression $ renderSQL (Alias @col)
 instance (HasUnique tab from row, Has col row ty, column ~ (col ::: ty))
   => IsLabel col
     (Aliased (Expression db params 'Ungrouped from) column) where
@@ -284,7 +284,7 @@ instance (HasUnique tab from row, Has col row ty, columns ~ '[col ::: ty])
 instance (Has tab from row, Has col row ty)
   => IsQualified tab col (Expression db params 'Ungrouped from ty) where
     tab ! col = UnsafeExpression $
-      renderAlias tab <> "." <> renderAlias col
+      renderSQL tab <> "." <> renderSQL col
 instance (Has tab from row, Has col row ty, column ~ (col ::: ty))
   => IsQualified tab col
     (Aliased (Expression db params 'Ungrouped from) column) where
@@ -300,7 +300,7 @@ instance
   , GroupedBy tab col bys
   ) => IsLabel col
     (Expression db params ('Grouped bys) from ty) where
-      fromLabel = UnsafeExpression $ renderAlias (Alias @col)
+      fromLabel = UnsafeExpression $ renderSQL (Alias @col)
 instance
   ( HasUnique tab from row
   , Has col row ty
@@ -325,7 +325,7 @@ instance
   ) => IsQualified tab col
     (Expression db params ('Grouped bys) from ty) where
       tab ! col = UnsafeExpression $
-        renderAlias tab <> "." <> renderAlias col
+        renderSQL tab <> "." <> renderSQL col
 instance
   ( Has tab from row
   , Has col row ty
@@ -419,7 +419,7 @@ matchNull y f x = ifThenElse (isNull x) y
 `nullIf` gives @NULL@.
 
 >>> :set -XTypeApplications -XDataKinds
->>> let expr = nullIf false (param @1) :: Expression (commons :=> schema) from grp '[ 'NotNull 'PGbool] ('Null 'PGbool)
+>>> let expr = nullIf false (param @1) :: Expression (commons :=> schema) '[ 'NotNull 'PGbool] grp from ('Null 'PGbool)
 >>> printSQL expr
 NULL IF (FALSE, ($1 :: bool))
 -}
@@ -495,7 +495,7 @@ field
   -> Expression (commons :=> schemas) params grp from ty
 field td fld expr = UnsafeExpression $
   parenthesized (renderExpression expr <> "::" <> renderQualifiedAlias td)
-    <> "." <> renderAlias fld
+    <> "." <> renderSQL fld
 
 instance Semigroup
   (Expression db params grp from (nullity ('PGvararray ty))) where
@@ -506,7 +506,7 @@ instance Monoid
     mempty = array []
     mappend = (<>)
 
--- | >>> let expr = greatest currentTimestamp [param @1] :: Expression (commons :=> schemas) rels grp '[ 'NotNull 'PGtimestamptz] ('NotNull 'PGtimestamptz)
+-- | >>> let expr = greatest currentTimestamp [param @1] :: Expression (commons :=> schemas) '[ 'NotNull 'PGtimestamptz] grp from ('NotNull 'PGtimestamptz)
 -- >>> printSQL expr
 -- GREATEST(CURRENT_TIMESTAMP, ($1 :: timestamp with time zone))
 greatest
@@ -1393,7 +1393,7 @@ unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Grouped bys) params ('Null 'PGnumeric)
+--   expression :: Expression db params ('Grouped bys) '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null 'PGnumeric)
 --   expression = sum_ #col
 -- in printSQL expression
 -- :}
@@ -1407,7 +1407,7 @@ sum_ = unsafeAggregate "sum"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGnumeric]] ('Grouped bys) params (nullity 'PGnumeric)
+--   expression :: Expression db params ('Grouped bys) '[tab ::: '["col" ::: nullity 'PGnumeric]] (nullity 'PGnumeric)
 --   expression = sumDistinct #col
 -- in printSQL expression
 -- :}
@@ -1438,7 +1438,7 @@ instance PGAvg 'PGinterval 'PGinterval
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
 --   expression = bitAnd #col
 -- in printSQL expression
 -- :}
@@ -1452,7 +1452,7 @@ bitAnd = unsafeAggregate "bit_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
+--   expression :: Expression db params ('Grouped bys) '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
 --   expression = bitOr #col
 -- in printSQL expression
 -- :}
@@ -1466,7 +1466,7 @@ bitOr = unsafeAggregate "bit_or"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
+--   expression :: Expression db params ('Grouped bys) '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
 --   expression = bitAndDistinct #col
 -- in printSQL expression
 -- :}
@@ -1480,7 +1480,7 @@ bitAndDistinct = unsafeAggregateDistinct "bit_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
 --   expression = bitOrDistinct #col
 -- in printSQL expression
 -- :}
@@ -1494,7 +1494,7 @@ bitOrDistinct = unsafeAggregateDistinct "bit_or"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
 --   expression = boolAnd #col
 -- in printSQL expression
 -- :}
@@ -1507,7 +1507,7 @@ boolAnd = unsafeAggregate "bool_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
 --   expression = boolOr #col
 -- in printSQL expression
 -- :}
@@ -1520,7 +1520,7 @@ boolOr = unsafeAggregate "bool_or"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
 --   expression = boolAndDistinct #col
 -- in printSQL expression
 -- :}
@@ -1533,7 +1533,7 @@ boolAndDistinct = unsafeAggregateDistinct "bool_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
 --   expression = boolOrDistinct #col
 -- in printSQL expression
 -- :}
@@ -1554,7 +1554,7 @@ countStar = UnsafeExpression $ "count(*)"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity ty]] (Grouped bys) params ('NotNull 'PGint8)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
 --   expression = count #col
 -- in printSQL expression
 -- :}
@@ -1567,7 +1567,7 @@ count = unsafeAggregate "count"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity ty]] (Grouped bys) params ('NotNull 'PGint8)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
 --   expression = countDistinct #col
 -- in printSQL expression
 -- :}
@@ -1582,7 +1582,7 @@ countDistinct = unsafeAggregateDistinct "count"
 --
 -- >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
 --   expression = every #col
 -- in printSQL expression
 -- :}
@@ -1597,7 +1597,7 @@ every = unsafeAggregate "every"
 --
 -- >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
 --   expression = everyDistinct #col
 -- in printSQL expression
 -- :}
