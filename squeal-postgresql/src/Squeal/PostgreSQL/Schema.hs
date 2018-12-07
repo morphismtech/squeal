@@ -93,6 +93,7 @@ module Squeal.PostgreSQL.Schema
     -- * Grouping
   , Grouping (..)
   , GroupedBy
+  , Aggregatable
     -- * Aligned lists
   , AlignedList (..)
   , single
@@ -350,6 +351,12 @@ type family TableToRow (table :: TableType) :: RowType where
 data Grouping
   = Ungrouped -- ^ no aggregation permitted
   | Grouped [(Symbol,Symbol)] -- ^ aggregation required for any column which is not grouped
+  | Framed
+
+type family Aggregatable (grp :: Grouping) :: Constraint where
+  Aggregatable 'Ungrouped = TypeError ('Text "Non-aggregate expression")
+  Aggregatable ('Grouped bys) = ()
+  Aggregatable 'Framed = ()
 
 {- | A `GroupedBy` constraint indicates that a table qualified column is
 a member of the auxiliary namespace created by @GROUP BY@ clauses and thus,

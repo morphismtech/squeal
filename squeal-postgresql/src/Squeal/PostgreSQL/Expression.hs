@@ -143,6 +143,10 @@ module Squeal.PostgreSQL.Expression
   , count, countDistinct
   , every, everyDistinct
   , max_, maxDistinct, min_, minDistinct
+    -- * Window functions
+  , over
+  , partitionBy
+  , rank
     -- * Sorting
   , SortExpression (..)
   , renderSortExpression
@@ -1627,18 +1631,54 @@ minDistinct = unsafeAggregateDistinct "min"
 window functions
 -----------------------------------------}
 
+{- |
+:{
+let
+  expr :: Expression db '["tab" ::: '["a" ::: ty]] 'Ungrouped params ('NotNull 'PGint8)
+  expr = rank `over` (partitionBy (#a :* Nil))
+in
+  printSQL expr
+:}
+rank() OVER (PARTITION BY "a")
+-}
+rank :: Expression db from 'Framed params ('NotNull 'PGint8)
+rank = UnsafeExpression "rank()"
+
 over
-  :: WindowFunction columns ty
-  -> WindowDefinition db from grp params columns
+  :: Aggregatable agg
+  => Expression db from agg params ty
+  -> WindowDefinition db from grp params
   -> Expression db from grp params ty
-over = undefined
+over expr windef = UnsafeExpression $
+  renderExpression expr <+> "OVER"
+  <+> parenthesized (renderWindowDefinition windef)
 
-data WindowFunction columns ty
+data WindowDefinition db from grp params where
+  WindowDefinition
+    :: SListI bys
+    => NP (Expression db from grp params) bys
+    -> [SortExpression db from grp params]
+    -> WindowDefinition db from grp params
 
-data WindowDefinition db from grp params columns = WindowDefinition
-  { windowPartitionByClause :: NP (Expression db from grp params) columns
-  , windowOrderByClause :: [SortExpression db from grp params]
-  }
+renderWindowDefinition
+  :: WindowDefinition db from grp params
+  -> ByteString
+renderWindowDefinition (WindowDefinition part ord) =
+  renderPartitionByClause part <> renderOrderByClause ord
+  where
+    renderPartitionByClause = \case
+      Nil -> ""
+      parts -> "PARTITION" <+> "BY" <+> renderCommaSeparated renderExpression parts
+    renderOrderByClause = \case
+      [] -> ""
+      srts -> " ORDER" <+> "BY"
+        <+> commaSeparated (renderSortExpression <$> srts)
+
+partitionBy
+  :: SListI bys
+  => NP (Expression db from grp params) bys
+  -> WindowDefinition db from grp params
+partitionBy bys = WindowDefinition bys []
 
 {-----------------------------------------
 sort expressions
