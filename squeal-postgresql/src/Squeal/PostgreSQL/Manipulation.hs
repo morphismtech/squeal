@@ -43,9 +43,6 @@ module Squeal.PostgreSQL.Manipulation
     -- * Insert
   , insertInto
   , insertInto_
-  , renderConflictClause
-  , renderConflictTarget
-  , renderConflictAction
     -- * Update
   , update
   , update_
@@ -206,14 +203,14 @@ instance RenderSQL (Manipulation db params columns) where
 instance With Manipulation where
   with Done manip = manip
   with (cte :>> ctes) manip = UnsafeManipulation $
-    "WITH" <+> renderCommonTableExpressions renderManipulation cte ctes
-    <+> renderManipulation manip
+    "WITH" <+> renderCommonTableExpressions renderSQL cte ctes
+    <+> renderSQL manip
 
 -- | Convert a `Query` into a `Manipulation`.
 queryStatement
   :: Query db params columns
   -> Manipulation db params columns
-queryStatement q = UnsafeManipulation $ renderQuery q
+queryStatement q = UnsafeManipulation $ renderSQL q
 
 {-----------------------------------------
 INSERT statements
@@ -241,8 +238,8 @@ insertInto
   -> Manipulation db params row1
 insertInto tab qry conflict ret = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderSQL tab
-  <+> renderQueryClause qry
-  <> renderConflictClause conflict
+  <+> renderSQL qry
+  <> renderSQL conflict
   <> renderSQL ret
 
 insertInto_
@@ -274,39 +271,37 @@ data QueryClause db params columns where
     => Query db params row
     -> QueryClause db params columns
 
-renderQueryClause
-  :: QueryClause db params columns
-  -> ByteString
-renderQueryClause = \case
-  Values row0 rows ->
-    parenthesized (renderCommaSeparated renderSQLPart row0)
-    <+> "VALUES"
-    <+> commaSeparated
-          ( parenthesized
-          . renderCommaSeparated renderValuePart <$> row0 : rows )
-  Select row0 tab ->
-    parenthesized (renderCommaSeparatedMaybe renderSQLPartMaybe row0)
-    <+> "SELECT"
-    <+> renderCommaSeparatedMaybe renderValuePartMaybe row0
-    <+> renderTableExpression tab
-  Subquery qry -> renderQuery qry
-  where
-    renderSQLPartMaybe, renderValuePartMaybe
-      :: ColumnExpression db params grp from column -> Maybe ByteString
-    renderSQLPartMaybe = \case
-      DefaultAs _ -> Nothing
-      Specific (_ `As` name) -> Just $ renderSQL name
-    renderValuePartMaybe = \case
-      DefaultAs _ -> Nothing
-      Specific (value `As` _) -> Just $ renderExpression value
-    renderSQLPart, renderValuePart
-      :: ColumnExpression db params grp from column -> ByteString
-    renderSQLPart = \case
-      DefaultAs name -> renderSQL name
-      Specific (_ `As` name) -> renderSQL name
-    renderValuePart = \case
-      DefaultAs _ -> "DEFAULT"
-      Specific (value `As` _) -> renderExpression value
+instance RenderSQL (QueryClause db params columns) where
+  renderSQL = \case
+    Values row0 rows ->
+      parenthesized (renderCommaSeparated renderSQLPart row0)
+      <+> "VALUES"
+      <+> commaSeparated
+            ( parenthesized
+            . renderCommaSeparated renderValuePart <$> row0 : rows )
+    Select row0 tab ->
+      parenthesized (renderCommaSeparatedMaybe renderSQLPartMaybe row0)
+      <+> "SELECT"
+      <+> renderCommaSeparatedMaybe renderValuePartMaybe row0
+      <+> renderSQL tab
+    Subquery qry -> renderQuery qry
+    where
+      renderSQLPartMaybe, renderValuePartMaybe
+        :: ColumnExpression db params grp from column -> Maybe ByteString
+      renderSQLPartMaybe = \case
+        DefaultAs _ -> Nothing
+        Specific (_ `As` name) -> Just $ renderSQL name
+      renderValuePartMaybe = \case
+        DefaultAs _ -> Nothing
+        Specific (value `As` _) -> Just $ renderExpression value
+      renderSQLPart, renderValuePart
+        :: ColumnExpression db params grp from column -> ByteString
+      renderSQLPart = \case
+        DefaultAs name -> renderSQL name
+        Specific (_ `As` name) -> renderSQL name
+      renderValuePart = \case
+        DefaultAs _ -> "DEFAULT"
+        Specific (value `As` _) -> renderExpression value
 
 pattern Values_
   :: SOP.SListI columns
@@ -389,14 +384,12 @@ instance
     (NP (ColumnExpression db params ('Grouped bys) from) columns) where
       tab ! col = tab ! col :* Nil
 
-renderColumnExpression
-  :: ColumnExpression db params grp from column
-  -> ByteString
-renderColumnExpression = \case
-  DefaultAs col ->
-    renderSQL col <+> "=" <+> "DEFAULT"
-  Specific (expression `As` col) ->
-    renderSQL col <+> "=" <+> renderExpression expression
+instance RenderSQL (ColumnExpression db params grp from column) where
+  renderSQL = \case
+    DefaultAs col ->
+      renderSQL col <+> "=" <+> "DEFAULT"
+    Specific (expression `As` col) ->
+      renderSQL col <+> "=" <+> renderSQL expression
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
@@ -435,14 +428,12 @@ data ConflictClause tab db params table where
     -> ConflictClause tab db params (constraints :=> columns)
 
 -- | Render a `ConflictClause`.
-renderConflictClause
-  :: SOP.SListI (TableToColumns table)
-  => ConflictClause tab db params table
-  -> ByteString
-renderConflictClause = \case
-  OnConflictDoRaise -> ""
-  OnConflict target action -> " ON CONFLICT"
-    <+> renderConflictTarget target <+> renderConflictAction action
+instance SOP.SListI (TableToColumns table)
+  => RenderSQL (ConflictClause tab db params table) where
+    renderSQL = \case
+      OnConflictDoRaise -> ""
+      OnConflict target action -> " ON CONFLICT"
+        <+> renderSQL target <+> renderSQL action
 
 data ConflictAction tab db params columns where
   DoNothing :: ConflictAction tab db params columns
@@ -456,17 +447,15 @@ data ConflictAction tab db params columns where
     -> [Condition db params 'Ungrouped '[tab ::: row, "excluded" ::: row]]
     -> ConflictAction tab db params columns
 
-renderConflictAction
-  :: ConflictAction tab db params columns
-  -> ByteString
-renderConflictAction = \case
-  DoNothing -> "DO NOTHING"
-  DoUpdate updates whs'
-    -> "DO UPDATE SET"
-      <+> renderCommaSeparated renderColumnExpression updates
-      <> case whs' of
-        [] -> ""
-        wh:whs -> " WHERE" <+> renderExpression (foldr (.&&) wh whs)
+instance RenderSQL (ConflictAction tab db params columns) where
+  renderSQL = \case
+    DoNothing -> "DO NOTHING"
+    DoUpdate updates whs'
+      -> "DO UPDATE SET"
+        <+> renderCommaSeparated renderSQL updates
+        <> case whs' of
+          [] -> ""
+          wh:whs -> " WHERE" <+> renderSQL (foldr (.&&) wh whs)
 
 -- | A `ConflictTarget` specifies the constraint violation that triggers a
 -- `ConflictAction`.
@@ -477,11 +466,9 @@ data ConflictTarget constraints where
     -> ConflictTarget constraints
 
 -- | Render a `ConflictTarget`
-renderConflictTarget
-  :: ConflictTarget constraints
-  -> ByteString
-renderConflictTarget (OnConstraint con) =
-  "ON" <+> "CONSTRAINT" <+> renderSQL con
+instance RenderSQL (ConflictTarget constraints) where
+  renderSQL (OnConstraint con) =
+    "ON" <+> "CONSTRAINT" <+> renderSQL con
 
 {-----------------------------------------
 UPDATE statements
@@ -510,8 +497,8 @@ update tab columns wh returning = UnsafeManipulation $
   "UPDATE"
   <+> renderSQL tab
   <+> "SET"
-  <+> renderCommaSeparated renderColumnExpression columns
-  <+> "WHERE" <+> renderExpression wh
+  <+> renderCommaSeparated renderSQL columns
+  <+> "WHERE" <+> renderSQL wh
   <> renderSQL returning
 
 -- | Update a row returning `Nil`.
@@ -561,8 +548,8 @@ deleteFrom tab using wh returning = UnsafeManipulation $
   <+> renderSQL tab
   <> case using of
     NoUsing -> ""
-    Using tables -> " USING" <+> renderFromClause tables
-  <+> "WHERE" <+> renderExpression wh
+    Using from -> " USING" <+> renderSQL from
+  <+> "WHERE" <+> renderSQL wh
   <> renderSQL returning
 
 -- | Delete rows returning `Nil`.
@@ -591,4 +578,4 @@ also
   -- ^ left
   -> FromClause schema params (Join left right)
 also right left = UnsafeFromClause $
-  renderFromClause left <> "," <+> renderFromClause right
+  renderSQL left <> "," <+> renderSQL right

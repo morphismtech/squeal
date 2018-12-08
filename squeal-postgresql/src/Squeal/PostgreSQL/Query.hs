@@ -69,7 +69,6 @@ module Squeal.PostgreSQL.Query
   , jsonbToRecordSet
     -- * Table Expressions
   , TableExpression (..)
-  , renderTableExpression
   , from
   , where_
   , groupBy
@@ -90,7 +89,6 @@ module Squeal.PostgreSQL.Query
   , fullOuterJoin
     -- * Grouping
   , By (..)
-  , renderBy
   , GroupByClause (..)
   , HavingClause (..)
     -- * Sorting
@@ -329,9 +327,9 @@ union
   -> Query db params columns
   -> Query db params columns
 q1 `union` q2 = UnsafeQuery $
-  parenthesized (renderQuery q1)
+  parenthesized (renderSQL q1)
   <+> "UNION"
-  <+> parenthesized (renderQuery q2)
+  <+> parenthesized (renderSQL q2)
 
 -- | The results of two queries can be combined using the set operation
 -- `unionAll`, the disjoint union. Duplicate rows are retained.
@@ -340,9 +338,9 @@ unionAll
   -> Query db params columns
   -> Query db params columns
 q1 `unionAll` q2 = UnsafeQuery $
-  parenthesized (renderQuery q1)
+  parenthesized (renderSQL q1)
   <+> "UNION" <+> "ALL"
-  <+> parenthesized (renderQuery q2)
+  <+> parenthesized (renderSQL q2)
 
 -- | The results of two queries can be combined using the set operation
 -- `intersect`, the intersection. Duplicate rows are eliminated.
@@ -351,9 +349,9 @@ intersect
   -> Query db params columns
   -> Query db params columns
 q1 `intersect` q2 = UnsafeQuery $
-  parenthesized (renderQuery q1)
+  parenthesized (renderSQL q1)
   <+> "INTERSECT"
-  <+> parenthesized (renderQuery q2)
+  <+> parenthesized (renderSQL q2)
 
 -- | The results of two queries can be combined using the set operation
 -- `intersectAll`, the intersection. Duplicate rows are retained.
@@ -362,9 +360,9 @@ intersectAll
   -> Query db params columns
   -> Query db params columns
 q1 `intersectAll` q2 = UnsafeQuery $
-  parenthesized (renderQuery q1)
+  parenthesized (renderSQL q1)
   <+> "INTERSECT" <+> "ALL"
-  <+> parenthesized (renderQuery q2)
+  <+> parenthesized (renderSQL q2)
 
 -- | The results of two queries can be combined using the set operation
 -- `except`, the set difference. Duplicate rows are eliminated.
@@ -373,9 +371,9 @@ except
   -> Query db params columns
   -> Query db params columns
 q1 `except` q2 = UnsafeQuery $
-  parenthesized (renderQuery q1)
+  parenthesized (renderSQL q1)
   <+> "EXCEPT"
-  <+> parenthesized (renderQuery q2)
+  <+> parenthesized (renderSQL q2)
 
 -- | The results of two queries can be combined using the set operation
 -- `exceptAll`, the set difference. Duplicate rows are retained.
@@ -384,9 +382,9 @@ exceptAll
   -> Query db params columns
   -> Query db params columns
 q1 `exceptAll` q2 = UnsafeQuery $
-  parenthesized (renderQuery q1)
+  parenthesized (renderSQL q1)
   <+> "EXCEPT" <+> "ALL"
-  <+> parenthesized (renderQuery q2)
+  <+> parenthesized (renderSQL q2)
 
 {-----------------------------------------
 SELECT queries
@@ -456,7 +454,7 @@ select
 select selection tabexpr = UnsafeQuery $
   "SELECT"
   <+> renderSQL selection
-  <+> renderTableExpression tabexpr
+  <+> renderSQL tabexpr
 
 select_
   :: (SListI row, row ~ (x ': xs))
@@ -477,7 +475,7 @@ selectDistinct
 selectDistinct selection tabexpr = UnsafeQuery $
   "SELECT DISTINCT"
   <+> renderSQL selection
-  <+> renderTableExpression tabexpr
+  <+> renderSQL tabexpr
 
 selectDistinct_
   :: (SListI columns, columns ~ (col ': cols))
@@ -511,11 +509,11 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
         ( parenthesized
         . renderCommaSeparated renderValuePart <$> rw:rws )
     ) <+> "AS t"
-  <+> parenthesized (renderCommaSeparated renderSQLPart rw)
+  <+> parenthesized (renderCommaSeparated renderAliasPart rw)
   where
-    renderSQLPart, renderValuePart
+    renderAliasPart, renderValuePart
       :: Aliased (Expression db params 'Ungrouped '[] ) ty -> ByteString
-    renderSQLPart (_ `As` name) = renderSQL name
+    renderAliasPart (_ `As` name) = renderSQL name
     renderValuePart (value `As` _) = renderSQL value
 
 -- | `values_` computes a row value or set of row values
@@ -585,34 +583,32 @@ data TableExpression
     }
 
 -- | Render a `TableExpression`
-renderTableExpression
-  :: TableExpression db params grp from
-  -> ByteString
-renderTableExpression
-  (TableExpression frm' whs' grps' hvs' srts' lims' offs') = mconcat
-    [ "FROM ", renderFromClause frm'
-    , renderWheres whs'
-    , renderSQL grps'
-    , renderSQL hvs'
-    , renderOrderByClause srts'
-    , renderLimits lims'
-    , renderOffsets offs'
-    ]
-    where
-      renderWheres = \case
-        [] -> ""
-        wh:[] -> " WHERE" <+> renderSQL wh
-        wh:whs -> " WHERE" <+> renderSQL (foldr (.&&) wh whs)
-      renderOrderByClause = \case
-        [] -> ""
-        srts -> " ORDER BY"
-          <+> commaSeparated (renderSQL <$> srts)
-      renderLimits = \case
-        [] -> ""
-        lims -> " LIMIT" <+> fromString (show (minimum lims))
-      renderOffsets = \case
-        [] -> ""
-        offs -> " OFFSET" <+> fromString (show (sum offs))
+instance RenderSQL (TableExpression db params grp from) where
+  renderSQL
+    (TableExpression frm' whs' grps' hvs' srts' lims' offs') = mconcat
+      [ "FROM ", renderSQL frm'
+      , renderWheres whs'
+      , renderSQL grps'
+      , renderSQL hvs'
+      , renderOrderByClause srts'
+      , renderLimits lims'
+      , renderOffsets offs'
+      ]
+      where
+        renderWheres = \case
+          [] -> ""
+          wh:[] -> " WHERE" <+> renderSQL wh
+          wh:whs -> " WHERE" <+> renderSQL (foldr (.&&) wh whs)
+        renderOrderByClause = \case
+          [] -> ""
+          srts -> " ORDER BY"
+            <+> commaSeparated (renderSQL <$> srts)
+        renderLimits = \case
+          [] -> ""
+          lims -> " LIMIT" <+> fromString (show (minimum lims))
+        renderOffsets = \case
+          [] -> ""
+          offs -> " OFFSET" <+> fromString (show (sum offs))
 
 -- | A `from` generates a `TableExpression` from a table reference that can be
 -- a table name, or a derived table such as a subquery, a JOIN construct,
@@ -835,6 +831,8 @@ as a subquery, a @JOIN@ construct, or complex combinations of these.
 newtype FromClause db params from
   = UnsafeFromClause { renderFromClause :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
+instance RenderSQL (FromClause db params from) where
+  renderSQL = renderFromClause
 
 -- | A real `table` is a table from the database.
 table
@@ -878,7 +876,7 @@ crossJoin
   -- ^ left
   -> FromClause db params (Join left right)
 crossJoin right left = UnsafeFromClause $
-  renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
+  renderSQL left <+> "CROSS JOIN" <+> renderSQL right
 
 {- | @left & innerJoin right on@. The joined table is filtered by
 the @on@ condition.
@@ -892,7 +890,7 @@ innerJoin
   -- ^ left
   -> FromClause db params (Join left right)
 innerJoin right on left = UnsafeFromClause $
-  renderFromClause left <+> "INNER JOIN" <+> renderFromClause right
+  renderSQL left <+> "INNER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
 {- | @left & leftOuterJoin right on@. First, an inner join is performed.
@@ -909,7 +907,7 @@ leftOuterJoin
   -- ^ left
   -> FromClause db params (Join left (NullifyFrom right))
 leftOuterJoin right on left = UnsafeFromClause $
-  renderFromClause left <+> "LEFT OUTER JOIN" <+> renderFromClause right
+  renderSQL left <+> "LEFT OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
 {- | @left & rightOuterJoin right on@. First, an inner join is performed.
@@ -927,7 +925,7 @@ rightOuterJoin
   -- ^ left
   -> FromClause db params (Join (NullifyFrom left) right)
 rightOuterJoin right on left = UnsafeFromClause $
-  renderFromClause left <+> "RIGHT OUTER JOIN" <+> renderFromClause right
+  renderSQL left <+> "RIGHT OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
 {- | @left & fullOuterJoin right on@. First, an inner join is performed.
@@ -947,7 +945,7 @@ fullOuterJoin
   -> FromClause db params
       (Join (NullifyFrom left) (NullifyFrom right))
 fullOuterJoin right on left = UnsafeFromClause $
-  renderFromClause left <+> "FULL OUTER JOIN" <+> renderFromClause right
+  renderSQL left <+> "FULL OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
 {-----------------------------------------
@@ -974,6 +972,10 @@ data By
 deriving instance Show (By from by)
 deriving instance Eq (By from by)
 deriving instance Ord (By from by)
+instance RenderSQL (By from by) where
+  renderSQL = \case
+    By1 column -> renderSQL column
+    By2 rel column -> renderSQL rel <> "." <> renderSQL column
 
 instance (HasUnique rel rels cols, Has col cols ty, by ~ '(rel, col))
   => IsLabel col (By rels by) where fromLabel = By1 fromLabel
@@ -984,12 +986,6 @@ instance (Has rel rels cols, Has col cols ty, by ~ '(rel, col))
 instance (Has rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
   => IsQualified rel col (NP (By rels) bys) where
     rel ! col = By2 rel col :* Nil
-
--- | Renders a `By`.
-renderBy :: By from by -> ByteString
-renderBy = \case
-  By1 column -> renderSQL column
-  By2 rel column -> renderSQL rel <> "." <> renderSQL column
 
 -- | A `GroupByClause` indicates the `Grouping` of a `TableExpression`.
 -- A `NoGroups` indicates `Ungrouped` while a `Group` indicates `Grouped`.
@@ -1009,7 +1005,7 @@ instance RenderSQL (GroupByClause grp from) where
   renderSQL = \case
     NoGroups -> ""
     Group Nil -> ""
-    Group bys -> " GROUP BY" <+> renderCommaSeparated renderBy bys
+    Group bys -> " GROUP BY" <+> renderCommaSeparated renderSQL bys
 
 -- | A `HavingClause` is used to eliminate groups that are not of interest.
 -- An `Ungrouped` `TableExpression` may only use `NoHaving` while a `Grouped`
@@ -1083,7 +1079,7 @@ unsafeSubqueryExpression
   -> Query db params '[alias ::: ty]
   -> Expression db params grp from (nullity 'PGbool)
 unsafeSubqueryExpression op x q = UnsafeExpression $
-  renderSQL x <+> op <+> parenthesized (renderQuery q)
+  renderSQL x <+> op <+> parenthesized (renderSQL q)
 
 unsafeRowSubqueryExpression
   :: SListI row
@@ -1092,7 +1088,7 @@ unsafeRowSubqueryExpression
   -> Query db params row
   -> Expression db params grp from (nullity 'PGbool)
 unsafeRowSubqueryExpression op xs q = UnsafeExpression $
-  renderSQL (row xs) <+> op <+> parenthesized (renderQuery q)
+  renderSQL (row xs) <+> op <+> parenthesized (renderSQL q)
 
 -- | The right-hand side is a sub`Query`, which must return exactly one column.
 -- The left-hand expression is evaluated and compared to each row of the
@@ -1404,5 +1400,5 @@ class With statement where
 instance With Query where
   with Done query = query
   with (cte :>> ctes) query = UnsafeQuery $
-    "WITH" <+> renderCommonTableExpressions renderQuery cte ctes
-      <+> renderQuery query
+    "WITH" <+> renderCommonTableExpressions renderSQL cte ctes
+      <+> renderSQL query
