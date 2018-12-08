@@ -30,7 +30,7 @@ Squeal queries.
 
 module Squeal.PostgreSQL.Query
   ( -- * Queries
-    Query (UnsafeQuery, renderQuery)
+    Query (..)
     -- ** Select
   , select
   , select_
@@ -48,7 +48,7 @@ module Squeal.PostgreSQL.Query
   , except
   , exceptAll
     -- ** With
-  , With (with)
+  , With (..)
   , CommonTableExpression (..)
   , renderCommonTableExpression
   , renderCommonTableExpressions
@@ -89,12 +89,10 @@ module Squeal.PostgreSQL.Query
   , rightOuterJoin
   , fullOuterJoin
     -- * Grouping
-  , By (By1, By2)
+  , By (..)
   , renderBy
-  , GroupByClause (NoGroups, Group)
-  , renderGroupByClause
-  , HavingClause (NoHaving, Having)
-  , renderHavingClause
+  , GroupByClause (..)
+  , HavingClause (..)
     -- * Sorting
   , SortExpression (..)
     -- * Subquery Expressions
@@ -594,8 +592,8 @@ renderTableExpression
   (TableExpression frm' whs' grps' hvs' srts' lims' offs') = mconcat
     [ "FROM ", renderFromClause frm'
     , renderWheres whs'
-    , renderGroupByClause grps'
-    , renderHavingClause hvs'
+    , renderSQL grps'
+    , renderSQL hvs'
     , renderOrderByClause srts'
     , renderLimits lims'
     , renderOffsets offs'
@@ -1007,11 +1005,11 @@ data GroupByClause grp from where
     -> GroupByClause ('Grouped bys) from
 
 -- | Renders a `GroupByClause`.
-renderGroupByClause :: GroupByClause grp from -> ByteString
-renderGroupByClause = \case
-  NoGroups -> ""
-  Group Nil -> ""
-  Group bys -> " GROUP BY" <+> renderCommaSeparated renderBy bys
+instance RenderSQL (GroupByClause grp from) where
+  renderSQL = \case
+    NoGroups -> ""
+    Group Nil -> ""
+    Group bys -> " GROUP BY" <+> renderCommaSeparated renderBy bys
 
 -- | A `HavingClause` is used to eliminate groups that are not of interest.
 -- An `Ungrouped` `TableExpression` may only use `NoHaving` while a `Grouped`
@@ -1027,12 +1025,12 @@ deriving instance Eq (HavingClause db params grp from)
 deriving instance Ord (HavingClause db params grp from)
 
 -- | Render a `HavingClause`.
-renderHavingClause :: HavingClause db params grp from -> ByteString
-renderHavingClause = \case
-  NoHaving -> ""
-  Having [] -> ""
-  Having conditions ->
-    " HAVING" <+> commaSeparated (renderSQL <$> conditions)
+instance RenderSQL (HavingClause db params grp from) where
+  renderSQL = \case
+    NoHaving -> ""
+    Having [] -> ""
+    Having conditions ->
+      " HAVING" <+> commaSeparated (renderSQL <$> conditions)
 
 {-----------------------------------------
 Sorting
