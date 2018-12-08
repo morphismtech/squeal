@@ -548,7 +548,7 @@ deleteFrom tab using wh returning = UnsafeManipulation $
   <+> renderSQL tab
   <> case using of
     NoUsing -> ""
-    Using from -> " USING" <+> renderSQL from
+    Using tables -> " USING" <+> renderSQL tables
   <+> "WHERE" <+> renderSQL wh
   <> renderSQL returning
 
