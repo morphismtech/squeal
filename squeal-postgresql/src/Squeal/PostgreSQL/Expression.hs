@@ -145,6 +145,7 @@ module Squeal.PostgreSQL.Expression
   , max_, maxDistinct, min_, minDistinct
     -- * Window functions
   , WindowExpression (..)
+  , WindowDefinition (..)
   , partitionBy
   , rank
     -- * Sorting
