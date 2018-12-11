@@ -1677,11 +1677,11 @@ percentRank = UnsafeExpression "percent_rank()"
 
 {- | cumulative distribution: (number of partition rows
 preceding or peer with current row) / total partition rows
->>> printSQL cumDist
+>>> printSQL cumeDist
 cume_dist()
 -}
-cumDist :: Expression db from 'Framed params ('NotNull 'PGfloat8)
-cumDist = UnsafeExpression "cume_dist()"
+cumeDist :: Expression db from 'Framed params ('NotNull 'PGfloat8)
+cumeDist = UnsafeExpression "cume_dist()"
 
 data WindowExpression db params grp from ty where
   Over
