@@ -18,7 +18,9 @@ Squeal queries.
   , LambdaCase
   , MultiParamTypeClasses
   , OverloadedStrings
+  , ScopedTypeVariables
   , StandaloneDeriving
+  , TypeApplications
   , TypeFamilies
   , TypeInType
   , TypeOperators
@@ -28,14 +30,13 @@ Squeal queries.
 
 module Squeal.PostgreSQL.Query
   ( -- * Queries
-    Query (UnsafeQuery, renderQuery)
+    Query (..)
     -- ** Select
   , select
+  , select_
   , selectDistinct
-  , selectStar
-  , selectDistinctStar
-  , selectDotStar
-  , selectDistinctDotStar
+  , selectDistinct_
+  , Selection (..)
     -- ** Values
   , values
   , values_
@@ -47,7 +48,7 @@ module Squeal.PostgreSQL.Query
   , except
   , exceptAll
     -- ** With
-  , With (with)
+  , With (..)
   , CommonTableExpression (..)
   , renderCommonTableExpression
   , renderCommonTableExpressions
@@ -68,7 +69,6 @@ module Squeal.PostgreSQL.Query
   , jsonbToRecordSet
     -- * Table Expressions
   , TableExpression (..)
-  , renderTableExpression
   , from
   , where_
   , groupBy
@@ -87,12 +87,11 @@ module Squeal.PostgreSQL.Query
   , rightOuterJoin
   , fullOuterJoin
     -- * Grouping
-  , By (By1, By2)
-  , renderBy
-  , GroupByClause (NoGroups, Group)
-  , renderGroupByClause
-  , HavingClause (NoHaving, Having)
-  , renderHavingClause
+  , By (..)
+  , GroupByClause (..)
+  , HavingClause (..)
+    -- * Sorting
+  , SortExpression (..)
     -- * Subquery Expressions
   , in_
   , rowIn
@@ -146,7 +145,7 @@ simple query:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectStar (from (table #tab))
+  query = select Star (from (table #tab))
 in printSQL query
 :}
 SELECT * FROM "tab" AS "tab"
@@ -157,7 +156,7 @@ restricted query:
 let
   query :: Query (DBof (Public Schema)) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4]
   query =
-    select ((#col1 + #col2) `as` #sum :* #col1)
+    select_ ((#col1 + #col2) `as` #sum :* #col1)
       ( from (table #tab)
         & where_ (#col1 .> #col2)
         & where_ (#col2 .> 0) )
@@ -170,7 +169,7 @@ subquery:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectStar (from (subquery (selectStar (from (table #tab)) `as` #sub)))
+  query = select Star (from (subquery (select Star (from (table #tab)) `as` #sub)))
 in printSQL query
 :}
 SELECT * FROM (SELECT * FROM "tab" AS "tab") AS "sub"
@@ -180,7 +179,7 @@ limits and offsets:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectStar (from (table #tab) & limit 100 & offset 2 & limit 50 & offset 2)
+  query = select Star (from (table #tab) & limit 100 & offset 2 & limit 50 & offset 2)
 in printSQL query
 :}
 SELECT * FROM "tab" AS "tab" LIMIT 50 OFFSET 4
@@ -190,7 +189,7 @@ parameterized query:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[ 'NotNull 'PGint4] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectStar (from (table #tab) & where_ (#col1 .> param @1))
+  query = select Star (from (table #tab) & where_ (#col1 .> param @1))
 in printSQL query
 :}
 SELECT * FROM "tab" AS "tab" WHERE ("col1" > ($1 :: int4))
@@ -201,7 +200,7 @@ aggregation query:
 let
   query :: Query (DBof (Public Schema)) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4 ]
   query =
-    select (sum_ #col2 `as` #sum :* #col1)
+    select_ (sum_ #col2 `as` #sum :* #col1)
     ( from (table (#tab `as` #table1))
       & groupBy #col1
       & having (#col1 + sum_ #col2 .> 1) )
@@ -214,7 +213,7 @@ sorted query:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectStar (from (table #tab) & orderBy [#col1 & Asc])
+  query = select Star (from (table #tab) & orderBy [#col1 & Asc])
 in printSQL query
 :}
 SELECT * FROM "tab" AS "tab" ORDER BY "col1" ASC
@@ -256,7 +255,7 @@ let
      , "customer_name" ::: 'NotNull 'PGtext
      , "shipper_name" ::: 'NotNull 'PGtext
      ]
-  query = select
+  query = select_
     ( #o ! #price `as` #order_price :*
       #c ! #name `as` #customer_name :*
       #s ! #name `as` #shipper_name )
@@ -274,7 +273,7 @@ self-join:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectDotStar #t1 (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
+  query = select (#t1 & DotStar) (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
 in printSQL query
 :}
 SELECT "t1".* FROM "tab" AS "t1" CROSS JOIN "tab" AS "t2"
@@ -294,7 +293,7 @@ set operations:
 >>> :{
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  query = selectStar (from (table #tab)) `unionAll` selectStar (from (table #tab))
+  query = select Star (from (table #tab)) `unionAll` select Star (from (table #tab))
 in printSQL query
 :}
 (SELECT * FROM "tab" AS "tab") UNION ALL (SELECT * FROM "tab" AS "tab")
@@ -305,9 +304,9 @@ with queries:
 let
   query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
   query = with (
-    selectStar (from (table #tab)) `as` #cte1 :>>
-    selectStar (from (common #cte1)) `as` #cte2
-    ) (selectStar (from (common #cte2)))
+    select Star (from (table #tab)) `as` #cte1 :>>
+    select Star (from (common #cte1)) `as` #cte2
+    ) (select Star (from (common #cte2)))
 in printSQL query
 :}
 WITH "cte1" AS (SELECT * FROM "tab" AS "tab"), "cte2" AS (SELECT * FROM "cte1" AS "cte1") SELECT * FROM "cte2" AS "cte2"
@@ -327,9 +326,9 @@ union
   -> Query db params columns
   -> Query db params columns
 q1 `union` q2 = UnsafeQuery $
-  parenthesized (renderQuery q1)
+  parenthesized (renderSQL q1)
   <+> "UNION"
-  <+> parenthesized (renderQuery q2)
+  <+> parenthesized (renderSQL q2)
 
 -- | The results of two queries can be combined using the set operation
 -- `unionAll`, the disjoint union. Duplicate rows are retained.
@@ -338,9 +337,9 @@ unionAll
   -> Query db params columns
   -> Query db params columns
 q1 `unionAll` q2 = UnsafeQuery $
-  parenthesized (renderQuery q1)
+  parenthesized (renderSQL q1)
   <+> "UNION" <+> "ALL"
-  <+> parenthesized (renderQuery q2)
+  <+> parenthesized (renderSQL q2)
 
 -- | The results of two queries can be combined using the set operation
 -- `intersect`, the intersection. Duplicate rows are eliminated.
@@ -349,9 +348,9 @@ intersect
   -> Query db params columns
   -> Query db params columns
 q1 `intersect` q2 = UnsafeQuery $
-  parenthesized (renderQuery q1)
+  parenthesized (renderSQL q1)
   <+> "INTERSECT"
-  <+> parenthesized (renderQuery q2)
+  <+> parenthesized (renderSQL q2)
 
 -- | The results of two queries can be combined using the set operation
 -- `intersectAll`, the intersection. Duplicate rows are retained.
@@ -360,9 +359,9 @@ intersectAll
   -> Query db params columns
   -> Query db params columns
 q1 `intersectAll` q2 = UnsafeQuery $
-  parenthesized (renderQuery q1)
+  parenthesized (renderSQL q1)
   <+> "INTERSECT" <+> "ALL"
-  <+> parenthesized (renderQuery q2)
+  <+> parenthesized (renderSQL q2)
 
 -- | The results of two queries can be combined using the set operation
 -- `except`, the set difference. Duplicate rows are eliminated.
@@ -371,9 +370,9 @@ except
   -> Query db params columns
   -> Query db params columns
 q1 `except` q2 = UnsafeQuery $
-  parenthesized (renderQuery q1)
+  parenthesized (renderSQL q1)
   <+> "EXCEPT"
-  <+> parenthesized (renderQuery q2)
+  <+> parenthesized (renderSQL q2)
 
 -- | The results of two queries can be combined using the set operation
 -- `exceptAll`, the set difference. Duplicate rows are retained.
@@ -382,88 +381,116 @@ exceptAll
   -> Query db params columns
   -> Query db params columns
 q1 `exceptAll` q2 = UnsafeQuery $
-  parenthesized (renderQuery q1)
+  parenthesized (renderSQL q1)
   <+> "EXCEPT" <+> "ALL"
-  <+> parenthesized (renderQuery q2)
+  <+> parenthesized (renderSQL q2)
 
 {-----------------------------------------
 SELECT queries
 -----------------------------------------}
 
+data Selection db params grp from row where
+  List
+    :: SListI row
+    => NP (Aliased (Expression db params grp from)) row
+    -> Selection db params grp from row
+  Star
+    :: HasUnique tab from row
+    => Selection db params 'Ungrouped from row
+  DotStar
+    :: Has tab from row
+    => Alias tab
+    -> Selection db params 'Ungrouped from row
+  Also
+    :: Selection db params grp from right
+    -> Selection db params grp from left
+    -> Selection db params grp from (Join left right)
+  Window
+    :: SListI row
+    => NP (Aliased (WindowExpression db params grp from)) row
+    -> Selection db params grp from row
+instance (KnownSymbol col, row ~ '[col ::: ty])
+  => Aliasable col
+    (Expression db params grp from ty)
+    (Selection db params grp from row) where
+      expr `as` col = List (expr `as` col)
+instance (Has tab from row0, Has col row0 ty, row1 ~ '[col ::: ty])
+  => IsQualified tab col (Selection db params 'Ungrouped from row1) where
+    tab ! col = tab ! col `as` col
+instance
+  ( Has tab from row0
+  , Has col row0 ty
+  , row1 ~ '[col ::: ty]
+  , GroupedBy tab col bys )
+  => IsQualified tab col (Selection db params ('Grouped bys) from row1) where
+    tab ! col = tab ! col `as` col
+instance (HasUnique tab from row0, Has col row0 ty, row1 ~ '[col ::: ty])
+  => IsLabel col (Selection db params 'Ungrouped from row1) where
+    fromLabel = fromLabel @col `as` Alias
+instance
+  ( HasUnique tab from row0
+  , Has col row0 ty
+  , row1 ~ '[col ::: ty]
+  , GroupedBy tab col bys )
+  => IsLabel col (Selection db params ('Grouped bys) from row1) where
+    fromLabel = fromLabel @col `as` Alias
+
+instance RenderSQL (Selection db params grp from row) where
+  renderSQL = \case
+    List list -> renderCommaSeparated (renderAliased renderSQL) list
+    Star -> "*"
+    DotStar tab -> renderSQL tab <> ".*"
+    Also right left -> renderSQL left <> ", " <> renderSQL right
+    Window window -> renderCommaSeparated (renderAliased renderSQL) window
+
 -- | the `TableExpression` in the `select` command constructs an intermediate
 -- virtual table by possibly combining tables, views, eliminating rows,
 -- grouping, etc. This table is finally passed on to processing by
--- the select list. The select list determines which columns of
+-- the `Selection`. The `Selection` determines which columns of
 -- the intermediate table are actually output.
 select
-  :: (SListI columns, columns ~ (col ': cols))
-  => NP (Aliased (Expression db from grouping params)) columns
-  -- ^ select list
-  -> TableExpression db params from grouping
+  :: (SListI row, row ~ (x ': xs))
+  => Selection db params grp from row
+  -- ^ output columns
+  -> TableExpression db params grp from
   -- ^ intermediate virtual table
-  -> Query db params columns
-select list rels = UnsafeQuery $
+  -> Query db params row
+select selection tabexpr = UnsafeQuery $
   "SELECT"
-  <+> renderCommaSeparated (renderAliasedAs renderExpression) list
-  <+> renderTableExpression rels
+  <+> renderSQL selection
+  <+> renderSQL tabexpr
+
+select_
+  :: (SListI row, row ~ (x ': xs))
+  => NP (Aliased (Expression db params grp from)) row
+  -- ^ output columns
+  -> TableExpression db params grp from
+  -- ^ intermediate virtual table
+  -> Query db params row
+select_ list = select (List list)
 
 -- | After the select list has been processed, the result table can
 -- be subject to the elimination of duplicate rows using `selectDistinct`.
 selectDistinct
   :: (SListI columns, columns ~ (col ': cols))
-  => NP (Aliased (Expression db from 'Ungrouped params)) columns
-  -- ^ select list
-  -> TableExpression db params from 'Ungrouped
+  => Selection db params 'Ungrouped from columns
+  -- ^ output columns
+  -> TableExpression db params 'Ungrouped from
   -- ^ intermediate virtual table
   -> Query db params columns
-selectDistinct list rels = UnsafeQuery $
+selectDistinct selection tabexpr = UnsafeQuery $
   "SELECT DISTINCT"
-  <+> renderCommaSeparated (renderAliasedAs renderExpression) list
-  <+> renderTableExpression rels
+  <+> renderSQL selection
+  <+> renderSQL tabexpr
 
--- | The simplest kind of query is `selectStar` which emits all columns
--- that the table expression produces.
-selectStar
-  :: HasUnique table from columns
-  => TableExpression db params from 'Ungrouped
+selectDistinct_
+  :: (SListI columns, columns ~ (col ': cols))
+  => NP (Aliased (Expression db params 'Ungrouped from)) columns
+  -- ^ select list
+  -> TableExpression db params 'Ungrouped from
   -- ^ intermediate virtual table
   -> Query db params columns
-selectStar rels = UnsafeQuery $ "SELECT" <+> "*" <+> renderTableExpression rels
-
--- | A `selectDistinctStar` emits all columns that the table expression
--- produces and eliminates duplicate rows.
-selectDistinctStar
-  :: HasUnique table from columns
-  => TableExpression db params from 'Ungrouped
-  -- ^ intermediate virtual table
-  -> Query db params columns
-selectDistinctStar rels = UnsafeQuery $
-  "SELECT DISTINCT" <+> "*" <+> renderTableExpression rels
-
--- | When working with multiple tables, it can also be useful to ask
--- for all the columns of a particular table, using `selectDotStar`.
-selectDotStar
-  :: Has table from columns
-  => Alias table
-  -- ^ particular virtual subtable
-  -> TableExpression db params from 'Ungrouped
-  -- ^ intermediate virtual table
-  -> Query db params columns
-selectDotStar rel tab = UnsafeQuery $
-  "SELECT" <+> renderAlias rel <> ".*" <+> renderTableExpression tab
-
--- | A `selectDistinctDotStar` asks for all the columns of a particular table,
--- and eliminates duplicate rows.
-selectDistinctDotStar
-  :: Has table from columns
-  => Alias table
-  -- ^ particular virtual table
-  -> TableExpression db params from 'Ungrouped
-  -- ^ intermediate virtual table
-  -> Query db params columns
-selectDistinctDotStar rel tab = UnsafeQuery $
-  "SELECT DISTINCT" <+> renderAlias rel <> ".*"
-  <+> renderTableExpression tab
+selectDistinct_ list = select (List list)
 
 -- | `values` computes a row value or set of row values
 -- specified by value expressions. It is most commonly used
@@ -476,8 +503,8 @@ selectDistinctDotStar rel tab = UnsafeQuery $
 -- SELECT * FROM (VALUES (1, E'one')) AS t ("a", "b")
 values
   :: SListI cols
-  => NP (Aliased (Expression db '[] 'Ungrouped params)) cols
-  -> [NP (Aliased (Expression db '[] 'Ungrouped params)) cols]
+  => NP (Aliased (Expression db params 'Ungrouped '[] )) cols
+  -> [NP (Aliased (Expression db params 'Ungrouped '[] )) cols]
   -- ^ When more than one row is specified, all the rows must
   -- must have the same number of elements
   -> Query db params cols
@@ -491,15 +518,15 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
   <+> parenthesized (renderCommaSeparated renderAliasPart rw)
   where
     renderAliasPart, renderValuePart
-      :: Aliased (Expression db '[] 'Ungrouped params) ty -> ByteString
-    renderAliasPart (_ `As` name) = renderAlias name
-    renderValuePart (value `As` _) = renderExpression value
+      :: Aliased (Expression db params 'Ungrouped '[] ) ty -> ByteString
+    renderAliasPart (_ `As` name) = renderSQL name
+    renderValuePart (value `As` _) = renderSQL value
 
 -- | `values_` computes a row value or set of row values
 -- specified by value expressions.
 values_
   :: SListI cols
-  => NP (Aliased (Expression db '[] 'Ungrouped params)) cols
+  => NP (Aliased (Expression db params 'Ungrouped '[] )) cols
   -- ^ one row of values
   -> Query db params cols
 values_ rw = values rw []
@@ -517,13 +544,13 @@ Table Expressions
 data TableExpression
   (db :: DBType)
   (params :: [NullityType])
+  (grp :: Grouping)
   (from :: FromType)
-  (grouping :: Grouping)
     = TableExpression
     { fromClause :: FromClause db params from
     -- ^ A table reference that can be a table name, or a derived table such
     -- as a subquery, a @JOIN@ construct, or complex combinations of these.
-    , whereClause :: [Condition db from 'Ungrouped params]
+    , whereClause :: [Condition db params 'Ungrouped from]
     -- ^ optional search coditions, combined with `.&&`. After the processing
     -- of the `fromClause` is done, each row of the derived virtual table
     -- is checked against the search condition. If the result of the
@@ -532,20 +559,20 @@ data TableExpression
     -- at least one column of the table generated in the `fromClause`;
     -- this is not required, but otherwise the WHERE clause will
     -- be fairly useless.
-    , groupByClause :: GroupByClause from grouping
+    , groupByClause :: GroupByClause grp from
     -- ^ The `groupByClause` is used to group together those rows in a table
     -- that have the same values in all the columns listed. The order in which
     -- the columns are listed does not matter. The effect is to combine each
     -- set of rows having common values into one group row that represents all
     -- rows in the group. This is done to eliminate redundancy in the output
     -- and/or compute aggregates that apply to these groups.
-    , havingClause :: HavingClause db from grouping params
+    , havingClause :: HavingClause db params grp from
     -- ^ If a table has been grouped using `groupBy`, but only certain groups
     -- are of interest, the `havingClause` can be used, much like a
     -- `whereClause`, to eliminate groups from the result. Expressions in the
     -- `havingClause` can refer both to grouped expressions and to ungrouped
     -- expressions (which necessarily involve an aggregate function).
-    , orderByClause :: [SortExpression db from grouping params]
+    , orderByClause :: [SortExpression db params grp from]
     -- ^ The `orderByClause` is for optional sorting. When more than one
     -- `SortExpression` is specified, the later (right) values are used to sort
     -- rows that are equal according to the earlier (left) values.
@@ -562,34 +589,32 @@ data TableExpression
     }
 
 -- | Render a `TableExpression`
-renderTableExpression
-  :: TableExpression db params from grouping
-  -> ByteString
-renderTableExpression
-  (TableExpression frm' whs' grps' hvs' srts' lims' offs') = mconcat
-    [ "FROM ", renderFromClause frm'
-    , renderWheres whs'
-    , renderGroupByClause grps'
-    , renderHavingClause hvs'
-    , renderOrderByClause srts'
-    , renderLimits lims'
-    , renderOffsets offs'
-    ]
-    where
-      renderWheres = \case
-        [] -> ""
-        wh:[] -> " WHERE" <+> renderExpression wh
-        wh:whs -> " WHERE" <+> renderExpression (foldr (.&&) wh whs)
-      renderOrderByClause = \case
-        [] -> ""
-        srts -> " ORDER BY"
-          <+> commaSeparated (renderSortExpression <$> srts)
-      renderLimits = \case
-        [] -> ""
-        lims -> " LIMIT" <+> fromString (show (minimum lims))
-      renderOffsets = \case
-        [] -> ""
-        offs -> " OFFSET" <+> fromString (show (sum offs))
+instance RenderSQL (TableExpression db params grp from) where
+  renderSQL
+    (TableExpression frm' whs' grps' hvs' srts' lims' offs') = mconcat
+      [ "FROM ", renderSQL frm'
+      , renderWheres whs'
+      , renderSQL grps'
+      , renderSQL hvs'
+      , renderOrderByClause srts'
+      , renderLimits lims'
+      , renderOffsets offs'
+      ]
+      where
+        renderWheres = \case
+          [] -> ""
+          wh:[] -> " WHERE" <+> renderSQL wh
+          wh:whs -> " WHERE" <+> renderSQL (foldr (.&&) wh whs)
+        renderOrderByClause = \case
+          [] -> ""
+          srts -> " ORDER BY"
+            <+> commaSeparated (renderSQL <$> srts)
+        renderLimits = \case
+          [] -> ""
+          lims -> " LIMIT" <+> fromString (show (minimum lims))
+        renderOffsets = \case
+          [] -> ""
+          offs -> " OFFSET" <+> fromString (show (sum offs))
 
 -- | A `from` generates a `TableExpression` from a table reference that can be
 -- a table name, or a derived table such as a subquery, a JOIN construct,
@@ -598,15 +623,15 @@ renderTableExpression
 -- to match the left-to-right sequencing of their placement in SQL.
 from
   :: FromClause db params from -- ^ table reference
-  -> TableExpression db params from 'Ungrouped
+  -> TableExpression db params 'Ungrouped from
 from rels = TableExpression rels [] NoGroups NoHaving [] [] []
 
 -- | A `where_` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `whereClause`.
 where_
-  :: Condition db from 'Ungrouped params -- ^ filtering condition
-  -> TableExpression db params from grouping
-  -> TableExpression db params from grouping
+  :: Condition db params 'Ungrouped from -- ^ filtering condition
+  -> TableExpression db params grp from
+  -> TableExpression db params grp from
 where_ wh rels = rels {whereClause = wh : whereClause rels}
 
 -- | A `groupBy` is a transformation of `TableExpression`s which switches
@@ -615,8 +640,8 @@ where_ wh rels = rels {whereClause = wh : whereClause rels}
 groupBy
   :: SListI bys
   => NP (By from) bys -- ^ grouped columns
-  -> TableExpression db params from 'Ungrouped
-  -> TableExpression db params from ('Grouped bys)
+  -> TableExpression db params 'Ungrouped from
+  -> TableExpression db params ('Grouped bys) from
 groupBy bys rels = TableExpression
   { fromClause = fromClause rels
   , whereClause = whereClause rels
@@ -630,9 +655,9 @@ groupBy bys rels = TableExpression
 -- | A `having` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `havingClause`.
 having
-  :: Condition db from ('Grouped bys) params -- ^ having condition
-  -> TableExpression db params from ('Grouped bys)
-  -> TableExpression db params from ('Grouped bys)
+  :: Condition db params ('Grouped bys) from -- ^ having condition
+  -> TableExpression db params ('Grouped bys) from
+  -> TableExpression db params ('Grouped bys) from
 having hv rels = rels
   { havingClause = case havingClause rels of Having hvs -> Having (hv:hvs) }
 
@@ -645,16 +670,16 @@ instance OrderBy TableExpression where
 -- `limitClause`.
 limit
   :: Word64 -- ^ limit parameter
-  -> TableExpression db params from grouping
-  -> TableExpression db params from grouping
+  -> TableExpression db params grp from
+  -> TableExpression db params grp from
 limit lim rels = rels {limitClause = lim : limitClause rels}
 
 -- | An `offset` is an endomorphism of `TableExpression`s which adds to the
 -- `offsetClause`.
 offset
   :: Word64 -- ^ offset parameter
-  -> TableExpression db params from grouping
-  -> TableExpression db params from grouping
+  -> TableExpression db params grp from
+  -> TableExpression db params grp from
 offset off rels = rels {offsetClause = off : offsetClause rels}
 
 {-----------------------------------------
@@ -663,66 +688,66 @@ JSON stuff
 
 unsafeSetOfFunction
   :: ByteString
-  -> Expression db '[] 'Ungrouped params ty
+  -> Expression db params 'Ungrouped '[]  ty
   -> Query db params row
 unsafeSetOfFunction fun expr = UnsafeQuery $
-  "SELECT * FROM " <> fun <> "(" <> renderExpression expr <> ")"
+  "SELECT * FROM " <> fun <> "(" <> renderSQL expr <> ")"
 
 -- | Expands the outermost JSON object into a set of key/value pairs.
 jsonEach
-  :: Expression db '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
+  :: Expression db params 'Ungrouped '[]  (nullity 'PGjson) -- ^ json object
   -> Query db params
       '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]
 jsonEach = unsafeSetOfFunction "json_each"
 
 -- | Expands the outermost binary JSON object into a set of key/value pairs.
 jsonbEach
-  :: Expression db '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
+  :: Expression db params 'Ungrouped '[]  (nullity 'PGjsonb) -- ^ jsonb object
   -> Query db params
       '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjsonb]
 jsonbEach = unsafeSetOfFunction "jsonb_each"
 
 -- | Expands the outermost JSON object into a set of key/value pairs.
 jsonEachAsText
-  :: Expression db '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
+  :: Expression db params 'Ungrouped '[]  (nullity 'PGjson) -- ^ json object
   -> Query db params
       '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
 jsonEachAsText = unsafeSetOfFunction "json_each_text"
 
 -- | Expands the outermost binary JSON object into a set of key/value pairs.
 jsonbEachAsText
-  :: Expression db '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
+  :: Expression db params 'Ungrouped '[]  (nullity 'PGjsonb) -- ^ jsonb object
   -> Query db params
     '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
 jsonbEachAsText = unsafeSetOfFunction "jsonb_each_text"
 
 -- | Returns set of keys in the outermost JSON object.
 jsonObjectKeys
-  :: Expression db '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
+  :: Expression db params 'Ungrouped '[]  (nullity 'PGjson) -- ^ json object
   -> Query db params '["json_object_keys" ::: 'NotNull 'PGtext]
 jsonObjectKeys = unsafeSetOfFunction "json_object_keys"
 
 -- | Returns set of keys in the outermost JSON object.
 jsonbObjectKeys
-  :: Expression db '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
+  :: Expression db params 'Ungrouped '[]  (nullity 'PGjsonb) -- ^ jsonb object
   -> Query db params '["jsonb_object_keys" ::: 'NotNull 'PGtext]
 jsonbObjectKeys = unsafeSetOfFunction "jsonb_object_keys"
 
 unsafePopulateFunction
   :: ByteString
   -> TypeExpression schemas (nullity ('PGcomposite row))
-  -> Expression (commons :=> schemas) '[] 'Ungrouped params ty
+  -> Expression (commons :=> schemas) params 'Ungrouped '[]  ty
   -> Query (commons :=> schemas) params row
 unsafePopulateFunction fun ty expr = UnsafeQuery $
   "SELECT * FROM " <> fun <> "("
-    <> "null::" <> renderTypeExpression ty <> ", "
-    <> renderExpression expr <> ")"
+    <> "null::" <> renderSQL ty <> ", "
+    <> renderSQL expr <> ")"
 
 -- | Expands the JSON expression to a row whose columns match the record
 -- type defined by the given table.
 jsonPopulateRecord
   :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
+  -> Expression (commons :=> schemas) params 'Ungrouped '[]  (nullity 'PGjson) -- ^ json object
   -> Query (commons :=> schemas) params row
 jsonPopulateRecord = unsafePopulateFunction "json_populate_record"
 
@@ -730,7 +755,7 @@ jsonPopulateRecord = unsafePopulateFunction "json_populate_record"
 -- type defined by the given table.
 jsonbPopulateRecord
   :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
+  -> Expression (commons :=> schemas) params 'Ungrouped '[]  (nullity 'PGjsonb) -- ^ jsonb object
   -> Query (commons :=> schemas) params row
 jsonbPopulateRecord = unsafePopulateFunction "jsonb_populate_record"
 
@@ -738,7 +763,7 @@ jsonbPopulateRecord = unsafePopulateFunction "jsonb_populate_record"
 -- set of rows whose columns match the record type defined by the given table.
 jsonPopulateRecordSet
   :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjson) -- ^ json array
+  -> Expression (commons :=> schemas) params 'Ungrouped '[]  (nullity 'PGjson) -- ^ json array
   -> Query (commons :=> schemas) params row
 jsonPopulateRecordSet = unsafePopulateFunction "json_populate_record_set"
 
@@ -747,29 +772,29 @@ jsonPopulateRecordSet = unsafePopulateFunction "json_populate_record_set"
 -- table.
 jsonbPopulateRecordSet
   :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb array
+  -> Expression (commons :=> schemas) params 'Ungrouped '[]  (nullity 'PGjsonb) -- ^ jsonb array
   -> Query (commons :=> schemas) params row
 jsonbPopulateRecordSet = unsafePopulateFunction "jsonb_populate_record_set"
 
 unsafeRecordFunction
   :: (SListI record, json `In` PGJsonType)
   => ByteString
-  -> Expression (commons :=> schemas) '[] 'Ungrouped params (nullity json)
+  -> Expression (commons :=> schemas) params 'Ungrouped '[]  (nullity json)
   -> NP (Aliased (TypeExpression schemas)) record
   -> Query (commons :=> schemas) params record
 unsafeRecordFunction fun expr types = UnsafeQuery $
   "SELECT * FROM " <> fun <> "("
-    <> renderExpression expr <> ")"
+    <> renderSQL expr <> ")"
     <+> "AS" <+> "x" <> parenthesized (renderCommaSeparated renderTy types)
     where
       renderTy :: Aliased (TypeExpression db) ty -> ByteString
       renderTy (ty `As` alias) =
-        renderAlias alias <+> renderTypeExpression ty
+        renderSQL alias <+> renderSQL ty
 
 -- | Builds an arbitrary record from a JSON object.
 jsonToRecord
   :: SListI record
-  => Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjson) -- ^ json object
+  => Expression (commons :=> schemas) params 'Ungrouped '[]  (nullity 'PGjson) -- ^ json object
   -> NP (Aliased (TypeExpression schemas)) record -- ^ record types
   -> Query (commons :=> schemas) params record
 jsonToRecord = unsafeRecordFunction "json_to_record"
@@ -777,7 +802,7 @@ jsonToRecord = unsafeRecordFunction "json_to_record"
 -- | Builds an arbitrary record from a binary JSON object.
 jsonbToRecord
   :: SListI record
-  => Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb object
+  => Expression (commons :=> schemas) params 'Ungrouped '[]  (nullity 'PGjsonb) -- ^ jsonb object
   -> NP (Aliased (TypeExpression schemas)) record -- ^ record types
   -> Query (commons :=> schemas) params record
 jsonbToRecord = unsafeRecordFunction "jsonb_to_record"
@@ -785,7 +810,7 @@ jsonbToRecord = unsafeRecordFunction "jsonb_to_record"
 -- | Builds an arbitrary set of records from a JSON array of objects.
 jsonToRecordSet
   :: SListI record
-  => Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjson) -- ^ json array
+  => Expression (commons :=> schemas) params 'Ungrouped '[]  (nullity 'PGjson) -- ^ json array
   -> NP (Aliased (TypeExpression schemas)) record -- ^ record types
   -> Query (commons :=> schemas) params record
 jsonToRecordSet = unsafeRecordFunction "json_to_record_set"
@@ -793,7 +818,7 @@ jsonToRecordSet = unsafeRecordFunction "json_to_record_set"
 -- | Builds an arbitrary set of records from a binary JSON array of objects.
 jsonbToRecordSet
   :: SListI record
-  => Expression (commons :=> schemas) '[] 'Ungrouped params (nullity 'PGjsonb) -- ^ jsonb array
+  => Expression (commons :=> schemas) params 'Ungrouped '[]  (nullity 'PGjsonb) -- ^ jsonb array
   -> NP (Aliased (TypeExpression schemas)) record -- ^ record types
   -> Query (commons :=> schemas) params record
 jsonbToRecordSet = unsafeRecordFunction "jsonb_to_record_set"
@@ -809,6 +834,8 @@ as a subquery, a @JOIN@ construct, or complex combinations of these.
 newtype FromClause db params from
   = UnsafeFromClause { renderFromClause :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
+instance RenderSQL (FromClause db params from) where
+  renderSQL = renderFromClause
 
 -- | A real `table` is a table from the database.
 table
@@ -816,13 +843,13 @@ table
   => Aliased (QualifiedAlias sch) (alias ::: tab)
   -> FromClause (commons :=> schemas) params '[alias ::: TableToRow table]
 table (tab `As` alias) = UnsafeFromClause $
-  renderQualifiedAlias tab <+> "AS" <+> renderAlias alias
+  renderSQL tab <+> "AS" <+> renderSQL alias
 
 -- | `subquery` derives a table from a `Query`.
 subquery
   :: Aliased (Query db params) query
   -> FromClause db params '[query]
-subquery = UnsafeFromClause . renderAliasedAs (parenthesized . renderQuery)
+subquery = UnsafeFromClause . renderAliased (parenthesized . renderQuery)
 
 -- | `view` derives a table from a `View`.
 view
@@ -830,14 +857,14 @@ view
   => Aliased (QualifiedAlias sch) (alias ::: vw)
   -> FromClause (commons :=> schemas) params '[alias ::: view]
 view (vw `As` alias) = UnsafeFromClause $
-  renderQualifiedAlias vw <+> "AS" <+> renderAlias alias
+  renderSQL vw <+> "AS" <+> renderSQL alias
 
 common
   :: Has cte commons common
   => Aliased Alias (alias ::: cte)
   -> FromClause (commons :=> schemas) params '[alias ::: common]
 common (cte `As` alias) = UnsafeFromClause $
-  renderAlias cte <+> "AS" <+> renderAlias alias
+  renderSQL cte <+> "AS" <+> renderSQL alias
 
 {- | @left & crossJoin right@. For every possible combination of rows from
     @left@ and @right@ (i.e., a Cartesian product), the joined table will contain
@@ -852,7 +879,7 @@ crossJoin
   -- ^ left
   -> FromClause db params (Join left right)
 crossJoin right left = UnsafeFromClause $
-  renderFromClause left <+> "CROSS JOIN" <+> renderFromClause right
+  renderSQL left <+> "CROSS JOIN" <+> renderSQL right
 
 {- | @left & innerJoin right on@. The joined table is filtered by
 the @on@ condition.
@@ -860,14 +887,14 @@ the @on@ condition.
 innerJoin
   :: FromClause db params right
   -- ^ right
-  -> Condition db (Join left right) 'Ungrouped params
+  -> Condition db params 'Ungrouped (Join left right)
   -- ^ @on@ condition
   -> FromClause db params left
   -- ^ left
   -> FromClause db params (Join left right)
 innerJoin right on left = UnsafeFromClause $
-  renderFromClause left <+> "INNER JOIN" <+> renderFromClause right
-  <+> "ON" <+> renderExpression on
+  renderSQL left <+> "INNER JOIN" <+> renderSQL right
+  <+> "ON" <+> renderSQL on
 
 {- | @left & leftOuterJoin right on@. First, an inner join is performed.
     Then, for each row in @left@ that does not satisfy the @on@ condition with
@@ -877,14 +904,14 @@ innerJoin right on left = UnsafeFromClause $
 leftOuterJoin
   :: FromClause db params right
   -- ^ right
-  -> Condition db (Join left right) 'Ungrouped params
+  -> Condition db params 'Ungrouped (Join left right)
   -- ^ @on@ condition
   -> FromClause db params left
   -- ^ left
   -> FromClause db params (Join left (NullifyFrom right))
 leftOuterJoin right on left = UnsafeFromClause $
-  renderFromClause left <+> "LEFT OUTER JOIN" <+> renderFromClause right
-  <+> "ON" <+> renderExpression on
+  renderSQL left <+> "LEFT OUTER JOIN" <+> renderSQL right
+  <+> "ON" <+> renderSQL on
 
 {- | @left & rightOuterJoin right on@. First, an inner join is performed.
     Then, for each row in @right@ that does not satisfy the @on@ condition with
@@ -895,14 +922,14 @@ leftOuterJoin right on left = UnsafeFromClause $
 rightOuterJoin
   :: FromClause db params right
   -- ^ right
-  -> Condition db (Join left right) 'Ungrouped params
+  -> Condition db params 'Ungrouped (Join left right)
   -- ^ @on@ condition
   -> FromClause db params left
   -- ^ left
   -> FromClause db params (Join (NullifyFrom left) right)
 rightOuterJoin right on left = UnsafeFromClause $
-  renderFromClause left <+> "RIGHT OUTER JOIN" <+> renderFromClause right
-  <+> "ON" <+> renderExpression on
+  renderSQL left <+> "RIGHT OUTER JOIN" <+> renderSQL right
+  <+> "ON" <+> renderSQL on
 
 {- | @left & fullOuterJoin right on@. First, an inner join is performed.
     Then, for each row in @left@ that does not satisfy the @on@ condition with
@@ -914,15 +941,15 @@ rightOuterJoin right on left = UnsafeFromClause $
 fullOuterJoin
   :: FromClause db params right
   -- ^ right
-  -> Condition db (Join left right) 'Ungrouped params
+  -> Condition db params 'Ungrouped (Join left right)
   -- ^ @on@ condition
   -> FromClause db params left
   -- ^ left
   -> FromClause db params
       (Join (NullifyFrom left) (NullifyFrom right))
 fullOuterJoin right on left = UnsafeFromClause $
-  renderFromClause left <+> "FULL OUTER JOIN" <+> renderFromClause right
-  <+> "ON" <+> renderExpression on
+  renderSQL left <+> "FULL OUTER JOIN" <+> renderSQL right
+  <+> "ON" <+> renderSQL on
 
 {-----------------------------------------
 Grouping
@@ -948,6 +975,10 @@ data By
 deriving instance Show (By from by)
 deriving instance Eq (By from by)
 deriving instance Ord (By from by)
+instance RenderSQL (By from by) where
+  renderSQL = \case
+    By1 column -> renderSQL column
+    By2 rel column -> renderSQL rel <> "." <> renderSQL column
 
 instance (HasUnique rel rels cols, Has col cols ty, by ~ '(rel, col))
   => IsLabel col (By rels by) where fromLabel = By1 fromLabel
@@ -959,69 +990,63 @@ instance (Has rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
   => IsQualified rel col (NP (By rels) bys) where
     rel ! col = By2 rel col :* Nil
 
--- | Renders a `By`.
-renderBy :: By from by -> ByteString
-renderBy = \case
-  By1 column -> renderAlias column
-  By2 rel column -> renderAlias rel <> "." <> renderAlias column
-
 -- | A `GroupByClause` indicates the `Grouping` of a `TableExpression`.
 -- A `NoGroups` indicates `Ungrouped` while a `Group` indicates `Grouped`.
 -- @NoGroups@ is distinguised from @Group Nil@ since no aggregation can be
 -- done on @NoGroups@ while all output `Expression`s must be aggregated
 -- in @Group Nil@. In general, all output `Expression`s in the
 -- complement of @bys@ must be aggregated in @Group bys@.
-data GroupByClause from grouping where
-  NoGroups :: GroupByClause from 'Ungrouped
+data GroupByClause grp from where
+  NoGroups :: GroupByClause 'Ungrouped from
   Group
     :: SListI bys
     => NP (By from) bys
-    -> GroupByClause from ('Grouped bys)
+    -> GroupByClause ('Grouped bys) from
 
 -- | Renders a `GroupByClause`.
-renderGroupByClause :: GroupByClause from grouping -> ByteString
-renderGroupByClause = \case
-  NoGroups -> ""
-  Group Nil -> ""
-  Group bys -> " GROUP BY" <+> renderCommaSeparated renderBy bys
+instance RenderSQL (GroupByClause grp from) where
+  renderSQL = \case
+    NoGroups -> ""
+    Group Nil -> ""
+    Group bys -> " GROUP BY" <+> renderCommaSeparated renderSQL bys
 
 -- | A `HavingClause` is used to eliminate groups that are not of interest.
 -- An `Ungrouped` `TableExpression` may only use `NoHaving` while a `Grouped`
 -- `TableExpression` must use `Having` whose conditions are combined with
 -- `.&&`.
-data HavingClause db from grouping params where
-  NoHaving :: HavingClause db from 'Ungrouped params
+data HavingClause db params grp from where
+  NoHaving :: HavingClause db params 'Ungrouped from
   Having
-    :: [Condition db from ('Grouped bys) params]
-    -> HavingClause db from ('Grouped bys) params
-deriving instance Show (HavingClause db from grouping params)
-deriving instance Eq (HavingClause db from grouping params)
-deriving instance Ord (HavingClause db from grouping params)
+    :: [Condition db params ('Grouped bys) from]
+    -> HavingClause db params ('Grouped bys) from
+deriving instance Show (HavingClause db params grp from)
+deriving instance Eq (HavingClause db params grp from)
+deriving instance Ord (HavingClause db params grp from)
 
 -- | Render a `HavingClause`.
-renderHavingClause :: HavingClause db from grouping params -> ByteString
-renderHavingClause = \case
-  NoHaving -> ""
-  Having [] -> ""
-  Having conditions ->
-    " HAVING" <+> commaSeparated (renderExpression <$> conditions)
+instance RenderSQL (HavingClause db params grp from) where
+  renderSQL = \case
+    NoHaving -> ""
+    Having [] -> ""
+    Having conditions ->
+      " HAVING" <+> commaSeparated (renderSQL <$> conditions)
 
 unsafeSubqueryExpression
   :: ByteString
-  -> Expression db from grp params ty
+  -> Expression db params grp from ty
   -> Query db params '[alias ::: ty]
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 unsafeSubqueryExpression op x q = UnsafeExpression $
-  renderExpression x <+> op <+> parenthesized (renderQuery q)
+  renderSQL x <+> op <+> parenthesized (renderSQL q)
 
 unsafeRowSubqueryExpression
   :: SListI row
   => ByteString
-  -> NP (Aliased (Expression db from grp params)) row
+  -> NP (Aliased (Expression db params grp from)) row
   -> Query db params row
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 unsafeRowSubqueryExpression op xs q = UnsafeExpression $
-  renderExpression (row xs) <+> op <+> parenthesized (renderQuery q)
+  renderSQL (row xs) <+> op <+> parenthesized (renderSQL q)
 
 -- | The right-hand side is a sub`Query`, which must return exactly one column.
 -- The left-hand expression is evaluated and compared to each row of the
@@ -1032,9 +1057,9 @@ unsafeRowSubqueryExpression op xs q = UnsafeExpression $
 -- >>> printSQL $ true `in_` values_ (true `as` #foo)
 -- TRUE IN (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 in_
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 in_ = unsafeSubqueryExpression "IN"
 
 {- | The left-hand side of this form of `rowIn` is a row constructor.
@@ -1047,231 +1072,231 @@ is `true` if any equal subquery row is found.
 The result is `false` if no equal row is found
 (including the case where the subquery returns no rows).
 
->>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+>>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 >>> printSQL $ myRow `rowIn` values_ myRow
 ROW(1, FALSE) IN (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 -}
 rowIn
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowIn = unsafeRowSubqueryExpression "IN"
 
 -- | >>> printSQL $ true `eqAll` values_ (true `as` #foo)
 -- TRUE = ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 eqAll
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 eqAll = unsafeSubqueryExpression "= ALL"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowEqAll` values_ myRow
 -- ROW(1, FALSE) = ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowEqAll
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowEqAll = unsafeRowSubqueryExpression "= ALL"
 
 -- | >>> printSQL $ true `eqAny` values_ (true `as` #foo)
 -- TRUE = ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 eqAny
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 eqAny = unsafeSubqueryExpression "= ANY"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowEqAny` values_ myRow
 -- ROW(1, FALSE) = ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowEqAny
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowEqAny = unsafeRowSubqueryExpression "= ANY"
 
 -- | >>> printSQL $ true `neqAll` values_ (true `as` #foo)
 -- TRUE <> ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 neqAll
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 neqAll = unsafeSubqueryExpression "<> ALL"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowNeqAll` values_ myRow
 -- ROW(1, FALSE) <> ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowNeqAll
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowNeqAll = unsafeRowSubqueryExpression "<> ALL"
 
 -- | >>> printSQL $ true `neqAny` values_ (true `as` #foo)
 -- TRUE <> ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 neqAny
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 neqAny = unsafeSubqueryExpression "<> ANY"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowNeqAny` values_ myRow
 -- ROW(1, FALSE) <> ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowNeqAny
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowNeqAny = unsafeRowSubqueryExpression "<> ANY"
 
 -- | >>> printSQL $ true `allLt` values_ (true `as` #foo)
 -- TRUE ALL < (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 allLt
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 allLt = unsafeSubqueryExpression "ALL <"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowLtAll` values_ myRow
 -- ROW(1, FALSE) ALL < (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowLtAll
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowLtAll = unsafeRowSubqueryExpression "ALL <"
 
 -- | >>> printSQL $ true `ltAny` values_ (true `as` #foo)
 -- TRUE ANY < (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 ltAny
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 ltAny = unsafeSubqueryExpression "ANY <"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowLtAll` values_ myRow
 -- ROW(1, FALSE) ALL < (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowLtAny
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowLtAny = unsafeRowSubqueryExpression "ANY <"
 
 -- | >>> printSQL $ true `lteAll` values_ (true `as` #foo)
 -- TRUE <= ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 lteAll
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 lteAll = unsafeSubqueryExpression "<= ALL"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowLteAll` values_ myRow
 -- ROW(1, FALSE) <= ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowLteAll
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowLteAll = unsafeRowSubqueryExpression "<= ALL"
 
 -- | >>> printSQL $ true `lteAny` values_ (true `as` #foo)
 -- TRUE <= ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 lteAny
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 lteAny = unsafeSubqueryExpression "<= ANY"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowLteAny` values_ myRow
 -- ROW(1, FALSE) <= ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowLteAny
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowLteAny = unsafeRowSubqueryExpression "<= ANY"
 
 -- | >>> printSQL $ true `gtAll` values_ (true `as` #foo)
 -- TRUE > ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 gtAll
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 gtAll = unsafeSubqueryExpression "> ALL"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowGtAll` values_ myRow
 -- ROW(1, FALSE) > ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowGtAll
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowGtAll = unsafeRowSubqueryExpression "> ALL"
 
 -- | >>> printSQL $ true `gtAny` values_ (true `as` #foo)
 -- TRUE > ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 gtAny
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 gtAny = unsafeSubqueryExpression "> ANY"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowGtAny` values_ myRow
 -- ROW(1, FALSE) > ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowGtAny
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowGtAny = unsafeRowSubqueryExpression "> ANY"
 
 -- | >>> printSQL $ true `gteAll` values_ (true `as` #foo)
 -- TRUE >= ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 gteAll
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 gteAll = unsafeSubqueryExpression ">= ALL"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowGteAll` values_ myRow
 -- ROW(1, FALSE) >= ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowGteAll
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowGteAll = unsafeRowSubqueryExpression ">= ALL"
 
 -- | >>> printSQL $ true `gteAny` values_ (true `as` #foo)
 -- TRUE >= ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
 gteAny
-  :: Expression db from grp params ty -- ^ expression
+  :: Expression db params grp from ty -- ^ expression
   -> Query db params '[alias ::: ty] -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 gteAny = unsafeSubqueryExpression ">= ANY"
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db from grp params)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+-- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression db params grp from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
 -- >>> printSQL $ myRow `rowGteAny` values_ myRow
 -- ROW(1, FALSE) >= ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
 rowGteAny
   :: SListI row
-  => NP (Aliased (Expression db from grp params)) row -- ^ row constructor
+  => NP (Aliased (Expression db params grp from)) row -- ^ row constructor
   -> Query db params row -- ^ subquery
-  -> Expression db from grp params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 rowGteAny = unsafeRowSubqueryExpression ">= ANY"
 
 -- | A `CommonTableExpression` is an auxiliary statement in a `with` clause.
@@ -1306,7 +1331,7 @@ renderCommonTableExpression
   -> CommonTableExpression statement params db0 db1 -> ByteString
 renderCommonTableExpression renderStatement
   (CommonTableExpression (statement `As` alias)) =
-    renderAlias alias <+> "AS" <+> parenthesized (renderStatement statement)
+    renderSQL alias <+> "AS" <+> parenthesized (renderStatement statement)
 
 -- | render a non-empty `AlignedList` of `CommonTableExpression`s.
 renderCommonTableExpressions
@@ -1333,5 +1358,5 @@ class With statement where
 instance With Query where
   with Done query = query
   with (cte :>> ctes) query = UnsafeQuery $
-    "WITH" <+> renderCommonTableExpressions renderQuery cte ctes
-      <+> renderQuery query
+    "WITH" <+> renderCommonTableExpressions renderSQL cte ctes
+      <+> renderSQL query

@@ -71,7 +71,7 @@ let
     :: Has "migrations" schemas MigrationsSchema
     => PQ schemas schemas IO ()
   numMigrations = do
-    result <- runQuery (selectStar (from (table (#migrations ! #schema_migrations `as` #m))))
+    result <- runQuery (select Star (from (table (#migrations ! #schema_migrations `as` #m))))
     num <- ntuples result
     liftBase $ print num
 :}
@@ -291,7 +291,7 @@ selectMigration
   :: Has "migrations" schemas MigrationsSchema
   => Query ('[] :=> schemas) '[ 'NotNull 'PGtext ]
     '[ "executed_at" ::: 'NotNull 'PGtimestamptz ]
-selectMigration = select
+selectMigration = select_
   (#executed_at `as` #executed_at)
   ( from (table ((#migrations ! #schema_migrations) `as` #m))
     & where_ (#name .== param @1))

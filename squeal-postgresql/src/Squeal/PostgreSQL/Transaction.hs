@@ -30,17 +30,13 @@ module Squeal.PostgreSQL.Transaction
   , defaultMode
   , longRunningMode
   , IsolationLevel (..)
-  , renderIsolationLevel
   , AccessMode (..)
-  , renderAccessMode
   , DeferrableMode (..)
-  , renderDeferrableMode
   ) where
 
 import Control.Exception.Lifted
 import Control.Monad.Base
 import Control.Monad.Trans.Control
-import Data.ByteString
 import Generics.SOP
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
@@ -72,7 +68,7 @@ transactionally_ = transactionally defaultMode
 -- | @BEGIN@ a transaction.
 begin :: MonadPQ schemas tx => TransactionMode -> tx (K Result ('[] :: RowType))
 begin mode = manipulate . UnsafeManipulation $
-  "BEGIN" <+> renderTransactionMode mode <> ";"
+  "BEGIN" <+> renderSQL mode <> ";"
 
 -- | @COMMIT@ a schema invariant transaction.
 commit :: MonadPQ schemas tx => tx (K Result ('[] :: RowType))
@@ -90,7 +86,7 @@ transactionallySchema
   -> PQ schemas0 schemas1 io x
 transactionallySchema mode u = PQ $ \ conn -> mask $ \ restore -> do
   _ <- liftBase . LibPQ.exec (unK conn) $
-    "BEGIN" <+> renderTransactionMode mode <> ";"
+    "BEGIN" <+> renderSQL mode <> ";"
   x <- restore (unPQ u conn)
     `onException` (liftBase (LibPQ.exec (unK conn) "ROLLBACK"))
   _ <- liftBase $ LibPQ.exec (unK conn) "COMMIT"
@@ -123,12 +119,12 @@ longRunningMode :: TransactionMode
 longRunningMode = TransactionMode Serializable ReadOnly Deferrable
 
 -- | Render a `TransactionMode`.
-renderTransactionMode :: TransactionMode -> ByteString
-renderTransactionMode mode =
-  "ISOLATION LEVEL"
-    <+> renderIsolationLevel (isolationLevel mode)
-    <+> renderAccessMode (accessMode mode)
-    <+> renderDeferrableMode (deferrableMode mode)
+instance RenderSQL TransactionMode where
+  renderSQL mode =
+    "ISOLATION LEVEL"
+      <+> renderSQL (isolationLevel mode)
+      <+> renderSQL (accessMode mode)
+      <+> renderSQL (deferrableMode mode)
 
 -- | The SQL standard defines four levels of transaction isolation.
 -- The most strict is `Serializable`, which is defined by the standard in a paragraph
@@ -179,12 +175,12 @@ data IsolationLevel
   deriving (Show, Eq)
 
 -- | Render an `IsolationLevel`.
-renderIsolationLevel :: IsolationLevel -> ByteString
-renderIsolationLevel = \case
-  Serializable -> "SERIALIZABLE"
-  ReadCommitted -> "READ COMMITTED"
-  ReadUncommitted -> "READ UNCOMMITTED"
-  RepeatableRead -> "REPEATABLE READ"
+instance RenderSQL IsolationLevel where
+  renderSQL = \case
+    Serializable -> "SERIALIZABLE"
+    ReadCommitted -> "READ COMMITTED"
+    ReadUncommitted -> "READ UNCOMMITTED"
+    RepeatableRead -> "REPEATABLE READ"
 
 -- | The transaction access mode determines whether the transaction is `ReadWrite` or `ReadOnly`.
 -- `ReadWrite` is the default. When a transaction is `ReadOnly`,
@@ -201,10 +197,10 @@ data AccessMode
   deriving (Show, Eq)
 
 -- | Render an `AccessMode`.
-renderAccessMode :: AccessMode -> ByteString
-renderAccessMode = \case
-  ReadWrite -> "READ WRITE"
-  ReadOnly -> "READ ONLY"
+instance RenderSQL AccessMode where
+  renderSQL = \case
+    ReadWrite -> "READ WRITE"
+    ReadOnly -> "READ ONLY"
 
 -- | The `Deferrable` transaction property has no effect
 -- unless the transaction is also `Serializable` and `ReadOnly`.
@@ -220,7 +216,7 @@ data DeferrableMode
   deriving (Show, Eq)
 
 -- | Render a `DeferrableMode`.
-renderDeferrableMode :: DeferrableMode -> ByteString
-renderDeferrableMode = \case
-  Deferrable -> "DEFERRABLE"
-  NotDeferrable -> "NOT DEFERRABLE"
+instance RenderSQL DeferrableMode where
+  renderSQL = \case
+    Deferrable -> "DEFERRABLE"
+    NotDeferrable -> "NOT DEFERRABLE"
