@@ -147,7 +147,10 @@ module Squeal.PostgreSQL.Expression
   , WindowExpression (..)
   , WindowDefinition (..)
   , partitionBy
+  , rowNumber
   , rank
+  , denseRank
+  , percentRank
     -- * Sorting
   , SortExpression (..)
   , OrderBy (..)
@@ -1638,7 +1641,7 @@ minDistinct = unsafeAggregateDistinct "min"
 window functions
 -----------------------------------------}
 
-{- |
+{- | rank of the current row with gaps; same as `rowNumber` of its first peer
 >>> :{
 let
   expr :: WindowExpression db params 'Ungrouped '["tab" ::: '["a" ::: ty]] ('NotNull 'PGint8)
@@ -1650,6 +1653,35 @@ rank() OVER (PARTITION BY "a")
 -}
 rank :: Expression db from 'Framed params ('NotNull 'PGint8)
 rank = UnsafeExpression "rank()"
+
+{- | number of the current row within its partition, counting from 1
+>>> printSQL rowNumber
+row_number()
+-}
+rowNumber :: Expression db from 'Framed params ('NotNull 'PGint8)
+rowNumber = UnsafeExpression "row_number()"
+
+{- | rank of the current row without gaps; this function counts peer groups
+>>> printSQL denseRank
+dense_rank()
+-}
+denseRank :: Expression db from 'Framed params ('NotNull 'PGint8)
+denseRank = UnsafeExpression "dense_rank()"
+
+{- | relative rank of the current row: (rank - 1) / (total partition rows - 1)
+>>> printSQL percentRank
+percent_rank()
+-}
+percentRank :: Expression db from 'Framed params ('NotNull 'PGfloat8)
+percentRank = UnsafeExpression "percent_rank()"
+
+{- | cumulative distribution: (number of partition rows
+preceding or peer with current row) / total partition rows
+>>> printSQL cumDist
+cume_dist()
+-}
+cumDist :: Expression db from 'Framed params ('NotNull 'PGfloat8)
+cumDist = UnsafeExpression "cume_dist()"
 
 data WindowExpression db params grp from ty where
   Over
