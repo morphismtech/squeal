@@ -151,6 +151,7 @@ module Squeal.PostgreSQL.Expression
   , rank
   , denseRank
   , percentRank
+  , cumeDist
     -- * Sorting
   , SortExpression (..)
   , OrderBy (..)
