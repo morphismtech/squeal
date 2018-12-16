@@ -84,8 +84,8 @@ module Squeal.PostgreSQL.Schema
   , GroupedBy
     -- * Aligned lists
   , AlignedList (..)
-  , single
   , extractList
+  , single
     -- * Data Definitions
   , Create
   , Drop

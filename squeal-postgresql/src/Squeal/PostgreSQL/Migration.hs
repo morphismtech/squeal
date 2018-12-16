@@ -88,17 +88,16 @@ withConnection "host=localhost port=5432 dbname=exampledb" $
 Row 2
 Row 0
 -}
-
-{-# LANGUAGE
-    DataKinds
-  , GADTs
-  , LambdaCase
-  , PolyKinds
-  , OverloadedLabels
-  , TypeApplications
-  , FlexibleContexts
-  , TypeOperators
-#-}
+{-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE FlexibleContexts  #-}
+{-# LANGUAGE GADTs             #-}
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedLabels  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PolyKinds         #-}
+{-# LANGUAGE TypeApplications  #-}
+{-# LANGUAGE TypeOperators     #-}
 
 module Squeal.PostgreSQL.Migration
   ( -- * Migration
@@ -111,23 +110,32 @@ module Squeal.PostgreSQL.Migration
   , insertMigration
   , deleteMigration
   , selectMigration
+   -- * CLI
+  , defaultMain
   ) where
 
-import Control.Monad
-import Control.Monad.Base
-import Control.Monad.Trans.Control
-import Generics.SOP (K(..))
-import Data.Function ((&))
-import Data.Text (Text)
-
-import Squeal.PostgreSQL
+import           Control.Monad
+import           Control.Monad.Base
+import           Control.Monad.Trans.Control
+import           Data.ByteString             (ByteString)
+import           Data.Foldable               (traverse_)
+import           Data.Function               ((&))
+import           Data.List                   ((\\))
+import           Data.Text                   (Text)
+import qualified Data.Text.IO                as T (putStrLn)
+import           Data.Time                   (UTCTime)
+import           Generics.SOP                (K (..))
+import qualified Generics.SOP                as SOP
+import qualified GHC.Generics                as GHC
+import           Squeal.PostgreSQL
+import           System.Environment
 
 -- | A `Migration` should contain an inverse pair of
 -- `up` and `down` instructions and a unique `name`.
 data Migration io schemas0 schemas1 = Migration
   { name :: Text -- ^ The `name` of a `Migration`.
     -- Each `name` in a `Migration` should be unique.
-  , up :: PQ schemas0 schemas1 io () -- ^ The `up` instruction of a `Migration`.
+  , up   :: PQ schemas0 schemas1 io () -- ^ The `up` instruction of a `Migration`.
   , down :: PQ schemas1 schemas0 io () -- ^ The `down` instruction of a `Migration`.
   }
 
@@ -248,7 +256,7 @@ okResult result = do
   when (not (status `elem` [CommandOk, TuplesOk])) $ do
     errorMessageMaybe <- resultErrorMessage result
     case errorMessageMaybe of
-      Nothing -> error "migrateDown: unknown error"
+      Nothing  -> error "migrateDown: unknown error"
       Just msg -> error ("migrationDown: " <> show msg)
 
 -- | The `TableType` for a Squeal migration.
@@ -257,6 +265,14 @@ type MigrationsTable =
   '[ "name"        ::: 'NoDef :=> 'NotNull 'PGtext
    , "executed_at" :::   'Def :=> 'NotNull 'PGtimestamptz
    ]
+
+data MigrationRow =
+  MigrationRow { migrationName :: Text
+               , executedAt    :: UTCTime }
+  deriving (GHC.Generic, Show)
+
+instance SOP.Generic MigrationRow
+instance SOP.HasDatatypeInfo MigrationRow
 
 type MigrationsSchema = '["schema_migrations" ::: 'Table MigrationsTable]
 
@@ -295,3 +311,87 @@ selectMigration = select_
   (#executed_at `as` #executed_at)
   ( from (table ((#migrations ! #schema_migrations) `as` #m))
     & where_ (#name .== param @1))
+
+fetchAllMigrations
+  :: Query '[] '[] '["migrations" ::: MigrationsSchema] '[] (RowPG MigrationRow)
+fetchAllMigrations =
+  select_ ( #name `as` #migrationName
+         :* #executed_at `as` #executedAt)
+  (from (table (#migrations ! #schema_migrations)))
+
+unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
+unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
+
+data Command = Display
+             | AllUp
+             | AllDown
+             deriving (GHC.Generic, Show)
+
+defaultMain
+  :: ByteString
+  -- ^ connection string
+  -> AlignedList (Migration IO) db0 db1
+  -- ^ migrations
+  -> IO ()
+defaultMain connectTo migrations = do
+  command <- readCommandFromArgs
+  maybe (pure ()) (performCommand connectTo migrations) command
+
+readCommandFromArgs :: IO (Maybe Command)
+readCommandFromArgs = do
+  args <- getArgs
+  case args of
+    ["db:migrate"]  -> pure . Just $ AllUp
+    ["db:rollback"] -> pure . Just $ AllDown
+    ["db:status"]   -> pure . Just $ Display
+    _               -> displayUsage >> pure Nothing
+
+displayUsage :: IO ()
+displayUsage = do
+  putStrLn "Invalid command. Use:"
+  putStrLn "db:migrate    to run all available migrations"
+  putStrLn "db:rollback   to rollback all available migrations"
+  putStrLn "db:status     to display migrations run and migrations left to run"
+
+type RunMigrationName = Text
+
+getRunMigrationNames :: (MonadBase IO m) => PQ db0 db0 m [RunMigrationName]
+getRunMigrationNames =
+  fmap migrationName <$> (unsafePQ (define createMigrations & pqThen (runQuery fetchAllMigrations)) >>= getRows)
+
+displayListOfNames :: [Text] -> IO ()
+displayListOfNames [] = T.putStrLn "\tNone"
+displayListOfNames xs =
+  let singleName n = T.putStrLn $ "\t- " <> n
+  in traverse_ singleName xs
+
+displayUnrunned :: [RunMigrationName] -> IO ()
+displayUnrunned unrunned =
+  T.putStrLn "Migrations left to run:"
+  >> displayListOfNames unrunned
+
+displayRunned :: [RunMigrationName] -> IO ()
+displayRunned runned =
+  T.putStrLn "Migrations already run:"
+  >> displayListOfNames runned
+
+performCommand
+  :: ByteString
+  -- ^ Connection string
+  -> AlignedList (Migration IO) db0 db1
+  -- ^ Known migrations
+  -> Command
+  -- ^ Operation to perform
+  -> IO ()
+performCommand connectTo migrations Display =
+  withConnection connectTo $ do
+    runNames <- getRunMigrationNames
+    let names = extractList name migrations
+        unrunNames = names \\ runNames
+    liftBase $ displayRunned runNames >> displayUnrunned unrunNames
+performCommand connectTo migrations AllUp =
+  withConnection connectTo (migrateUp migrations)
+  >> performCommand connectTo migrations Display
+performCommand connectTo migrations AllDown =
+  withConnection connectTo (migrateDown migrations)
+  >> performCommand connectTo migrations Display
