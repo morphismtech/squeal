@@ -78,7 +78,7 @@ simple insert:
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  manipulation :: Manipulation (DBof (Public Schema)) '[] '[]
+  manipulation :: Manipulation '[] (Public Schema) '[] '[]
   manipulation =
     insertInto_ #tab (Values_ (2 `as` #col1 :* defaultAs #col2))
 in printSQL manipulation
@@ -91,7 +91,7 @@ parameterized insert:
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  manipulation :: Manipulation (DBof (Public Schema)) '[ 'NotNull 'PGint4, 'NotNull 'PGint4 ] '[]
+  manipulation :: Manipulation '[] (Public Schema) '[ 'NotNull 'PGint4, 'NotNull 'PGint4 ] '[]
   manipulation =
     insertInto_ #tab (Values_ (param @1 `as` #col1 :* param @2 `as` #col2))
 in printSQL manipulation
@@ -102,7 +102,7 @@ returning insert:
 
 >>> :{
 let
-  manipulation :: Manipulation (DBof (Public Schema)) '[] '["fromOnly" ::: 'NotNull 'PGint4]
+  manipulation :: Manipulation '[] (Public Schema) '[] '["fromOnly" ::: 'NotNull 'PGint4]
   manipulation =
     insertInto #tab (Values_ (2 `as` #col1 :* 3 `as` #col2))
       OnConflictDoRaise (Returning (#col1 `as` #fromOnly))
@@ -117,7 +117,7 @@ upsert:
 >>> type CustomersSchema = '["customers" ::: 'Table (CustomersConstraints :=> CustomersColumns)]
 >>> :{
 let
-  manipulation :: Manipulation (DBof (Public CustomersSchema)) '[] '[]
+  manipulation :: Manipulation '[] (Public CustomersSchema) '[] '[]
   manipulation =
     insertInto #customers
       (Values_ ("John Smith" `as` #name :* "john@smith.com" `as` #email))
@@ -132,7 +132,7 @@ query insert:
 
 >>> :{
 let
-  manipulation :: Manipulation (DBof (Public Schema)) '[] '[]
+  manipulation :: Manipulation '[] (Public Schema) '[] '[]
   manipulation = insertInto_ #tab (Subquery (select Star (from (table #tab))))
 in printSQL manipulation
 :}
@@ -142,7 +142,7 @@ update:
 
 >>> :{
 let
-  manipulation :: Manipulation (DBof (Public Schema)) '[] '[]
+  manipulation :: Manipulation '[] (Public Schema) '[] '[]
   manipulation = update_ #tab (2 `as` #col1) (#col1 ./= #col2)
 in printSQL manipulation
 :}
@@ -152,7 +152,7 @@ delete:
 
 >>> :{
 let
-  manipulation :: Manipulation (DBof (Public Schema)) '[]
+  manipulation :: Manipulation '[] (Public Schema) '[]
     '[ "col1" ::: 'NotNull 'PGint4
      , "col2" ::: 'NotNull 'PGint4 ]
   manipulation = deleteFrom #tab NoUsing (#col1 .== #col2) (Returning Star)
@@ -171,7 +171,7 @@ type Schema3 =
 
 >>> :{
 let
-  manipulation :: Manipulation (DBof (Public Schema3)) '[] '[]
+  manipulation :: Manipulation '[] (Public Schema3) '[] '[]
   manipulation =
     deleteFrom_ #tab (Using (table #other_tab & also (table #third_tab)))
     ( (#tab ! #col2 .== #other_tab ! #col2)
@@ -186,7 +186,7 @@ with manipulation:
 >>> type ProductsSchema = '["products" ::: 'Table ('[] :=> ProductsColumns), "products_deleted" ::: 'Table ('[] :=> ProductsColumns)]
 >>> :{
 let
-  manipulation :: Manipulation (DBof (Public ProductsSchema)) '[ 'NotNull 'PGdate] '[]
+  manipulation :: Manipulation '[] (Public ProductsSchema) '[ 'NotNull 'PGdate] '[]
   manipulation = with
     (deleteFrom #products NoUsing (#date .< param @1) (Returning Star) `as` #del)
     (insertInto_ #products_deleted (Subquery (select Star (from (common #del)))))

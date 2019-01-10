@@ -47,7 +47,6 @@ type Schema =
   '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns)
    , "emails" ::: 'Table (EmailsConstraints :=> EmailsColumns) ]
 type Schemas = Public Schema
-type DB = DBof Schemas
 :}
 
 Notice the use of type operators.
@@ -118,7 +117,7 @@ of our inserts.
 
 >>> :{
 let
-  insertUser :: Manipulation DB '[ 'NotNull 'PGtext, 'Null 'PGtext ] '[]
+  insertUser :: Manipulation '[] Schemas '[ 'NotNull 'PGtext, 'Null 'PGtext ] '[]
   insertUser = with (u `as` #u) e
     where
       u = insertInto #users
@@ -138,7 +137,7 @@ need to use an inner join to get the right result. A `Query` is like a
 
 >>> :{
 let
-  getUsers :: Query DB '[]
+  getUsers :: Query '[] Schemas '[]
     '[ "userName"  ::: 'NotNull 'PGtext
      , "userEmail" :::    'Null 'PGtext ]
   getUsers = select_

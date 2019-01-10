@@ -147,7 +147,7 @@ simple query:
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
   query = select Star (from (table #tab))
 in printSQL query
 :}
@@ -157,7 +157,7 @@ restricted query:
 
 >>> :{
 let
-  query :: Query (DBof (Public Schema)) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4]
+  query :: Query '[] (Public Schema) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4]
   query =
     select_ ((#col1 + #col2) `as` #sum :* #col1)
       ( from (table #tab)
@@ -171,7 +171,7 @@ subquery:
 
 >>> :{
 let
-  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
   query = select Star (from (subquery (select Star (from (table #tab)) `as` #sub)))
 in printSQL query
 :}
@@ -181,7 +181,7 @@ limits and offsets:
 
 >>> :{
 let
-  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
   query = select Star (from (table #tab) & limit 100 & offset 2 & limit 50 & offset 2)
 in printSQL query
 :}
@@ -191,7 +191,7 @@ parameterized query:
 
 >>> :{
 let
-  query :: Query (DBof (Public Schema)) '[ 'NotNull 'PGint4] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query '[] (Public Schema) '[ 'NotNull 'PGint4] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
   query = select Star (from (table #tab) & where_ (#col1 .> param @1))
 in printSQL query
 :}
@@ -201,7 +201,7 @@ aggregation query:
 
 >>> :{
 let
-  query :: Query (DBof (Public Schema)) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4 ]
+  query :: Query '[] (Public Schema) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4 ]
   query =
     select_ (sum_ #col2 `as` #sum :* #col1)
     ( from (table (#tab `as` #table1))
@@ -215,7 +215,7 @@ sorted query:
 
 >>> :{
 let
-  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
   query = select Star (from (table #tab) & orderBy [#col1 & Asc])
 in printSQL query
 :}
@@ -252,7 +252,7 @@ type OrdersSchema =
 
 >>> :{
 let
-  query :: Query (DBof (Public OrdersSchema))
+  query :: Query '[] (Public OrdersSchema)
     '[]
     '[ "order_price" ::: 'NotNull 'PGfloat4
      , "customer_name" ::: 'NotNull 'PGtext
@@ -275,7 +275,7 @@ self-join:
 
 >>> :{
 let
-  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
   query = select (#t1 & DotStar) (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
 in printSQL query
 :}
@@ -295,7 +295,7 @@ set operations:
 
 >>> :{
 let
-  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
   query = select Star (from (table #tab)) `unionAll` select Star (from (table #tab))
 in printSQL query
 :}
@@ -305,7 +305,7 @@ with queries:
 
 >>> :{
 let
-  query :: Query (DBof (Public Schema)) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
   query = with (
     select Star (from (table #tab)) `as` #cte1 :>>
     select Star (from (common #cte1)) `as` #cte2

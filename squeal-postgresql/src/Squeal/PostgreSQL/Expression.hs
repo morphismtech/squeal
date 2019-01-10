@@ -245,7 +245,7 @@ class KnownNat n => HasParameter
   | n params -> ty where
     -- | `parameter` takes a `Nat` using type application and a `TypeExpression`.
     --
-    -- >>> let expr = parameter @1 int4 :: Expression (DBof schemas) '[ 'Null 'PGint4] grp from ('Null 'PGint4)
+    -- >>> let expr = parameter @1 int4 :: Expression '[] schemas '[ 'Null 'PGint4] grp from ('Null 'PGint4)
     -- >>> printSQL expr
     -- ($1 :: int4)
     parameter
@@ -420,7 +420,7 @@ matchNull y f x = ifThenElse (isNull x) y
 `nullIf` gives @NULL@.
 
 >>> :set -XTypeApplications -XDataKinds
->>> let expr = nullIf false (param @1) :: Expression (commons :=> schema) '[ 'NotNull 'PGbool] grp from ('Null 'PGbool)
+>>> let expr = nullIf false (param @1) :: Expression commons schemas '[ 'NotNull 'PGbool] grp from ('Null 'PGbool)
 >>> printSQL expr
 NULL IF (FALSE, ($1 :: bool))
 -}
@@ -480,10 +480,9 @@ row exprs = UnsafeExpression $ "ROW" <> parenthesized
 --   '[ "real"      ::: 'NotNull 'PGfloat8
 --    , "imaginary" ::: 'NotNull 'PGfloat8 ]
 -- type Schema = '["complex" ::: 'Typedef Complex]
--- type DB = DBof (Public Schema)
 -- :}
 --
--- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression DB from grp params ('NotNull Complex)
+-- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression '[] (Public Schema) from grp params ('NotNull Complex)
 -- >>> printSQL $ i & field #complex #imaginary
 -- (ROW(0, 1)::"complex")."imaginary"
 field
