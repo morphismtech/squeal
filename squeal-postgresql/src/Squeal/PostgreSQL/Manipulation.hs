@@ -231,8 +231,7 @@ more than one row, but there is no way to insert less than one row.
 Even if you know only some column values, a complete row must be created.
 -}
 insertInto
-  :: ( db ~ (commons :=> schemas)
-     , Has sch schemas schema
+  :: ( Has sch schemas schema
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table
      , row0 ~ TableToRow table
@@ -250,8 +249,7 @@ insertInto tab qry conflict ret = UnsafeManipulation $
   <> renderSQL ret
 
 insertInto_
-  :: ( db ~ (commons :=> schemas)
-     , Has sch schemas schema
+  :: ( Has sch schemas schema
      , Has tab schema ('Table table)
      , columns ~ TableToColumns table
      , row ~ TableToRow table
@@ -276,7 +274,7 @@ data QueryClause commons schemas params columns where
   Subquery
     :: ColumnsToRow columns ~ row
     => Query commons schemas params row
-    -> QueryClause commmons schemas params columns
+    -> QueryClause commons schemas params columns
 
 instance RenderSQL (QueryClause commons schemas params columns) where
   renderSQL = \case
