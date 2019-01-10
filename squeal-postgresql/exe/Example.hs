@@ -43,8 +43,6 @@ type Schema =
 
 type Schemas = Public Schema
 
-type DB = DBof Schemas
-
 setup :: Definition (Public '[]) Schemas
 setup = 
   createTable #users
@@ -64,17 +62,17 @@ setup =
 teardown :: Definition Schemas (Public '[])
 teardown = dropTable #emails >>> dropTable #users
 
-insertUser :: Manipulation DB '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
+insertUser :: Manipulation '[] Schemas '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
 insertUser = insertInto #users
   (Values_ (defaultAs #id :* param @1 `as` #name :* param @2 `as` #vec))
   (OnConflict (OnConstraint #pk_users) DoNothing) (Returning_ (#id `as` #fromOnly))
 
-insertEmail :: Manipulation DB '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
+insertEmail :: Manipulation '[] Schemas '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
 insertEmail = insertInto_ #emails
   (Values_ (defaultAs #id :* param @1 `as` #user_id :* param @2 `as` #email))
 
-getUsers :: Query DB '[]
+getUsers :: Query '[] Schemas '[]
   '[ "userName" ::: 'NotNull 'PGtext
    , "userEmail" ::: 'Null 'PGtext
    , "userVec" ::: 'NotNull ('PGvararray ('Null 'PGint2))]
