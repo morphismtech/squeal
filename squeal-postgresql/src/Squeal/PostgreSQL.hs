@@ -123,7 +123,7 @@ let
     where
       u = insertInto #users
         (Values_ (defaultAs #id :* param @1 `as` #name))
-        OnConflictDoRaise (Returning (#id :* param @2 `as` #email))
+        OnConflictDoRaise (Returning_ (#id :* param @2 `as` #email))
       e = insertInto_ #emails
         (Select (defaultAs #id :* #u ! #id `as` #user_id :* #u ! #email) (from (common #u)))
 :}
@@ -141,7 +141,7 @@ let
   getUsers :: Query DB '[]
     '[ "userName"  ::: 'NotNull 'PGtext
      , "userEmail" :::    'Null 'PGtext ]
-  getUsers = select
+  getUsers = select_
     (#u ! #name `as` #userName :* #e ! #email `as` #userEmail)
     ( from (table (#users `as` #u)
       & innerJoin (table (#emails `as` #e))

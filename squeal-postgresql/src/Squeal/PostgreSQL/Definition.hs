@@ -29,7 +29,7 @@ Squeal data definition language.
 
 module Squeal.PostgreSQL.Definition
   ( -- * Definition
-    Definition (UnsafeDefinition, renderDefinition)
+    Definition (..)
   , (>>>)
     -- * Tables
     -- ** Create
@@ -43,23 +43,21 @@ module Squeal.PostgreSQL.Definition
   , primaryKey
   , foreignKey
   , ForeignKeyed
-  , OnDeleteClause (OnDeleteNoAction, OnDeleteRestrict, OnDeleteCascade)
-  , renderOnDeleteClause
-  , OnUpdateClause (OnUpdateNoAction, OnUpdateRestrict, OnUpdateCascade)
-  , renderOnUpdateClause
+  , OnDeleteClause (..)
+  , OnUpdateClause (..)
     -- ** Drop
   , dropTable
     -- ** Alter
   , alterTable
   , alterTableRename
-  , AlterTable (UnsafeAlterTable, renderAlterTable)
+  , AlterTable (..)
   , addConstraint
   , dropConstraint
-  , AddColumn (addColumn)
+  , AddColumn (..)
   , dropColumn
   , renameColumn
   , alterColumn
-  , AlterColumn (UnsafeAlterColumn, renderAlterColumn)
+  , AlterColumn (..)
   , setDefault
   , dropDefault
   , setNotNull
@@ -121,7 +119,7 @@ instance RenderSQL (Definition schemas0 schemas1) where
 instance Category Definition where
   id = UnsafeDefinition ";"
   ddl1 . ddl0 = UnsafeDefinition $
-    renderDefinition ddl0 <> "\n" <> renderDefinition ddl1
+    renderSQL ddl0 <> "\n" <> renderSQL ddl1
 
 {-----------------------------------------
 CREATE statements
@@ -132,7 +130,7 @@ createSchema
   => Alias sch
   -> Definition schemas (Create sch '[] schemas)
 createSchema sch = UnsafeDefinition $
-  "CREATE" <+> "SCHEMA" <+> renderAlias sch <> ";"
+  "CREATE" <+> "SCHEMA" <+> renderSQL sch <> ";"
 
 createSchemaIfNotExists
   :: (KnownSymbol sch, Has sch schemas schema)
@@ -140,7 +138,7 @@ createSchemaIfNotExists
   -> Definition schemas schemas
 createSchemaIfNotExists sch = UnsafeDefinition $
   "CREATE" <+> "SCHEMA" <+> "IF" <+> "NOT" <+> "EXISTS"
-  <+> renderAlias sch <> ";"
+  <+> renderSQL sch <> ";"
 
 {- | `createTable` adds a table to the schema.
 
@@ -227,7 +225,7 @@ renderCreation
   -> NP (Aliased (TableConstraintExpression sch tab schemas1)) constraints
     -- ^ constraints that must hold for the table
   -> ByteString
-renderCreation tab columns constraints = renderQualifiedAlias tab
+renderCreation tab columns constraints = renderSQL tab
   <+> parenthesized
     ( renderCommaSeparated renderColumnDef columns
       <> ( case constraints of
@@ -238,12 +236,12 @@ renderCreation tab columns constraints = renderQualifiedAlias tab
   where
     renderColumnDef :: Aliased (ColumnTypeExpression schemas) x -> ByteString
     renderColumnDef (ty `As` column) =
-      renderAlias column <+> renderColumnTypeExpression ty
+      renderSQL column <+> renderColumnTypeExpression ty
     renderConstraint
       :: Aliased (TableConstraintExpression sch tab schemas) constraint
       -> ByteString
     renderConstraint (constraint `As` alias) =
-      "CONSTRAINT" <+> renderAlias alias <+> renderTableConstraintExpression constraint
+      "CONSTRAINT" <+> renderSQL alias <+> renderSQL constraint
 
 -- | Data types are a way to limit the kind of data that can be stored in a
 -- table. For many applications, however, the constraint they provide is
@@ -265,6 +263,9 @@ newtype TableConstraintExpression
     = UnsafeTableConstraintExpression
     { renderTableConstraintExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
+instance RenderSQL
+  (TableConstraintExpression sch tab schemas constraint) where
+    renderSQL = renderTableConstraintExpression
 
 {-| A `check` constraint is the most generic `TableConstraint` type.
 It allows you to specify that the value in a certain column must satisfy
@@ -296,11 +297,11 @@ check
      , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify the subcolumns which are getting checked
-  -> (forall t. Condition ('[] :=> schemas) '[t ::: subcolumns] 'Ungrouped '[])
+  -> (forall t. Condition ('[] :=> schemas) '[] 'Ungrouped '[t ::: subcolumns])
   -- ^ a closed `Condition` on those subcolumns
   -> TableConstraintExpression sch tab schemas ('Check aliases)
 check _cols condition = UnsafeTableConstraintExpression $
-  "CHECK" <+> parenthesized (renderExpression condition)
+  "CHECK" <+> parenthesized (renderSQL condition)
 
 {-| A `unique` constraint ensure that the data contained in a column,
 or a group of columns, is unique among all the rows in the table.
@@ -333,7 +334,7 @@ unique
   -- ^ specify subcolumns which together are unique for each row
   -> TableConstraintExpression sch tab schemas ('Unique aliases)
 unique columns = UnsafeTableConstraintExpression $
-  "UNIQUE" <+> parenthesized (commaSeparated (renderAliases columns))
+  "UNIQUE" <+> parenthesized (renderSQL columns)
 
 {-| A `primaryKey` constraint indicates that a column, or group of columns,
 can be used as a unique identifier for rows in the table.
@@ -368,7 +369,7 @@ primaryKey
   -- ^ specify the subcolumns which together form a primary key.
   -> TableConstraintExpression sch tab schemas ('PrimaryKey aliases)
 primaryKey columns = UnsafeTableConstraintExpression $
-  "PRIMARY KEY" <+> parenthesized (commaSeparated (renderAliases columns))
+  "PRIMARY KEY" <+> parenthesized (renderSQL columns)
 
 {-| A `foreignKey` specifies that the values in a column
 (or a group of columns) must match the values appearing in some row of
@@ -462,11 +463,11 @@ foreignKey
   -> TableConstraintExpression sch child schemas
       ('ForeignKey columns parent refcolumns)
 foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
-  "FOREIGN KEY" <+> parenthesized (commaSeparated (renderAliases keys))
-  <+> "REFERENCES" <+> renderAlias parent
-  <+> parenthesized (commaSeparated (renderAliases refs))
-  <+> renderOnDeleteClause ondel
-  <+> renderOnUpdateClause onupd
+  "FOREIGN KEY" <+> parenthesized (renderSQL keys)
+  <+> "REFERENCES" <+> renderSQL parent
+  <+> parenthesized (renderSQL refs)
+  <+> renderSQL ondel
+  <+> renderSQL onupd
 
 -- | A constraint synonym between types involved in a foreign key constraint.
 type ForeignKeyed schemas
@@ -497,13 +498,12 @@ data OnDeleteClause
     -- row(s) referencing it should be automatically deleted as well
   deriving (GHC.Generic,Show,Eq,Ord)
 instance NFData OnDeleteClause
-
 -- | Render `OnDeleteClause`.
-renderOnDeleteClause :: OnDeleteClause -> ByteString
-renderOnDeleteClause = \case
-  OnDeleteNoAction -> "ON DELETE NO ACTION"
-  OnDeleteRestrict -> "ON DELETE RESTRICT"
-  OnDeleteCascade -> "ON DELETE CASCADE"
+instance RenderSQL OnDeleteClause where
+  renderSQL = \case
+    OnDeleteNoAction -> "ON DELETE NO ACTION"
+    OnDeleteRestrict -> "ON DELETE RESTRICT"
+    OnDeleteCascade -> "ON DELETE CASCADE"
 
 -- | Analagous to `OnDeleteClause` there is also `OnUpdateClause` which is invoked
 -- when a referenced column is changed (updated).
@@ -519,11 +519,11 @@ data OnUpdateClause
 instance NFData OnUpdateClause
 
 -- | Render `OnUpdateClause`.
-renderOnUpdateClause :: OnUpdateClause -> ByteString
-renderOnUpdateClause = \case
-  OnUpdateNoAction -> "ON UPDATE NO ACTION"
-  OnUpdateRestrict -> "ON UPDATE RESTRICT"
-  OnUpdateCascade -> "ON UPDATE CASCADE"
+instance RenderSQL OnUpdateClause where
+  renderSQL = \case
+    OnUpdateNoAction -> "ON UPDATE NO ACTION"
+    OnUpdateRestrict -> "ON UPDATE RESTRICT"
+    OnUpdateCascade -> "ON UPDATE CASCADE"
 
 {-----------------------------------------
 DROP statements
@@ -544,7 +544,7 @@ dropTable
      , Has tab schema ('Table table))
   => QualifiedAlias sch tab -- ^ table to remove
   -> Definition schemas (Alter sch (Drop tab schema) schemas)
-dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderQualifiedAlias tab <> ";"
+dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderSQL tab <> ";"
 
 {-----------------------------------------
 ALTER statements
@@ -558,7 +558,7 @@ alterTable
   -> Definition schemas (Alter sch (Alter tab ('Table table1) schema) schemas)
 alterTable tab alteration = UnsafeDefinition $
   "ALTER TABLE"
-  <+> renderQualifiedAlias tab
+  <+> renderSQL tab
   <+> renderAlterTable alteration
   <> ";"
 
@@ -572,8 +572,8 @@ alterTableRename
   -> Alias table1 -- ^ what to rename it
   -> Definition schema (Rename table0 table1 schema)
 alterTableRename table0 table1 = UnsafeDefinition $
-  "ALTER TABLE" <+> renderAlias table0
-  <+> "RENAME TO" <+> renderAlias table1 <> ";"
+  "ALTER TABLE" <+> renderSQL table0
+  <+> "RENAME TO" <+> renderSQL table1 <> ";"
 
 -- | An `AlterTable` describes the alteration to perform on the columns
 -- of a table.
@@ -607,8 +607,8 @@ addConstraint
   -- ^ constraint to add
   -> AlterTable sch tab schemas table1
 addConstraint alias constraint = UnsafeAlterTable $
-  "ADD" <+> "CONSTRAINT" <+> renderAlias alias
-    <+> renderTableConstraintExpression constraint
+  "ADD" <+> "CONSTRAINT" <+> renderSQL alias
+    <+> renderSQL constraint
 
 -- | A `dropConstraint` drops a table constraint.
 --
@@ -631,7 +631,7 @@ dropConstraint
   -- ^ constraint to drop
   -> AlterTable sch tab schemas table1
 dropConstraint constraint = UnsafeAlterTable $
-  "DROP" <+> "CONSTRAINT" <+> renderAlias constraint
+  "DROP" <+> "CONSTRAINT" <+> renderSQL constraint
 
 -- | An `AddColumn` is either @NULL@ or has @DEFAULT@.
 class AddColumn ty where
@@ -670,7 +670,7 @@ class AddColumn ty where
     -> ColumnTypeExpression schemas ty -- ^ type of the new column
     -> AlterTable sch tab schemas (constraints :=> Create column ty columns)
   addColumn column ty = UnsafeAlterTable $
-    "ADD COLUMN" <+> renderAlias column <+> renderColumnTypeExpression ty
+    "ADD COLUMN" <+> renderSQL column <+> renderColumnTypeExpression ty
 instance {-# OVERLAPPING #-} AddColumn ('Def :=> ty)
 instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 
@@ -699,7 +699,7 @@ dropColumn
   => Alias column -- ^ column to remove
   -> AlterTable sch tab schemas table1
 dropColumn column = UnsafeAlterTable $
-  "DROP COLUMN" <+> renderAlias column
+  "DROP COLUMN" <+> renderSQL column
 
 -- | A `renameColumn` renames a column.
 --
@@ -723,7 +723,7 @@ renameColumn
   -> Alias column1 -- ^ what to rename the column
   -> AlterTable sch tab schemas table1
 renameColumn column0 column1 = UnsafeAlterTable $
-  "RENAME COLUMN" <+> renderAlias column0  <+> "TO" <+> renderAlias column1
+  "RENAME COLUMN" <+> renderSQL column0  <+> "TO" <+> renderSQL column1
 
 -- | An `alterColumn` alters a single column.
 alterColumn
@@ -737,7 +737,7 @@ alterColumn
   -> AlterColumn schemas ty0 ty1 -- ^ alteration to perform
   -> AlterTable sch tab schemas table1
 alterColumn column alteration = UnsafeAlterTable $
-  "ALTER COLUMN" <+> renderAlias column <+> renderAlterColumn alteration
+  "ALTER COLUMN" <+> renderSQL column <+> renderAlterColumn alteration
 
 -- | An `AlterColumn` describes the alteration to perform on a single column.
 newtype AlterColumn (schemas :: SchemasType) (ty0 :: ColumnType) (ty1 :: ColumnType) =
@@ -835,7 +835,7 @@ let
     '[ "public" ::: '["abc" ::: 'Table ('[] :=> ABC)]]
     '[ "public" ::: '["abc" ::: 'Table ('[] :=> ABC), "bc"  ::: 'View BC]]
   definition =
-    createView #bc (select (#b :* #c) (from (table #abc)))
+    createView #bc (select_ (#b :* #c) (from (table #abc)))
 in printSQL definition
 :}
 CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
@@ -846,7 +846,7 @@ createView
   -> Query ('[] :=> schemas) '[] view -- ^ query
   -> Definition schemas (Alter sch (Create vw ('View view) schema) schemas)
 createView alias query = UnsafeDefinition $
-  "CREATE" <+> "VIEW" <+> renderQualifiedAlias alias <+> "AS"
+  "CREATE" <+> "VIEW" <+> renderSQL alias <+> "AS"
   <+> renderQuery query <> ";"
 
 -- | Drop a view.
@@ -865,7 +865,7 @@ dropView
   :: (Has sch schemas schema, Has vw schema ('View view))
   => QualifiedAlias sch vw -- ^ view to remove
   -> Definition schemas (Alter sch (Drop vw schema) schemas)
-dropView vw = UnsafeDefinition $ "DROP VIEW" <+> renderQualifiedAlias vw <> ";"
+dropView vw = UnsafeDefinition $ "DROP VIEW" <+> renderSQL vw <> ";"
 
 -- | Enumerated types are created using the `createTypeEnum` command, for example
 --
@@ -879,8 +879,8 @@ createTypeEnum
   -- ^ labels of the enumerated type
   -> Definition schemas (Alter sch (Create enum ('Typedef ('PGenum labels)) schema) schemas)
 createTypeEnum enum labels = UnsafeDefinition $
-  "CREATE" <+> "TYPE" <+> renderQualifiedAlias enum <+> "AS" <+> "ENUM" <+>
-  parenthesized (commaSeparated (renderLabels labels)) <> ";"
+  "CREATE" <+> "TYPE" <+> renderSQL enum <+> "AS" <+> "ENUM" <+>
+  parenthesized (renderSQL labels) <> ";"
 
 -- | Enumerated types can also be generated from a Haskell type, for example
 --
@@ -933,12 +933,12 @@ createTypeComposite
   -- ^ list of attribute names and data types
   -> Definition schemas (Alter sch (Create ty ('Typedef ('PGcomposite fields)) schema) schemas)
 createTypeComposite ty fields = UnsafeDefinition $
-  "CREATE" <+> "TYPE" <+> renderQualifiedAlias ty <+> "AS" <+> parenthesized
+  "CREATE" <+> "TYPE" <+> renderSQL ty <+> "AS" <+> parenthesized
   (renderCommaSeparated renderField fields) <> ";"
   where
     renderField :: Aliased (TypeExpression schemas) x -> ByteString
     renderField (typ `As` alias) =
-      renderAlias alias <+> renderTypeExpression typ
+      renderSQL alias <+> renderSQL typ
 
 -- | Composite types can also be generated from a Haskell type, for example
 --
@@ -984,26 +984,28 @@ dropType
   => QualifiedAlias sch td
   -- ^ name of the user defined type
   -> Definition schemas (Alter sch (Drop td schema) schemas)
-dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderQualifiedAlias tydef <> ";"
+dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderSQL tydef <> ";"
 
 -- | `ColumnTypeExpression`s are used in `createTable` commands.
 newtype ColumnTypeExpression (schemas :: SchemasType) (ty :: ColumnType)
   = UnsafeColumnTypeExpression { renderColumnTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
+instance RenderSQL (ColumnTypeExpression schemas ty) where
+  renderSQL = renderColumnTypeExpression
 
 -- | used in `createTable` commands as a column constraint to note that
 -- @NULL@ may be present in a column
 nullable
   :: TypeExpression schemas (nullity ty)
   -> ColumnTypeExpression schemas ('NoDef :=> 'Null ty)
-nullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NULL"
+nullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NULL"
 
 -- | used in `createTable` commands as a column constraint to ensure
 -- @NULL@ is not present in a column
 notNullable
   :: TypeExpression schemas (nullity ty)
   -> ColumnTypeExpression schemas ('NoDef :=> 'NotNull ty)
-notNullable ty = UnsafeColumnTypeExpression $ renderTypeExpression ty <+> "NOT NULL"
+notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
 
 -- | used in `createTable` commands as a column constraint to give a default
 default_
@@ -1011,7 +1013,7 @@ default_
   -> ColumnTypeExpression schemas ('NoDef :=> ty)
   -> ColumnTypeExpression schemas ('Def :=> ty)
 default_ x ty = UnsafeColumnTypeExpression $
-  renderColumnTypeExpression ty <+> "DEFAULT" <+> renderExpression x
+  renderSQL ty <+> "DEFAULT" <+> renderExpression x
 
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `PGint2`

@@ -31,7 +31,7 @@ Squeal expressions are the atoms used to build statements.
 
 module Squeal.PostgreSQL.Expression
   ( -- * Expression
-    Expression (UnsafeExpression, renderExpression)
+    Expression (..)
   , HasParameter (parameter)
   , param
     -- ** Null
@@ -142,8 +142,8 @@ module Squeal.PostgreSQL.Expression
   , every, everyDistinct
   , max_, maxDistinct, min_, minDistinct
     -- * Types
-  , TypeExpression (UnsafeTypeExpression, renderTypeExpression)
-  , PGTyped (pgtype)
+  , TypeExpression (..)
+  , PGTyped (..)
   , typedef
   , typetable
   , typeview
@@ -219,14 +219,14 @@ and other operations.
 -}
 newtype Expression
   (db :: DBType)
-  (from :: FromType)
-  (grouping :: Grouping)
   (params :: [NullityType])
+  (grp :: Grouping)
+  (from :: FromType)
   (ty :: NullityType)
     = UnsafeExpression { renderExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
-instance RenderSQL (Expression db from grouping params ty) where
+instance RenderSQL (Expression db params grp from ty) where
   renderSQL = renderExpression
 
 {- | A `HasParameter` constraint is used to indicate a value that is
@@ -244,15 +244,15 @@ class KnownNat n => HasParameter
   | n params -> ty where
     -- | `parameter` takes a `Nat` using type application and a `TypeExpression`.
     --
-    -- >>> let expr = parameter @1 int4 :: Expression (DBof schemas) from grp '[ 'Null 'PGint4] ('Null 'PGint4)
+    -- >>> let expr = parameter @1 int4 :: Expression (DBof schemas) '[ 'Null 'PGint4] grp from ('Null 'PGint4)
     -- >>> printSQL expr
     -- ($1 :: int4)
     parameter
       :: TypeExpression schemas ty
-      -> Expression (commons :=> schemas) from grouping params ty
+      -> Expression (commons :=> schemas) params grp from ty
     parameter ty = UnsafeExpression $ parenthesized $
       "$" <> renderNat @n <+> "::"
-        <+> renderTypeExpression ty
+        <+> renderSQL ty
 instance {-# OVERLAPPING #-} HasParameter 1 (ty1:tys) ty1
 instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
   => HasParameter n (ty' : params) ty
@@ -260,88 +260,88 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
 -- | `param` takes a `Nat` using type application and for basic types,
 -- infers a `TypeExpression`.
 --
--- >>> let expr = param @1 :: Expression (commons :=> schemas) from grp '[ 'Null 'PGint4] ('Null 'PGint4)
+-- >>> let expr = param @1 :: Expression (commons :=> schemas) '[ 'Null 'PGint4] grp from ('Null 'PGint4)
 -- >>> printSQL expr
 -- ($1 :: int4)
 param
-  :: forall n db commons schemas params from grouping ty
+  :: forall n db commons schemas params from grp ty
    . (db ~ (commons :=> schemas), PGTyped schemas ty, HasParameter n params ty)
-  => Expression db from grouping params ty -- ^ param
+  => Expression db params grp from ty -- ^ param
 param = parameter @n (pgtype @schemas)
 
 instance (HasUnique tab from row, Has col row ty)
-  => IsLabel col (Expression db from 'Ungrouped params ty) where
-    fromLabel = UnsafeExpression $ renderAlias (Alias @col)
+  => IsLabel col (Expression db params 'Ungrouped from ty) where
+    fromLabel = UnsafeExpression $ renderSQL (Alias @col)
 instance (HasUnique tab from row, Has col row ty, column ~ (col ::: ty))
   => IsLabel col
-    (Aliased (Expression db from 'Ungrouped params) column) where
+    (Aliased (Expression db params 'Ungrouped from) column) where
     fromLabel = fromLabel @col `As` Alias
 instance (HasUnique tab from row, Has col row ty, columns ~ '[col ::: ty])
   => IsLabel col
-    (NP (Aliased (Expression db from 'Ungrouped params)) columns) where
+    (NP (Aliased (Expression db params 'Ungrouped from)) columns) where
     fromLabel = fromLabel @col :* Nil
 
 instance (Has tab from row, Has col row ty)
-  => IsQualified tab col (Expression db from 'Ungrouped params ty) where
+  => IsQualified tab col (Expression db params 'Ungrouped from ty) where
     tab ! col = UnsafeExpression $
-      renderAlias tab <> "." <> renderAlias col
+      renderSQL tab <> "." <> renderSQL col
 instance (Has tab from row, Has col row ty, column ~ (col ::: ty))
   => IsQualified tab col
-    (Aliased (Expression db from 'Ungrouped params) column) where
+    (Aliased (Expression db params 'Ungrouped from) column) where
     tab ! col = tab ! col `As` col
 instance (Has tab from row, Has col row ty, columns ~ '[col ::: ty])
   => IsQualified tab col
-    (NP (Aliased (Expression db from 'Ungrouped params)) columns) where
+    (NP (Aliased (Expression db params 'Ungrouped from)) columns) where
     tab ! col = tab ! col :* Nil
 
 instance
-  ( HasUnique table from columns
-  , Has column columns ty
-  , GroupedBy table column bys
-  ) => IsLabel column
-    (Expression db from ('Grouped bys) params ty) where
-      fromLabel = UnsafeExpression $ renderAlias (Alias @column)
+  ( HasUnique tab from row
+  , Has col row ty
+  , GroupedBy tab col bys
+  ) => IsLabel col
+    (Expression db params ('Grouped bys) from ty) where
+      fromLabel = UnsafeExpression $ renderSQL (Alias @col)
 instance
-  ( HasUnique table from columns
-  , Has column columns ty
-  , GroupedBy table column bys
-  ) => IsLabel column
-    ( Aliased (Expression db from ('Grouped bys) params)
-      (column ::: ty) ) where
-      fromLabel = fromLabel @column `As` Alias @column
+  ( HasUnique tab from row
+  , Has col row ty
+  , GroupedBy tab col bys
+  , column ~ (col ::: ty)
+  ) => IsLabel col
+    (Aliased (Expression db params ('Grouped bys) from) column) where
+      fromLabel = fromLabel @col `As` Alias
 instance
-  ( HasUnique table from columns
-  , Has column columns ty
-  , GroupedBy table column bys
-  ) => IsLabel column
-    ( NP (Aliased (Expression db from ('Grouped bys) params))
-      '[column ::: ty] ) where
-      fromLabel = fromLabel @column :* Nil
+  ( HasUnique tab from row
+  , Has col row ty
+  , GroupedBy tab col bys
+  , columns ~ '[col ::: ty]
+  ) => IsLabel col
+    (NP (Aliased (Expression db params ('Grouped bys) from)) columns) where
+      fromLabel = fromLabel @col :* Nil
 
 instance
-  ( Has table from columns
-  , Has column columns ty
-  , GroupedBy table column bys
-  ) => IsQualified table column
-    (Expression db from ('Grouped bys) params ty) where
-      table ! column = UnsafeExpression $
-        renderAlias table <> "." <> renderAlias column
+  ( Has tab from row
+  , Has col row ty
+  , GroupedBy tab col bys
+  ) => IsQualified tab col
+    (Expression db params ('Grouped bys) from ty) where
+      tab ! col = UnsafeExpression $
+        renderSQL tab <> "." <> renderSQL col
 instance
-  ( Has table from columns
-  , Has column columns ty
-  , GroupedBy table column bys
-  ) => IsQualified table column
-    (Aliased (Expression db from ('Grouped bys) params)
-      (column ::: ty)) where
-        table ! column = table ! column `As` column
+  ( Has tab from row
+  , Has col row ty
+  , GroupedBy tab col bys
+  , column ~ (col ::: ty)
+  ) => IsQualified tab col
+    (Aliased (Expression db params ('Grouped bys) from) column) where
+      tab ! col = tab ! col `As` col
 instance
-  ( Has table from columns
-  , Has column columns ty
-  , GroupedBy table column bys
-  ) => IsQualified table column
-    ( NP (Aliased (Expression db from ('Grouped bys) params))
-      '[column ::: ty]) where
-        table ! column = table ! column :* Nil
+  ( Has tab from row
+  , Has col row ty
+  , GroupedBy tab col bys
+  , columns ~ '[col ::: ty]
+  ) => IsQualified tab col
+    (NP (Aliased (Expression db params ('Grouped bys) from)) columns) where
+      tab ! col = tab ! col :* Nil
 
 -- | analagous to `Nothing`
 --
@@ -357,102 +357,102 @@ null_ = UnsafeExpression "NULL"
 notNull
   :: Expression db rels grouping params ('NotNull ty)
   -> Expression db rels grouping params ('Null ty)
-notNull = UnsafeExpression . renderExpression
+notNull = UnsafeExpression . renderSQL
 
 -- | return the leftmost value which is not NULL
 --
 -- >>> printSQL $ coalesce [null_, true] false
 -- COALESCE(NULL, TRUE, FALSE)
 coalesce
-  :: [Expression db from grouping params ('Null ty)]
+  :: [Expression db params grp from ('Null ty)]
   -- ^ @NULL@s may be present
-  -> Expression db from grouping params ('NotNull ty)
+  -> Expression db params grp from ('NotNull ty)
   -- ^ @NULL@ is absent
-  -> Expression db from grouping params ('NotNull ty)
+  -> Expression db params grp from ('NotNull ty)
 coalesce nullxs notNullx = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
-    ((renderExpression <$> nullxs) <> [renderExpression notNullx]))
+    ((renderSQL <$> nullxs) <> [renderSQL notNullx]))
 
 -- | analagous to `Data.Maybe.fromMaybe` using @COALESCE@
 --
 -- >>> printSQL $ fromNull true null_
 -- COALESCE(NULL, TRUE)
 fromNull
-  :: Expression db from grouping params ('NotNull ty)
+  :: Expression db params grp from ('NotNull ty)
   -- ^ what to convert @NULL@ to
-  -> Expression db from grouping params ('Null ty)
-  -> Expression db from grouping params ('NotNull ty)
+  -> Expression db params grp from ('Null ty)
+  -> Expression db params grp from ('NotNull ty)
 fromNull notNullx nullx = coalesce [nullx] notNullx
 
 -- | >>> printSQL $ null_ & isNull
 -- NULL IS NULL
 isNull
-  :: Expression db from grouping params ('Null ty)
+  :: Expression db params grp from ('Null ty)
   -- ^ possibly @NULL@
-  -> Condition db from grouping params
-isNull x = UnsafeExpression $ renderExpression x <+> "IS NULL"
+  -> Condition db params grp from
+isNull x = UnsafeExpression $ renderSQL x <+> "IS NULL"
 
 -- | >>> printSQL $ null_ & isNotNull
 -- NULL IS NOT NULL
 isNotNull
-  :: Expression db from grouping params ('Null ty)
+  :: Expression db params grp from ('Null ty)
   -- ^ possibly @NULL@
-  -> Condition db from grouping params
-isNotNull x = UnsafeExpression $ renderExpression x <+> "IS NOT NULL"
+  -> Condition db params grp from
+isNotNull x = UnsafeExpression $ renderSQL x <+> "IS NOT NULL"
 
 -- | analagous to `maybe` using @IS NULL@
 --
 -- >>> printSQL $ matchNull true not_ null_
 -- CASE WHEN NULL IS NULL THEN TRUE ELSE (NOT NULL) END
 matchNull
-  :: Expression db from grouping params (nullty)
+  :: Expression db params grp from (nullty)
   -- ^ what to convert @NULL@ to
-  -> ( Expression db from grouping params ('NotNull ty)
-       -> Expression db from grouping params (nullty) )
+  -> ( Expression db params grp from ('NotNull ty)
+       -> Expression db params grp from (nullty) )
   -- ^ function to perform when @NULL@ is absent
-  -> Expression db from grouping params ('Null ty)
-  -> Expression db from grouping params (nullty)
+  -> Expression db params grp from ('Null ty)
+  -> Expression db params grp from (nullty)
 matchNull y f x = ifThenElse (isNull x) y
-  (f (UnsafeExpression (renderExpression x)))
+  (f (UnsafeExpression (renderSQL x)))
 
 {-| right inverse to `fromNull`, if its arguments are equal then
 `nullIf` gives @NULL@.
 
 >>> :set -XTypeApplications -XDataKinds
->>> let expr = nullIf false (param @1) :: Expression (commons :=> schema) from grp '[ 'NotNull 'PGbool] ('Null 'PGbool)
+>>> let expr = nullIf false (param @1) :: Expression (commons :=> schema) '[ 'NotNull 'PGbool] grp from ('Null 'PGbool)
 >>> printSQL expr
 NULL IF (FALSE, ($1 :: bool))
 -}
 nullIf
-  :: Expression db from grouping params ('NotNull ty)
+  :: Expression db params grp from ('NotNull ty)
   -- ^ @NULL@ is absent
-  -> Expression db from grouping params ('NotNull ty)
+  -> Expression db params grp from ('NotNull ty)
   -- ^ @NULL@ is absent
-  -> Expression db from grouping params ('Null ty)
+  -> Expression db params grp from ('Null ty)
 nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
-  (renderExpression x <> ", " <> renderExpression y)
+  (renderSQL x <> ", " <> renderSQL y)
 
 -- | >>> printSQL $ array [null_, false, true]
 -- ARRAY[NULL, FALSE, TRUE]
 array
-  :: [Expression db from grouping params ty]
+  :: [Expression db params grp from ty]
   -- ^ array elements
-  -> Expression db from grouping params (nullity ('PGvararray ty))
+  -> Expression db params grp from (nullity ('PGvararray ty))
 array xs = UnsafeExpression $
-  "ARRAY[" <> commaSeparated (renderExpression <$> xs) <> "]"
+  "ARRAY[" <> commaSeparated (renderSQL <$> xs) <> "]"
 
 -- | >>> printSQL $ array [null_, false, true] & index 2
 -- (ARRAY[NULL, FALSE, TRUE])[2]
 index
   :: Word64 -- ^ index
-  -> Expression db from grouping params (nullity ('PGvararray ty)) -- ^ array
-  -> Expression db from grouping params (NullifyType ty)
+  -> Expression db params grp from (nullity ('PGvararray ty)) -- ^ array
+  -> Expression db params grp from (NullifyType ty)
 index n expr = UnsafeExpression $
-  parenthesized (renderExpression expr) <> "[" <> fromString (show n) <> "]"
+  parenthesized (renderSQL expr) <> "[" <> fromString (show n) <> "]"
 
 instance (KnownSymbol label, label `In` labels) => IsPGlabel label
-  (Expression db from grouping params (nullity ('PGenum labels))) where
-  label = UnsafeExpression $ renderLabel (PGlabel @label)
+  (Expression db params grp from (nullity ('PGenum labels))) where
+  label = UnsafeExpression $ renderSQL (PGlabel @label)
 
 -- | A row constructor is an expression that builds a row value
 -- (also called a composite value) using values for its member fields.
@@ -468,11 +468,11 @@ instance (KnownSymbol label, label `In` labels) => IsPGlabel label
 -- ROW(0, 1)
 row
   :: SListI row
-  => NP (Aliased (Expression db from grouping params)) row
+  => NP (Aliased (Expression db params grp from)) row
   -- ^ zero or more expressions for the row field values
-  -> Expression db from grouping params (nullity ('PGcomposite row))
+  -> Expression db params grp from (nullity ('PGcomposite row))
 row exprs = UnsafeExpression $ "ROW" <> parenthesized
-  (renderCommaSeparated (\ (expr `As` _) -> renderExpression expr) exprs)
+  (renderCommaSeparated (\ (expr `As` _) -> renderSQL expr) exprs)
 
 -- | >>> :{
 -- type Complex = 'PGcomposite
@@ -491,87 +491,87 @@ field
      , Has field row ty)
   => QualifiedAlias sch tydef -- ^ row type
   -> Alias field -- ^ field name
-  -> Expression (commons :=> schemas) from grouping params ('NotNull ('PGcomposite row))
-  -> Expression (commons :=> schemas) from grouping params ty
+  -> Expression (commons :=> schemas) params grp from ('NotNull ('PGcomposite row))
+  -> Expression (commons :=> schemas) params grp from ty
 field td fld expr = UnsafeExpression $
-  parenthesized (renderExpression expr <> "::" <> renderQualifiedAlias td)
-    <> "." <> renderAlias fld
+  parenthesized (renderSQL expr <> "::" <> renderSQL td)
+    <> "." <> renderSQL fld
 
 instance Semigroup
-  (Expression db from grouping params (nullity ('PGvararray ty))) where
+  (Expression db params grp from (nullity ('PGvararray ty))) where
     (<>) = unsafeBinaryOp "||"
 
 instance Monoid
-  (Expression db from grouping params (nullity ('PGvararray ty))) where
+  (Expression db params grp from (nullity ('PGvararray ty))) where
     mempty = array []
     mappend = (<>)
 
--- | >>> let expr = greatest currentTimestamp [param @1] :: Expression (commons :=> schemas) rels grp '[ 'NotNull 'PGtimestamptz] ('NotNull 'PGtimestamptz)
+-- | >>> let expr = greatest currentTimestamp [param @1] :: Expression (commons :=> schemas) '[ 'NotNull 'PGtimestamptz] grp from ('NotNull 'PGtimestamptz)
 -- >>> printSQL expr
 -- GREATEST(CURRENT_TIMESTAMP, ($1 :: timestamp with time zone))
 greatest
-  :: Expression db from grouping params (nullty)
+  :: Expression db params grp from (nullty)
   -- ^ needs at least 1 argument
-  -> [Expression db from grouping params (nullty)]
+  -> [Expression db params grp from (nullty)]
   -- ^ or more
-  -> Expression db from grouping params (nullty)
+  -> Expression db params grp from (nullty)
 greatest x xs = UnsafeExpression $ "GREATEST("
-  <> commaSeparated (renderExpression <$> (x:xs)) <> ")"
+  <> commaSeparated (renderSQL <$> (x:xs)) <> ")"
 
 -- | >>> printSQL $ least currentTimestamp [null_]
 -- LEAST(CURRENT_TIMESTAMP, NULL)
 least
-  :: Expression db from grouping params (nullty)
+  :: Expression db params grp from (nullty)
   -- ^ needs at least 1 argument
-  -> [Expression db from grouping params (nullty)]
+  -> [Expression db params grp from (nullty)]
   -- ^ or more
-  -> Expression db from grouping params (nullty)
+  -> Expression db params grp from (nullty)
 least x xs = UnsafeExpression $ "LEAST("
-  <> commaSeparated (renderExpression <$> (x:xs)) <> ")"
+  <> commaSeparated (renderSQL <$> (x:xs)) <> ")"
 
 -- | >>> printSQL $ unsafeBinaryOp "OR" true false
 -- (TRUE OR FALSE)
 unsafeBinaryOp
   :: ByteString
   -- ^ operator
-  -> Expression db from grouping params (ty0)
-  -> Expression db from grouping params (ty1)
-  -> Expression db from grouping params (ty2)
+  -> Expression db params grp from (ty0)
+  -> Expression db params grp from (ty1)
+  -> Expression db params grp from (ty2)
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
-  renderExpression x <+> op <+> renderExpression y
+  renderSQL x <+> op <+> renderSQL y
 
 -- | >>> printSQL $ unsafeUnaryOp "NOT" true
 -- (NOT TRUE)
 unsafeUnaryOp
   :: ByteString
   -- ^ operator
-  -> Expression db from grouping params (ty0)
-  -> Expression db from grouping params (ty1)
+  -> Expression db params grp from (ty0)
+  -> Expression db params grp from (ty1)
 unsafeUnaryOp op x = UnsafeExpression $ parenthesized $
-  op <+> renderExpression x
+  op <+> renderSQL x
 
 -- | >>> printSQL $ unsafeFunction "f" true
 -- f(TRUE)
 unsafeFunction
   :: ByteString
   -- ^ function
-  -> Expression db from grouping params (xty)
-  -> Expression db from grouping params (yty)
+  -> Expression db params grp from (xty)
+  -> Expression db params grp from (yty)
 unsafeFunction fun x = UnsafeExpression $
-  fun <> parenthesized (renderExpression x)
+  fun <> parenthesized (renderSQL x)
 
 -- | Helper for defining variadic functions.
 unsafeVariadicFunction
   :: SListI elems
   => ByteString
   -- ^ function
-  -> NP (Expression db from grouping params) elems
-  -> Expression db from grouping params ret
+  -> NP (Expression db params grp from) elems
+  -> Expression db params grp from ret
 unsafeVariadicFunction fun x = UnsafeExpression $
-  fun <> parenthesized (commaSeparated (hcollapse (hmap (K . renderExpression) x)))
+  fun <> parenthesized (commaSeparated (hcollapse (hmap (K . renderSQL) x)))
 
 instance ty `In` PGNum
-  => Num (Expression db from grouping params (nullity ty)) where
+  => Num (Expression db params grp from (nullity ty)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
     (*) = unsafeBinaryOp "*"
@@ -583,18 +583,18 @@ instance ty `In` PGNum
       . show
 
 instance (ty `In` PGNum, ty `In` PGFloating) => Fractional
-  (Expression db from grouping params (nullity ty)) where
+  (Expression db params grp from (nullity ty)) where
     (/) = unsafeBinaryOp "/"
     fromRational x = fromInteger (numerator x) / fromInteger (denominator x)
 
 instance (ty `In` PGNum, ty `In` PGFloating) => Floating
-  (Expression db from grouping params (nullity ty)) where
+  (Expression db params grp from (nullity ty)) where
     pi = UnsafeExpression "pi()"
     exp = unsafeFunction "exp"
     log = unsafeFunction "ln"
     sqrt = unsafeFunction "sqrt"
     b ** x = UnsafeExpression $
-      "power(" <> renderExpression b <> ", " <> renderExpression x <> ")"
+      "power(" <> renderSQL b <> ", " <> renderSQL x <> ")"
     logBase b y = log y / log b
     sin = unsafeFunction "sin"
     cos = unsafeFunction "cos"
@@ -611,20 +611,20 @@ instance (ty `In` PGNum, ty `In` PGFloating) => Floating
 
 -- | >>> :{
 -- let
---   expression :: Expression db from grouping params (nullity 'PGfloat4)
+--   expression :: Expression db params grp from (nullity 'PGfloat4)
 --   expression = atan2_ pi 2
 -- in printSQL expression
 -- :}
 -- atan2(pi(), 2)
 atan2_
   :: float `In` PGFloating
-  => Expression db from grouping params (nullity float)
+  => Expression db params grp from (nullity float)
   -- ^ numerator
-  -> Expression db from grouping params (nullity float)
+  -> Expression db params grp from (nullity float)
   -- ^ denominator
-  -> Expression db from grouping params (nullity float)
+  -> Expression db params grp from (nullity float)
 atan2_ y x = UnsafeExpression $
-  "atan2(" <> renderExpression y <> ", " <> renderExpression x <> ")"
+  "atan2(" <> renderSQL y <> ", " <> renderSQL x <> ")"
 
 -- When a `cast` is applied to an `Expression` of a known type, it
 -- represents a run-time type conversion. The cast will succeed only if a
@@ -635,171 +635,171 @@ atan2_ y x = UnsafeExpression $
 cast
   :: TypeExpression schemas ty1
   -- ^ type to cast as
-  -> Expression (commons :=> schemas) from grouping params ty0
+  -> Expression (commons :=> schemas) params grp from ty0
   -- ^ value to convert
-  -> Expression (commons :=> schemas) from grouping params ty1
+  -> Expression (commons :=> schemas) params grp from ty1
 cast ty x = UnsafeExpression $ parenthesized $
-  renderExpression x <+> "::" <+> renderTypeExpression ty
+  renderSQL x <+> "::" <+> renderSQL ty
 
 -- | integer division, truncates the result
 --
 -- >>> :{
 -- let
---   expression :: Expression db from grouping params (nullity 'PGint2)
+--   expression :: Expression db params grp from (nullity 'PGint2)
 --   expression = 5 `quot_` 2
 -- in printSQL expression
 -- :}
 -- (5 / 2)
 quot_
   :: int `In` PGIntegral
-  => Expression db from grouping params (nullity int)
+  => Expression db params grp from (nullity int)
   -- ^ numerator
-  -> Expression db from grouping params (nullity int)
+  -> Expression db params grp from (nullity int)
   -- ^ denominator
-  -> Expression db from grouping params (nullity int)
+  -> Expression db params grp from (nullity int)
 quot_ = unsafeBinaryOp "/"
 
 -- | remainder upon integer division
 --
 -- >>> :{
 -- let
---   expression :: Expression db from grouping params (nullity 'PGint2)
+--   expression :: Expression db params grp from (nullity 'PGint2)
 --   expression = 5 `rem_` 2
 -- in printSQL expression
 -- :}
 -- (5 % 2)
 rem_
   :: int `In` PGIntegral
-  => Expression db from grouping params (nullity int)
+  => Expression db params grp from (nullity int)
   -- ^ numerator
-  -> Expression db from grouping params (nullity int)
+  -> Expression db params grp from (nullity int)
   -- ^ denominator
-  -> Expression db from grouping params (nullity int)
+  -> Expression db params grp from (nullity int)
 rem_ = unsafeBinaryOp "%"
 
 -- | >>> :{
 -- let
---   expression :: Expression db from grouping params (nullity 'PGfloat4)
+--   expression :: Expression db params grp from (nullity 'PGfloat4)
 --   expression = trunc pi
 -- in printSQL expression
 -- :}
 -- trunc(pi())
 trunc
   :: frac `In` PGFloating
-  => Expression db from grouping params (nullity frac)
+  => Expression db params grp from (nullity frac)
   -- ^ fractional number
-  -> Expression db from grouping params (nullity frac)
+  -> Expression db params grp from (nullity frac)
 trunc = unsafeFunction "trunc"
 
 -- | >>> :{
 -- let
---   expression :: Expression db from grouping params (nullity 'PGfloat4)
+--   expression :: Expression db params grp from (nullity 'PGfloat4)
 --   expression = round_ pi
 -- in printSQL expression
 -- :}
 -- round(pi())
 round_
   :: frac `In` PGFloating
-  => Expression db from grouping params (nullity frac)
+  => Expression db params grp from (nullity frac)
   -- ^ fractional number
-  -> Expression db from grouping params (nullity frac)
+  -> Expression db params grp from (nullity frac)
 round_ = unsafeFunction "round"
 
 -- | >>> :{
 -- let
---   expression :: Expression db from grouping params (nullity 'PGfloat4)
+--   expression :: Expression db params grp from (nullity 'PGfloat4)
 --   expression = ceiling_ pi
 -- in printSQL expression
 -- :}
 -- ceiling(pi())
 ceiling_
   :: frac `In` PGFloating
-  => Expression db from grouping params (nullity frac)
+  => Expression db params grp from (nullity frac)
   -- ^ fractional number
-  -> Expression db from grouping params (nullity frac)
+  -> Expression db params grp from (nullity frac)
 ceiling_ = unsafeFunction "ceiling"
 
 -- | A `Condition` is an `Expression`, which can evaluate
 -- to `true`, `false` or `null_`. This is because SQL uses
 -- a three valued logic.
-type Condition db from grouping params =
-  Expression db from grouping params ('Null 'PGbool)
+type Condition db params grp from =
+  Expression db params grp from ('Null 'PGbool)
 
 -- | >>> printSQL true
 -- TRUE
-true :: Expression db from grouping params (nullity 'PGbool)
+true :: Expression db params grp from (nullity 'PGbool)
 true = UnsafeExpression "TRUE"
 
 -- | >>> printSQL false
 -- FALSE
-false :: Expression db from grouping params (nullity 'PGbool)
+false :: Expression db params grp from (nullity 'PGbool)
 false = UnsafeExpression "FALSE"
 
 -- | >>> printSQL $ not_ true
 -- (NOT TRUE)
 not_
-  :: Expression db from grouping params (nullity 'PGbool)
-  -> Expression db from grouping params (nullity 'PGbool)
+  :: Expression db params grp from (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 not_ = unsafeUnaryOp "NOT"
 
 -- | >>> printSQL $ true .&& false
 -- (TRUE AND FALSE)
 (.&&)
-  :: Expression db from grouping params (nullity 'PGbool)
-  -> Expression db from grouping params (nullity 'PGbool)
-  -> Expression db from grouping params (nullity 'PGbool)
+  :: Expression db params grp from (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 infixr 3 .&&
 (.&&) = unsafeBinaryOp "AND"
 
 -- | >>> printSQL $ true .|| false
 -- (TRUE OR FALSE)
 (.||)
-  :: Expression db from grouping params (nullity 'PGbool)
-  -> Expression db from grouping params (nullity 'PGbool)
-  -> Expression db from grouping params (nullity 'PGbool)
+  :: Expression db params grp from (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 infixr 2 .||
 (.||) = unsafeBinaryOp "OR"
 
 -- | >>> :{
 -- let
---   expression :: Expression db from grouping params (nullity 'PGint2)
+--   expression :: Expression db params grp from (nullity 'PGint2)
 --   expression = caseWhenThenElse [(true, 1), (false, 2)] 3
 -- in printSQL expression
 -- :}
 -- CASE WHEN TRUE THEN 1 WHEN FALSE THEN 2 ELSE 3 END
 caseWhenThenElse
-  :: [ ( Condition db from grouping params
-       , Expression db from grouping params ty
+  :: [ ( Condition db params grp from
+       , Expression db params grp from ty
      ) ]
   -- ^ whens and thens
-  -> Expression db from grouping params ty
+  -> Expression db params grp from ty
   -- ^ else
-  -> Expression db from grouping params ty
+  -> Expression db params grp from ty
 caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   [ "CASE"
   , mconcat
     [ mconcat
-      [ " WHEN ", renderExpression when_
-      , " THEN ", renderExpression then_
+      [ " WHEN ", renderSQL when_
+      , " THEN ", renderSQL then_
       ]
     | (when_,then_) <- whenThens
     ]
-  , " ELSE ", renderExpression else_
+  , " ELSE ", renderSQL else_
   , " END"
   ]
 
 -- | >>> :{
 -- let
---   expression :: Expression db from grouping params (nullity 'PGint2)
+--   expression :: Expression db params grp from (nullity 'PGint2)
 --   expression = ifThenElse true 1 0
 -- in printSQL expression
 -- :}
 -- CASE WHEN TRUE THEN 1 ELSE 0 END
 ifThenElse
-  :: Condition db from grouping params
-  -> Expression db from grouping params ty -- ^ then
-  -> Expression db from grouping params ty -- ^ else
-  -> Expression db from grouping params ty
+  :: Condition db params grp from
+  -> Expression db params grp from ty -- ^ then
+  -> Expression db params grp from ty -- ^ else
+  -> Expression db params grp from ty
 ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 
 -- | Comparison operations like `.==`, `./=`, `.>`, `.>=`, `.<` and `.<=`
@@ -808,85 +808,85 @@ ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 -- >>> printSQL $ true .== null_
 -- (TRUE = NULL)
 (.==)
-  :: Expression db from grouping params (nullity0 ty) -- ^ lhs
-  -> Expression db from grouping params (nullity1 ty) -- ^ rhs
-  -> Condition db from grouping params
+  :: Expression db params grp from (nullity0 ty) -- ^ lhs
+  -> Expression db params grp from (nullity1 ty) -- ^ rhs
+  -> Condition db params grp from
 (.==) = unsafeBinaryOp "="
 infix 4 .==
 
 -- | >>> printSQL $ true ./= null_
 -- (TRUE <> NULL)
 (./=)
-  :: Expression db from grouping params (nullity0 ty) -- ^ lhs
-  -> Expression db from grouping params (nullity1 ty) -- ^ rhs
-  -> Condition db from grouping params
+  :: Expression db params grp from (nullity0 ty) -- ^ lhs
+  -> Expression db params grp from (nullity1 ty) -- ^ rhs
+  -> Condition db params grp from
 (./=) = unsafeBinaryOp "<>"
 infix 4 ./=
 
 -- | >>> printSQL $ true .>= null_
 -- (TRUE >= NULL)
 (.>=)
-  :: Expression db from grouping params (nullity0 ty) -- ^ lhs
-  -> Expression db from grouping params (nullity1 ty) -- ^ rhs
-  -> Condition db from grouping params
+  :: Expression db params grp from (nullity0 ty) -- ^ lhs
+  -> Expression db params grp from (nullity1 ty) -- ^ rhs
+  -> Condition db params grp from
 (.>=) = unsafeBinaryOp ">="
 infix 4 .>=
 
 -- | >>> printSQL $ true .< null_
 -- (TRUE < NULL)
 (.<)
-  :: Expression db from grouping params (nullity0 ty) -- ^ lhs
-  -> Expression db from grouping params (nullity1 ty) -- ^ rhs
-  -> Condition db from grouping params
+  :: Expression db params grp from (nullity0 ty) -- ^ lhs
+  -> Expression db params grp from (nullity1 ty) -- ^ rhs
+  -> Condition db params grp from
 (.<) = unsafeBinaryOp "<"
 infix 4 .<
 
 -- | >>> printSQL $ true .<= null_
 -- (TRUE <= NULL)
 (.<=)
-  :: Expression db from grouping params (nullity0 ty) -- ^ lhs
-  -> Expression db from grouping params (nullity1 ty) -- ^ rhs
-  -> Condition db from grouping params
+  :: Expression db params grp from (nullity0 ty) -- ^ lhs
+  -> Expression db params grp from (nullity1 ty) -- ^ rhs
+  -> Condition db params grp from
 (.<=) = unsafeBinaryOp "<="
 infix 4 .<=
 
 -- | >>> printSQL $ true .> null_
 -- (TRUE > NULL)
 (.>)
-  :: Expression db from grouping params (nullity0 ty) -- ^ lhs
-  -> Expression db from grouping params (nullity1 ty) -- ^ rhs
-  -> Condition db from grouping params
+  :: Expression db params grp from (nullity0 ty) -- ^ lhs
+  -> Expression db params grp from (nullity1 ty) -- ^ rhs
+  -> Condition db params grp from
 (.>) = unsafeBinaryOp ">"
 infix 4 .>
 
 -- | >>> printSQL currentDate
 -- CURRENT_DATE
 currentDate
-  :: Expression db from grouping params (nullity 'PGdate)
+  :: Expression db params grp from (nullity 'PGdate)
 currentDate = UnsafeExpression "CURRENT_DATE"
 
 -- | >>> printSQL currentTime
 -- CURRENT_TIME
 currentTime
-  :: Expression db from grouping params (nullity 'PGtimetz)
+  :: Expression db params grp from (nullity 'PGtimetz)
 currentTime = UnsafeExpression "CURRENT_TIME"
 
 -- | >>> printSQL currentTimestamp
 -- CURRENT_TIMESTAMP
 currentTimestamp
-  :: Expression db from grouping params (nullity 'PGtimestamptz)
+  :: Expression db params grp from (nullity 'PGtimestamptz)
 currentTimestamp = UnsafeExpression "CURRENT_TIMESTAMP"
 
 -- | >>> printSQL localTime
 -- LOCALTIME
 localTime
-  :: Expression db from grouping params (nullity 'PGtime)
+  :: Expression db params grp from (nullity 'PGtime)
 localTime = UnsafeExpression "LOCALTIME"
 
 -- | >>> printSQL localTimestamp
 -- LOCALTIMESTAMP
 localTimestamp
-  :: Expression db from grouping params (nullity 'PGtimestamp)
+  :: Expression db params grp from (nullity 'PGtimestamp)
 localTimestamp = UnsafeExpression "LOCALTIMESTAMP"
 
 {-----------------------------------------
@@ -894,7 +894,7 @@ text
 -----------------------------------------}
 
 instance IsString
-  (Expression db from grouping params (nullity 'PGtext)) where
+  (Expression db params grp from (nullity 'PGtext)) where
     fromString str = UnsafeExpression $
       "E\'" <> fromString (escape =<< str) <> "\'"
       where
@@ -910,36 +910,36 @@ instance IsString
           c -> [c]
 
 instance Semigroup
-  (Expression db from grouping params (nullity 'PGtext)) where
+  (Expression db params grp from (nullity 'PGtext)) where
     (<>) = unsafeBinaryOp "||"
 
 instance Monoid
-  (Expression db from grouping params (nullity 'PGtext)) where
+  (Expression db params grp from (nullity 'PGtext)) where
     mempty = fromString ""
     mappend = (<>)
 
 -- | >>> printSQL $ lower "ARRRGGG"
 -- lower(E'ARRRGGG')
 lower
-  :: Expression db from grouping params (nullity 'PGtext)
+  :: Expression db params grp from (nullity 'PGtext)
   -- ^ string to lower case
-  -> Expression db from grouping params (nullity 'PGtext)
+  -> Expression db params grp from (nullity 'PGtext)
 lower = unsafeFunction "lower"
 
 -- | >>> printSQL $ upper "eeee"
 -- upper(E'eeee')
 upper
-  :: Expression db from grouping params (nullity 'PGtext)
+  :: Expression db params grp from (nullity 'PGtext)
   -- ^ string to upper case
-  -> Expression db from grouping params (nullity 'PGtext)
+  -> Expression db params grp from (nullity 'PGtext)
 upper = unsafeFunction "upper"
 
 -- | >>> printSQL $ charLength "four"
 -- char_length(E'four')
 charLength
-  :: Expression db from grouping params (nullity 'PGtext)
+  :: Expression db params grp from (nullity 'PGtext)
   -- ^ string to measure
-  -> Expression db from grouping params (nullity 'PGint4)
+  -> Expression db params grp from (nullity 'PGint4)
 charLength = unsafeFunction "char_length"
 
 -- | The `like` expression returns true if the @string@ matches
@@ -952,11 +952,11 @@ charLength = unsafeFunction "char_length"
 -- >>> printSQL $ "abc" `like` "a%"
 -- (E'abc' LIKE E'a%')
 like
-  :: Expression db from grouping params (nullity 'PGtext)
+  :: Expression db params grp from (nullity 'PGtext)
   -- ^ string
-  -> Expression db from grouping params (nullity 'PGtext)
+  -> Expression db params grp from (nullity 'PGtext)
   -- ^ pattern
-  -> Expression db from grouping params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 like = unsafeBinaryOp "LIKE"
 
 -- | The key word ILIKE can be used instead of LIKE to make the
@@ -965,11 +965,11 @@ like = unsafeBinaryOp "LIKE"
 -- >>> printSQL $ "abc" `ilike` "a%"
 -- (E'abc' ILIKE E'a%')
 ilike
-  :: Expression db from grouping params (nullity 'PGtext)
+  :: Expression db params grp from (nullity 'PGtext)
   -- ^ string
-  -> Expression db from grouping params (nullity 'PGtext)
+  -> Expression db params grp from (nullity 'PGtext)
   -- ^ pattern
-  -> Expression db from grouping params (nullity 'PGbool)
+  -> Expression db params grp from (nullity 'PGbool)
 ilike = unsafeBinaryOp "ILIKE"
 
 {-----------------------------------------
@@ -984,36 +984,36 @@ Table 9.44: json and jsonb operators
 -- | Get JSON value (object field or array element) at a key.
 (.->)
   :: (json `In` PGJsonType, key `In` PGJsonKey)
-  => Expression db from grouping params (nullity json)
-  -> Expression db from grouping params (nullity key)
-  -> Expression db from grouping params ('Null json)
+  => Expression db params grp from (nullity json)
+  -> Expression db params grp from (nullity key)
+  -> Expression db params grp from ('Null json)
 infixl 8 .->
 (.->) = unsafeBinaryOp "->"
 
 -- | Get JSON value (object field or array element) at a key, as text.
 (.->>)
   :: (json `In` PGJsonType, key `In` PGJsonKey)
-  => Expression db from grouping params (nullity json)
-  -> Expression db from grouping params (nullity key)
-  -> Expression db from grouping params ('Null 'PGtext)
+  => Expression db params grp from (nullity json)
+  -> Expression db params grp from (nullity key)
+  -> Expression db params grp from ('Null 'PGtext)
 infixl 8 .->>
 (.->>) = unsafeBinaryOp "->>"
 
 -- | Get JSON value at a specified path.
 (.#>)
   :: (json `In` PGJsonType, PGTextArray "(.#>)" path)
-  => Expression db from grouping params (nullity json)
-  -> Expression db from grouping params (nullity path)
-  -> Expression db from grouping params ('Null json)
+  => Expression db params grp from (nullity json)
+  -> Expression db params grp from (nullity path)
+  -> Expression db params grp from ('Null json)
 infixl 8 .#>
 (.#>) = unsafeBinaryOp "#>"
 
 -- | Get JSON value at a specified path as text.
 (.#>>)
   :: (json `In` PGJsonType, PGTextArray "(.#>>)" path)
-  => Expression db from grouping params (nullity json)
-  -> Expression db from grouping params (nullity path)
-  -> Expression db from grouping params ('Null 'PGtext)
+  => Expression db params grp from (nullity json)
+  -> Expression db params grp from (nullity path)
+  -> Expression db params grp from ('Null 'PGtext)
 infixl 8 .#>>
 (.#>>) = unsafeBinaryOp "#>>"
 
@@ -1022,42 +1022,42 @@ infixl 8 .#>>
 -- | Does the left JSON value contain the right JSON path/value entries at the
 -- top level?
 (.@>)
-  :: Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity 'PGjsonb)
-  -> Condition db from grouping params
+  :: Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity 'PGjsonb)
+  -> Condition db params grp from
 infixl 9 .@>
 (.@>) = unsafeBinaryOp "@>"
 
 -- | Are the left JSON path/value entries contained at the top level within the
 -- right JSON value?
 (.<@)
-  :: Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity 'PGjsonb)
-  -> Condition db from grouping params
+  :: Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity 'PGjsonb)
+  -> Condition db params grp from
 infixl 9 .<@
 (.<@) = unsafeBinaryOp "<@"
 
 -- | Does the string exist as a top-level key within the JSON value?
 (.?)
-  :: Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity 'PGtext)
-  -> Condition db from grouping params
+  :: Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity 'PGtext)
+  -> Condition db params grp from
 infixl 9 .?
 (.?) = unsafeBinaryOp "?"
 
 -- | Do any of these array strings exist as top-level keys?
 (.?|)
-  :: Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity ('PGvararray ('NotNull 'PGtext)))
-  -> Condition db from grouping params
+  :: Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity ('PGvararray ('NotNull 'PGtext)))
+  -> Condition db params grp from
 infixl 9 .?|
 (.?|) = unsafeBinaryOp "?|"
 
 -- | Do all of these array strings exist as top-level keys?
 (.?&)
-  :: Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity ('PGvararray ('NotNull 'PGtext)))
-  -> Condition db from grouping params
+  :: Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity ('PGvararray ('NotNull 'PGtext)))
+  -> Condition db params grp from
 infixl 9 .?&
 (.?&) = unsafeBinaryOp "?&"
 
@@ -1080,9 +1080,9 @@ instance
 -- count from the end). Throws an error if top level container is not an array.
 (.-.)
   :: (key `In` '[ 'PGtext, 'PGvararray ('NotNull 'PGtext), 'PGint4, 'PGint2 ]) -- hlint error without parens here
-  => Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity key)
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  => Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity key)
+  -> Expression db params grp from (nullity 'PGjsonb)
 infixl 6 .-.
 (.-.) = unsafeBinaryOp "-"
 
@@ -1090,9 +1090,9 @@ infixl 6 .-.
 -- integers count from the end)
 (#-.)
   :: PGTextArray "(#-.)" arrayty
-  => Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity arrayty)
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  => Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity arrayty)
+  -> Expression db params grp from (nullity 'PGjsonb)
 infixl 6 #-.
 (#-.) = unsafeBinaryOp "#-"
 
@@ -1103,14 +1103,14 @@ Table 9.45: JSON creation functions
 -- | Literal binary JSON
 jsonbLit
   :: JSON.ToJSON x
-  => x -> Expression (commons :=> schemas) from grouping params (nullity 'PGjsonb)
+  => x -> Expression (commons :=> schemas) params grp from (nullity 'PGjsonb)
 jsonbLit = cast jsonb . UnsafeExpression
   . singleQuotedUtf8 . toStrict . JSON.encode
 
 -- | Literal JSON
 jsonLit
   :: JSON.ToJSON x
-  => x -> Expression (commons :=> schemas) from grouping params (nullity 'PGjson)
+  => x -> Expression (commons :=> schemas) params grp from (nullity 'PGjson)
 jsonLit = cast json . UnsafeExpression
   . singleQuotedUtf8 . toStrict . JSON.encode
 
@@ -1121,8 +1121,8 @@ jsonLit = cast json . UnsafeExpression
 -- number, a Boolean, or a null value, the text representation will be used, in
 -- such a fashion that it is a valid json value.
 toJson
-  :: Expression db from grouping params (nullity ty)
-  -> Expression db from grouping params (nullity 'PGjson)
+  :: Expression db params grp from (nullity ty)
+  -> Expression db params grp from (nullity 'PGjson)
 toJson = unsafeFunction "to_json"
 
 -- | Returns the value as jsonb. Arrays and composites are converted
@@ -1132,56 +1132,59 @@ toJson = unsafeFunction "to_json"
 -- number, a Boolean, or a null value, the text representation will be used, in
 -- such a fashion that it is a valid jsonb value.
 toJsonb
-  :: Expression db from grouping params (nullity ty)
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  :: Expression db params grp from (nullity ty)
+  -> Expression db params grp from (nullity 'PGjsonb)
 toJsonb = unsafeFunction "to_jsonb"
 
 -- | Returns the array as a JSON array. A PostgreSQL multidimensional array
 -- becomes a JSON array of arrays.
 arrayToJson
   :: PGArray "arrayToJson" arr
-  => Expression db from grouping params (nullity arr)
-  -> Expression db from grouping params (nullity 'PGjson)
+  => Expression db params grp from (nullity arr)
+  -> Expression db params grp from (nullity 'PGjson)
 arrayToJson = unsafeFunction "array_to_json"
 
 -- | Returns the row as a JSON object.
 rowToJson
-  :: Expression db from grouping params (nullity ('PGcomposite ty))
-  -> Expression db from grouping params (nullity 'PGjson)
+  :: Expression db params grp from (nullity ('PGcomposite ty))
+  -> Expression db params grp from (nullity 'PGjson)
 rowToJson = unsafeFunction "row_to_json"
 
 -- | Builds a possibly-heterogeneously-typed JSON array out of a variadic
 -- argument list.
 jsonBuildArray
   :: SListI elems
-  => NP (Expression db from grouping params) elems
-  -> Expression db from grouping params (nullity 'PGjson)
+  => NP (Expression db params grp from) elems
+  -> Expression db params grp from (nullity 'PGjson)
 jsonBuildArray = unsafeVariadicFunction "json_build_array"
 
 -- | Builds a possibly-heterogeneously-typed (binary) JSON array out of a
 -- variadic argument list.
 jsonbBuildArray
   :: SListI elems
-  => NP (Expression db from grouping params) elems
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  => NP (Expression db params grp from) elems
+  -> Expression db params grp from (nullity 'PGjsonb)
 jsonbBuildArray = unsafeVariadicFunction "jsonb_build_array"
 
 unsafeRowFunction
   :: All Top elems
-  => NP (Aliased (Expression db from grouping params)) elems
+  => NP (Aliased (Expression db params grp from)) elems
   -> [ByteString]
 unsafeRowFunction =
   (`appEndo` []) . hcfoldMap (Proxy :: Proxy Top)
   (\(col `As` name) -> Endo $ \xs ->
-      renderAliasString name : renderExpression col : xs)
+      renderAliasString name : renderSQL col : xs)
+  where
+    renderAliasString :: KnownSymbol alias => Alias alias -> ByteString
+    renderAliasString = singleQuotedText . fromString . symbolVal
 
 -- | Builds a possibly-heterogeneously-typed JSON object out of a variadic
 -- argument list. The elements of the argument list must alternate between text
 -- and values.
 jsonBuildObject
   :: All Top elems
-  => NP (Aliased (Expression db from grouping params)) elems
-  -> Expression db from grouping params (nullity 'PGjson)
+  => NP (Aliased (Expression db params grp from)) elems
+  -> Expression db params grp from (nullity 'PGjson)
 jsonBuildObject
   = unsafeFunction "json_build_object"
   . UnsafeExpression
@@ -1193,8 +1196,8 @@ jsonBuildObject
 -- between text and values.
 jsonbBuildObject
   :: All Top elems
-  => NP (Aliased (Expression db from grouping params)) elems
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  => NP (Aliased (Expression db params grp from)) elems
+  -> Expression db params grp from (nullity 'PGjsonb)
 jsonbBuildObject
   = unsafeFunction "jsonb_build_object"
   . UnsafeExpression
@@ -1207,8 +1210,8 @@ jsonbBuildObject
 -- array has exactly two elements, which are taken as a key/value pair.
 jsonObject
   :: PGArrayOf "jsonObject" arr ('NotNull 'PGtext)
-  => Expression db from grouping params (nullity arr)
-  -> Expression db from grouping params (nullity 'PGjson)
+  => Expression db params grp from (nullity arr)
+  -> Expression db params grp from (nullity 'PGjson)
 jsonObject = unsafeFunction "json_object"
 
 -- | Builds a binary JSON object out of a text array. The array must have either
@@ -1217,8 +1220,8 @@ jsonObject = unsafeFunction "json_object"
 -- array has exactly two elements, which are taken as a key/value pair.
 jsonbObject
   :: PGArrayOf "jsonbObject" arr ('NotNull 'PGtext)
-  => Expression db from grouping params (nullity arr)
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  => Expression db params grp from (nullity arr)
+  -> Expression db params grp from (nullity 'PGjsonb)
 jsonbObject = unsafeFunction "jsonb_object"
 
 -- | This is an alternate form of 'jsonObject' that takes two arrays; one for
@@ -1226,9 +1229,9 @@ jsonbObject = unsafeFunction "jsonb_object"
 jsonZipObject
   :: ( PGArrayOf "jsonZipObject" keysArray ('NotNull 'PGtext)
      , PGArrayOf "jsonZipObject" valuesArray ('NotNull 'PGtext))
-  => Expression db from grouping params (nullity keysArray)
-  -> Expression db from grouping params (nullity valuesArray)
-  -> Expression db from grouping params (nullity 'PGjson)
+  => Expression db params grp from (nullity keysArray)
+  -> Expression db params grp from (nullity valuesArray)
+  -> Expression db params grp from (nullity 'PGjson)
 jsonZipObject ks vs =
   unsafeVariadicFunction "json_object" (ks :* vs :* Nil)
 
@@ -1238,9 +1241,9 @@ jsonZipObject ks vs =
 jsonbZipObject
   :: ( PGArrayOf "jsonbZipObject" keysArray ('NotNull 'PGtext)
      , PGArrayOf "jsonbZipObject" valuesArray ('NotNull 'PGtext))
-  => Expression db from grouping params (nullity keysArray)
-  -> Expression db from grouping params (nullity valuesArray)
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  => Expression db params grp from (nullity keysArray)
+  -> Expression db params grp from (nullity valuesArray)
+  -> Expression db params grp from (nullity 'PGjsonb)
 jsonbZipObject ks vs =
   unsafeVariadicFunction "jsonb_object" (ks :* vs :* Nil)
 
@@ -1250,23 +1253,23 @@ Table 9.46: JSON processing functions
 
 -- | Returns the number of elements in the outermost JSON array.
 jsonArrayLength
-  :: Expression db from grouping params (nullity 'PGjson)
-  -> Expression db from grouping params (nullity 'PGint4)
+  :: Expression db params grp from (nullity 'PGjson)
+  -> Expression db params grp from (nullity 'PGint4)
 jsonArrayLength = unsafeFunction "json_array_length"
 
 -- | Returns the number of elements in the outermost binary JSON array.
 jsonbArrayLength
-  :: Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity 'PGint4)
+  :: Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity 'PGint4)
 jsonbArrayLength = unsafeFunction "jsonb_array_length"
 
 -- | Returns JSON value pointed to by the given path (equivalent to #>
 -- operator).
 jsonExtractPath
   :: SListI elems
-  => Expression db from grouping params (nullity 'PGjson)
-  -> NP (Expression db from grouping params) elems
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  => Expression db params grp from (nullity 'PGjson)
+  -> NP (Expression db params grp from) elems
+  -> Expression db params grp from (nullity 'PGjsonb)
 jsonExtractPath x xs =
   unsafeVariadicFunction "json_extract_path" (x :* xs)
 
@@ -1274,9 +1277,9 @@ jsonExtractPath x xs =
 -- operator).
 jsonbExtractPath
   :: SListI elems
-  => Expression db from grouping params (nullity 'PGjsonb)
-  -> NP (Expression db from grouping params) elems
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  => Expression db params grp from (nullity 'PGjsonb)
+  -> NP (Expression db params grp from) elems
+  -> Expression db params grp from (nullity 'PGjsonb)
 jsonbExtractPath x xs =
   unsafeVariadicFunction "jsonb_extract_path" (x :* xs)
 
@@ -1284,9 +1287,9 @@ jsonbExtractPath x xs =
 -- operator), as text.
 jsonExtractPathAsText
   :: SListI elems
-  => Expression db from grouping params (nullity 'PGjson)
-  -> NP (Expression db from grouping params) elems
-  -> Expression db from grouping params (nullity 'PGjson)
+  => Expression db params grp from (nullity 'PGjson)
+  -> NP (Expression db params grp from) elems
+  -> Expression db params grp from (nullity 'PGjson)
 jsonExtractPathAsText x xs =
   unsafeVariadicFunction "json_extract_path_text" (x :* xs)
 
@@ -1294,38 +1297,38 @@ jsonExtractPathAsText x xs =
 -- operator), as text.
 jsonbExtractPathAsText
   :: SListI elems
-  => Expression db from grouping params (nullity 'PGjsonb)
-  -> NP (Expression db from grouping params) elems
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  => Expression db params grp from (nullity 'PGjsonb)
+  -> NP (Expression db params grp from) elems
+  -> Expression db params grp from (nullity 'PGjsonb)
 jsonbExtractPathAsText x xs =
   unsafeVariadicFunction "jsonb_extract_path_text" (x :* xs)
 
 -- | Returns the type of the outermost JSON value as a text string. Possible
 -- types are object, array, string, number, boolean, and null.
 jsonTypeof
-  :: Expression db from grouping params (nullity 'PGjson)
-  -> Expression db from grouping params (nullity 'PGtext)
+  :: Expression db params grp from (nullity 'PGjson)
+  -> Expression db params grp from (nullity 'PGtext)
 jsonTypeof = unsafeFunction "json_typeof"
 
 -- | Returns the type of the outermost binary JSON value as a text string.
 -- Possible types are object, array, string, number, boolean, and null.
 jsonbTypeof
-  :: Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity 'PGtext)
+  :: Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity 'PGtext)
 jsonbTypeof = unsafeFunction "jsonb_typeof"
 
 -- | Returns its argument with all object fields that have null values omitted.
 -- Other null values are untouched.
 jsonStripNulls
-  :: Expression db from grouping params (nullity 'PGjson)
-  -> Expression db from grouping params (nullity 'PGjson)
+  :: Expression db params grp from (nullity 'PGjson)
+  -> Expression db params grp from (nullity 'PGjson)
 jsonStripNulls = unsafeFunction "json_strip_nulls"
 
 -- | Returns its argument with all object fields that have null values omitted.
 -- Other null values are untouched.
 jsonbStripNulls
-  :: Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  :: Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity 'PGjsonb)
 jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
 
 -- | @ jsonbSet target path new_value create_missing @
@@ -1337,11 +1340,11 @@ jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
 -- arrays.
 jsonbSet
   :: PGTextArray "jsonbSet" arr
-  => Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity arr)
-  -> Expression db from grouping params (nullity 'PGjsonb)
-  -> Maybe (Expression db from grouping params (nullity 'PGbool))
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  => Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity arr)
+  -> Expression db params grp from (nullity 'PGjsonb)
+  -> Maybe (Expression db params grp from (nullity 'PGbool))
+  -> Expression db params grp from (nullity 'PGjsonb)
 jsonbSet tgt path val createMissing = case createMissing of
   Just m -> unsafeVariadicFunction "jsonb_set" (tgt :* path :* val :* m :* Nil)
   Nothing -> unsafeVariadicFunction "jsonb_set" (tgt :* path :* val :* Nil)
@@ -1356,19 +1359,19 @@ jsonbSet tgt path val createMissing = case createMissing of
 -- in path count from the end of JSON arrays.
 jsonbInsert
   :: PGTextArray "jsonbInsert" arr
-  => Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity arr)
-  -> Expression db from grouping params (nullity 'PGjsonb)
-  -> Maybe (Expression db from grouping params (nullity 'PGbool))
-  -> Expression db from grouping params (nullity 'PGjsonb)
+  => Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity arr)
+  -> Expression db params grp from (nullity 'PGjsonb)
+  -> Maybe (Expression db params grp from (nullity 'PGbool))
+  -> Expression db params grp from (nullity 'PGjsonb)
 jsonbInsert tgt path val insertAfter = case insertAfter of
   Just i -> unsafeVariadicFunction "jsonb_insert" (tgt :* path :* val :* i :* Nil)
   Nothing -> unsafeVariadicFunction "jsonb_insert" (tgt :* path :* val :* Nil)
 
 -- | Returns its argument as indented JSON text.
 jsonbPretty
-  :: Expression db from grouping params (nullity 'PGjsonb)
-  -> Expression db from grouping params (nullity 'PGtext)
+  :: Expression db params grp from (nullity 'PGjsonb)
+  -> Expression db params grp from (nullity 'PGtext)
 jsonbPretty = unsafeFunction "jsonb_pretty"
 
 {-----------------------------------------
@@ -1381,7 +1384,7 @@ unsafeAggregate
   -> Expression db from 'Ungrouped params (xty)
   -> Expression db from ('Grouped bys) params (yty)
 unsafeAggregate fun x = UnsafeExpression $ mconcat
-  [fun, "(", renderExpression x, ")"]
+  [fun, "(", renderSQL x, ")"]
 
 -- | escape hatch to define aggregate functions over distinct values
 unsafeAggregateDistinct
@@ -1389,11 +1392,11 @@ unsafeAggregateDistinct
   -> Expression db from 'Ungrouped params (xty)
   -> Expression db from ('Grouped bys) params (yty)
 unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
-  [fun, "(DISTINCT ", renderExpression x, ")"]
+  [fun, "(DISTINCT ", renderSQL x, ")"]
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Grouped bys) params ('Null 'PGnumeric)
+--   expression :: Expression db params ('Grouped bys) '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null 'PGnumeric)
 --   expression = sum_ #col
 -- in printSQL expression
 -- :}
@@ -1407,7 +1410,7 @@ sum_ = unsafeAggregate "sum"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGnumeric]] ('Grouped bys) params (nullity 'PGnumeric)
+--   expression :: Expression db params ('Grouped bys) '[tab ::: '["col" ::: nullity 'PGnumeric]] (nullity 'PGnumeric)
 --   expression = sumDistinct #col
 -- in printSQL expression
 -- :}
@@ -1438,7 +1441,7 @@ instance PGAvg 'PGinterval 'PGinterval
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
 --   expression = bitAnd #col
 -- in printSQL expression
 -- :}
@@ -1452,7 +1455,7 @@ bitAnd = unsafeAggregate "bit_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
+--   expression :: Expression db params ('Grouped bys) '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
 --   expression = bitOr #col
 -- in printSQL expression
 -- :}
@@ -1466,7 +1469,7 @@ bitOr = unsafeAggregate "bit_or"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
+--   expression :: Expression db params ('Grouped bys) '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
 --   expression = bitAndDistinct #col
 -- in printSQL expression
 -- :}
@@ -1480,7 +1483,7 @@ bitAndDistinct = unsafeAggregateDistinct "bit_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGint4]] (Grouped bys) params (nullity 'PGint4)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
 --   expression = bitOrDistinct #col
 -- in printSQL expression
 -- :}
@@ -1494,7 +1497,7 @@ bitOrDistinct = unsafeAggregateDistinct "bit_or"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
 --   expression = boolAnd #col
 -- in printSQL expression
 -- :}
@@ -1507,7 +1510,7 @@ boolAnd = unsafeAggregate "bool_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
 --   expression = boolOr #col
 -- in printSQL expression
 -- :}
@@ -1520,7 +1523,7 @@ boolOr = unsafeAggregate "bool_or"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
 --   expression = boolAndDistinct #col
 -- in printSQL expression
 -- :}
@@ -1533,7 +1536,7 @@ boolAndDistinct = unsafeAggregateDistinct "bool_and"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
 --   expression = boolOrDistinct #col
 -- in printSQL expression
 -- :}
@@ -1554,7 +1557,7 @@ countStar = UnsafeExpression $ "count(*)"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity ty]] (Grouped bys) params ('NotNull 'PGint8)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
 --   expression = count #col
 -- in printSQL expression
 -- :}
@@ -1567,7 +1570,7 @@ count = unsafeAggregate "count"
 
 -- | >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity ty]] (Grouped bys) params ('NotNull 'PGint8)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
 --   expression = countDistinct #col
 -- in printSQL expression
 -- :}
@@ -1582,7 +1585,7 @@ countDistinct = unsafeAggregateDistinct "count"
 --
 -- >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
 --   expression = every #col
 -- in printSQL expression
 -- :}
@@ -1597,7 +1600,7 @@ every = unsafeAggregate "every"
 --
 -- >>> :{
 -- let
---   expression :: Expression db '[tab ::: '["col" ::: nullity 'PGbool]] (Grouped bys) params (nullity 'PGbool)
+--   expression :: Expression db params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
 --   expression = everyDistinct #col
 -- in printSQL expression
 -- :}
@@ -1626,13 +1629,15 @@ type expressions
 newtype TypeExpression (schemas :: SchemasType) (ty :: NullityType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
+instance RenderSQL (TypeExpression schemas ty) where
+  renderSQL = renderTypeExpression
 
 -- | The enum or composite type in a `Typedef` can be expressed by its alias.
 typedef
   :: (Has sch schemas schema, Has td schema ('Typedef ty))
   => QualifiedAlias sch td
   -> TypeExpression schemas (nullity ty)
-typedef = UnsafeTypeExpression . renderQualifiedAlias
+typedef = UnsafeTypeExpression . renderSQL
 
 -- | The composite type corresponding to a `Table` definition can be expressed
 -- by its alias.
@@ -1640,7 +1645,7 @@ typetable
   :: (Has sch schemas schema, Has tab schema ('Table table))
   => QualifiedAlias sch tab
   -> TypeExpression schemas (nullity ('PGcomposite (TableToRow table)))
-typetable = UnsafeTypeExpression . renderQualifiedAlias
+typetable = UnsafeTypeExpression . renderSQL
 
 -- | The composite type corresponding to a `View` definition can be expressed
 -- by its alias.
@@ -1648,7 +1653,7 @@ typeview
   :: (Has sch schemas schema, Has vw schema ('View view))
   => QualifiedAlias sch vw
   -> TypeExpression schemas (nullity ('PGcomposite view))
-typeview = UnsafeTypeExpression . renderQualifiedAlias
+typeview = UnsafeTypeExpression . renderSQL
 
 -- | logical Boolean (true/false)
 bool :: TypeExpression schemas (nullity 'PGbool)
@@ -1730,17 +1735,17 @@ jsonb = UnsafeTypeExpression "jsonb"
 vararray
   :: TypeExpression schemas pg
   -> TypeExpression schemas (nullity ('PGvararray pg))
-vararray ty = UnsafeTypeExpression $ renderTypeExpression ty <> "[]"
+vararray ty = UnsafeTypeExpression $ renderSQL ty <> "[]"
 -- | fixed length array
 --
--- >>> renderTypeExpression (fixarray @2 json)
+-- >>> renderSQL (fixarray @2 json)
 -- "json[2]"
 fixarray
   :: forall n schemas nullity pg. KnownNat n
   => TypeExpression schemas pg
   -> TypeExpression schemas (nullity ('PGfixarray n pg))
 fixarray ty = UnsafeTypeExpression $
-  renderTypeExpression ty <> "[" <> renderNat @n <> "]"
+  renderSQL ty <> "[" <> renderNat @n <> "]"
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped schemas (ty :: NullityType) where

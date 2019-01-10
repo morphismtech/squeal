@@ -68,18 +68,17 @@ insertUser :: Manipulation DB '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
 insertUser = insertInto #users
   (Values_ (defaultAs #id :* param @1 `as` #name :* param @2 `as` #vec))
-  (OnConflict (OnConstraint #pk_users) DoNothing) (Returning (#id `as` #fromOnly))
+  (OnConflict (OnConstraint #pk_users) DoNothing) (Returning_ (#id `as` #fromOnly))
 
 insertEmail :: Manipulation DB '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
-insertEmail = insertInto #emails
+insertEmail = insertInto_ #emails
   (Values_ (defaultAs #id :* param @1 `as` #user_id :* param @2 `as` #email))
-  (OnConflict (OnConstraint #pk_emails) DoNothing) (Returning Nil)
 
 getUsers :: Query DB '[]
   '[ "userName" ::: 'NotNull 'PGtext
    , "userEmail" ::: 'Null 'PGtext
    , "userVec" ::: 'NotNull ('PGvararray ('Null 'PGint2))]
-getUsers = select
+getUsers = select_
   (#u ! #name `as` #userName :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)
   ( from (table (#users `as` #u)
     & innerJoin (table (#emails `as` #e))
