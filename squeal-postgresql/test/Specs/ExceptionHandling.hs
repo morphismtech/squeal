@@ -48,8 +48,6 @@ type Schema =
 
 type Schemas = Public Schema
 
-type DB = DBof Schemas
-
 data User =
   User { userName  :: Text
        , userEmail :: Maybe Text
@@ -58,7 +56,7 @@ data User =
 instance SOP.Generic User
 instance SOP.HasDatatypeInfo User
 
-insertUser :: Manipulation DB '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
+insertUser :: Manipulation '[] Schemas '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
 insertUser = insertInto #users
   (Values_ (defaultAs #id :* param @1 `as` #name :* param @2 `as` #vec))

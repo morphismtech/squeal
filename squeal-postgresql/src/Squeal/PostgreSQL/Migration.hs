@@ -275,21 +275,21 @@ createMigrations =
 -- | Inserts a `Migration` into the `MigrationsTable`
 insertMigration
   :: Has "migrations" schemas MigrationsSchema
-  => Manipulation ('[] :=> schemas) '[ 'NotNull 'PGtext] '[]
+  => Manipulation '[] schemas '[ 'NotNull 'PGtext] '[]
 insertMigration = insertInto_ (#migrations ! #schema_migrations) . Values_ $
   (param @1) `as` #name :* defaultAs #executed_at
 
 -- | Deletes a `Migration` from the `MigrationsTable`
 deleteMigration
   :: Has "migrations" schemas MigrationsSchema
-  => Manipulation ('[] :=> schemas) '[ 'NotNull 'PGtext ] '[]
+  => Manipulation '[] schemas '[ 'NotNull 'PGtext ] '[]
 deleteMigration = deleteFrom_ (#migrations ! #schema_migrations) NoUsing (#name .== param @1)
 
 -- | Selects a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was executed.
 selectMigration
   :: Has "migrations" schemas MigrationsSchema
-  => Query ('[] :=> schemas) '[ 'NotNull 'PGtext ]
+  => Query '[] schemas '[ 'NotNull 'PGtext ]
     '[ "executed_at" ::: 'NotNull 'PGtimestamptz ]
 selectMigration = select_
   (#executed_at `as` #executed_at)

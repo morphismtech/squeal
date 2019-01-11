@@ -27,7 +27,7 @@ round trip query.
 >>> instance HasDatatypeInfo Row
 >>> :{
 let
-  roundTrip :: Query (DBof (Public '[])) (TuplePG Row) (RowPG Row)
+  roundTrip :: Query_ (Public '[]) Row Row
   roundTrip = values_ $
     parameter @1 int2 `as` #col1 :*
     parameter @2 text `as` #col2 :*
@@ -68,7 +68,7 @@ Once again, we define a simple round trip query.
 
 >>> :{
 let
-  roundTrip :: Query (DBof (Public '[])) (TuplePG Row) (RowPG Row)
+  roundTrip :: Query_ (Public '[]) Row Row
   roundTrip = values_ $
     parameter @1 (int2 & vararray)                  `as` #col1 :*
     parameter @2 (int2 & fixarray @2)               `as` #col2 :*
@@ -146,7 +146,7 @@ Once again, define a round trip query.
 
 >>> :{
 let
-  roundTrip :: Query (DBof (Public Schema)) (TuplePG Row) (RowPG Row)
+  roundTrip :: Query_ (Public Schema) Row Row
   roundTrip = values_ $
     parameter @1 (typedef #schwarma) `as` #schwarma :*
     parameter @2 (typedef #person)   `as` #person1  :*
