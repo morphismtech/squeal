@@ -451,8 +451,9 @@ instance RenderSQL (Selection commons schemas params grp from row) where
         renderOver
           :: Aliased (WindowFunction commons schemas params grp from) field
           -> ByteString
-        renderOver winFn = renderAliased renderSQL winFn
+        renderOver (winFn `As` col) = renderSQL winFn
           <+> "OVER" <+> parenthesized (renderSQL winDef)
+          <+> "AS" <+> renderSQL col
       in
         renderCommaSeparated renderOver winFns
 
