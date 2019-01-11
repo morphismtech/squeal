@@ -115,9 +115,18 @@ need to retrieve the user id that the insert generates and insert it into
 the emails table. Take a careful look at the type and definition of both
 of our inserts.
 
+We'll need a Haskell type for users. We give the type `Generics.SOP.Generic` and
+`Generics.SOP.HasDatatypeInfo` instances so that we can decode the rows
+we receive when we run @getUsers@. Notice that the record fields of the
+@User@ type match the column names of @getUsers@.
+ 
+>>> data User = User { userName :: Text, userEmail :: Maybe Text } deriving (Show, GHC.Generic)
+>>> instance SOP.Generic User
+>>> instance SOP.HasDatatypeInfo User
+
 >>> :{
 let
-  insertUser :: Manipulation '[] Schemas '[ 'NotNull 'PGtext, 'Null 'PGtext ] '[]
+  insertUser :: Manipulation_ Schemas User ()
   insertUser = with (u `as` #u) e
     where
       u = insertInto #users
@@ -137,9 +146,7 @@ need to use an inner join to get the right result. A `Query` is like a
 
 >>> :{
 let
-  getUsers :: Query '[] Schemas '[]
-    '[ "userName"  ::: 'NotNull 'PGtext
-     , "userEmail" :::    'Null 'PGtext ]
+  getUsers :: Query_ Schemas () User
   getUsers = select_
     (#u ! #name `as` #userName :* #e ! #email `as` #userEmail)
     ( from (table (#users `as` #u)
@@ -150,17 +157,7 @@ let
 >>> printSQL getUsers
 SELECT "u"."name" AS "userName", "e"."email" AS "userEmail" FROM "users" AS "u" INNER JOIN "emails" AS "e" ON ("u"."id" = "e"."user_id")
 
-Now that we've defined the SQL side of things, we'll need a Haskell type
-for users. We give the type `Generics.SOP.Generic` and
-`Generics.SOP.HasDatatypeInfo` instances so that we can decode the rows
-we receive when we run @getUsers@. Notice that the record fields of the
-@User@ type match the column names of @getUsers@.
- 
->>> data User = User { userName :: Text, userEmail :: Maybe Text } deriving (Show, GHC.Generic)
->>> instance SOP.Generic User
->>> instance SOP.HasDatatypeInfo User
-
-Let's also create some users to add to the database.
+Let's create some users to add to the database.
 
 >>> :{
 let
