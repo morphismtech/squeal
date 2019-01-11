@@ -1887,14 +1887,8 @@ instance RenderSQL (WindowFunction commons schemas params grp from ty) where
   renderSQL = renderWindowFunction
 
 {- | rank of the current row with gaps; same as `rowNumber` of its first peer
->>> :{
-let
-  expr :: WindowExpression commons schemas params 'Ungrouped '["tab" ::: '["a" ::: ty]] ('NotNull 'PGint8)
-  expr = rank `Over` (partitionBy #a)
-in
-  printSQL expr
-:}
-rank() OVER (PARTITION BY "a")
+>>> printSQL rank
+rank()
 -}
 rank :: WindowFunction commons schemas from grp params ('NotNull 'PGint8)
 rank = UnsafeWindowFunction "rank()"
