@@ -16,11 +16,13 @@ Squeal expressions are the atoms used to build statements.
   , FlexibleContexts
   , FlexibleInstances
   , FunctionalDependencies
+  , GADTs
   , GeneralizedNewtypeDeriving
   , LambdaCase
   , MagicHash
   , OverloadedStrings
   , ScopedTypeVariables
+  , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
   , TypeInType
@@ -141,6 +143,18 @@ module Squeal.PostgreSQL.Expression
   , count, countDistinct
   , every, everyDistinct
   , max_, maxDistinct, min_, minDistinct
+    -- * Window Functions
+  , WindowDefinition (..)
+  , partitionBy
+  , WindowFunction (..)
+  , rank
+  , rowNumber
+  , denseRank
+  , percentRank
+  , cumeDist
+    -- * Sorting
+  , SortExpression (..)
+  , OrderBy (..)
     -- * Types
   , TypeExpression (..)
   , PGTyped (..)
@@ -1778,3 +1792,138 @@ instance PGTyped schemas ty
 instance (KnownNat n, PGTyped schemas ty)
   => PGTyped schemas (nullity ('PGfixarray n ty)) where
     pgtype = fixarray @n (pgtype @schemas @ty)
+
+{-----------------------------------------
+Sorting
+-----------------------------------------}
+
+-- | `SortExpression`s are used by `sortBy` to optionally sort the results
+-- of a `Query`. `Asc` or `Desc` set the sort direction of a `NotNull` result
+-- column to ascending or descending. Ascending order puts smaller values
+-- first, where "smaller" is defined in terms of the `.<` operator. Similarly,
+-- descending order is determined with the `.>` operator. `AscNullsFirst`,
+-- `AscNullsLast`, `DescNullsFirst` and `DescNullsLast` options are used to
+-- determine whether nulls appear before or after non-null values in the sort
+-- ordering of a `Null` result column.
+data SortExpression commons schemas params grp from where
+    Asc
+      :: Expression commons schemas params grp from ('NotNull ty)
+      -> SortExpression commons schemas params grp from
+    Desc
+      :: Expression commons schemas params grp from ('NotNull ty)
+      -> SortExpression commons schemas params grp from
+    AscNullsFirst
+      :: Expression commons schemas params grp from  ('Null ty)
+      -> SortExpression commons schemas params grp from
+    AscNullsLast
+      :: Expression commons schemas params grp from  ('Null ty)
+      -> SortExpression commons schemas params grp from
+    DescNullsFirst
+      :: Expression commons schemas params grp from  ('Null ty)
+      -> SortExpression commons schemas params grp from
+    DescNullsLast
+      :: Expression commons schemas params grp from  ('Null ty)
+      -> SortExpression commons schemas params grp from
+deriving instance Show (SortExpression commons schemas params grp from)
+
+class OrderBy expr where
+  orderBy
+    :: [SortExpression commons schemas params grp from]
+    -> expr commons schemas params grp from
+    -> expr commons schemas params grp from
+
+-- | Render a `SortExpression`.
+instance RenderSQL (SortExpression commons schemas params grp from) where
+  renderSQL = \case
+    Asc expression -> renderSQL expression <+> "ASC"
+    Desc expression -> renderSQL expression <+> "DESC"
+    AscNullsFirst expression -> renderSQL expression
+      <+> "ASC NULLS FIRST"
+    DescNullsFirst expression -> renderSQL expression
+      <+> "DESC NULLS FIRST"
+    AscNullsLast expression -> renderSQL expression <+> "ASC NULLS LAST"
+    DescNullsLast expression -> renderSQL expression <+> "DESC NULLS LAST"
+
+data WindowDefinition commons schemas params grp from where
+  WindowDefinition
+    :: SListI bys
+    => NP (Expression commons schemas params grp from) bys
+    -> [SortExpression commons schemas params grp from]
+    -> WindowDefinition commons schemas params grp from
+
+instance OrderBy WindowDefinition where
+  orderBy sortsR (WindowDefinition parts sortsL)
+    = WindowDefinition parts (sortsL ++ sortsR)
+
+instance RenderSQL (WindowDefinition commons schemas from grp params) where
+  renderSQL (WindowDefinition part ord) =
+    renderPartitionByClause part <> renderOrderByClause ord
+    where
+      renderPartitionByClause = \case
+        Nil -> ""
+        parts -> "PARTITION" <+> "BY" <+> renderCommaSeparated renderExpression parts
+      renderOrderByClause = \case
+        [] -> ""
+        srts -> " ORDER" <+> "BY"
+          <+> commaSeparated (renderSQL <$> srts)
+
+partitionBy
+  :: SListI bys
+  => NP (Expression commons schemas params grp from) bys
+  -> WindowDefinition commons schemas params grp from
+partitionBy bys = WindowDefinition bys []
+
+newtype WindowFunction
+  (commons :: FromType)
+  (schemas :: SchemasType)
+  (params :: [NullityType])
+  (grp :: Grouping)
+  (from :: FromType)
+  (ty :: NullityType)
+    = UnsafeWindowFunction { renderWindowFunction :: ByteString }
+    deriving (GHC.Generic,Show,Eq,Ord,NFData)
+
+instance RenderSQL (WindowFunction commons schemas params grp from ty) where
+  renderSQL = renderWindowFunction
+
+{- | rank of the current row with gaps; same as `rowNumber` of its first peer
+>>> :{
+let
+  expr :: WindowExpression commons schemas params 'Ungrouped '["tab" ::: '["a" ::: ty]] ('NotNull 'PGint8)
+  expr = rank `Over` (partitionBy #a)
+in
+  printSQL expr
+:}
+rank() OVER (PARTITION BY "a")
+-}
+rank :: WindowFunction commons schemas from grp params ('NotNull 'PGint8)
+rank = UnsafeWindowFunction "rank()"
+
+{- | number of the current row within its partition, counting from 1
+>>> printSQL rowNumber
+row_number()
+-}
+rowNumber :: WindowFunction commons schemas from grp params ('NotNull 'PGint8)
+rowNumber = UnsafeWindowFunction "row_number()"
+
+{- | rank of the current row without gaps; this function counts peer groups
+>>> printSQL denseRank
+dense_rank()
+-}
+denseRank :: WindowFunction commons schemas from grp params ('NotNull 'PGint8)
+denseRank = UnsafeWindowFunction "dense_rank()"
+
+{- | relative rank of the current row: (rank - 1) / (total partition rows - 1)
+>>> printSQL percentRank
+percent_rank()
+-}
+percentRank :: WindowFunction commons schemas from grp params ('NotNull 'PGfloat8)
+percentRank = UnsafeWindowFunction "percent_rank()"
+
+{- | cumulative distribution: (number of partition rows
+preceding or peer with current row) / total partition rows
+>>> printSQL cumeDist
+cume_dist()
+-}
+cumeDist :: WindowFunction commons schemas from grp params ('NotNull 'PGfloat8)
+cumeDist = UnsafeWindowFunction "cume_dist()"

@@ -74,7 +74,6 @@ module Squeal.PostgreSQL.Query
   , where_
   , groupBy
   , having
-  , orderBy
   , limit
   , offset
     -- * From Clauses
@@ -92,8 +91,6 @@ module Squeal.PostgreSQL.Query
   , By (..)
   , GroupByClause (..)
   , HavingClause (..)
-    -- * Sorting
-  , SortExpression (..)
     -- * Subquery Expressions
   , in_
   , rowIn
@@ -412,6 +409,11 @@ data Selection commons schemas params grp from row where
     :: Selection commons schemas params grp from right
     -> Selection commons schemas params grp from left
     -> Selection commons schemas params grp from (Join left right)
+  Over
+    :: SListI row
+    => NP (Aliased (WindowFunction commons schemas params grp from)) row
+    -> WindowDefinition commons schemas params grp from
+    -> Selection commons schemas params grp from row
 instance (KnownSymbol col, row ~ '[col ::: ty])
   => Aliasable col
     (Expression commons schemas params grp from ty)
@@ -444,6 +446,15 @@ instance RenderSQL (Selection commons schemas params grp from row) where
     Star -> "*"
     DotStar tab -> renderSQL tab <> ".*"
     Also right left -> renderSQL left <> ", " <> renderSQL right
+    Over winFns winDef ->
+      let
+        renderOver
+          :: Aliased (WindowFunction commons schemas params grp from) field
+          -> ByteString
+        renderOver winFn = renderAliased renderSQL winFn
+          <+> "OVER" <+> parenthesized (renderSQL winDef)
+      in
+        renderCommaSeparated renderOver winFns
 
 -- | the `TableExpression` in the `select` command constructs an intermediate
 -- virtual table by possibly combining tables, views, eliminating rows,
@@ -662,13 +673,8 @@ having
 having hv rels = rels
   { havingClause = case havingClause rels of Having hvs -> Having (hv:hvs) }
 
--- | An `orderBy` is an endomorphism of `TableExpression`s which appends an
--- ordering to the right of the `orderByClause`.
-orderBy
-  :: [SortExpression commons schemas params grp from] -- ^ sort expressions
-  -> TableExpression commons schemas params grp from
-  -> TableExpression commons schemas params grp from
-orderBy srts rels = rels {orderByClause = orderByClause rels ++ srts}
+instance OrderBy TableExpression where
+  orderBy srts rels = rels {orderByClause = orderByClause rels ++ srts}
 
 -- | A `limit` is an endomorphism of `TableExpression`s which adds to the
 -- `limitClause`.
@@ -1034,51 +1040,6 @@ instance RenderSQL (HavingClause commons schemas params grp from) where
     Having [] -> ""
     Having conditions ->
       " HAVING" <+> commaSeparated (renderSQL <$> conditions)
-
-{-----------------------------------------
-Sorting
------------------------------------------}
-
--- | `SortExpression`s are used by `sortBy` to optionally sort the results
--- of a `Query`. `Asc` or `Desc` set the sort direction of a `NotNull` result
--- column to ascending or descending. Ascending order puts smaller values
--- first, where "smaller" is defined in terms of the `.<` operator. Similarly,
--- descending order is determined with the `.>` operator. `AscNullsFirst`,
--- `AscNullsLast`, `DescNullsFirst` and `DescNullsLast` options are used to
--- determine whether nulls appear before or after non-null values in the sort
--- ordering of a `Null` result column.
-data SortExpression commons schemas params grp from where
-    Asc
-      :: Expression commons schemas params grp from ('NotNull ty)
-      -> SortExpression commons schemas params grp from
-    Desc
-      :: Expression commons schemas params grp from ('NotNull ty)
-      -> SortExpression commons schemas params grp from
-    AscNullsFirst
-      :: Expression commons schemas params grp from  ('Null ty)
-      -> SortExpression commons schemas params grp from
-    AscNullsLast
-      :: Expression commons schemas params grp from  ('Null ty)
-      -> SortExpression commons schemas params grp from
-    DescNullsFirst
-      :: Expression commons schemas params grp from  ('Null ty)
-      -> SortExpression commons schemas params grp from
-    DescNullsLast
-      :: Expression commons schemas params grp from  ('Null ty)
-      -> SortExpression commons schemas params grp from
-deriving instance Show (SortExpression commons schemas params grp from)
-
--- | Render a `SortExpression`.
-instance RenderSQL (SortExpression commons schemas params grp from) where
-  renderSQL = \case
-    Asc expression -> renderSQL expression <+> "ASC"
-    Desc expression -> renderSQL expression <+> "DESC"
-    AscNullsFirst expression -> renderSQL expression
-      <+> "ASC NULLS FIRST"
-    DescNullsFirst expression -> renderSQL expression
-      <+> "DESC NULLS FIRST"
-    AscNullsLast expression -> renderSQL expression <+> "ASC NULLS LAST"
-    DescNullsLast expression -> renderSQL expression <+> "DESC NULLS LAST"
 
 unsafeSubqueryExpression
   :: ByteString
