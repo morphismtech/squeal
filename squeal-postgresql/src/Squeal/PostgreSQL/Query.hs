@@ -310,6 +310,18 @@ let
 in printSQL query
 :}
 WITH "cte1" AS (SELECT * FROM "tab" AS "tab"), "cte2" AS (SELECT * FROM "cte1" AS "cte1") SELECT * FROM "cte2" AS "cte2"
+
+window function queries
+
+>>> :{
+let
+  query :: Query '[] (Public Schema) '[] ["col1" ::: 'NotNull 'PGint4, "rank" ::: 'NotNull 'PGint8]
+  query = select
+    (List #col1 & Also ((rank `as` #rank) `Over` (partitionBy (#col1 :* Nil) & orderBy [#col2 & Asc])))
+    (from (table #tab))
+in printSQL query
+:}
+SELECT "col1" AS "col1", rank() OVER (PARTITION BY "col1" ORDER BY "col2" ASC) AS "rank" FROM "tab" AS "tab"
 -}
 newtype Query
   (commons :: FromType)
