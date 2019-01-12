@@ -152,6 +152,12 @@ module Squeal.PostgreSQL.Expression
   , denseRank
   , percentRank
   , cumeDist
+  , ntile
+  , lag
+  , lead
+  , firstValue
+  , lastValue
+  , nthValue
     -- * Sorting
   , SortExpression (..)
   , OrderBy (..)
@@ -1921,3 +1927,79 @@ cume_dist()
 -}
 cumeDist :: WindowFunction commons schemas from grp params ('NotNull 'PGfloat8)
 cumeDist = UnsafeWindowFunction "cume_dist()"
+
+{- | integer ranging from 1 to the argument value,
+dividing the partition as equally as possible
+-}
+ntile
+  :: Expression commons schemas from grp params ('NotNull 'PGint4)
+  -- ^ numuckets
+  -> WindowFunction commons schemas from grp params ('NotNull 'PGint4)
+ntile numBuckets = UnsafeWindowFunction $ "ntile"
+  <> parenthesized (renderSQL numBuckets)
+
+{- | returns value evaluated at the row that is offset rows before the current
+row within the partition; if there is no such row, instead return default
+(which must be of the same type as value). Both offset and default are
+evaluated with respect to the current row.
+-}
+lag
+  :: Expression commons schemas from grp params ty
+  -- ^ value
+  -> Expression commons schemas from grp params ('NotNull 'PGint4)
+  -- ^ offset
+  -> Expression commons schemas from grp params ty
+  -- ^ default
+  -> WindowFunction commons schemas from grp params ty
+lag value offset def = UnsafeWindowFunction $ "lag"
+  <> parenthesized
+  (commaSeparated ([renderSQL value, renderSQL offset, renderSQL def]))
+
+{- | returns value evaluated at the row that is offset rows after the current
+row within the partition; if there is no such row, instead return default
+(which must be of the same type as value). Both offset and default are
+evaluated with respect to the current row.
+-}
+lead
+  :: Expression commons schemas from grp params ty
+  -- ^ value
+  -> Expression commons schemas from grp params ('NotNull 'PGint4)
+  -- ^ offset
+  -> Expression commons schemas from grp params ty
+  -- ^ default
+  -> WindowFunction commons schemas from grp params ty
+lead value offset def = UnsafeWindowFunction $ "lag"
+  <> parenthesized
+  (commaSeparated ([renderSQL value, renderSQL offset, renderSQL def]))
+
+{- | returns value evaluated at the row that is the
+first row of the window frame
+-}
+firstValue
+  :: Expression commons schemas from grp params ty
+  -- ^ value
+  -> WindowFunction commons schemas from grp params ty
+firstValue value = UnsafeWindowFunction $ "first_value"
+  <> parenthesized (renderSQL value)
+
+{- | returns value evaluated at the row that is the
+last row of the window frame
+-}
+lastValue
+  :: Expression commons schemas from grp params ty
+  -- ^ value
+  -> WindowFunction commons schemas from grp params ty
+lastValue value = UnsafeWindowFunction $ "last_value"
+  <> parenthesized (renderSQL value)
+
+{- | returns value evaluated at the row that is the nth
+row of the window frame (counting from 1); null if no such row
+-}
+nthValue
+  :: Expression commons schemas from grp params (nullity ty)
+  -- ^ value
+  -> Expression commons schemas from grp params ('NotNull 'PGint4)
+  -- ^ nth
+  -> WindowFunction commons schemas from grp params ('Null ty)
+nthValue value nth = UnsafeWindowFunction $ "nth_value"
+  <> parenthesized (commaSeparated [renderSQL value, renderSQL nth])
