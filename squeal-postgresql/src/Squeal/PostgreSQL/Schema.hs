@@ -44,10 +44,6 @@ module Squeal.PostgreSQL.Schema
   , NullPG
   , TuplePG
   , RowPG
-  , Json (..)
-  , Jsonb (..)
-  , Composite (..)
-  , Enumerated (..)
     -- * Schema Types
   , ColumnType
   , ColumnsType
@@ -137,7 +133,6 @@ import Data.Time
 import Data.Word (Word16, Word32, Word64)
 import Data.Type.Bool
 import Data.UUID.Types (UUID)
-import Data.Vector (Vector)
 import Generics.SOP
 import Generics.SOP.Record
 import GHC.OverloadedLabels
@@ -755,49 +750,6 @@ type instance PG DiffTime = 'PGinterval
 type instance PG UUID = 'PGuuid
 type instance PG (NetAddr IP) = 'PGinet
 type instance PG Value = 'PGjson
-type instance PG (Json hask) = 'PGjson
-type instance PG (Jsonb hask) = 'PGjsonb
-type instance PG (Vector hask) = 'PGvararray (NullPG hask)
-type instance PG (hask, hask) = 'PGfixarray 2 (NullPG hask)
-type instance PG (hask, hask, hask) = 'PGfixarray 3 (NullPG hask)
-type instance PG (hask, hask, hask, hask) = 'PGfixarray 4 (NullPG hask)
-type instance PG (hask, hask, hask, hask, hask) = 'PGfixarray 5 (NullPG hask)
-type instance PG (hask, hask, hask, hask, hask, hask)
-  = 'PGfixarray 6 (NullPG hask)
-type instance PG (hask, hask, hask, hask, hask, hask, hask)
-  = 'PGfixarray 7 (NullPG hask)
-type instance PG (hask, hask, hask, hask, hask, hask, hask, hask)
-  = 'PGfixarray 8 (NullPG hask)
-type instance PG (hask, hask, hask, hask, hask, hask, hask, hask, hask)
-  = 'PGfixarray 9 (NullPG hask)
-type instance PG (hask, hask, hask, hask, hask, hask, hask, hask, hask, hask)
-  = 'PGfixarray 10 (NullPG hask)
-type instance PG (Composite hask) = 'PGcomposite (RowPG hask)
-type instance PG (Enumerated hask) = 'PGenum (LabelsPG hask)
-
-{- | The `Json` newtype is an indication that the Haskell
-type it's applied to should be stored as `PGjson`.
--}
-newtype Json hask = Json {getJson :: hask}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
-
-{- | The `Jsonb` newtype is an indication that the Haskell
-type it's applied to should be stored as `PGjsonb`.
--}
-newtype Jsonb hask = Jsonb {getJsonb :: hask}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
-
-{- | The `Composite` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGcomposite`.
--}
-newtype Composite record = Composite {getComposite :: record}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
-
-{- | The `Enumerated` newtype is an indication that the Haskell
-type it's applied to should be stored as `PGenum`.
--}
-newtype Enumerated enum = Enumerated {getEnumerated :: enum}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
 
 {-| The `LabelsPG` type family calculates the constructors of a
 Haskell enum type.
