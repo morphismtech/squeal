@@ -397,6 +397,20 @@ class ToField (x :: (Symbol, Type)) (field :: (Symbol, NullityType)) where
 instance ToNullityParam x ty => ToField (alias ::: x) (alias ::: ty) where
   toField (P x) = K . unK $ toNullityParam @x @ty x
 
+class ToFixArray (x :: Type) (dims :: [Nat]) (array :: NullityType) where
+  toFixArray :: x -> K (K Encoding.Array dims) array
+instance ToNullityParam x ty => ToFixArray x '[] ty where
+  toFixArray = K . K . maybe Encoding.nullArray Encoding.encodingArray . unK
+    . toNullityParam @x @ty
+instance
+  ( IsProductType product xs
+  , Length xs ~ dim
+  , All ((~) x) xs
+  , ToFixArray x dims ty )
+  => ToFixArray product (dim ': dims) ty where
+    toFixArray = K . K . Encoding.dimensionArray foldlN
+      (unK . unK . toFixArray @x @dims @ty) . unZ . unSOP . from
+
 class ToArray (x :: Type) (array :: NullityType) where
   toArray :: x -> K Encoding.Array array
   baseOid :: Word32
@@ -501,6 +515,41 @@ instance Aeson.FromJSON x => FromValue 'PGjson (Json x) where
 instance Aeson.FromJSON x => FromValue 'PGjsonb (Jsonb x) where
   fromValue = Jsonb <$>
     Decoding.jsonb_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
+instance FromValue pg y
+  => FromValue ('PGvararray ('NotNull pg)) (VarArray (Vector y)) where
+    fromValue =
+      let
+        rep n x = VarArray <$> Vector.replicateM n x
+      in
+        Decoding.array $ Decoding.dimensionArray rep
+          (fromFixArray @'[] @('NotNull pg))
+instance FromValue pg y
+  => FromValue ('PGvararray ('Null pg)) (VarArray (Vector (Maybe y))) where
+    fromValue =
+      let
+        rep n x = VarArray <$> Vector.replicateM n x
+      in
+        Decoding.array $ Decoding.dimensionArray rep
+          (fromFixArray @'[] @('Null pg))
+instance FromValue pg y
+  => FromValue ('PGvararray ('NotNull pg)) (VarArray [y]) where
+    fromValue =
+      let
+        rep n x = VarArray <$> replicateM n x
+      in
+        Decoding.array $ Decoding.dimensionArray rep
+          (fromFixArray @'[] @('NotNull pg))
+instance FromValue pg y
+  => FromValue ('PGvararray ('Null pg)) (VarArray [Maybe y]) where
+    fromValue =
+      let
+        rep n x = VarArray <$> replicateM n x
+      in
+        Decoding.array $ Decoding.dimensionArray rep
+          (fromFixArray @'[] @('Null pg))
+instance FromFixArray dims ty y
+  => FromValue ('PGfixarray_ dims ty) (FixArray y) where
+    fromValue = FixArray <$> Decoding.array (fromFixArray @dims @ty @y)
 instance FromArray ('NotNull ('PGvararray ty)) y
   => FromValue ('PGvararray ty) y where
     fromValue = Decoding.array (fromArray @('NotNull ('PGvararray ty)) @y)
@@ -576,6 +625,24 @@ instance FromValue pg y
       K Nothing -> Right $ P Nothing
       K (Just bytestring) -> P . Just <$>
         Decoding.valueParser (fromValue @pg) bytestring
+
+class FromFixArray (dims :: [Nat]) (ty :: NullityType) (y :: Type) where
+  fromFixArray :: Decoding.Array y
+instance FromValue pg y => FromFixArray '[] ('NotNull pg) y where
+  fromFixArray = Decoding.valueArray (fromValue @pg @y)
+instance FromValue pg y => FromFixArray '[] ('Null pg) (Maybe y) where
+  fromFixArray = Decoding.nullableValueArray (fromValue @pg @y)
+instance
+  ( IsProductType product ys
+  , Length ys ~ dim
+  , All ((~) y) ys
+  , FromFixArray dims ty y )
+  => FromFixArray (dim ': dims) ty product where
+    fromFixArray =
+      let
+        rep _ = fmap (to . SOP . Z) . replicateMN
+      in
+        Decoding.dimensionArray rep (fromFixArray @dims @ty @y)
 
 class FromArray (ty :: NullityType) (y :: Type) where
   fromArray :: Decoding.Array y
