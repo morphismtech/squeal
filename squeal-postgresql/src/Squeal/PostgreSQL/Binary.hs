@@ -306,6 +306,25 @@ instance Aeson.ToJSON x => ToParam (Json x) 'PGjson where
 instance Aeson.ToJSON x => ToParam (Jsonb x) 'PGjsonb where
   toParam = K . Encoding.jsonb_bytes
     . Lazy.ByteString.toStrict . Aeson.encode . getJsonb
+instance (ToNullityParam x ty, ty ~ nullity pg, HasOid pg)
+  => ToParam (VarArray [x]) ('PGvararray ty) where
+    toParam = K
+      . Encoding.array_foldable (oid @pg) (unK . toNullityParam @x @ty)
+      . getVarArray
+instance (ToParam x pg, HasOid pg)
+  => ToParam (VarArray (Vector x)) ('PGvararray ('NotNull pg)) where
+    toParam = K
+      . Encoding.array_vector (oid @pg) (unK . toParam @x @pg)
+      . getVarArray
+instance (ToParam x pg, HasOid pg)
+  => ToParam (VarArray (Vector (Maybe x))) ('PGvararray ('Null pg)) where
+    toParam = K
+      . Encoding.nullableArray_vector (oid @pg) (unK . toParam @x @pg)
+      . getVarArray
+instance (ToFixArray x dims ty, ty ~ nullity pg, HasOid pg)
+  => ToParam (FixArray x) ('PGfixarray_ dims ty) where
+    toParam = K . Encoding.array (oid @pg)
+      . unK . unK . toFixArray @x @dims @ty . getFixArray
 instance ToArray x ('NotNull ('PGvararray ty))
   => ToParam x ('PGvararray ty) where
     toParam
