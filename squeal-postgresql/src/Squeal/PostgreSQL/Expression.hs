@@ -198,6 +198,7 @@ import GHC.OverloadedLabels
 import GHC.TypeLits
 import Prelude hiding (id, (.))
 
+import qualified Data.ByteString as ByteString
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Render
@@ -1738,14 +1739,24 @@ vararray
 vararray ty = UnsafeTypeExpression $ renderSQL ty <> "[]"
 -- | fixed length array
 --
--- >>> renderSQL (fixarray @2 json)
+-- >>> renderSQL (fixarray @'[2] json)
 -- "json[2]"
 fixarray
-  :: forall n schemas nullity pg. KnownNat n
+  :: forall dims schemas nullity pg. All KnownNat dims
   => TypeExpression schemas pg
-  -> TypeExpression schemas (nullity ('PGfixarray n pg))
+  -> TypeExpression schemas (nullity ('PGfixarray dims pg))
 fixarray ty = UnsafeTypeExpression $
-  renderSQL ty <> "[" <> renderNat @n <> "]"
+  renderSQL ty <> renderDims @dims
+  where
+    renderDims :: forall ns. All KnownNat ns => ByteString
+    renderDims =
+      ("[" <>)
+      . (<> "]")
+      . ByteString.intercalate "]["
+      . hcollapse
+      $ hcmap (Proxy @KnownNat)
+        (K . fromString . show . natVal)
+        (hpure Proxy :: NP Proxy ns)
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped schemas (ty :: NullityType) where
@@ -1775,6 +1786,6 @@ instance PGTyped schemas (nullity 'PGjsonb) where pgtype = jsonb
 instance PGTyped schemas ty
   => PGTyped schemas (nullity ('PGvararray ty)) where
     pgtype = vararray (pgtype @schemas @ty)
-instance (KnownNat n, PGTyped schemas ty)
-  => PGTyped schemas (nullity ('PGfixarray n ty)) where
-    pgtype = fixarray @n (pgtype @schemas @ty)
+instance (All KnownNat dims, PGTyped schemas ty)
+  => PGTyped schemas (nullity ('PGfixarray dims ty)) where
+    pgtype = fixarray @dims (pgtype @schemas @ty)
