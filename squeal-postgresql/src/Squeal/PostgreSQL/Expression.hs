@@ -134,15 +134,10 @@ module Squeal.PostgreSQL.Expression
   , jsonbInsert
   , jsonbPretty
     -- ** Aggregation
-  , unsafeAggregate, unsafeAggregateDistinct
-  , sum_, sumDistinct
+  , Aggregate (..)
+  , DistinctExpression (..)
   , PGAvg (avg, avgDistinct)
-  , bitAnd, bitOr, boolAnd, boolOr
-  , bitAndDistinct, bitOrDistinct, boolAndDistinct, boolOrDistinct
   , countStar
-  , count, countDistinct
-  , every, everyDistinct
-  , max_, maxDistinct, min_, minDistinct
     -- * Window Functions
   , WindowDefinition (..)
   , partitionBy
@@ -1399,10 +1394,144 @@ jsonbPretty = unsafeFunction "jsonb_pretty"
 aggregation
 -----------------------------------------}
 
+class Aggregate expr aggr where
+
+  -- | >>> :{
+  -- let
+  --   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
+  --   expression = count #col
+  -- in printSQL expression
+  -- :}
+  -- count("col")
+  count
+    :: expr commons schemas params from ty
+    -- ^ what to count
+    -> aggr commons schemas params from ('NotNull 'PGint8)
+
+  -- | >>> :{
+  -- let
+  --   expression :: Expression ('Grouped bys) commons schemas params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null 'PGnumeric)
+  --   expression = sum_ #col
+  -- in printSQL expression
+  -- :}
+  -- sum("col")
+  sum_
+    :: ty `In` PGNum
+    => expr commons schemas params from (nullity ty)
+    -> aggr commons schemas params from (nullity ty)
+
+  -- | >>> :{
+  -- let
+  --   expression :: Expression ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
+  --   expression = bitAndDistinct #col
+  -- in printSQL expression
+  -- :}
+  -- bit_and(DISTINCT "col")
+  bitAnd
+    :: int `In` PGIntegral
+    => expr commons schemas params from (nullity int)
+    -- ^ what to aggregate
+    -> aggr commons schemas params from (nullity int)
+
+  -- | >>> :{
+  -- let
+  --   expression :: Expression ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
+  --   expression = bitOr #col
+  -- in printSQL expression
+  -- :}
+  -- bit_or("col")
+  bitOr
+    :: int `In` PGIntegral
+    => expr commons schemas params from (nullity int)
+    -- ^ what to aggregate
+    -> aggr commons schemas params from (nullity int)
+
+  -- | >>> :{
+  -- let
+  --   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+  --   expression = boolAnd #col
+  -- in printSQL expression
+  -- :}
+  -- bool_and("col")
+  boolAnd
+    :: expr commons schemas params from (nullity 'PGbool)
+    -- ^ what to aggregate
+    -> aggr commons schemas params from (nullity 'PGbool)
+
+  -- | >>> :{
+  -- let
+  --   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+  --   expression = boolOr #col
+  -- in printSQL expression
+  -- :}
+  -- bool_or("col")
+  boolOr
+    :: expr commons schemas params from (nullity 'PGbool)
+    -- ^ what to aggregate
+    -> aggr commons schemas params from (nullity 'PGbool)
+
+  -- | synonym for `boolAnd`
+  --
+  -- >>> :{
+  -- let
+  --   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+  --   expression = every #col
+  -- in printSQL expression
+  -- :}
+  -- every("col")
+  every
+    :: expr commons schemas params from (nullity 'PGbool)
+    -- ^ what to aggregate
+    -> aggr commons schemas params from (nullity 'PGbool)
+
+  -- | minimum and maximum aggregation
+  max_, min_
+    :: expr commons schemas params from (nullity ty)
+    -- ^ what to aggregate
+    -> aggr commons schemas params from (nullity ty)
+
+instance Aggregate (Expression 'Ungrouped) (Expression ('Grouped bys)) where
+  count = unsafeAggregate "count"
+  sum_ = unsafeAggregate "sum"
+  bitAnd = unsafeAggregate "bit_and"
+  bitOr = unsafeAggregate "bit_or"
+  boolAnd = unsafeAggregate "bool_and"
+  boolOr = unsafeAggregate "bool_or"
+  every = unsafeAggregate "every"
+  max_ = unsafeAggregate "max"
+  min_ = unsafeAggregate "min"
+instance Aggregate DistinctExpression (Expression ('Grouped bys)) where
+  count = unsafeAggregate "count"
+  sum_ = unsafeAggregate "sum"
+  bitAnd = unsafeAggregate "bit_and"
+  bitOr = unsafeAggregate "bit_or"
+  boolAnd = unsafeAggregate "bool_and"
+  boolOr = unsafeAggregate "bool_or"
+  every = unsafeAggregate "every"
+  max_ = unsafeAggregate "max"
+  min_ = unsafeAggregate "min"
+instance Aggregate (Expression grp) (WindowFunction grp) where
+  count = unsafeWindowFunction1 "count"
+  sum_ = unsafeWindowFunction1 "sum"
+  bitAnd = unsafeWindowFunction1 "bit_and"
+  bitOr = unsafeWindowFunction1 "bit_or"
+  boolAnd = unsafeWindowFunction1 "bool_and"
+  boolOr = unsafeWindowFunction1 "bool_or"
+  every = unsafeWindowFunction1 "every"
+  max_ = unsafeWindowFunction1 "max"
+  min_ = unsafeWindowFunction1 "min"
+
+newtype DistinctExpression commons schemas params from ty
+  = Distinct (Expression 'Ungrouped commons schemas params from ty)
+  deriving (GHC.Generic,Show,Eq,Ord,NFData)
+instance RenderSQL (DistinctExpression commons schemas params from ty) where
+  renderSQL (Distinct x) = "DISTINCT" <+> renderSQL x
+
 -- | escape hatch to define aggregate functions
 unsafeAggregate
-  :: ByteString -- ^ aggregate function
-  -> Expression 'Ungrouped commons schemas params from xty
+  :: RenderSQL (expr commons schemas params from xty)
+  => ByteString -- ^ aggregate function
+  -> expr commons schemas params from xty
   -> Expression ('Grouped bys) commons schemas params from yty
 unsafeAggregate fun x = UnsafeExpression $ mconcat
   [fun, "(", renderSQL x, ")"]
@@ -1414,34 +1543,6 @@ unsafeAggregateDistinct
   -> Expression ('Grouped bys) commons schemas params from yty
 unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
   [fun, "(DISTINCT ", renderSQL x, ")"]
-
--- | >>> :{
--- let
---   expression :: Expression ('Grouped bys) commons schemas params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null 'PGnumeric)
---   expression = sum_ #col
--- in printSQL expression
--- :}
--- sum("col")
-sum_
-  :: ty `In` PGNum
-  => Expression 'Ungrouped commons schemas params from (nullity ty)
-  -- ^ what to sum
-  -> Expression ('Grouped bys) commons schemas params from (nullity ty)
-sum_ = unsafeAggregate "sum"
-
--- | >>> :{
--- let
---   expression :: Expression ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGnumeric]] (nullity 'PGnumeric)
---   expression = sumDistinct #col
--- in printSQL expression
--- :}
--- sum(DISTINCT "col")
-sumDistinct
-  :: ty `In` PGNum
-  => Expression 'Ungrouped commons schemas params from (nullity ty)
-  -- ^ what to sum
-  -> Expression ('Grouped bys) commons schemas params from (nullity ty)
-sumDistinct = unsafeAggregateDistinct "sum"
 
 -- | A constraint for `PGType`s that you can take averages of and the resulting
 -- `PGType`.
@@ -1460,114 +1561,6 @@ instance PGAvg 'PGfloat4 'PGfloat8
 instance PGAvg 'PGfloat8 'PGfloat8
 instance PGAvg 'PGinterval 'PGinterval
 
--- | >>> :{
--- let
---   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
---   expression = bitAnd #col
--- in printSQL expression
--- :}
--- bit_and("col")
-bitAnd
-  :: int `In` PGIntegral
-  => Expression 'Ungrouped commons schemas params from (nullity int)
-  -- ^ what to aggregate
-  -> Expression ('Grouped bys) commons schemas params from (nullity int)
-bitAnd = unsafeAggregate "bit_and"
-
--- | >>> :{
--- let
---   expression :: Expression ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
---   expression = bitOr #col
--- in printSQL expression
--- :}
--- bit_or("col")
-bitOr
-  :: int `In` PGIntegral
-  => Expression 'Ungrouped commons schemas params from (nullity int)
-  -- ^ what to aggregate
-  -> Expression ('Grouped bys) commons schemas params from (nullity int)
-bitOr = unsafeAggregate "bit_or"
-
--- | >>> :{
--- let
---   expression :: Expression ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
---   expression = bitAndDistinct #col
--- in printSQL expression
--- :}
--- bit_and(DISTINCT "col")
-bitAndDistinct
-  :: int `In` PGIntegral
-  => Expression 'Ungrouped commons schemas params from (nullity int)
-  -- ^ what to aggregate
-  -> Expression ('Grouped bys) commons schemas params from (nullity int)
-bitAndDistinct = unsafeAggregateDistinct "bit_and"
-
--- | >>> :{
--- let
---   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
---   expression = bitOrDistinct #col
--- in printSQL expression
--- :}
--- bit_or(DISTINCT "col")
-bitOrDistinct
-  :: int `In` PGIntegral
-  => Expression 'Ungrouped commons schemas params from (nullity int)
-  -- ^ what to aggregate
-  -> Expression ('Grouped bys) commons schemas params from (nullity int)
-bitOrDistinct = unsafeAggregateDistinct "bit_or"
-
--- | >>> :{
--- let
---   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
---   expression = boolAnd #col
--- in printSQL expression
--- :}
--- bool_and("col")
-boolAnd
-  :: Expression 'Ungrouped commons schemas params from (nullity 'PGbool)
-  -- ^ what to aggregate
-  -> Expression ('Grouped bys) commons schemas params from (nullity 'PGbool)
-boolAnd = unsafeAggregate "bool_and"
-
--- | >>> :{
--- let
---   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
---   expression = boolOr #col
--- in printSQL expression
--- :}
--- bool_or("col")
-boolOr
-  :: Expression 'Ungrouped commons schemas params from (nullity 'PGbool)
-  -- ^ what to aggregate
-  -> Expression ('Grouped bys) commons schemas params from (nullity 'PGbool)
-boolOr = unsafeAggregate "bool_or"
-
--- | >>> :{
--- let
---   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
---   expression = boolAndDistinct #col
--- in printSQL expression
--- :}
--- bool_and(DISTINCT "col")
-boolAndDistinct
-  :: Expression 'Ungrouped commons schemas params from (nullity 'PGbool)
-  -- ^ what to aggregate
-  -> Expression ('Grouped bys) commons schemas params from (nullity 'PGbool)
-boolAndDistinct = unsafeAggregateDistinct "bool_and"
-
--- | >>> :{
--- let
---   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
---   expression = boolOrDistinct #col
--- in printSQL expression
--- :}
--- bool_or(DISTINCT "col")
-boolOrDistinct
-  :: Expression 'Ungrouped commons schemas params from (nullity 'PGbool)
-  -- ^ what to aggregate
-  -> Expression ('Grouped bys) commons schemas params from (nullity 'PGbool)
-boolOrDistinct = unsafeAggregateDistinct "bool_or"
-
 -- | A special aggregation that does not require an input
 --
 -- >>> printSQL countStar
@@ -1575,72 +1568,6 @@ boolOrDistinct = unsafeAggregateDistinct "bool_or"
 countStar
   :: Expression ('Grouped bys) commons schemas params from ('NotNull 'PGint8)
 countStar = UnsafeExpression $ "count(*)"
-
--- | >>> :{
--- let
---   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
---   expression = count #col
--- in printSQL expression
--- :}
--- count("col")
-count
-  :: Expression 'Ungrouped commons schemas params from ty
-  -- ^ what to count
-  -> Expression ('Grouped bys) commons schemas params from ('NotNull 'PGint8)
-count = unsafeAggregate "count"
-
--- | >>> :{
--- let
---   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
---   expression = countDistinct #col
--- in printSQL expression
--- :}
--- count(DISTINCT "col")
-countDistinct
-  :: Expression 'Ungrouped commons schemas params from ty
-  -- ^ what to count
-  -> Expression ('Grouped bys) commons schemas params from ('NotNull 'PGint8)
-countDistinct = unsafeAggregateDistinct "count"
-
--- | synonym for `boolAnd`
---
--- >>> :{
--- let
---   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
---   expression = every #col
--- in printSQL expression
--- :}
--- every("col")
-every
-  :: Expression 'Ungrouped commons schemas params from (nullity 'PGbool)
-  -- ^ what to aggregate
-  -> Expression ('Grouped bys) commons schemas params from (nullity 'PGbool)
-every = unsafeAggregate "every"
-
--- | synonym for `boolAndDistinct`
---
--- >>> :{
--- let
---   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
---   expression = everyDistinct #col
--- in printSQL expression
--- :}
--- every(DISTINCT "col")
-everyDistinct
-  :: Expression 'Ungrouped commons schemas params from (nullity 'PGbool)
-  -- ^ what to aggregate
-  -> Expression ('Grouped bys) commons schemas params from (nullity 'PGbool)
-everyDistinct = unsafeAggregateDistinct "every"
-
--- | minimum and maximum aggregation
-max_, min_, maxDistinct, minDistinct
-  :: Expression 'Ungrouped commons schemas params from (nullity ty)
-  -- ^ what to aggregate
-  -> Expression ('Grouped bys) commons schemas params from (nullity ty)
-max_ = unsafeAggregate "max"
-min_ = unsafeAggregate "min"
-maxDistinct = unsafeAggregateDistinct "max"
-minDistinct = unsafeAggregateDistinct "min"
 
 {-----------------------------------------
 type expressions
@@ -1903,6 +1830,13 @@ newtype WindowFunction
 instance RenderSQL (WindowFunction grp commons schemas params from ty) where
   renderSQL = renderWindowFunction
 
+unsafeWindowFunction1
+  :: ByteString
+  -> Expression grp commons schemas params from ty0
+  -> WindowFunction grp commons schemas params from ty1
+unsafeWindowFunction1 fun x
+  = UnsafeWindowFunction $ fun <> parenthesized (renderSQL x)
+
 {- | rank of the current row with gaps; same as `rowNumber` of its first peer
 >>> printSQL rank
 rank()
@@ -1944,7 +1878,7 @@ dividing the partition as equally as possible
 -}
 ntile
   :: Expression grp commons schemas params from ('NotNull 'PGint4)
-  -- ^ numuckets
+  -- ^ num buckets
   -> WindowFunction grp commons schemas params from ('NotNull 'PGint4)
 ntile numBuckets = UnsafeWindowFunction $ "ntile"
   <> parenthesized (renderSQL numBuckets)
