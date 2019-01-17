@@ -1,3 +1,7 @@
+{-# LANGUAGE
+    TypeFamilies
+#-}
+
 {-|
 Module: Squeal.PostgreSQL.Binary
 Description: Binary encoding and decoding
@@ -55,9 +59,9 @@ create multi-dimensional fixed length arrays.
 
 >>> :{
 data Row = Row
-  { col1 :: Vector Int16
-  , col2 :: (Maybe Int16,Maybe Int16)
-  , col3 :: ((Int16,Int16),(Int16,Int16),(Int16,Int16))
+  { col1 :: VarArray (Vector Int16)
+  , col2 :: FixArray (Maybe Int16,Maybe Int16)
+  , col3 :: FixArray ((Int16,Int16),(Int16,Int16),(Int16,Int16))
   } deriving (Eq, GHC.Generic)
 :}
 
@@ -70,13 +74,13 @@ Once again, we define a simple round trip query.
 let
   roundTrip :: Query_ (Public '[]) Row Row
   roundTrip = values_ $
-    parameter @1 (int2 & vararray)                  `as` #col1 :*
-    parameter @2 (int2 & fixarray @2)               `as` #col2 :*
-    parameter @3 (int2 & fixarray @2 & fixarray @3) `as` #col3
+    parameter @1 (int2 & vararray) `as` #col1 :*
+    parameter @2 (int2 & fixarray @'[2]) `as` #col2 :*
+    parameter @3 (int2 & fixarray @'[3,2]) `as` #col3
 :}
 
 >>> :set -XOverloadedLists
->>> let input = Row [1,2] (Just 1,Nothing) ((1,2),(3,4),(5,6))
+>>> let input = Row (VarArray [1,2]) (FixArray (Just 1,Nothing)) (FixArray ((1,2),(3,4),(5,6)))
 >>> :{
 void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
   result <- runQueryParams roundTrip input
@@ -200,8 +204,13 @@ True
 #-}
 
 module Squeal.PostgreSQL.Binary
-  ( -- * Encoding
-    ToParam (..)
+  ( Json (..)
+  , Jsonb (..)
+  , Composite (..)
+  , Enumerated (..)
+  , VarArray (..)
+    -- * Encoding
+  , ToParam (..)
   , ToParams (..)
     -- * Decoding
   , FromValue (..)
@@ -297,16 +306,25 @@ instance Aeson.ToJSON x => ToParam (Json x) 'PGjson where
 instance Aeson.ToJSON x => ToParam (Jsonb x) 'PGjsonb where
   toParam = K . Encoding.jsonb_bytes
     . Lazy.ByteString.toStrict . Aeson.encode . getJsonb
-instance ToArray x ('NotNull ('PGvararray ty))
-  => ToParam x ('PGvararray ty) where
-    toParam
-      = K . Encoding.array (baseOid @x @('NotNull ('PGvararray ty)))
-      . unK . toArray @x @('NotNull ('PGvararray ty))
-instance ToArray x ('NotNull ('PGfixarray n ty))
-  => ToParam x ('PGfixarray n ty) where
-    toParam
-      = K . Encoding.array (baseOid @x @('NotNull ('PGfixarray n ty)))
-      . unK . toArray @x @('NotNull ('PGfixarray n ty))
+instance (ToNullityParam x ty, ty ~ nullity pg, HasOid pg)
+  => ToParam (VarArray [x]) ('PGvararray ty) where
+    toParam = K
+      . Encoding.array_foldable (oid @pg) (unK . toNullityParam @x @ty)
+      . getVarArray
+instance (ToParam x pg, HasOid pg)
+  => ToParam (VarArray (Vector x)) ('PGvararray ('NotNull pg)) where
+    toParam = K
+      . Encoding.array_vector (oid @pg) (unK . toParam @x @pg)
+      . getVarArray
+instance (ToParam x pg, HasOid pg)
+  => ToParam (VarArray (Vector (Maybe x))) ('PGvararray ('Null pg)) where
+    toParam = K
+      . Encoding.nullableArray_vector (oid @pg) (unK . toParam @x @pg)
+      . getVarArray
+instance (ToFixArray x dims ty, ty ~ nullity pg, HasOid pg)
+  => ToParam (FixArray x) ('PGfixarray dims ty) where
+    toParam = K . Encoding.array (oid @pg)
+      . unK . unK . toFixArray @x @dims @ty . getFixArray
 instance
   ( IsEnumType x
   , HasDatatypeInfo x
@@ -388,46 +406,19 @@ class ToField (x :: (Symbol, Type)) (field :: (Symbol, NullityType)) where
 instance ToNullityParam x ty => ToField (alias ::: x) (alias ::: ty) where
   toField (P x) = K . unK $ toNullityParam @x @ty x
 
-class ToArray (x :: Type) (array :: NullityType) where
-  toArray :: x -> K Encoding.Array array
-  baseOid :: Word32
-  default baseOid :: HasOid (PGTypeOf array) => Word32
-  baseOid = oid @(PGTypeOf array)
-instance {-# OVERLAPPABLE #-} (HasOid pg, ToParam x pg)
-  => ToArray x ('NotNull pg) where
-    toArray = K . Encoding.encodingArray . unK . toParam @x @pg
-instance {-# OVERLAPPABLE #-} (HasOid pg, ToParam x pg)
-  => ToArray (Maybe x) ('Null pg) where
-    toArray = K . maybe Encoding.nullArray
-      (Encoding.encodingArray . unK . toParam @x @pg)
-instance {-# OVERLAPPING #-} ToArray x array
-  => ToArray (Vector x) ('NotNull ('PGvararray array)) where
-    toArray = K . Encoding.dimensionArray Vector.foldl'
-      (unK . toArray @x @array)
-    baseOid = baseOid @x @array
-instance {-# OVERLAPPING #-} ToArray x array
-  => ToArray (Maybe (Vector x)) ('Null ('PGvararray array)) where
-    toArray = K . maybe Encoding.nullArray
-      (Encoding.dimensionArray Vector.foldl' (unK . toArray @x @array))
-    baseOid = baseOid @x @array
-instance {-# OVERLAPPING #-}
+class ToFixArray (x :: Type) (dims :: [Nat]) (array :: NullityType) where
+  toFixArray :: x -> K (K Encoding.Array dims) array
+instance ToNullityParam x ty => ToFixArray x '[] ty where
+  toFixArray = K . K . maybe Encoding.nullArray Encoding.encodingArray . unK
+    . toNullityParam @x @ty
+instance
   ( IsProductType product xs
-  , Length xs ~ n
+  , Length xs ~ dim
   , All ((~) x) xs
-  , ToArray x array )
-  => ToArray product ('NotNull ('PGfixarray n array)) where
-    toArray = K . Encoding.dimensionArray foldlN
-      (unK . toArray @x @array) . unZ . unSOP . from
-    baseOid = baseOid @x @array
-instance {-# OVERLAPPING #-}
-  ( IsProductType product xs
-  , Length xs ~ n
-  , All ((~) x) xs
-  , ToArray x array )
-  => ToArray (Maybe product) ('Null ('PGfixarray n array)) where
-    toArray = K . maybe Encoding.nullArray
-      (Encoding.dimensionArray foldlN (unK . toArray @x @array) . unZ . unSOP . from)
-    baseOid = baseOid @x @array
+  , ToFixArray x dims ty )
+  => ToFixArray product (dim ': dims) ty where
+    toFixArray = K . K . Encoding.dimensionArray foldlN
+      (unK . unK . toFixArray @x @dims @ty) . unZ . unSOP . from
 
 -- | A `ToParams` constraint generically sequences the encodings of `Type`s
 -- of the fields of a tuple or record to a row of `ColumnType`s. You should
@@ -492,12 +483,41 @@ instance Aeson.FromJSON x => FromValue 'PGjson (Json x) where
 instance Aeson.FromJSON x => FromValue 'PGjsonb (Jsonb x) where
   fromValue = Jsonb <$>
     Decoding.jsonb_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
-instance FromArray ('NotNull ('PGvararray ty)) y
-  => FromValue ('PGvararray ty) y where
-    fromValue = Decoding.array (fromArray @('NotNull ('PGvararray ty)) @y)
-instance FromArray ('NotNull ('PGfixarray n ty)) y
-  => FromValue ('PGfixarray n ty) y where
-    fromValue = Decoding.array (fromArray @('NotNull ('PGfixarray n ty)) @y)
+instance FromValue pg y
+  => FromValue ('PGvararray ('NotNull pg)) (VarArray (Vector y)) where
+    fromValue =
+      let
+        rep n x = VarArray <$> Vector.replicateM n x
+      in
+        Decoding.array $ Decoding.dimensionArray rep
+          (fromFixArray @'[] @('NotNull pg))
+instance FromValue pg y
+  => FromValue ('PGvararray ('Null pg)) (VarArray (Vector (Maybe y))) where
+    fromValue =
+      let
+        rep n x = VarArray <$> Vector.replicateM n x
+      in
+        Decoding.array $ Decoding.dimensionArray rep
+          (fromFixArray @'[] @('Null pg))
+instance FromValue pg y
+  => FromValue ('PGvararray ('NotNull pg)) (VarArray [y]) where
+    fromValue =
+      let
+        rep n x = VarArray <$> replicateM n x
+      in
+        Decoding.array $ Decoding.dimensionArray rep
+          (fromFixArray @'[] @('NotNull pg))
+instance FromValue pg y
+  => FromValue ('PGvararray ('Null pg)) (VarArray [Maybe y]) where
+    fromValue =
+      let
+        rep n x = VarArray <$> replicateM n x
+      in
+        Decoding.array $ Decoding.dimensionArray rep
+          (fromFixArray @'[] @('Null pg))
+instance FromFixArray dims ty y
+  => FromValue ('PGfixarray dims ty) (FixArray y) where
+    fromValue = FixArray <$> Decoding.array (fromFixArray @dims @ty @y)
 instance
   ( IsEnumType y
   , HasDatatypeInfo y
@@ -568,44 +588,23 @@ instance FromValue pg y
       K (Just bytestring) -> P . Just <$>
         Decoding.valueParser (fromValue @pg) bytestring
 
-class FromArray (ty :: NullityType) (y :: Type) where
-  fromArray :: Decoding.Array y
-instance {-# OVERLAPPABLE #-} FromValue pg y
-  => FromArray ('NotNull pg) y where
-    fromArray = Decoding.valueArray (fromValue @pg @y)
-instance {-# OVERLAPPABLE #-} FromValue pg y
-  => FromArray ('Null pg) (Maybe y) where
-    fromArray = Decoding.nullableValueArray (fromValue @pg @y)
-instance {-# OVERLAPPING #-} FromArray array y
-  => FromArray ('NotNull ('PGvararray array)) (Vector y) where
-    fromArray =
-      Decoding.dimensionArray Vector.replicateM (fromArray @array @y)
-instance {-# OVERLAPPING #-} FromArray array y
-  => FromArray ('Null ('PGvararray array)) (Maybe (Vector y)) where
-    fromArray = Just <$> 
-      Decoding.dimensionArray Vector.replicateM (fromArray @array @y)
-instance {-# OVERLAPPING #-}
-  ( FromArray array y
+class FromFixArray (dims :: [Nat]) (ty :: NullityType) (y :: Type) where
+  fromFixArray :: Decoding.Array y
+instance FromValue pg y => FromFixArray '[] ('NotNull pg) y where
+  fromFixArray = Decoding.valueArray (fromValue @pg @y)
+instance FromValue pg y => FromFixArray '[] ('Null pg) (Maybe y) where
+  fromFixArray = Decoding.nullableValueArray (fromValue @pg @y)
+instance
+  ( IsProductType product ys
+  , Length ys ~ dim
   , All ((~) y) ys
-  , SListI ys
-  , IsProductType product ys )
-  => FromArray ('NotNull ('PGfixarray n array)) product where
-    fromArray =
+  , FromFixArray dims ty y )
+  => FromFixArray (dim ': dims) ty product where
+    fromFixArray =
       let
         rep _ = fmap (to . SOP . Z) . replicateMN
       in
-        Decoding.dimensionArray rep (fromArray @array @y)
-instance {-# OVERLAPPING #-}
-  ( FromArray array y
-  , All ((~) y) ys
-  , SListI ys
-  , IsProductType product ys )
-  => FromArray ('Null ('PGfixarray n array)) (Maybe product) where
-    fromArray =
-      let
-        rep _ = fmap (to . SOP . Z) . replicateMN
-      in
-        Just <$> Decoding.dimensionArray rep (fromArray @array @y)
+        Decoding.dimensionArray rep (fromFixArray @dims @ty @y)
 
 -- | A `FromRow` constraint generically sequences the parsings of the columns
 -- of a `RowType` into the fields of a record `Type` provided they have
@@ -660,3 +659,70 @@ replicateMN
   => m x -> m (NP I xs)
 replicateMN mx = hsequence' $
   hcpure (Proxy :: Proxy ((~) x)) (Comp (I <$> mx)) 
+
+{- | The `Json` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGjson`.
+-}
+newtype Json hask = Json {getJson :: hask}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG (Json hask) = 'PGjson
+
+{- | The `Jsonb` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGjsonb`.
+-}
+newtype Jsonb hask = Jsonb {getJsonb :: hask}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG (Jsonb hask) = 'PGjsonb
+
+{- | The `Composite` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGcomposite`.
+-}
+newtype Composite record = Composite {getComposite :: record}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG (Composite hask) = 'PGcomposite (RowPG hask)
+
+{- | The `Enumerated` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGenum`.
+-}
+newtype Enumerated enum = Enumerated {getEnumerated :: enum}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG (Enumerated hask) = 'PGenum (LabelsPG hask)
+
+{- | The `VarArray` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGvararray`.
+-}
+newtype VarArray arr = VarArray {getVarArray :: arr}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG (VarArray (Vector hask)) = 'PGvararray (NullPG hask)
+
+{- | The `FixArray` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGfixarray`.
+-}
+newtype FixArray arr = FixArray {getFixArray :: arr}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG (FixArray x) = 'PGfixarray (DimPG x) (FixPG x)
+
+type family DimPG (hask :: Type) :: [Nat] where
+  DimPG (x,x) = 2 ': DimPG x
+  DimPG (x,x,x) = 3 ': DimPG x
+  DimPG (x,x,x,x) = 4 ': DimPG x
+  DimPG (x,x,x,x,x) = 5 ': DimPG x
+  DimPG (x,x,x,x,x,x) = 6 ': DimPG x
+  DimPG (x,x,x,x,x,x,x) = 7 ': DimPG x
+  DimPG (x,x,x,x,x,x,x,x) = 8 ': DimPG x
+  DimPG (x,x,x,x,x,x,x,x,x) = 9 ': DimPG x
+  DimPG (x,x,x,x,x,x,x,x,x,x) = 10 ': DimPG x
+  DimPG x = '[]
+
+type family FixPG (hask :: Type) :: NullityType where
+  FixPG (x,x) = FixPG x
+  FixPG (x,x,x) = FixPG x
+  FixPG (x,x,x,x) = FixPG x
+  FixPG (x,x,x,x,x) = FixPG x
+  FixPG (x,x,x,x,x,x) = FixPG x
+  FixPG (x,x,x,x,x,x,x) = FixPG x
+  FixPG (x,x,x,x,x,x,x,x) = FixPG x
+  FixPG (x,x,x,x,x,x,x,x,x) = FixPG x
+  FixPG (x,x,x,x,x,x,x,x,x,x) = FixPG x
+  FixPG (x,x,x,x,x,x,x,x,x,x,x) = FixPG x
+  FixPG x = NullPG x

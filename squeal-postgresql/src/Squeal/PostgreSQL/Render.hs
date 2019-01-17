@@ -103,8 +103,7 @@ renderSymbol :: forall s. KnownSymbol s => ByteString
 renderSymbol = fromString (symbolVal' (proxy# :: Proxy# s))
 
 -- | A class for rendering SQL
-class RenderSQL sql where
-  renderSQL :: sql -> ByteString
+class RenderSQL sql where renderSQL :: sql -> ByteString
 
 -- | Print SQL.
 printSQL :: (RenderSQL sql, MonadBase IO io) => sql -> io ()

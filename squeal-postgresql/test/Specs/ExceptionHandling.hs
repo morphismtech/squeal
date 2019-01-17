@@ -51,7 +51,7 @@ type Schemas = Public Schema
 data User =
   User { userName  :: Text
        , userEmail :: Maybe Text
-       , userVec   :: Vector (Maybe Int16) }
+       , userVec   :: VarArray (Vector (Maybe Int16)) }
   deriving (Show, GHC.Generic)
 instance SOP.Generic User
 instance SOP.HasDatatypeInfo User
@@ -101,7 +101,7 @@ connectionString :: Char8.ByteString
 connectionString = "host=localhost port=5432 dbname=exampledb"
 
 testUser :: User
-testUser = User "TestUser" Nothing []
+testUser = User "TestUser" Nothing (VarArray [])
 
 newUser :: (MonadBase IO m, MonadPQ Schemas m) => User -> m ()
 newUser u = void $ manipulateParams insertUser (userName u, userVec u)

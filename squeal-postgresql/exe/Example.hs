@@ -82,16 +82,16 @@ getUsers = select_
     & innerJoin (table (#emails `as` #e))
       (#u ! #id .== #e ! #user_id)) )
 
-data User = User { userName :: Text, userEmail :: Maybe Text, userVec :: Vector (Maybe Int16) }
+data User = User { userName :: Text, userEmail :: Maybe Text, userVec :: VarArray (Vector (Maybe Int16)) }
   deriving (Show, GHC.Generic)
 instance SOP.Generic User
 instance SOP.HasDatatypeInfo User
 
 users :: [User]
 users = 
-  [ User "Alice" (Just "alice@gmail.com") [Nothing, Just 1]
-  , User "Bob" Nothing [Just 2, Nothing]
-  , User "Carole" (Just "carole@hotmail.com") [Just 3]
+  [ User "Alice" (Just "alice@gmail.com") (VarArray [Nothing, Just 1])
+  , User "Bob" Nothing (VarArray [Just 2, Nothing])
+  , User "Carole" (Just "carole@hotmail.com") (VarArray [Just 3])
   ]
 
 session :: (MonadBase IO pq, MonadPQ Schemas pq) => pq ()
