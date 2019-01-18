@@ -1404,6 +1404,7 @@ class Aggregate expr aggr | aggr -> expr where
   --   expression :: Expression (Grouped bys) commons schemas params from ('NotNull 'PGint8)
   --   expression = countStar
   -- in printSQL expression
+  -- :}
   -- count(*)
   countStar :: aggr commons schemas params from ('NotNull 'PGint8)
 
