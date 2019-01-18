@@ -1399,7 +1399,11 @@ class Aggregate expr aggr | aggr -> expr where
 
   -- | A special aggregation that does not require an input
   --
-  -- >>> printSQL countStar
+  -- >>> :{
+  -- let
+  --   expression :: Expression (Grouped bys) commons schemas params from ('NotNull 'PGint8)
+  --   expression = countStar
+  -- in printSQL expression
   -- count(*)
   countStar :: aggr commons schemas params from ('NotNull 'PGint8)
 
