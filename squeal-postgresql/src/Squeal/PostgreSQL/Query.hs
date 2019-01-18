@@ -200,13 +200,13 @@ aggregation query:
 let
   query :: Query '[] (Public Schema) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4 ]
   query =
-    select_ (sum_ #col2 `as` #sum :* #col1)
+    select_ (sum_ (All #col2) `as` #sum :* #col1)
     ( from (table (#tab `as` #table1))
       & groupBy #col1
-      & having (#col1 + sum_ #col2 .> 1) )
+      & having (#col1 + sum_ (Distinct #col2) .> 1) )
 in printSQL query
 :}
-SELECT sum("col2") AS "sum", "col1" AS "col1" FROM "tab" AS "table1" GROUP BY "col1" HAVING (("col1" + sum("col2")) > 1)
+SELECT sum(ALL "col2") AS "sum", "col1" AS "col1" FROM "tab" AS "table1" GROUP BY "col1" HAVING (("col1" + sum(DISTINCT "col2")) > 1)
 
 sorted query:
 
