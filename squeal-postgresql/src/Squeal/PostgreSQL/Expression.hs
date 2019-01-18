@@ -137,7 +137,6 @@ module Squeal.PostgreSQL.Expression
   , Aggregate (..)
   , Distinction (..)
   , PGAvg
-  , countStar
     -- * Window Functions
   , WindowDefinition (..)
   , partitionBy
@@ -1396,6 +1395,14 @@ aggregation
 
 class Aggregate expr aggr | aggr -> expr where
 
+
+
+  -- | A special aggregation that does not require an input
+  --
+  -- >>> printSQL countStar
+  -- count(*)
+  countStar :: aggr commons schemas params from ('NotNull 'PGint8)
+
   -- | >>> :{
   -- let
   --   expression :: Expression (Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
@@ -1513,6 +1520,7 @@ instance RenderSQL (Distinction commons schemas params from ty) where
     Distinct x -> "DISTINCT" <+> renderSQL x
 
 instance Aggregate Distinction (Expression ('Grouped bys)) where
+  countStar = UnsafeExpression "count(*)"
   count = unsafeAggregate "count"
   sum_ = unsafeAggregate "sum"
   bitAnd = unsafeAggregate "bit_and"
@@ -1524,6 +1532,7 @@ instance Aggregate Distinction (Expression ('Grouped bys)) where
   min_ = unsafeAggregate "min"
   avg = unsafeAggregate "avg"
 instance Aggregate (Expression grp) (WindowFunction grp) where
+  countStar = UnsafeWindowFunction "count(*)"
   count = unsafeWindowFunction1 "count"
   sum_ = unsafeWindowFunction1 "sum"
   bitAnd = unsafeWindowFunction1 "bit_and"
@@ -1554,14 +1563,6 @@ type family PGAvg ty where
   PGAvg 'PGfloat8 = 'PGfloat8
   PGAvg 'PGinterval = 'PGinterval
   -- PGAvg pg = TypeError
-
--- | A special aggregation that does not require an input
---
--- >>> printSQL countStar
--- count(*)
-countStar
-  :: Expression ('Grouped bys) commons schemas params from ('NotNull 'PGint8)
-countStar = UnsafeExpression $ "count(*)"
 
 {-----------------------------------------
 type expressions
