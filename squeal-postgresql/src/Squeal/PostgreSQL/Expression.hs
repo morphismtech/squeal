@@ -136,7 +136,7 @@ module Squeal.PostgreSQL.Expression
     -- ** Aggregation
   , Aggregate (..)
   , DistinctExpression (..)
-  , PGAvg (avg, avgDistinct)
+  , PGAvg
   , countStar
     -- * Window Functions
   , WindowDefinition (..)
@@ -261,7 +261,7 @@ class KnownNat n => HasParameter
   | n params -> ty where
     -- | `parameter` takes a `Nat` using type application and a `TypeExpression`.
     --
-    -- >>> let expr = parameter @1 int4 :: Expression '[] schemas '[ 'Null 'PGint4] grp from ('Null 'PGint4)
+    -- >>> let expr = parameter @1 int4 :: Expression grp '[] schemas '[ 'Null 'PGint4] from ('Null 'PGint4)
     -- >>> printSQL expr
     -- ($1 :: int4)
     parameter
@@ -277,7 +277,7 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
 -- | `param` takes a `Nat` using type application and for basic types,
 -- infers a `TypeExpression`.
 --
--- >>> let expr = param @1 :: Expression commons schemas '[ 'Null 'PGint4] grp from ('Null 'PGint4)
+-- >>> let expr = param @1 :: Expression grp commons schemas '[ 'Null 'PGint4] from ('Null 'PGint4)
 -- >>> printSQL expr
 -- ($1 :: int4)
 param
@@ -436,7 +436,7 @@ matchNull y f x = ifThenElse (isNull x) y
 `nullIf` gives @NULL@.
 
 >>> :set -XTypeApplications -XDataKinds
->>> let expr = nullIf false (param @1) :: Expression commons schemas '[ 'NotNull 'PGbool] grp from ('Null 'PGbool)
+>>> let expr = nullIf false (param @1) :: Expression grp commons schemas '[ 'NotNull 'PGbool] from ('Null 'PGbool)
 >>> printSQL expr
 NULL IF (FALSE, ($1 :: bool))
 -}
@@ -498,7 +498,7 @@ row exprs = UnsafeExpression $ "ROW" <> parenthesized
 -- type Schema = '["complex" ::: 'Typedef Complex]
 -- :}
 --
--- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression '[] (Public Schema) from grp params ('NotNull Complex)
+-- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression grp '[] (Public Schema) from params ('NotNull Complex)
 -- >>> printSQL $ i & field #complex #imaginary
 -- (ROW(0, 1)::"complex")."imaginary"
 field
@@ -522,7 +522,7 @@ instance Monoid
     mempty = array []
     mappend = (<>)
 
--- | >>> let expr = greatest currentTimestamp [param @1] :: Expression commons schemas '[ 'NotNull 'PGtimestamptz] grp from ('NotNull 'PGtimestamptz)
+-- | >>> let expr = greatest currentTimestamp [param @1] :: Expression grp commons schemas '[ 'NotNull 'PGtimestamptz] from ('NotNull 'PGtimestamptz)
 -- >>> printSQL expr
 -- GREATEST(CURRENT_TIMESTAMP, ($1 :: timestamp with time zone))
 greatest
@@ -1398,7 +1398,7 @@ class Aggregate expr aggr where
 
   -- | >>> :{
   -- let
-  --   expression :: Expression commons schemas params (Grouped bys) '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
+  --   expression :: Expression (Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
   --   expression = count #col
   -- in printSQL expression
   -- :}
@@ -1484,13 +1484,37 @@ class Aggregate expr aggr where
     -- ^ what to aggregate
     -> aggr commons schemas params from (nullity 'PGbool)
 
-  -- | minimum and maximum aggregation
-  max_, min_
+  -- | maximum aggregation
+  max_
     :: expr commons schemas params from (nullity ty)
-    -- ^ what to aggregate
+    -- ^ what to maximize
     -> aggr commons schemas params from (nullity ty)
 
-instance Aggregate (Expression 'Ungrouped) (Expression ('Grouped bys)) where
+  -- | minimum aggregation
+  min_
+    :: expr commons schemas params from (nullity ty)
+    -- ^ what to minimize
+    -> aggr commons schemas params from (nullity ty)
+  
+  -- | average aggregation
+  avg
+    :: expr commons schemas params from (nullity ty)
+    -- ^ what to average
+    -> aggr commons schemas params from (nullity (PGAvg ty))
+
+instance {-# OVERLAPPABLE #-} expr ~ (Expression 'Ungrouped)
+  => Aggregate expr (Expression ('Grouped bys)) where
+    count = unsafeAggregate "count"
+    sum_ = unsafeAggregate "sum"
+    bitAnd = unsafeAggregate "bit_and"
+    bitOr = unsafeAggregate "bit_or"
+    boolAnd = unsafeAggregate "bool_and"
+    boolOr = unsafeAggregate "bool_or"
+    every = unsafeAggregate "every"
+    max_ = unsafeAggregate "max"
+    min_ = unsafeAggregate "min"
+    avg = unsafeAggregate "avg"
+instance {-# OVERLAPPING #-} Aggregate DistinctExpression (Expression ('Grouped bys)) where
   count = unsafeAggregate "count"
   sum_ = unsafeAggregate "sum"
   bitAnd = unsafeAggregate "bit_and"
@@ -1500,16 +1524,7 @@ instance Aggregate (Expression 'Ungrouped) (Expression ('Grouped bys)) where
   every = unsafeAggregate "every"
   max_ = unsafeAggregate "max"
   min_ = unsafeAggregate "min"
-instance Aggregate DistinctExpression (Expression ('Grouped bys)) where
-  count = unsafeAggregate "count"
-  sum_ = unsafeAggregate "sum"
-  bitAnd = unsafeAggregate "bit_and"
-  bitOr = unsafeAggregate "bit_or"
-  boolAnd = unsafeAggregate "bool_and"
-  boolOr = unsafeAggregate "bool_or"
-  every = unsafeAggregate "every"
-  max_ = unsafeAggregate "max"
-  min_ = unsafeAggregate "min"
+  avg = unsafeAggregate "avg"
 instance Aggregate (Expression grp) (WindowFunction grp) where
   count = unsafeWindowFunction1 "count"
   sum_ = unsafeWindowFunction1 "sum"
@@ -1520,6 +1535,7 @@ instance Aggregate (Expression grp) (WindowFunction grp) where
   every = unsafeWindowFunction1 "every"
   max_ = unsafeWindowFunction1 "max"
   min_ = unsafeWindowFunction1 "min"
+  avg = unsafeWindowFunction1 "avg"
 
 newtype DistinctExpression commons schemas params from ty
   = Distinct (Expression 'Ungrouped commons schemas params from ty)
@@ -1536,30 +1552,15 @@ unsafeAggregate
 unsafeAggregate fun x = UnsafeExpression $ mconcat
   [fun, "(", renderSQL x, ")"]
 
--- | escape hatch to define aggregate functions over distinct values
-unsafeAggregateDistinct
-  :: ByteString -- ^ aggregate function
-  -> Expression 'Ungrouped commons schemas params from xty
-  -> Expression ('Grouped bys) commons schemas params from yty
-unsafeAggregateDistinct fun x = UnsafeExpression $ mconcat
-  [fun, "(DISTINCT ", renderSQL x, ")"]
-
--- | A constraint for `PGType`s that you can take averages of and the resulting
--- `PGType`.
-class PGAvg ty avg | ty -> avg where
-  avg, avgDistinct
-    :: Expression 'Ungrouped commons schemas params from (nullity ty)
-    -- ^ what to average
-    -> Expression ('Grouped bys) commons schemas params from (nullity avg)
-  avg = unsafeAggregate "avg"
-  avgDistinct = unsafeAggregateDistinct "avg"
-instance PGAvg 'PGint2 'PGnumeric
-instance PGAvg 'PGint4 'PGnumeric
-instance PGAvg 'PGint8 'PGnumeric
-instance PGAvg 'PGnumeric 'PGnumeric
-instance PGAvg 'PGfloat4 'PGfloat8
-instance PGAvg 'PGfloat8 'PGfloat8
-instance PGAvg 'PGinterval 'PGinterval
+-- | A type family that calculates `PGAvg` type of a `PGType`.
+type family PGAvg ty where
+  PGAvg 'PGint2 = 'PGnumeric
+  PGAvg 'PGint4 = 'PGnumeric
+  PGAvg 'PGint8 = 'PGnumeric
+  PGAvg 'PGnumeric = 'PGnumeric
+  PGAvg 'PGfloat4 = 'PGfloat8
+  PGAvg 'PGfloat8 = 'PGfloat8
+  PGAvg 'PGinterval = 'PGinterval
 
 -- | A special aggregation that does not require an input
 --
