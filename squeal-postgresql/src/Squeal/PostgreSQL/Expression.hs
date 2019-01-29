@@ -1396,8 +1396,6 @@ aggregation
 class Aggregate expr1 expr2 aggr
   | aggr -> expr1, aggr -> expr2 where
 
-
-
   -- | A special aggregation that does not require an input
   --
   -- >>> :{
@@ -1497,13 +1495,13 @@ class Aggregate expr1 expr2 aggr
     -- ^ what to aggregate
     -> aggr (nullity 'PGbool)
 
-  -- | maximum aggregation
+  -- | maximum value of expression across all input values
   max_
     :: expr1 (nullity ty)
     -- ^ what to maximize
     -> aggr (nullity ty)
 
-  -- | minimum aggregation
+  -- | minimum value of expression across all input values
   min_
     :: expr1 (nullity ty)
     -- ^ what to minimize
@@ -1515,30 +1513,102 @@ class Aggregate expr1 expr2 aggr
     -- ^ what to average
     -> aggr (nullity (PGAvg ty))
 
-  -- | correlation coefficient
+  -- | @corr (y :*: x)@, correlation coefficient
   corr
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | population covariance
+  -- | @covarPop (y :*: x)@, population covariance
   covarPop
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | sample covariance
+  -- | @covarPop (y :*: x)@, sample covariance
   covarSamp
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | average of the independent variable (sum(X)/N)
+  -- | @regrAvgX (y :*: x)@, average of the independent variable (sum(X)/N)
   regrAvgX
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | average of the dependent variable (sum(Y)/N)
+  -- | @regrAvgY (y :*: x)@, average of the dependent variable (sum(Y)/N)
   regrAvgY
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
+
+  -- | @regrCount (y :*: x)@, number of input rows in which both expressions are nonnull
+  regrCount
+    :: expr2 (nullity 'PGfloat8)
+    -> aggr (nullity 'PGint8)
+
+  -- | @regrIntercept (y :*: x)@, y-intercept of the least-squares-fit linear
+  -- equation determined by the (X, Y) pairs
+  regrIntercept
+    :: expr2 (nullity 'PGfloat8)
+    -> aggr (nullity 'PGfloat8)
+
+  -- | @regrR2 (y :*: x)@, square of the correlation coefficient
+  regrR2
+    :: expr2 (nullity 'PGfloat8)
+    -> aggr (nullity 'PGfloat8)
+
+  -- | @regrSlope (y :*: x)@, slope of the least-squares-fit linear equation
+  -- determined by the (X, Y) pairs
+  regrSlope
+    :: expr2 (nullity 'PGfloat8)
+    -> aggr (nullity 'PGfloat8)
+
+  -- | @regrSxx (y :*: x)@, sum(X^2) - sum(X)^2/N
+  -- (“sum of squares” of the independent variable)
+  regrSxx
+    :: expr2 (nullity 'PGfloat8)
+    -> aggr (nullity 'PGfloat8)
+
+  -- | @regrSxy (y :*: x)@, sum(X*Y) - sum(X) * sum(Y)/N
+  -- (“sum of products” of independent times dependent variable)
+  regrSxy
+    :: expr2 (nullity 'PGfloat8)
+    -> aggr (nullity 'PGfloat8)
+
+  -- | @regrSyy (y :*: x)@, sum(Y^2) - sum(Y)^2/N
+  -- (“sum of squares” of the dependent variable)
+  regrSyy
+    :: expr2 (nullity 'PGfloat8)
+    -> aggr (nullity 'PGfloat8)
+  
+  -- | historical alias for `stddevSamp`
+  stddev
+    :: expr1 (nullity ty)
+    -> aggr (nullity (PGAvg ty))
+  
+  -- | population standard deviation of the input values
+  stddevPop
+    :: expr1 (nullity ty)
+    -> aggr (nullity (PGAvg ty))
+  
+  -- | sample standard deviation of the input values
+  stddevSamp
+    :: expr1 (nullity ty)
+    -> aggr (nullity (PGAvg ty))
+  
+  -- | historical alias for `varSamp`
+  variance
+    :: expr1 (nullity ty)
+    -> aggr (nullity (PGAvg ty))
+  
+  -- | population variance of the input values
+  -- (square of the population standard deviation)
+  varPop
+    :: expr1 (nullity ty)
+    -> aggr (nullity (PGAvg ty))
+  
+  -- | sample variance of the input values
+  -- (square of the sample standard deviation)
+  varSamp
+    :: expr1 (nullity ty)
+    -> aggr (nullity (PGAvg ty))
 
 data Distinction expr ty
   = All (expr ty)
@@ -1580,6 +1650,19 @@ instance Aggregate
     covarSamp = unsafeAggregate2 "covar_samp"
     regrAvgX = unsafeAggregate2 "regr_avgx"
     regrAvgY = unsafeAggregate2 "regr_avgy"
+    regrCount = unsafeAggregate2 "regr_count"
+    regrIntercept = unsafeAggregate2 "regr_intercept"
+    regrR2 = unsafeAggregate2 "regr_r2"
+    regrSlope = unsafeAggregate2 "regr_slope"
+    regrSxx = unsafeAggregate2 "regr_sxx"
+    regrSxy = unsafeAggregate2 "regr_sxy"
+    regrSyy = unsafeAggregate2 "regr_syy"
+    stddev = unsafeAggregate1 "stddev"
+    stddevPop = unsafeAggregate1 "stddev_pop"
+    stddevSamp = unsafeAggregate1 "stddev_samp"
+    variance = unsafeAggregate1 "variance"
+    varPop = unsafeAggregate1 "var_pop"
+    varSamp = unsafeAggregate1 "var_samp"
 instance Aggregate
   (Expression grp commons schemas params from)
   (Expression grp commons schemas params from GHC.:*: Expression grp commons schemas params from)
@@ -1600,6 +1683,19 @@ instance Aggregate
     covarSamp = unsafeWindowFunction2 "covar_samp"
     regrAvgX = unsafeWindowFunction2 "regr_avgx"
     regrAvgY = unsafeWindowFunction2 "regr_avgy"
+    regrCount = unsafeWindowFunction2 "regr_count"
+    regrIntercept = unsafeWindowFunction2 "regr_intercept"
+    regrR2 = unsafeWindowFunction2 "regr_r2"
+    regrSlope = unsafeWindowFunction2 "regr_slope"
+    regrSxx = unsafeWindowFunction2 "regr_sxx"
+    regrSxy = unsafeWindowFunction2 "regr_sxy"
+    regrSyy = unsafeWindowFunction2 "regr_syy"
+    stddev = unsafeWindowFunction1 "stddev"
+    stddevPop = unsafeWindowFunction1 "stddev_pop"
+    stddevSamp = unsafeWindowFunction1 "stddev_samp"
+    variance = unsafeWindowFunction1 "variance"
+    varPop = unsafeWindowFunction1 "var_pop"
+    varSamp = unsafeWindowFunction1 "var_samp"
 
 -- | escape hatch to define aggregate functions
 unsafeAggregate1
