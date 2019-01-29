@@ -1515,6 +1515,31 @@ class Aggregate expr1 expr2 aggr
     -- ^ what to average
     -> aggr (nullity (PGAvg ty))
 
+  -- | correlation coefficient
+  corr
+    :: expr2 (nullity 'PGfloat8)
+    -> aggr (nullity 'PGfloat8)
+
+  -- | population covariance
+  covarPop
+    :: expr2 (nullity 'PGfloat8)
+    -> aggr (nullity 'PGfloat8)
+
+  -- | sample covariance
+  covarSamp
+    :: expr2 (nullity 'PGfloat8)
+    -> aggr (nullity 'PGfloat8)
+
+  -- | average of the independent variable (sum(X)/N)
+  regrAvgX
+    :: expr2 (nullity 'PGfloat8)
+    -> aggr (nullity 'PGfloat8)
+
+  -- | average of the independent variable (sum(Y)/N)
+  regrAvgY
+    :: expr2 (nullity 'PGfloat8)
+    -> aggr (nullity 'PGfloat8)
+
 data Distinction expr ty
   = All (expr ty)
   | Distinct (expr ty)
@@ -1524,22 +1549,37 @@ instance RenderSQL (Distinction (Expression grp commons schemas params from) ty)
   renderSQL = \case
     All x -> "ALL" <+> renderSQL x
     Distinct x -> "DISTINCT" <+> renderSQL x
+instance RenderSQL
+  (Distinction
+    ( Expression grp commons schemas params from
+      GHC.:*:
+      Expression grp commons schemas params from) xty ) where
+        renderSQL = \case
+          All (x GHC.:*: x') ->
+            "ALL" <+> renderSQL x <> ", " <> renderSQL x'
+          Distinct (x GHC.:*: x') ->
+            "DISTINCT" <+> renderSQL x <> ", " <> renderSQL x'
 
 instance Aggregate
   (Distinction (Expression 'Ungrouped commons schemas params from))
   (Distinction (Expression 'Ungrouped commons schemas params from GHC.:*: Expression 'Ungrouped commons schemas params from))
   (Expression ('Grouped bys) commons schemas params from) where
     countStar = UnsafeExpression "count(*)"
-    count = unsafeAggregate "count"
-    sum_ = unsafeAggregate "sum"
-    bitAnd = unsafeAggregate "bit_and"
-    bitOr = unsafeAggregate "bit_or"
-    boolAnd = unsafeAggregate "bool_and"
-    boolOr = unsafeAggregate "bool_or"
-    every = unsafeAggregate "every"
-    max_ = unsafeAggregate "max"
-    min_ = unsafeAggregate "min"
-    avg = unsafeAggregate "avg"
+    count = unsafeAggregate1 "count"
+    sum_ = unsafeAggregate1 "sum"
+    bitAnd = unsafeAggregate1 "bit_and"
+    bitOr = unsafeAggregate1 "bit_or"
+    boolAnd = unsafeAggregate1 "bool_and"
+    boolOr = unsafeAggregate1 "bool_or"
+    every = unsafeAggregate1 "every"
+    max_ = unsafeAggregate1 "max"
+    min_ = unsafeAggregate1 "min"
+    avg = unsafeAggregate1 "avg"
+    corr = unsafeAggregate2 "corr"
+    covarPop = unsafeAggregate2 "covar_pop"
+    covarSamp = unsafeAggregate2 "covar_samp"
+    regrAvgX = unsafeAggregate2 "regr_avgx"
+    regrAvgY = unsafeAggregate2 "regr_avgy"
 instance Aggregate
   (Expression grp commons schemas params from)
   (Expression grp commons schemas params from GHC.:*: Expression grp commons schemas params from)
@@ -1555,14 +1595,27 @@ instance Aggregate
     max_ = unsafeWindowFunction1 "max"
     min_ = unsafeWindowFunction1 "min"
     avg = unsafeWindowFunction1 "avg"
+    corr = unsafeWindowFunction2 "corr"
+    covarPop = unsafeWindowFunction2 "covar_pop"
+    covarSamp = unsafeWindowFunction2 "covar_samp"
+    regrAvgX = unsafeWindowFunction2 "regr_avgx"
+    regrAvgY = unsafeWindowFunction2 "regr_avgy"
 
 -- | escape hatch to define aggregate functions
-unsafeAggregate
+unsafeAggregate1
   :: ByteString -- ^ aggregate function
   -> Distinction (Expression 'Ungrouped commons schemas params from) xty
   -> Expression ('Grouped bys) commons schemas params from yty
-unsafeAggregate fun x = UnsafeExpression $ mconcat
+unsafeAggregate1 fun x = UnsafeExpression $ mconcat
   [fun, "(", renderSQL x, ")"]
+
+-- | escape hatch to define aggregate binary functions
+unsafeAggregate2
+  :: ByteString -- ^ aggregate function
+  -> Distinction (Expression 'Ungrouped commons schemas params from GHC.:*: Expression 'Ungrouped commons schemas params from) xty
+  -> Expression ('Grouped bys) commons schemas params from yty
+unsafeAggregate2 fun xx = UnsafeExpression $ mconcat
+  [fun, "(", renderSQL xx, ")"]
 
 -- | A type family that calculates `PGAvg` type of a `PGType`.
 type family PGAvg ty where
@@ -1842,6 +1895,21 @@ unsafeWindowFunction1
   -> WindowFunction grp commons schemas params from ty1
 unsafeWindowFunction1 fun x
   = UnsafeWindowFunction $ fun <> parenthesized (renderSQL x)
+
+unsafeWindowFunction2
+  :: ByteString
+  -> (Expression grp commons schemas params from GHC.:*: Expression grp commons schemas params from) ty0
+  -> WindowFunction grp commons schemas params from ty1
+unsafeWindowFunction2 fun (x GHC.:*: x')
+  = UnsafeWindowFunction $ fun <> parenthesized (renderSQL x <> ", " <> renderSQL x')
+
+-- | escape hatch to define aggregate binary functions
+-- unsafeAggregate2
+--   :: ByteString -- ^ aggregate function
+--   -> Distinction (Expression 'Ungrouped commons schemas params from GHC.:*: Expression 'Ungrouped commons schemas params from) xty
+--   -> Expression ('Grouped bys) commons schemas params from yty
+-- unsafeAggregate2 fun xx = UnsafeExpression $ mconcat
+--   [fun, "(", renderSQL xx, ")"]
 
 {- | rank of the current row with gaps; same as `rowNumber` of its first peer
 >>> printSQL rank
