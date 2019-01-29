@@ -1535,7 +1535,7 @@ class Aggregate expr1 expr2 aggr
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | average of the independent variable (sum(Y)/N)
+  -- | average of the dependent variable (sum(Y)/N)
   regrAvgY
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
