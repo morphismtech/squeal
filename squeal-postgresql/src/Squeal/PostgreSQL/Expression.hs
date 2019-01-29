@@ -1393,7 +1393,8 @@ jsonbPretty = unsafeFunction "jsonb_pretty"
 aggregation
 -----------------------------------------}
 
-class Aggregate expr aggr | aggr -> expr where
+class Aggregate expr1 expr2 aggr
+  | aggr -> expr1, aggr -> expr2 where
 
 
 
@@ -1406,7 +1407,7 @@ class Aggregate expr aggr | aggr -> expr where
   -- in printSQL expression
   -- :}
   -- count(*)
-  countStar :: aggr commons schemas params from ('NotNull 'PGint8)
+  countStar :: aggr ('NotNull 'PGint8)
 
   -- | >>> :{
   -- let
@@ -1416,9 +1417,9 @@ class Aggregate expr aggr | aggr -> expr where
   -- :}
   -- count(ALL "col")
   count
-    :: expr commons schemas params from ty
+    :: expr1 ty
     -- ^ what to count
-    -> aggr commons schemas params from ('NotNull 'PGint8)
+    -> aggr ('NotNull 'PGint8)
 
   -- | >>> :{
   -- let
@@ -1429,8 +1430,8 @@ class Aggregate expr aggr | aggr -> expr where
   -- sum(DISTINCT "col")
   sum_
     :: ty `In` PGNum
-    => expr commons schemas params from (nullity ty)
-    -> aggr commons schemas params from (nullity ty)
+    => expr1 (nullity ty)
+    -> aggr (nullity ty)
 
   -- | >>> :{
   -- let
@@ -1441,9 +1442,9 @@ class Aggregate expr aggr | aggr -> expr where
   -- bit_and(DISTINCT "col")
   bitAnd
     :: int `In` PGIntegral
-    => expr commons schemas params from (nullity int)
+    => expr1 (nullity int)
     -- ^ what to aggregate
-    -> aggr commons schemas params from (nullity int)
+    -> aggr (nullity int)
 
   -- | >>> :{
   -- let
@@ -1454,9 +1455,9 @@ class Aggregate expr aggr | aggr -> expr where
   -- bit_or(ALL "col")
   bitOr
     :: int `In` PGIntegral
-    => expr commons schemas params from (nullity int)
+    => expr1 (nullity int)
     -- ^ what to aggregate
-    -> aggr commons schemas params from (nullity int)
+    -> aggr (nullity int)
 
   -- | >>> :{
   -- let
@@ -1466,9 +1467,9 @@ class Aggregate expr aggr | aggr -> expr where
   -- :}
   -- bool_and(ALL "col")
   boolAnd
-    :: expr commons schemas params from (nullity 'PGbool)
+    :: expr1 (nullity 'PGbool)
     -- ^ what to aggregate
-    -> aggr commons schemas params from (nullity 'PGbool)
+    -> aggr (nullity 'PGbool)
 
   -- | >>> :{
   -- let
@@ -1478,9 +1479,9 @@ class Aggregate expr aggr | aggr -> expr where
   -- :}
   -- bool_or(ALL "col")
   boolOr
-    :: expr commons schemas params from (nullity 'PGbool)
+    :: expr1(nullity 'PGbool)
     -- ^ what to aggregate
-    -> aggr commons schemas params from (nullity 'PGbool)
+    -> aggr (nullity 'PGbool)
 
   -- | synonym for `boolAnd`
   --
@@ -1492,68 +1493,73 @@ class Aggregate expr aggr | aggr -> expr where
   -- :}
   -- every(DISTINCT "col")
   every
-    :: expr commons schemas params from (nullity 'PGbool)
+    :: expr1 (nullity 'PGbool)
     -- ^ what to aggregate
-    -> aggr commons schemas params from (nullity 'PGbool)
+    -> aggr (nullity 'PGbool)
 
   -- | maximum aggregation
   max_
-    :: expr commons schemas params from (nullity ty)
+    :: expr1 (nullity ty)
     -- ^ what to maximize
-    -> aggr commons schemas params from (nullity ty)
+    -> aggr (nullity ty)
 
   -- | minimum aggregation
   min_
-    :: expr commons schemas params from (nullity ty)
+    :: expr1 (nullity ty)
     -- ^ what to minimize
-    -> aggr commons schemas params from (nullity ty)
+    -> aggr (nullity ty)
   
   -- | average aggregation
   avg
-    :: expr commons schemas params from (nullity ty)
+    :: expr1 (nullity ty)
     -- ^ what to average
-    -> aggr commons schemas params from (nullity (PGAvg ty))
+    -> aggr (nullity (PGAvg ty))
 
-data Distinction commons schemas params from ty
-  = All (Expression 'Ungrouped commons schemas params from ty)
-  | Distinct (Expression 'Ungrouped commons schemas params from ty)
+data Distinction expr ty
+  = All (expr ty)
+  | Distinct (expr ty)
   deriving (GHC.Generic,Show,Eq,Ord)
-instance NFData (Distinction commons schemas params from ty)
-instance RenderSQL (Distinction commons schemas params from ty) where
+instance NFData (Distinction (Expression grp commons schemas params from) ty)
+instance RenderSQL (Distinction (Expression grp commons schemas params from) ty) where
   renderSQL = \case
     All x -> "ALL" <+> renderSQL x
     Distinct x -> "DISTINCT" <+> renderSQL x
 
-instance Aggregate Distinction (Expression ('Grouped bys)) where
-  countStar = UnsafeExpression "count(*)"
-  count = unsafeAggregate "count"
-  sum_ = unsafeAggregate "sum"
-  bitAnd = unsafeAggregate "bit_and"
-  bitOr = unsafeAggregate "bit_or"
-  boolAnd = unsafeAggregate "bool_and"
-  boolOr = unsafeAggregate "bool_or"
-  every = unsafeAggregate "every"
-  max_ = unsafeAggregate "max"
-  min_ = unsafeAggregate "min"
-  avg = unsafeAggregate "avg"
-instance Aggregate (Expression grp) (WindowFunction grp) where
-  countStar = UnsafeWindowFunction "count(*)"
-  count = unsafeWindowFunction1 "count"
-  sum_ = unsafeWindowFunction1 "sum"
-  bitAnd = unsafeWindowFunction1 "bit_and"
-  bitOr = unsafeWindowFunction1 "bit_or"
-  boolAnd = unsafeWindowFunction1 "bool_and"
-  boolOr = unsafeWindowFunction1 "bool_or"
-  every = unsafeWindowFunction1 "every"
-  max_ = unsafeWindowFunction1 "max"
-  min_ = unsafeWindowFunction1 "min"
-  avg = unsafeWindowFunction1 "avg"
+instance Aggregate
+  (Distinction (Expression 'Ungrouped commons schemas params from))
+  (Distinction (Expression 'Ungrouped commons schemas params from GHC.:*: Expression 'Ungrouped commons schemas params from))
+  (Expression ('Grouped bys) commons schemas params from) where
+    countStar = UnsafeExpression "count(*)"
+    count = unsafeAggregate "count"
+    sum_ = unsafeAggregate "sum"
+    bitAnd = unsafeAggregate "bit_and"
+    bitOr = unsafeAggregate "bit_or"
+    boolAnd = unsafeAggregate "bool_and"
+    boolOr = unsafeAggregate "bool_or"
+    every = unsafeAggregate "every"
+    max_ = unsafeAggregate "max"
+    min_ = unsafeAggregate "min"
+    avg = unsafeAggregate "avg"
+instance Aggregate
+  (Expression grp commons schemas params from)
+  (Expression grp commons schemas params from GHC.:*: Expression grp commons schemas params from)
+  (WindowFunction grp commons schemas params from) where
+    countStar = UnsafeWindowFunction "count(*)"
+    count = unsafeWindowFunction1 "count"
+    sum_ = unsafeWindowFunction1 "sum"
+    bitAnd = unsafeWindowFunction1 "bit_and"
+    bitOr = unsafeWindowFunction1 "bit_or"
+    boolAnd = unsafeWindowFunction1 "bool_and"
+    boolOr = unsafeWindowFunction1 "bool_or"
+    every = unsafeWindowFunction1 "every"
+    max_ = unsafeWindowFunction1 "max"
+    min_ = unsafeWindowFunction1 "min"
+    avg = unsafeWindowFunction1 "avg"
 
 -- | escape hatch to define aggregate functions
 unsafeAggregate
-  :: RenderSQL (expr commons schemas params from xty)
-  => ByteString -- ^ aggregate function
-  -> expr commons schemas params from xty
+  :: ByteString -- ^ aggregate function
+  -> Distinction (Expression 'Ungrouped commons schemas params from) xty
   -> Expression ('Grouped bys) commons schemas params from yty
 unsafeAggregate fun x = UnsafeExpression $ mconcat
   [fun, "(", renderSQL x, ")"]
