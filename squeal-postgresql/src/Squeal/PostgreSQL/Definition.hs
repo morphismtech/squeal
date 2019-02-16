@@ -528,8 +528,7 @@ instance RenderSQL OnUpdateClause where
 {-----------------------------------------
 DROP statements
 -----------------------------------------}
--- | `dropTable` removes schemas from the database.
---
+
 -- >>> :{
 -- let
 --   definition :: Definition '["muh_schema" ::: schema, "public" ::: public] '["public" ::: public]
