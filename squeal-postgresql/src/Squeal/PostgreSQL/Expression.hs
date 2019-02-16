@@ -1457,6 +1457,11 @@ class Aggregate expr1 expr2 aggr
     => expr1 (nullity ty)
     -> aggr (nullity ty)
 
+  -- | input values, including nulls, concatenated into an array
+  arrayAgg
+    :: expr1 ty
+    -> aggr ('NotNull ('PGvararray ty))
+
   -- | >>> :{
   -- let
   --   expression :: Expression ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
@@ -1718,6 +1723,7 @@ instance Aggregate
     countStar = UnsafeExpression "count(*)"
     count = unsafeAggregate1 "count"
     sum_ = unsafeAggregate1 "sum"
+    arrayAgg = unsafeAggregate1 "array_agg"
     bitAnd = unsafeAggregate1 "bit_and"
     bitOr = unsafeAggregate1 "bit_or"
     boolAnd = unsafeAggregate1 "bool_and"
@@ -1751,6 +1757,7 @@ instance Aggregate
     countStar = UnsafeWindowFunction "count(*)"
     count = unsafeWindowFunction1 "count"
     sum_ = unsafeWindowFunction1 "sum"
+    arrayAgg = unsafeWindowFunction1 "array_agg"
     bitAnd = unsafeWindowFunction1 "bit_and"
     bitOr = unsafeWindowFunction1 "bit_or"
     boolAnd = unsafeWindowFunction1 "bool_and"
