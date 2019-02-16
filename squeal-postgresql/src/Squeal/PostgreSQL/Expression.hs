@@ -194,7 +194,10 @@ module Squeal.PostgreSQL.Expression
   , fixarray
     -- * Re-export
   , (&)
-  , NP ((:*), Nil)
+  , NP (..)
+  , (:*:) (..)
+  , I (..)
+  , K (..)
   ) where
 
 import Control.Category
@@ -208,6 +211,7 @@ import Data.Ratio
 import Data.String
 import Data.Word
 import Generics.SOP hiding (from)
+import GHC.Generics ((:*:) (..))
 import GHC.OverloadedLabels
 import GHC.TypeLits
 import Prelude hiding (id, (.))
@@ -1459,11 +1463,11 @@ class Aggregate expr1 expr2 aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression (Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
-  --   expression = boolAnd (All #col)
-  -- in printSQL expression
+  --   winFun :: WindowFunction 'Ungrouped commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+  --   winFun = boolAnd #col
+  -- in printSQL winFun
   -- :}
-  -- bool_and(ALL "col")
+  -- bool_and("col")
   boolAnd
     :: expr1 (nullity 'PGbool)
     -- ^ what to aggregate
@@ -1485,7 +1489,7 @@ class Aggregate expr1 expr2 aggr
   --
   -- >>> :{
   -- let
-  --   expression :: Expression (Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+  --   expression :: Expression ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
   --   expression = every (Distinct #col)
   -- in printSQL expression
   -- :}
@@ -1513,66 +1517,121 @@ class Aggregate expr1 expr2 aggr
     -- ^ what to average
     -> aggr (nullity (PGAvg ty))
 
-  -- | @corr (y :*: x)@, correlation coefficient
+  {- | correlation coefficient
+  >>> :{
+  let
+    expression :: Expression ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression = corr (All (#y :*: #x))
+  in printSQL expression
+  :}
+  corr(ALL "y", "x")
+  -}
   corr
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | @covarPop (y :*: x)@, population covariance
+  {- | population covariance
+  >>> :{
+  let
+    expression :: Expression ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression = covarPop (All (#y :*: #x))
+  in printSQL expression
+  :}
+  covar_pop(ALL "y", "x")
+  -}
   covarPop
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | @covarPop (y :*: x)@, sample covariance
+  {- | sample covariance
+  >>> :{
+  let
+    winFun :: WindowFunction 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    winFun = covarSamp (#y :*: #x)
+  in printSQL winFun
+  :}
+  covar_samp("y", "x")
+  -}
   covarSamp
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | @regrAvgX (y :*: x)@, average of the independent variable (sum(X)/N)
+  {- | average of the independent variable (sum(X)/N)
+  >>> :{
+  let
+    expression :: Expression ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression = regrAvgX (All (#y :*: #x))
+  in printSQL expression
+  :}
+  regr_avgx(ALL "y", "x")
+  -}
   regrAvgX
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | @regrAvgY (y :*: x)@, average of the dependent variable (sum(Y)/N)
+  {- | average of the dependent variable (sum(Y)/N)
+  >>> :{
+  let
+    winFun :: WindowFunction 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    winFun = regrAvgY (#y :*: #x)
+  in printSQL winFun
+  :}
+  regr_avgy("y", "x")
+  -}
   regrAvgY
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | @regrCount (y :*: x)@, number of input rows in which both expressions are nonnull
+  {- | number of input rows in which both expressions are nonnull
+  >>> :{
+  let
+    winFun :: WindowFunction 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGint8)
+    winFun = regrCount (#y :*: #x)
+  in printSQL winFun
+  :}
+  regr_count("y", "x")
+  -}
   regrCount
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGint8)
 
-  -- | @regrIntercept (y :*: x)@, y-intercept of the least-squares-fit linear
-  -- equation determined by the (X, Y) pairs
+  {- | y-intercept of the least-squares-fit linear equation determined by the (X, Y) pairs
+  >>> :{
+  let
+    expression :: Expression ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression = regrIntercept (All (#y :*: #x))
+  in printSQL expression
+  :}
+  regr_intercept(ALL "y", "x")
+  -}
   regrIntercept
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | @regrR2 (y :*: x)@, square of the correlation coefficient
+  -- | @regr_r2(Y, X)@, square of the correlation coefficient
   regrR2
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | @regrSlope (y :*: x)@, slope of the least-squares-fit linear equation
+  -- | @regr_slope(Y, X)@, slope of the least-squares-fit linear equation
   -- determined by the (X, Y) pairs
   regrSlope
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | @regrSxx (y :*: x)@, sum(X^2) - sum(X)^2/N
+  -- | @regr_sxx(Y, X)@, sum(X^2) - sum(X)^2/N
   -- (“sum of squares” of the independent variable)
   regrSxx
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | @regrSxy (y :*: x)@, sum(X*Y) - sum(X) * sum(Y)/N
+  -- | @regr_sxy(Y, X)@, sum(X*Y) - sum(X) * sum(Y)/N
   -- (“sum of products” of independent times dependent variable)
   regrSxy
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
 
-  -- | @regrSyy (y :*: x)@, sum(Y^2) - sum(Y)^2/N
+  -- | @regr_syy(Y, X)@, sum(Y^2) - sum(Y)^2/N
   -- (“sum of squares” of the dependent variable)
   regrSyy
     :: expr2 (nullity 'PGfloat8)
@@ -1622,17 +1681,17 @@ instance RenderSQL (Distinction (Expression grp commons schemas params from) ty)
 instance RenderSQL
   (Distinction
     ( Expression grp commons schemas params from
-      GHC.:*:
+      :*:
       Expression grp commons schemas params from) xty ) where
         renderSQL = \case
-          All (x GHC.:*: x') ->
+          All (x :*: x') ->
             "ALL" <+> renderSQL x <> ", " <> renderSQL x'
-          Distinct (x GHC.:*: x') ->
+          Distinct (x :*: x') ->
             "DISTINCT" <+> renderSQL x <> ", " <> renderSQL x'
 
 instance Aggregate
   (Distinction (Expression 'Ungrouped commons schemas params from))
-  (Distinction (Expression 'Ungrouped commons schemas params from GHC.:*: Expression 'Ungrouped commons schemas params from))
+  (Distinction (Expression 'Ungrouped commons schemas params from :*: Expression 'Ungrouped commons schemas params from))
   (Expression ('Grouped bys) commons schemas params from) where
     countStar = UnsafeExpression "count(*)"
     count = unsafeAggregate1 "count"
@@ -1665,7 +1724,7 @@ instance Aggregate
     varSamp = unsafeAggregate1 "var_samp"
 instance Aggregate
   (Expression grp commons schemas params from)
-  (Expression grp commons schemas params from GHC.:*: Expression grp commons schemas params from)
+  (Expression grp commons schemas params from :*: Expression grp commons schemas params from)
   (WindowFunction grp commons schemas params from) where
     countStar = UnsafeWindowFunction "count(*)"
     count = unsafeWindowFunction1 "count"
@@ -1708,7 +1767,7 @@ unsafeAggregate1 fun x = UnsafeExpression $ mconcat
 -- | escape hatch to define aggregate binary functions
 unsafeAggregate2
   :: ByteString -- ^ aggregate function
-  -> Distinction (Expression 'Ungrouped commons schemas params from GHC.:*: Expression 'Ungrouped commons schemas params from) xty
+  -> Distinction (Expression 'Ungrouped commons schemas params from :*: Expression 'Ungrouped commons schemas params from) xty
   -> Expression ('Grouped bys) commons schemas params from yty
 unsafeAggregate2 fun xx = UnsafeExpression $ mconcat
   [fun, "(", renderSQL xx, ")"]
@@ -1994,18 +2053,10 @@ unsafeWindowFunction1 fun x
 
 unsafeWindowFunction2
   :: ByteString
-  -> (Expression grp commons schemas params from GHC.:*: Expression grp commons schemas params from) ty0
+  -> (Expression grp commons schemas params from :*: Expression grp commons schemas params from) ty0
   -> WindowFunction grp commons schemas params from ty1
-unsafeWindowFunction2 fun (x GHC.:*: x')
+unsafeWindowFunction2 fun (x :*: x')
   = UnsafeWindowFunction $ fun <> parenthesized (renderSQL x <> ", " <> renderSQL x')
-
--- | escape hatch to define aggregate binary functions
--- unsafeAggregate2
---   :: ByteString -- ^ aggregate function
---   -> Distinction (Expression 'Ungrouped commons schemas params from GHC.:*: Expression 'Ungrouped commons schemas params from) xty
---   -> Expression ('Grouped bys) commons schemas params from yty
--- unsafeAggregate2 fun xx = UnsafeExpression $ mconcat
---   [fun, "(", renderSQL xx, ")"]
 
 {- | rank of the current row with gaps; same as `rowNumber` of its first peer
 >>> printSQL rank
@@ -2050,8 +2101,7 @@ ntile
   :: Expression grp commons schemas params from ('NotNull 'PGint4)
   -- ^ num buckets
   -> WindowFunction grp commons schemas params from ('NotNull 'PGint4)
-ntile numBuckets = UnsafeWindowFunction $ "ntile"
-  <> parenthesized (renderSQL numBuckets)
+ntile = unsafeWindowFunction1 "ntile"
 
 {- | returns value evaluated at the row that is offset rows before the current
 row within the partition; if there is no such row, instead return default
@@ -2094,8 +2144,7 @@ firstValue
   :: Expression grp commons schemas params from ty
   -- ^ value
   -> WindowFunction grp commons schemas params from ty
-firstValue value = UnsafeWindowFunction $ "first_value"
-  <> parenthesized (renderSQL value)
+firstValue = unsafeWindowFunction1 "first_value"
 
 {- | returns value evaluated at the row that is the
 last row of the window frame
@@ -2104,8 +2153,7 @@ lastValue
   :: Expression grp commons schemas params from ty
   -- ^ value
   -> WindowFunction grp commons schemas params from ty
-lastValue value = UnsafeWindowFunction $ "last_value"
-  <> parenthesized (renderSQL value)
+lastValue = unsafeWindowFunction1 "last_value"
 
 {- | returns value evaluated at the row that is the nth
 row of the window frame (counting from 1); null if no such row
