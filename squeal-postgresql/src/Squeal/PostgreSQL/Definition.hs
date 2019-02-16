@@ -542,7 +542,7 @@ dropSchema
   :: Has sch schemas schema
   => Alias sch
   -> Definition schemas (Drop sch schemas)
-dropSchema sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch
+dropSchema sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch <> ";"
 
 -- | `dropTable` removes a table from the schema.
 --
