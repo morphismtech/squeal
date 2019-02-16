@@ -1781,7 +1781,8 @@ type family PGAvg ty where
   PGAvg 'PGfloat4 = 'PGfloat8
   PGAvg 'PGfloat8 = 'PGfloat8
   PGAvg 'PGinterval = 'PGinterval
-  -- PGAvg pg = TypeError
+  PGAvg pg = TypeError
+    ('Text "Squeal type error: No average for " ':<>: 'ShowType pg)
 
 {-----------------------------------------
 type expressions
