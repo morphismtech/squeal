@@ -292,6 +292,9 @@ param = parameter @n (pgtype @schemas)
 instance (HasUnique tab from row, Has col row ty)
   => IsLabel col (Expression 'Ungrouped commons schemas params from ty) where
     fromLabel = UnsafeExpression $ renderSQL (Alias @col)
+instance (HasUnique tab from row, Has col row ty, tys ~ '[ty])
+  => IsLabel col (NP (Expression 'Ungrouped commons schemas params from) tys) where
+    fromLabel = fromLabel @col :* Nil
 instance (HasUnique tab from row, Has col row ty, column ~ (col ::: ty))
   => IsLabel col
     (Aliased (Expression 'Ungrouped commons schemas params from) column) where
@@ -305,6 +308,9 @@ instance (Has tab from row, Has col row ty)
   => IsQualified tab col (Expression 'Ungrouped commons schemas params from ty) where
     tab ! col = UnsafeExpression $
       renderSQL tab <> "." <> renderSQL col
+instance (Has tab from row, Has col row ty, tys ~ '[ty])
+  => IsQualified tab col (NP (Expression 'Ungrouped commons schemas params from) tys) where
+    tab ! col = tab ! col :* Nil
 instance (Has tab from row, Has col row ty, column ~ (col ::: ty))
   => IsQualified tab col
     (Aliased (Expression 'Ungrouped commons schemas params from) column) where
@@ -321,6 +327,14 @@ instance
   ) => IsLabel col
     (Expression ('Grouped bys) commons schemas params from ty) where
       fromLabel = UnsafeExpression $ renderSQL (Alias @col)
+instance
+  ( HasUnique tab from row
+  , Has col row ty
+  , GroupedBy tab col bys
+  , tys ~ '[ty]
+  ) => IsLabel col
+    (NP (Expression ('Grouped bys) commons schemas params from) tys) where
+      fromLabel = fromLabel @col :* Nil
 instance
   ( HasUnique tab from row
   , Has col row ty
@@ -346,6 +360,14 @@ instance
     (Expression ('Grouped bys) commons schemas params from ty) where
       tab ! col = UnsafeExpression $
         renderSQL tab <> "." <> renderSQL col
+instance
+  ( Has tab from row
+  , Has col row ty
+  , GroupedBy tab col bys
+  , tys ~ '[ty]
+  ) => IsQualified tab col
+    (NP (Expression ('Grouped bys) commons schemas params from) tys) where
+      tab ! col = tab ! col :* Nil
 instance
   ( Has tab from row
   , Has col row ty

@@ -317,7 +317,7 @@ window function queries
 let
   query :: Query '[] (Public Schema) '[] ["col1" ::: 'NotNull 'PGint4, "rank" ::: 'NotNull 'PGint8]
   query = select
-    (List #col1 & Also ((rank `as` #rank) `Over` (partitionBy (#col1 :* Nil) & orderBy [#col2 & Asc])))
+    (#col1 & Also (rank `as` #rank `Over` (partitionBy #col1 & orderBy [#col2 & Asc])))
     (from (table #tab))
 in printSQL query
 :}
