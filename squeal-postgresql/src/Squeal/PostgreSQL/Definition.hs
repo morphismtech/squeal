@@ -37,6 +37,11 @@ module Squeal.PostgreSQL.Definition
   , createSchemaIfNotExists
   , createTable
   , createTableIfNotExists
+  , createView
+  , createTypeEnum
+  , createTypeEnumFrom
+  , createTypeComposite
+  , createTypeCompositeFrom
   , TableConstraintExpression (..)
   , check
   , unique
@@ -46,7 +51,10 @@ module Squeal.PostgreSQL.Definition
   , OnDeleteClause (..)
   , OnUpdateClause (..)
     -- ** Drop
+  , dropSchema
   , dropTable
+  , dropView
+  , dropType
     -- ** Alter
   , alterTable
   , alterTableRename
@@ -63,15 +71,6 @@ module Squeal.PostgreSQL.Definition
   , setNotNull
   , dropNotNull
   , alterType
-    -- * Views
-  , createView
-  , dropView
-    -- * Types
-  , createTypeEnum
-  , createTypeEnumFrom
-  , createTypeComposite
-  , createTypeCompositeFrom
-  , dropType
     -- * Columns
   , ColumnTypeExpression (..)
   , nullable
@@ -529,6 +528,21 @@ instance RenderSQL OnUpdateClause where
 {-----------------------------------------
 DROP statements
 -----------------------------------------}
+-- | `dropTable` removes schemas from the database.
+--
+-- >>> :{
+-- let
+--   definition :: Definition '["muh_schema" ::: schema, "public" ::: public] '["public" ::: public]
+--   definition = dropSchema #muh_schema
+-- :}
+--
+-- >>> printSQL definition
+-- DROP SCHEMA "muh_schema";
+dropSchema
+  :: Has sch schemas schema
+  => Alias sch
+  -> Definition schemas (Drop sch schemas)
+dropSchema sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch
 
 -- | `dropTable` removes a table from the schema.
 --
