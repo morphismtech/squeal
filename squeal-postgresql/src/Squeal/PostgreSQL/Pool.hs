@@ -38,6 +38,8 @@ import Data.Pool
 import Data.Time
 import Generics.SOP (K(..))
 
+import qualified Control.Monad.Fail as Fail
+
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Schema
 
@@ -104,6 +106,10 @@ instance Monad m => Monad (PoolPQ schemas m) where
   PoolPQ x >>= f = PoolPQ $ \ pool -> do
     x' <- x pool
     runPoolPQ (f x') pool
+
+-- | `MonadFail` instance for `PoolPQ`.
+instance Monad m => Fail.MonadFail (PoolPQ schemas m) where
+  fail = Fail.fail
 
 -- | `MonadTrans` instance for `PoolPQ`.
 instance MonadTrans (PoolPQ schemas) where
