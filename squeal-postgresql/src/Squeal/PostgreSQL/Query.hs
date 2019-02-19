@@ -18,6 +18,7 @@ Squeal queries.
   , LambdaCase
   , MultiParamTypeClasses
   , OverloadedStrings
+  , QuantifiedConstraints
   , ScopedTypeVariables
   , StandaloneDeriving
   , TypeApplications
@@ -51,8 +52,6 @@ module Squeal.PostgreSQL.Query
     -- ** With
   , With (..)
   , CommonTableExpression (..)
-  , renderCommonTableExpression
-  , renderCommonTableExpressions
     -- ** Json
   , jsonEach
   , jsonbEach
@@ -1346,25 +1345,10 @@ instance
     (AlignedList (CommonTableExpression statement schemas params) commons commons1) where
       statement `as` cte = single (statement `as` cte)
 
--- | render a `CommonTableExpression`.
-renderCommonTableExpression
-  :: (forall cs ss ps row. statement cs ss ps row -> ByteString) -- ^ render statement
-  -> CommonTableExpression statement schemas params commons0 commons1 -> ByteString
-renderCommonTableExpression renderStatement
-  (CommonTableExpression (statement `As` alias)) =
-    renderSQL alias <+> "AS" <+> parenthesized (renderStatement statement)
-
--- | render a non-empty `AlignedList` of `CommonTableExpression`s.
-renderCommonTableExpressions
-  :: (forall cs ss ps row. statement cs ss ps row -> ByteString) -- ^ render statement
-  -> CommonTableExpression statement schemas params commons0 commons1
-  -> AlignedList (CommonTableExpression statement schemas params) commons1 commons2
-  -> ByteString
-renderCommonTableExpressions renderStatement cte ctes =
-  renderCommonTableExpression renderStatement cte <> case ctes of
-    Done           -> ""
-    cte' :>> ctes' -> "," <+>
-      renderCommonTableExpressions renderStatement cte' ctes'
+instance (forall c s p r. RenderSQL (statement c s p r)) => RenderSQL
+  (CommonTableExpression statement schemas params commons0 commons1) where
+    renderSQL (CommonTableExpression (statement `As` cte)) =
+      renderSQL cte <+> "AS" <+> parenthesized (renderSQL statement)
 
 -- | `with` provides a way to write auxiliary statements for use in a larger query.
 -- These statements, referred to as `CommonTableExpression`s, can be thought of as
@@ -1378,6 +1362,5 @@ class With statement where
     -> statement commons0 schemas params row
 instance With Query where
   with Done query = query
-  with (cte :>> ctes) query = UnsafeQuery $
-    "WITH" <+> renderCommonTableExpressions renderSQL cte ctes
-      <+> renderSQL query
+  with ctes query = UnsafeQuery $
+    "WITH" <+> renderSQL ctes <+> renderSQL query

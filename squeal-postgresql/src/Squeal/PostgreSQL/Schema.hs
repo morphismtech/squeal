@@ -22,6 +22,7 @@ it defines an embedding of Haskell types into Postgres types.
   , GADTs
   , LambdaCase
   , OverloadedStrings
+  , QuantifiedConstraints
   , RankNTypes
   , ScopedTypeVariables
   , StandaloneDeriving
@@ -775,6 +776,7 @@ RowPG Person :: [(Symbol, NullityType)]
 = '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
 -}
 type family RowPG (hask :: Type) :: RowType where
+  RowPG (P (col ::: head), tail) = col ::: NullPG head ': RowPG tail
   RowPG hask = RowOf (RecordCodeOf hask)
 
 type family RowOf (fields :: [(Symbol, Type)]) :: RowType where
@@ -802,7 +804,7 @@ the corresponding list of `NullityType`s.
 
 >>> :kind! TuplePG (Double, Maybe Char)
 TuplePG (Double, Maybe Char) :: [NullityType]
-= '['NotNull 'PGfloat8, 'Null ('PGchar 1)]
+= '[ 'NotNull 'PGfloat8, 'Null ('PGchar 1)]
 -}
 type family TuplePG (hask :: Type) :: [NullityType] where
   TuplePG hask = TupleOf (TupleCodeOf hask (Code hask))
@@ -867,6 +869,12 @@ instance Category (AlignedList p) where
   (.) list = \case
     Done -> list
     step :>> steps -> step :>> (steps >>> list)
+instance (forall t0 t1. RenderSQL (p t0 t1))
+  => RenderSQL (AlignedList p x0 x1) where
+    renderSQL = \case
+      Done -> ""
+      step :>> Done -> renderSQL step
+      step :>> steps -> renderSQL step <> ", " <> renderSQL steps
 
 -- | A `single` step.
 single :: p x0 x1 -> AlignedList p x0 x1

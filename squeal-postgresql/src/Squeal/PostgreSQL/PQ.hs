@@ -83,6 +83,7 @@ import Data.Traversable
 import Generics.SOP
 import PostgreSQL.Binary.Encoding (encodingBytes)
 
+import qualified Control.Monad.Fail as Fail
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Squeal.PostgreSQL.Binary
@@ -487,6 +488,10 @@ instance (Monad m, schemas0 ~ schemas1)
   => Monad (PQ schemas0 schemas1 m) where
   return = pure
   (>>=) = flip pqBind
+
+instance (Monad m, schemas0 ~ schemas1)
+  => Fail.MonadFail (PQ schemas0 schemas1 m) where
+  fail = Fail.fail
 
 instance schemas0 ~ schemas1 => MFunctor (PQ schemas0 schemas1) where
   hoist f (PQ pq) = PQ (f . pq)

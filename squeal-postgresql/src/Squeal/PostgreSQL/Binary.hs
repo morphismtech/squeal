@@ -1,5 +1,6 @@
 {-# LANGUAGE
     TypeFamilies
+  , UndecidableSuperClasses
 #-}
 
 {-|

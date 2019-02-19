@@ -206,9 +206,8 @@ instance RenderSQL (Manipulation commons schemas params columns) where
   renderSQL = renderManipulation
 instance With Manipulation where
   with Done manip = manip
-  with (cte :>> ctes) manip = UnsafeManipulation $
-    "WITH" <+> renderCommonTableExpressions renderSQL cte ctes
-    <+> renderSQL manip
+  with ctes manip = UnsafeManipulation $
+    "WITH" <+> renderSQL ctes <+> renderSQL manip
 
 type family Manipulation_ (schemas :: SchemasType) (params :: Type) (row :: Type) where
   Manipulation_ schemas params row = Manipulation '[] schemas (TuplePG params) (RowPG row)
