@@ -289,7 +289,7 @@ deleteMigration = deleteFrom_ (#migrations ! #schema_migrations) (#name .== para
 -- the time at which it was executed.
 selectMigration
   :: Has "migrations" schemas MigrationsSchema
-  => Query '[] schemas '[ 'NotNull 'PGtext ]
+  => Query '[] '[] schemas '[ 'NotNull 'PGtext ]
     '[ "executed_at" ::: 'NotNull 'PGtimestamptz ]
 selectMigration = select_
   (#executed_at `as` #executed_at)

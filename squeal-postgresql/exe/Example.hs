@@ -44,7 +44,7 @@ type Schema =
 type Schemas = Public Schema
 
 setup :: Definition (Public '[]) Schemas
-setup = 
+setup =
   createTable #users
     ( serial `as` #id :*
       (text & notNullable) `as` #name :*
@@ -62,20 +62,16 @@ setup =
 teardown :: Definition Schemas (Public '[])
 teardown = dropTable #emails >>> dropTable #users
 
-insertUser :: Manipulation '[] Schemas '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
-  '[ "fromOnly" ::: 'NotNull 'PGint4 ]
+insertUser :: Manipulation_ Schemas (Text, VarArray (Vector (Maybe Int16))) (Only Int32)
 insertUser = insertInto #users
   (Values_ (defaultAs #id :* param @1 `as` #name :* param @2 `as` #vec))
   (OnConflict (OnConstraint #pk_users) DoNothing) (Returning_ (#id `as` #fromOnly))
 
-insertEmail :: Manipulation '[] Schemas '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
+insertEmail :: Manipulation_ Schemas (Int32, Maybe Text) ()
 insertEmail = insertInto_ #emails
   (Values_ (defaultAs #id :* param @1 `as` #user_id :* param @2 `as` #email))
 
-getUsers :: Query '[] Schemas '[]
-  '[ "userName" ::: 'NotNull 'PGtext
-   , "userEmail" ::: 'Null 'PGtext
-   , "userVec" ::: 'NotNull ('PGvararray ('Null 'PGint2))]
+getUsers :: Query_ Schemas () User
 getUsers = select_
   (#u ! #name `as` #userName :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)
   ( from (table (#users `as` #u)
