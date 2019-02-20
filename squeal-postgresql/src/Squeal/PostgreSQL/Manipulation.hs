@@ -564,11 +564,10 @@ deleteFrom_
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
   => QualifiedAlias sch tab -- ^ table to delete from
-  -> UsingClause commons schemas params from
-  -> Condition 'Ungrouped commons schemas params (tab ::: row ': from)
+  -> Condition 'Ungrouped commons schemas params '[tab ::: row]
   -- ^ condition under which to delete a row
   -> Manipulation commons schemas params '[]
-deleteFrom_ tab uses wh = deleteFrom tab uses wh (Returning_ Nil)
+deleteFrom_ tab wh = deleteFrom tab NoUsing wh (Returning_ Nil)
 
 -- | This has the behaviour of a cartesian product, taking all
 -- possible combinations between @left@ and @right@ - exactly like a

@@ -633,6 +633,9 @@ instance
       = fmap fromRecord
       . hsequence'
       . htrans (Proxy @FromField) fromField
+instance (FromField (col ::: pgkey) (col ::: key), FromRow pgval val)
+  => FromRow (col ::: pgkey ': pgval) (P (col ::: key), val) where
+    fromRow (key :* val) = (,) <$> (unComp . fromField) key <*> fromRow val
 
 -- | `Only` is a 1-tuple type, useful for encoding a single parameter with
 -- `toParams` or decoding a single value with `fromRow`.
