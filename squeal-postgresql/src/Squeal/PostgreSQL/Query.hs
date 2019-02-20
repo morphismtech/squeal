@@ -91,6 +91,7 @@ module Squeal.PostgreSQL.Query
   , GroupByClause (..)
   , HavingClause (..)
     -- * Subquery Expressions
+  , exists
   , in_
   , rowIn
   , eqAll
@@ -321,6 +322,20 @@ let
 in printSQL query
 :}
 SELECT "col1" AS "col1", rank() OVER (PARTITION BY "col1" ORDER BY "col2" ASC) AS "rank" FROM "tab" AS "tab"
+
+correlated subqueries
+
+>>> :{
+let
+  query :: Query '[] '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4]
+  query =
+    select #col1 (from (table (#tab `as` #t1))
+    & where_ (exists (
+      select Star (from (table (#tab `as` #t2))
+      & where_ (#t2 ! #col2 .== #t1 ! #col1)))))
+in printSQL query
+:}
+SELECT "col1" AS "col1" FROM "tab" AS "t1" WHERE EXISTS (SELECT * FROM "tab" AS "t2" WHERE ("t2"."col2" = "t1"."col1"))
 -}
 newtype Query
   (outer :: FromType)
@@ -1074,6 +1089,11 @@ unsafeRowSubqueryExpression
   -> Expression outer grp commons schemas params from (nullity 'PGbool)
 unsafeRowSubqueryExpression op xs q = UnsafeExpression $
   renderSQL (row xs) <+> op <+> parenthesized (renderSQL q)
+
+exists
+  :: Query (Join outer from) commons schemas params row
+  -> Condition outer grp commons schemas params from
+exists query = UnsafeExpression $ "EXISTS" <+> parenthesized (renderSQL query)
 
 -- | The right-hand side is a sub`Query`, which must return exactly one column.
 -- The left-hand expression is evaluated and compared to each row of the
