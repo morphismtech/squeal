@@ -1427,7 +1427,7 @@ class Aggregate expr1 expr2 aggr
   --
   -- >>> :{
   -- let
-  --   expression :: Expression outer ('Grouped bys) commons schemas params from ('NotNull 'PGint8)
+  --   expression :: Expression '[] ('Grouped bys) commons schemas params from ('NotNull 'PGint8)
   --   expression = countStar
   -- in printSQL expression
   -- :}
@@ -1436,7 +1436,7 @@ class Aggregate expr1 expr2 aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression outer ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
+  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
   --   expression = count (All #col)
   -- in printSQL expression
   -- :}
@@ -1448,7 +1448,7 @@ class Aggregate expr1 expr2 aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression outer ('Grouped bys) commons schemas params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null 'PGnumeric)
+  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null 'PGnumeric)
   --   expression = sum_ (Distinct #col)
   -- in printSQL expression
   -- :}
@@ -1475,7 +1475,7 @@ class Aggregate expr1 expr2 aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression outer ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
+  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
   --   expression = bitAnd (Distinct #col)
   -- in printSQL expression
   -- :}
@@ -1488,7 +1488,7 @@ class Aggregate expr1 expr2 aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression outer ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
+  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
   --   expression = bitOr (All #col)
   -- in printSQL expression
   -- :}
@@ -1501,7 +1501,7 @@ class Aggregate expr1 expr2 aggr
 
   -- | >>> :{
   -- let
-  --   winFun :: WindowFunction 'Ungrouped commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+  --   winFun :: WindowFunction '[] 'Ungrouped commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
   --   winFun = boolAnd #col
   -- in printSQL winFun
   -- :}
@@ -1513,7 +1513,7 @@ class Aggregate expr1 expr2 aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression outer ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
   --   expression = boolOr (All #col)
   -- in printSQL expression
   -- :}
@@ -1527,7 +1527,7 @@ class Aggregate expr1 expr2 aggr
   --
   -- >>> :{
   -- let
-  --   expression :: Expression outer ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
   --   expression = every (Distinct #col)
   -- in printSQL expression
   -- :}
@@ -1548,7 +1548,7 @@ class Aggregate expr1 expr2 aggr
     :: expr1 (nullity ty)
     -- ^ what to minimize
     -> aggr (nullity ty)
-  
+
   -- | average aggregation
   avg
     :: expr1 (nullity ty)
@@ -1558,7 +1558,7 @@ class Aggregate expr1 expr2 aggr
   {- | correlation coefficient
   >>> :{
   let
-    expression :: Expression o ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
     expression = corr (All (#y :*: #x))
   in printSQL expression
   :}
@@ -1571,7 +1571,7 @@ class Aggregate expr1 expr2 aggr
   {- | population covariance
   >>> :{
   let
-    expression :: Expression o ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
     expression = covarPop (All (#y :*: #x))
   in printSQL expression
   :}
@@ -1584,7 +1584,7 @@ class Aggregate expr1 expr2 aggr
   {- | sample covariance
   >>> :{
   let
-    winFun :: WindowFunction 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    winFun :: WindowFunction '[] 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
     winFun = covarSamp (#y :*: #x)
   in printSQL winFun
   :}
@@ -1597,7 +1597,7 @@ class Aggregate expr1 expr2 aggr
   {- | average of the independent variable (sum(X)/N)
   >>> :{
   let
-    expression :: Expression o ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
     expression = regrAvgX (All (#y :*: #x))
   in printSQL expression
   :}
@@ -1610,7 +1610,7 @@ class Aggregate expr1 expr2 aggr
   {- | average of the dependent variable (sum(Y)/N)
   >>> :{
   let
-    winFun :: WindowFunction 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    winFun :: WindowFunction '[] 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
     winFun = regrAvgY (#y :*: #x)
   in printSQL winFun
   :}
@@ -1623,7 +1623,7 @@ class Aggregate expr1 expr2 aggr
   {- | number of input rows in which both expressions are nonnull
   >>> :{
   let
-    winFun :: WindowFunction 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGint8)
+    winFun :: WindowFunction '[] 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGint8)
     winFun = regrCount (#y :*: #x)
   in printSQL winFun
   :}
@@ -1636,7 +1636,7 @@ class Aggregate expr1 expr2 aggr
   {- | y-intercept of the least-squares-fit linear equation determined by the (X, Y) pairs
   >>> :{
   let
-    expression :: Expression o ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
     expression = regrIntercept (All (#y :*: #x))
   in printSQL expression
   :}
@@ -1674,27 +1674,27 @@ class Aggregate expr1 expr2 aggr
   regrSyy
     :: expr2 (nullity 'PGfloat8)
     -> aggr (nullity 'PGfloat8)
-  
+
   -- | historical alias for `stddevSamp`
   stddev
     :: expr1 (nullity ty)
     -> aggr (nullity (PGAvg ty))
-  
+
   -- | population standard deviation of the input values
   stddevPop
     :: expr1 (nullity ty)
     -> aggr (nullity (PGAvg ty))
-  
+
   -- | sample standard deviation of the input values
   stddevSamp
     :: expr1 (nullity ty)
     -> aggr (nullity (PGAvg ty))
-  
+
   -- | historical alias for `varSamp`
   variance
     :: expr1 (nullity ty)
     -> aggr (nullity (PGAvg ty))
-  
+
   -- | population variance of the input values
   -- (square of the population standard deviation)
   varPop

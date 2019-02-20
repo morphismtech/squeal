@@ -173,9 +173,10 @@ type Schema3 =
 let
   manipulation :: Manipulation '[] (Public Schema3) '[] '[]
   manipulation =
-    deleteFrom_ #tab (Using (table #other_tab & also (table #third_tab)))
+    deleteFrom #tab (Using (table #other_tab & also (table #third_tab)))
     ( (#tab ! #col2 .== #other_tab ! #col2)
     .&& (#tab ! #col2 .== #third_tab ! #col2) )
+    (Returning_ Nil)
 in printSQL manipulation
 :}
 DELETE FROM "tab" USING "other_tab" AS "other_tab", "third_tab" AS "third_tab" WHERE (("tab"."col2" = "other_tab"."col2") AND ("tab"."col2" = "third_tab"."col2"))
