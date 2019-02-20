@@ -1427,7 +1427,7 @@ class Aggregate expr1 expr2 aggr
   --
   -- >>> :{
   -- let
-  --   expression :: Expression (Grouped bys) commons schemas params from ('NotNull 'PGint8)
+  --   expression :: Expression outer ('Grouped bys) commons schemas params from ('NotNull 'PGint8)
   --   expression = countStar
   -- in printSQL expression
   -- :}
@@ -1436,7 +1436,7 @@ class Aggregate expr1 expr2 aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression (Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
+  --   expression :: Expression outer ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
   --   expression = count (All #col)
   -- in printSQL expression
   -- :}
@@ -1462,6 +1462,16 @@ class Aggregate expr1 expr2 aggr
   arrayAgg
     :: expr1 ty
     -> aggr ('NotNull ('PGvararray ty))
+
+  -- | aggregates values as a JSON array
+  jsonAgg
+    :: expr1 ty
+    -> aggr ('NotNull 'PGjson)
+
+  -- | aggregates values as a JSON array
+  jsonbAgg
+    :: expr1 ty
+    -> aggr ('NotNull 'PGjsonb)
 
   -- | >>> :{
   -- let
@@ -1503,7 +1513,7 @@ class Aggregate expr1 expr2 aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression (Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+  --   expression :: Expression outer ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
   --   expression = boolOr (All #col)
   -- in printSQL expression
   -- :}
@@ -1548,7 +1558,7 @@ class Aggregate expr1 expr2 aggr
   {- | correlation coefficient
   >>> :{
   let
-    expression :: Expression ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression :: Expression o ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
     expression = corr (All (#y :*: #x))
   in printSQL expression
   :}
@@ -1561,7 +1571,7 @@ class Aggregate expr1 expr2 aggr
   {- | population covariance
   >>> :{
   let
-    expression :: Expression ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression :: Expression o ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
     expression = covarPop (All (#y :*: #x))
   in printSQL expression
   :}
@@ -1587,7 +1597,7 @@ class Aggregate expr1 expr2 aggr
   {- | average of the independent variable (sum(X)/N)
   >>> :{
   let
-    expression :: Expression ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression :: Expression o ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
     expression = regrAvgX (All (#y :*: #x))
   in printSQL expression
   :}
@@ -1626,7 +1636,7 @@ class Aggregate expr1 expr2 aggr
   {- | y-intercept of the least-squares-fit linear equation determined by the (X, Y) pairs
   >>> :{
   let
-    expression :: Expression ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression :: Expression o ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
     expression = regrIntercept (All (#y :*: #x))
   in printSQL expression
   :}
@@ -1725,6 +1735,8 @@ instance Aggregate
     count = unsafeAggregate1 "count"
     sum_ = unsafeAggregate1 "sum"
     arrayAgg = unsafeAggregate1 "array_agg"
+    jsonAgg = unsafeAggregate1 "json_agg"
+    jsonbAgg = unsafeAggregate1 "jsonb_agg"
     bitAnd = unsafeAggregate1 "bit_and"
     bitOr = unsafeAggregate1 "bit_or"
     boolAnd = unsafeAggregate1 "bool_and"
@@ -1759,6 +1771,8 @@ instance Aggregate
     count = unsafeWindowFunction1 "count"
     sum_ = unsafeWindowFunction1 "sum"
     arrayAgg = unsafeWindowFunction1 "array_agg"
+    jsonAgg = unsafeWindowFunction1 "json_agg"
+    jsonbAgg = unsafeWindowFunction1 "jsonb_agg"
     bitAnd = unsafeWindowFunction1 "bit_and"
     bitOr = unsafeWindowFunction1 "bit_or"
     boolAnd = unsafeWindowFunction1 "bool_and"
