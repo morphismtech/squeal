@@ -1700,7 +1700,7 @@ class Aggregate expr1 expr2 aggr
   varPop
     :: expr1 (nullity ty)
     -> aggr (nullity (PGAvg ty))
-  
+
   -- | sample variance of the input values
   -- (square of the sample standard deviation)
   varSamp
