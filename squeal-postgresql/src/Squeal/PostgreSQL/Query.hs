@@ -468,6 +468,10 @@ instance RenderSQL (Selection outer grp commons schemas params from row) where
       in
         renderCommaSeparated renderOver winFns
 
+instance IsString
+  (Selection outer grp commons schemas params from '["unI" ::: 'NotNull 'PGtext]) where
+    fromString str = fromString str `as` #unI
+
 -- | the `TableExpression` in the `select` command constructs an intermediate
 -- virtual table by possibly combining tables, views, eliminating rows,
 -- grouping, etc. This table is finally passed on to processing by

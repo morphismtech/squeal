@@ -196,7 +196,6 @@ module Squeal.PostgreSQL.Expression
   , (&)
   , NP (..)
   , (:*:) (..)
-  , I (..)
   , K (..)
   ) where
 
