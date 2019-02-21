@@ -333,13 +333,13 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
 
   runQueryParams
     :: ToParams x params
-    => Query '[] schemas params ys
+    => Query '[] '[] schemas params ys
     -- ^ `select` and friends
     -> x -> pq (K LibPQ.Result ys)
   runQueryParams = manipulateParams . queryStatement
 
   runQuery
-    :: Query '[] schemas '[] ys
+    :: Query '[] '[] schemas '[] ys
     -- ^ `select` and friends
     -> pq (K LibPQ.Result ys)
   runQuery q = runQueryParams q ()
