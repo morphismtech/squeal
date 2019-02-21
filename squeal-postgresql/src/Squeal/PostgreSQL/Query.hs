@@ -107,7 +107,6 @@ import Data.Word
 import Generics.SOP hiding (from)
 import GHC.TypeLits
 
-import qualified Data.ByteString as ByteString
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Expression
@@ -1091,21 +1090,15 @@ The result is `null_` if no comparison with a subquery row returns `false`,
 and at least one comparison returns `null_`.
 
 >>> printSQL $ subAll true (.==) (values_ (true `as` #foo))
-TRUE = ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
+(TRUE = ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo")))
 -}
 subAll
   :: Expression outer grp commons schemas params from ty1 -- ^ expression
   -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
   -> Query (Join outer from) commons schemas params '[col ::: ty2] -- ^ subquery
   -> Condition outer grp commons schemas params from
-subAll expr (?) qry = UnsafeExpression $
-  renderSQL expr <> op <> "ALL" <+> parenthesized (renderSQL qry)
-  where
-    nil = UnsafeExpression ""
-    op = ByteString.init
-       . ByteString.tail
-       . renderSQL
-       $ nil ? nil
+subAll expr (?) qry = expr ?
+  (UnsafeExpression $ "ALL" <+> parenthesized (renderSQL qry))
 
 {- |
 The right-hand side is a parenthesized subquery, which must return exactly one column.
@@ -1115,18 +1108,15 @@ if any `true` result is obtained. The result is `false` if no true result is fou
 (including the case where the subquery returns no rows).
 
 >>> printSQL $ subAll "foo" like (values_ ("foobar" `as` #foo))
-E'foo' LIKE ALL (SELECT * FROM (VALUES (E'foobar')) AS t ("foo"))
+(E'foo' LIKE ALL (SELECT * FROM (VALUES (E'foobar')) AS t ("foo")))
 -}
 subAny
   :: Expression outer grp commons schemas params from ty1 -- ^ expression
   -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
   -> Query (Join outer from) commons schemas params '[col ::: ty2] -- ^ subquery
   -> Condition outer grp commons schemas params from
-subAny expr (?) qry = UnsafeExpression $
-  renderSQL expr <+> renderSQL (nil ? nil) <+> "ANY"
-  <+> parenthesized (renderSQL qry)
-  where
-    nil = UnsafeExpression ""
+subAny expr (?) qry = expr ?
+  (UnsafeExpression $ "ANY" <+> parenthesized (renderSQL qry))
 
 {-
 The result is `true` if the left-hand expression's result is equal
