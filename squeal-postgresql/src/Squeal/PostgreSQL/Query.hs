@@ -93,31 +93,10 @@ module Squeal.PostgreSQL.Query
     -- * Subquery Expressions
   , exists
   , in_
-  , rowIn
-  , eqAll
-  , rowEqAll
-  , eqAny
-  , rowEqAny
-  , neqAll
-  , rowNeqAll
-  , neqAny
-  , rowNeqAny
-  , allLt
-  , rowLtAll
-  , ltAny
-  , rowLtAny
-  , lteAll
-  , rowLteAll
-  , lteAny
-  , rowLteAny
-  , gtAll
-  , rowGtAll
-  , gtAny
-  , rowGtAny
-  , gteAll
-  , rowGteAll
-  , gteAny
-  , rowGteAny
+  , notIn
+  , Operator
+  , subAll
+  , subAny
   ) where
 
 import Control.DeepSeq
@@ -128,6 +107,7 @@ import Data.Word
 import Generics.SOP hiding (from)
 import GHC.TypeLits
 
+import qualified Data.ByteString as ByteString
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Expression
@@ -1073,278 +1053,104 @@ instance RenderSQL (HavingClause outer grp commons schemas params from) where
     Having conditions ->
       " HAVING" <+> commaSeparated (renderSQL <$> conditions)
 
-unsafeSubqueryExpression
-  :: ByteString
-  -> Expression outer grp commons schemas params from ty
-  -> Query (Join outer from) commons schemas params '[alias ::: ty]
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-unsafeSubqueryExpression op x q = UnsafeExpression $
-  renderSQL x <+> op <+> parenthesized (renderSQL q)
+{-
+The argument of `exists` is an arbitrary subquery. The subquery is evaluated
+to determine whether it returns any rows. If it returns at least one row,
+the result of `exists` is `true`; if the subquery returns no rows,
+the result of `exists` is `false`.
 
-unsafeRowSubqueryExpression
-  :: SListI row
-  => ByteString
-  -> NP (Aliased (Expression outer grp commons schemas params from)) row
-  -> Query (Join outer from) commons schemas params row
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-unsafeRowSubqueryExpression op xs q = UnsafeExpression $
-  renderSQL (row xs) <+> op <+> parenthesized (renderSQL q)
+The subquery can refer to variables from the surrounding query,
+which will act as constants during any one evaluation of the subquery.
 
+The subquery will generally only be executed long enough to determine whether
+at least one row is returned, not all the way to completion.
+-}
 exists
   :: Query (Join outer from) commons schemas params row
   -> Condition outer grp commons schemas params from
 exists query = UnsafeExpression $ "EXISTS" <+> parenthesized (renderSQL query)
 
--- | The right-hand side is a sub`Query`, which must return exactly one column.
--- The left-hand expression is evaluated and compared to each row of the
--- sub`Query` result. The result of `in_` is `true` if any equal subquery row is found.
--- The result is `false` if no equal row is found
--- (including the case where the subquery returns no rows).
---
--- >>> printSQL $ true `in_` values_ (true `as` #foo)
--- TRUE IN (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-in_
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-in_ = unsafeSubqueryExpression "IN"
+type Operator ty1 ty2 ty3
+  =  forall outer grp commons schemas params from
+  .  Expression outer grp commons schemas params from ty1
+  -> Expression outer grp commons schemas params from ty2
+  -> Expression outer grp commons schemas params from ty3
 
-{- | The left-hand side of this form of `rowIn` is a row constructor.
-The right-hand side is a sub`Query`,
-which must return exactly as many columns as
-there are expressions in the left-hand row.
-The left-hand expressions are evaluated and compared row-wise to each row
-of the subquery result. The result of `rowIn`
-is `true` if any equal subquery row is found.
-The result is `false` if no equal row is found
+{- |
+The right-hand side is a parenthesized subquery, which must return
+exactly one column. The left-hand expression is evaluated and compared to each
+row of the subquery result using the given `Operator`,
+which must yield a Boolean result. The result of `subAll` is `true`
+if all rows yield true (including the case where the subquery returns no rows).
+The result is `false` if any `false` result is found.
+The result is `null_` if no comparison with a subquery row returns `false`,
+and at least one comparison returns `null_`.
+
+>>> printSQL $ subAll true (.==) (values_ (true `as` #foo))
+TRUE = ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
+-}
+subAll
+  :: Expression outer grp commons schemas params from ty1 -- ^ expression
+  -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
+  -> Query (Join outer from) commons schemas params '[col ::: ty2] -- ^ subquery
+  -> Condition outer grp commons schemas params from
+subAll expr (?) qry = UnsafeExpression $
+  renderSQL expr <> op <> "ALL" <+> parenthesized (renderSQL qry)
+  where
+    nil = UnsafeExpression ""
+    op = ByteString.init
+       . ByteString.tail
+       . renderSQL
+       $ nil ? nil
+
+{- |
+The right-hand side is a parenthesized subquery, which must return exactly one column.
+The left-hand expression is evaluated and compared to each row of the subquery result
+using the given `Operator`, which must yield a Boolean result. The result of `subAny` is `true`
+if any `true` result is obtained. The result is `false` if no true result is found
 (including the case where the subquery returns no rows).
 
->>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
->>> printSQL $ myRow `rowIn` values_ myRow
-ROW(1, FALSE) IN (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
+>>> printSQL $ subAll "foo" like (values_ ("foobar" `as` #foo))
+E'foo' LIKE ALL (SELECT * FROM (VALUES (E'foobar')) AS t ("foo"))
 -}
-rowIn
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowIn = unsafeRowSubqueryExpression "IN"
+subAny
+  :: Expression outer grp commons schemas params from ty1 -- ^ expression
+  -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
+  -> Query (Join outer from) commons schemas params '[col ::: ty2] -- ^ subquery
+  -> Condition outer grp commons schemas params from
+subAny expr (?) qry = UnsafeExpression $
+  renderSQL expr <+> renderSQL (nil ? nil) <+> "ANY"
+  <+> parenthesized (renderSQL qry)
+  where
+    nil = UnsafeExpression ""
 
--- | >>> printSQL $ true `eqAll` values_ (true `as` #foo)
--- TRUE = ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-eqAll
+{-
+The result is `true` if the left-hand expression's result is equal
+to any of the right-hand expressions.
+
+>>> printSQL $ true `in_` [true, false, null_]
+TRUE IN (TRUE, FALSE, NULL)
+-}
+in_
   :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-eqAll = unsafeSubqueryExpression "= ALL"
+  -> [Expression outer grp commons schemas params from ty]
+  -> Condition outer grp commons schemas params from
+expr `in_` exprs = UnsafeExpression $ renderSQL expr <+> "IN"
+  <+> parenthesized (commaSeparated (renderSQL <$> exprs))
 
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowEqAll` values_ myRow
--- ROW(1, FALSE) = ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowEqAll
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowEqAll = unsafeRowSubqueryExpression "= ALL"
+{-
+The result is `true` if the left-hand expression's result is not equal
+to any of the right-hand expressions.
 
--- | >>> printSQL $ true `eqAny` values_ (true `as` #foo)
--- TRUE = ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-eqAny
+>>> printSQL $ true `notIn` [false, null_]
+TRUE NOT IN (FALSE, NULL)
+-}
+notIn
   :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-eqAny = unsafeSubqueryExpression "= ANY"
-
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowEqAny` values_ myRow
--- ROW(1, FALSE) = ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowEqAny
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowEqAny = unsafeRowSubqueryExpression "= ANY"
-
--- | >>> printSQL $ true `neqAll` values_ (true `as` #foo)
--- TRUE <> ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-neqAll
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-neqAll = unsafeSubqueryExpression "<> ALL"
-
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowNeqAll` values_ myRow
--- ROW(1, FALSE) <> ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowNeqAll
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowNeqAll = unsafeRowSubqueryExpression "<> ALL"
-
--- | >>> printSQL $ true `neqAny` values_ (true `as` #foo)
--- TRUE <> ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-neqAny
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-neqAny = unsafeSubqueryExpression "<> ANY"
-
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowNeqAny` values_ myRow
--- ROW(1, FALSE) <> ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowNeqAny
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowNeqAny = unsafeRowSubqueryExpression "<> ANY"
-
--- | >>> printSQL $ true `allLt` values_ (true `as` #foo)
--- TRUE ALL < (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-allLt
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-allLt = unsafeSubqueryExpression "ALL <"
-
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowLtAll` values_ myRow
--- ROW(1, FALSE) ALL < (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowLtAll
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowLtAll = unsafeRowSubqueryExpression "ALL <"
-
--- | >>> printSQL $ true `ltAny` values_ (true `as` #foo)
--- TRUE ANY < (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-ltAny
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-ltAny = unsafeSubqueryExpression "ANY <"
-
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowLtAll` values_ myRow
--- ROW(1, FALSE) ALL < (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowLtAny
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowLtAny = unsafeRowSubqueryExpression "ANY <"
-
--- | >>> printSQL $ true `lteAll` values_ (true `as` #foo)
--- TRUE <= ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-lteAll
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-lteAll = unsafeSubqueryExpression "<= ALL"
-
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowLteAll` values_ myRow
--- ROW(1, FALSE) <= ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowLteAll
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowLteAll = unsafeRowSubqueryExpression "<= ALL"
-
--- | >>> printSQL $ true `lteAny` values_ (true `as` #foo)
--- TRUE <= ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-lteAny
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-lteAny = unsafeSubqueryExpression "<= ANY"
-
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowLteAny` values_ myRow
--- ROW(1, FALSE) <= ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowLteAny
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowLteAny = unsafeRowSubqueryExpression "<= ANY"
-
--- | >>> printSQL $ true `gtAll` values_ (true `as` #foo)
--- TRUE > ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-gtAll
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-gtAll = unsafeSubqueryExpression "> ALL"
-
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowGtAll` values_ myRow
--- ROW(1, FALSE) > ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowGtAll
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowGtAll = unsafeRowSubqueryExpression "> ALL"
-
--- | >>> printSQL $ true `gtAny` values_ (true `as` #foo)
--- TRUE > ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-gtAny
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-gtAny = unsafeSubqueryExpression "> ANY"
-
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowGtAny` values_ myRow
--- ROW(1, FALSE) > ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowGtAny
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowGtAny = unsafeRowSubqueryExpression "> ANY"
-
--- | >>> printSQL $ true `gteAll` values_ (true `as` #foo)
--- TRUE >= ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-gteAll
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-gteAll = unsafeSubqueryExpression ">= ALL"
-
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowGteAll` values_ myRow
--- ROW(1, FALSE) >= ALL (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowGteAll
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowGteAll = unsafeRowSubqueryExpression ">= ALL"
-
--- | >>> printSQL $ true `gteAny` values_ (true `as` #foo)
--- TRUE >= ANY (SELECT * FROM (VALUES (TRUE)) AS t ("foo"))
-gteAny
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> Query (Join outer from) commons schemas params '[alias ::: ty] -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-gteAny = unsafeSubqueryExpression ">= ANY"
-
--- | >>> let myRow = 1 `as` #foo :* false `as` #bar :: NP (Aliased (Expression outer grp commons schemas params from)) '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
--- >>> printSQL $ myRow `rowGteAny` values_ myRow
--- ROW(1, FALSE) >= ANY (SELECT * FROM (VALUES (1, FALSE)) AS t ("foo", "bar"))
-rowGteAny
-  :: SListI row
-  => NP (Aliased (Expression outer grp commons schemas params from)) row -- ^ row constructor
-  -> Query (Join outer from) commons schemas params row -- ^ subquery
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-rowGteAny = unsafeRowSubqueryExpression ">= ANY"
+  -> [Expression outer grp commons schemas params from ty]
+  -> Condition outer grp commons schemas params from
+expr `notIn` exprs = UnsafeExpression $ renderSQL expr <+> "NOT IN"
+  <+> parenthesized (commaSeparated (renderSQL <$> exprs))
 
 -- | A `CommonTableExpression` is an auxiliary statement in a `with` clause.
 data CommonTableExpression statement
