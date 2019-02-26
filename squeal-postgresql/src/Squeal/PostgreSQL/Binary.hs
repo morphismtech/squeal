@@ -218,6 +218,7 @@ module Squeal.PostgreSQL.Binary
   , FromRow (..)
     -- * Only
   , Only (..)
+  , P (..)
   ) where
 
 import BinaryParser
