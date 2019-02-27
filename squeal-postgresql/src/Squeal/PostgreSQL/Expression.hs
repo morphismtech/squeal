@@ -484,6 +484,8 @@ array
 array xs = UnsafeExpression $
   "ARRAY[" <> commaSeparated (renderSQL <$> xs) <> "]"
 
+-- | >>> printSQL $ cardinality (array [null_, false, true])
+-- cardinality(ARRAY[NULL, FALSE, TRUE])
 cardinality
   :: Expression outer grp commons schemas params from (nullity ('PGvararray ty))
   -> Expression outer grp commons schemas params from (nullity 'PGint8)
