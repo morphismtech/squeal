@@ -92,7 +92,7 @@ module Squeal.PostgreSQL.Schema
   , Rename
   , DropIfConstraintsInvolve
     -- * Lists
-  , Join
+  , Joinable (..)
   , Elem
   , In
   , Length
@@ -628,9 +628,15 @@ type family NullifyFrom (tables :: FromType) :: FromType where
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.
-type family Join xs ys where
-  Join '[] ys = ys
-  Join (x ': xs) ys = x ': Join xs ys
+class Joinable xs ys where
+  type family Join (xs :: [k]) (ys :: [k]) :: [k]
+  disjoin :: NP expr (Join xs ys) -> (NP expr xs, NP expr ys)
+instance Joinable '[] ys where
+  type Join '[] ys = ys
+  disjoin list = (Nil, list)
+instance Joinable xs ys => Joinable (x ': xs) ys where
+  type Join (x ': xs) ys = x ': Join xs ys
+  disjoin (x :* xsys) = case disjoin xsys of (xs,ys) -> (x :* xs, ys)
 
 -- | @Create alias x xs@ adds @alias ::: x@ to the end of @xs@ and is used in
 -- `Squeal.PostgreSQL.Definition.createTable` statements and in @ALTER TABLE@
@@ -824,7 +830,8 @@ RowPG Person :: [(Symbol, NullityType)]
 = '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
 -}
 type family RowPG (hask :: Type) :: RowType where
-  RowPG (P (col ::: head), tail) = col ::: NullPG head ': RowPG tail
+  RowPG (hask1, hask2) = Join (RowPG hask1) (RowPG hask2)
+  RowPG (P (col ::: head)) = '[col ::: NullPG head]
   RowPG hask = RowOf (RecordCodeOf hask)
 
 type family RowOf (fields :: [(Symbol, Type)]) :: RowType where

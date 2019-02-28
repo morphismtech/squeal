@@ -1217,7 +1217,7 @@ jsonbBuildArray
 jsonbBuildArray = unsafeVariadicFunction "jsonb_build_array"
 
 unsafeRowFunction
-  :: SOP.All SOP.Top elems
+  :: SOP.SListI elems
   => NP (Aliased (Expression outer grp commons schemas params from)) elems
   -> [ByteString]
 unsafeRowFunction =
@@ -1232,7 +1232,7 @@ unsafeRowFunction =
 -- argument list. The elements of the argument list must alternate between text
 -- and values.
 jsonBuildObject
-  :: SOP.All SOP.Top elems
+  :: SOP.SListI elems
   => NP (Aliased (Expression outer grp commons schemas params from)) elems
   -> Expression outer grp commons schemas params from (nullity 'PGjson)
 jsonBuildObject
@@ -1245,7 +1245,7 @@ jsonBuildObject
 -- variadic argument list. The elements of the argument list must alternate
 -- between text and values.
 jsonbBuildObject
-  :: SOP.All SOP.Top elems
+  :: SOP.SListI elems
   => NP (Aliased (Expression outer grp commons schemas params from)) elems
   -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
 jsonbBuildObject

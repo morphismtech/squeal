@@ -634,9 +634,18 @@ instance
       = fmap fromRecord
       . hsequence'
       . htrans (Proxy @FromField) fromField
-instance (FromField (col ::: pgkey) (col ::: key), FromRow pgval val)
-  => FromRow (col ::: pgkey ': pgval) (P (col ::: key), val) where
-    fromRow (key :* val) = (,) <$> (unComp . fromField) key <*> fromRow val
+instance (FromField (col ::: pg) (col ::: hask))
+  => FromRow '[col ::: pg] (P (col ::: hask)) where
+    fromRow (pg :* Nil) = (unComp . fromField) pg
+instance
+  ( Joinable row1 row2
+  , row ~ Join row1 row2
+  , FromRow row1 hask1
+  , FromRow row2 hask2
+  , SListI row
+  ) => FromRow row (hask1, hask2) where
+    fromRow row = case disjoin @row1 @row2 row of
+      (row1, row2) -> (,) <$> fromRow row1 <*> fromRow row2
 
 -- | `Only` is a 1-tuple type, useful for encoding a single parameter with
 -- `toParams` or decoding a single value with `fromRow`.
