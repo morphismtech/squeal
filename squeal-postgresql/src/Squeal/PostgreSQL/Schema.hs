@@ -273,7 +273,13 @@ data TableConstraint
   | PrimaryKey [Symbol]
   | ForeignKey [Symbol] Symbol [Symbol]
 
--- | A `TableConstraints` is a row of `TableConstraint`s.
+{- | A `TableConstraints` is a row of `TableConstraint`s.
+
+>>> :{
+type family UsersConstraints :: TableConstraints where
+  UsersConstraints = '[ "pk_users" ::: 'PrimaryKey '["id"] ]
+:}
+-}
 type TableConstraints = [(Symbol,TableConstraint)]
 
 -- | A `ForeignKey` must reference columns that either are
@@ -442,8 +448,12 @@ instance {-# OVERLAPPING #-} KnownSymbol alias
 instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
   => Has alias (field' ': fields) field
 
-class HasIn fields (x :: (Symbol, a)) where
-instance (Has alias fields field) => HasIn fields '(alias, field) where
+{-| @HasIn fields (alias ::: field)@ is a constraint that proves that
+@fields@ has a field of @alias ::: field@. It is used in @UPDATE@s to
+choose which subfields to update.
+-}
+class HasIn fields field where
+instance (Has alias fields field) => HasIn fields (alias ::: field) where
 
 -- | Utility class for `AllUnique` to provide nicer error messages.
 class IsNotElem x isElem where
@@ -452,11 +462,16 @@ instance (TypeError (      'Text "Cannot assign to "
                       ':<>: 'ShowType alias
                       ':<>: 'Text " more than once"))
    => IsNotElem '(alias, a) 'True where
- -- | No elem of @xs@ appears more than once, in the context of assignment.
+
+-- | No elem of @xs@ appears more than once, in the context of assignment.
 class AllUnique (xs :: [(Symbol, a)]) where
 instance AllUnique '[] where
 instance (IsNotElem x (Elem x xs), AllUnique xs) => AllUnique (x ': xs) where
 
+{- |
+The `DefaultAliasable` class is intended to help with Scrap your Nils
+for default inserts and updates.
+-}
 class KnownSymbol alias
   => DefaultAliasable alias aliased | aliased -> alias where
     defaultAs :: Alias alias -> aliased
@@ -483,6 +498,21 @@ class IsQualified table column expression where
   infixl 9 !
 instance IsQualified table column (Alias table, Alias column) where (!) = (,)
 
+{-| `QualifiedAlias`es enables multi-schema support by allowing a reference
+to a `Table`, `Typedef` or `View` to be qualified by their schemas. By default,
+a qualifier of @public@ is provided.
+
+>>> :{
+let
+  alias1 :: QualifiedAlias "sch" "tab"
+  alias1 = #sch ! #tab
+  alias2 :: QualifiedAlias "public" "vw"
+  alias2 = #vw
+in printSQL alias1 >> printSQL alias2
+:}
+"sch"."tab"
+"vw"
+-}
 data QualifiedAlias (qualifier :: Symbol) (alias :: Symbol) = QualifiedAlias
   deriving (Eq,GHC.Generic,Ord,Show,NFData)
 instance (q ~ q', a ~ a') => IsQualified q a (QualifiedAlias q' a') where
@@ -621,7 +651,7 @@ type family Drop alias xs where
   Drop alias (x ': xs) = x ': Drop alias xs
 
 -- | @Alter alias x xs@ replaces the type associated with an @alias@ in @xs@
--- with the type `x` and is used in `Squeal.PostgreSQL.Definition.alterTable`
+-- with the type @x@ and is used in `Squeal.PostgreSQL.Definition.alterTable`
 -- and `Squeal.PostgreSQL.Definition.alterColumn`.
 type family Alter alias x xs where
   Alter alias x1 (alias ::: x0 ': xs) = alias ::: x1 ': xs
@@ -691,8 +721,26 @@ type family Schema :: SchemaType where
 -}
 type SchemaType = [(Symbol,SchemumType)]
 
+{- |
+A database contains one or more named schemas, which in turn contain tables.
+The same object name can be used in different schemas without conflict;
+for example, both schema1 and myschema can contain tables named mytable.
+Unlike databases, schemas are not rigidly separated:
+a user can access objects in any of the schemas in the database they are connected to,
+if they have privileges to do so.
+
+There are several reasons why one might want to use schemas:
+
+  * To allow many users to use one database without interfering with each other.
+  * To organize database objects into logical groups to make them more manageable.
+  * Third-party applications can be put into separate schemas
+  so they do not collide with the names of other objects.
+-}
 type SchemasType = [(Symbol,SchemaType)]
 
+{-|
+
+-}
 type family Public (schema :: SchemaType) :: SchemasType
   where Public schema = '["public" ::: schema]
 

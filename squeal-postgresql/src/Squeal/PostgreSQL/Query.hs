@@ -612,11 +612,11 @@ data TableExpression
     -- will be returned (but possibly fewer, if the query itself yields
     -- fewer rows).
     , offsetClause :: [Word64]
-    -- ^ The `offsetClause` is combined with `+` to give an offset count
+    -- ^ The `offsetClause` is combined with `Prelude.+` to give an offset count
     -- if nonempty. The offset count says to skip that many rows before
     -- beginning to return rows. The rows are skipped before the limit count
     -- is applied.
-    }
+    } deriving (GHC.Generic)
 
 -- | Render a `TableExpression`
 instance RenderSQL (TableExpression outer grp commons schemas params from) where
@@ -648,7 +648,7 @@ instance RenderSQL (TableExpression outer grp commons schemas params from) where
 -- | A `from` generates a `TableExpression` from a table reference that can be
 -- a table name, or a derived table such as a subquery, a JOIN construct,
 -- or complex combinations of these. A `from` may be transformed by `where_`,
--- `group`, `having`, `orderBy`, `limit` and `offset`, using the `&` operator
+-- `groupBy`, `having`, `orderBy`, `limit` and `offset`, using the `&` operator
 -- to match the left-to-right sequencing of their placement in SQL.
 from
   :: FromClause outer commons schemas params from -- ^ table reference
@@ -987,7 +987,7 @@ fullOuterJoin right on left = UnsafeFromClause $
 Grouping
 -----------------------------------------}
 
--- | `By`s are used in `group` to reference a list of columns which are then
+-- | `By`s are used in `groupBy` to reference a list of columns which are then
 -- used to group together those rows in a table that have the same values
 -- in all the columns listed. @By \#col@ will reference an unambiguous
 -- column @col@; otherwise @By2 (\#tab \! \#col)@ will reference a table

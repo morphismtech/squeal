@@ -41,9 +41,10 @@ import Data.Monoid ((<>))
 import Data.Text (Text)
 import Generics.SOP
 import GHC.Exts
-import GHC.TypeLits
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
+import GHC.TypeLits hiding (Text)
+
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
 
@@ -66,11 +67,12 @@ doubleQuoted str = "\"" <> str <> "\""
 
 -- | Add single quotes around a `Text` and escape single quotes within it.
 singleQuotedText :: Text -> ByteString
-singleQuotedText str = "'" <> T.encodeUtf8 (T.replace "'" "''" str) <> "'"
+singleQuotedText str =
+  "'" <> Text.encodeUtf8 (Text.replace "'" "''" str) <> "'"
 
 -- | Add single quotes around a `ByteString` and escape single quotes within it.
 singleQuotedUtf8 :: ByteString -> ByteString
-singleQuotedUtf8 = singleQuotedText . T.decodeUtf8
+singleQuotedUtf8 = singleQuotedText . Text.decodeUtf8
 
 -- | Comma separate the renderings of a heterogeneous list.
 renderCommaSeparated

@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.Query
+Module: Squeal.PostgreSQL.Expression
 Description: Squeal expressions
 Copyright: (c) Eitan Chatav, 2017
 Maintainer: eitan@morphism.tech
@@ -210,7 +210,7 @@ import qualified Data.Aeson as JSON
 import Data.Ratio
 import Data.String
 import Data.Word
-import Generics.SOP hiding (from)
+import Generics.SOP hiding (All, from)
 import GHC.Generics ((:*:) (..))
 import GHC.OverloadedLabels
 import GHC.TypeLits
@@ -218,6 +218,7 @@ import Prelude hiding (id, (.))
 
 import qualified Data.ByteString as ByteString
 import qualified GHC.Generics as GHC
+import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
@@ -1216,11 +1217,11 @@ jsonbBuildArray
 jsonbBuildArray = unsafeVariadicFunction "jsonb_build_array"
 
 unsafeRowFunction
-  :: All Top elems
+  :: SOP.All SOP.Top elems
   => NP (Aliased (Expression outer grp commons schemas params from)) elems
   -> [ByteString]
 unsafeRowFunction =
-  (`appEndo` []) . hcfoldMap (Proxy :: Proxy Top)
+  (`appEndo` []) . hcfoldMap (Proxy :: SOP.Proxy SOP.Top)
   (\(col `As` name) -> Endo $ \xs ->
       renderAliasString name : renderSQL col : xs)
   where
@@ -1231,7 +1232,7 @@ unsafeRowFunction =
 -- argument list. The elements of the argument list must alternate between text
 -- and values.
 jsonBuildObject
-  :: All Top elems
+  :: SOP.All SOP.Top elems
   => NP (Aliased (Expression outer grp commons schemas params from)) elems
   -> Expression outer grp commons schemas params from (nullity 'PGjson)
 jsonBuildObject
@@ -1244,7 +1245,7 @@ jsonBuildObject
 -- variadic argument list. The elements of the argument list must alternate
 -- between text and values.
 jsonbBuildObject
-  :: All Top elems
+  :: SOP.All SOP.Top elems
   => NP (Aliased (Expression outer grp commons schemas params from)) elems
   -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
 jsonbBuildObject
@@ -1427,6 +1428,11 @@ jsonbPretty = unsafeFunction "jsonb_pretty"
 aggregation
 -----------------------------------------}
 
+{- |
+`Aggregate` functions compute a single result from a set of input values.
+`Aggregate` functions can be used as `GroupedBy` `Expression`s as well
+as `WindowFunction`s.
+-}
 class Aggregate expr1 expr2 aggr
   | aggr -> expr1, aggr -> expr2 where
 
@@ -1714,6 +1720,12 @@ class Aggregate expr1 expr2 aggr
     :: expr1 (nullity ty)
     -> aggr (nullity (PGAvg ty))
 
+{- |
+`Distinction`s are used for the input of `Aggregate` `Expression`s.
+`All` invokes the aggregate once for each input row.
+`Distinct` invokes the aggregate once for each distinct value of the expression
+(or distinct set of values, for multiple expressions) found in the input
+-}
 data Distinction expr ty
   = All (expr ty)
   | Distinct (expr ty)
@@ -1839,7 +1851,8 @@ type family PGAvg ty where
 type expressions
 -----------------------------------------}
 
--- | `TypeExpression`s are used in `cast`s and `createTable` commands.
+-- | `TypeExpression`s are used in `cast`s and
+-- `Squeal.PostgreSQL.Definition.createTable` commands.
 newtype TypeExpression (schemas :: SchemasType) (ty :: NullityType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
@@ -1955,21 +1968,21 @@ vararray ty = UnsafeTypeExpression $ renderSQL ty <> "[]"
 -- >>> renderSQL (fixarray @'[2] json)
 -- "json[2]"
 fixarray
-  :: forall dims schemas nullity pg. All KnownNat dims
+  :: forall dims schemas nullity pg. SOP.All KnownNat dims
   => TypeExpression schemas pg
   -> TypeExpression schemas (nullity ('PGfixarray dims pg))
 fixarray ty = UnsafeTypeExpression $
   renderSQL ty <> renderDims @dims
   where
-    renderDims :: forall ns. All KnownNat ns => ByteString
+    renderDims :: forall ns. SOP.All KnownNat ns => ByteString
     renderDims =
       ("[" <>)
       . (<> "]")
       . ByteString.intercalate "]["
       . hcollapse
-      $ hcmap (Proxy @KnownNat)
+      $ hcmap (SOP.Proxy @KnownNat)
         (K . fromString . show . natVal)
-        (hpure Proxy :: NP Proxy ns)
+        (hpure SOP.Proxy :: NP SOP.Proxy ns)
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped schemas (ty :: NullityType) where
@@ -1999,7 +2012,7 @@ instance PGTyped schemas (nullity 'PGjsonb) where pgtype = jsonb
 instance PGTyped schemas ty
   => PGTyped schemas (nullity ('PGvararray ty)) where
     pgtype = vararray (pgtype @schemas @ty)
-instance (All KnownNat dims, PGTyped schemas ty)
+instance (SOP.All KnownNat dims, PGTyped schemas ty)
   => PGTyped schemas (nullity ('PGfixarray dims ty)) where
     pgtype = fixarray @dims (pgtype @schemas @ty)
 
@@ -2007,8 +2020,9 @@ instance (All KnownNat dims, PGTyped schemas ty)
 Sorting
 -----------------------------------------}
 
--- | `SortExpression`s are used by `sortBy` to optionally sort the results
--- of a `Query`. `Asc` or `Desc` set the sort direction of a `NotNull` result
+-- | `SortExpression`s are used by `orderBy` to optionally sort the results
+-- of a `Squeal.PostgreSQL.Query.Query`. `Asc` or `Desc`
+-- set the sort direction of a `NotNull` result
 -- column to ascending or descending. Ascending order puts smaller values
 -- first, where "smaller" is defined in terms of the `.<` operator. Similarly,
 -- descending order is determined with the `.>` operator. `AscNullsFirst`,
@@ -2016,26 +2030,37 @@ Sorting
 -- determine whether nulls appear before or after non-null values in the sort
 -- ordering of a `Null` result column.
 data SortExpression outer grp commons schemas params from where
-    Asc
-      :: Expression outer grp commons schemas params from ('NotNull ty)
-      -> SortExpression outer grp commons schemas params from
-    Desc
-      :: Expression outer grp commons schemas params from ('NotNull ty)
-      -> SortExpression outer grp commons schemas params from
-    AscNullsFirst
-      :: Expression outer grp commons schemas params from  ('Null ty)
-      -> SortExpression outer grp commons schemas params from
-    AscNullsLast
-      :: Expression outer grp commons schemas params from  ('Null ty)
-      -> SortExpression outer grp commons schemas params from
-    DescNullsFirst
-      :: Expression outer grp commons schemas params from  ('Null ty)
-      -> SortExpression outer grp commons schemas params from
-    DescNullsLast
-      :: Expression outer grp commons schemas params from  ('Null ty)
-      -> SortExpression outer grp commons schemas params from
+  Asc
+    :: Expression outer grp commons schemas params from ('NotNull ty)
+    -> SortExpression outer grp commons schemas params from
+  Desc
+    :: Expression outer grp commons schemas params from ('NotNull ty)
+    -> SortExpression outer grp commons schemas params from
+  AscNullsFirst
+    :: Expression outer grp commons schemas params from  ('Null ty)
+    -> SortExpression outer grp commons schemas params from
+  AscNullsLast
+    :: Expression outer grp commons schemas params from  ('Null ty)
+    -> SortExpression outer grp commons schemas params from
+  DescNullsFirst
+    :: Expression outer grp commons schemas params from  ('Null ty)
+    -> SortExpression outer grp commons schemas params from
+  DescNullsLast
+    :: Expression outer grp commons schemas params from  ('Null ty)
+    -> SortExpression outer grp commons schemas params from
 deriving instance Show (SortExpression outer grp commons schemas params from)
 
+{- |
+The `orderBy` clause causes the result rows of a `Squeal.PostgreSQL.Query.TableExpression`
+to be sorted according to the specified `SortExpression`(s).
+If two rows are equal according to the leftmost expression,
+they are compared according to the next expression and so on.
+If they are equal according to all specified expressions,
+they are returned in an implementation-dependent order.
+
+You can also control the order in which rows are processed by window functions
+using `orderBy` within `Squeal.PostgreSQL.Query.Over`.
+-}
 class OrderBy expr where
   orderBy
     :: [SortExpression outer grp commons schemas params from]
@@ -2054,6 +2079,8 @@ instance RenderSQL (SortExpression outer grp commons schemas params from) where
     AscNullsLast expression -> renderSQL expression <+> "ASC NULLS LAST"
     DescNullsLast expression -> renderSQL expression <+> "DESC NULLS LAST"
 
+-- | A `WindowDefinition` is a set of table rows that are somehow related
+-- to the current row
 data WindowDefinition outer grp commons schemas params from where
   WindowDefinition
     :: SListI bys
@@ -2077,12 +2104,28 @@ instance RenderSQL (WindowDefinition outer commons schemas from grp params) wher
         srts -> " ORDER" <+> "BY"
           <+> commaSeparated (renderSQL <$> srts)
 
+{- |
+The `partitionBy` clause within `Squeal.PostgreSQL.Query.Over` divides the rows into groups,
+or partitions, that share the same values of the `partitionBy` `Expression`(s).
+For each row, the window function is computed across the rows that fall into
+the same partition as the current row.
+-}
 partitionBy
   :: SListI bys
   => NP (Expression outer grp commons schemas params from) bys
   -> WindowDefinition outer grp commons schemas params from
 partitionBy bys = WindowDefinition bys []
 
+{- |
+A window function performs a calculation across a set of table rows
+that are somehow related to the current row. This is comparable to the type
+of calculation that can be done with an aggregate function.
+However, window functions do not cause rows to become grouped into a single
+output row like non-window aggregate calls would.
+Instead, the rows retain their separate identities.
+Behind the scenes, the window function is able to access more than
+just the current row of the query result.
+-}
 newtype WindowFunction
   (outer :: FromType)
   (grp :: Grouping)
