@@ -831,6 +831,12 @@ RowPG Person :: [(Symbol, NullityType)]
 -}
 type family RowPG (hask :: Type) :: RowType where
   RowPG (hask1, hask2) = Join (RowPG hask1) (RowPG hask2)
+  RowPG (hask1, hask2, hask3) =
+    Join (RowPG hask1) (RowPG (hask2, hask3))
+  RowPG (hask1, hask2, hask3, hask4) =
+    Join (RowPG hask1) (RowPG (hask2, hask3, hask4))
+  RowPG (hask1, hask2, hask3, hask4, hask5) =
+    Join (RowPG hask1) (RowPG (hask2, hask3, hask4, hask5))
   RowPG (P (col ::: head)) = '[col ::: NullPG head]
   RowPG hask = RowOf (RecordCodeOf hask)
 
