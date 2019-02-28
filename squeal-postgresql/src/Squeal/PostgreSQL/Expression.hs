@@ -47,6 +47,7 @@ module Squeal.PostgreSQL.Expression
   , nullIf
     -- ** Collections
   , array
+  , cardinality
   , index
   , row
   , field
@@ -482,6 +483,13 @@ array
   -> Expression outer grp commons schemas params from (nullity ('PGvararray ty))
 array xs = UnsafeExpression $
   "ARRAY[" <> commaSeparated (renderSQL <$> xs) <> "]"
+
+-- | >>> printSQL $ cardinality (array [null_, false, true])
+-- cardinality(ARRAY[NULL, FALSE, TRUE])
+cardinality
+  :: Expression outer grp commons schemas params from (nullity ('PGvararray ty))
+  -> Expression outer grp commons schemas params from (nullity 'PGint8)
+cardinality = unsafeFunction "cardinality"
 
 -- | >>> printSQL $ array [null_, false, true] & index 2
 -- (ARRAY[NULL, FALSE, TRUE])[2]
