@@ -1461,7 +1461,7 @@ class Aggregate expr1 expr2 aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null 'PGnumeric)
+  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('NotNull 'PGnumeric)
   --   expression = sum_ (Distinct #col)
   -- in printSQL expression
   -- :}
@@ -1469,7 +1469,7 @@ class Aggregate expr1 expr2 aggr
   sum_
     :: ty `In` PGNum
     => expr1 (nullity ty)
-    -> aggr ('Null ty)
+    -> aggr ('NotNull ty)
 
   -- | input values, including nulls, concatenated into an array
   arrayAgg
@@ -1486,71 +1486,88 @@ class Aggregate expr1 expr2 aggr
     :: expr1 ty
     -> aggr ('Null 'PGjsonb)
 
-  -- | >>> :{
-  -- let
-  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
-  --   expression = bitAnd (Distinct #col)
-  -- in printSQL expression
-  -- :}
-  -- bit_and(DISTINCT "col")
+  {- |
+  the bitwise AND of all non-null input values, or null if none
+  >>> :{
+  let
+    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] ('Null 'PGint4)
+    expression = bitAnd (Distinct #col)
+  in printSQL expression
+  :}
+  bit_and(DISTINCT "col")
+  -}
   bitAnd
     :: int `In` PGIntegral
     => expr1 (nullity int)
     -- ^ what to aggregate
     -> aggr ('Null int)
 
-  -- | >>> :{
-  -- let
-  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] (nullity 'PGint4)
-  --   expression = bitOr (All #col)
-  -- in printSQL expression
-  -- :}
-  -- bit_or(ALL "col")
+  {- |
+  the bitwise OR of all non-null input values, or null if none
+
+  >>> :{
+  let
+    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] ('Null 'PGint4)
+    expression = bitOr (All #col)
+  in printSQL expression
+  :}
+  bit_or(ALL "col")
+  -}
   bitOr
     :: int `In` PGIntegral
     => expr1 (nullity int)
     -- ^ what to aggregate
     -> aggr ('Null int)
 
-  -- | >>> :{
-  -- let
-  --   winFun :: WindowFunction '[] 'Ungrouped commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
-  --   winFun = boolAnd #col
-  -- in printSQL winFun
-  -- :}
-  -- bool_and("col")
+  {- |
+  true if all input values are true, otherwise false
+
+  >>> :{
+  let
+    winFun :: WindowFunction '[] 'Ungrouped commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] ('Null 'PGbool)
+    winFun = boolAnd #col
+  in printSQL winFun
+  :}
+  bool_and("col")
+  -}
   boolAnd
     :: expr1 (nullity 'PGbool)
     -- ^ what to aggregate
     -> aggr ('Null 'PGbool)
 
-  -- | >>> :{
-  -- let
-  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
-  --   expression = boolOr (All #col)
-  -- in printSQL expression
-  -- :}
-  -- bool_or(ALL "col")
+  {- |
+  true if at least one input value is true, otherwise false
+
+  >>> :{
+  let
+    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+    expression = boolOr (All #col)
+  in printSQL expression
+  :}
+  bool_or(ALL "col")
+  -}
   boolOr
     :: expr1(nullity 'PGbool)
     -- ^ what to aggregate
     -> aggr ('Null 'PGbool)
 
-  -- | synonym for `boolAnd`
-  --
-  -- >>> :{
-  -- let
-  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
-  --   expression = every (Distinct #col)
-  -- in printSQL expression
-  -- :}
-  -- every(DISTINCT "col")
+  {- |
+  equivalent to `boolAnd`
+
+  >>> :{
+  let
+    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+    expression = every (Distinct #col)
+  in printSQL expression
+  :}
+  every(DISTINCT "col")
+  -}
   every
     :: expr1 (nullity 'PGbool)
     -- ^ what to aggregate
     -> aggr ('Null 'PGbool)
 
-  -- | maximum value of expression across all input values
+  {- |maximum value of expression across all input values-}
   max_
     :: expr1 (nullity ty)
     -- ^ what to maximize
@@ -1562,7 +1579,7 @@ class Aggregate expr1 expr2 aggr
     -- ^ what to minimize
     -> aggr ('Null ty)
 
-  -- | average aggregation
+  -- | the average (arithmetic mean) of all input values
   avg
     :: expr1 (nullity ty)
     -- ^ what to average
