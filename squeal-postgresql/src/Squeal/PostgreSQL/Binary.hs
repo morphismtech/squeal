@@ -634,9 +634,50 @@ instance
       = fmap fromRecord
       . hsequence'
       . htrans (Proxy @FromField) fromField
-instance (FromField (col ::: pgkey) (col ::: key), FromRow pgval val)
-  => FromRow (col ::: pgkey ': pgval) (P (col ::: key), val) where
-    fromRow (key :* val) = (,) <$> (unComp . fromField) key <*> fromRow val
+instance (FromField (col ::: pg) (col ::: hask))
+  => FromRow '[col ::: pg] (P (col ::: hask)) where
+    fromRow (pg :* Nil) = (unComp . fromField) pg
+instance
+  ( row ~ Join row1 row2
+  , FromRow row1 hask1
+  , FromRow row2 hask2
+  , SListI row
+  ) => FromRow row (hask1, hask2) where
+    fromRow row = case disjoin @row1 @row2 row of
+      (row1, row2) -> (,) <$> fromRow row1 <*> fromRow row2
+instance
+  ( row ~ Join row1 row23
+  , FromRow row1 hask1
+  , FromRow row23 (hask2, hask3)
+  , SListI row
+  ) => FromRow row (hask1, hask2, hask3) where
+    fromRow row = case disjoin @row1 @row23 row of
+      (row1, row23) -> do
+        hask1 <- fromRow row1
+        (hask2, hask3) <- fromRow row23
+        return (hask1, hask2, hask3)
+instance
+  ( row ~ Join row1 row234
+  , FromRow row1 hask1
+  , FromRow row234 (hask2, hask3, hask4)
+  , SListI row
+  ) => FromRow row (hask1, hask2, hask3, hask4) where
+    fromRow row = case disjoin @row1 @row234 row of
+      (row1, row234) -> do
+        hask1 <- fromRow row1
+        (hask2, hask3, hask4) <- fromRow row234
+        return (hask1, hask2, hask3, hask4)
+instance
+  ( row ~ Join row1 row2345
+  , FromRow row1 hask1
+  , FromRow row2345 (hask2, hask3, hask4, hask5)
+  , SListI row
+  ) => FromRow row (hask1, hask2, hask3, hask4, hask5) where
+    fromRow row = case disjoin @row1 @row2345 row of
+      (row1, row2345) -> do
+        hask1 <- fromRow row1
+        (hask2, hask3, hask4, hask5) <- fromRow row2345
+        return (hask1, hask2, hask3, hask4, hask5)
 
 -- | `Only` is a 1-tuple type, useful for encoding a single parameter with
 -- `toParams` or decoding a single value with `fromRow`.

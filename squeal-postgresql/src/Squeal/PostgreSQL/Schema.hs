@@ -93,6 +93,7 @@ module Squeal.PostgreSQL.Schema
   , DropIfConstraintsInvolve
     -- * Lists
   , Join
+  , disjoin
   , Elem
   , In
   , Length
@@ -632,6 +633,16 @@ type family Join xs ys where
   Join '[] ys = ys
   Join (x ': xs) ys = x ': Join xs ys
 
+-- | `disjoin` is a utility function for splitting an `NP` list into pieces.
+disjoin
+ :: forall xs ys expr. SListI xs
+ => NP expr (Join xs ys)
+ -> (NP expr xs, NP expr ys)
+disjoin = case sList @xs of
+  SNil -> \ys -> (Nil, ys)
+  SCons -> \(x :* xsys) ->
+    case disjoin xsys of (xs,ys) -> (x :* xs, ys)
+
 -- | @Create alias x xs@ adds @alias ::: x@ to the end of @xs@ and is used in
 -- `Squeal.PostgreSQL.Definition.createTable` statements and in @ALTER TABLE@
 -- `Squeal.PostgreSQL.Definition.addColumn`.
@@ -824,7 +835,14 @@ RowPG Person :: [(Symbol, NullityType)]
 = '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
 -}
 type family RowPG (hask :: Type) :: RowType where
-  RowPG (P (col ::: head), tail) = col ::: NullPG head ': RowPG tail
+  RowPG (hask1, hask2) = Join (RowPG hask1) (RowPG hask2)
+  RowPG (hask1, hask2, hask3) =
+    Join (RowPG hask1) (RowPG (hask2, hask3))
+  RowPG (hask1, hask2, hask3, hask4) =
+    Join (RowPG hask1) (RowPG (hask2, hask3, hask4))
+  RowPG (hask1, hask2, hask3, hask4, hask5) =
+    Join (RowPG hask1) (RowPG (hask2, hask3, hask4, hask5))
+  RowPG (P (col ::: head)) = '[col ::: NullPG head]
   RowPG hask = RowOf (RecordCodeOf hask)
 
 type family RowOf (fields :: [(Symbol, Type)]) :: RowType where
