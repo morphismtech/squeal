@@ -638,8 +638,7 @@ instance (FromField (col ::: pg) (col ::: hask))
   => FromRow '[col ::: pg] (P (col ::: hask)) where
     fromRow (pg :* Nil) = (unComp . fromField) pg
 instance
-  ( Joinable row1 row2
-  , row ~ Join row1 row2
+  ( row ~ Join row1 row2
   , FromRow row1 hask1
   , FromRow row2 hask2
   , SListI row
@@ -647,8 +646,7 @@ instance
     fromRow row = case disjoin @row1 @row2 row of
       (row1, row2) -> (,) <$> fromRow row1 <*> fromRow row2
 instance
-  ( Joinable row1 row23
-  , row ~ Join row1 row23
+  ( row ~ Join row1 row23
   , FromRow row1 hask1
   , FromRow row23 (hask2, hask3)
   , SListI row
@@ -659,8 +657,7 @@ instance
         (hask2, hask3) <- fromRow row23
         return (hask1, hask2, hask3)
 instance
-  ( Joinable row1 row234
-  , row ~ Join row1 row234
+  ( row ~ Join row1 row234
   , FromRow row1 hask1
   , FromRow row234 (hask2, hask3, hask4)
   , SListI row
@@ -671,8 +668,7 @@ instance
         (hask2, hask3, hask4) <- fromRow row234
         return (hask1, hask2, hask3, hask4)
 instance
-  ( Joinable row1 row2345
-  , row ~ Join row1 row2345
+  ( row ~ Join row1 row2345
   , FromRow row1 hask1
   , FromRow row2345 (hask2, hask3, hask4, hask5)
   , SListI row

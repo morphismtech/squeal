@@ -92,7 +92,8 @@ module Squeal.PostgreSQL.Schema
   , Rename
   , DropIfConstraintsInvolve
     -- * Lists
-  , Joinable (..)
+  , Join
+  , disjoin
   , Elem
   , In
   , Length
@@ -628,15 +629,19 @@ type family NullifyFrom (tables :: FromType) :: FromType where
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.
-class Joinable xs ys where
-  type family Join (xs :: [k]) (ys :: [k]) :: [k]
-  disjoin :: NP expr (Join xs ys) -> (NP expr xs, NP expr ys)
-instance Joinable '[] ys where
-  type Join '[] ys = ys
-  disjoin list = (Nil, list)
-instance Joinable xs ys => Joinable (x ': xs) ys where
-  type Join (x ': xs) ys = x ': Join xs ys
-  disjoin (x :* xsys) = case disjoin xsys of (xs,ys) -> (x :* xs, ys)
+type family Join xs ys where
+  Join '[] ys = ys
+  Join (x ': xs) ys = x ': Join xs ys
+
+-- | `disjoin` is a utility function for splitting an `NP` list into pieces.
+disjoin
+ :: forall xs ys expr. SListI xs
+ => NP expr (Join xs ys)
+ -> (NP expr xs, NP expr ys)
+disjoin = case sList @xs of
+  SNil -> \ys -> (Nil, ys)
+  SCons -> \(x :* xsys) ->
+    case disjoin xsys of (xs,ys) -> (x :* xs, ys)
 
 -- | @Create alias x xs@ adds @alias ::: x@ to the end of @xs@ and is used in
 -- `Squeal.PostgreSQL.Definition.createTable` statements and in @ALTER TABLE@
