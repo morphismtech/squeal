@@ -1469,22 +1469,22 @@ class Aggregate expr1 expr2 aggr
   sum_
     :: ty `In` PGNum
     => expr1 (nullity ty)
-    -> aggr (nullity ty)
+    -> aggr ('Null ty)
 
   -- | input values, including nulls, concatenated into an array
   arrayAgg
     :: expr1 ty
-    -> aggr ('NotNull ('PGvararray ty))
+    -> aggr ('Null ('PGvararray ty))
 
   -- | aggregates values as a JSON array
   jsonAgg
     :: expr1 ty
-    -> aggr ('NotNull 'PGjson)
+    -> aggr ('Null 'PGjson)
 
   -- | aggregates values as a JSON array
   jsonbAgg
     :: expr1 ty
-    -> aggr ('NotNull 'PGjsonb)
+    -> aggr ('Null 'PGjsonb)
 
   -- | >>> :{
   -- let
@@ -1497,7 +1497,7 @@ class Aggregate expr1 expr2 aggr
     :: int `In` PGIntegral
     => expr1 (nullity int)
     -- ^ what to aggregate
-    -> aggr (nullity int)
+    -> aggr ('Null int)
 
   -- | >>> :{
   -- let
@@ -1510,7 +1510,7 @@ class Aggregate expr1 expr2 aggr
     :: int `In` PGIntegral
     => expr1 (nullity int)
     -- ^ what to aggregate
-    -> aggr (nullity int)
+    -> aggr ('Null int)
 
   -- | >>> :{
   -- let
@@ -1522,7 +1522,7 @@ class Aggregate expr1 expr2 aggr
   boolAnd
     :: expr1 (nullity 'PGbool)
     -- ^ what to aggregate
-    -> aggr (nullity 'PGbool)
+    -> aggr ('Null 'PGbool)
 
   -- | >>> :{
   -- let
@@ -1534,7 +1534,7 @@ class Aggregate expr1 expr2 aggr
   boolOr
     :: expr1(nullity 'PGbool)
     -- ^ what to aggregate
-    -> aggr (nullity 'PGbool)
+    -> aggr ('Null 'PGbool)
 
   -- | synonym for `boolAnd`
   --
@@ -1548,25 +1548,25 @@ class Aggregate expr1 expr2 aggr
   every
     :: expr1 (nullity 'PGbool)
     -- ^ what to aggregate
-    -> aggr (nullity 'PGbool)
+    -> aggr ('Null 'PGbool)
 
   -- | maximum value of expression across all input values
   max_
     :: expr1 (nullity ty)
     -- ^ what to maximize
-    -> aggr (nullity ty)
+    -> aggr ('Null ty)
 
   -- | minimum value of expression across all input values
   min_
     :: expr1 (nullity ty)
     -- ^ what to minimize
-    -> aggr (nullity ty)
+    -> aggr ('Null ty)
 
   -- | average aggregation
   avg
     :: expr1 (nullity ty)
     -- ^ what to average
-    -> aggr (nullity (PGAvg ty))
+    -> aggr ('Null (PGAvg ty))
 
   {- | correlation coefficient
   >>> :{
@@ -1579,7 +1579,7 @@ class Aggregate expr1 expr2 aggr
   -}
   corr
     :: expr2 (nullity 'PGfloat8)
-    -> aggr (nullity 'PGfloat8)
+    -> aggr ('Null 'PGfloat8)
 
   {- | population covariance
   >>> :{
@@ -1592,7 +1592,7 @@ class Aggregate expr1 expr2 aggr
   -}
   covarPop
     :: expr2 (nullity 'PGfloat8)
-    -> aggr (nullity 'PGfloat8)
+    -> aggr ('Null 'PGfloat8)
 
   {- | sample covariance
   >>> :{
@@ -1605,7 +1605,7 @@ class Aggregate expr1 expr2 aggr
   -}
   covarSamp
     :: expr2 (nullity 'PGfloat8)
-    -> aggr (nullity 'PGfloat8)
+    -> aggr ('Null 'PGfloat8)
 
   {- | average of the independent variable (sum(X)/N)
   >>> :{
@@ -1618,7 +1618,7 @@ class Aggregate expr1 expr2 aggr
   -}
   regrAvgX
     :: expr2 (nullity 'PGfloat8)
-    -> aggr (nullity 'PGfloat8)
+    -> aggr ('Null 'PGfloat8)
 
   {- | average of the dependent variable (sum(Y)/N)
   >>> :{
@@ -1631,7 +1631,7 @@ class Aggregate expr1 expr2 aggr
   -}
   regrAvgY
     :: expr2 (nullity 'PGfloat8)
-    -> aggr (nullity 'PGfloat8)
+    -> aggr ('Null 'PGfloat8)
 
   {- | number of input rows in which both expressions are nonnull
   >>> :{
@@ -1644,7 +1644,7 @@ class Aggregate expr1 expr2 aggr
   -}
   regrCount
     :: expr2 (nullity 'PGfloat8)
-    -> aggr (nullity 'PGint8)
+    -> aggr ('Null 'PGint8)
 
   {- | y-intercept of the least-squares-fit linear equation determined by the (X, Y) pairs
   >>> :{
@@ -1657,68 +1657,68 @@ class Aggregate expr1 expr2 aggr
   -}
   regrIntercept
     :: expr2 (nullity 'PGfloat8)
-    -> aggr (nullity 'PGfloat8)
+    -> aggr ('Null 'PGfloat8)
 
   -- | @regr_r2(Y, X)@, square of the correlation coefficient
   regrR2
     :: expr2 (nullity 'PGfloat8)
-    -> aggr (nullity 'PGfloat8)
+    -> aggr ('Null 'PGfloat8)
 
   -- | @regr_slope(Y, X)@, slope of the least-squares-fit linear equation
   -- determined by the (X, Y) pairs
   regrSlope
     :: expr2 (nullity 'PGfloat8)
-    -> aggr (nullity 'PGfloat8)
+    -> aggr ('Null 'PGfloat8)
 
   -- | @regr_sxx(Y, X)@, sum(X^2) - sum(X)^2/N
   -- (“sum of squares” of the independent variable)
   regrSxx
     :: expr2 (nullity 'PGfloat8)
-    -> aggr (nullity 'PGfloat8)
+    -> aggr ('Null 'PGfloat8)
 
   -- | @regr_sxy(Y, X)@, sum(X*Y) - sum(X) * sum(Y)/N
   -- (“sum of products” of independent times dependent variable)
   regrSxy
     :: expr2 (nullity 'PGfloat8)
-    -> aggr (nullity 'PGfloat8)
+    -> aggr ('Null 'PGfloat8)
 
   -- | @regr_syy(Y, X)@, sum(Y^2) - sum(Y)^2/N
   -- (“sum of squares” of the dependent variable)
   regrSyy
     :: expr2 (nullity 'PGfloat8)
-    -> aggr (nullity 'PGfloat8)
+    -> aggr ('Null 'PGfloat8)
 
   -- | historical alias for `stddevSamp`
   stddev
     :: expr1 (nullity ty)
-    -> aggr (nullity (PGAvg ty))
+    -> aggr ('Null (PGAvg ty))
 
   -- | population standard deviation of the input values
   stddevPop
     :: expr1 (nullity ty)
-    -> aggr (nullity (PGAvg ty))
+    -> aggr ('Null (PGAvg ty))
 
   -- | sample standard deviation of the input values
   stddevSamp
     :: expr1 (nullity ty)
-    -> aggr (nullity (PGAvg ty))
+    -> aggr ('Null (PGAvg ty))
 
   -- | historical alias for `varSamp`
   variance
     :: expr1 (nullity ty)
-    -> aggr (nullity (PGAvg ty))
+    -> aggr ('Null (PGAvg ty))
 
   -- | population variance of the input values
   -- (square of the population standard deviation)
   varPop
     :: expr1 (nullity ty)
-    -> aggr (nullity (PGAvg ty))
+    -> aggr ('Null (PGAvg ty))
 
   -- | sample variance of the input values
   -- (square of the sample standard deviation)
   varSamp
     :: expr1 (nullity ty)
-    -> aggr (nullity (PGAvg ty))
+    -> aggr ('Null (PGAvg ty))
 
 {- |
 `Distinction`s are used for the input of `Aggregate` `Expression`s.
