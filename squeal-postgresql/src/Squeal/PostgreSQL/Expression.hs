@@ -1540,7 +1540,7 @@ class Aggregate expr1 expr2 aggr
 
   >>> :{
   let
-    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] ('Null 'PGbool)
     expression = boolOr (All #col)
   in printSQL expression
   :}
@@ -1556,7 +1556,7 @@ class Aggregate expr1 expr2 aggr
 
   >>> :{
   let
-    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] (nullity 'PGbool)
+    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] ('Null 'PGbool)
     expression = every (Distinct #col)
   in printSQL expression
   :}
@@ -1588,7 +1588,7 @@ class Aggregate expr1 expr2 aggr
   {- | correlation coefficient
   >>> :{
   let
-    expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
     expression = corr (All (#y :*: #x))
   in printSQL expression
   :}
@@ -1601,7 +1601,7 @@ class Aggregate expr1 expr2 aggr
   {- | population covariance
   >>> :{
   let
-    expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
     expression = covarPop (All (#y :*: #x))
   in printSQL expression
   :}
@@ -1614,7 +1614,7 @@ class Aggregate expr1 expr2 aggr
   {- | sample covariance
   >>> :{
   let
-    winFun :: WindowFunction '[] 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    winFun :: WindowFunction '[] 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
     winFun = covarSamp (#y :*: #x)
   in printSQL winFun
   :}
@@ -1627,7 +1627,7 @@ class Aggregate expr1 expr2 aggr
   {- | average of the independent variable (sum(X)/N)
   >>> :{
   let
-    expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
     expression = regrAvgX (All (#y :*: #x))
   in printSQL expression
   :}
@@ -1640,7 +1640,7 @@ class Aggregate expr1 expr2 aggr
   {- | average of the dependent variable (sum(Y)/N)
   >>> :{
   let
-    winFun :: WindowFunction '[] 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    winFun :: WindowFunction '[] 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
     winFun = regrAvgY (#y :*: #x)
   in printSQL winFun
   :}
@@ -1653,7 +1653,7 @@ class Aggregate expr1 expr2 aggr
   {- | number of input rows in which both expressions are nonnull
   >>> :{
   let
-    winFun :: WindowFunction '[] 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGint8)
+    winFun :: WindowFunction '[] 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGint8)
     winFun = regrCount (#y :*: #x)
   in printSQL winFun
   :}
@@ -1666,7 +1666,7 @@ class Aggregate expr1 expr2 aggr
   {- | y-intercept of the least-squares-fit linear equation determined by the (X, Y) pairs
   >>> :{
   let
-    expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('NotNull 'PGfloat8)
+    expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
     expression = regrIntercept (All (#y :*: #x))
   in printSQL expression
   :}

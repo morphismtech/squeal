@@ -720,6 +720,7 @@ unsafeSetOfFunction
 unsafeSetOfFunction fun expr = UnsafeQuery $
   "SELECT * FROM " <> fun <> "(" <> renderSQL expr <> ")"
 
+-- | Expand an array to a set of rows
 unnest
   :: Expression outer 'Ungrouped commons schemas params '[] (nullity ('PGvararray ty))
   -> Query outer commons schemas params '[ "unnest" ::: ty ]
@@ -891,6 +892,7 @@ view
 view (vw `As` alias) = UnsafeFromClause $
   renderSQL vw <+> "AS" <+> renderSQL alias
 
+-- | `common` derives a table from a common table expression.
 common
   :: Has cte commons common
   => Aliased Alias (alias ::: cte)
@@ -1063,7 +1065,7 @@ instance RenderSQL (HavingClause outer grp commons schemas params from) where
     Having conditions ->
       " HAVING" <+> commaSeparated (renderSQL <$> conditions)
 
-{-
+{- |
 The argument of `exists` is an arbitrary subquery. The subquery is evaluated
 to determine whether it returns any rows. If it returns at least one row,
 the result of `exists` is `true`; if the subquery returns no rows,
@@ -1125,7 +1127,7 @@ subAny
 subAny expr (?) qry = expr ?
   (UnsafeExpression $ "ANY" <+> parenthesized (renderSQL qry))
 
-{-
+{- |
 The result is `true` if the left-hand expression's result is equal
 to any of the right-hand expressions.
 
@@ -1139,7 +1141,7 @@ in_
 expr `in_` exprs = UnsafeExpression $ renderSQL expr <+> "IN"
   <+> parenthesized (commaSeparated (renderSQL <$> exprs))
 
-{-
+{- |
 The result is `true` if the left-hand expression's result is not equal
 to any of the right-hand expressions.
 
