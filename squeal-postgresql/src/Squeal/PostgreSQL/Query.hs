@@ -111,6 +111,7 @@ import GHC.TypeLits
 
 import qualified GHC.Generics as GHC
 
+import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema

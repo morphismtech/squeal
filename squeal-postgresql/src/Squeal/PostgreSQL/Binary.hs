@@ -1,8 +1,3 @@
-{-# LANGUAGE
-    TypeFamilies
-  , UndecidableSuperClasses
-#-}
-
 {-|
 Module: Squeal.PostgreSQL.Binary
 Description: Binary encoding and decoding
@@ -199,13 +194,22 @@ True
   , MultiParamTypeClasses
   , ScopedTypeVariables
   , TypeApplications
+  , TypeFamilies
   , TypeInType
   , TypeOperators
   , UndecidableInstances
+  , UndecidableSuperClasses
 #-}
 
 module Squeal.PostgreSQL.Binary
-  ( Json (..)
+  ( -- * PG type families
+    PG
+  , NullPG
+  , TuplePG
+  , RowPG
+  , LabelsPG
+    -- * Storage newtypes
+  , Json (..)
   , Jsonb (..)
   , Composite (..)
   , Enumerated (..)
@@ -226,9 +230,12 @@ import BinaryParser
 import ByteString.StrictBuilder (builderLength, int32BE, int64BE, word32BE)
 import Control.Arrow (left)
 import Control.Monad
+import Data.Aeson (Value)
+import Data.ByteString (ByteString)
 import Data.Int
 import Data.Kind
 import Data.Scientific
+import Data.Text (Text)
 import Data.Time
 import Data.UUID.Types
 import Data.Vector (Vector)
@@ -246,6 +253,7 @@ import qualified Data.Text.Lazy as Lazy (Text)
 import qualified Data.Text as Strict (Text)
 import qualified Data.Text as Strict.Text
 import qualified Data.Vector as Vector
+import qualified Generics.SOP.Type.Metadata as Type
 import qualified GHC.Generics as GHC
 import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
@@ -773,3 +781,149 @@ type family FixPG (hask :: Type) :: NullityType where
   FixPG (x,x,x,x,x,x,x,x,x,x) = FixPG x
   FixPG (x,x,x,x,x,x,x,x,x,x,x) = FixPG x
   FixPG x = NullPG x
+
+{- | The `PG` type family embeds a subset of Haskell types
+as Postgres types. As an open type family, `PG` is extensible.
+
+>>> :kind! PG LocalTime
+PG LocalTime :: PGType
+= 'PGtimestamp
+
+>>> newtype MyDouble = My Double
+>>> :set -XTypeFamilies
+>>> type instance PG MyDouble = 'PGfloat8
+-}
+type family PG (hask :: Type) :: PGType
+type instance PG Bool = 'PGbool
+type instance PG Int16 = 'PGint2
+type instance PG Int32 = 'PGint4
+type instance PG Int64 = 'PGint8
+type instance PG Word16 = 'PGint2
+type instance PG Word32 = 'PGint4
+type instance PG Word64 = 'PGint8
+type instance PG Scientific = 'PGnumeric
+type instance PG Float = 'PGfloat4
+type instance PG Double = 'PGfloat8
+type instance PG Char = 'PGchar 1
+type instance PG Text = 'PGtext
+type instance PG Lazy.Text = 'PGtext
+type instance PG String = 'PGtext
+type instance PG ByteString = 'PGbytea
+type instance PG Lazy.ByteString = 'PGbytea
+type instance PG LocalTime = 'PGtimestamp
+type instance PG UTCTime = 'PGtimestamptz
+type instance PG Day = 'PGdate
+type instance PG TimeOfDay = 'PGtime
+type instance PG (TimeOfDay, TimeZone) = 'PGtimetz
+type instance PG DiffTime = 'PGinterval
+type instance PG UUID = 'PGuuid
+type instance PG (NetAddr IP) = 'PGinet
+type instance PG Value = 'PGjson
+
+{-| The `LabelsPG` type family calculates the constructors of a
+Haskell enum type.
+
+>>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
+>>> instance Generic Schwarma
+>>> instance HasDatatypeInfo Schwarma
+>>> :kind! LabelsPG Schwarma
+LabelsPG Schwarma :: [Type.ConstructorName]
+= '["Beef", "Lamb", "Chicken"]
+-}
+type family LabelsPG (hask :: Type) :: [Type.ConstructorName] where
+  LabelsPG hask =
+    ConstructorNamesOf (ConstructorsOf (DatatypeInfoOf hask))
+
+{- | `RowPG` turns a Haskell record type into a `RowType`.
+
+>>> data Person = Person { name :: Text, age :: Int32 } deriving GHC.Generic
+>>> instance Generic Person
+>>> instance HasDatatypeInfo Person
+>>> :kind! RowPG Person
+RowPG Person :: [(Symbol, NullityType)]
+= '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
+-}
+type family RowPG (hask :: Type) :: RowType where
+  RowPG (hask1, hask2) = Join (RowPG hask1) (RowPG hask2)
+  RowPG (hask1, hask2, hask3) =
+    Join (RowPG hask1) (RowPG (hask2, hask3))
+  RowPG (hask1, hask2, hask3, hask4) =
+    Join (RowPG hask1) (RowPG (hask2, hask3, hask4))
+  RowPG (hask1, hask2, hask3, hask4, hask5) =
+    Join (RowPG hask1) (RowPG (hask2, hask3, hask4, hask5))
+  RowPG (P (col ::: head)) = '[col ::: NullPG head]
+  RowPG hask = RowOf (RecordCodeOf hask)
+
+type family RowOf (fields :: [(Symbol, Type)]) :: RowType where
+  RowOf '[] = '[]
+  RowOf (field ': fields) = FieldPG field ': RowOf fields
+
+type family FieldPG (field :: (Symbol, Type)) :: (Symbol, NullityType) where
+  FieldPG (field ::: hask) = field ::: NullPG hask
+
+{- | `NullPG` turns a Haskell type into a `NullityType`.
+
+>>> :kind! NullPG Double
+NullPG Double :: NullityType
+= 'NotNull 'PGfloat8
+>>> :kind! NullPG (Maybe Double)
+NullPG (Maybe Double) :: NullityType
+= 'Null 'PGfloat8
+-}
+type family NullPG (hask :: Type) :: NullityType where
+  NullPG (Maybe hask) = 'Null (PG hask)
+  NullPG hask = 'NotNull (PG hask)
+
+{- | `TuplePG` turns a Haskell tuple type (including record types) into
+the corresponding list of `NullityType`s.
+
+>>> :kind! TuplePG (Double, Maybe Char)
+TuplePG (Double, Maybe Char) :: [NullityType]
+= '[ 'NotNull 'PGfloat8, 'Null ('PGchar 1)]
+-}
+type family TuplePG (hask :: Type) :: [NullityType] where
+  TuplePG hask = TupleOf (TupleCodeOf hask (Code hask))
+
+type family TupleOf (tuple :: [Type]) :: [NullityType] where
+  TupleOf '[] = '[]
+  TupleOf (hask ': tuple) = NullPG hask ': TupleOf tuple
+
+type family TupleCodeOf (hask :: Type) (code :: [[Type]]) :: [Type] where
+  TupleCodeOf hask '[tuple] = tuple
+  TupleCodeOf hask '[] =
+    TypeError
+      (    'Text "The type `" ':<>: 'ShowType hask ':<>: 'Text "' is not a tuple type."
+      ':$$: 'Text "It is a void type with no constructors."
+      )
+  TupleCodeOf hask (_ ': _ ': _) =
+    TypeError
+      (    'Text "The type `" ':<>: 'ShowType hask ':<>: 'Text "' is not a tuple type."
+      ':$$: 'Text "It is a sum type with more than one constructor."
+      )
+
+-- | Calculates constructors of a datatype.
+type family ConstructorsOf (datatype :: Type.DatatypeInfo)
+  :: [Type.ConstructorInfo] where
+    ConstructorsOf ('Type.ADT _module _datatype constructors) =
+      constructors
+    ConstructorsOf ('Type.Newtype _module _datatype constructor) =
+      '[constructor]
+
+-- | Calculates the name of a nullary constructor, otherwise
+-- generates a type error.
+type family ConstructorNameOf (constructors :: Type.ConstructorInfo)
+  :: Type.ConstructorName where
+    ConstructorNameOf ('Type.Constructor name) = name
+    ConstructorNameOf ('Type.Infix name _assoc _fix) = TypeError
+      ('Text "ConstructorNameOf error: non-nullary constructor "
+        ':<>: 'Text name)
+    ConstructorNameOf ('Type.Record name _fields) = TypeError
+      ('Text "ConstructorNameOf error: non-nullary constructor "
+        ':<>: 'Text name)
+
+-- | Calculate the names of nullary constructors.
+type family ConstructorNamesOf (constructors :: [Type.ConstructorInfo])
+  :: [Type.ConstructorName] where
+    ConstructorNamesOf '[] = '[]
+    ConstructorNamesOf (constructor ': constructors) =
+      ConstructorNameOf constructor ': ConstructorNamesOf constructors
