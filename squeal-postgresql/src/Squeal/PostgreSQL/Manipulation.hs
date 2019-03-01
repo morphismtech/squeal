@@ -402,8 +402,8 @@ instance RenderSQL (ColumnExpression grp schemas params from column) where
 -- serial sequence number. However, any expression using the table's columns
 -- is allowed. Only rows that were successfully inserted or updated or
 -- deleted will be returned. For example, if a row was locked
--- but not updated because an `OnConflictDoUpdate` condition was not satisfied,
--- the row will not be returned. `ReturningStar` will return all columns
+-- but not updated because an `OnConflict` `DoUpdate` condition was not satisfied,
+-- the row will not be returned. `Returning` `Star` will return all columns
 -- in the row. Use @Returning Nil@ in the common case where no return
 -- values are desired.
 newtype ReturningClause commons schemas params from row =
@@ -422,8 +422,8 @@ pattern Returning_ list = Returning (List list)
 
 -- | A `ConflictClause` specifies an action to perform upon a constraint
 -- violation. `OnConflictDoRaise` will raise an error.
--- `OnConflictDoNothing` simply avoids inserting a row.
--- `OnConflictDoUpdate` updates the existing row that conflicts with the row
+-- `OnConflict` `DoNothing` simply avoids inserting a row.
+-- `OnConflict` `DoUpdate` updates the existing row that conflicts with the row
 -- proposed for insertion.
 data ConflictClause tab commons schemas params table where
   OnConflictDoRaise :: ConflictClause tab commons schemas params table
@@ -572,9 +572,9 @@ deleteFrom_ tab wh = deleteFrom tab NoUsing wh (Returning_ Nil)
 
 -- | This has the behaviour of a cartesian product, taking all
 -- possible combinations between @left@ and @right@ - exactly like a
--- CROSS JOIN. Used when no "CROSS JOIN" syntax is required but simply
--- a comma separated list of tables. Typical case is the `USING` clause
--- of a DELETE query.
+-- `crossJoin`. Used when no `crossJoin` syntax is required but simply
+-- a comma separated list of tables. Typical case is the `UsingClause`
+-- of a `deleteFrom` query.
 also
   :: FromClause outer commons schemas params right
   -- ^ right

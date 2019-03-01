@@ -12,7 +12,7 @@ Stability: experimental
 
 This module provides binary encoding and decoding between Haskell and PostgreSQL types.
 
-Instances are governed by the `Generic` and `HasDatatypeInfo` typeclasses, so you absolutely
+Instances are governed by the `SOP.Generic` and `SOP.HasDatatypeInfo` typeclasses, so you absolutely
 do not need to define your own instances to decode retrieved rows into Haskell values or
 to encode Haskell values into statement parameters.
 
@@ -24,7 +24,7 @@ Let's see some examples. We'll need some imports
 >>> import Control.Monad.Base (liftBase)
 >>> import Squeal.PostgreSQL
 
-Define a Haskell datatype `Row` that will serve as both the input and output of a simple
+Define a Haskell datatype @Row@ that will serve as both the input and output of a simple
 round trip query.
 
 >>> data Row = Row { col1 :: Int16, col2 :: Text, col3 :: Maybe Bool } deriving (Eq, GHC.Generic)
@@ -125,9 +125,9 @@ let
     createTypeCompositeFrom @Person #person
 :}
 
-Let's demonstrate how to associate our Haskell types `Schwarma` and `Person`
+Let's demonstrate how to associate our Haskell types @Schwarma@ and @Person@
 with enumerated, composite or json types in Postgres. First create a Haskell
-`Row` type using the `Enumerated`, `Composite` and `Json` newtypes as fields.
+@Row@ type using the `Enumerated`, `Composite` and `Json` newtypes as fields.
 
 >>> :{
 data Row = Row
@@ -210,6 +210,7 @@ module Squeal.PostgreSQL.Binary
   , Composite (..)
   , Enumerated (..)
   , VarArray (..)
+  , FixArray (..)
     -- * Encoding
   , ToParam (..)
   , ToParams (..)
@@ -424,7 +425,7 @@ instance
 
 -- | A `ToParams` constraint generically sequences the encodings of `Type`s
 -- of the fields of a tuple or record to a row of `ColumnType`s. You should
--- not define instances of `ToParams`. Instead define `Generic` instances
+-- not define instances of `ToParams`. Instead define `SOP.Generic` instances
 -- which in turn provide `ToParams` instances.
 class SListI tys => ToParams (x :: Type) (tys :: [NullityType]) where
   -- | >>> type Params = '[ 'NotNull 'PGbool, 'Null 'PGint2]
@@ -611,7 +612,7 @@ instance
 -- | A `FromRow` constraint generically sequences the parsings of the columns
 -- of a `RowType` into the fields of a record `Type` provided they have
 -- the same field names. You should not define instances of `FromRow`.
--- Instead define `Generic` and `HasDatatypeInfo` instances which in turn
+-- Instead define `SOP.Generic` and `SOP.HasDatatypeInfo` instances which in turn
 -- provide `FromRow` instances.
 class SListI result => FromRow (result :: RowType) y where
   -- | >>> :set -XOverloadedStrings
