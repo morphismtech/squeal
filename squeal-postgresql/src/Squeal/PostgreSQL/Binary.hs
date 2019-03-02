@@ -47,7 +47,7 @@ void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
 True
 
 In addition to being able to encode and decode basic Haskell types
-like `Int16` and `Text`, Squeal permits you to encode and decode Haskell types to
+like `Int16` and `Data.Text.Text`, Squeal permits you to encode and decode Haskell types to
 Postgres array, enumerated and composite types and json. Let's see another example,
 this time using the `Vector` type which corresponds to variable length arrays
 and homogeneous tuples which correspond to fixed length arrays. We can even

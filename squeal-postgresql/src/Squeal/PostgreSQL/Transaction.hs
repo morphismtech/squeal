@@ -92,7 +92,7 @@ transactionallySchema mode u = PQ $ \ conn -> mask $ \ restore -> do
   _ <- liftBase $ LibPQ.exec (unK conn) "COMMIT"
   return x
 
--- | Run a schema changing computation `transactionallySchema_` in `DefaultMode`.
+-- | Run a schema changing computation `transactionallySchema_` in `defaultMode`.
 transactionallySchema_
   :: MonadBaseControl IO io
   => PQ schemas0 schemas1 io x

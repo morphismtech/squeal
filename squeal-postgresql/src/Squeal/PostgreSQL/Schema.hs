@@ -289,7 +289,7 @@ type family Uniquely
 type TableType = (TableConstraints,ColumnsType)
 
 {- | A `RowType` is a row of `NullityType`. They correspond to Haskell
-record types by means of `RowPG` and are used in many places.
+record types by means of `Squeal.PostgreSQL.Binary.RowPG` and are used in many places.
 
 >>> :{
 type family PersonRow :: RowType where

@@ -6,7 +6,7 @@ Maintainer: eitan@morphism.tech
 Stability: experimental
 
 This module is where Squeal commands actually get executed by
-`LibPQ`. It containts two typeclasses, `IndexedMonadTransPQ` for executing
+`Database.PostgreSQL.LibPQ`. It containts two typeclasses, `IndexedMonadTransPQ` for executing
 a `Definition` and `MonadPQ` for executing a `Manipulation` or `Query`,
 and a `PQ` type with instances for them.
 
@@ -172,7 +172,7 @@ instance Monad m => Functor (PQ schemas0 schemas1 m) where
     K x <- pq conn
     return $ K (f x)
 
--- | Run a `PQ` and keep the result and the `Connection`.
+-- | Run a `PQ` and keep the result and the `LibPQ.Connection`.
 runPQ
   :: Functor m
   => PQ schemas0 schemas1 m x
@@ -182,7 +182,7 @@ runPQ (PQ pq) conn = (\ x -> (unK x, K (unK conn))) <$> pq conn
   -- K x <- pq conn
   -- return (x, K (unK conn))
 
--- | Execute a `PQ` and discard the result but keep the `Connection`.
+-- | Execute a `PQ` and discard the result but keep the `LibPQ.Connection`.
 execPQ
   :: Functor m
   => PQ schemas0 schemas1 m x
@@ -190,7 +190,7 @@ execPQ
   -> m (K LibPQ.Connection schemas1)
 execPQ (PQ pq) conn = mapKK (\ _ -> unK conn) <$> pq conn
 
--- | Evaluate a `PQ` and discard the `Connection` but keep the result.
+-- | Evaluate a `PQ` and discard the `LibPQ.Connection` but keep the result.
 evalPQ
   :: Functor m
   => PQ schemas0 schemas1 m x
@@ -279,8 +279,8 @@ instance IndexedMonadTransPQ PQ where
         "define: LibPQ.exec returned no results"
       Just result -> return $ K (K result)
 
-{- | `MonadPQ` is an `mtl` style constraint, similar to
-`Control.Monad.State.Class.MonadState`, for using `LibPQ` to
+{- | `MonadPQ` is an @mtl@ style constraint, similar to
+`Control.Monad.State.Class.MonadState`, for using `Database.PostgreSQL.LibPQ` to
 
 * `manipulateParams` runs a `Manipulation` with params from a type
    with a `ToParams` constraint. It calls `LibPQ.execParams` and
@@ -305,7 +305,7 @@ instance IndexedMonadTransPQ PQ where
 
 * `forPrepared_` is a flipped `traversePrepared_`.
 
-* `liftPQ` lets you lift actions from `LibPQ` that require a connection
+* `liftPQ` lets you lift actions from `Database.PostgreSQL.LibPQ` that require a connection
   into your monad.
 
 To define an instance, you can minimally define only `manipulateParams`,
@@ -317,13 +317,13 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
   manipulateParams
     :: ToParams x params
     => Manipulation '[] schemas params ys
-    -- ^ `insertRows`, `update` or `deleteFrom`
+    -- ^ `insertInto`, `update` or `deleteFrom`
     -> x -> pq (K LibPQ.Result ys)
   default manipulateParams
     :: (MonadTrans t, MonadPQ schemas pq1, pq ~ t pq1)
     => ToParams x params
     => Manipulation '[] schemas params ys
-    -- ^ `insertRows`, `update` or `deleteFrom`
+    -- ^ `insertInto`, `update` or `deleteFrom`
     -> x -> pq (K LibPQ.Result ys)
   manipulateParams manipulation params = lift $
     manipulateParams manipulation params
@@ -347,7 +347,7 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
   traversePrepared
     :: (ToParams x params, Traversable list)
     => Manipulation '[] schemas params ys
-    -- ^ `insertRows`, `update`, or `deleteFrom`, and friends
+    -- ^ `insertInto`, `update`, or `deleteFrom`, and friends
     -> list x -> pq (list (K LibPQ.Result ys))
   default traversePrepared
     :: (MonadTrans t, MonadPQ schemas pq1, pq ~ t pq1)
@@ -360,20 +360,20 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
     :: (ToParams x params, Traversable list)
     => list x
     -> Manipulation '[] schemas params ys
-    -- ^ `insertRows`, `update` or `deleteFrom`
+    -- ^ `insertInto`, `update` or `deleteFrom`
     -> pq (list (K LibPQ.Result ys))
   forPrepared = flip traversePrepared
 
   traversePrepared_
     :: (ToParams x params, Foldable list)
     => Manipulation '[] schemas params '[]
-    -- ^ `insertRows`, `update` or `deleteFrom`
+    -- ^ `insertInto`, `update` or `deleteFrom`
     -> list x -> pq ()
   default traversePrepared_
     :: (MonadTrans t, MonadPQ schemas pq1, pq ~ t pq1)
     => (ToParams x params, Foldable list)
     => Manipulation '[] schemas params '[]
-    -- ^ `insertRows`, `update` or `deleteFrom`
+    -- ^ `insertInto`, `update` or `deleteFrom`
     -> list x -> pq ()
   traversePrepared_ manipulation params = lift $
     traversePrepared_ manipulation params
@@ -382,7 +382,7 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
     :: (ToParams x params, Foldable list)
     => list x
     -> Manipulation '[] schemas params '[]
-    -- ^ `insertRows`, `update` or `deleteFrom`
+    -- ^ `insertInto`, `update` or `deleteFrom`
     -> pq ()
   forPrepared_ = flip traversePrepared_
 

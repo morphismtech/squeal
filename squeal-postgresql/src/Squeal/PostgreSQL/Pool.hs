@@ -107,7 +107,7 @@ instance Monad m => Monad (PoolPQ schemas m) where
     x' <- x pool
     runPoolPQ (f x') pool
 
--- | `MonadFail` instance for `PoolPQ`.
+-- | `Fail.MonadFail` instance for `PoolPQ`.
 instance Monad m => Fail.MonadFail (PoolPQ schemas m) where
   fail = Fail.fail
 

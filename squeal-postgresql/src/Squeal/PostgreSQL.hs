@@ -13,7 +13,7 @@ features.
 
 >>> :set -XDataKinds -XDeriveGeneric -XOverloadedLabels
 >>> :set -XOverloadedStrings -XTypeApplications -XTypeOperators -XGADTs
- 
+
 We'll need some imports.
 
 >>> import Control.Monad (void)
@@ -105,7 +105,7 @@ DROP TABLE "emails";
 DROP TABLE "users";
 
 Next, we'll write `Manipulation`s to insert data into our two tables.
-A `Manipulation` like `insertRow`, `update` or `deleteFrom`
+A `Manipulation` like `insertInto`, `update` or `deleteFrom`
 has three type parameters, the schema it refers to, a list of parameters
 it can take as input, and a list of columns it produces as output. When
 we insert into the users table, we will need a parameter for the @name@
