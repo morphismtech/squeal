@@ -42,6 +42,7 @@ module Squeal.PostgreSQL.Definition
   , createTypeEnumFrom
   , createTypeComposite
   , createTypeCompositeFrom
+  , createDomain
   , TableConstraintExpression (..)
   , check
   , unique
@@ -979,6 +980,35 @@ createTypeCompositeFrom
 createTypeCompositeFrom ty = createTypeComposite ty
   (SOP.hcpure (SOP.Proxy :: SOP.Proxy (FieldTyped schemas)) fieldtype
     :: NP (Aliased (TypeExpression schemas)) (RowPG hask))
+
+{-|
+`createDomain` creates a new domain. A domain is essentially a data type
+with constraints (restrictions on the allowed set of values).
+
+Domains are useful for abstracting common constraints on fields
+into a single location for maintenance. For example, several tables might
+contain email address columns, all requiring the same `check` constraint
+to verify the address syntax. Define a domain rather than setting up
+each table's constraint individually.
+
+>>> :{
+let
+  createPositive :: Definition (Public '[]) (Public '["positive" ::: 'Typedef 'PGfloat4])
+  createPositive = createDomain #positive real (#value .> 0 .&& (#value & isNotNull))
+in printSQL createPositive
+:}
+CREATE DOMAIN "positive" AS real CHECK ((("value" > 0) AND "value" IS NOT NULL));
+-}
+createDomain
+  :: (Has sch schemas schema, KnownSymbol dom)
+  => QualifiedAlias sch dom
+  -> (forall nullity. TypeExpression schemas (nullity ty))
+  -> (forall tab. Condition '[] 'Ungrouped '[] schemas '[] '[tab ::: '["value" ::: 'Null ty]])
+  -> Definition schemas (Alter sch (Create alias ('Typedef ty) schema) schemas)
+createDomain dom ty condition =
+  UnsafeDefinition $ "CREATE DOMAIN" <+> renderSQL dom
+    <+> "AS" <+> renderTypeExpression ty
+    <+> "CHECK" <+> parenthesized (renderSQL condition) <> ";"
 
 class FieldTyped schemas ty where
   fieldtype :: Aliased (TypeExpression schemas) ty
