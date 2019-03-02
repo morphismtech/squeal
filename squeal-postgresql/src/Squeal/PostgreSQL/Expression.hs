@@ -175,6 +175,7 @@ module Squeal.PostgreSQL.Expression
   , real
   , float8
   , doublePrecision
+  , money
   , text
   , char
   , character
@@ -1926,6 +1927,9 @@ real = UnsafeTypeExpression "real"
 float8, doublePrecision :: TypeExpression schemas (nullity 'PGfloat8)
 float8 = UnsafeTypeExpression "float8"
 doublePrecision = UnsafeTypeExpression "double precision"
+-- | currency amount
+money :: TypeExpression schema (nullity 'PGmoney)
+money = UnsafeTypeExpression "money"
 -- | variable-length character string
 text :: TypeExpression schemas (nullity 'PGtext)
 text = UnsafeTypeExpression "text"

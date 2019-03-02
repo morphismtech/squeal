@@ -145,6 +145,7 @@ data PGType
   | PGnumeric -- ^ arbitrary precision numeric type
   | PGfloat4 -- ^ single precision floating-point number (4 bytes)
   | PGfloat8 -- ^ double precision floating-point number (8 bytes)
+  | PGmoney -- ^ currency amount
   | PGchar Nat -- ^ fixed-length character string
   | PGvarchar Nat -- ^ variable-length character string
   | PGtext -- ^ variable-length character string
