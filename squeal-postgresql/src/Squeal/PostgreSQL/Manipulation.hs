@@ -196,7 +196,6 @@ in printSQL manipulation
 :}
 WITH "del" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "del" AS "del"
 -}
-
 newtype Manipulation
   (commons :: FromType)
   (schemas :: SchemasType)

@@ -86,6 +86,11 @@ module Squeal.PostgreSQL.Expression
   , currentTimestamp
   , localTime
   , localTimestamp
+  , TimeOp (..)
+  , makeDate
+  , makeTime
+  , makeTimestamp
+  , makeTimestamptz
     -- ** Text
   , lower
   , upper
@@ -208,13 +213,13 @@ import Data.ByteString.Lazy (toStrict)
 import Data.Function ((&))
 import Data.Semigroup hiding (All)
 import qualified Data.Aeson as JSON
-import Data.Ratio
 import Data.String
 import Data.Word
 import Generics.SOP hiding (All, from)
 import GHC.Generics ((:*:) (..))
 import GHC.OverloadedLabels
 import GHC.TypeLits
+import Numeric
 import Prelude hiding (id, (.))
 
 import qualified Data.ByteString as ByteString
@@ -636,7 +641,12 @@ instance ty `In` PGNum
 instance (ty `In` PGNum, ty `In` PGFloating) => Fractional
   (Expression outer grp commons schemas params from (nullity ty)) where
     (/) = unsafeBinaryOp "/"
-    fromRational x = fromInteger (numerator x) / fromInteger (denominator x)
+    fromRational
+      = UnsafeExpression
+      . fromString
+      . ($ "")
+      . showFFloat Nothing
+      . fromRat @Double
 
 instance (ty `In` PGNum, ty `In` PGFloating) => Floating
   (Expression outer grp commons schemas params from (nullity ty)) where
@@ -2283,3 +2293,125 @@ nthValue
   -> WindowFunction outer grp commons schemas params from ('Null ty)
 nthValue value nth = UnsafeWindowFunction $ "nth_value"
   <> parenthesized (commaSeparated [renderSQL value, renderSQL nth])
+
+{-|
+Create date from year, month and day fields
+
+>>> printSQL (makeDate 1984 7 3)
+make_date(1984, 7, 3)
+-}
+makeDate
+  :: Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ year
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ month
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ day
+  -> Expression outer grp commons schemas params from (nullity 'PGdate)
+makeDate y m d = UnsafeExpression $ "make_date" <>
+  parenthesized (renderCommaSeparated renderSQL (y :* m :* d :* Nil))
+
+{-|
+Create time from hour, minute and seconds fields
+
+>>> printSQL (makeTime 8 15 23.5)
+make_time(8, 15, 23.5)
+-}
+makeTime
+  :: Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ hour
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ min
+  -> Expression outer grp commons schemas params from (nullity 'PGfloat8)
+    -- ^ sec
+  -> Expression outer grp commons schemas params from (nullity 'PGtime)
+makeTime h m s = UnsafeExpression $ "make_time" <>
+  parenthesized (renderCommaSeparated renderSQL (h :* m :* s :* Nil))
+
+{-|
+Create timestamp from year, month, day, hour, minute and seconds fields
+
+>>> printSQL (makeTimestamp 2013 7 15 8 15 23.5)
+make_timestamp(2013, 7, 15, 8, 15, 23.5)
+-}
+makeTimestamp
+  :: Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ year
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ month
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ day
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ hour
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ min
+  -> Expression outer grp commons schemas params from (nullity 'PGfloat8)
+    -- ^ sec
+  -> Expression outer grp commons schemas params from (nullity 'PGtimestamp)
+makeTimestamp y mon d h m s =
+  UnsafeExpression $ "make_timestamp" <> parenthesized
+    (renderCommaSeparated renderSQL (y :* mon :* d :* h :* m :* s :* Nil))
+
+{-|
+Create timestamp with time zone from
+year, month, day, hour, minute and seconds fields;
+the current time zone is used
+
+>>> printSQL (makeTimestamptz 2013 7 15 8 15 23.5)
+make_timestamptz(2013, 7, 15, 8, 15, 23.5)
+-}
+makeTimestamptz
+  :: Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ year
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ month
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ day
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ hour
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+    -- ^ min
+  -> Expression outer grp commons schemas params from (nullity 'PGfloat8)
+    -- ^ sec
+  -> Expression outer grp commons schemas params from (nullity 'PGtimestamptz)
+makeTimestamptz y mon d h m s =
+  UnsafeExpression $ "make_timestamptz" <> parenthesized
+    (renderCommaSeparated renderSQL (y :* mon :* d :* h :* m :* s :* Nil))
+
+{-|
+Affine space operations on time types.
+-}
+class TimeOp time diff | time -> diff where
+  {-|
+  >>> printSQL (makeDate 1984 7 3 !+ 365)
+  (make_date(1984, 7, 3) + 365)
+  -}
+  (!+)
+    :: Expression outer grp commons schemas params from (nullity time)
+    -> Expression outer grp commons schemas params from (nullity diff)
+    -> Expression outer grp commons schemas params from (nullity time)
+  (!+) = unsafeBinaryOp "+"
+  {-|
+  >>> printSQL (365 +! makeDate 1984 7 3)
+  (365 + make_date(1984, 7, 3))
+  -}
+  (+!)
+    :: Expression outer grp commons schemas params from (nullity diff)
+    -> Expression outer grp commons schemas params from (nullity time)
+    -> Expression outer grp commons schemas params from (nullity time)
+  (+!) = unsafeBinaryOp "+"
+  {-|
+  >>> printSQL (makeDate 1984 7 3 !-! currentDate)
+  (make_date(1984, 7, 3) - CURRENT_DATE)
+  -}
+  (!-!)
+    :: Expression outer grp commons schemas params from (nullity time)
+    -> Expression outer grp commons schemas params from (nullity time)
+    -> Expression outer grp commons schemas params from (nullity diff)
+  (!-!) = unsafeBinaryOp "-"
+instance TimeOp 'PGtimestamp 'PGinterval
+instance TimeOp 'PGtimestamptz 'PGinterval
+instance TimeOp 'PGtime 'PGinterval
+instance TimeOp 'PGtimetz 'PGinterval
+instance TimeOp 'PGinterval 'PGinterval
+instance TimeOp 'PGdate 'PGint4
