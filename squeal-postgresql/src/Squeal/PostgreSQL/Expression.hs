@@ -2401,6 +2401,15 @@ class TimeOp time diff | time -> diff where
     -> Expression outer grp commons schemas params from (nullity time)
   (+!) = unsafeBinaryOp "+"
   {-|
+  >>> printSQL (makeDate 1984 7 3 !- 365)
+  (make_date(1984, 7, 3) - 365)
+  -}
+  (!-)
+    :: Expression outer grp commons schemas params from (nullity time)
+    -> Expression outer grp commons schemas params from (nullity diff)
+    -> Expression outer grp commons schemas params from (nullity time)
+  (!-) = unsafeBinaryOp "-"
+  {-|
   >>> printSQL (makeDate 1984 7 3 !-! currentDate)
   (make_date(1984, 7, 3) - CURRENT_DATE)
   -}
