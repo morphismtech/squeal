@@ -982,6 +982,15 @@ createTypeCompositeFrom ty = createTypeComposite ty
     :: NP (Aliased (TypeExpression schemas)) (RowPG hask))
 
 {-|
+`createDomain` creates a new domain. A domain is essentially a data type
+with constraints (restrictions on the allowed set of values).
+
+Domains are useful for abstracting common constraints on fields
+into a single location for maintenance. For example, several tables might
+contain email address columns, all requiring the same `check` constraint
+to verify the address syntax. Define a domain rather than setting up
+each table's constraint individually.
+
 >>> :{
 let
   createPositive :: Definition (Public '[]) (Public '["positive" ::: 'Typedef 'PGfloat4])
