@@ -209,6 +209,7 @@ module Squeal.PostgreSQL.Binary
   , RowPG
   , LabelsPG
     -- * Storage newtypes
+  , Money (..)
   , Json (..)
   , Jsonb (..)
   , Composite (..)
@@ -289,6 +290,7 @@ instance ToParam Word64 'PGint8 where toParam = K . Encoding.int8_word64
 instance ToParam Float 'PGfloat4 where toParam = K . Encoding.float4
 instance ToParam Double 'PGfloat8 where toParam = K . Encoding.float8
 instance ToParam Scientific 'PGnumeric where toParam = K . Encoding.numeric
+instance ToParam Money 'PGmoney where toParam = K . Encoding.int8_int64 . cents
 instance ToParam UUID 'PGuuid where toParam = K . Encoding.uuid
 instance ToParam (NetAddr IP) 'PGinet where toParam = K . Encoding.inet
 instance ToParam Char ('PGchar 1) where toParam = K . Encoding.char_utf8
@@ -465,6 +467,7 @@ instance FromValue 'PGint8 Int64 where fromValue = Decoding.int
 instance FromValue 'PGfloat4 Float where fromValue = Decoding.float4
 instance FromValue 'PGfloat8 Double where fromValue = Decoding.float8
 instance FromValue 'PGnumeric Scientific where fromValue = Decoding.numeric
+instance FromValue 'PGmoney Money where fromValue = Money <$> Decoding.int
 instance FromValue 'PGuuid UUID where fromValue = Decoding.uuid
 instance FromValue 'PGinet (NetAddr IP) where fromValue = Decoding.inet
 instance FromValue ('PGchar 1) Char where fromValue = Decoding.char
@@ -713,7 +716,34 @@ replicateMN
   :: forall x xs m. (All ((~) x) xs, Monad m, SListI xs)
   => m x -> m (NP I xs)
 replicateMN mx = hsequence' $
-  hcpure (Proxy :: Proxy ((~) x)) (Comp (I <$> mx)) 
+  hcpure (Proxy :: Proxy ((~) x)) (Comp (I <$> mx))
+
+{- | The `Money` newtype stores a monetary value in terms
+of the number of cents, i.e. @$2,000.20@ would be expressed as
+@Money { cents = 200020 }@.
+
+>>> import Control.Monad (void)
+>>> import Control.Monad.Base (liftBase)
+>>> import Squeal.PostgreSQL
+>>> :{
+let
+  roundTrip :: Query_ (Public '[]) (Only Money) (Only Money)
+  roundTrip = values_ $ parameter @1 money `as` #fromOnly
+:}
+
+>>> let input = Only (Money 20020)
+
+>>> :{
+void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+  result <- runQueryParams roundTrip input
+  Just output <- firstRow result
+  liftBase . print $ input == output
+:}
+True
+-}
+newtype Money = Money { cents :: Int64 }
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG Money = 'PGmoney
 
 {- | The `Json` newtype is an indication that the Haskell
 type it's applied to should be stored as a `PGjson`.
