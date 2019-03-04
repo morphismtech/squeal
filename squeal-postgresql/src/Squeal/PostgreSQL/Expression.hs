@@ -80,6 +80,18 @@ module Squeal.PostgreSQL.Expression
   , (.<)
   , (.<=)
   , (.>)
+  , between
+  , notBetween
+  , betweenSymmetric
+  , notBetweenSymmetric
+  , isDistinctFrom
+  , isNotDistinctFrom
+  , isTrue
+  , isNotTrue
+  , isFalse
+  , isNotFalse
+  , isUnknown
+  , isNotUnknown
     -- ** Time
   , currentDate
   , currentTime
@@ -919,6 +931,128 @@ infix 4 .<=
   -> Condition outer grp commons schemas params from
 (.>) = unsafeBinaryOp ">"
 infix 4 .>
+
+{- | between
+>>> printSQL $ true `between` (null_, false)
+TRUE BETWEEN NULL AND FALSE
+-}
+between
+  :: Expression outer grp commons schemas params from (nullity ty)
+  -> ( Expression outer grp commons schemas params from (nullity ty)
+     , Expression outer grp commons schemas params from (nullity ty) ) -- ^ bounds
+  -> Condition outer grp commons schemas params from
+between a (x,y) = UnsafeExpression $ renderSQL a <+> "BETWEEN"
+  <+> renderSQL x <+> "AND" <+> renderSQL y
+
+{- | not between
+>>> printSQL $ true `notBetween` (null_, false)
+TRUE NOT BETWEEN NULL AND FALSE
+-}
+notBetween
+  :: Expression outer grp commons schemas params from (nullity ty)
+  -> ( Expression outer grp commons schemas params from (nullity ty)
+     , Expression outer grp commons schemas params from (nullity ty) ) -- ^ bounds
+  -> Condition outer grp commons schemas params from
+notBetween a (x,y) = UnsafeExpression $ renderSQL a <+> "NOT BETWEEN"
+  <+> renderSQL x <+> "AND" <+> renderSQL y
+
+{- | between, after sorting the comparison values
+>>> printSQL $ true `betweenSymmetric` (null_, false)
+TRUE BETWEEN SYMMETRIC NULL AND FALSE
+-}
+betweenSymmetric
+  :: Expression outer grp commons schemas params from (nullity ty)
+  -> ( Expression outer grp commons schemas params from (nullity ty)
+     , Expression outer grp commons schemas params from (nullity ty) ) -- ^ bounds
+  -> Condition outer grp commons schemas params from
+betweenSymmetric a (x,y) = UnsafeExpression $ renderSQL a
+  <+> "BETWEEN SYMMETRIC" <+> renderSQL x <+> "AND" <+> renderSQL y
+
+{- | not between, after sorting the comparison values
+>>> printSQL $ true `notBetweenSymmetric` (null_, false)
+TRUE NOT BETWEEN SYMMETRIC NULL AND FALSE
+-}
+notBetweenSymmetric
+  :: Expression outer grp commons schemas params from (nullity ty)
+  -> ( Expression outer grp commons schemas params from (nullity ty)
+     , Expression outer grp commons schemas params from (nullity ty) ) -- ^ bounds
+  -> Condition outer grp commons schemas params from
+notBetweenSymmetric a (x,y) = UnsafeExpression $ renderSQL a
+  <+> "NOT BETWEEN SYMMETRIC" <+> renderSQL x <+> "AND" <+> renderSQL y
+
+{- | not equal, treating null like an ordinary value
+>>> printSQL $ true `isDistinctFrom` null_
+(TRUE IS DISTINCT FROM NULL)
+-}
+isDistinctFrom
+  :: Expression outer grp commons schemas params from (nullity ty)
+  -> Expression outer grp commons schemas params from (nullity ty)
+  -> Condition outer grp commons schemas params from
+isDistinctFrom = unsafeBinaryOp "IS DISTINCT FROM"
+
+{- | equal, treating null like an ordinary value
+>>> printSQL $ true `isNotDistinctFrom` null_
+(TRUE IS NOT DISTINCT FROM NULL)
+-}
+isNotDistinctFrom
+  :: Expression outer grp commons schemas params from (nullity ty)
+  -> Expression outer grp commons schemas params from (nullity ty)
+  -> Condition outer grp commons schemas params from
+isNotDistinctFrom = unsafeBinaryOp "IS NOT DISTINCT FROM"
+
+{- | is true
+>>> printSQL $ true & isTrue
+TRUE IS TRUE
+-}
+isTrue
+  :: Expression outer grp commons schemas params from (nullity 'PGbool)
+  -> Condition outer grp commons schemas params from
+isTrue b = UnsafeExpression $ renderSQL b <+> "IS TRUE"
+
+{- | is false or unknown
+>>> printSQL $ true & isNotTrue
+TRUE IS NOT TRUE
+-}
+isNotTrue
+  :: Expression outer grp commons schemas params from (nullity 'PGbool)
+  -> Condition outer grp commons schemas params from
+isNotTrue b = UnsafeExpression $ renderSQL b <+> "IS NOT TRUE"
+
+{- | is false
+>>> printSQL $ true & isFalse
+TRUE IS FALSE
+-}
+isFalse
+  :: Expression outer grp commons schemas params from (nullity 'PGbool)
+  -> Condition outer grp commons schemas params from
+isFalse b = UnsafeExpression $ renderSQL b <+> "IS FALSE"
+
+{- | is true or unknown
+>>> printSQL $ true & isNotFalse
+TRUE IS NOT FALSE
+-}
+isNotFalse
+  :: Expression outer grp commons schemas params from (nullity 'PGbool)
+  -> Condition outer grp commons schemas params from
+isNotFalse b = UnsafeExpression $ renderSQL b <+> "IS NOT FALSE"
+
+{- | is unknown
+>>> printSQL $ true & isUnknown
+TRUE IS UNKNOWN
+-}
+isUnknown
+  :: Expression outer grp commons schemas params from (nullity 'PGbool)
+  -> Condition outer grp commons schemas params from
+isUnknown b = UnsafeExpression $ renderSQL b <+> "IS UNKNOWN"
+
+{- | is true or false
+>>> printSQL $ true & isNotUnknown
+TRUE IS NOT UNKNOWN
+-}
+isNotUnknown
+  :: Expression outer grp commons schemas params from (nullity 'PGbool)
+  -> Condition outer grp commons schemas params from
+isNotUnknown b = UnsafeExpression $ renderSQL b <+> "IS NOT UNKNOWN"
 
 -- | >>> printSQL currentDate
 -- CURRENT_DATE
@@ -2424,3 +2558,7 @@ instance TimeOp 'PGtime 'PGinterval
 instance TimeOp 'PGtimetz 'PGinterval
 instance TimeOp 'PGinterval 'PGinterval
 instance TimeOp 'PGdate 'PGint4
+infixl 6 !+
+infixl 6 +!
+infixl 6 !-
+infixl 6 !-!
