@@ -17,6 +17,7 @@ Squeal queries.
   , GeneralizedNewtypeDeriving
   , LambdaCase
   , MultiParamTypeClasses
+  , OverloadedLabels
   , OverloadedStrings
   , QuantifiedConstraints
   , ScopedTypeVariables
@@ -57,8 +58,8 @@ module Squeal.PostgreSQL.Query
     -- ** Json
   , jsonEach
   , jsonbEach
-  , jsonEachAsText
-  , jsonbEachAsText
+  , jsonEachText
+  , jsonbEachText
   , jsonObjectKeys
   , jsonbObjectKeys
   , jsonPopulateRecord
@@ -717,89 +718,108 @@ JSON stuff
 unsafeSetOfFunction
   :: ByteString
   -> Expression outer 'Ungrouped commons schemas params '[]  ty
-  -> Query outer commons schemas params row
-unsafeSetOfFunction fun expr = UnsafeQuery $
-  "SELECT * FROM " <> fun <> "(" <> renderSQL expr <> ")"
+  -> FromClause outer commons schemas params from
+unsafeSetOfFunction fun expr = UnsafeFromClause $
+  fun <> "(" <> renderSQL expr <> ")"
 
 -- | Expand an array to a set of rows
 unnest
   :: Expression outer 'Ungrouped commons schemas params '[] (nullity ('PGvararray ty))
-  -> Query outer commons schemas params '[ "unnest" ::: ty ]
+  -> FromClause outer commons schemas params '["unnest" ::: '["unnest" ::: ty]]
 unnest = unsafeSetOfFunction "unnest"
 
 -- | Expands the outermost JSON object into a set of key/value pairs.
+-- >>> import Data.Aeson
+-- >>> printSQL (select Star (from (jsonEach (jsonLit (object ["a" .= "foo", "b" .= "bar"])))))
+-- SELECT * FROM json_each(('{"a":"foo","b":"bar"}' :: json))
 jsonEach
-  :: Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjson) -- ^ json object
-  -> Query outer commons schemas params
-      '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]
+  :: Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjson) -- ^ json object
+  -> FromClause outer commons schemas params
+      '["json_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]]
 jsonEach = unsafeSetOfFunction "json_each"
 
 -- | Expands the outermost binary JSON object into a set of key/value pairs.
+-- >>> import Data.Aeson
+-- >>> printSQL (select Star (from (jsonbEach (jsonbLit (object ["a" .= "foo", "b" .= "bar"])))))
+-- SELECT * FROM jsonb_each(('{"a":"foo","b":"bar"}' :: jsonb))
 jsonbEach
-  :: Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb object
-  -> Query outer commons schemas params
-      '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjsonb]
+  :: Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
+  -> FromClause outer commons schemas params
+      '["jsonb_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]]
 jsonbEach = unsafeSetOfFunction "jsonb_each"
 
--- | Expands the outermost JSON object into a set of key/value pairs.
-jsonEachAsText
-  :: Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjson) -- ^ json object
-  -> Query outer commons schemas params
-      '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
-jsonEachAsText = unsafeSetOfFunction "json_each_text"
+-- | Expands the outermost JSON object into a set of key/value pairs.-- | Expands the outermost binary JSON object into a set of key/value pairs.
+-- >>> import Data.Aeson
+-- >>> printSQL (select Star (from (jsonEachText (jsonLit (object ["a" .= "foo", "b" .= "bar"])))))
+-- SELECT * FROM json_each_text(('{"a":"foo","b":"bar"}' :: json))
+jsonEachText
+  :: Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjson) -- ^ json object
+  -> FromClause outer commons schemas params
+      '["json_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]]
+jsonEachText = unsafeSetOfFunction "json_each_text"
 
 -- | Expands the outermost binary JSON object into a set of key/value pairs.
-jsonbEachAsText
-  :: Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb object
-  -> Query outer commons schemas params
-    '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
-jsonbEachAsText = unsafeSetOfFunction "jsonb_each_text"
+-- >>> import Data.Aeson
+-- >>> printSQL (select Star (from (jsonbEachText (jsonbLit (object ["a" .= "foo", "b" .= "bar"])))))
+-- SELECT * FROM jsonb_each_text(('{"a":"foo","b":"bar"}' :: jsonb))
+jsonbEachText
+  :: Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
+  -> FromClause outer commons schemas params
+      '["jsonb_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]]
+jsonbEachText = unsafeSetOfFunction "jsonb_each_text"
 
 -- | Returns set of keys in the outermost JSON object.
+-- >>> import Data.Aeson
+-- >>> printSQL (jsonObjectKeys (jsonLit (object ["a" .= "foo", "b" .= "bar"])))
+-- json_object_keys(('{"a":"foo","b":"bar"}' :: json))
 jsonObjectKeys
   :: Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjson) -- ^ json object
-  -> Query outer commons schemas params '["json_object_keys" ::: 'NotNull 'PGtext]
+  -> FromClause outer commons schemas params
+      '["json_object_keys" ::: '["json_object_keys" ::: 'NotNull 'PGtext]]
 jsonObjectKeys = unsafeSetOfFunction "json_object_keys"
 
 -- | Returns set of keys in the outermost JSON object.
+-- >>> import Data.Aeson
+-- >>> printSQL (jsonbObjectKeys (jsonbLit (object ["a" .= "foo", "b" .= "bar"])))
+-- jsonb_object_keys(('{"a":"foo","b":"bar"}' :: jsonb))
 jsonbObjectKeys
   :: Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb object
-  -> Query outer commons schemas params '["jsonb_object_keys" ::: 'NotNull 'PGtext]
+  -> FromClause outer commons schemas params
+      '["jsonb_object_keys" ::: '["jsonb_object_keys" ::: 'NotNull 'PGtext]]
 jsonbObjectKeys = unsafeSetOfFunction "jsonb_object_keys"
 
 unsafePopulateFunction
-  :: ByteString
+  :: KnownSymbol fun
+  => Alias fun
   -> TypeExpression schemas (nullity ('PGcomposite row))
   -> Expression outer 'Ungrouped commons schemas params '[]  ty
-  -> Query outer commons schemas params row
-unsafePopulateFunction fun ty expr = UnsafeQuery $
-  "SELECT * FROM " <> fun <> "("
-    <> "null::" <> renderSQL ty <> ", "
-    <> renderSQL expr <> ")"
+  -> FromClause outer commons schemas params '[fun ::: row]
+unsafePopulateFunction fun ty expr = UnsafeFromClause $ renderSQL fun
+  <> parenthesized ("null::" <> renderSQL ty <> ", " <> renderSQL expr)
 
 -- | Expands the JSON expression to a row whose columns match the record
 -- type defined by the given table.
 jsonPopulateRecord
   :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
   -> Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjson) -- ^ json object
-  -> Query outer commons schemas params row
-jsonPopulateRecord = unsafePopulateFunction "json_populate_record"
+  -> FromClause outer commons schemas params '["json_populate_record" ::: row]
+jsonPopulateRecord = unsafePopulateFunction #json_populate_record
 
 -- | Expands the binary JSON expression to a row whose columns match the record
 -- type defined by the given table.
 jsonbPopulateRecord
   :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb object
-  -> Query outer commons schemas params row
-jsonbPopulateRecord = unsafePopulateFunction "jsonb_populate_record"
+  -> Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
+  -> FromClause outer commons schemas params '["jsonb_populate_record" ::: row]
+jsonbPopulateRecord = unsafePopulateFunction #jsonb_populate_record
 
 -- | Expands the outermost array of objects in the given JSON expression to a
 -- set of rows whose columns match the record type defined by the given table.
 jsonPopulateRecordSet
   :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjson) -- ^ json array
-  -> Query outer commons schemas params row
-jsonPopulateRecordSet = unsafePopulateFunction "json_populate_record_set"
+  -> Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjson) -- ^ json array
+  -> FromClause outer commons schemas params '["json_populate_record_set" ::: row]
+jsonPopulateRecordSet = unsafePopulateFunction #json_populate_record_set
 
 -- | Expands the outermost array of objects in the given binary JSON expression
 -- to a set of rows whose columns match the record type defined by the given
@@ -807,54 +827,52 @@ jsonPopulateRecordSet = unsafePopulateFunction "json_populate_record_set"
 jsonbPopulateRecordSet
   :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
   -> Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb array
-  -> Query outer commons schemas params row
-jsonbPopulateRecordSet = unsafePopulateFunction "jsonb_populate_record_set"
+  -> FromClause outer commons schemas params '["jsonb_populate_record_set" ::: row]
+jsonbPopulateRecordSet = unsafePopulateFunction #jsonb_populate_record_set
 
 unsafeRecordFunction
   :: (SListI record, json `In` PGJsonType)
   => ByteString
-  -> Expression outer 'Ungrouped commons schemas params '[]  (nullity json)
-  -> NP (Aliased (TypeExpression schemas)) record
-  -> Query outer commons schemas params record
-unsafeRecordFunction fun expr types = UnsafeQuery $
-  "SELECT * FROM " <> fun <> "("
-    <> renderSQL expr <> ")"
-    <+> "AS" <+> "x" <> parenthesized (renderCommaSeparated renderTy types)
+  -> Expression outer 'Ungrouped commons schemas params '[] (nullity json)
+  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
+  -> FromClause outer commons schemas params '[tab ::: record]
+unsafeRecordFunction fun expr (types `As` tab) = UnsafeFromClause $
+  fun <> parenthesized (renderSQL expr) <+> "AS" <+> renderSQL tab
+    <> parenthesized (renderCommaSeparated renderTy types)
     where
       renderTy :: Aliased (TypeExpression schemas) ty -> ByteString
-      renderTy (ty `As` alias) =
-        renderSQL alias <+> renderSQL ty
+      renderTy (ty `As` alias) = renderSQL alias <+> renderSQL ty
 
 -- | Builds an arbitrary record from a JSON object.
 jsonToRecord
   :: SListI record
-  => Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjson) -- ^ json object
-  -> NP (Aliased (TypeExpression schemas)) record -- ^ record types
-  -> Query outer commons schemas params record
+  => Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjson) -- ^ json object
+  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
+  -> FromClause outer commons schemas params '[tab ::: record]
 jsonToRecord = unsafeRecordFunction "json_to_record"
 
 -- | Builds an arbitrary record from a binary JSON object.
 jsonbToRecord
   :: SListI record
-  => Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb object
-  -> NP (Aliased (TypeExpression schemas)) record -- ^ record types
-  -> Query outer commons schemas params record
+  => Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
+  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
+  -> FromClause outer commons schemas params '[tab ::: record]
 jsonbToRecord = unsafeRecordFunction "jsonb_to_record"
 
 -- | Builds an arbitrary set of records from a JSON array of objects.
 jsonToRecordSet
   :: SListI record
   => Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjson) -- ^ json array
-  -> NP (Aliased (TypeExpression schemas)) record -- ^ record types
-  -> Query outer commons schemas params record
+  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
+  -> FromClause outer commons schemas params '[tab ::: record]
 jsonToRecordSet = unsafeRecordFunction "json_to_record_set"
 
 -- | Builds an arbitrary set of records from a binary JSON array of objects.
 jsonbToRecordSet
   :: SListI record
   => Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb array
-  -> NP (Aliased (TypeExpression schemas)) record -- ^ record types
-  -> Query outer commons schemas params record
+  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
+  -> FromClause outer commons schemas params '[tab ::: record]
 jsonbToRecordSet = unsafeRecordFunction "jsonb_to_record_set"
 
 {-----------------------------------------
