@@ -211,6 +211,8 @@ module Squeal.PostgreSQL.Expression
   , jsonb
   , vararray
   , fixarray
+  , tsvector
+  , tsquery
     -- * Re-export
   , (&)
   , NP (..)
@@ -2148,6 +2150,10 @@ fixarray ty = UnsafeTypeExpression $
       $ hcmap (SOP.Proxy @KnownNat)
         (K . fromString . show . natVal)
         (hpure SOP.Proxy :: NP SOP.Proxy ns)
+tsvector :: TypeExpression schemas (nullity 'PGtsvector)
+tsvector = UnsafeTypeExpression "tsvector"
+tsquery :: TypeExpression schemas (nullity 'PGtsquery)
+tsquery = UnsafeTypeExpression "tsquery"
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped schemas (ty :: NullityType) where
