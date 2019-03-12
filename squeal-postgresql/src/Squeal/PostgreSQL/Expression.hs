@@ -228,6 +228,10 @@ module Squeal.PostgreSQL.Expression
   , numnode
   , plainToTSquery
   , phraseToTSquery
+  , websearchToTSquery
+  , queryTree
+  , toTSquery
+  , toTSvector
     -- * Re-export
   , (&)
   , NP (..)
