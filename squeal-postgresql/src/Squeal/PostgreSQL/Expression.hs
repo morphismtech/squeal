@@ -58,6 +58,7 @@ module Squeal.PostgreSQL.Expression
   , unsafeBinaryOp
   , unsafeUnaryOp
   , unsafeFunction
+  , unsafeFunction2
   , unsafeVariadicFunction
   , atan2_
   , cast
@@ -222,6 +223,11 @@ module Squeal.PostgreSQL.Expression
   , fixarray
   , tsvector
   , tsquery
+  , arrayToTSvector
+  , tsvectorLength
+  , numnode
+  , plainToTSquery
+  , phraseToTSquery
     -- * Re-export
   , (&)
   , NP (..)
@@ -646,10 +652,19 @@ unsafeUnaryOp op x = UnsafeExpression $ parenthesized $
 unsafeFunction
   :: ByteString
   -- ^ function
-  -> Expression outer grp commons schemas params from (xty)
-  -> Expression outer grp commons schemas params from (yty)
+  -> Expression outer grp commons schemas params from xty
+  -> Expression outer grp commons schemas params from yty
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
+
+unsafeFunction2
+  :: ByteString
+  -- ^ function
+  -> Expression outer grp commons schemas params from ty1
+  -> Expression outer grp commons schemas params from ty2
+  -> Expression outer grp commons schemas params from ty
+unsafeFunction2 fun x1 x2 = UnsafeExpression $
+  fun <> parenthesized (commaSeparated [renderSQL x1, renderSQL x2])
 
 -- | Helper for defining variadic functions.
 unsafeVariadicFunction
@@ -1624,6 +1639,57 @@ jsonbPretty = unsafeFunction "jsonb_pretty"
 
 (<->) :: Operator (nullity 'PGtsquery) (nullity 'PGtsquery) (nullity 'PGtsquery)
 (<->) = unsafeBinaryOp "<->"
+
+arrayToTSvector
+  :: Expression outer grp commons schemas params from (nullity ('PGvararray ('NotNull 'PGtext)))
+  -> Expression outer grp commons schemas params from (nullity 'PGtsvector)
+arrayToTSvector = unsafeFunction "array_to_tsvector"
+
+tsvectorLength
+  :: Expression outer grp commons schemas params from (nullity 'PGtsvector)
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+tsvectorLength = unsafeFunction "length"
+
+numnode
+  :: Expression outer grp commons schemas params from (nullity 'PGtsquery)
+  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+numnode = unsafeFunction "numnode"
+
+plainToTSquery
+  :: Expression outer grp commons schemas params from (nullity 'PGtext)
+  -> Expression outer grp commons schemas params from (nullity 'PGtext)
+  -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
+plainToTSquery = unsafeFunction2 "plainto_tsquery"
+
+phraseToTSquery
+  :: Expression outer grp commons schemas params from (nullity 'PGtext)
+  -> Expression outer grp commons schemas params from (nullity 'PGtext)
+  -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
+phraseToTSquery = unsafeFunction2 "phraseto_tsquery"
+
+websearchToTSquery
+  :: Expression outer grp commons schemas params from (nullity 'PGtext)
+  -> Expression outer grp commons schemas params from (nullity 'PGtext)
+  -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
+websearchToTSquery = unsafeFunction2 "websearch_to_tsquery"
+
+queryTree
+  :: Expression outer grp commons schemas params from (nullity 'PGtsquery)
+  -> Expression outer grp commons schemas params from (nullity 'PGtext)
+queryTree = unsafeFunction "query_tree"
+
+toTSquery
+  :: Expression outer grp commons schemas params from (nullity 'PGtext)
+  -> Expression outer grp commons schemas params from (nullity 'PGtext)
+  -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
+toTSquery = unsafeFunction2 "to_tsquery"
+
+toTSvector
+  :: ty `In` '[ 'PGtext, 'PGjson, 'PGjsonb]
+  => Expression outer grp commons schemas params from (nullity 'PGtext)
+  -> Expression outer grp commons schemas params from (nullity ty)
+  -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
+toTSvector = unsafeFunction2 "to_tsvector"
 
 {-----------------------------------------
 aggregation
