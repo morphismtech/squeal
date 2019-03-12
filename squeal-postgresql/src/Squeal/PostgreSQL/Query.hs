@@ -1101,12 +1101,6 @@ exists
   -> Condition outer grp commons schemas params from
 exists query = UnsafeExpression $ "EXISTS" <+> parenthesized (renderSQL query)
 
-type Operator ty1 ty2 ty3
-  =  forall outer grp commons schemas params from
-  .  Expression outer grp commons schemas params from ty1
-  -> Expression outer grp commons schemas params from ty2
-  -> Expression outer grp commons schemas params from ty3
-
 {- |
 The right-hand side is a parenthesized subquery, which must return
 exactly one column. The left-hand expression is evaluated and compared to each

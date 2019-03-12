@@ -34,6 +34,9 @@ Squeal expressions are the atoms used to build statements.
 module Squeal.PostgreSQL.Expression
   ( -- * Expression
     Expression (..)
+  , ClosedExpression
+  , Operator
+  , ComparisonOperator
   , HasParameter (parameter)
   , param
     -- ** Null
@@ -151,6 +154,12 @@ module Squeal.PostgreSQL.Expression
   , jsonbSet
   , jsonbInsert
   , jsonbPretty
+    -- ** Text Search
+  , (@@)
+  , (.&)
+  , (.|)
+  , (.!)
+  , (<->)
     -- ** Aggregation
   , Aggregate (..)
   , Distinction (..)
@@ -267,9 +276,21 @@ newtype Expression
   (ty :: NullityType)
     = UnsafeExpression { renderExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
-
 instance RenderSQL (Expression outer grp commons schemas params from ty) where
   renderSQL = renderExpression
+
+type ClosedExpression ty
+  = forall outer grp commons schemas params from
+  . Expression outer grp commons schemas params from ty
+
+type Operator ty1 ty2 ty3
+  =  forall outer grp commons schemas params from
+  .  Expression outer grp commons schemas params from ty1
+  -> Expression outer grp commons schemas params from ty2
+  -> Expression outer grp commons schemas params from ty3
+
+type ComparisonOperator ty1 ty2
+  = Operator ty1 ty2 ('Null 'PGbool)
 
 {- | A `HasParameter` constraint is used to indicate a value that is
 supplied externally to a SQL statement.
@@ -1090,28 +1111,44 @@ localTimestamp = UnsafeExpression "LOCALTIMESTAMP"
 text
 -----------------------------------------}
 
+escape :: Char -> String
+escape = \case
+  '\NUL' -> "\\0"
+  '\'' -> "''"
+  '"' -> "\\\""
+  '\b' -> "\\b"
+  '\n' -> "\\n"
+  '\r' -> "\\r"
+  '\t' -> "\\t"
+  '\\' -> "\\\\"
+  c -> [c]
+
 instance IsString
   (Expression outer grp commons schemas params from (nullity 'PGtext)) where
     fromString str = UnsafeExpression $
       "E\'" <> fromString (escape =<< str) <> "\'"
-      where
-        escape = \case
-          '\NUL' -> "\\0"
-          '\'' -> "''"
-          '"' -> "\\\""
-          '\b' -> "\\b"
-          '\n' -> "\\n"
-          '\r' -> "\\r"
-          '\t' -> "\\t"
-          '\\' -> "\\\\"
-          c -> [c]
+instance IsString
+  (Expression outer grp commons schemas params from (nullity 'PGtsvector)) where
+    fromString str = cast tsvector . UnsafeExpression $
+      "E\'" <> fromString (escape =<< str) <> "\'"
+instance IsString
+  (Expression outer grp commons schemas params from (nullity 'PGtsquery)) where
+    fromString str = cast tsquery . UnsafeExpression $
+      "E\'" <> fromString (escape =<< str) <> "\'"
 
 instance Semigroup
   (Expression outer grp commons schemas params from (nullity 'PGtext)) where
     (<>) = unsafeBinaryOp "||"
+instance Semigroup
+  (Expression outer grp commons schemas params from (nullity 'PGtsvector)) where
+    (<>) = unsafeBinaryOp "||"
 
 instance Monoid
   (Expression outer grp commons schemas params from (nullity 'PGtext)) where
+    mempty = fromString ""
+    mappend = (<>)
+instance Monoid
+  (Expression outer grp commons schemas params from (nullity 'PGtsvector)) where
     mempty = fromString ""
     mappend = (<>)
 
@@ -1570,6 +1607,23 @@ jsonbPretty
   :: Expression outer grp commons schemas params from (nullity 'PGjsonb)
   -> Expression outer grp commons schemas params from (nullity 'PGtext)
 jsonbPretty = unsafeFunction "jsonb_pretty"
+
+(@@) :: ComparisonOperator (nullity 'PGtsvector) (nullity 'PGtsquery)
+(@@) = unsafeBinaryOp "@@"
+
+(.&) :: Operator (nullity 'PGtsquery) (nullity 'PGtsquery) (nullity 'PGtsquery)
+(.&) = unsafeBinaryOp "&&"
+
+(.|) :: Operator (nullity 'PGtsquery) (nullity 'PGtsquery) (nullity 'PGtsquery)
+(.|) = unsafeBinaryOp "||"
+
+(.!)
+  :: Expression outer grp commons schemas params from (nullity 'PGtsquery)
+  -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
+(.!) = unsafeUnaryOp "!!"
+
+(<->) :: Operator (nullity 'PGtsquery) (nullity 'PGtsquery) (nullity 'PGtsquery)
+(<->) = unsafeBinaryOp "<->"
 
 {-----------------------------------------
 aggregation
@@ -2165,6 +2219,7 @@ instance PGTyped schemas (nullity 'PGint8) where pgtype = int8
 instance PGTyped schemas (nullity 'PGnumeric) where pgtype = numeric
 instance PGTyped schemas (nullity 'PGfloat4) where pgtype = float4
 instance PGTyped schemas (nullity 'PGfloat8) where pgtype = float8
+instance PGTyped schemas (nullity 'PGmoney) where pgtype = money
 instance PGTyped schemas (nullity 'PGtext) where pgtype = text
 instance (KnownNat n, 1 <= n)
   => PGTyped schemas (nullity ('PGchar n)) where pgtype = char @n
@@ -2186,6 +2241,8 @@ instance PGTyped schemas ty
 instance (SOP.All KnownNat dims, PGTyped schemas ty)
   => PGTyped schemas (nullity ('PGfixarray dims ty)) where
     pgtype = fixarray @dims (pgtype @schemas @ty)
+instance PGTyped schemas (nullity 'PGtsvector) where pgtype = tsvector
+instance PGTyped schemas (nullity 'PGtsquery) where pgtype = tsquery
 
 {-----------------------------------------
 Sorting
