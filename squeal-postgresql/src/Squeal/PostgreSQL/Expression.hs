@@ -34,9 +34,7 @@ Squeal expressions are the atoms used to build statements.
 module Squeal.PostgreSQL.Expression
   ( -- * Expression
     Expression (..)
-  , ClosedExpression
   , Operator
-  , ComparisonOperator
   , HasParameter (parameter)
   , param
     -- ** Null
@@ -289,18 +287,11 @@ newtype Expression
 instance RenderSQL (Expression outer grp commons schemas params from ty) where
   renderSQL = renderExpression
 
-type ClosedExpression ty
-  = forall outer grp commons schemas params from
-  . Expression outer grp commons schemas params from ty
-
 type Operator ty1 ty2 ty3
   =  forall outer grp commons schemas params from
   .  Expression outer grp commons schemas params from ty1
   -> Expression outer grp commons schemas params from ty2
   -> Expression outer grp commons schemas params from ty3
-
-type ComparisonOperator ty1 ty2
-  = Operator ty1 ty2 ('Null 'PGbool)
 
 {- | A `HasParameter` constraint is used to indicate a value that is
 supplied externally to a SQL statement.
@@ -635,9 +626,7 @@ least x xs = UnsafeExpression $ "LEAST("
 unsafeBinaryOp
   :: ByteString
   -- ^ operator
-  -> Expression outer grp commons schemas params from (ty0)
-  -> Expression outer grp commons schemas params from (ty1)
-  -> Expression outer grp commons schemas params from (ty2)
+  -> Operator ty0 ty1 ty2
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderSQL x <+> op <+> renderSQL y
 
@@ -767,11 +756,7 @@ cast ty x = UnsafeExpression $ parenthesized $
 -- (5 / 2)
 quot_
   :: int `In` PGIntegral
-  => Expression outer grp commons schemas params from (nullity int)
-  -- ^ numerator
-  -> Expression outer grp commons schemas params from (nullity int)
-  -- ^ denominator
-  -> Expression outer grp commons schemas params from (nullity int)
+  => Operator (nullity int) (nullity int) (nullity int)
 quot_ = unsafeBinaryOp "/"
 
 -- | remainder upon integer division
@@ -785,11 +770,7 @@ quot_ = unsafeBinaryOp "/"
 -- (5 % 2)
 rem_
   :: int `In` PGIntegral
-  => Expression outer grp commons schemas params from (nullity int)
-  -- ^ numerator
-  -> Expression outer grp commons schemas params from (nullity int)
-  -- ^ denominator
-  -> Expression outer grp commons schemas params from (nullity int)
+  => Operator (nullity int) (nullity int) (nullity int)
 rem_ = unsafeBinaryOp "%"
 
 -- | >>> :{
@@ -859,19 +840,13 @@ not_ = unsafeUnaryOp "NOT"
 
 -- | >>> printSQL $ true .&& false
 -- (TRUE AND FALSE)
-(.&&)
-  :: Expression outer grp commons schemas params from (nullity 'PGbool)
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
+(.&&) :: Operator (nullity 'PGbool) (nullity 'PGbool) (nullity 'PGbool)
 infixr 3 .&&
 (.&&) = unsafeBinaryOp "AND"
 
 -- | >>> printSQL $ true .|| false
 -- (TRUE OR FALSE)
-(.||)
-  :: Expression outer grp commons schemas params from (nullity 'PGbool)
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
+(.||) :: Operator (nullity 'PGbool) (nullity 'PGbool) (nullity 'PGbool)
 infixr 2 .||
 (.||) = unsafeBinaryOp "OR"
 
@@ -922,55 +897,37 @@ ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 --
 -- >>> printSQL $ true .== null_
 -- (TRUE = NULL)
-(.==)
-  :: Expression outer grp commons schemas params from (nullity0 ty) -- ^ lhs
-  -> Expression outer grp commons schemas params from (nullity1 ty) -- ^ rhs
-  -> Condition outer grp commons schemas params from
+(.==) :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
 (.==) = unsafeBinaryOp "="
 infix 4 .==
 
 -- | >>> printSQL $ true ./= null_
 -- (TRUE <> NULL)
-(./=)
-  :: Expression outer grp commons schemas params from (nullity0 ty) -- ^ lhs
-  -> Expression outer grp commons schemas params from (nullity1 ty) -- ^ rhs
-  -> Condition outer grp commons schemas params from
+(./=) :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
 (./=) = unsafeBinaryOp "<>"
 infix 4 ./=
 
 -- | >>> printSQL $ true .>= null_
 -- (TRUE >= NULL)
-(.>=)
-  :: Expression outer grp commons schemas params from (nullity0 ty) -- ^ lhs
-  -> Expression outer grp commons schemas params from (nullity1 ty) -- ^ rhs
-  -> Condition outer grp commons schemas params from
+(.>=) :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
 (.>=) = unsafeBinaryOp ">="
 infix 4 .>=
 
 -- | >>> printSQL $ true .< null_
 -- (TRUE < NULL)
-(.<)
-  :: Expression outer grp commons schemas params from (nullity0 ty) -- ^ lhs
-  -> Expression outer grp commons schemas params from (nullity1 ty) -- ^ rhs
-  -> Condition outer grp commons schemas params from
+(.<) :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
 (.<) = unsafeBinaryOp "<"
 infix 4 .<
 
 -- | >>> printSQL $ true .<= null_
 -- (TRUE <= NULL)
-(.<=)
-  :: Expression outer grp commons schemas params from (nullity0 ty) -- ^ lhs
-  -> Expression outer grp commons schemas params from (nullity1 ty) -- ^ rhs
-  -> Condition outer grp commons schemas params from
+(.<=) :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
 (.<=) = unsafeBinaryOp "<="
 infix 4 .<=
 
 -- | >>> printSQL $ true .> null_
 -- (TRUE > NULL)
-(.>)
-  :: Expression outer grp commons schemas params from (nullity0 ty) -- ^ lhs
-  -> Expression outer grp commons schemas params from (nullity1 ty) -- ^ rhs
-  -> Condition outer grp commons schemas params from
+(.>) :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
 (.>) = unsafeBinaryOp ">"
 infix 4 .>
 
@@ -1026,20 +983,14 @@ notBetweenSymmetric a (x,y) = UnsafeExpression $ renderSQL a
 >>> printSQL $ true `isDistinctFrom` null_
 (TRUE IS DISTINCT FROM NULL)
 -}
-isDistinctFrom
-  :: Expression outer grp commons schemas params from (nullity ty)
-  -> Expression outer grp commons schemas params from (nullity ty)
-  -> Condition outer grp commons schemas params from
+isDistinctFrom :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
 isDistinctFrom = unsafeBinaryOp "IS DISTINCT FROM"
 
 {- | equal, treating null like an ordinary value
 >>> printSQL $ true `isNotDistinctFrom` null_
 (TRUE IS NOT DISTINCT FROM NULL)
 -}
-isNotDistinctFrom
-  :: Expression outer grp commons schemas params from (nullity ty)
-  -> Expression outer grp commons schemas params from (nullity ty)
-  -> Condition outer grp commons schemas params from
+isNotDistinctFrom :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
 isNotDistinctFrom = unsafeBinaryOp "IS NOT DISTINCT FROM"
 
 {- | is true
@@ -1204,12 +1155,7 @@ charLength = unsafeFunction "char_length"
 --
 -- >>> printSQL $ "abc" `like` "a%"
 -- (E'abc' LIKE E'a%')
-like
-  :: Expression outer grp commons schemas params from (nullity 'PGtext)
-  -- ^ string
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
-  -- ^ pattern
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
+like :: Operator (nullity 'PGtext) (nullity 'PGtext) ('Null 'PGbool)
 like = unsafeBinaryOp "LIKE"
 
 -- | The key word ILIKE can be used instead of LIKE to make the
@@ -1217,12 +1163,7 @@ like = unsafeBinaryOp "LIKE"
 --
 -- >>> printSQL $ "abc" `ilike` "a%"
 -- (E'abc' ILIKE E'a%')
-ilike
-  :: Expression outer grp commons schemas params from (nullity 'PGtext)
-  -- ^ string
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
-  -- ^ pattern
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
+ilike :: Operator (nullity 'PGtext) (nullity 'PGtext) ('Null 'PGbool)
 ilike = unsafeBinaryOp "ILIKE"
 
 {-----------------------------------------
@@ -1237,36 +1178,28 @@ Table 9.44: json and jsonb operators
 -- | Get JSON value (object field or array element) at a key.
 (.->)
   :: (json `In` PGJsonType, key `In` PGJsonKey)
-  => Expression outer grp commons schemas params from (nullity json)
-  -> Expression outer grp commons schemas params from (nullity key)
-  -> Expression outer grp commons schemas params from ('Null json)
+  => Operator (nullity json) (nullity key) ('Null json)
 infixl 8 .->
 (.->) = unsafeBinaryOp "->"
 
 -- | Get JSON value (object field or array element) at a key, as text.
 (.->>)
   :: (json `In` PGJsonType, key `In` PGJsonKey)
-  => Expression outer grp commons schemas params from (nullity json)
-  -> Expression outer grp commons schemas params from (nullity key)
-  -> Expression outer grp commons schemas params from ('Null 'PGtext)
+  => Operator (nullity json) (nullity key) ('Null 'PGtext)
 infixl 8 .->>
 (.->>) = unsafeBinaryOp "->>"
 
 -- | Get JSON value at a specified path.
 (.#>)
   :: (json `In` PGJsonType, PGTextArray "(.#>)" path)
-  => Expression outer grp commons schemas params from (nullity json)
-  -> Expression outer grp commons schemas params from (nullity path)
-  -> Expression outer grp commons schemas params from ('Null json)
+  => Operator (nullity json) (nullity path) ('Null json)
 infixl 8 .#>
 (.#>) = unsafeBinaryOp "#>"
 
 -- | Get JSON value at a specified path as text.
 (.#>>)
   :: (json `In` PGJsonType, PGTextArray "(.#>>)" path)
-  => Expression outer grp commons schemas params from (nullity json)
-  -> Expression outer grp commons schemas params from (nullity path)
-  -> Expression outer grp commons schemas params from ('Null 'PGtext)
+  => Operator (nullity json) (nullity path) ('Null 'PGtext)
 infixl 8 .#>>
 (.#>>) = unsafeBinaryOp "#>>"
 
@@ -1275,42 +1208,34 @@ infixl 8 .#>>
 -- | Does the left JSON value contain the right JSON path/value entries at the
 -- top level?
 (.@>)
-  :: Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Condition outer grp commons schemas params from
+  :: Operator (nullity 'PGjsonb) (nullity 'PGjsonb) ('Null 'PGbool)
 infixl 9 .@>
 (.@>) = unsafeBinaryOp "@>"
 
 -- | Are the left JSON path/value entries contained at the top level within the
 -- right JSON value?
-(.<@)
-  :: Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Condition outer grp commons schemas params from
+(.<@) :: Operator (nullity 'PGjsonb) (nullity 'PGjsonb) ('Null 'PGbool)
 infixl 9 .<@
 (.<@) = unsafeBinaryOp "<@"
 
 -- | Does the string exist as a top-level key within the JSON value?
-(.?)
-  :: Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
-  -> Condition outer grp commons schemas params from
+(.?) :: Operator (nullity 'PGjsonb) (nullity 'PGtext) ('Null 'PGbool)
 infixl 9 .?
 (.?) = unsafeBinaryOp "?"
 
 -- | Do any of these array strings exist as top-level keys?
-(.?|)
-  :: Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity ('PGvararray ('NotNull 'PGtext)))
-  -> Condition outer grp commons schemas params from
+(.?|) :: Operator
+  (nullity 'PGjsonb)
+  (nullity ('PGvararray ('NotNull 'PGtext)))
+  ('Null 'PGbool)
 infixl 9 .?|
 (.?|) = unsafeBinaryOp "?|"
 
 -- | Do all of these array strings exist as top-level keys?
-(.?&)
-  :: Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity ('PGvararray ('NotNull 'PGtext)))
-  -> Condition outer grp commons schemas params from
+(.?&) :: Operator
+  (nullity 'PGjsonb)
+  (nullity ('PGvararray ('NotNull 'PGtext)))
+  ('Null 'PGbool)
 infixl 9 .?&
 (.?&) = unsafeBinaryOp "?&"
 
@@ -1333,9 +1258,7 @@ instance Semigroup
 -- count from the end). Throws an error if top level container is not an array.
 (.-.)
   :: (key `In` '[ 'PGtext, 'PGvararray ('NotNull 'PGtext), 'PGint4, 'PGint2 ]) -- hlint error without parens here
-  => Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity key)
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  => Operator (nullity 'PGjsonb) (nullity key) (nullity 'PGjsonb)
 infixl 6 .-.
 (.-.) = unsafeBinaryOp "-"
 
@@ -1343,9 +1266,7 @@ infixl 6 .-.
 -- integers count from the end)
 (#-.)
   :: PGTextArray "(#-.)" arrayty
-  => Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity arrayty)
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  => Operator (nullity 'PGjsonb) (nullity arrayty)(nullity 'PGjsonb)
 infixl 6 #-.
 (#-.) = unsafeBinaryOp "#-"
 
@@ -1627,7 +1548,7 @@ jsonbPretty
   -> Expression outer grp commons schemas params from (nullity 'PGtext)
 jsonbPretty = unsafeFunction "jsonb_pretty"
 
-(@@) :: ComparisonOperator (nullity 'PGtsvector) (nullity 'PGtsquery)
+(@@) :: Operator (nullity 'PGtsvector) (nullity 'PGtsquery) ('Null 'PGbool)
 (@@) = unsafeBinaryOp "@@"
 
 (.&) :: Operator (nullity 'PGtsquery) (nullity 'PGtsquery) (nullity 'PGtsquery)
@@ -2653,37 +2574,25 @@ class TimeOp time diff | time -> diff where
   >>> printSQL (makeDate 1984 7 3 !+ 365)
   (make_date(1984, 7, 3) + 365)
   -}
-  (!+)
-    :: Expression outer grp commons schemas params from (nullity time)
-    -> Expression outer grp commons schemas params from (nullity diff)
-    -> Expression outer grp commons schemas params from (nullity time)
+  (!+) :: Operator (nullity time) (nullity diff) (nullity time)
   (!+) = unsafeBinaryOp "+"
   {-|
   >>> printSQL (365 +! makeDate 1984 7 3)
   (365 + make_date(1984, 7, 3))
   -}
-  (+!)
-    :: Expression outer grp commons schemas params from (nullity diff)
-    -> Expression outer grp commons schemas params from (nullity time)
-    -> Expression outer grp commons schemas params from (nullity time)
+  (+!) :: Operator (nullity diff) (nullity time) (nullity time)
   (+!) = unsafeBinaryOp "+"
   {-|
   >>> printSQL (makeDate 1984 7 3 !- 365)
   (make_date(1984, 7, 3) - 365)
   -}
-  (!-)
-    :: Expression outer grp commons schemas params from (nullity time)
-    -> Expression outer grp commons schemas params from (nullity diff)
-    -> Expression outer grp commons schemas params from (nullity time)
+  (!-) :: Operator (nullity time) (nullity diff) (nullity time)
   (!-) = unsafeBinaryOp "-"
   {-|
   >>> printSQL (makeDate 1984 7 3 !-! currentDate)
   (make_date(1984, 7, 3) - CURRENT_DATE)
   -}
-  (!-!)
-    :: Expression outer grp commons schemas params from (nullity time)
-    -> Expression outer grp commons schemas params from (nullity time)
-    -> Expression outer grp commons schemas params from (nullity diff)
+  (!-!) :: Operator (nullity time) (nullity time) (nullity diff)
   (!-!) = unsafeBinaryOp "-"
 instance TimeOp 'PGtimestamp 'PGinterval
 instance TimeOp 'PGtimestamptz 'PGinterval
