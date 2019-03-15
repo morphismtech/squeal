@@ -879,6 +879,10 @@ jsonbToRecordSet = unsafeRecordFunction "jsonb_to_record_set"
 FROM clauses
 -----------------------------------------}
 
+type family FromClause_ schemas params from where
+  FromClause_ schemas params from =
+    FromClause schemas (TuplePG params) (FromPG from)
+
 {- |
 A `FromClause` can be a table name, or a derived table such
 as a subquery, a @JOIN@ construct, or complex combinations of these.
