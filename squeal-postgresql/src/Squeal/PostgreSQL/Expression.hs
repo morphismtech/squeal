@@ -287,11 +287,16 @@ newtype Expression
 instance RenderSQL (Expression outer grp commons schemas params from ty) where
   renderSQL = renderExpression
 
-type Operator ty1 ty2 ty3
+type Operator x1 x2 y
   =  forall outer grp commons schemas params from
-  .  Expression outer grp commons schemas params from ty1
-  -> Expression outer grp commons schemas params from ty2
-  -> Expression outer grp commons schemas params from ty3
+  .  Expression outer grp commons schemas params from x1
+  -> Expression outer grp commons schemas params from x2
+  -> Expression outer grp commons schemas params from y
+
+type (:-->) x y
+  =  forall outer grp commons schemas params from
+  .  Expression outer grp commons schemas params from x
+  -> Expression outer grp commons schemas params from y
 
 {- | A `HasParameter` constraint is used to indicate a value that is
 supplied externally to a SQL statement.
@@ -529,17 +534,15 @@ array xs = UnsafeExpression $
 
 -- | >>> printSQL $ cardinality (array [null_, false, true])
 -- cardinality(ARRAY[NULL, FALSE, TRUE])
-cardinality
-  :: Expression outer grp commons schemas params from (nullity ('PGvararray ty))
-  -> Expression outer grp commons schemas params from (nullity 'PGint8)
+cardinality :: nullity ('PGvararray ty) :--> nullity 'PGint8
 cardinality = unsafeFunction "cardinality"
 
 -- | >>> printSQL $ array [null_, false, true] & index 2
 -- (ARRAY[NULL, FALSE, TRUE])[2]
 index
-  :: Word64 -- ^ index
-  -> Expression outer grp commons schemas params from (nullity ('PGvararray ty)) -- ^ array
-  -> Expression outer grp commons schemas params from (NullifyType ty)
+  ::   Word64 -- ^ index
+  ->   nullity ('PGvararray ty) -- ^ array
+  :--> NullifyType ty
 index n expr = UnsafeExpression $
   parenthesized (renderSQL expr) <> "[" <> fromString (show n) <> "]"
 
@@ -632,21 +635,13 @@ unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
 
 -- | >>> printSQL $ unsafeUnaryOp "NOT" true
 -- (NOT TRUE)
-unsafeUnaryOp
-  :: ByteString
-  -- ^ operator
-  -> Expression outer grp commons schemas params from (ty0)
-  -> Expression outer grp commons schemas params from (ty1)
+unsafeUnaryOp :: ByteString {- ^ operator -} -> x :--> y
 unsafeUnaryOp op x = UnsafeExpression $ parenthesized $
   op <+> renderSQL x
 
 -- | >>> printSQL $ unsafeFunction "f" true
 -- f(TRUE)
-unsafeFunction
-  :: ByteString
-  -- ^ function
-  -> Expression outer grp commons schemas params from xty
-  -> Expression outer grp commons schemas params from yty
+unsafeFunction :: ByteString {- ^ function -} -> x :--> y
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
@@ -780,11 +775,7 @@ rem_ = unsafeBinaryOp "%"
 -- in printSQL expression
 -- :}
 -- trunc(pi())
-trunc
-  :: frac `In` PGFloating
-  => Expression outer grp commons schemas params from (nullity frac)
-  -- ^ fractional number
-  -> Expression outer grp commons schemas params from (nullity frac)
+trunc :: frac `In` PGFloating => nullity frac :--> nullity frac
 trunc = unsafeFunction "trunc"
 
 -- | >>> :{
@@ -794,11 +785,7 @@ trunc = unsafeFunction "trunc"
 -- in printSQL expression
 -- :}
 -- round(pi())
-round_
-  :: frac `In` PGFloating
-  => Expression outer grp commons schemas params from (nullity frac)
-  -- ^ fractional number
-  -> Expression outer grp commons schemas params from (nullity frac)
+round_ :: frac `In` PGFloating => nullity frac :--> nullity frac
 round_ = unsafeFunction "round"
 
 -- | >>> :{
@@ -808,11 +795,7 @@ round_ = unsafeFunction "round"
 -- in printSQL expression
 -- :}
 -- ceiling(pi())
-ceiling_
-  :: frac `In` PGFloating
-  => Expression outer grp commons schemas params from (nullity frac)
-  -- ^ fractional number
-  -> Expression outer grp commons schemas params from (nullity frac)
+ceiling_ :: frac `In` PGFloating => nullity frac :--> nullity frac
 ceiling_ = unsafeFunction "ceiling"
 
 -- | A `Condition` is an `Expression`, which can evaluate
@@ -833,9 +816,7 @@ false = UnsafeExpression "FALSE"
 
 -- | >>> printSQL $ not_ true
 -- (NOT TRUE)
-not_
-  :: Expression outer grp commons schemas params from (nullity 'PGbool)
-  -> Expression outer grp commons schemas params from (nullity 'PGbool)
+not_ :: nullity 'PGbool :--> nullity 'PGbool
 not_ = unsafeUnaryOp "NOT"
 
 -- | >>> printSQL $ true .&& false
@@ -1125,25 +1106,25 @@ instance Monoid
 -- | >>> printSQL $ lower "ARRRGGG"
 -- lower(E'ARRRGGG')
 lower
-  :: Expression outer grp commons schemas params from (nullity 'PGtext)
+  ::   nullity 'PGtext
   -- ^ string to lower case
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
+  :--> nullity 'PGtext
 lower = unsafeFunction "lower"
 
 -- | >>> printSQL $ upper "eeee"
 -- upper(E'eeee')
 upper
-  :: Expression outer grp commons schemas params from (nullity 'PGtext)
+  ::   nullity 'PGtext
   -- ^ string to upper case
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
+  :--> nullity 'PGtext
 upper = unsafeFunction "upper"
 
 -- | >>> printSQL $ charLength "four"
 -- char_length(E'four')
 charLength
-  :: Expression outer grp commons schemas params from (nullity 'PGtext)
+  :: nullity 'PGtext
   -- ^ string to measure
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+  :--> nullity 'PGint4
 charLength = unsafeFunction "char_length"
 
 -- | The `like` expression returns true if the @string@ matches
@@ -1294,9 +1275,7 @@ jsonLit = cast json . UnsafeExpression
 -- otherwise, a scalar value is produced. For any scalar type other than a
 -- number, a Boolean, or a null value, the text representation will be used, in
 -- such a fashion that it is a valid json value.
-toJson
-  :: Expression outer grp commons schemas params from (nullity ty)
-  -> Expression outer grp commons schemas params from (nullity 'PGjson)
+toJson :: nullity ty :--> nullity 'PGjson
 toJson = unsafeFunction "to_json"
 
 -- | Returns the value as jsonb. Arrays and composites are converted
@@ -1305,23 +1284,18 @@ toJson = unsafeFunction "to_json"
 -- otherwise, a scalar value is produced. For any scalar type other than a
 -- number, a Boolean, or a null value, the text representation will be used, in
 -- such a fashion that it is a valid jsonb value.
-toJsonb
-  :: Expression outer grp commons schemas params from (nullity ty)
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+toJsonb :: nullity ty :--> nullity 'PGjsonb
 toJsonb = unsafeFunction "to_jsonb"
 
 -- | Returns the array as a JSON array. A PostgreSQL multidimensional array
 -- becomes a JSON array of arrays.
 arrayToJson
   :: PGArray "arrayToJson" arr
-  => Expression outer grp commons schemas params from (nullity arr)
-  -> Expression outer grp commons schemas params from (nullity 'PGjson)
+  => nullity arr :--> nullity 'PGjson
 arrayToJson = unsafeFunction "array_to_json"
 
 -- | Returns the row as a JSON object.
-rowToJson
-  :: Expression outer grp commons schemas params from (nullity ('PGcomposite ty))
-  -> Expression outer grp commons schemas params from (nullity 'PGjson)
+rowToJson :: nullity ('PGcomposite ty) :--> nullity 'PGjson
 rowToJson = unsafeFunction "row_to_json"
 
 -- | Builds a possibly-heterogeneously-typed JSON array out of a variadic
@@ -1384,8 +1358,7 @@ jsonbBuildObject
 -- array has exactly two elements, which are taken as a key/value pair.
 jsonObject
   :: PGArrayOf "jsonObject" arr ('NotNull 'PGtext)
-  => Expression outer grp commons schemas params from (nullity arr)
-  -> Expression outer grp commons schemas params from (nullity 'PGjson)
+  => nullity arr :--> nullity 'PGjson
 jsonObject = unsafeFunction "json_object"
 
 -- | Builds a binary JSON object out of a text array. The array must have either
@@ -1394,8 +1367,7 @@ jsonObject = unsafeFunction "json_object"
 -- array has exactly two elements, which are taken as a key/value pair.
 jsonbObject
   :: PGArrayOf "jsonbObject" arr ('NotNull 'PGtext)
-  => Expression outer grp commons schemas params from (nullity arr)
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  => nullity arr :--> nullity 'PGjsonb
 jsonbObject = unsafeFunction "jsonb_object"
 
 -- | This is an alternate form of 'jsonObject' that takes two arrays; one for
@@ -1426,15 +1398,11 @@ Table 9.46: JSON processing functions
 -----------------------------------------}
 
 -- | Returns the number of elements in the outermost JSON array.
-jsonArrayLength
-  :: Expression outer grp commons schemas params from (nullity 'PGjson)
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+jsonArrayLength :: nullity 'PGjson :--> nullity 'PGint4
 jsonArrayLength = unsafeFunction "json_array_length"
 
 -- | Returns the number of elements in the outermost binary JSON array.
-jsonbArrayLength
-  :: Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+jsonbArrayLength :: nullity 'PGjsonb :--> nullity 'PGint4
 jsonbArrayLength = unsafeFunction "jsonb_array_length"
 
 -- | Returns JSON value pointed to by the given path (equivalent to #>
@@ -1479,30 +1447,22 @@ jsonbExtractPathAsText x xs =
 
 -- | Returns the type of the outermost JSON value as a text string. Possible
 -- types are object, array, string, number, boolean, and null.
-jsonTypeof
-  :: Expression outer grp commons schemas params from (nullity 'PGjson)
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
+jsonTypeof :: nullity 'PGjson :--> nullity 'PGtext
 jsonTypeof = unsafeFunction "json_typeof"
 
 -- | Returns the type of the outermost binary JSON value as a text string.
 -- Possible types are object, array, string, number, boolean, and null.
-jsonbTypeof
-  :: Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
+jsonbTypeof :: nullity 'PGjsonb :--> nullity 'PGtext
 jsonbTypeof = unsafeFunction "jsonb_typeof"
 
 -- | Returns its argument with all object fields that have null values omitted.
 -- Other null values are untouched.
-jsonStripNulls
-  :: Expression outer grp commons schemas params from (nullity 'PGjson)
-  -> Expression outer grp commons schemas params from (nullity 'PGjson)
+jsonStripNulls :: nullity 'PGjson :--> nullity 'PGjson
 jsonStripNulls = unsafeFunction "json_strip_nulls"
 
 -- | Returns its argument with all object fields that have null values omitted.
 -- Other null values are untouched.
-jsonbStripNulls
-  :: Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+jsonbStripNulls :: nullity 'PGjsonb :--> nullity 'PGjsonb
 jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
 
 -- | @ jsonbSet target path new_value create_missing @
@@ -1543,9 +1503,7 @@ jsonbInsert tgt path val insertAfter = case insertAfter of
   Nothing -> unsafeVariadicFunction "jsonb_insert" (tgt :* path :* val :* Nil)
 
 -- | Returns its argument as indented JSON text.
-jsonbPretty
-  :: Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
+jsonbPretty :: nullity 'PGjsonb :--> nullity 'PGtext
 jsonbPretty = unsafeFunction "jsonb_pretty"
 
 (@@) :: Operator (nullity 'PGtsvector) (nullity 'PGtsquery) ('Null 'PGbool)
@@ -1557,27 +1515,21 @@ jsonbPretty = unsafeFunction "jsonb_pretty"
 (.|) :: Operator (nullity 'PGtsquery) (nullity 'PGtsquery) (nullity 'PGtsquery)
 (.|) = unsafeBinaryOp "||"
 
-(.!)
-  :: Expression outer grp commons schemas params from (nullity 'PGtsquery)
-  -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
+(.!) :: nullity 'PGtsquery :--> nullity 'PGtsquery
 (.!) = unsafeUnaryOp "!!"
 
 (<->) :: Operator (nullity 'PGtsquery) (nullity 'PGtsquery) (nullity 'PGtsquery)
 (<->) = unsafeBinaryOp "<->"
 
 arrayToTSvector
-  :: Expression outer grp commons schemas params from (nullity ('PGvararray ('NotNull 'PGtext)))
-  -> Expression outer grp commons schemas params from (nullity 'PGtsvector)
+  ::   nullity ('PGvararray ('NotNull 'PGtext))
+  :--> nullity 'PGtsvector
 arrayToTSvector = unsafeFunction "array_to_tsvector"
 
-tsvectorLength
-  :: Expression outer grp commons schemas params from (nullity 'PGtsvector)
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+tsvectorLength :: nullity 'PGtsvector :--> nullity 'PGint4
 tsvectorLength = unsafeFunction "length"
 
-numnode
-  :: Expression outer grp commons schemas params from (nullity 'PGtsquery)
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
+numnode :: nullity 'PGtsquery :--> nullity 'PGint4
 numnode = unsafeFunction "numnode"
 
 plainToTSquery
@@ -1598,9 +1550,7 @@ websearchToTSquery
   -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
 websearchToTSquery = unsafeFunction2 "websearch_to_tsquery"
 
-queryTree
-  :: Expression outer grp commons schemas params from (nullity 'PGtsquery)
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
+queryTree :: nullity 'PGtsquery :--> nullity 'PGtext
 queryTree = unsafeFunction "query_tree"
 
 toTSquery
