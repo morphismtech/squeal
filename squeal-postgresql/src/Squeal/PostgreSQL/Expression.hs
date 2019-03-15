@@ -35,6 +35,7 @@ module Squeal.PostgreSQL.Expression
   ( -- * Expression
     Expression (..)
   , Operator
+  , (:-->)
   , HasParameter (parameter)
   , param
     -- ** Null
@@ -56,7 +57,6 @@ module Squeal.PostgreSQL.Expression
   , unsafeBinaryOp
   , unsafeUnaryOp
   , unsafeFunction
-  , unsafeFunction2
   , unsafeVariadicFunction
   , atan2_
   , cast
@@ -296,6 +296,11 @@ type Operator x1 x2 y
 type (:-->) x y
   =  forall outer grp commons schemas params from
   .  Expression outer grp commons schemas params from x
+  -> Expression outer grp commons schemas params from y
+
+type FunctionHet xs y
+  =  forall outer grp commons schemas params from
+  .  NP (Expression outer grp commons schemas params from) xs
   -> Expression outer grp commons schemas params from y
 
 {- | A `HasParameter` constraint is used to indicate a value that is
@@ -645,14 +650,12 @@ unsafeFunction :: ByteString {- ^ function -} -> x :--> y
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
-unsafeFunction2
-  :: ByteString
-  -- ^ function
-  -> Expression outer grp commons schemas params from ty1
-  -> Expression outer grp commons schemas params from ty2
-  -> Expression outer grp commons schemas params from ty
-unsafeFunction2 fun x1 x2 = UnsafeExpression $
-  fun <> parenthesized (commaSeparated [renderSQL x1, renderSQL x2])
+unsafeFunctionHet
+  :: SListI xs
+  => ByteString {- ^ function -}
+  -> FunctionHet xs y
+unsafeFunctionHet fun xs = UnsafeExpression $
+  fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
 -- | Helper for defining variadic functions.
 unsafeVariadicFunction
@@ -1533,38 +1536,28 @@ numnode :: nullity 'PGtsquery :--> nullity 'PGint4
 numnode = unsafeFunction "numnode"
 
 plainToTSquery
-  :: Expression outer grp commons schemas params from (nullity 'PGtext)
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
-  -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
-plainToTSquery = unsafeFunction2 "plainto_tsquery"
+  :: FunctionHet '[nullity 'PGtext, nullity 'PGtext] (nullity 'PGtsquery)
+plainToTSquery = unsafeFunctionHet "plainto_tsquery"
 
 phraseToTSquery
-  :: Expression outer grp commons schemas params from (nullity 'PGtext)
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
-  -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
-phraseToTSquery = unsafeFunction2 "phraseto_tsquery"
+  :: FunctionHet '[nullity 'PGtext, nullity 'PGtext] (nullity 'PGtsquery)
+phraseToTSquery = unsafeFunctionHet "phraseto_tsquery"
 
 websearchToTSquery
-  :: Expression outer grp commons schemas params from (nullity 'PGtext)
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
-  -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
-websearchToTSquery = unsafeFunction2 "websearch_to_tsquery"
+  :: FunctionHet '[nullity 'PGtext, nullity 'PGtext] (nullity 'PGtsquery)
+websearchToTSquery = unsafeFunctionHet "websearch_to_tsquery"
 
 queryTree :: nullity 'PGtsquery :--> nullity 'PGtext
 queryTree = unsafeFunction "query_tree"
 
 toTSquery
-  :: Expression outer grp commons schemas params from (nullity 'PGtext)
-  -> Expression outer grp commons schemas params from (nullity 'PGtext)
-  -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
-toTSquery = unsafeFunction2 "to_tsquery"
+  :: FunctionHet '[nullity 'PGtext, nullity 'PGtext] (nullity 'PGtsquery)
+toTSquery = unsafeFunctionHet "to_tsquery"
 
 toTSvector
   :: ty `In` '[ 'PGtext, 'PGjson, 'PGjsonb]
-  => Expression outer grp commons schemas params from (nullity 'PGtext)
-  -> Expression outer grp commons schemas params from (nullity ty)
-  -> Expression outer grp commons schemas params from (nullity 'PGtsquery)
-toTSvector = unsafeFunction2 "to_tsvector"
+  => FunctionHet '[nullity 'PGtext, nullity ty] (nullity 'PGtsquery)
+toTSvector = unsafeFunctionHet "to_tsvector"
 
 {-----------------------------------------
 aggregation
