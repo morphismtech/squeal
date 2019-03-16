@@ -91,6 +91,7 @@ module Squeal.PostgreSQL.Schema
   , Elem
   , In
   , Length
+  , (*:)
     -- * Type Classifications
   , HasOid (..)
   , PGNum
@@ -786,3 +787,6 @@ instance (forall t0 t1. RenderSQL (p t0 t1))
 -- | A `single` step.
 single :: p x0 x1 -> AlignedList p x0 x1
 single step = step :>> Done
+
+(*:) :: f x -> f y -> NP f '[x,y]
+x *: y = x :* y :* Nil

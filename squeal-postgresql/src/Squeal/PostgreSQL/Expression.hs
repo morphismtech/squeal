@@ -55,7 +55,7 @@ module Squeal.PostgreSQL.Expression
   , field
     -- ** Functions
   , unsafeBinaryOp
-  , unsafeUnaryOp
+  , unsafeUnaryOpL
   , unsafeFunction
   , unsafeVariadicFunction
   , atan2_
@@ -287,6 +287,10 @@ newtype Expression
 instance RenderSQL (Expression outer grp commons schemas params from ty) where
   renderSQL = renderExpression
 
+type Expr x
+  = forall outer grp commons schemas params from
+  . Expression outer grp commons schemas params from x
+
 type Operator x1 x2 y
   =  forall outer grp commons schemas params from
   .  Expression outer grp commons schemas params from x1
@@ -302,6 +306,16 @@ type FunctionHet xs y
   =  forall outer grp commons schemas params from
   .  NP (Expression outer grp commons schemas params from) xs
   -> Expression outer grp commons schemas params from y
+
+type FunctionHom x y
+  =  forall outer grp commons schemas params from
+  .  [Expression outer grp commons schemas params from x]
+  -> Expression outer grp commons schemas params from x
+  -> Expression outer grp commons schemas params from y
+
+unsafeFunctionHom :: ByteString -> FunctionHom x y
+unsafeFunctionHom fun xs x = UnsafeExpression $ fun <> parenthesized
+  (commaSeparated (renderSQL <$> xs) <> ", " <> renderSQL x)
 
 {- | A `HasParameter` constraint is used to indicate a value that is
 supplied externally to a SQL statement.
@@ -443,16 +457,14 @@ instance
 --
 -- >>> printSQL null_
 -- NULL
-null_ :: Expression outer grp commons schemas params from ('Null ty)
+null_ :: Expr ('Null ty)
 null_ = UnsafeExpression "NULL"
 
 -- | analagous to `Just`
 --
 -- >>> printSQL $ notNull true
 -- TRUE
-notNull
-  :: Expression outer grp commons schemas params from ('NotNull ty)
-  -> Expression outer grp commons schemas params from ('Null ty)
+notNull :: 'NotNull ty :--> 'Null ty
 notNull = UnsafeExpression . renderSQL
 
 -- | return the leftmost value which is not NULL
@@ -533,26 +545,25 @@ nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
 array
   :: [Expression outer grp commons schemas params from ty]
   -- ^ array elements
-  -> Expression outer grp commons schemas params from (nullity ('PGvararray ty))
+  -> Expression outer grp commons schemas params from (null ('PGvararray ty))
 array xs = UnsafeExpression $
   "ARRAY[" <> commaSeparated (renderSQL <$> xs) <> "]"
 
 -- | >>> printSQL $ cardinality (array [null_, false, true])
 -- cardinality(ARRAY[NULL, FALSE, TRUE])
-cardinality :: nullity ('PGvararray ty) :--> nullity 'PGint8
+cardinality :: null ('PGvararray ty) :--> null 'PGint8
 cardinality = unsafeFunction "cardinality"
 
 -- | >>> printSQL $ array [null_, false, true] & index 2
 -- (ARRAY[NULL, FALSE, TRUE])[2]
 index
-  ::   Word64 -- ^ index
-  ->   nullity ('PGvararray ty) -- ^ array
-  :--> NullifyType ty
+  :: Word64 -- ^ index
+  -> null ('PGvararray ty) :--> NullifyType ty
 index n expr = UnsafeExpression $
   parenthesized (renderSQL expr) <> "[" <> fromString (show n) <> "]"
 
 instance (KnownSymbol label, label `In` labels) => IsPGlabel label
-  (Expression outer grp commons schemas params from (nullity ('PGenum labels))) where
+  (Expression outer grp commons schemas params from (null ('PGenum labels))) where
   label = UnsafeExpression $ renderSQL (PGlabel @label)
 
 -- | A row constructor is an expression that builds a row value
@@ -571,7 +582,7 @@ row
   :: SListI row
   => NP (Aliased (Expression outer grp commons schemas params from)) row
   -- ^ zero or more expressions for the row field values
-  -> Expression outer grp commons schemas params from (nullity ('PGcomposite row))
+  -> Expression outer grp commons schemas params from (null ('PGcomposite row))
 row exprs = UnsafeExpression $ "ROW" <> parenthesized
   (renderCommaSeparated (\ (expr `As` _) -> renderSQL expr) exprs)
 
@@ -598,51 +609,38 @@ field td fld expr = UnsafeExpression $
     <> "." <> renderSQL fld
 
 instance Semigroup
-  (Expression outer grp commons schemas params from (nullity ('PGvararray ty))) where
+  (Expression outer grp commons schemas params from (null ('PGvararray ty))) where
     (<>) = unsafeBinaryOp "||"
 
 instance Monoid
-  (Expression outer grp commons schemas params from (nullity ('PGvararray ty))) where
+  (Expression outer grp commons schemas params from (null ('PGvararray ty))) where
     mempty = array []
     mappend = (<>)
 
--- | >>> let expr = greatest currentTimestamp [param @1] :: Expression outer grp commons schemas '[ 'NotNull 'PGtimestamptz] from ('NotNull 'PGtimestamptz)
+-- | >>> let expr = greatest [param @1] currentTimestamp :: Expression outer grp commons schemas '[ 'NotNull 'PGtimestamptz] from ('NotNull 'PGtimestamptz)
 -- >>> printSQL expr
--- GREATEST(CURRENT_TIMESTAMP, ($1 :: timestamp with time zone))
-greatest
-  :: Expression outer grp commons schemas params from (nullty)
-  -- ^ needs at least 1 argument
-  -> [Expression outer grp commons schemas params from (nullty)]
-  -- ^ or more
-  -> Expression outer grp commons schemas params from (nullty)
-greatest x xs = UnsafeExpression $ "GREATEST("
-  <> commaSeparated (renderSQL <$> (x:xs)) <> ")"
+-- GREATEST(($1 :: timestamp with time zone), CURRENT_TIMESTAMP)
+greatest :: FunctionHom ty ty
+greatest = unsafeFunctionHom "GREATEST"
 
--- | >>> printSQL $ least currentTimestamp [null_]
--- LEAST(CURRENT_TIMESTAMP, NULL)
-least
-  :: Expression outer grp commons schemas params from (nullty)
-  -- ^ needs at least 1 argument
-  -> [Expression outer grp commons schemas params from (nullty)]
-  -- ^ or more
-  -> Expression outer grp commons schemas params from (nullty)
-least x xs = UnsafeExpression $ "LEAST("
-  <> commaSeparated (renderSQL <$> (x:xs)) <> ")"
+-- | >>> printSQL $ least [null_] currentTimestamp
+-- LEAST(NULL, CURRENT_TIMESTAMP)
+least :: FunctionHom ty ty
+least = unsafeFunctionHom "LEAST"
 
 -- | >>> printSQL $ unsafeBinaryOp "OR" true false
 -- (TRUE OR FALSE)
-unsafeBinaryOp
-  :: ByteString
-  -- ^ operator
-  -> Operator ty0 ty1 ty2
+unsafeBinaryOp :: ByteString {- ^ operator -} -> Operator ty0 ty1 ty2
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderSQL x <+> op <+> renderSQL y
 
--- | >>> printSQL $ unsafeUnaryOp "NOT" true
+-- | >>> printSQL $ unsafeUnaryOpL "NOT" true
 -- (NOT TRUE)
-unsafeUnaryOp :: ByteString {- ^ operator -} -> x :--> y
-unsafeUnaryOp op x = UnsafeExpression $ parenthesized $
-  op <+> renderSQL x
+unsafeUnaryOpL :: ByteString {- ^ operator -} -> x :--> y
+unsafeUnaryOpL op x = UnsafeExpression $ parenthesized $ op <+> renderSQL x
+
+unsafeUnaryOpR :: ByteString {- ^ operator -} -> x :--> y
+unsafeUnaryOpR op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
 
 -- | >>> printSQL $ unsafeFunction "f" true
 -- f(TRUE)
@@ -668,7 +666,7 @@ unsafeVariadicFunction fun x = UnsafeExpression $
   fun <> parenthesized (commaSeparated (hcollapse (hmap (K . renderSQL) x)))
 
 instance ty `In` PGNum
-  => Num (Expression outer grp commons schemas params from (nullity ty)) where
+  => Num (Expression outer grp commons schemas params from (null ty)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
     (*) = unsafeBinaryOp "*"
@@ -680,7 +678,7 @@ instance ty `In` PGNum
       . show
 
 instance (ty `In` PGNum, ty `In` PGFloating) => Fractional
-  (Expression outer grp commons schemas params from (nullity ty)) where
+  (Expression outer grp commons schemas params from (null ty)) where
     (/) = unsafeBinaryOp "/"
     fromRational
       = UnsafeExpression
@@ -690,7 +688,7 @@ instance (ty `In` PGNum, ty `In` PGFloating) => Fractional
       . fromRat @Double
 
 instance (ty `In` PGNum, ty `In` PGFloating) => Floating
-  (Expression outer grp commons schemas params from (nullity ty)) where
+  (Expression outer grp commons schemas params from (null ty)) where
     pi = UnsafeExpression "pi()"
     exp = unsafeFunction "exp"
     log = unsafeFunction "ln"
@@ -713,20 +711,15 @@ instance (ty `In` PGNum, ty `In` PGFloating) => Floating
 
 -- | >>> :{
 -- let
---   expression :: Expression outer grp commons schemas params from (nullity 'PGfloat4)
---   expression = atan2_ pi 2
+--   expression :: Expr (null 'PGfloat4)
+--   expression = atan2_ (pi *: 2)
 -- in printSQL expression
 -- :}
 -- atan2(pi(), 2)
 atan2_
   :: float `In` PGFloating
-  => Expression outer grp commons schemas params from (nullity float)
-  -- ^ numerator
-  -> Expression outer grp commons schemas params from (nullity float)
-  -- ^ denominator
-  -> Expression outer grp commons schemas params from (nullity float)
-atan2_ y x = UnsafeExpression $
-  "atan2(" <> renderSQL y <> ", " <> renderSQL x <> ")"
+  => FunctionHet '[ null float, null float] (null float)
+atan2_ = unsafeFunctionHet "atan2"
 
 -- When a `cast` is applied to an `Expression` of a known type, it
 -- represents a run-time type conversion. The cast will succeed only if a
@@ -747,58 +740,58 @@ cast ty x = UnsafeExpression $ parenthesized $
 --
 -- >>> :{
 -- let
---   expression :: Expression outer grp commons schemas params from (nullity 'PGint2)
+--   expression :: Expression outer grp commons schemas params from (null 'PGint2)
 --   expression = 5 `quot_` 2
 -- in printSQL expression
 -- :}
 -- (5 / 2)
 quot_
   :: int `In` PGIntegral
-  => Operator (nullity int) (nullity int) (nullity int)
+  => Operator (null int) (null int) (null int)
 quot_ = unsafeBinaryOp "/"
 
 -- | remainder upon integer division
 --
 -- >>> :{
 -- let
---   expression :: Expression outer grp commons schemas params from (nullity 'PGint2)
+--   expression :: Expression outer grp commons schemas params from (null 'PGint2)
 --   expression = 5 `rem_` 2
 -- in printSQL expression
 -- :}
 -- (5 % 2)
 rem_
   :: int `In` PGIntegral
-  => Operator (nullity int) (nullity int) (nullity int)
+  => Operator (null int) (null int) (null int)
 rem_ = unsafeBinaryOp "%"
 
 -- | >>> :{
 -- let
---   expression :: Expression outer grp commons schemas params from (nullity 'PGfloat4)
+--   expression :: Expression outer grp commons schemas params from (null 'PGfloat4)
 --   expression = trunc pi
 -- in printSQL expression
 -- :}
 -- trunc(pi())
-trunc :: frac `In` PGFloating => nullity frac :--> nullity frac
+trunc :: frac `In` PGFloating => null frac :--> null frac
 trunc = unsafeFunction "trunc"
 
 -- | >>> :{
 -- let
---   expression :: Expression outer grp commons schemas params from (nullity 'PGfloat4)
+--   expression :: Expression outer grp commons schemas params from (null 'PGfloat4)
 --   expression = round_ pi
 -- in printSQL expression
 -- :}
 -- round(pi())
-round_ :: frac `In` PGFloating => nullity frac :--> nullity frac
+round_ :: frac `In` PGFloating => null frac :--> null frac
 round_ = unsafeFunction "round"
 
 -- | >>> :{
 -- let
---   expression :: Expression outer grp commons schemas params from (nullity 'PGfloat4)
+--   expression :: Expression outer grp commons schemas params from (null 'PGfloat4)
 --   expression = ceiling_ pi
 -- in printSQL expression
 -- :}
 -- ceiling(pi())
-ceiling_ :: frac `In` PGFloating => nullity frac :--> nullity frac
+ceiling_ :: frac `In` PGFloating => null frac :--> null frac
 ceiling_ = unsafeFunction "ceiling"
 
 -- | A `Condition` is an `Expression`, which can evaluate
@@ -809,34 +802,34 @@ type Condition outer grp commons schemas params from =
 
 -- | >>> printSQL true
 -- TRUE
-true :: Expression outer grp commons schemas params from (nullity 'PGbool)
+true :: Expr (null 'PGbool)
 true = UnsafeExpression "TRUE"
 
 -- | >>> printSQL false
 -- FALSE
-false :: Expression outer grp commons schemas params from (nullity 'PGbool)
+false :: Expr (null 'PGbool)
 false = UnsafeExpression "FALSE"
 
 -- | >>> printSQL $ not_ true
 -- (NOT TRUE)
-not_ :: nullity 'PGbool :--> nullity 'PGbool
-not_ = unsafeUnaryOp "NOT"
+not_ :: null 'PGbool :--> null 'PGbool
+not_ = unsafeUnaryOpL "NOT"
 
 -- | >>> printSQL $ true .&& false
 -- (TRUE AND FALSE)
-(.&&) :: Operator (nullity 'PGbool) (nullity 'PGbool) (nullity 'PGbool)
+(.&&) :: Operator (null 'PGbool) (null 'PGbool) (null 'PGbool)
 infixr 3 .&&
 (.&&) = unsafeBinaryOp "AND"
 
 -- | >>> printSQL $ true .|| false
 -- (TRUE OR FALSE)
-(.||) :: Operator (nullity 'PGbool) (nullity 'PGbool) (nullity 'PGbool)
+(.||) :: Operator (null 'PGbool) (null 'PGbool) (null 'PGbool)
 infixr 2 .||
 (.||) = unsafeBinaryOp "OR"
 
 -- | >>> :{
 -- let
---   expression :: Expression outer grp commons schemas params from (nullity 'PGint2)
+--   expression :: Expression outer grp commons schemas params from (null 'PGint2)
 --   expression = caseWhenThenElse [(true, 1), (false, 2)] 3
 -- in printSQL expression
 -- :}
@@ -864,7 +857,7 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
 
 -- | >>> :{
 -- let
---   expression :: Expression outer grp commons schemas params from (nullity 'PGint2)
+--   expression :: Expression outer grp commons schemas params from (null 'PGint2)
 --   expression = ifThenElse true 1 0
 -- in printSQL expression
 -- :}
@@ -881,37 +874,37 @@ ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_
 --
 -- >>> printSQL $ true .== null_
 -- (TRUE = NULL)
-(.==) :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
+(.==) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
 (.==) = unsafeBinaryOp "="
 infix 4 .==
 
 -- | >>> printSQL $ true ./= null_
 -- (TRUE <> NULL)
-(./=) :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
+(./=) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
 (./=) = unsafeBinaryOp "<>"
 infix 4 ./=
 
 -- | >>> printSQL $ true .>= null_
 -- (TRUE >= NULL)
-(.>=) :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
+(.>=) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
 (.>=) = unsafeBinaryOp ">="
 infix 4 .>=
 
 -- | >>> printSQL $ true .< null_
 -- (TRUE < NULL)
-(.<) :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
+(.<) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
 (.<) = unsafeBinaryOp "<"
 infix 4 .<
 
 -- | >>> printSQL $ true .<= null_
 -- (TRUE <= NULL)
-(.<=) :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
+(.<=) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
 (.<=) = unsafeBinaryOp "<="
 infix 4 .<=
 
 -- | >>> printSQL $ true .> null_
 -- (TRUE > NULL)
-(.>) :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
+(.>) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
 (.>) = unsafeBinaryOp ">"
 infix 4 .>
 
@@ -920,9 +913,9 @@ infix 4 .>
 TRUE BETWEEN NULL AND FALSE
 -}
 between
-  :: Expression outer grp commons schemas params from (nullity ty)
-  -> ( Expression outer grp commons schemas params from (nullity ty)
-     , Expression outer grp commons schemas params from (nullity ty) ) -- ^ bounds
+  :: Expression outer grp commons schemas params from (null ty)
+  -> ( Expression outer grp commons schemas params from (null ty)
+     , Expression outer grp commons schemas params from (null ty) ) -- ^ bounds
   -> Condition outer grp commons schemas params from
 between a (x,y) = UnsafeExpression $ renderSQL a <+> "BETWEEN"
   <+> renderSQL x <+> "AND" <+> renderSQL y
@@ -932,9 +925,9 @@ between a (x,y) = UnsafeExpression $ renderSQL a <+> "BETWEEN"
 TRUE NOT BETWEEN NULL AND FALSE
 -}
 notBetween
-  :: Expression outer grp commons schemas params from (nullity ty)
-  -> ( Expression outer grp commons schemas params from (nullity ty)
-     , Expression outer grp commons schemas params from (nullity ty) ) -- ^ bounds
+  :: Expression outer grp commons schemas params from (null ty)
+  -> ( Expression outer grp commons schemas params from (null ty)
+     , Expression outer grp commons schemas params from (null ty) ) -- ^ bounds
   -> Condition outer grp commons schemas params from
 notBetween a (x,y) = UnsafeExpression $ renderSQL a <+> "NOT BETWEEN"
   <+> renderSQL x <+> "AND" <+> renderSQL y
@@ -944,9 +937,9 @@ notBetween a (x,y) = UnsafeExpression $ renderSQL a <+> "NOT BETWEEN"
 TRUE BETWEEN SYMMETRIC NULL AND FALSE
 -}
 betweenSymmetric
-  :: Expression outer grp commons schemas params from (nullity ty)
-  -> ( Expression outer grp commons schemas params from (nullity ty)
-     , Expression outer grp commons schemas params from (nullity ty) ) -- ^ bounds
+  :: Expression outer grp commons schemas params from (null ty)
+  -> ( Expression outer grp commons schemas params from (null ty)
+     , Expression outer grp commons schemas params from (null ty) ) -- ^ bounds
   -> Condition outer grp commons schemas params from
 betweenSymmetric a (x,y) = UnsafeExpression $ renderSQL a
   <+> "BETWEEN SYMMETRIC" <+> renderSQL x <+> "AND" <+> renderSQL y
@@ -956,9 +949,9 @@ betweenSymmetric a (x,y) = UnsafeExpression $ renderSQL a
 TRUE NOT BETWEEN SYMMETRIC NULL AND FALSE
 -}
 notBetweenSymmetric
-  :: Expression outer grp commons schemas params from (nullity ty)
-  -> ( Expression outer grp commons schemas params from (nullity ty)
-     , Expression outer grp commons schemas params from (nullity ty) ) -- ^ bounds
+  :: Expression outer grp commons schemas params from (null ty)
+  -> ( Expression outer grp commons schemas params from (null ty)
+     , Expression outer grp commons schemas params from (null ty) ) -- ^ bounds
   -> Condition outer grp commons schemas params from
 notBetweenSymmetric a (x,y) = UnsafeExpression $ renderSQL a
   <+> "NOT BETWEEN SYMMETRIC" <+> renderSQL x <+> "AND" <+> renderSQL y
@@ -967,98 +960,81 @@ notBetweenSymmetric a (x,y) = UnsafeExpression $ renderSQL a
 >>> printSQL $ true `isDistinctFrom` null_
 (TRUE IS DISTINCT FROM NULL)
 -}
-isDistinctFrom :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
+isDistinctFrom :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
 isDistinctFrom = unsafeBinaryOp "IS DISTINCT FROM"
 
 {- | equal, treating null like an ordinary value
 >>> printSQL $ true `isNotDistinctFrom` null_
 (TRUE IS NOT DISTINCT FROM NULL)
 -}
-isNotDistinctFrom :: Operator (nullity0 ty) (nullity1 ty) ('Null 'PGbool)
+isNotDistinctFrom :: Operator (null0 ty) (null1 ty) ('NotNull 'PGbool)
 isNotDistinctFrom = unsafeBinaryOp "IS NOT DISTINCT FROM"
 
 {- | is true
 >>> printSQL $ true & isTrue
-TRUE IS TRUE
+(TRUE IS TRUE)
 -}
-isTrue
-  :: Expression outer grp commons schemas params from (nullity 'PGbool)
-  -> Condition outer grp commons schemas params from
-isTrue b = UnsafeExpression $ renderSQL b <+> "IS TRUE"
+isTrue :: null 'PGbool :--> 'NotNull 'PGbool
+isTrue = unsafeUnaryOpR "IS TRUE"
 
 {- | is false or unknown
 >>> printSQL $ true & isNotTrue
-TRUE IS NOT TRUE
+(TRUE IS NOT TRUE)
 -}
-isNotTrue
-  :: Expression outer grp commons schemas params from (nullity 'PGbool)
-  -> Condition outer grp commons schemas params from
-isNotTrue b = UnsafeExpression $ renderSQL b <+> "IS NOT TRUE"
+isNotTrue :: null 'PGbool :--> 'NotNull 'PGbool
+isNotTrue = unsafeUnaryOpR "IS NOT TRUE"
 
 {- | is false
 >>> printSQL $ true & isFalse
-TRUE IS FALSE
+(TRUE IS FALSE)
 -}
-isFalse
-  :: Expression outer grp commons schemas params from (nullity 'PGbool)
-  -> Condition outer grp commons schemas params from
-isFalse b = UnsafeExpression $ renderSQL b <+> "IS FALSE"
+isFalse :: null 'PGbool :--> 'NotNull 'PGbool
+isFalse = unsafeUnaryOpR "IS FALSE"
 
 {- | is true or unknown
 >>> printSQL $ true & isNotFalse
-TRUE IS NOT FALSE
+(TRUE IS NOT FALSE)
 -}
-isNotFalse
-  :: Expression outer grp commons schemas params from (nullity 'PGbool)
-  -> Condition outer grp commons schemas params from
-isNotFalse b = UnsafeExpression $ renderSQL b <+> "IS NOT FALSE"
+isNotFalse :: null 'PGbool :--> 'NotNull 'PGbool
+isNotFalse = unsafeUnaryOpR "IS NOT FALSE"
 
 {- | is unknown
 >>> printSQL $ true & isUnknown
-TRUE IS UNKNOWN
+(TRUE IS UNKNOWN)
 -}
-isUnknown
-  :: Expression outer grp commons schemas params from (nullity 'PGbool)
-  -> Condition outer grp commons schemas params from
-isUnknown b = UnsafeExpression $ renderSQL b <+> "IS UNKNOWN"
+isUnknown :: null 'PGbool :--> 'NotNull 'PGbool
+isUnknown = unsafeUnaryOpR "IS UNKNOWN"
 
 {- | is true or false
 >>> printSQL $ true & isNotUnknown
-TRUE IS NOT UNKNOWN
+(TRUE IS NOT UNKNOWN)
 -}
-isNotUnknown
-  :: Expression outer grp commons schemas params from (nullity 'PGbool)
-  -> Condition outer grp commons schemas params from
-isNotUnknown b = UnsafeExpression $ renderSQL b <+> "IS NOT UNKNOWN"
+isNotUnknown :: null 'PGbool :--> 'NotNull 'PGbool
+isNotUnknown = unsafeUnaryOpR "IS NOT UNKNOWN"
 
 -- | >>> printSQL currentDate
 -- CURRENT_DATE
-currentDate
-  :: Expression outer grp commons schemas params from (nullity 'PGdate)
+currentDate :: Expr (null 'PGdate)
 currentDate = UnsafeExpression "CURRENT_DATE"
 
 -- | >>> printSQL currentTime
 -- CURRENT_TIME
-currentTime
-  :: Expression outer grp commons schemas params from (nullity 'PGtimetz)
+currentTime :: Expr (null 'PGtimetz)
 currentTime = UnsafeExpression "CURRENT_TIME"
 
 -- | >>> printSQL currentTimestamp
 -- CURRENT_TIMESTAMP
-currentTimestamp
-  :: Expression outer grp commons schemas params from (nullity 'PGtimestamptz)
+currentTimestamp :: Expr (null 'PGtimestamptz)
 currentTimestamp = UnsafeExpression "CURRENT_TIMESTAMP"
 
 -- | >>> printSQL localTime
 -- LOCALTIME
-localTime
-  :: Expression outer grp commons schemas params from (nullity 'PGtime)
+localTime :: Expr (null 'PGtime)
 localTime = UnsafeExpression "LOCALTIME"
 
 -- | >>> printSQL localTimestamp
 -- LOCALTIMESTAMP
-localTimestamp
-  :: Expression outer grp commons schemas params from (nullity 'PGtimestamp)
+localTimestamp :: Expr (null 'PGtimestamp)
 localTimestamp = UnsafeExpression "LOCALTIMESTAMP"
 
 {-----------------------------------------
@@ -1078,56 +1054,47 @@ escape = \case
   c -> [c]
 
 instance IsString
-  (Expression outer grp commons schemas params from (nullity 'PGtext)) where
+  (Expression outer grp commons schemas params from (null 'PGtext)) where
     fromString str = UnsafeExpression $
       "E\'" <> fromString (escape =<< str) <> "\'"
 instance IsString
-  (Expression outer grp commons schemas params from (nullity 'PGtsvector)) where
+  (Expression outer grp commons schemas params from (null 'PGtsvector)) where
     fromString str = cast tsvector . UnsafeExpression $
       "E\'" <> fromString (escape =<< str) <> "\'"
 instance IsString
-  (Expression outer grp commons schemas params from (nullity 'PGtsquery)) where
+  (Expression outer grp commons schemas params from (null 'PGtsquery)) where
     fromString str = cast tsquery . UnsafeExpression $
       "E\'" <> fromString (escape =<< str) <> "\'"
 
 instance Semigroup
-  (Expression outer grp commons schemas params from (nullity 'PGtext)) where
+  (Expression outer grp commons schemas params from (null 'PGtext)) where
     (<>) = unsafeBinaryOp "||"
 instance Semigroup
-  (Expression outer grp commons schemas params from (nullity 'PGtsvector)) where
+  (Expression outer grp commons schemas params from (null 'PGtsvector)) where
     (<>) = unsafeBinaryOp "||"
 
 instance Monoid
-  (Expression outer grp commons schemas params from (nullity 'PGtext)) where
+  (Expression outer grp commons schemas params from (null 'PGtext)) where
     mempty = fromString ""
     mappend = (<>)
 instance Monoid
-  (Expression outer grp commons schemas params from (nullity 'PGtsvector)) where
+  (Expression outer grp commons schemas params from (null 'PGtsvector)) where
     mempty = fromString ""
     mappend = (<>)
 
 -- | >>> printSQL $ lower "ARRRGGG"
 -- lower(E'ARRRGGG')
-lower
-  ::   nullity 'PGtext
-  -- ^ string to lower case
-  :--> nullity 'PGtext
+lower :: null 'PGtext :--> null 'PGtext
 lower = unsafeFunction "lower"
 
 -- | >>> printSQL $ upper "eeee"
 -- upper(E'eeee')
-upper
-  ::   nullity 'PGtext
-  -- ^ string to upper case
-  :--> nullity 'PGtext
+upper :: null 'PGtext :--> null 'PGtext
 upper = unsafeFunction "upper"
 
 -- | >>> printSQL $ charLength "four"
 -- char_length(E'four')
-charLength
-  :: nullity 'PGtext
-  -- ^ string to measure
-  :--> nullity 'PGint4
+charLength :: null 'PGtext :--> null 'PGint4
 charLength = unsafeFunction "char_length"
 
 -- | The `like` expression returns true if the @string@ matches
@@ -1139,7 +1106,7 @@ charLength = unsafeFunction "char_length"
 --
 -- >>> printSQL $ "abc" `like` "a%"
 -- (E'abc' LIKE E'a%')
-like :: Operator (nullity 'PGtext) (nullity 'PGtext) ('Null 'PGbool)
+like :: Operator (null 'PGtext) (null 'PGtext) ('Null 'PGbool)
 like = unsafeBinaryOp "LIKE"
 
 -- | The key word ILIKE can be used instead of LIKE to make the
@@ -1147,7 +1114,7 @@ like = unsafeBinaryOp "LIKE"
 --
 -- >>> printSQL $ "abc" `ilike` "a%"
 -- (E'abc' ILIKE E'a%')
-ilike :: Operator (nullity 'PGtext) (nullity 'PGtext) ('Null 'PGbool)
+ilike :: Operator (null 'PGtext) (null 'PGtext) ('Null 'PGbool)
 ilike = unsafeBinaryOp "ILIKE"
 
 {-----------------------------------------
@@ -1162,28 +1129,28 @@ Table 9.44: json and jsonb operators
 -- | Get JSON value (object field or array element) at a key.
 (.->)
   :: (json `In` PGJsonType, key `In` PGJsonKey)
-  => Operator (nullity json) (nullity key) ('Null json)
+  => Operator (null json) (null key) ('Null json)
 infixl 8 .->
 (.->) = unsafeBinaryOp "->"
 
 -- | Get JSON value (object field or array element) at a key, as text.
 (.->>)
   :: (json `In` PGJsonType, key `In` PGJsonKey)
-  => Operator (nullity json) (nullity key) ('Null 'PGtext)
+  => Operator (null json) (null key) ('Null 'PGtext)
 infixl 8 .->>
 (.->>) = unsafeBinaryOp "->>"
 
 -- | Get JSON value at a specified path.
 (.#>)
   :: (json `In` PGJsonType, PGTextArray "(.#>)" path)
-  => Operator (nullity json) (nullity path) ('Null json)
+  => Operator (null json) (null path) ('Null json)
 infixl 8 .#>
 (.#>) = unsafeBinaryOp "#>"
 
 -- | Get JSON value at a specified path as text.
 (.#>>)
   :: (json `In` PGJsonType, PGTextArray "(.#>>)" path)
-  => Operator (nullity json) (nullity path) ('Null 'PGtext)
+  => Operator (null json) (null path) ('Null 'PGtext)
 infixl 8 .#>>
 (.#>>) = unsafeBinaryOp "#>>"
 
@@ -1192,40 +1159,40 @@ infixl 8 .#>>
 -- | Does the left JSON value contain the right JSON path/value entries at the
 -- top level?
 (.@>)
-  :: Operator (nullity 'PGjsonb) (nullity 'PGjsonb) ('Null 'PGbool)
+  :: Operator (null 'PGjsonb) (null 'PGjsonb) ('Null 'PGbool)
 infixl 9 .@>
 (.@>) = unsafeBinaryOp "@>"
 
 -- | Are the left JSON path/value entries contained at the top level within the
 -- right JSON value?
-(.<@) :: Operator (nullity 'PGjsonb) (nullity 'PGjsonb) ('Null 'PGbool)
+(.<@) :: Operator (null 'PGjsonb) (null 'PGjsonb) ('Null 'PGbool)
 infixl 9 .<@
 (.<@) = unsafeBinaryOp "<@"
 
 -- | Does the string exist as a top-level key within the JSON value?
-(.?) :: Operator (nullity 'PGjsonb) (nullity 'PGtext) ('Null 'PGbool)
+(.?) :: Operator (null 'PGjsonb) (null 'PGtext) ('Null 'PGbool)
 infixl 9 .?
 (.?) = unsafeBinaryOp "?"
 
 -- | Do any of these array strings exist as top-level keys?
 (.?|) :: Operator
-  (nullity 'PGjsonb)
-  (nullity ('PGvararray ('NotNull 'PGtext)))
+  (null 'PGjsonb)
+  (null ('PGvararray ('NotNull 'PGtext)))
   ('Null 'PGbool)
 infixl 9 .?|
 (.?|) = unsafeBinaryOp "?|"
 
 -- | Do all of these array strings exist as top-level keys?
 (.?&) :: Operator
-  (nullity 'PGjsonb)
-  (nullity ('PGvararray ('NotNull 'PGtext)))
+  (null 'PGjsonb)
+  (null ('PGvararray ('NotNull 'PGtext)))
   ('Null 'PGbool)
 infixl 9 .?&
 (.?&) = unsafeBinaryOp "?&"
 
 -- | Concatenate two jsonb values into a new jsonb value.
 instance Semigroup
-  (Expression outer grp commons schemas params from (nullity 'PGjsonb)) where
+  (Expression outer grp commons schemas params from (null 'PGjsonb)) where
     (<>) = unsafeBinaryOp "||"
 
 -- | Delete a key or keys from a JSON object, or remove an array element.
@@ -1242,7 +1209,7 @@ instance Semigroup
 -- count from the end). Throws an error if top level container is not an array.
 (.-.)
   :: (key `In` '[ 'PGtext, 'PGvararray ('NotNull 'PGtext), 'PGint4, 'PGint2 ]) -- hlint error without parens here
-  => Operator (nullity 'PGjsonb) (nullity key) (nullity 'PGjsonb)
+  => Operator (null 'PGjsonb) (null key) (null 'PGjsonb)
 infixl 6 .-.
 (.-.) = unsafeBinaryOp "-"
 
@@ -1250,7 +1217,7 @@ infixl 6 .-.
 -- integers count from the end)
 (#-.)
   :: PGTextArray "(#-.)" arrayty
-  => Operator (nullity 'PGjsonb) (nullity arrayty)(nullity 'PGjsonb)
+  => Operator (null 'PGjsonb) (null arrayty)(null 'PGjsonb)
 infixl 6 #-.
 (#-.) = unsafeBinaryOp "#-"
 
@@ -1259,16 +1226,12 @@ Table 9.45: JSON creation functions
 -----------------------------------------}
 
 -- | Literal binary JSON
-jsonbLit
-  :: JSON.ToJSON x
-  => x -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+jsonbLit :: JSON.ToJSON x => x -> Expr (null 'PGjsonb)
 jsonbLit = cast jsonb . UnsafeExpression
   . singleQuotedUtf8 . toStrict . JSON.encode
 
 -- | Literal JSON
-jsonLit
-  :: JSON.ToJSON x
-  => x -> Expression outer grp commons schemas params from (nullity 'PGjson)
+jsonLit :: JSON.ToJSON x => x -> Expr (null 'PGjson)
 jsonLit = cast json . UnsafeExpression
   . singleQuotedUtf8 . toStrict . JSON.encode
 
@@ -1278,7 +1241,7 @@ jsonLit = cast json . UnsafeExpression
 -- otherwise, a scalar value is produced. For any scalar type other than a
 -- number, a Boolean, or a null value, the text representation will be used, in
 -- such a fashion that it is a valid json value.
-toJson :: nullity ty :--> nullity 'PGjson
+toJson :: null ty :--> null 'PGjson
 toJson = unsafeFunction "to_json"
 
 -- | Returns the value as jsonb. Arrays and composites are converted
@@ -1287,18 +1250,18 @@ toJson = unsafeFunction "to_json"
 -- otherwise, a scalar value is produced. For any scalar type other than a
 -- number, a Boolean, or a null value, the text representation will be used, in
 -- such a fashion that it is a valid jsonb value.
-toJsonb :: nullity ty :--> nullity 'PGjsonb
+toJsonb :: null ty :--> null 'PGjsonb
 toJsonb = unsafeFunction "to_jsonb"
 
 -- | Returns the array as a JSON array. A PostgreSQL multidimensional array
 -- becomes a JSON array of arrays.
 arrayToJson
   :: PGArray "arrayToJson" arr
-  => nullity arr :--> nullity 'PGjson
+  => null arr :--> null 'PGjson
 arrayToJson = unsafeFunction "array_to_json"
 
 -- | Returns the row as a JSON object.
-rowToJson :: nullity ('PGcomposite ty) :--> nullity 'PGjson
+rowToJson :: null ('PGcomposite ty) :--> null 'PGjson
 rowToJson = unsafeFunction "row_to_json"
 
 -- | Builds a possibly-heterogeneously-typed JSON array out of a variadic
@@ -1306,7 +1269,7 @@ rowToJson = unsafeFunction "row_to_json"
 jsonBuildArray
   :: SListI elems
   => NP (Expression outer grp commons schemas params from) elems
-  -> Expression outer grp commons schemas params from (nullity 'PGjson)
+  -> Expression outer grp commons schemas params from (null 'PGjson)
 jsonBuildArray = unsafeVariadicFunction "json_build_array"
 
 -- | Builds a possibly-heterogeneously-typed (binary) JSON array out of a
@@ -1314,7 +1277,7 @@ jsonBuildArray = unsafeVariadicFunction "json_build_array"
 jsonbBuildArray
   :: SListI elems
   => NP (Expression outer grp commons schemas params from) elems
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonbBuildArray = unsafeVariadicFunction "jsonb_build_array"
 
 unsafeRowFunction
@@ -1335,7 +1298,7 @@ unsafeRowFunction =
 jsonBuildObject
   :: SOP.SListI elems
   => NP (Aliased (Expression outer grp commons schemas params from)) elems
-  -> Expression outer grp commons schemas params from (nullity 'PGjson)
+  -> Expression outer grp commons schemas params from (null 'PGjson)
 jsonBuildObject
   = unsafeFunction "json_build_object"
   . UnsafeExpression
@@ -1348,7 +1311,7 @@ jsonBuildObject
 jsonbBuildObject
   :: SOP.SListI elems
   => NP (Aliased (Expression outer grp commons schemas params from)) elems
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonbBuildObject
   = unsafeFunction "jsonb_build_object"
   . UnsafeExpression
@@ -1361,7 +1324,7 @@ jsonbBuildObject
 -- array has exactly two elements, which are taken as a key/value pair.
 jsonObject
   :: PGArrayOf "jsonObject" arr ('NotNull 'PGtext)
-  => nullity arr :--> nullity 'PGjson
+  => null arr :--> null 'PGjson
 jsonObject = unsafeFunction "json_object"
 
 -- | Builds a binary JSON object out of a text array. The array must have either
@@ -1370,7 +1333,7 @@ jsonObject = unsafeFunction "json_object"
 -- array has exactly two elements, which are taken as a key/value pair.
 jsonbObject
   :: PGArrayOf "jsonbObject" arr ('NotNull 'PGtext)
-  => nullity arr :--> nullity 'PGjsonb
+  => null arr :--> null 'PGjsonb
 jsonbObject = unsafeFunction "jsonb_object"
 
 -- | This is an alternate form of 'jsonObject' that takes two arrays; one for
@@ -1378,9 +1341,9 @@ jsonbObject = unsafeFunction "jsonb_object"
 jsonZipObject
   :: ( PGArrayOf "jsonZipObject" keysArray ('NotNull 'PGtext)
      , PGArrayOf "jsonZipObject" valuesArray ('NotNull 'PGtext))
-  => Expression outer grp commons schemas params from (nullity keysArray)
-  -> Expression outer grp commons schemas params from (nullity valuesArray)
-  -> Expression outer grp commons schemas params from (nullity 'PGjson)
+  => Expression outer grp commons schemas params from (null keysArray)
+  -> Expression outer grp commons schemas params from (null valuesArray)
+  -> Expression outer grp commons schemas params from (null 'PGjson)
 jsonZipObject ks vs =
   unsafeVariadicFunction "json_object" (ks :* vs :* Nil)
 
@@ -1390,9 +1353,9 @@ jsonZipObject ks vs =
 jsonbZipObject
   :: ( PGArrayOf "jsonbZipObject" keysArray ('NotNull 'PGtext)
      , PGArrayOf "jsonbZipObject" valuesArray ('NotNull 'PGtext))
-  => Expression outer grp commons schemas params from (nullity keysArray)
-  -> Expression outer grp commons schemas params from (nullity valuesArray)
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  => Expression outer grp commons schemas params from (null keysArray)
+  -> Expression outer grp commons schemas params from (null valuesArray)
+  -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonbZipObject ks vs =
   unsafeVariadicFunction "jsonb_object" (ks :* vs :* Nil)
 
@@ -1401,20 +1364,20 @@ Table 9.46: JSON processing functions
 -----------------------------------------}
 
 -- | Returns the number of elements in the outermost JSON array.
-jsonArrayLength :: nullity 'PGjson :--> nullity 'PGint4
+jsonArrayLength :: null 'PGjson :--> null 'PGint4
 jsonArrayLength = unsafeFunction "json_array_length"
 
 -- | Returns the number of elements in the outermost binary JSON array.
-jsonbArrayLength :: nullity 'PGjsonb :--> nullity 'PGint4
+jsonbArrayLength :: null 'PGjsonb :--> null 'PGint4
 jsonbArrayLength = unsafeFunction "jsonb_array_length"
 
 -- | Returns JSON value pointed to by the given path (equivalent to #>
 -- operator).
 jsonExtractPath
   :: SListI elems
-  => Expression outer grp commons schemas params from (nullity 'PGjson)
+  => Expression outer grp commons schemas params from (null 'PGjson)
   -> NP (Expression outer grp commons schemas params from) elems
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonExtractPath x xs =
   unsafeVariadicFunction "json_extract_path" (x :* xs)
 
@@ -1422,9 +1385,9 @@ jsonExtractPath x xs =
 -- operator).
 jsonbExtractPath
   :: SListI elems
-  => Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  => Expression outer grp commons schemas params from (null 'PGjsonb)
   -> NP (Expression outer grp commons schemas params from) elems
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonbExtractPath x xs =
   unsafeVariadicFunction "jsonb_extract_path" (x :* xs)
 
@@ -1432,9 +1395,9 @@ jsonbExtractPath x xs =
 -- operator), as text.
 jsonExtractPathAsText
   :: SListI elems
-  => Expression outer grp commons schemas params from (nullity 'PGjson)
+  => Expression outer grp commons schemas params from (null 'PGjson)
   -> NP (Expression outer grp commons schemas params from) elems
-  -> Expression outer grp commons schemas params from (nullity 'PGjson)
+  -> Expression outer grp commons schemas params from (null 'PGjson)
 jsonExtractPathAsText x xs =
   unsafeVariadicFunction "json_extract_path_text" (x :* xs)
 
@@ -1442,30 +1405,30 @@ jsonExtractPathAsText x xs =
 -- operator), as text.
 jsonbExtractPathAsText
   :: SListI elems
-  => Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  => Expression outer grp commons schemas params from (null 'PGjsonb)
   -> NP (Expression outer grp commons schemas params from) elems
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonbExtractPathAsText x xs =
   unsafeVariadicFunction "jsonb_extract_path_text" (x :* xs)
 
 -- | Returns the type of the outermost JSON value as a text string. Possible
 -- types are object, array, string, number, boolean, and null.
-jsonTypeof :: nullity 'PGjson :--> nullity 'PGtext
+jsonTypeof :: null 'PGjson :--> null 'PGtext
 jsonTypeof = unsafeFunction "json_typeof"
 
 -- | Returns the type of the outermost binary JSON value as a text string.
 -- Possible types are object, array, string, number, boolean, and null.
-jsonbTypeof :: nullity 'PGjsonb :--> nullity 'PGtext
+jsonbTypeof :: null 'PGjsonb :--> null 'PGtext
 jsonbTypeof = unsafeFunction "jsonb_typeof"
 
 -- | Returns its argument with all object fields that have null values omitted.
 -- Other null values are untouched.
-jsonStripNulls :: nullity 'PGjson :--> nullity 'PGjson
+jsonStripNulls :: null 'PGjson :--> null 'PGjson
 jsonStripNulls = unsafeFunction "json_strip_nulls"
 
 -- | Returns its argument with all object fields that have null values omitted.
 -- Other null values are untouched.
-jsonbStripNulls :: nullity 'PGjsonb :--> nullity 'PGjsonb
+jsonbStripNulls :: null 'PGjsonb :--> null 'PGjsonb
 jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
 
 -- | @ jsonbSet target path new_value create_missing @
@@ -1477,11 +1440,11 @@ jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
 -- arrays.
 jsonbSet
   :: PGTextArray "jsonbSet" arr
-  => Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity arr)
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Maybe (Expression outer grp commons schemas params from (nullity 'PGbool))
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  => Expression outer grp commons schemas params from (null 'PGjsonb)
+  -> Expression outer grp commons schemas params from (null arr)
+  -> Expression outer grp commons schemas params from (null 'PGjsonb)
+  -> Maybe (Expression outer grp commons schemas params from (null 'PGbool))
+  -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonbSet tgt path val createMissing = case createMissing of
   Just m -> unsafeVariadicFunction "jsonb_set" (tgt :* path :* val :* m :* Nil)
   Nothing -> unsafeVariadicFunction "jsonb_set" (tgt :* path :* val :* Nil)
@@ -1496,67 +1459,67 @@ jsonbSet tgt path val createMissing = case createMissing of
 -- in path count from the end of JSON arrays.
 jsonbInsert
   :: PGTextArray "jsonbInsert" arr
-  => Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Expression outer grp commons schemas params from (nullity arr)
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
-  -> Maybe (Expression outer grp commons schemas params from (nullity 'PGbool))
-  -> Expression outer grp commons schemas params from (nullity 'PGjsonb)
+  => Expression outer grp commons schemas params from (null 'PGjsonb)
+  -> Expression outer grp commons schemas params from (null arr)
+  -> Expression outer grp commons schemas params from (null 'PGjsonb)
+  -> Maybe (Expression outer grp commons schemas params from (null 'PGbool))
+  -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonbInsert tgt path val insertAfter = case insertAfter of
   Just i -> unsafeVariadicFunction "jsonb_insert" (tgt :* path :* val :* i :* Nil)
   Nothing -> unsafeVariadicFunction "jsonb_insert" (tgt :* path :* val :* Nil)
 
 -- | Returns its argument as indented JSON text.
-jsonbPretty :: nullity 'PGjsonb :--> nullity 'PGtext
+jsonbPretty :: null 'PGjsonb :--> null 'PGtext
 jsonbPretty = unsafeFunction "jsonb_pretty"
 
-(@@) :: Operator (nullity 'PGtsvector) (nullity 'PGtsquery) ('Null 'PGbool)
+(@@) :: Operator (null 'PGtsvector) (null 'PGtsquery) ('Null 'PGbool)
 (@@) = unsafeBinaryOp "@@"
 
-(.&) :: Operator (nullity 'PGtsquery) (nullity 'PGtsquery) (nullity 'PGtsquery)
+(.&) :: Operator (null 'PGtsquery) (null 'PGtsquery) (null 'PGtsquery)
 (.&) = unsafeBinaryOp "&&"
 
-(.|) :: Operator (nullity 'PGtsquery) (nullity 'PGtsquery) (nullity 'PGtsquery)
+(.|) :: Operator (null 'PGtsquery) (null 'PGtsquery) (null 'PGtsquery)
 (.|) = unsafeBinaryOp "||"
 
-(.!) :: nullity 'PGtsquery :--> nullity 'PGtsquery
-(.!) = unsafeUnaryOp "!!"
+(.!) :: null 'PGtsquery :--> null 'PGtsquery
+(.!) = unsafeUnaryOpL "!!"
 
-(<->) :: Operator (nullity 'PGtsquery) (nullity 'PGtsquery) (nullity 'PGtsquery)
+(<->) :: Operator (null 'PGtsquery) (null 'PGtsquery) (null 'PGtsquery)
 (<->) = unsafeBinaryOp "<->"
 
 arrayToTSvector
-  ::   nullity ('PGvararray ('NotNull 'PGtext))
-  :--> nullity 'PGtsvector
+  ::   null ('PGvararray ('NotNull 'PGtext))
+  :--> null 'PGtsvector
 arrayToTSvector = unsafeFunction "array_to_tsvector"
 
-tsvectorLength :: nullity 'PGtsvector :--> nullity 'PGint4
+tsvectorLength :: null 'PGtsvector :--> null 'PGint4
 tsvectorLength = unsafeFunction "length"
 
-numnode :: nullity 'PGtsquery :--> nullity 'PGint4
+numnode :: null 'PGtsquery :--> null 'PGint4
 numnode = unsafeFunction "numnode"
 
 plainToTSquery
-  :: FunctionHet '[nullity 'PGtext, nullity 'PGtext] (nullity 'PGtsquery)
+  :: FunctionHet '[null 'PGtext, null 'PGtext] (null 'PGtsquery)
 plainToTSquery = unsafeFunctionHet "plainto_tsquery"
 
 phraseToTSquery
-  :: FunctionHet '[nullity 'PGtext, nullity 'PGtext] (nullity 'PGtsquery)
+  :: FunctionHet '[null 'PGtext, null 'PGtext] (null 'PGtsquery)
 phraseToTSquery = unsafeFunctionHet "phraseto_tsquery"
 
 websearchToTSquery
-  :: FunctionHet '[nullity 'PGtext, nullity 'PGtext] (nullity 'PGtsquery)
+  :: FunctionHet '[null 'PGtext, null 'PGtext] (null 'PGtsquery)
 websearchToTSquery = unsafeFunctionHet "websearch_to_tsquery"
 
-queryTree :: nullity 'PGtsquery :--> nullity 'PGtext
+queryTree :: null 'PGtsquery :--> null 'PGtext
 queryTree = unsafeFunction "query_tree"
 
 toTSquery
-  :: FunctionHet '[nullity 'PGtext, nullity 'PGtext] (nullity 'PGtsquery)
+  :: FunctionHet '[null 'PGtext, null 'PGtext] (null 'PGtsquery)
 toTSquery = unsafeFunctionHet "to_tsquery"
 
 toTSvector
   :: ty `In` '[ 'PGtext, 'PGjson, 'PGjsonb]
-  => FunctionHet '[nullity 'PGtext, nullity ty] (nullity 'PGtsquery)
+  => FunctionHet '[null 'PGtext, null ty] (null 'PGtsquery)
 toTSvector = unsafeFunctionHet "to_tsvector"
 
 {-----------------------------------------
@@ -1584,7 +1547,7 @@ class Aggregate expr1 expr2 aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity ty]] ('NotNull 'PGint8)
+  --   expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: null ty]] ('NotNull 'PGint8)
   --   expression = count (All #col)
   -- in printSQL expression
   -- :}
@@ -1603,7 +1566,7 @@ class Aggregate expr1 expr2 aggr
   -- sum(DISTINCT "col")
   sum_
     :: ty `In` PGNum
-    => expr1 (nullity ty)
+    => expr1 (null ty)
     -> aggr ('NotNull ty)
 
   -- | input values, including nulls, concatenated into an array
@@ -1625,7 +1588,7 @@ class Aggregate expr1 expr2 aggr
   the bitwise AND of all non-null input values, or null if none
   >>> :{
   let
-    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] ('Null 'PGint4)
+    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: null 'PGint4]] ('Null 'PGint4)
     expression = bitAnd (Distinct #col)
   in printSQL expression
   :}
@@ -1633,7 +1596,7 @@ class Aggregate expr1 expr2 aggr
   -}
   bitAnd
     :: int `In` PGIntegral
-    => expr1 (nullity int)
+    => expr1 (null int)
     -- ^ what to aggregate
     -> aggr ('Null int)
 
@@ -1642,7 +1605,7 @@ class Aggregate expr1 expr2 aggr
 
   >>> :{
   let
-    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGint4]] ('Null 'PGint4)
+    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: null 'PGint4]] ('Null 'PGint4)
     expression = bitOr (All #col)
   in printSQL expression
   :}
@@ -1650,7 +1613,7 @@ class Aggregate expr1 expr2 aggr
   -}
   bitOr
     :: int `In` PGIntegral
-    => expr1 (nullity int)
+    => expr1 (null int)
     -- ^ what to aggregate
     -> aggr ('Null int)
 
@@ -1659,14 +1622,14 @@ class Aggregate expr1 expr2 aggr
 
   >>> :{
   let
-    winFun :: WindowFunction '[] 'Ungrouped commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] ('Null 'PGbool)
+    winFun :: WindowFunction '[] 'Ungrouped commons schemas params '[tab ::: '["col" ::: null 'PGbool]] ('Null 'PGbool)
     winFun = boolAnd #col
   in printSQL winFun
   :}
   bool_and("col")
   -}
   boolAnd
-    :: expr1 (nullity 'PGbool)
+    :: expr1 (null 'PGbool)
     -- ^ what to aggregate
     -> aggr ('Null 'PGbool)
 
@@ -1675,14 +1638,14 @@ class Aggregate expr1 expr2 aggr
 
   >>> :{
   let
-    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] ('Null 'PGbool)
+    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: null 'PGbool]] ('Null 'PGbool)
     expression = boolOr (All #col)
   in printSQL expression
   :}
   bool_or(ALL "col")
   -}
   boolOr
-    :: expr1(nullity 'PGbool)
+    :: expr1(null 'PGbool)
     -- ^ what to aggregate
     -> aggr ('Null 'PGbool)
 
@@ -1691,32 +1654,32 @@ class Aggregate expr1 expr2 aggr
 
   >>> :{
   let
-    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: nullity 'PGbool]] ('Null 'PGbool)
+    expression :: Expression '[] ('Grouped bys) commons schemas params '[tab ::: '["col" ::: null 'PGbool]] ('Null 'PGbool)
     expression = every (Distinct #col)
   in printSQL expression
   :}
   every(DISTINCT "col")
   -}
   every
-    :: expr1 (nullity 'PGbool)
+    :: expr1 (null 'PGbool)
     -- ^ what to aggregate
     -> aggr ('Null 'PGbool)
 
   {- |maximum value of expression across all input values-}
   max_
-    :: expr1 (nullity ty)
+    :: expr1 (null ty)
     -- ^ what to maximize
     -> aggr ('Null ty)
 
   -- | minimum value of expression across all input values
   min_
-    :: expr1 (nullity ty)
+    :: expr1 (null ty)
     -- ^ what to minimize
     -> aggr ('Null ty)
 
   -- | the average (arithmetic mean) of all input values
   avg
-    :: expr1 (nullity ty)
+    :: expr1 (null ty)
     -- ^ what to average
     -> aggr ('Null (PGAvg ty))
 
@@ -1730,7 +1693,7 @@ class Aggregate expr1 expr2 aggr
   corr(ALL "y", "x")
   -}
   corr
-    :: expr2 (nullity 'PGfloat8)
+    :: expr2 (null 'PGfloat8)
     -> aggr ('Null 'PGfloat8)
 
   {- | population covariance
@@ -1743,7 +1706,7 @@ class Aggregate expr1 expr2 aggr
   covar_pop(ALL "y", "x")
   -}
   covarPop
-    :: expr2 (nullity 'PGfloat8)
+    :: expr2 (null 'PGfloat8)
     -> aggr ('Null 'PGfloat8)
 
   {- | sample covariance
@@ -1756,7 +1719,7 @@ class Aggregate expr1 expr2 aggr
   covar_samp("y", "x")
   -}
   covarSamp
-    :: expr2 (nullity 'PGfloat8)
+    :: expr2 (null 'PGfloat8)
     -> aggr ('Null 'PGfloat8)
 
   {- | average of the independent variable (sum(X)/N)
@@ -1769,7 +1732,7 @@ class Aggregate expr1 expr2 aggr
   regr_avgx(ALL "y", "x")
   -}
   regrAvgX
-    :: expr2 (nullity 'PGfloat8)
+    :: expr2 (null 'PGfloat8)
     -> aggr ('Null 'PGfloat8)
 
   {- | average of the dependent variable (sum(Y)/N)
@@ -1782,7 +1745,7 @@ class Aggregate expr1 expr2 aggr
   regr_avgy("y", "x")
   -}
   regrAvgY
-    :: expr2 (nullity 'PGfloat8)
+    :: expr2 (null 'PGfloat8)
     -> aggr ('Null 'PGfloat8)
 
   {- | number of input rows in which both expressions are nonnull
@@ -1795,7 +1758,7 @@ class Aggregate expr1 expr2 aggr
   regr_count("y", "x")
   -}
   regrCount
-    :: expr2 (nullity 'PGfloat8)
+    :: expr2 (null 'PGfloat8)
     -> aggr ('Null 'PGint8)
 
   {- | y-intercept of the least-squares-fit linear equation determined by the (X, Y) pairs
@@ -1808,68 +1771,68 @@ class Aggregate expr1 expr2 aggr
   regr_intercept(ALL "y", "x")
   -}
   regrIntercept
-    :: expr2 (nullity 'PGfloat8)
+    :: expr2 (null 'PGfloat8)
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_r2(Y, X)@, square of the correlation coefficient
   regrR2
-    :: expr2 (nullity 'PGfloat8)
+    :: expr2 (null 'PGfloat8)
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_slope(Y, X)@, slope of the least-squares-fit linear equation
   -- determined by the (X, Y) pairs
   regrSlope
-    :: expr2 (nullity 'PGfloat8)
+    :: expr2 (null 'PGfloat8)
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_sxx(Y, X)@, sum(X^2) - sum(X)^2/N
   -- (“sum of squares” of the independent variable)
   regrSxx
-    :: expr2 (nullity 'PGfloat8)
+    :: expr2 (null 'PGfloat8)
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_sxy(Y, X)@, sum(X*Y) - sum(X) * sum(Y)/N
   -- (“sum of products” of independent times dependent variable)
   regrSxy
-    :: expr2 (nullity 'PGfloat8)
+    :: expr2 (null 'PGfloat8)
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_syy(Y, X)@, sum(Y^2) - sum(Y)^2/N
   -- (“sum of squares” of the dependent variable)
   regrSyy
-    :: expr2 (nullity 'PGfloat8)
+    :: expr2 (null 'PGfloat8)
     -> aggr ('Null 'PGfloat8)
 
   -- | historical alias for `stddevSamp`
   stddev
-    :: expr1 (nullity ty)
+    :: expr1 (null ty)
     -> aggr ('Null (PGAvg ty))
 
   -- | population standard deviation of the input values
   stddevPop
-    :: expr1 (nullity ty)
+    :: expr1 (null ty)
     -> aggr ('Null (PGAvg ty))
 
   -- | sample standard deviation of the input values
   stddevSamp
-    :: expr1 (nullity ty)
+    :: expr1 (null ty)
     -> aggr ('Null (PGAvg ty))
 
   -- | historical alias for `varSamp`
   variance
-    :: expr1 (nullity ty)
+    :: expr1 (null ty)
     -> aggr ('Null (PGAvg ty))
 
   -- | population variance of the input values
   -- (square of the population standard deviation)
   varPop
-    :: expr1 (nullity ty)
+    :: expr1 (null ty)
     -> aggr ('Null (PGAvg ty))
 
   -- | sample variance of the input values
   -- (square of the sample standard deviation)
   varSamp
-    :: expr1 (nullity ty)
+    :: expr1 (null ty)
     -> aggr ('Null (PGAvg ty))
 
 {- |
@@ -2015,7 +1978,7 @@ instance RenderSQL (TypeExpression schemas ty) where
 typedef
   :: (Has sch schemas schema, Has td schema ('Typedef ty))
   => QualifiedAlias sch td
-  -> TypeExpression schemas (nullity ty)
+  -> TypeExpression schemas (null ty)
 typedef = UnsafeTypeExpression . renderSQL
 
 -- | The composite type corresponding to a `Table` definition can be expressed
@@ -2023,7 +1986,7 @@ typedef = UnsafeTypeExpression . renderSQL
 typetable
   :: (Has sch schemas schema, Has tab schema ('Table table))
   => QualifiedAlias sch tab
-  -> TypeExpression schemas (nullity ('PGcomposite (TableToRow table)))
+  -> TypeExpression schemas (null ('PGcomposite (TableToRow table)))
 typetable = UnsafeTypeExpression . renderSQL
 
 -- | The composite type corresponding to a `View` definition can be expressed
@@ -2031,101 +1994,101 @@ typetable = UnsafeTypeExpression . renderSQL
 typeview
   :: (Has sch schemas schema, Has vw schema ('View view))
   => QualifiedAlias sch vw
-  -> TypeExpression schemas (nullity ('PGcomposite view))
+  -> TypeExpression schemas (null ('PGcomposite view))
 typeview = UnsafeTypeExpression . renderSQL
 
 -- | logical Boolean (true/false)
-bool :: TypeExpression schemas (nullity 'PGbool)
+bool :: TypeExpression schemas (null 'PGbool)
 bool = UnsafeTypeExpression "bool"
 -- | signed two-byte integer
-int2, smallint :: TypeExpression schemas (nullity 'PGint2)
+int2, smallint :: TypeExpression schemas (null 'PGint2)
 int2 = UnsafeTypeExpression "int2"
 smallint = UnsafeTypeExpression "smallint"
 -- | signed four-byte integer
-int4, int, integer :: TypeExpression schemas (nullity 'PGint4)
+int4, int, integer :: TypeExpression schemas (null 'PGint4)
 int4 = UnsafeTypeExpression "int4"
 int = UnsafeTypeExpression "int"
 integer = UnsafeTypeExpression "integer"
 -- | signed eight-byte integer
-int8, bigint :: TypeExpression schemas (nullity 'PGint8)
+int8, bigint :: TypeExpression schemas (null 'PGint8)
 int8 = UnsafeTypeExpression "int8"
 bigint = UnsafeTypeExpression "bigint"
 -- | arbitrary precision numeric type
-numeric :: TypeExpression schemas (nullity 'PGnumeric)
+numeric :: TypeExpression schemas (null 'PGnumeric)
 numeric = UnsafeTypeExpression "numeric"
 -- | single precision floating-point number (4 bytes)
-float4, real :: TypeExpression schemas (nullity 'PGfloat4)
+float4, real :: TypeExpression schemas (null 'PGfloat4)
 float4 = UnsafeTypeExpression "float4"
 real = UnsafeTypeExpression "real"
 -- | double precision floating-point number (8 bytes)
-float8, doublePrecision :: TypeExpression schemas (nullity 'PGfloat8)
+float8, doublePrecision :: TypeExpression schemas (null 'PGfloat8)
 float8 = UnsafeTypeExpression "float8"
 doublePrecision = UnsafeTypeExpression "double precision"
 -- | currency amount
-money :: TypeExpression schema (nullity 'PGmoney)
+money :: TypeExpression schema (null 'PGmoney)
 money = UnsafeTypeExpression "money"
 -- | variable-length character string
-text :: TypeExpression schemas (nullity 'PGtext)
+text :: TypeExpression schemas (null 'PGtext)
 text = UnsafeTypeExpression "text"
 -- | fixed-length character string
 char, character
-  :: forall n schemas nullity. (KnownNat n, 1 <= n)
-  => TypeExpression schemas (nullity ('PGchar n))
+  :: forall n schemas null. (KnownNat n, 1 <= n)
+  => TypeExpression schemas (null ('PGchar n))
 char = UnsafeTypeExpression $ "char(" <> renderNat @n <> ")"
 character = UnsafeTypeExpression $  "character(" <> renderNat @n <> ")"
 -- | variable-length character string
 varchar, characterVarying
-  :: forall n schemas nullity. (KnownNat n, 1 <= n)
-  => TypeExpression schemas (nullity ('PGvarchar n))
+  :: forall n schemas null. (KnownNat n, 1 <= n)
+  => TypeExpression schemas (null ('PGvarchar n))
 varchar = UnsafeTypeExpression $ "varchar(" <> renderNat @n <> ")"
 characterVarying = UnsafeTypeExpression $
   "character varying(" <> renderNat @n <> ")"
 -- | binary data ("byte array")
-bytea :: TypeExpression schemas (nullity 'PGbytea)
+bytea :: TypeExpression schemas (null 'PGbytea)
 bytea = UnsafeTypeExpression "bytea"
 -- | date and time (no time zone)
-timestamp :: TypeExpression schemas (nullity 'PGtimestamp)
+timestamp :: TypeExpression schemas (null 'PGtimestamp)
 timestamp = UnsafeTypeExpression "timestamp"
 -- | date and time, including time zone
-timestampWithTimeZone :: TypeExpression schemas (nullity 'PGtimestamptz)
+timestampWithTimeZone :: TypeExpression schemas (null 'PGtimestamptz)
 timestampWithTimeZone = UnsafeTypeExpression "timestamp with time zone"
 -- | calendar date (year, month, day)
-date :: TypeExpression schemas (nullity 'PGdate)
+date :: TypeExpression schemas (null 'PGdate)
 date = UnsafeTypeExpression "date"
 -- | time of day (no time zone)
-time :: TypeExpression schemas (nullity 'PGtime)
+time :: TypeExpression schemas (null 'PGtime)
 time = UnsafeTypeExpression "time"
 -- | time of day, including time zone
-timeWithTimeZone :: TypeExpression schemas (nullity 'PGtimetz)
+timeWithTimeZone :: TypeExpression schemas (null 'PGtimetz)
 timeWithTimeZone = UnsafeTypeExpression "time with time zone"
 -- | time span
-interval :: TypeExpression schemas (nullity 'PGinterval)
+interval :: TypeExpression schemas (null 'PGinterval)
 interval = UnsafeTypeExpression "interval"
 -- | universally unique identifier
-uuid :: TypeExpression schemas (nullity 'PGuuid)
+uuid :: TypeExpression schemas (null 'PGuuid)
 uuid = UnsafeTypeExpression "uuid"
 -- | IPv4 or IPv6 host address
-inet :: TypeExpression schemas (nullity 'PGinet)
+inet :: TypeExpression schemas (null 'PGinet)
 inet = UnsafeTypeExpression "inet"
 -- | textual JSON data
-json :: TypeExpression schemas (nullity 'PGjson)
+json :: TypeExpression schemas (null 'PGjson)
 json = UnsafeTypeExpression "json"
 -- | binary JSON data, decomposed
-jsonb :: TypeExpression schemas (nullity 'PGjsonb)
+jsonb :: TypeExpression schemas (null 'PGjsonb)
 jsonb = UnsafeTypeExpression "jsonb"
 -- | variable length array
 vararray
   :: TypeExpression schemas pg
-  -> TypeExpression schemas (nullity ('PGvararray pg))
+  -> TypeExpression schemas (null ('PGvararray pg))
 vararray ty = UnsafeTypeExpression $ renderSQL ty <> "[]"
 -- | fixed length array
 --
 -- >>> renderSQL (fixarray @'[2] json)
 -- "json[2]"
 fixarray
-  :: forall dims schemas nullity pg. SOP.All KnownNat dims
+  :: forall dims schemas null pg. SOP.All KnownNat dims
   => TypeExpression schemas pg
-  -> TypeExpression schemas (nullity ('PGfixarray dims pg))
+  -> TypeExpression schemas (null ('PGfixarray dims pg))
 fixarray ty = UnsafeTypeExpression $
   renderSQL ty <> renderDims @dims
   where
@@ -2138,45 +2101,45 @@ fixarray ty = UnsafeTypeExpression $
       $ hcmap (SOP.Proxy @KnownNat)
         (K . fromString . show . natVal)
         (hpure SOP.Proxy :: NP SOP.Proxy ns)
-tsvector :: TypeExpression schemas (nullity 'PGtsvector)
+tsvector :: TypeExpression schemas (null 'PGtsvector)
 tsvector = UnsafeTypeExpression "tsvector"
-tsquery :: TypeExpression schemas (nullity 'PGtsquery)
+tsquery :: TypeExpression schemas (null 'PGtsquery)
 tsquery = UnsafeTypeExpression "tsquery"
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped schemas (ty :: NullityType) where
   pgtype :: TypeExpression schemas ty
-instance PGTyped schemas (nullity 'PGbool) where pgtype = bool
-instance PGTyped schemas (nullity 'PGint2) where pgtype = int2
-instance PGTyped schemas (nullity 'PGint4) where pgtype = int4
-instance PGTyped schemas (nullity 'PGint8) where pgtype = int8
-instance PGTyped schemas (nullity 'PGnumeric) where pgtype = numeric
-instance PGTyped schemas (nullity 'PGfloat4) where pgtype = float4
-instance PGTyped schemas (nullity 'PGfloat8) where pgtype = float8
-instance PGTyped schemas (nullity 'PGmoney) where pgtype = money
-instance PGTyped schemas (nullity 'PGtext) where pgtype = text
+instance PGTyped schemas (null 'PGbool) where pgtype = bool
+instance PGTyped schemas (null 'PGint2) where pgtype = int2
+instance PGTyped schemas (null 'PGint4) where pgtype = int4
+instance PGTyped schemas (null 'PGint8) where pgtype = int8
+instance PGTyped schemas (null 'PGnumeric) where pgtype = numeric
+instance PGTyped schemas (null 'PGfloat4) where pgtype = float4
+instance PGTyped schemas (null 'PGfloat8) where pgtype = float8
+instance PGTyped schemas (null 'PGmoney) where pgtype = money
+instance PGTyped schemas (null 'PGtext) where pgtype = text
 instance (KnownNat n, 1 <= n)
-  => PGTyped schemas (nullity ('PGchar n)) where pgtype = char @n
+  => PGTyped schemas (null ('PGchar n)) where pgtype = char @n
 instance (KnownNat n, 1 <= n)
-  => PGTyped schemas (nullity ('PGvarchar n)) where pgtype = varchar @n
-instance PGTyped schemas (nullity 'PGbytea) where pgtype = bytea
-instance PGTyped schemas (nullity 'PGtimestamp) where pgtype = timestamp
-instance PGTyped schemas (nullity 'PGtimestamptz) where pgtype = timestampWithTimeZone
-instance PGTyped schemas (nullity 'PGdate) where pgtype = date
-instance PGTyped schemas (nullity 'PGtime) where pgtype = time
-instance PGTyped schemas (nullity 'PGtimetz) where pgtype = timeWithTimeZone
-instance PGTyped schemas (nullity 'PGinterval) where pgtype = interval
-instance PGTyped schemas (nullity 'PGuuid) where pgtype = uuid
-instance PGTyped schemas (nullity 'PGjson) where pgtype = json
-instance PGTyped schemas (nullity 'PGjsonb) where pgtype = jsonb
+  => PGTyped schemas (null ('PGvarchar n)) where pgtype = varchar @n
+instance PGTyped schemas (null 'PGbytea) where pgtype = bytea
+instance PGTyped schemas (null 'PGtimestamp) where pgtype = timestamp
+instance PGTyped schemas (null 'PGtimestamptz) where pgtype = timestampWithTimeZone
+instance PGTyped schemas (null 'PGdate) where pgtype = date
+instance PGTyped schemas (null 'PGtime) where pgtype = time
+instance PGTyped schemas (null 'PGtimetz) where pgtype = timeWithTimeZone
+instance PGTyped schemas (null 'PGinterval) where pgtype = interval
+instance PGTyped schemas (null 'PGuuid) where pgtype = uuid
+instance PGTyped schemas (null 'PGjson) where pgtype = json
+instance PGTyped schemas (null 'PGjsonb) where pgtype = jsonb
 instance PGTyped schemas ty
-  => PGTyped schemas (nullity ('PGvararray ty)) where
+  => PGTyped schemas (null ('PGvararray ty)) where
     pgtype = vararray (pgtype @schemas @ty)
 instance (SOP.All KnownNat dims, PGTyped schemas ty)
-  => PGTyped schemas (nullity ('PGfixarray dims ty)) where
+  => PGTyped schemas (null ('PGfixarray dims ty)) where
     pgtype = fixarray @dims (pgtype @schemas @ty)
-instance PGTyped schemas (nullity 'PGtsvector) where pgtype = tsvector
-instance PGTyped schemas (nullity 'PGtsquery) where pgtype = tsquery
+instance PGTyped schemas (null 'PGtsvector) where pgtype = tsvector
+instance PGTyped schemas (null 'PGtsquery) where pgtype = tsquery
 
 {-----------------------------------------
 Sorting
@@ -2417,7 +2380,7 @@ lastValue = unsafeWindowFunction1 "last_value"
 row of the window frame (counting from 1); null if no such row
 -}
 nthValue
-  :: Expression outer grp commons schemas params from (nullity ty)
+  :: Expression outer grp commons schemas params from (null ty)
   -- ^ value
   -> Expression outer grp commons schemas params from ('NotNull 'PGint4)
   -- ^ nth
@@ -2428,114 +2391,78 @@ nthValue value nth = UnsafeWindowFunction $ "nth_value"
 {-|
 Create date from year, month and day fields
 
->>> printSQL (makeDate 1984 7 3)
+>>> printSQL (makeDate (1984 :* 7 *: 3))
 make_date(1984, 7, 3)
 -}
-makeDate
-  :: Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ year
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ month
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ day
-  -> Expression outer grp commons schemas params from (nullity 'PGdate)
-makeDate y m d = UnsafeExpression $ "make_date" <>
-  parenthesized (renderCommaSeparated renderSQL (y :* m :* d :* Nil))
+makeDate :: FunctionHet
+  '[ null 'PGint4, null 'PGint4, null 'PGint4 ]
+   ( null 'PGdate )
+makeDate = unsafeFunctionHet "make_date"
 
 {-|
 Create time from hour, minute and seconds fields
 
->>> printSQL (makeTime 8 15 23.5)
+>>> printSQL (makeTime (8 :* 15 *: 23.5))
 make_time(8, 15, 23.5)
 -}
-makeTime
-  :: Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ hour
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ min
-  -> Expression outer grp commons schemas params from (nullity 'PGfloat8)
-    -- ^ sec
-  -> Expression outer grp commons schemas params from (nullity 'PGtime)
-makeTime h m s = UnsafeExpression $ "make_time" <>
-  parenthesized (renderCommaSeparated renderSQL (h :* m :* s :* Nil))
+makeTime :: FunctionHet
+  '[ null 'PGint4, null 'PGint4, null 'PGfloat8 ]
+   ( null 'PGtime )
+makeTime = unsafeFunctionHet "make_time"
 
 {-|
 Create timestamp from year, month, day, hour, minute and seconds fields
 
->>> printSQL (makeTimestamp 2013 7 15 8 15 23.5)
+>>> printSQL (makeTimestamp (2013 :* 7 :* 15 :* 8 :* 15 *: 23.5))
 make_timestamp(2013, 7, 15, 8, 15, 23.5)
 -}
-makeTimestamp
-  :: Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ year
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ month
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ day
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ hour
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ min
-  -> Expression outer grp commons schemas params from (nullity 'PGfloat8)
-    -- ^ sec
-  -> Expression outer grp commons schemas params from (nullity 'PGtimestamp)
-makeTimestamp y mon d h m s =
-  UnsafeExpression $ "make_timestamp" <> parenthesized
-    (renderCommaSeparated renderSQL (y :* mon :* d :* h :* m :* s :* Nil))
+makeTimestamp :: FunctionHet
+  '[ null 'PGint4, null 'PGint4, null 'PGint4
+   , null 'PGint4, null 'PGint4, null 'PGfloat8 ]
+   ( null 'PGtimestamp )
+makeTimestamp = unsafeFunctionHet "make_timestamp"
 
 {-|
 Create timestamp with time zone from
 year, month, day, hour, minute and seconds fields;
 the current time zone is used
 
->>> printSQL (makeTimestamptz 2013 7 15 8 15 23.5)
+>>> printSQL (makeTimestamptz (2013 :* 7 :* 15 :* 8 :* 15 *: 23.5))
 make_timestamptz(2013, 7, 15, 8, 15, 23.5)
 -}
-makeTimestamptz
-  :: Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ year
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ month
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ day
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ hour
-  -> Expression outer grp commons schemas params from (nullity 'PGint4)
-    -- ^ min
-  -> Expression outer grp commons schemas params from (nullity 'PGfloat8)
-    -- ^ sec
-  -> Expression outer grp commons schemas params from (nullity 'PGtimestamptz)
-makeTimestamptz y mon d h m s =
-  UnsafeExpression $ "make_timestamptz" <> parenthesized
-    (renderCommaSeparated renderSQL (y :* mon :* d :* h :* m :* s :* Nil))
+makeTimestamptz :: FunctionHet
+  '[ null 'PGint4, null 'PGint4, null 'PGint4
+   , null 'PGint4, null 'PGint4, null 'PGfloat8 ]
+   ( null 'PGtimestamptz )
+makeTimestamptz = unsafeFunctionHet "make_timestamptz"
 
 {-|
 Affine space operations on time types.
 -}
 class TimeOp time diff | time -> diff where
   {-|
-  >>> printSQL (makeDate 1984 7 3 !+ 365)
+  >>> printSQL (makeDate (1984 :* 7 *: 3) !+ 365)
   (make_date(1984, 7, 3) + 365)
   -}
-  (!+) :: Operator (nullity time) (nullity diff) (nullity time)
+  (!+) :: Operator (null time) (null diff) (null time)
   (!+) = unsafeBinaryOp "+"
   {-|
-  >>> printSQL (365 +! makeDate 1984 7 3)
+  >>> printSQL (365 +! makeDate (1984 :* 7 *: 3))
   (365 + make_date(1984, 7, 3))
   -}
-  (+!) :: Operator (nullity diff) (nullity time) (nullity time)
+  (+!) :: Operator (null diff) (null time) (null time)
   (+!) = unsafeBinaryOp "+"
   {-|
-  >>> printSQL (makeDate 1984 7 3 !- 365)
+  >>> printSQL (makeDate (1984 :* 7 *: 3) !- 365)
   (make_date(1984, 7, 3) - 365)
   -}
-  (!-) :: Operator (nullity time) (nullity diff) (nullity time)
+  (!-) :: Operator (null time) (null diff) (null time)
   (!-) = unsafeBinaryOp "-"
   {-|
-  >>> printSQL (makeDate 1984 7 3 !-! currentDate)
+  >>> printSQL (makeDate (1984 :* 7 *: 3) !-! currentDate)
   (make_date(1984, 7, 3) - CURRENT_DATE)
   -}
-  (!-!) :: Operator (nullity time) (nullity time) (nullity diff)
+  (!-!) :: Operator (null time) (null time) (null diff)
   (!-!) = unsafeBinaryOp "-"
 instance TimeOp 'PGtimestamp 'PGinterval
 instance TimeOp 'PGtimestamptz 'PGinterval
