@@ -54,6 +54,7 @@ module Squeal.PostgreSQL.Expression
   , index
   , row
   , field
+  , PGSubset (..)
     -- ** Functions
   , unsafeBinaryOp
   , unsafeUnaryOpL
@@ -119,8 +120,6 @@ module Squeal.PostgreSQL.Expression
   , (.#>)
   , (.#>>)
     -- *** Jsonb operators
-  , (.@>)
-  , (.<@)
   , (.?)
   , (.?|)
   , (.?&)
@@ -160,6 +159,15 @@ module Squeal.PostgreSQL.Expression
   , (.|)
   , (.!)
   , (<->)
+  , arrayToTSvector
+  , tsvectorLength
+  , numnode
+  , plainToTSquery
+  , phraseToTSquery
+  , websearchToTSquery
+  , queryTree
+  , toTSquery
+  , toTSvector
     -- ** Aggregation
   , Aggregate (..)
   , Distinction (..)
@@ -222,15 +230,6 @@ module Squeal.PostgreSQL.Expression
   , fixarray
   , tsvector
   , tsquery
-  , arrayToTSvector
-  , tsvectorLength
-  , numnode
-  , plainToTSquery
-  , phraseToTSquery
-  , websearchToTSquery
-  , queryTree
-  , toTSquery
-  , toTSvector
     -- * Re-export
   , (&)
   , NP (..)
@@ -1157,18 +1156,14 @@ infixl 8 .#>>
 
 -- Additional jsonb operators
 
--- | Does the left JSON value contain the right JSON path/value entries at the
--- top level?
-(.@>)
-  :: Operator (null 'PGjsonb) (null 'PGjsonb) ('Null 'PGbool)
-infixl 9 .@>
-(.@>) = unsafeBinaryOp "@>"
-
--- | Are the left JSON path/value entries contained at the top level within the
--- right JSON value?
-(.<@) :: Operator (null 'PGjsonb) (null 'PGjsonb) ('Null 'PGbool)
-infixl 9 .<@
-(.<@) = unsafeBinaryOp "<@"
+class PGSubset container where
+  (@>) :: Operator (null0 container) (null1 container) ('Null 'PGbool)
+  (@>) = unsafeBinaryOp "@>"
+  (<@) :: Operator (null0 container) (null1 container) ('Null 'PGbool)
+  (<@) = unsafeBinaryOp "<@"
+instance PGSubset 'PGjsonb
+instance PGSubset 'PGtsquery
+instance PGSubset ('PGvararray ty)
 
 -- | Does the string exist as a top-level key within the JSON value?
 (.?) :: Operator (null 'PGjsonb) (null 'PGtext) ('Null 'PGbool)
