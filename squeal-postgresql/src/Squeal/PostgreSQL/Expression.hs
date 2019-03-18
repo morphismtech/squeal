@@ -34,6 +34,7 @@ Squeal expressions are the atoms used to build statements.
 module Squeal.PostgreSQL.Expression
   ( -- * Expression
     Expression (..)
+  , Expr
   , Operator
   , (:-->)
   , HasParameter (parameter)
