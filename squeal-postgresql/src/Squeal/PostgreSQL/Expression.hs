@@ -1216,7 +1216,7 @@ infixl 6 .-.
 -- integers count from the end)
 (#-.)
   :: PGTextArray "(#-.)" arrayty
-  => Operator (null 'PGjsonb) (null arrayty)(null 'PGjsonb)
+  => Operator (null 'PGjsonb) (null arrayty) (null 'PGjsonb)
 infixl 6 #-.
 (#-.) = unsafeBinaryOp "#-"
 
