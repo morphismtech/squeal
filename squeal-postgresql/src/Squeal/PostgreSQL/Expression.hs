@@ -69,6 +69,7 @@ module Squeal.PostgreSQL.Expression
   , ceiling_
   , greatest
   , least
+  , litChar
     -- ** Conditions
   , true
   , false
@@ -168,6 +169,13 @@ module Squeal.PostgreSQL.Expression
   , queryTree
   , toTSquery
   , toTSvector
+  , setWeight
+  , strip
+  , jsonToTSvector
+  , jsonbToTSvector
+  , tsDelete
+  , tsFilter
+  , tsHeadline
     -- ** Aggregation
   , Aggregate (..)
   , Distinction (..)
@@ -1494,30 +1502,57 @@ tsvectorLength = unsafeFunction "length"
 numnode :: null 'PGtsquery :--> null 'PGint4
 numnode = unsafeFunction "numnode"
 
-plainToTSquery
-  :: FunctionHet '[null 'PGtext, null 'PGtext] (null 'PGtsquery)
-plainToTSquery = unsafeFunctionHet "plainto_tsquery"
+plainToTSquery :: null 'PGtext :--> null 'PGtsquery
+plainToTSquery = unsafeFunction "plainto_tsquery"
 
-phraseToTSquery
-  :: FunctionHet '[null 'PGtext, null 'PGtext] (null 'PGtsquery)
-phraseToTSquery = unsafeFunctionHet "phraseto_tsquery"
+phraseToTSquery :: null 'PGtext :--> null 'PGtsquery
+phraseToTSquery = unsafeFunction "phraseto_tsquery"
 
-websearchToTSquery
-  :: FunctionHet '[null 'PGtext, null 'PGtext] (null 'PGtsquery)
-websearchToTSquery = unsafeFunctionHet "websearch_to_tsquery"
+websearchToTSquery :: null 'PGtext :--> null 'PGtsquery
+websearchToTSquery = unsafeFunction "websearch_to_tsquery"
 
 queryTree :: null 'PGtsquery :--> null 'PGtext
 queryTree = unsafeFunction "query_tree"
 
-toTSquery
-  :: FunctionHet '[null 'PGtext, null 'PGtext] (null 'PGtsquery)
-toTSquery = unsafeFunctionHet "to_tsquery"
+toTSquery :: null 'PGtext :--> null 'PGtsquery
+toTSquery = unsafeFunction "to_tsquery"
 
 toTSvector
   :: ty `In` '[ 'PGtext, 'PGjson, 'PGjsonb]
-  => FunctionHet '[null 'PGtext, null ty] (null 'PGtsquery)
-toTSvector = unsafeFunctionHet "to_tsvector"
+  => null ty :--> null 'PGtsquery
+toTSvector = unsafeFunction "to_tsvector"
 
+setWeight
+  :: FunctionHet '[null 'PGtsvector, null ('PGchar 1)] (null 'PGtsvector)
+setWeight = unsafeFunctionHet "set_weight"
+
+litChar :: Char -> Expr (null ('PGchar 1))
+litChar chr = UnsafeExpression $
+  "E\'" <> fromString (escape =<< [chr]) <> "\'"
+
+strip :: null 'PGtsvector :--> null 'PGtsvector
+strip = unsafeFunction "strip"
+
+jsonToTSvector :: FunctionHet '[null 'PGjson, null 'PGjson] (null 'PGtsvector)
+jsonToTSvector = unsafeFunctionHet "json_to_tsvector"
+
+jsonbToTSvector :: FunctionHet '[null 'PGjsonb, null 'PGjsonb] (null 'PGtsvector)
+jsonbToTSvector = unsafeFunctionHet "jsonb_to_tsvector"
+
+tsDelete :: FunctionHet
+  '[null 'PGtsvector, null ('PGvararray ('NotNull 'PGtext))]
+   (null 'PGtsvector)
+tsDelete = unsafeFunctionHet "ts_delete"
+
+tsFilter :: FunctionHet
+  '[null 'PGtsvector, null ('PGvararray ('NotNull ('PGchar 1)))]
+   (null 'PGtsvector)
+tsFilter = unsafeFunctionHet "ts_filter"
+
+tsHeadline
+  :: document `In` '[ 'PGtext, 'PGjson, 'PGjsonb]
+  => FunctionHet '[null document, null 'PGtsquery] (null 'PGtext)
+tsHeadline = unsafeFunctionHet "ts_headline"
 {-----------------------------------------
 aggregation
 -----------------------------------------}
