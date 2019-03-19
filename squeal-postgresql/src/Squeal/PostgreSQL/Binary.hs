@@ -208,7 +208,6 @@ module Squeal.PostgreSQL.Binary
   , TuplePG
   , RowPG
   , LabelsPG
-  , FromPG
     -- * Storage newtypes
   , Money (..)
   , Json (..)
@@ -955,18 +954,3 @@ type family ConstructorNamesOf (constructors :: [Type.ConstructorInfo])
     ConstructorNamesOf '[] = '[]
     ConstructorNamesOf (constructor ': constructors) =
       ConstructorNameOf constructor ': ConstructorNamesOf constructors
-
-type family FromPG (hask :: Type) :: FromType where
-  FromPG (hask1, hask2) = Join (FromPG hask1) (FromPG hask2)
-  FromPG (hask1, hask2, hask3) =
-    Join (FromPG hask1) (FromPG (hask2, hask3))
-  FromPG (hask1, hask2, hask3, hask4) =
-    Join (FromPG hask1) (FromPG (hask2, hask3, hask4))
-  FromPG (hask1, hask2, hask3, hask4, hask5) =
-    Join (FromPG hask1) (FromPG (hask2, hask3, hask4, hask5))
-  FromPG (P (col ::: hask)) = '[col ::: RowPG hask]
-  FromPG hask = FromOf (RecordCodeOf hask)
-
-type family FromOf (record :: [(Symbol, Type)]) :: FromType where
-  FromOf '[] = '[]
-  FromOf (tab ::: ty ': record) = tab ::: RowPG ty ': FromOf record
