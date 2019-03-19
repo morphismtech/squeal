@@ -333,7 +333,7 @@ type (:-->) x y
      -- ^ output
 
 {- | A `RankNType` for functions with a fixed-length list of heterogeneous arguments.
-Use the `:*` operator to end your argument lists, like so.
+Use the `*:` operator to end your argument lists, like so.
 
 >>> printSQL (unsafeFunctionHet "fun" (true :* false :* localTime *: true))
 fun(TRUE, FALSE, LOCALTIME, TRUE)

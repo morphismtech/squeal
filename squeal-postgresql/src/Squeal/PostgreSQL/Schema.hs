@@ -754,5 +754,6 @@ instance (forall t0 t1. RenderSQL (p t0 t1))
 single :: p x0 x1 -> AlignedList p x0 x1
 single step = step :>> Done
 
+-- | A useful operator for ending an `NP` list of length at least 2 without `Nil`.
 (*:) :: f x -> f y -> NP f '[x,y]
 x *: y = x :* y :* Nil
