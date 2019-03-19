@@ -36,7 +36,15 @@ module Squeal.PostgreSQL.Expression
     Expression (..)
   , Expr
   , Operator
+  , unsafeBinaryOp
   , (:-->)
+  , unsafeUnaryOpL
+  , unsafeUnaryOpR
+  , unsafeFunction
+  , FunctionHom
+  , unsafeFunctionHom
+  , FunctionHet
+  , unsafeFunctionHet
   , HasParameter (parameter)
   , param
     -- ** Null
@@ -56,11 +64,6 @@ module Squeal.PostgreSQL.Expression
   , field
   , PGSubset (..)
     -- ** Functions
-  , unsafeBinaryOp
-  , unsafeUnaryOpL
-  , unsafeUnaryOpR
-  , unsafeFunction
-  , unsafeFunctionHet
   , atan2_
   , cast
   , quot_
@@ -329,6 +332,12 @@ type (:-->) x y
   -> Expression outer grp commons schemas params from y
      -- ^ output
 
+{- | A `RankNType` for functions with a fixed-length list of heterogeneous arguments.
+Use the `:*` operator to end your argument lists, like so.
+
+>>> printSQL (unsafeFunctionHet "fun" (true :* false :* localTime *: true))
+fun(TRUE, FALSE, LOCALTIME, TRUE)
+-}
 type FunctionHet xs y
   =  forall outer grp commons schemas params from
   .  NP (Expression outer grp commons schemas params from) xs
@@ -336,6 +345,9 @@ type FunctionHet xs y
   -> Expression outer grp commons schemas params from y
      -- ^ output
 
+{- | A `RankNType` for functions with a variable-length list of
+homogeneous arguments and at least 1 more argument.
+-}
 type FunctionHom x0 x1 y
   =  forall outer grp commons schemas params from
   .  [Expression outer grp commons schemas params from x0]
@@ -345,6 +357,9 @@ type FunctionHom x0 x1 y
   -> Expression outer grp commons schemas params from y
      -- ^ output
 
+{- | >>> printSQL (unsafeFunctionHom "greatest" [true, null_] false)
+greatest(TRUE, NULL, FALSE)
+-}
 unsafeFunctionHom :: ByteString -> FunctionHom x0 x1 y
 unsafeFunctionHom fun xs x = UnsafeExpression $ fun <> parenthesized
   (commaSeparated (renderSQL <$> xs) <> ", " <> renderSQL x)
@@ -654,6 +669,8 @@ unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
 unsafeUnaryOpL :: ByteString {- ^ operator -} -> x :--> y
 unsafeUnaryOpL op x = UnsafeExpression $ parenthesized $ op <+> renderSQL x
 
+-- | >>> printSQL $ true & unsafeUnaryOpR "IS NOT TRUE"
+-- (TRUE IS NOT TRUE)
 unsafeUnaryOpR :: ByteString {- ^ operator -} -> x :--> y
 unsafeUnaryOpR op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
 
@@ -663,6 +680,8 @@ unsafeFunction :: ByteString {- ^ function -} -> x :--> y
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
+-- | >>> printSQL $ unsafeFunctionHet "f" (currentTime :* localTimestamp :* false *: litChar 'a')
+-- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, E'a')
 unsafeFunctionHet
   :: SListI xs
   => ByteString {- ^ function -}
