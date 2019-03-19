@@ -58,6 +58,8 @@ module Squeal.PostgreSQL.Expression
   , nullIf
     -- ** Collections
   , array
+  , array1
+  , array2
   , cardinality
   , index
   , row
@@ -576,8 +578,58 @@ array
   :: [Expression outer grp commons schemas params from ty]
   -- ^ array elements
   -> Expression outer grp commons schemas params from (null ('PGvararray ty))
-array xs = UnsafeExpression $
-  "ARRAY[" <> commaSeparated (renderSQL <$> xs) <> "]"
+array xs = UnsafeExpression $ "ARRAY" <>
+  bracketed (commaSeparated (renderSQL <$> xs))
+
+{- | construct a 1-dimensional fixed length array
+
+>>> printSQL $ array1 (null_ :* false *: true)
+ARRAY[NULL, FALSE, TRUE]
+
+>>> :type array1 (null_ :* false *: true)
+array1 (null_ :* false *: true)
+  :: Expression
+       outer
+       grp
+       commons
+       schemas
+       params
+       from
+       (null ('PGfixarray '[3] ('Null 'PGbool)))
+-}
+array1
+  :: (n ~ Length tys, SOP.All ((~) ty) tys)
+  => NP (Expression outer grp commons schemas params from) tys
+  -> Expression outer grp commons schemas params from (null ('PGfixarray '[n] ty))
+array1 xs = UnsafeExpression $ "ARRAY" <>
+  bracketed (renderCommaSeparated renderSQL xs)
+
+{- | construct a 1-dimensional fixed length array
+
+>>> printSQL $ array2 ((null_ :* false *: true) *: (false :* null_ *: true))
+ARRAY[[NULL, FALSE, TRUE], [FALSE, NULL, TRUE]]
+
+>>> :type array2 ((null_ :* false *: true) *: (false :* null_ *: true))
+array2 ((null_ :* false *: true) *: (false :* null_ *: true))
+  :: Expression
+       outer
+       grp
+       commons
+       schemas
+       params
+       from
+       (null ('PGfixarray '[2, 3] ('Null 'PGbool)))
+-}
+array2
+  ::  ( SOP.All ((~) tys) tyss
+      , SOP.All SOP.SListI tyss
+      , Length tyss ~ n1
+      , SOP.All ((~) ty) tys
+      , Length tys ~ n2 )
+  => NP (NP (Expression outer grp commons schemas params from)) tyss
+  -> Expression outer grp commons schemas params from (null ('PGfixarray '[n1,n2] ty))
+array2 xss = UnsafeExpression $ "ARRAY" <>
+  bracketed (renderCommaSeparatedConstraint @SOP.SListI (bracketed . renderCommaSeparated renderSQL) xss)
 
 -- | >>> printSQL $ cardinality (array [null_, false, true])
 -- cardinality(ARRAY[NULL, FALSE, TRUE])

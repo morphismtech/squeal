@@ -10,23 +10,27 @@ Rendering helper functions.
 
 {-# LANGUAGE
     AllowAmbiguousTypes
+  , ConstraintKinds
   , FlexibleContexts
   , MagicHash
   , OverloadedStrings
   , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
+  , TypeApplications
 #-}
 
 module Squeal.PostgreSQL.Render
   ( -- * Render
     parenthesized
+  , bracketed
   , (<+>)
   , commaSeparated
   , doubleQuoted
   , singleQuotedText
   , singleQuotedUtf8
   , renderCommaSeparated
+  , renderCommaSeparatedConstraint
   , renderCommaSeparatedMaybe
   , renderNat
   , renderSymbol
@@ -51,6 +55,10 @@ import qualified Data.ByteString.Char8 as Char8
 -- | Parenthesize a `ByteString`.
 parenthesized :: ByteString -> ByteString
 parenthesized str = "(" <> str <> ")"
+
+-- | Square bracket a `ByteString`
+bracketed :: ByteString -> ByteString
+bracketed str = "[" <> str <> "]"
 
 -- | Concatenate two `ByteString`s with a space between.
 (<+>) :: ByteString -> ByteString -> ByteString
@@ -83,6 +91,16 @@ renderCommaSeparated render
   = commaSeparated
   . hcollapse
   . hmap (K . render)
+
+-- | Comma separate the renderings of a heterogeneous list.
+renderCommaSeparatedConstraint
+  :: forall c xs expression. (All c xs, SListI xs)
+  => (forall x. c x => expression x -> ByteString)
+  -> NP expression xs -> ByteString
+renderCommaSeparatedConstraint render
+  = commaSeparated
+  . hcollapse
+  . hcmap (Proxy @c) (K . render)
 
 -- | Comma separate the `Maybe` renderings of a heterogeneous list, dropping
 -- `Nothing`s.
