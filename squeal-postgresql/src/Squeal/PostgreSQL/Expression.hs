@@ -604,7 +604,7 @@ array1
 array1 xs = UnsafeExpression $ "ARRAY" <>
   bracketed (renderCommaSeparated renderSQL xs)
 
-{- | construct a 1-dimensional fixed length array
+{- | construct a 2-dimensional fixed length array
 
 >>> printSQL $ array2 ((null_ :* false *: true) *: (false :* null_ *: true))
 ARRAY[[NULL, FALSE, TRUE], [FALSE, NULL, TRUE]]
