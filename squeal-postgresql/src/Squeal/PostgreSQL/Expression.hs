@@ -295,33 +295,45 @@ newtype Expression
 instance RenderSQL (Expression outer grp commons schemas params from ty) where
   renderSQL = renderExpression
 
+-- | An `Expr` is a closed `Expression`.
 type Expr x
   = forall outer grp commons schemas params from
   . Expression outer grp commons schemas params from x
+    -- ^ cannot reference aliases
 
 type Operator x1 x2 y
   =  forall outer grp commons schemas params from
   .  Expression outer grp commons schemas params from x1
+     -- ^ left input
   -> Expression outer grp commons schemas params from x2
+     -- ^ right input
   -> Expression outer grp commons schemas params from y
+     -- ^ output
 
 type (:-->) x y
   =  forall outer grp commons schemas params from
   .  Expression outer grp commons schemas params from x
+     -- ^ input
   -> Expression outer grp commons schemas params from y
+     -- ^ output
 
 type FunctionHet xs y
   =  forall outer grp commons schemas params from
   .  NP (Expression outer grp commons schemas params from) xs
+     -- ^ inputs
   -> Expression outer grp commons schemas params from y
+     -- ^ output
 
-type FunctionHom x y
+type FunctionHom x0 x1 y
   =  forall outer grp commons schemas params from
-  .  [Expression outer grp commons schemas params from x]
-  -> Expression outer grp commons schemas params from x
+  .  [Expression outer grp commons schemas params from x0]
+     -- ^ inputs
+  -> Expression outer grp commons schemas params from x1
+     -- ^ must have at least 1 input
   -> Expression outer grp commons schemas params from y
+     -- ^ output
 
-unsafeFunctionHom :: ByteString -> FunctionHom x y
+unsafeFunctionHom :: ByteString -> FunctionHom x0 x1 y
 unsafeFunctionHom fun xs x = UnsafeExpression $ fun <> parenthesized
   (commaSeparated (renderSQL <$> xs) <> ", " <> renderSQL x)
 
@@ -479,12 +491,7 @@ notNull = UnsafeExpression . renderSQL
 --
 -- >>> printSQL $ coalesce [null_, true] false
 -- COALESCE(NULL, TRUE, FALSE)
-coalesce
-  :: [Expression outer grp commons schemas params from ('Null ty)]
-  -- ^ @NULL@s may be present
-  -> Expression outer grp commons schemas params from ('NotNull ty)
-  -- ^ @NULL@ is absent
-  -> Expression outer grp commons schemas params from ('NotNull ty)
+coalesce :: FunctionHom ('Null ty) ('NotNull ty) ('NotNull ty)
 coalesce nullxs notNullx = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
     ((renderSQL <$> nullxs) <> [renderSQL notNullx]))
@@ -502,18 +509,12 @@ fromNull notNullx nullx = coalesce [nullx] notNullx
 
 -- | >>> printSQL $ null_ & isNull
 -- NULL IS NULL
-isNull
-  :: Expression outer grp commons schemas params from ('Null ty)
-  -- ^ possibly @NULL@
-  -> Condition outer grp commons schemas params from
+isNull :: 'Null ty :--> null 'PGbool
 isNull x = UnsafeExpression $ renderSQL x <+> "IS NULL"
 
 -- | >>> printSQL $ null_ & isNotNull
 -- NULL IS NOT NULL
-isNotNull
-  :: Expression outer grp commons schemas params from ('Null ty)
-  -- ^ possibly @NULL@
-  -> Condition outer grp commons schemas params from
+isNotNull :: 'Null ty :--> null 'PGbool
 isNotNull x = UnsafeExpression $ renderSQL x <+> "IS NOT NULL"
 
 -- | analagous to `maybe` using @IS NULL@
@@ -535,18 +536,12 @@ matchNull y f x = ifThenElse (isNull x) y
 `nullIf` gives @NULL@.
 
 >>> :set -XTypeApplications -XDataKinds
->>> let expr = nullIf false (param @1) :: Expression outer grp commons schemas '[ 'NotNull 'PGbool] from ('Null 'PGbool)
+>>> let expr = nullIf (false *: param @1) :: Expression outer grp commons schemas '[ 'NotNull 'PGbool] from ('Null 'PGbool)
 >>> printSQL expr
-NULL IF (FALSE, ($1 :: bool))
+NULLIF(FALSE, ($1 :: bool))
 -}
-nullIf
-  :: Expression outer grp commons schemas params from ('NotNull ty)
-  -- ^ @NULL@ is absent
-  -> Expression outer grp commons schemas params from ('NotNull ty)
-  -- ^ @NULL@ is absent
-  -> Expression outer grp commons schemas params from ('Null ty)
-nullIf x y = UnsafeExpression $ "NULL IF" <+> parenthesized
-  (renderSQL x <> ", " <> renderSQL y)
+nullIf :: FunctionHet '[ 'NotNull ty, 'NotNull ty] ('Null ty)
+nullIf = functionHet "NULLIF"
 
 -- | >>> printSQL $ array [null_, false, true]
 -- ARRAY[NULL, FALSE, TRUE]
@@ -628,12 +623,12 @@ instance Monoid
 -- | >>> let expr = greatest [param @1] currentTimestamp :: Expression outer grp commons schemas '[ 'NotNull 'PGtimestamptz] from ('NotNull 'PGtimestamptz)
 -- >>> printSQL expr
 -- GREATEST(($1 :: timestamp with time zone), CURRENT_TIMESTAMP)
-greatest :: FunctionHom ty ty
+greatest :: FunctionHom ty ty ty
 greatest = unsafeFunctionHom "GREATEST"
 
 -- | >>> printSQL $ least [null_] currentTimestamp
 -- LEAST(NULL, CURRENT_TIMESTAMP)
-least :: FunctionHom ty ty
+least :: FunctionHom ty ty ty
 least = unsafeFunctionHom "LEAST"
 
 -- | >>> printSQL $ unsafeBinaryOp "OR" true false
