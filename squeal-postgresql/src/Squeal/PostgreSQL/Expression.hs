@@ -541,7 +541,7 @@ matchNull y f x = ifThenElse (isNull x) y
 NULLIF(FALSE, ($1 :: bool))
 -}
 nullIf :: FunctionHet '[ 'NotNull ty, 'NotNull ty] ('Null ty)
-nullIf = functionHet "NULLIF"
+nullIf = unsafeFunctionHet "NULLIF"
 
 -- | >>> printSQL $ array [null_, false, true]
 -- ARRAY[NULL, FALSE, TRUE]
