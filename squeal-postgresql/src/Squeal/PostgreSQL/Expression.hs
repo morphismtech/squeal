@@ -58,6 +58,7 @@ module Squeal.PostgreSQL.Expression
     -- ** Functions
   , unsafeBinaryOp
   , unsafeUnaryOpL
+  , unsafeUnaryOpR
   , unsafeFunction
   , unsafeVariadicFunction
   , atan2_
@@ -241,7 +242,6 @@ module Squeal.PostgreSQL.Expression
     -- * Re-export
   , (&)
   , NP (..)
-  , (:*:) (..)
   , K (..)
   ) where
 
@@ -250,12 +250,12 @@ import Control.DeepSeq
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (toStrict)
 import Data.Function ((&))
+import Data.Kind
 import Data.Semigroup hiding (All)
 import qualified Data.Aeson as JSON
 import Data.String
 import Data.Word
 import Generics.SOP hiding (All, from)
-import GHC.Generics ((:*:) (..))
 import GHC.OverloadedLabels
 import GHC.TypeLits
 import Numeric
@@ -1552,13 +1552,31 @@ tsHeadline = unsafeFunctionHet "ts_headline"
 aggregation
 -----------------------------------------}
 
+type AggrFun x y
+  =  forall outer bys commons schemas params from
+  .  Distinction (Expression outer 'Ungrouped commons schemas params from) x
+     -- ^ input
+  -> Expression outer ('Grouped bys) commons schemas params from y
+     -- ^ output
+
+type AggrHet xs y
+  =  forall outer bys commons schemas params from
+  .  Distinction (NP (Expression outer 'Ungrouped commons schemas params from)) xs
+     -- ^ inputs
+  -> Expression outer ('Grouped bys) commons schemas params from y
+     -- ^ output
+
+unsafeAggregateHet :: SOP.SListI xs => ByteString -> AggrHet xs y
+unsafeAggregateHet fun xs = UnsafeExpression $ mconcat
+  [fun, "(", renderSQL xs, ")"]
+
 {- |
 `Aggregate` functions compute a single result from a set of input values.
 `Aggregate` functions can be used as `GroupedBy` `Expression`s as well
 as `WindowFunction`s.
 -}
-class Aggregate expr1 expr2 aggr
-  | aggr -> expr1, aggr -> expr2 where
+class Aggregate expr1 exprHet aggr
+  | aggr -> expr1, aggr -> exprHet where
 
   -- | A special aggregation that does not require an input
   --
@@ -1671,7 +1689,7 @@ class Aggregate expr1 expr2 aggr
   bool_or(ALL "col")
   -}
   boolOr
-    :: expr1(null 'PGbool)
+    :: expr1 (null 'PGbool)
     -- ^ what to aggregate
     -> aggr ('Null 'PGbool)
 
@@ -1713,120 +1731,120 @@ class Aggregate expr1 expr2 aggr
   >>> :{
   let
     expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
-    expression = corr (All (#y :*: #x))
+    expression = corr (All (#y *: #x))
   in printSQL expression
   :}
   corr(ALL "y", "x")
   -}
   corr
-    :: expr2 (null 'PGfloat8)
+    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   {- | population covariance
   >>> :{
   let
     expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
-    expression = covarPop (All (#y :*: #x))
+    expression = covarPop (All (#y *: #x))
   in printSQL expression
   :}
   covar_pop(ALL "y", "x")
   -}
   covarPop
-    :: expr2 (null 'PGfloat8)
+    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   {- | sample covariance
   >>> :{
   let
     winFun :: WindowFunction '[] 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
-    winFun = covarSamp (#y :*: #x)
+    winFun = covarSamp (#y *: #x)
   in printSQL winFun
   :}
   covar_samp("y", "x")
   -}
   covarSamp
-    :: expr2 (null 'PGfloat8)
+    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   {- | average of the independent variable (sum(X)/N)
   >>> :{
   let
     expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
-    expression = regrAvgX (All (#y :*: #x))
+    expression = regrAvgX (All (#y *: #x))
   in printSQL expression
   :}
   regr_avgx(ALL "y", "x")
   -}
   regrAvgX
-    :: expr2 (null 'PGfloat8)
+    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   {- | average of the dependent variable (sum(Y)/N)
   >>> :{
   let
     winFun :: WindowFunction '[] 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
-    winFun = regrAvgY (#y :*: #x)
+    winFun = regrAvgY (#y *: #x)
   in printSQL winFun
   :}
   regr_avgy("y", "x")
   -}
   regrAvgY
-    :: expr2 (null 'PGfloat8)
+    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   {- | number of input rows in which both expressions are nonnull
   >>> :{
   let
     winFun :: WindowFunction '[] 'Ungrouped c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGint8)
-    winFun = regrCount (#y :*: #x)
+    winFun = regrCount (#y *: #x)
   in printSQL winFun
   :}
   regr_count("y", "x")
   -}
   regrCount
-    :: expr2 (null 'PGfloat8)
+    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGint8)
 
   {- | y-intercept of the least-squares-fit linear equation determined by the (X, Y) pairs
   >>> :{
   let
     expression :: Expression '[] ('Grouped g) c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
-    expression = regrIntercept (All (#y :*: #x))
+    expression = regrIntercept (All (#y *: #x))
   in printSQL expression
   :}
   regr_intercept(ALL "y", "x")
   -}
   regrIntercept
-    :: expr2 (null 'PGfloat8)
+    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_r2(Y, X)@, square of the correlation coefficient
   regrR2
-    :: expr2 (null 'PGfloat8)
+    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_slope(Y, X)@, slope of the least-squares-fit linear equation
   -- determined by the (X, Y) pairs
   regrSlope
-    :: expr2 (null 'PGfloat8)
+    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_sxx(Y, X)@, sum(X^2) - sum(X)^2/N
   -- (“sum of squares” of the independent variable)
   regrSxx
-    :: expr2 (null 'PGfloat8)
+    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_sxy(Y, X)@, sum(X*Y) - sum(X) * sum(Y)/N
   -- (“sum of products” of independent times dependent variable)
   regrSxy
-    :: expr2 (null 'PGfloat8)
+    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_syy(Y, X)@, sum(Y^2) - sum(Y)^2/N
   -- (“sum of squares” of the dependent variable)
   regrSyy
-    :: expr2 (null 'PGfloat8)
+    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   -- | historical alias for `stddevSamp`
@@ -1867,7 +1885,7 @@ class Aggregate expr1 expr2 aggr
 `Distinct` invokes the aggregate once for each distinct value of the expression
 (or distinct set of values, for multiple expressions) found in the input
 -}
-data Distinction expr ty
+data Distinction (expr :: kind -> Type) (ty :: kind)
   = All (expr ty)
   | Distinct (expr ty)
   deriving (GHC.Generic,Show,Eq,Ord)
@@ -1876,20 +1894,15 @@ instance RenderSQL (Distinction (Expression outer grp commons schemas params fro
   renderSQL = \case
     All x -> "ALL" <+> renderSQL x
     Distinct x -> "DISTINCT" <+> renderSQL x
-instance RenderSQL
-  (Distinction
-    ( Expression outer grp commons schemas params from
-      :*:
-      Expression outer grp commons schemas params from) xty ) where
-        renderSQL = \case
-          All (x :*: x') ->
-            "ALL" <+> renderSQL x <> ", " <> renderSQL x'
-          Distinct (x :*: x') ->
-            "DISTINCT" <+> renderSQL x <> ", " <> renderSQL x'
+instance SOP.SListI tys => RenderSQL
+  (Distinction (NP (Expression outer grp commons schemas params from)) tys) where
+    renderSQL = \case
+      All xs -> "ALL" <+> renderCommaSeparated renderSQL xs
+      Distinct xs -> "DISTINCT" <+> renderCommaSeparated renderSQL xs
 
 instance Aggregate
   (Distinction (Expression outer 'Ungrouped commons schemas params from))
-  (Distinction (Expression outer 'Ungrouped commons schemas params from :*: Expression outer 'Ungrouped commons schemas params from))
+  (Distinction (NP (Expression outer 'Ungrouped commons schemas params from)))
   (Expression outer ('Grouped bys) commons schemas params from) where
     countStar = UnsafeExpression "count(*)"
     count = unsafeAggregate1 "count"
@@ -1905,18 +1918,18 @@ instance Aggregate
     max_ = unsafeAggregate1 "max"
     min_ = unsafeAggregate1 "min"
     avg = unsafeAggregate1 "avg"
-    corr = unsafeAggregate2 "corr"
-    covarPop = unsafeAggregate2 "covar_pop"
-    covarSamp = unsafeAggregate2 "covar_samp"
-    regrAvgX = unsafeAggregate2 "regr_avgx"
-    regrAvgY = unsafeAggregate2 "regr_avgy"
-    regrCount = unsafeAggregate2 "regr_count"
-    regrIntercept = unsafeAggregate2 "regr_intercept"
-    regrR2 = unsafeAggregate2 "regr_r2"
-    regrSlope = unsafeAggregate2 "regr_slope"
-    regrSxx = unsafeAggregate2 "regr_sxx"
-    regrSxy = unsafeAggregate2 "regr_sxy"
-    regrSyy = unsafeAggregate2 "regr_syy"
+    corr = unsafeAggregateHet "corr"
+    covarPop = unsafeAggregateHet "covar_pop"
+    covarSamp = unsafeAggregateHet "covar_samp"
+    regrAvgX = unsafeAggregateHet "regr_avgx"
+    regrAvgY = unsafeAggregateHet "regr_avgy"
+    regrCount = unsafeAggregateHet "regr_count"
+    regrIntercept = unsafeAggregateHet "regr_intercept"
+    regrR2 = unsafeAggregateHet "regr_r2"
+    regrSlope = unsafeAggregateHet "regr_slope"
+    regrSxx = unsafeAggregateHet "regr_sxx"
+    regrSxy = unsafeAggregateHet "regr_sxy"
+    regrSyy = unsafeAggregateHet "regr_syy"
     stddev = unsafeAggregate1 "stddev"
     stddevPop = unsafeAggregate1 "stddev_pop"
     stddevSamp = unsafeAggregate1 "stddev_samp"
@@ -1925,7 +1938,7 @@ instance Aggregate
     varSamp = unsafeAggregate1 "var_samp"
 instance Aggregate
   (Expression outer grp commons schemas params from)
-  (Expression outer grp commons schemas params from :*: Expression outer grp commons schemas params from)
+  (NP (Expression outer grp commons schemas params from))
   (WindowFunction outer grp commons schemas params from) where
     countStar = UnsafeWindowFunction "count(*)"
     count = unsafeWindowFunction1 "count"
@@ -1941,18 +1954,18 @@ instance Aggregate
     max_ = unsafeWindowFunction1 "max"
     min_ = unsafeWindowFunction1 "min"
     avg = unsafeWindowFunction1 "avg"
-    corr = unsafeWindowFunction2 "corr"
-    covarPop = unsafeWindowFunction2 "covar_pop"
-    covarSamp = unsafeWindowFunction2 "covar_samp"
-    regrAvgX = unsafeWindowFunction2 "regr_avgx"
-    regrAvgY = unsafeWindowFunction2 "regr_avgy"
-    regrCount = unsafeWindowFunction2 "regr_count"
-    regrIntercept = unsafeWindowFunction2 "regr_intercept"
-    regrR2 = unsafeWindowFunction2 "regr_r2"
-    regrSlope = unsafeWindowFunction2 "regr_slope"
-    regrSxx = unsafeWindowFunction2 "regr_sxx"
-    regrSxy = unsafeWindowFunction2 "regr_sxy"
-    regrSyy = unsafeWindowFunction2 "regr_syy"
+    corr = unsafeWindowFunctionHet "corr"
+    covarPop = unsafeWindowFunctionHet "covar_pop"
+    covarSamp = unsafeWindowFunctionHet "covar_samp"
+    regrAvgX = unsafeWindowFunctionHet "regr_avgx"
+    regrAvgY = unsafeWindowFunctionHet "regr_avgy"
+    regrCount = unsafeWindowFunctionHet "regr_count"
+    regrIntercept = unsafeWindowFunctionHet "regr_intercept"
+    regrR2 = unsafeWindowFunctionHet "regr_r2"
+    regrSlope = unsafeWindowFunctionHet "regr_slope"
+    regrSxx = unsafeWindowFunctionHet "regr_sxx"
+    regrSxy = unsafeWindowFunctionHet "regr_sxy"
+    regrSyy = unsafeWindowFunctionHet "regr_syy"
     stddev = unsafeWindowFunction1 "stddev"
     stddevPop = unsafeWindowFunction1 "stddev_pop"
     stddevSamp = unsafeWindowFunction1 "stddev_samp"
@@ -1963,18 +1976,9 @@ instance Aggregate
 -- | escape hatch to define aggregate functions
 unsafeAggregate1
   :: ByteString -- ^ aggregate function
-  -> Distinction (Expression outer 'Ungrouped commons schemas params from) xty
-  -> Expression outer ('Grouped bys) commons schemas params from yty
+  -> AggrFun xty yty
 unsafeAggregate1 fun x = UnsafeExpression $ mconcat
   [fun, "(", renderSQL x, ")"]
-
--- | escape hatch to define aggregate binary functions
-unsafeAggregate2
-  :: ByteString -- ^ aggregate function
-  -> Distinction (Expression outer 'Ungrouped commons schemas params from :*: Expression outer 'Ungrouped commons schemas params from) xty
-  -> Expression outer ('Grouped bys) commons schemas params from yty
-unsafeAggregate2 fun xx = UnsafeExpression $ mconcat
-  [fun, "(", renderSQL xx, ")"]
 
 -- | A type family that calculates `PGAvg` type of a `PGType`.
 type family PGAvg ty where
@@ -2291,46 +2295,59 @@ newtype WindowFunction
 instance RenderSQL (WindowFunction outer grp commons schemas params from ty) where
   renderSQL = renderWindowFunction
 
-unsafeWindowFunction1
-  :: ByteString
-  -> Expression outer grp commons schemas params from ty0
-  -> WindowFunction outer grp commons schemas params from ty1
+type WinFun0 x
+  = forall outer grp commons schemas params from
+  . WindowFunction outer grp commons schemas params from x
+    -- ^ cannot reference aliases
+
+type WinFun1 x y
+  =  forall outer grp commons schemas params from
+  .  Expression outer grp commons schemas params from x
+     -- ^ input
+  -> WindowFunction outer grp commons schemas params from y
+     -- ^ output
+
+type WinFunHet xs y
+  =  forall outer grp commons schemas params from
+  .  NP (Expression outer grp commons schemas params from) xs
+     -- ^ inputs
+  -> WindowFunction outer grp commons schemas params from y
+     -- ^ output
+
+unsafeWindowFunction1 :: ByteString -> WinFun1 x y
 unsafeWindowFunction1 fun x
   = UnsafeWindowFunction $ fun <> parenthesized (renderSQL x)
 
-unsafeWindowFunction2
-  :: ByteString
-  -> (Expression outer grp commons schemas params from :*: Expression outer grp commons schemas params from) ty0
-  -> WindowFunction outer grp commons schemas params from ty1
-unsafeWindowFunction2 fun (x :*: x')
-  = UnsafeWindowFunction $ fun <> parenthesized (renderSQL x <> ", " <> renderSQL x')
+unsafeWindowFunctionHet :: SOP.SListI xs => ByteString -> WinFunHet xs y
+unsafeWindowFunctionHet fun xs = UnsafeWindowFunction $ fun <>
+  parenthesized (renderCommaSeparated renderSQL xs)
 
 {- | rank of the current row with gaps; same as `rowNumber` of its first peer
 >>> printSQL rank
 rank()
 -}
-rank :: WindowFunction outer grp commons schemas params from ('NotNull 'PGint8)
+rank :: WinFun0 ('NotNull 'PGint8)
 rank = UnsafeWindowFunction "rank()"
 
 {- | number of the current row within its partition, counting from 1
 >>> printSQL rowNumber
 row_number()
 -}
-rowNumber :: WindowFunction outer grp commons schemas params from ('NotNull 'PGint8)
+rowNumber :: WinFun0 ('NotNull 'PGint8)
 rowNumber = UnsafeWindowFunction "row_number()"
 
 {- | rank of the current row without gaps; this function counts peer groups
 >>> printSQL denseRank
 dense_rank()
 -}
-denseRank :: WindowFunction outer grp commons schemas params from ('NotNull 'PGint8)
+denseRank :: WinFun0 ('NotNull 'PGint8)
 denseRank = UnsafeWindowFunction "dense_rank()"
 
 {- | relative rank of the current row: (rank - 1) / (total partition rows - 1)
 >>> printSQL percentRank
 percent_rank()
 -}
-percentRank :: WindowFunction outer grp commons schemas params from ('NotNull 'PGfloat8)
+percentRank :: WinFun0 ('NotNull 'PGfloat8)
 percentRank = UnsafeWindowFunction "percent_rank()"
 
 {- | cumulative distribution: (number of partition rows
@@ -2338,16 +2355,13 @@ preceding or peer with current row) / total partition rows
 >>> printSQL cumeDist
 cume_dist()
 -}
-cumeDist :: WindowFunction outer grp commons schemas params from ('NotNull 'PGfloat8)
+cumeDist :: WinFun0 ('NotNull 'PGfloat8)
 cumeDist = UnsafeWindowFunction "cume_dist()"
 
 {- | integer ranging from 1 to the argument value,
 dividing the partition as equally as possible
 -}
-ntile
-  :: Expression outer grp commons schemas params from ('NotNull 'PGint4)
-  -- ^ num buckets
-  -> WindowFunction outer grp commons schemas params from ('NotNull 'PGint4)
+ntile :: WinFun1 ('NotNull 'PGint4) ('NotNull 'PGint4)
 ntile = unsafeWindowFunction1 "ntile"
 
 {- | returns value evaluated at the row that is offset rows before the current
@@ -2355,64 +2369,34 @@ row within the partition; if there is no such row, instead return default
 (which must be of the same type as value). Both offset and default are
 evaluated with respect to the current row.
 -}
-lag
-  :: Expression outer grp commons schemas params from ty
-  -- ^ value
-  -> Expression outer grp commons schemas params from ('NotNull 'PGint4)
-  -- ^ offset
-  -> Expression outer grp commons schemas params from ty
-  -- ^ default
-  -> WindowFunction outer grp commons schemas params from ty
-lag value offset def = UnsafeWindowFunction $ "lag"
-  <> parenthesized
-  (commaSeparated ([renderSQL value, renderSQL offset, renderSQL def]))
+lag :: WinFunHet '[ty, 'NotNull 'PGint4, ty] ty
+lag = unsafeWindowFunctionHet "lag"
 
 {- | returns value evaluated at the row that is offset rows after the current
 row within the partition; if there is no such row, instead return default
 (which must be of the same type as value). Both offset and default are
 evaluated with respect to the current row.
 -}
-lead
-  :: Expression outer grp commons schemas params from ty
-  -- ^ value
-  -> Expression outer grp commons schemas params from ('NotNull 'PGint4)
-  -- ^ offset
-  -> Expression outer grp commons schemas params from ty
-  -- ^ default
-  -> WindowFunction outer grp commons schemas params from ty
-lead value offset def = UnsafeWindowFunction $ "lag"
-  <> parenthesized
-  (commaSeparated ([renderSQL value, renderSQL offset, renderSQL def]))
+lead :: WinFunHet '[ty, 'NotNull 'PGint4, ty] ty
+lead = unsafeWindowFunctionHet "lag"
 
 {- | returns value evaluated at the row that is the
 first row of the window frame
 -}
-firstValue
-  :: Expression outer grp commons schemas params from ty
-  -- ^ value
-  -> WindowFunction outer grp commons schemas params from ty
+firstValue :: WinFun1 ty ty
 firstValue = unsafeWindowFunction1 "first_value"
 
 {- | returns value evaluated at the row that is the
 last row of the window frame
 -}
-lastValue
-  :: Expression outer grp commons schemas params from ty
-  -- ^ value
-  -> WindowFunction outer grp commons schemas params from ty
+lastValue :: WinFun1 ty ty
 lastValue = unsafeWindowFunction1 "last_value"
 
 {- | returns value evaluated at the row that is the nth
 row of the window frame (counting from 1); null if no such row
 -}
-nthValue
-  :: Expression outer grp commons schemas params from (null ty)
-  -- ^ value
-  -> Expression outer grp commons schemas params from ('NotNull 'PGint4)
-  -- ^ nth
-  -> WindowFunction outer grp commons schemas params from ('Null ty)
-nthValue value nth = UnsafeWindowFunction $ "nth_value"
-  <> parenthesized (commaSeparated [renderSQL value, renderSQL nth])
+nthValue :: WinFunHet '[null ty, 'NotNull 'PGint4] ('Null ty)
+nthValue = unsafeWindowFunctionHet "nth_value"
 
 {-|
 Create date from year, month and day fields
