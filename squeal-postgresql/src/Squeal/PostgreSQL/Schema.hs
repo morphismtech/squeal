@@ -98,9 +98,6 @@ module Squeal.PostgreSQL.Schema
   , PGIntegral
   , PGFloating
   , PGTypeOf
-  , PGArrayOf
-  , PGArray
-  , PGTextArray
   , PGJsonType
   , PGJsonKey
   , SamePGType
@@ -541,37 +538,6 @@ type PGFloating = '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 
 -- | Integral Postgres types.
 type PGIntegral = '[ 'PGint2, 'PGint4, 'PGint8]
-
--- | Error message helper for displaying unavailable\/unknown\/placeholder type
--- variables whose kind is known.
-type Placeholder k = 'Text "(_::" :<>: 'ShowType k :<>: 'Text ")"
-
-type ErrArrayOf arr ty = arr :<>: 'Text " " :<>: ty
-type ErrPGfixarrayOf t = ErrArrayOf ('ShowType 'PGfixarray :<>: 'Text " " :<>: Placeholder Nat) t
-type ErrPGvararrayOf t = ErrArrayOf ('ShowType 'PGvararray) t
-
--- | Ensure a type is a valid array type.
-type family PGArray name arr :: Constraint where
-  PGArray name ('PGvararray x) = ()
-  PGArray name ('PGfixarray n x) = ()
-  PGArray name val = TypeError
-    ('Text name :<>: 'Text ": Unsatisfied PGArray constraint. Expected either: "
-     :$$: 'Text " • " :<>: ErrPGvararrayOf (Placeholder PGType)
-     :$$: 'Text " • " :<>: ErrPGfixarrayOf (Placeholder PGType)
-     :$$: 'Text "But got: " :<>: 'ShowType val)
-
--- | Ensure a type is a valid array type with a specific element type.
-type family PGArrayOf name arr ty :: Constraint where
-  PGArrayOf name ('PGvararray x) ty = x ~ ty
-  PGArrayOf name ('PGfixarray n x) ty = x ~ ty
-  PGArrayOf name val ty = TypeError
-    ( 'Text name :<>: 'Text "Unsatisfied PGArrayOf constraint. Expected either: "
-      :$$: 'Text " • " :<>: ErrPGvararrayOf ( 'ShowType ty )
-      :$$: 'Text " • " :<>: ErrPGfixarrayOf ( 'ShowType ty )
-      :$$: 'Text "But got: " :<>: 'ShowType val)
-
--- | Ensure a type is a valid array type whose elements are text.
-type PGTextArray name arr = PGArrayOf name arr ('NotNull 'PGtext)
 
 -- | `PGTypeOf` forgets about @NULL@ and any column constraints.
 type family PGTypeOf (ty :: NullityType) :: PGType where

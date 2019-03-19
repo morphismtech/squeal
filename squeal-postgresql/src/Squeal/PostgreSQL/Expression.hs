@@ -60,7 +60,7 @@ module Squeal.PostgreSQL.Expression
   , unsafeUnaryOpL
   , unsafeUnaryOpR
   , unsafeFunction
-  , unsafeVariadicFunction
+  , unsafeFunctionHet
   , atan2_
   , cast
   , quot_
@@ -136,6 +136,7 @@ module Squeal.PostgreSQL.Expression
   , rowToJson
   , jsonBuildArray
   , jsonbBuildArray
+  , PGBuildObject
   , jsonBuildObject
   , jsonbBuildObject
   , jsonObject
@@ -296,11 +297,17 @@ instance RenderSQL (Expression outer grp commons schemas params from ty) where
   renderSQL = renderExpression
 
 -- | An `Expr` is a closed `Expression`.
+-- It is a F`RankNType` but don't be scared.
+-- Think of it as an expression which sees no
+-- namespaces, so you can't use parameters
+-- or alias references. It can be used as
+-- a simple piece of more complex `Expression`s.
 type Expr x
   = forall outer grp commons schemas params from
   . Expression outer grp commons schemas params from x
     -- ^ cannot reference aliases
 
+-- | A `RankNType` for binary operators.
 type Operator x1 x2 y
   =  forall outer grp commons schemas params from
   .  Expression outer grp commons schemas params from x1
@@ -310,6 +317,11 @@ type Operator x1 x2 y
   -> Expression outer grp commons schemas params from y
      -- ^ output
 
+-- | A `RankNType` for functions with a single argument.
+-- These could be either function calls or unary operators.
+-- This is a subtype of the usual Haskell function type `Prelude.->`,
+-- indeed a subcategory as it is closed under the usual
+-- `Prelude..` and `Prelude.id`.
 type (:-->) x y
   =  forall outer grp commons schemas params from
   .  Expression outer grp commons schemas params from x
@@ -658,16 +670,6 @@ unsafeFunctionHet
 unsafeFunctionHet fun xs = UnsafeExpression $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
--- | Helper for defining variadic functions.
-unsafeVariadicFunction
-  :: SListI elems
-  => ByteString
-  -- ^ function
-  -> NP (Expression outer grp commons schemas params from) elems
-  -> Expression outer grp commons schemas params from ret
-unsafeVariadicFunction fun x = UnsafeExpression $
-  fun <> parenthesized (commaSeparated (hcollapse (hmap (K . renderSQL) x)))
-
 instance ty `In` PGNum
   => Num (Expression outer grp commons schemas params from (null ty)) where
     (+) = unsafeBinaryOp "+"
@@ -911,8 +913,7 @@ infix 4 .<=
 (.>) = unsafeBinaryOp ">"
 infix 4 .>
 
-{- | between
->>> printSQL $ true `between` (null_, false)
+{- | >>> printSQL $ true `between` (null_, false)
 TRUE BETWEEN NULL AND FALSE
 -}
 between
@@ -923,8 +924,7 @@ between
 between a (x,y) = UnsafeExpression $ renderSQL a <+> "BETWEEN"
   <+> renderSQL x <+> "AND" <+> renderSQL y
 
-{- | not between
->>> printSQL $ true `notBetween` (null_, false)
+{- | >>> printSQL $ true `notBetween` (null_, false)
 TRUE NOT BETWEEN NULL AND FALSE
 -}
 notBetween
@@ -936,6 +936,7 @@ notBetween a (x,y) = UnsafeExpression $ renderSQL a <+> "NOT BETWEEN"
   <+> renderSQL x <+> "AND" <+> renderSQL y
 
 {- | between, after sorting the comparison values
+
 >>> printSQL $ true `betweenSymmetric` (null_, false)
 TRUE BETWEEN SYMMETRIC NULL AND FALSE
 -}
@@ -948,6 +949,7 @@ betweenSymmetric a (x,y) = UnsafeExpression $ renderSQL a
   <+> "BETWEEN SYMMETRIC" <+> renderSQL x <+> "AND" <+> renderSQL y
 
 {- | not between, after sorting the comparison values
+
 >>> printSQL $ true `notBetweenSymmetric` (null_, false)
 TRUE NOT BETWEEN SYMMETRIC NULL AND FALSE
 -}
@@ -960,6 +962,7 @@ notBetweenSymmetric a (x,y) = UnsafeExpression $ renderSQL a
   <+> "NOT BETWEEN SYMMETRIC" <+> renderSQL x <+> "AND" <+> renderSQL y
 
 {- | not equal, treating null like an ordinary value
+
 >>> printSQL $ true `isDistinctFrom` null_
 (TRUE IS DISTINCT FROM NULL)
 -}
@@ -967,6 +970,7 @@ isDistinctFrom :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
 isDistinctFrom = unsafeBinaryOp "IS DISTINCT FROM"
 
 {- | equal, treating null like an ordinary value
+
 >>> printSQL $ true `isNotDistinctFrom` null_
 (TRUE IS NOT DISTINCT FROM NULL)
 -}
@@ -974,6 +978,7 @@ isNotDistinctFrom :: Operator (null0 ty) (null1 ty) ('NotNull 'PGbool)
 isNotDistinctFrom = unsafeBinaryOp "IS NOT DISTINCT FROM"
 
 {- | is true
+
 >>> printSQL $ true & isTrue
 (TRUE IS TRUE)
 -}
@@ -981,6 +986,7 @@ isTrue :: null0 'PGbool :--> null1 'PGbool
 isTrue = unsafeUnaryOpR "IS TRUE"
 
 {- | is false or unknown
+
 >>> printSQL $ true & isNotTrue
 (TRUE IS NOT TRUE)
 -}
@@ -988,6 +994,7 @@ isNotTrue :: null0 'PGbool :--> null1 'PGbool
 isNotTrue = unsafeUnaryOpR "IS NOT TRUE"
 
 {- | is false
+
 >>> printSQL $ true & isFalse
 (TRUE IS FALSE)
 -}
@@ -995,6 +1002,7 @@ isFalse :: null0 'PGbool :--> null1 'PGbool
 isFalse = unsafeUnaryOpR "IS FALSE"
 
 {- | is true or unknown
+
 >>> printSQL $ true & isNotFalse
 (TRUE IS NOT FALSE)
 -}
@@ -1002,6 +1010,7 @@ isNotFalse :: null0 'PGbool :--> null1 'PGbool
 isNotFalse = unsafeUnaryOpR "IS NOT FALSE"
 
 {- | is unknown
+
 >>> printSQL $ true & isUnknown
 (TRUE IS UNKNOWN)
 -}
@@ -1009,6 +1018,7 @@ isUnknown :: null0 'PGbool :--> null1 'PGbool
 isUnknown = unsafeUnaryOpR "IS UNKNOWN"
 
 {- | is true or false
+
 >>> printSQL $ true & isNotUnknown
 (TRUE IS NOT UNKNOWN)
 -}
@@ -1145,15 +1155,15 @@ infixl 8 .->>
 
 -- | Get JSON value at a specified path.
 (.#>)
-  :: (json `In` PGJsonType, PGTextArray "(.#>)" path)
-  => Operator (null json) (null path) ('Null json)
+  :: json `In` PGJsonType
+  => Operator (null json) (null ('PGvararray ('NotNull 'PGtext))) ('Null json)
 infixl 8 .#>
 (.#>) = unsafeBinaryOp "#>"
 
 -- | Get JSON value at a specified path as text.
 (.#>>)
-  :: (json `In` PGJsonType, PGTextArray "(.#>>)" path)
-  => Operator (null json) (null path) ('Null 'PGtext)
+  :: json `In` PGJsonType
+  => Operator (null json) (null ('PGvararray ('NotNull 'PGtext))) ('Null 'PGtext)
 infixl 8 .#>>
 (.#>>) = unsafeBinaryOp "#>>"
 
@@ -1214,9 +1224,7 @@ infixl 6 .-.
 
 -- | Delete the field or element with specified path (for JSON arrays, negative
 -- integers count from the end)
-(#-.)
-  :: PGTextArray "(#-.)" arrayty
-  => Operator (null 'PGjsonb) (null arrayty) (null 'PGjsonb)
+(#-.) :: Operator (null 'PGjsonb) (null ('PGvararray ('NotNull 'PGtext))) (null 'PGjsonb)
 infixl 6 #-.
 (#-.) = unsafeBinaryOp "#-"
 
@@ -1254,9 +1262,7 @@ toJsonb = unsafeFunction "to_jsonb"
 
 -- | Returns the array as a JSON array. A PostgreSQL multidimensional array
 -- becomes a JSON array of arrays.
-arrayToJson
-  :: PGArray "arrayToJson" arr
-  => null arr :--> null 'PGjson
+arrayToJson :: null ('PGvararray ty) :--> null 'PGjson
 arrayToJson = unsafeFunction "array_to_json"
 
 -- | Returns the row as a JSON object.
@@ -1265,98 +1271,69 @@ rowToJson = unsafeFunction "row_to_json"
 
 -- | Builds a possibly-heterogeneously-typed JSON array out of a variadic
 -- argument list.
-jsonBuildArray
-  :: SListI elems
-  => NP (Expression outer grp commons schemas params from) elems
-  -> Expression outer grp commons schemas params from (null 'PGjson)
-jsonBuildArray = unsafeVariadicFunction "json_build_array"
+jsonBuildArray :: SListI tuple => FunctionHet tuple (null 'PGjson)
+jsonBuildArray = unsafeFunctionHet "json_build_array"
 
 -- | Builds a possibly-heterogeneously-typed (binary) JSON array out of a
 -- variadic argument list.
-jsonbBuildArray
-  :: SListI elems
-  => NP (Expression outer grp commons schemas params from) elems
-  -> Expression outer grp commons schemas params from (null 'PGjsonb)
-jsonbBuildArray = unsafeVariadicFunction "jsonb_build_array"
+jsonbBuildArray :: SListI tuple => FunctionHet tuple (null 'PGjsonb)
+jsonbBuildArray = unsafeFunctionHet "jsonb_build_array"
 
-unsafeRowFunction
-  :: SOP.SListI elems
-  => NP (Aliased (Expression outer grp commons schemas params from)) elems
-  -> [ByteString]
-unsafeRowFunction =
-  (`appEndo` []) . hcfoldMap (Proxy :: SOP.Proxy SOP.Top)
-  (\(col `As` name) -> Endo $ \xs ->
-      renderAliasString name : renderSQL col : xs)
-  where
-    renderAliasString :: KnownSymbol alias => Alias alias -> ByteString
-    renderAliasString = singleQuotedText . fromString . symbolVal
+class PGBuildObject tys where
+instance PGBuildObject '[]
+instance (PGBuildObject tys, key `In` PGJsonKey)
+  => PGBuildObject ('NotNull key ': value ': tys)
 
 -- | Builds a possibly-heterogeneously-typed JSON object out of a variadic
 -- argument list. The elements of the argument list must alternate between text
 -- and values.
 jsonBuildObject
-  :: SOP.SListI elems
-  => NP (Aliased (Expression outer grp commons schemas params from)) elems
-  -> Expression outer grp commons schemas params from (null 'PGjson)
-jsonBuildObject
-  = unsafeFunction "json_build_object"
-  . UnsafeExpression
-  . commaSeparated
-  . unsafeRowFunction
+  :: (SListI elems, PGBuildObject elems)
+  => FunctionHet elems (null 'PGjson)
+jsonBuildObject = unsafeFunctionHet "json_build_object"
 
 -- | Builds a possibly-heterogeneously-typed (binary) JSON object out of a
 -- variadic argument list. The elements of the argument list must alternate
--- between text and values.
+-- between keys and values.
 jsonbBuildObject
-  :: SOP.SListI elems
-  => NP (Aliased (Expression outer grp commons schemas params from)) elems
-  -> Expression outer grp commons schemas params from (null 'PGjsonb)
-jsonbBuildObject
-  = unsafeFunction "jsonb_build_object"
-  . UnsafeExpression
-  . commaSeparated
-  . unsafeRowFunction
+  :: (SListI elems, PGBuildObject elems)
+  => FunctionHet elems (null 'PGjsonb)
+jsonbBuildObject = unsafeFunctionHet "jsonb_build_object"
 
--- | Builds a JSON object out of a text array. The array must have either
--- exactly one dimension with an even number of members, in which case they are
--- taken as alternating key/value pairs, or two dimensions such that each inner
--- array has exactly two elements, which are taken as a key/value pair.
+-- | Builds a JSON object out of a text array.
+-- The array must have two dimensions
+-- such that each inner array has exactly two elements,
+-- which are taken as a key/value pair.
 jsonObject
-  :: PGArrayOf "jsonObject" arr ('NotNull 'PGtext)
-  => null arr :--> null 'PGjson
+  ::   null ('PGfixarray '[n,2] ('NotNull 'PGtext))
+  :--> null 'PGjson
 jsonObject = unsafeFunction "json_object"
 
--- | Builds a binary JSON object out of a text array. The array must have either
--- exactly one dimension with an even number of members, in which case they are
--- taken as alternating key/value pairs, or two dimensions such that each inner
--- array has exactly two elements, which are taken as a key/value pair.
+-- | Builds a binary JSON object out of a text array.
+-- The array must have two dimensions
+-- such that each inner array has exactly two elements,
+-- which are taken as a key/value pair.
 jsonbObject
-  :: PGArrayOf "jsonbObject" arr ('NotNull 'PGtext)
-  => null arr :--> null 'PGjsonb
+  ::   null ('PGfixarray '[n,2] ('NotNull 'PGtext))
+  :--> null 'PGjsonb
 jsonbObject = unsafeFunction "jsonb_object"
 
 -- | This is an alternate form of 'jsonObject' that takes two arrays; one for
 -- keys and one for values, that are zipped pairwise to create a JSON object.
-jsonZipObject
-  :: ( PGArrayOf "jsonZipObject" keysArray ('NotNull 'PGtext)
-     , PGArrayOf "jsonZipObject" valuesArray ('NotNull 'PGtext))
-  => Expression outer grp commons schemas params from (null keysArray)
-  -> Expression outer grp commons schemas params from (null valuesArray)
-  -> Expression outer grp commons schemas params from (null 'PGjson)
-jsonZipObject ks vs =
-  unsafeVariadicFunction "json_object" (ks :* vs :* Nil)
+jsonZipObject :: FunctionHet
+  '[ null ('PGvararray ('NotNull 'PGtext))
+   , null ('PGvararray ('NotNull 'PGtext)) ]
+   ( null 'PGjson )
+jsonZipObject = unsafeFunctionHet "json_object"
 
--- | This is an alternate form of 'jsonObject' that takes two arrays; one for
+-- | This is an alternate form of 'jsonbObject' that takes two arrays; one for
 -- keys and one for values, that are zipped pairwise to create a binary JSON
 -- object.
-jsonbZipObject
-  :: ( PGArrayOf "jsonbZipObject" keysArray ('NotNull 'PGtext)
-     , PGArrayOf "jsonbZipObject" valuesArray ('NotNull 'PGtext))
-  => Expression outer grp commons schemas params from (null keysArray)
-  -> Expression outer grp commons schemas params from (null valuesArray)
-  -> Expression outer grp commons schemas params from (null 'PGjsonb)
-jsonbZipObject ks vs =
-  unsafeVariadicFunction "jsonb_object" (ks :* vs :* Nil)
+jsonbZipObject :: FunctionHet
+  '[ null ('PGvararray ('NotNull 'PGtext))
+   , null ('PGvararray ('NotNull 'PGtext)) ]
+   ( null 'PGjsonb )
+jsonbZipObject = unsafeFunctionHet "jsonb_object"
 
 {-----------------------------------------
 Table 9.46: JSON processing functions
@@ -1378,7 +1355,7 @@ jsonExtractPath
   -> NP (Expression outer grp commons schemas params from) elems
   -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonExtractPath x xs =
-  unsafeVariadicFunction "json_extract_path" (x :* xs)
+  unsafeFunctionHet "json_extract_path" (x :* xs)
 
 -- | Returns JSON value pointed to by the given path (equivalent to #>
 -- operator).
@@ -1388,7 +1365,7 @@ jsonbExtractPath
   -> NP (Expression outer grp commons schemas params from) elems
   -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonbExtractPath x xs =
-  unsafeVariadicFunction "jsonb_extract_path" (x :* xs)
+  unsafeFunctionHet "jsonb_extract_path" (x :* xs)
 
 -- | Returns JSON value pointed to by the given path (equivalent to #>
 -- operator), as text.
@@ -1398,7 +1375,7 @@ jsonExtractPathAsText
   -> NP (Expression outer grp commons schemas params from) elems
   -> Expression outer grp commons schemas params from (null 'PGjson)
 jsonExtractPathAsText x xs =
-  unsafeVariadicFunction "json_extract_path_text" (x :* xs)
+  unsafeFunctionHet "json_extract_path_text" (x :* xs)
 
 -- | Returns JSON value pointed to by the given path (equivalent to #>
 -- operator), as text.
@@ -1408,7 +1385,7 @@ jsonbExtractPathAsText
   -> NP (Expression outer grp commons schemas params from) elems
   -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonbExtractPathAsText x xs =
-  unsafeVariadicFunction "jsonb_extract_path_text" (x :* xs)
+  unsafeFunctionHet "jsonb_extract_path_text" (x :* xs)
 
 -- | Returns the type of the outermost JSON value as a text string. Possible
 -- types are object, array, string, number, boolean, and null.
@@ -1438,15 +1415,14 @@ jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
 -- operators, negative integers that appear in path count from the end of JSON
 -- arrays.
 jsonbSet
-  :: PGTextArray "jsonbSet" arr
-  => Expression outer grp commons schemas params from (null 'PGjsonb)
-  -> Expression outer grp commons schemas params from (null arr)
+  :: Expression outer grp commons schemas params from (null 'PGjsonb)
+  -> Expression outer grp commons schemas params from (null ('PGvararray ('NotNull 'PGtext)))
   -> Expression outer grp commons schemas params from (null 'PGjsonb)
   -> Maybe (Expression outer grp commons schemas params from (null 'PGbool))
   -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonbSet tgt path val createMissing = case createMissing of
-  Just m -> unsafeVariadicFunction "jsonb_set" (tgt :* path :* val :* m :* Nil)
-  Nothing -> unsafeVariadicFunction "jsonb_set" (tgt :* path :* val :* Nil)
+  Just m -> unsafeFunctionHet "jsonb_set" (tgt :* path :* val :* m :* Nil)
+  Nothing -> unsafeFunctionHet "jsonb_set" (tgt :* path :* val :* Nil)
 
 -- | @ jsonbInsert target path new_value insert_after @
 --
@@ -1457,15 +1433,14 @@ jsonbSet tgt path val createMissing = case createMissing of
 -- exist. As with the path orientated operators, negative integers that appear
 -- in path count from the end of JSON arrays.
 jsonbInsert
-  :: PGTextArray "jsonbInsert" arr
-  => Expression outer grp commons schemas params from (null 'PGjsonb)
-  -> Expression outer grp commons schemas params from (null arr)
+  :: Expression outer grp commons schemas params from (null 'PGjsonb)
+  -> Expression outer grp commons schemas params from (null ('PGvararray ('NotNull 'PGtext)))
   -> Expression outer grp commons schemas params from (null 'PGjsonb)
   -> Maybe (Expression outer grp commons schemas params from (null 'PGbool))
   -> Expression outer grp commons schemas params from (null 'PGjsonb)
 jsonbInsert tgt path val insertAfter = case insertAfter of
-  Just i -> unsafeVariadicFunction "jsonb_insert" (tgt :* path :* val :* i :* Nil)
-  Nothing -> unsafeVariadicFunction "jsonb_insert" (tgt :* path :* val :* Nil)
+  Just i -> unsafeFunctionHet "jsonb_insert" (tgt :* path :* val :* i :* Nil)
+  Nothing -> unsafeFunctionHet "jsonb_insert" (tgt :* path :* val :* Nil)
 
 -- | Returns its argument as indented JSON text.
 jsonbPretty :: null 'PGjsonb :--> null 'PGtext
