@@ -104,16 +104,19 @@ module Squeal.PostgreSQL.Expression
   , isUnknown
   , isNotUnknown
     -- ** Time
+  , TimeOp (..)
   , currentDate
   , currentTime
   , currentTimestamp
   , localTime
   , localTimestamp
-  , TimeOp (..)
+  , now
   , makeDate
   , makeTime
   , makeTimestamp
   , makeTimestamptz
+  , interval_
+  , TimeUnit (..)
     -- ** Text
   , lower
   , upper
@@ -1120,6 +1123,13 @@ localTime = UnsafeExpression "LOCALTIME"
 -- LOCALTIMESTAMP
 localTimestamp :: Expr (null 'PGtimestamp)
 localTimestamp = UnsafeExpression "LOCALTIMESTAMP"
+
+-- | Current date and time (equivalent to `currentTimestamp`)
+--
+-- >>> printSQL now
+-- now()
+now :: Expr (null 'PGtimestamptz)
+now = UnsafeExpression "now()"
 
 {-----------------------------------------
 text
@@ -2530,3 +2540,30 @@ infixl 6 !+
 infixl 6 +!
 infixl 6 !-
 infixl 6 !-!
+
+data TimeUnit
+  = Years | Months | Weeks | Days
+  | Hours | Minutes | Seconds
+  | Microseconds | Milliseconds
+  | Decades | Centuries | Millennia
+  deriving (Eq, Ord, Show, Read, Enum, GHC.Generic)
+instance RenderSQL TimeUnit where
+  renderSQL = \case
+    Years -> "years"
+    Months -> "months"
+    Weeks -> "weeks"
+    Days -> "days"
+    Hours -> "hours"
+    Minutes -> "minutes"
+    Seconds -> "seconds"
+    Microseconds -> "microseconds"
+    Milliseconds -> "milliseconds"
+    Decades -> "decades"
+    Centuries -> "centuries"
+    Millennia -> "millennia"
+
+-- | >>> printSQL $ interval_ 7 Days
+-- INTERVAL '7.0 days'
+interval_ :: Double -> TimeUnit -> Expr (null 'PGinterval)
+interval_ num unit = UnsafeExpression $ "INTERVAL" <+>
+  "'" <> fromString (show num) <+> renderSQL unit <> "'"
