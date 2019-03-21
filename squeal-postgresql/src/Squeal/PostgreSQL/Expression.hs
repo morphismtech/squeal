@@ -1608,23 +1608,12 @@ tsHeadline = unsafeFunctionHet "ts_headline"
 aggregation
 -----------------------------------------}
 
-type AggrFun x y
-  =  forall outer bys commons schemas params from
-  .  Distinction (Expression outer commons 'Ungrouped schemas params from) x
-     -- ^ input
+unsafeAggregateHet
+  :: SOP.SListI xs
+  => ByteString -- ^ function
+  -> Distinction (NP (Expression outer commons 'Ungrouped schemas params from)) xs
   -> Expression outer commons ('Grouped bys) schemas params from y
-     -- ^ output
-
-type AggrHet xs y
-  =  forall outer bys commons schemas params from
-  .  Distinction (NP (Expression outer commons 'Ungrouped schemas params from)) xs
-     -- ^ inputs
-  -> Expression outer commons ('Grouped bys) schemas params from y
-     -- ^ output
-
-unsafeAggregateHet :: SOP.SListI xs => ByteString -> AggrHet xs y
-unsafeAggregateHet fun xs = UnsafeExpression $ mconcat
-  [fun, "(", renderSQL xs, ")"]
+unsafeAggregateHet fun xs = UnsafeExpression $ fun <> parenthesized (renderSQL xs)
 
 {- |
 `Aggregate` functions compute a single result from a set of input values.
@@ -2032,9 +2021,9 @@ instance Aggregate
 -- | escape hatch to define aggregate functions
 unsafeAggregate1
   :: ByteString -- ^ aggregate function
-  -> AggrFun xty yty
-unsafeAggregate1 fun x = UnsafeExpression $ mconcat
-  [fun, "(", renderSQL x, ")"]
+  -> Distinction (Expression outer commons 'Ungrouped schemas params from) x
+  -> Expression outer commons ('Grouped bys) schemas params from y
+unsafeAggregate1 fun x = UnsafeExpression $ fun <> parenthesized (renderSQL x)
 
 -- | A type family that calculates `PGAvg` type of a `PGType`.
 type family PGAvg ty where
