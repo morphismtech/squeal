@@ -403,35 +403,35 @@ q1 `exceptAll` q2 = UnsafeQuery $
 SELECT queries
 -----------------------------------------}
 
-data Selection outer grp commons schemas params from row where
+data Selection outer commons grp schemas params from row where
   List
     :: SListI row
-    => NP (Aliased (Expression outer grp commons schemas params from)) row
-    -> Selection outer grp commons schemas params from row
+    => NP (Aliased (Expression outer commons grp schemas params from)) row
+    -> Selection outer commons grp schemas params from row
   Star
     :: HasUnique tab from row
-    => Selection outer 'Ungrouped commons schemas params from row
+    => Selection outer commons 'Ungrouped schemas params from row
   DotStar
     :: Has tab from row
     => Alias tab
-    -> Selection outer 'Ungrouped commons schemas params from row
+    -> Selection outer commons 'Ungrouped schemas params from row
   Also
-    :: Selection outer grp commons schemas params from right
-    -> Selection outer grp commons schemas params from left
-    -> Selection outer grp commons schemas params from (Join left right)
+    :: Selection outer commons grp schemas params from right
+    -> Selection outer commons grp schemas params from left
+    -> Selection outer commons grp schemas params from (Join left right)
   Over
     :: SListI row
-    => NP (Aliased (WindowFunction outer grp commons schemas params from)) row
-    -> WindowDefinition outer grp commons schemas params from
-    -> Selection outer grp commons schemas params from row
+    => NP (Aliased (WindowFunction outer commons grp schemas params from)) row
+    -> WindowDefinition outer commons grp schemas params from
+    -> Selection outer commons grp schemas params from row
 instance (KnownSymbol col, row ~ '[col ::: ty])
   => Aliasable col
-    (Expression outer grp commons schemas params from ty)
-    (Selection outer grp commons schemas params from row) where
+    (Expression outer commons grp schemas params from ty)
+    (Selection outer commons grp schemas params from row) where
       expr `as` col = List (expr `as` col)
 instance (Has tab (Join outer from) row0, Has col row0 ty, row1 ~ '[col ::: ty])
   => IsQualified tab col
-    (Selection outer 'Ungrouped commons schemas params from row1) where
+    (Selection outer commons 'Ungrouped schemas params from row1) where
       tab ! col = tab ! col `as` col
 instance
   ( Has tab (Join outer from) row0
@@ -439,11 +439,11 @@ instance
   , row1 ~ '[col ::: ty]
   , GroupedBy tab col bys )
   => IsQualified tab col
-    (Selection outer ('Grouped bys) commons schemas params from row1) where
+    (Selection outer commons ('Grouped bys) schemas params from row1) where
       tab ! col = tab ! col `as` col
 instance (HasUnique tab (Join outer from) row0, Has col row0 ty, row1 ~ '[col ::: ty])
   => IsLabel col
-    (Selection outer 'Ungrouped commons schemas params from row1) where
+    (Selection outer commons 'Ungrouped schemas params from row1) where
       fromLabel = fromLabel @col `as` Alias
 instance
   ( HasUnique tab (Join outer from) row0
@@ -451,10 +451,10 @@ instance
   , row1 ~ '[col ::: ty]
   , GroupedBy tab col bys )
   => IsLabel col
-    (Selection outer ('Grouped bys) commons schemas params from row1) where
+    (Selection outer commons ('Grouped bys) schemas params from row1) where
       fromLabel = fromLabel @col `as` Alias
 
-instance RenderSQL (Selection outer grp commons schemas params from row) where
+instance RenderSQL (Selection outer commons grp schemas params from row) where
   renderSQL = \case
     List list -> renderCommaSeparated (renderAliased renderSQL) list
     Star -> "*"
@@ -463,7 +463,7 @@ instance RenderSQL (Selection outer grp commons schemas params from row) where
     Over winFns winDef ->
       let
         renderOver
-          :: Aliased (WindowFunction outer grp commons schemas params from) field
+          :: Aliased (WindowFunction outer commons grp schemas params from) field
           -> ByteString
         renderOver (winFn `As` col) = renderSQL winFn
           <+> "OVER" <+> parenthesized (renderSQL winDef)
@@ -472,7 +472,7 @@ instance RenderSQL (Selection outer grp commons schemas params from row) where
         renderCommaSeparated renderOver winFns
 
 instance IsString
-  (Selection outer grp commons schemas params from '["fromOnly" ::: 'NotNull 'PGtext]) where
+  (Selection outer commons grp schemas params from '["fromOnly" ::: 'NotNull 'PGtext]) where
     fromString str = fromString str `as` Alias
 
 -- | the `TableExpression` in the `select` command constructs an intermediate
@@ -482,9 +482,9 @@ instance IsString
 -- the intermediate table are actually output.
 select
   :: (SListI row, row ~ (x ': xs))
-  => Selection outer grp commons schemas params from row
+  => Selection outer commons grp schemas params from row
   -- ^ select list
-  -> TableExpression outer grp commons schemas params from
+  -> TableExpression outer commons grp schemas params from
   -- ^ intermediate virtual table
   -> Query outer commons schemas params row
 select selection tabexpr = UnsafeQuery $
@@ -494,8 +494,8 @@ select selection tabexpr = UnsafeQuery $
 
 select_
   :: (SListI row, row ~ (x ': xs))
-  => NP (Aliased (Expression outer grp commons schemas params from)) row
-  -> TableExpression outer grp commons schemas params from
+  => NP (Aliased (Expression outer commons grp schemas params from)) row
+  -> TableExpression outer commons grp schemas params from
   -> Query outer commons schemas params row
 select_ list = select (List list)
 
@@ -503,9 +503,9 @@ select_ list = select (List list)
 -- be subject to the elimination of duplicate rows using `selectDistinct`.
 selectDistinct
   :: (SListI columns, columns ~ (col ': cols))
-  => Selection outer 'Ungrouped commons schemas params from columns
+  => Selection outer commons 'Ungrouped schemas params from columns
   -- ^ select list
-  -> TableExpression outer 'Ungrouped commons schemas params from
+  -> TableExpression outer commons 'Ungrouped schemas params from
   -- ^ intermediate virtual table
   -> Query outer commons schemas params columns
 selectDistinct selection tabexpr = UnsafeQuery $
@@ -515,9 +515,9 @@ selectDistinct selection tabexpr = UnsafeQuery $
 
 selectDistinct_
   :: (SListI columns, columns ~ (col ': cols))
-  => NP (Aliased (Expression outer 'Ungrouped commons schemas params from)) columns
+  => NP (Aliased (Expression outer commons 'Ungrouped schemas params from)) columns
   -- ^ select list
-  -> TableExpression outer 'Ungrouped commons schemas params from
+  -> TableExpression outer commons 'Ungrouped schemas params from
   -- ^ intermediate virtual table
   -> Query outer commons schemas params columns
 selectDistinct_ list = select (List list)
@@ -533,8 +533,8 @@ selectDistinct_ list = select (List list)
 -- SELECT * FROM (VALUES (1, E'one')) AS t ("a", "b")
 values
   :: SListI cols
-  => NP (Aliased (Expression outer 'Ungrouped commons schemas params '[] )) cols
-  -> [NP (Aliased (Expression outer 'Ungrouped commons schemas params '[] )) cols]
+  => NP (Aliased (Expression outer commons 'Ungrouped schemas params '[] )) cols
+  -> [NP (Aliased (Expression outer commons 'Ungrouped schemas params '[] )) cols]
   -- ^ When more than one row is specified, all the rows must
   -- must have the same number of elements
   -> Query outer commons schemas params cols
@@ -548,7 +548,7 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
   <+> parenthesized (renderCommaSeparated renderAliasPart rw)
   where
     renderAliasPart, renderValuePart
-      :: Aliased (Expression outer 'Ungrouped commons schemas params '[] ) ty -> ByteString
+      :: Aliased (Expression outer commons 'Ungrouped schemas params '[] ) ty -> ByteString
     renderAliasPart (_ `As` name) = renderSQL name
     renderValuePart (value `As` _) = renderSQL value
 
@@ -556,7 +556,7 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
 -- specified by value expressions.
 values_
   :: SListI cols
-  => NP (Aliased (Expression outer 'Ungrouped commons schemas params '[] )) cols
+  => NP (Aliased (Expression outer commons 'Ungrouped schemas params '[] )) cols
   -- ^ one row of values
   -> Query outer commons schemas params cols
 values_ rw = values rw []
@@ -573,8 +573,8 @@ Table Expressions
 -- can be used to modify or combine base tables in various ways.
 data TableExpression
   (outer :: FromType)
-  (grp :: Grouping)
   (commons :: FromType)
+  (grp :: Grouping)
   (schemas :: SchemasType)
   (params :: [NullityType])
   (from :: FromType)
@@ -582,7 +582,7 @@ data TableExpression
     { fromClause :: FromClause outer commons schemas params from
     -- ^ A table reference that can be a table name, or a derived table such
     -- as a subquery, a @JOIN@ construct, or complex combinations of these.
-    , whereClause :: [Condition outer 'Ungrouped commons schemas params from]
+    , whereClause :: [Condition outer commons 'Ungrouped schemas params from]
     -- ^ optional search coditions, combined with `.&&`. After the processing
     -- of the `fromClause` is done, each row of the derived virtual table
     -- is checked against the search condition. If the result of the
@@ -598,13 +598,13 @@ data TableExpression
     -- set of rows having common values into one group row that represents all
     -- rows in the group. This is done to eliminate redundancy in the output
     -- and/or compute aggregates that apply to these groups.
-    , havingClause :: HavingClause outer grp commons schemas params from
+    , havingClause :: HavingClause outer commons grp schemas params from
     -- ^ If a table has been grouped using `groupBy`, but only certain groups
     -- are of interest, the `havingClause` can be used, much like a
     -- `whereClause`, to eliminate groups from the result. Expressions in the
     -- `havingClause` can refer both to grouped expressions and to ungrouped
     -- expressions (which necessarily involve an aggregate function).
-    , orderByClause :: [SortExpression outer grp commons schemas params from]
+    , orderByClause :: [SortExpression outer commons grp schemas params from]
     -- ^ The `orderByClause` is for optional sorting. When more than one
     -- `SortExpression` is specified, the later (right) values are used to sort
     -- rows that are equal according to the earlier (left) values.
@@ -621,7 +621,7 @@ data TableExpression
     } deriving (GHC.Generic)
 
 -- | Render a `TableExpression`
-instance RenderSQL (TableExpression outer grp commons schemas params from) where
+instance RenderSQL (TableExpression outer commons grp schemas params from) where
   renderSQL
     (TableExpression frm' whs' grps' hvs' srts' lims' offs') = mconcat
       [ "FROM ", renderSQL frm'
@@ -654,15 +654,15 @@ instance RenderSQL (TableExpression outer grp commons schemas params from) where
 -- to match the left-to-right sequencing of their placement in SQL.
 from
   :: FromClause outer commons schemas params from -- ^ table reference
-  -> TableExpression outer 'Ungrouped commons schemas params from
+  -> TableExpression outer commons 'Ungrouped schemas params from
 from tab = TableExpression tab [] NoGroups NoHaving [] [] []
 
 -- | A `where_` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `whereClause`.
 where_
-  :: Condition outer 'Ungrouped commons schemas params from -- ^ filtering condition
-  -> TableExpression outer grp commons schemas params from
-  -> TableExpression outer grp commons schemas params from
+  :: Condition outer commons 'Ungrouped schemas params from -- ^ filtering condition
+  -> TableExpression outer commons grp schemas params from
+  -> TableExpression outer commons grp schemas params from
 where_ wh rels = rels {whereClause = wh : whereClause rels}
 
 -- | A `groupBy` is a transformation of `TableExpression`s which switches
@@ -671,8 +671,8 @@ where_ wh rels = rels {whereClause = wh : whereClause rels}
 groupBy
   :: SListI bys
   => NP (By from) bys -- ^ grouped columns
-  -> TableExpression outer 'Ungrouped commons schemas params from
-  -> TableExpression outer ('Grouped bys) commons schemas params from
+  -> TableExpression outer commons 'Ungrouped schemas params from
+  -> TableExpression outer commons ('Grouped bys) schemas params from
 groupBy bys rels = TableExpression
   { fromClause = fromClause rels
   , whereClause = whereClause rels
@@ -686,9 +686,9 @@ groupBy bys rels = TableExpression
 -- | A `having` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `havingClause`.
 having
-  :: Condition outer ('Grouped bys) commons schemas params from -- ^ having condition
-  -> TableExpression outer ('Grouped bys) commons schemas params from
-  -> TableExpression outer ('Grouped bys) commons schemas params from
+  :: Condition outer commons ('Grouped bys) schemas params from -- ^ having condition
+  -> TableExpression outer commons ('Grouped bys) schemas params from
+  -> TableExpression outer commons ('Grouped bys) schemas params from
 having hv rels = rels
   { havingClause = case havingClause rels of Having hvs -> Having (hv:hvs) }
 
@@ -699,16 +699,16 @@ instance OrderBy TableExpression where
 -- `limitClause`.
 limit
   :: Word64 -- ^ limit parameter
-  -> TableExpression outer grp commons schemas params from
-  -> TableExpression outer grp commons schemas params from
+  -> TableExpression outer commons grp schemas params from
+  -> TableExpression outer commons grp schemas params from
 limit lim rels = rels {limitClause = lim : limitClause rels}
 
 -- | An `offset` is an endomorphism of `TableExpression`s which adds to the
 -- `offsetClause`.
 offset
   :: Word64 -- ^ offset parameter
-  -> TableExpression outer grp commons schemas params from
-  -> TableExpression outer grp commons schemas params from
+  -> TableExpression outer commons grp schemas params from
+  -> TableExpression outer commons grp schemas params from
 offset off rels = rels {offsetClause = off : offsetClause rels}
 
 {-----------------------------------------
@@ -717,14 +717,14 @@ JSON stuff
 
 unsafeSetOfFunction
   :: ByteString
-  -> Expression outer 'Ungrouped commons schemas params '[]  ty
+  -> Expression outer commons 'Ungrouped schemas params '[]  ty
   -> FromClause outer commons schemas params from
 unsafeSetOfFunction fun expr = UnsafeFromClause $
   fun <> "(" <> renderSQL expr <> ")"
 
 -- | Expand an array to a set of rows
 unnest
-  :: Expression outer 'Ungrouped commons schemas params '[] (nullity ('PGvararray ty))
+  :: Expression outer commons 'Ungrouped schemas params '[] (nullity ('PGvararray ty))
   -> FromClause outer commons schemas params '["unnest" ::: '["unnest" ::: ty]]
 unnest = unsafeSetOfFunction "unnest"
 
@@ -733,7 +733,7 @@ unnest = unsafeSetOfFunction "unnest"
 -- >>> printSQL (select Star (from (jsonEach (jsonLit (object ["a" .= "foo", "b" .= "bar"])))))
 -- SELECT * FROM json_each(('{"a":"foo","b":"bar"}' :: json))
 jsonEach
-  :: Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjson) -- ^ json object
+  :: Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjson) -- ^ json object
   -> FromClause outer commons schemas params
       '["json_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]]
 jsonEach = unsafeSetOfFunction "json_each"
@@ -743,7 +743,7 @@ jsonEach = unsafeSetOfFunction "json_each"
 -- >>> printSQL (select Star (from (jsonbEach (jsonbLit (object ["a" .= "foo", "b" .= "bar"])))))
 -- SELECT * FROM jsonb_each(('{"a":"foo","b":"bar"}' :: jsonb))
 jsonbEach
-  :: Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
+  :: Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
   -> FromClause outer commons schemas params
       '["jsonb_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]]
 jsonbEach = unsafeSetOfFunction "jsonb_each"
@@ -753,7 +753,7 @@ jsonbEach = unsafeSetOfFunction "jsonb_each"
 -- >>> printSQL (select Star (from (jsonEachText (jsonLit (object ["a" .= "foo", "b" .= "bar"])))))
 -- SELECT * FROM json_each_text(('{"a":"foo","b":"bar"}' :: json))
 jsonEachText
-  :: Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjson) -- ^ json object
+  :: Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjson) -- ^ json object
   -> FromClause outer commons schemas params
       '["json_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]]
 jsonEachText = unsafeSetOfFunction "json_each_text"
@@ -763,7 +763,7 @@ jsonEachText = unsafeSetOfFunction "json_each_text"
 -- >>> printSQL (select Star (from (jsonbEachText (jsonbLit (object ["a" .= "foo", "b" .= "bar"])))))
 -- SELECT * FROM jsonb_each_text(('{"a":"foo","b":"bar"}' :: jsonb))
 jsonbEachText
-  :: Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
+  :: Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
   -> FromClause outer commons schemas params
       '["jsonb_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]]
 jsonbEachText = unsafeSetOfFunction "jsonb_each_text"
@@ -773,7 +773,7 @@ jsonbEachText = unsafeSetOfFunction "jsonb_each_text"
 -- >>> printSQL (jsonObjectKeys (jsonLit (object ["a" .= "foo", "b" .= "bar"])))
 -- json_object_keys(('{"a":"foo","b":"bar"}' :: json))
 jsonObjectKeys
-  :: Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjson) -- ^ json object
+  :: Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjson) -- ^ json object
   -> FromClause outer commons schemas params
       '["json_object_keys" ::: '["json_object_keys" ::: 'NotNull 'PGtext]]
 jsonObjectKeys = unsafeSetOfFunction "json_object_keys"
@@ -783,7 +783,7 @@ jsonObjectKeys = unsafeSetOfFunction "json_object_keys"
 -- >>> printSQL (jsonbObjectKeys (jsonbLit (object ["a" .= "foo", "b" .= "bar"])))
 -- jsonb_object_keys(('{"a":"foo","b":"bar"}' :: jsonb))
 jsonbObjectKeys
-  :: Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb object
+  :: Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb object
   -> FromClause outer commons schemas params
       '["jsonb_object_keys" ::: '["jsonb_object_keys" ::: 'NotNull 'PGtext]]
 jsonbObjectKeys = unsafeSetOfFunction "jsonb_object_keys"
@@ -792,7 +792,7 @@ unsafePopulateFunction
   :: KnownSymbol fun
   => Alias fun
   -> TypeExpression schemas (nullity ('PGcomposite row))
-  -> Expression outer 'Ungrouped commons schemas params '[]  ty
+  -> Expression outer commons 'Ungrouped schemas params '[]  ty
   -> FromClause outer commons schemas params '[fun ::: row]
 unsafePopulateFunction fun ty expr = UnsafeFromClause $ renderSQL fun
   <> parenthesized ("null::" <> renderSQL ty <> ", " <> renderSQL expr)
@@ -801,7 +801,7 @@ unsafePopulateFunction fun ty expr = UnsafeFromClause $ renderSQL fun
 -- type defined by the given table.
 jsonPopulateRecord
   :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjson) -- ^ json object
+  -> Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjson) -- ^ json object
   -> FromClause outer commons schemas params '["json_populate_record" ::: row]
 jsonPopulateRecord = unsafePopulateFunction #json_populate_record
 
@@ -809,7 +809,7 @@ jsonPopulateRecord = unsafePopulateFunction #json_populate_record
 -- type defined by the given table.
 jsonbPopulateRecord
   :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
+  -> Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
   -> FromClause outer commons schemas params '["jsonb_populate_record" ::: row]
 jsonbPopulateRecord = unsafePopulateFunction #jsonb_populate_record
 
@@ -817,7 +817,7 @@ jsonbPopulateRecord = unsafePopulateFunction #jsonb_populate_record
 -- set of rows whose columns match the record type defined by the given table.
 jsonPopulateRecordSet
   :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjson) -- ^ json array
+  -> Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjson) -- ^ json array
   -> FromClause outer commons schemas params '["json_populate_record_set" ::: row]
 jsonPopulateRecordSet = unsafePopulateFunction #json_populate_record_set
 
@@ -826,14 +826,14 @@ jsonPopulateRecordSet = unsafePopulateFunction #json_populate_record_set
 -- table.
 jsonbPopulateRecordSet
   :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb array
+  -> Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb array
   -> FromClause outer commons schemas params '["jsonb_populate_record_set" ::: row]
 jsonbPopulateRecordSet = unsafePopulateFunction #jsonb_populate_record_set
 
 unsafeRecordFunction
   :: (SListI record, json `In` PGJsonType)
   => ByteString
-  -> Expression outer 'Ungrouped commons schemas params '[] (nullity json)
+  -> Expression outer commons 'Ungrouped schemas params '[] (nullity json)
   -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
   -> FromClause outer commons schemas params '[tab ::: record]
 unsafeRecordFunction fun expr (types `As` tab) = UnsafeFromClause $
@@ -846,7 +846,7 @@ unsafeRecordFunction fun expr (types `As` tab) = UnsafeFromClause $
 -- | Builds an arbitrary record from a JSON object.
 jsonToRecord
   :: SListI record
-  => Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjson) -- ^ json object
+  => Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjson) -- ^ json object
   -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
   -> FromClause outer commons schemas params '[tab ::: record]
 jsonToRecord = unsafeRecordFunction "json_to_record"
@@ -854,7 +854,7 @@ jsonToRecord = unsafeRecordFunction "json_to_record"
 -- | Builds an arbitrary record from a binary JSON object.
 jsonbToRecord
   :: SListI record
-  => Expression outer 'Ungrouped commons schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
+  => Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
   -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
   -> FromClause outer commons schemas params '[tab ::: record]
 jsonbToRecord = unsafeRecordFunction "jsonb_to_record"
@@ -862,7 +862,7 @@ jsonbToRecord = unsafeRecordFunction "jsonb_to_record"
 -- | Builds an arbitrary set of records from a JSON array of objects.
 jsonToRecordSet
   :: SListI record
-  => Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjson) -- ^ json array
+  => Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjson) -- ^ json array
   -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
   -> FromClause outer commons schemas params '[tab ::: record]
 jsonToRecordSet = unsafeRecordFunction "json_to_record_set"
@@ -870,7 +870,7 @@ jsonToRecordSet = unsafeRecordFunction "json_to_record_set"
 -- | Builds an arbitrary set of records from a binary JSON array of objects.
 jsonbToRecordSet
   :: SListI record
-  => Expression outer 'Ungrouped commons schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb array
+  => Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb array
   -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
   -> FromClause outer commons schemas params '[tab ::: record]
 jsonbToRecordSet = unsafeRecordFunction "jsonb_to_record_set"
@@ -940,7 +940,7 @@ the @on@ condition.
 innerJoin
   :: FromClause outer commons schemas params right
   -- ^ right
-  -> Condition outer 'Ungrouped commons schemas params (Join left right)
+  -> Condition outer commons 'Ungrouped schemas params (Join left right)
   -- ^ @on@ condition
   -> FromClause outer commons schemas params left
   -- ^ left
@@ -957,7 +957,7 @@ innerJoin right on left = UnsafeFromClause $
 leftOuterJoin
   :: FromClause outer commons schemas params right
   -- ^ right
-  -> Condition outer 'Ungrouped commons schemas params (Join left right)
+  -> Condition outer commons 'Ungrouped schemas params (Join left right)
   -- ^ @on@ condition
   -> FromClause outer commons schemas params left
   -- ^ left
@@ -975,7 +975,7 @@ leftOuterJoin right on left = UnsafeFromClause $
 rightOuterJoin
   :: FromClause outer commons schemas params right
   -- ^ right
-  -> Condition outer 'Ungrouped commons schemas params (Join left right)
+  -> Condition outer commons 'Ungrouped schemas params (Join left right)
   -- ^ @on@ condition
   -> FromClause outer commons schemas params left
   -- ^ left
@@ -994,7 +994,7 @@ rightOuterJoin right on left = UnsafeFromClause $
 fullOuterJoin
   :: FromClause outer commons schemas params right
   -- ^ right
-  -> Condition outer 'Ungrouped commons schemas params (Join left right)
+  -> Condition outer commons 'Ungrouped schemas params (Join left right)
   -- ^ @on@ condition
   -> FromClause outer commons schemas params left
   -- ^ left
@@ -1067,17 +1067,17 @@ instance RenderSQL (GroupByClause grp from) where
 -- An `Ungrouped` `TableExpression` may only use `NoHaving` while a `Grouped`
 -- `TableExpression` must use `Having` whose conditions are combined with
 -- `.&&`.
-data HavingClause outer grp commons schemas params from where
-  NoHaving :: HavingClause outer 'Ungrouped commons schemas params from
+data HavingClause outer commons grp schemas params from where
+  NoHaving :: HavingClause outer commons 'Ungrouped schemas params from
   Having
-    :: [Condition outer ('Grouped bys) commons schemas params from]
-    -> HavingClause outer ('Grouped bys) commons schemas params from
-deriving instance Show (HavingClause outer grp commons schemas params from)
-deriving instance Eq (HavingClause outer grp commons schemas params from)
-deriving instance Ord (HavingClause outer grp commons schemas params from)
+    :: [Condition outer commons ('Grouped bys) schemas params from]
+    -> HavingClause outer commons ('Grouped bys) schemas params from
+deriving instance Show (HavingClause outer commons grp schemas params from)
+deriving instance Eq (HavingClause outer commons grp schemas params from)
+deriving instance Ord (HavingClause outer commons grp schemas params from)
 
 -- | Render a `HavingClause`.
-instance RenderSQL (HavingClause outer grp commons schemas params from) where
+instance RenderSQL (HavingClause outer commons grp schemas params from) where
   renderSQL = \case
     NoHaving -> ""
     Having [] -> ""
@@ -1098,14 +1098,8 @@ at least one row is returned, not all the way to completion.
 -}
 exists
   :: Query (Join outer from) commons schemas params row
-  -> Condition outer grp commons schemas params from
+  -> Condition outer commons grp schemas params from
 exists query = UnsafeExpression $ "EXISTS" <+> parenthesized (renderSQL query)
-
-type Operator ty1 ty2 ty3
-  =  forall outer grp commons schemas params from
-  .  Expression outer grp commons schemas params from ty1
-  -> Expression outer grp commons schemas params from ty2
-  -> Expression outer grp commons schemas params from ty3
 
 {- |
 The right-hand side is a parenthesized subquery, which must return
@@ -1121,10 +1115,10 @@ and at least one comparison returns `null_`.
 (TRUE = ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo")))
 -}
 subAll
-  :: Expression outer grp commons schemas params from ty1 -- ^ expression
+  :: Expression outer commons grp schemas params from ty1 -- ^ expression
   -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
   -> Query (Join outer from) commons schemas params '[col ::: ty2] -- ^ subquery
-  -> Condition outer grp commons schemas params from
+  -> Condition outer commons grp schemas params from
 subAll expr (?) qry = expr ?
   (UnsafeExpression $ "ALL" <+> parenthesized (renderSQL qry))
 
@@ -1139,10 +1133,10 @@ if any `true` result is obtained. The result is `false` if no true result is fou
 (E'foo' LIKE ALL (SELECT * FROM (VALUES (E'foobar')) AS t ("foo")))
 -}
 subAny
-  :: Expression outer grp commons schemas params from ty1 -- ^ expression
+  :: Expression outer commons grp schemas params from ty1 -- ^ expression
   -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
   -> Query (Join outer from) commons schemas params '[col ::: ty2] -- ^ subquery
-  -> Condition outer grp commons schemas params from
+  -> Condition outer commons grp schemas params from
 subAny expr (?) qry = expr ?
   (UnsafeExpression $ "ANY" <+> parenthesized (renderSQL qry))
 
@@ -1154,9 +1148,9 @@ to any of the right-hand expressions.
 TRUE IN (TRUE, FALSE, NULL)
 -}
 in_
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> [Expression outer grp commons schemas params from ty]
-  -> Condition outer grp commons schemas params from
+  :: Expression outer commons grp schemas params from ty -- ^ expression
+  -> [Expression outer commons grp schemas params from ty]
+  -> Condition outer commons grp schemas params from
 expr `in_` exprs = UnsafeExpression $ renderSQL expr <+> "IN"
   <+> parenthesized (commaSeparated (renderSQL <$> exprs))
 
@@ -1168,9 +1162,9 @@ to any of the right-hand expressions.
 TRUE NOT IN (FALSE, NULL)
 -}
 notIn
-  :: Expression outer grp commons schemas params from ty -- ^ expression
-  -> [Expression outer grp commons schemas params from ty]
-  -> Condition outer grp commons schemas params from
+  :: Expression outer commons grp schemas params from ty -- ^ expression
+  -> [Expression outer commons grp schemas params from ty]
+  -> Condition outer commons grp schemas params from
 expr `notIn` exprs = UnsafeExpression $ renderSQL expr <+> "NOT IN"
   <+> parenthesized (commaSeparated (renderSQL <$> exprs))
 

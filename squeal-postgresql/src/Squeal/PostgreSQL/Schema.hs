@@ -91,15 +91,13 @@ module Squeal.PostgreSQL.Schema
   , Elem
   , In
   , Length
+  , (*:)
     -- * Type Classifications
   , HasOid (..)
   , PGNum
   , PGIntegral
   , PGFloating
   , PGTypeOf
-  , PGArrayOf
-  , PGArray
-  , PGTextArray
   , PGJsonType
   , PGJsonKey
   , SamePGType
@@ -164,6 +162,8 @@ data PGType
   | PGfixarray [Nat] NullityType -- ^ fixed length array
   | PGenum [Symbol] -- ^ enumerated (enum) types are data types that comprise a static, ordered set of values.
   | PGcomposite RowType -- ^ a composite type represents the structure of a row or record; it is essentially just a list of field names and their data types.
+  | PGtsvector -- ^ A tsvector value is a sorted list of distinct lexemes, which are words that have been normalized to merge different variants of the same word.
+  | PGtsquery -- ^ A tsquery value stores lexemes that are to be searched for
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
 -- | The object identifier of a `PGType`.
@@ -539,37 +539,6 @@ type PGFloating = '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 -- | Integral Postgres types.
 type PGIntegral = '[ 'PGint2, 'PGint4, 'PGint8]
 
--- | Error message helper for displaying unavailable\/unknown\/placeholder type
--- variables whose kind is known.
-type Placeholder k = 'Text "(_::" :<>: 'ShowType k :<>: 'Text ")"
-
-type ErrArrayOf arr ty = arr :<>: 'Text " " :<>: ty
-type ErrPGfixarrayOf t = ErrArrayOf ('ShowType 'PGfixarray :<>: 'Text " " :<>: Placeholder Nat) t
-type ErrPGvararrayOf t = ErrArrayOf ('ShowType 'PGvararray) t
-
--- | Ensure a type is a valid array type.
-type family PGArray name arr :: Constraint where
-  PGArray name ('PGvararray x) = ()
-  PGArray name ('PGfixarray n x) = ()
-  PGArray name val = TypeError
-    ('Text name :<>: 'Text ": Unsatisfied PGArray constraint. Expected either: "
-     :$$: 'Text " • " :<>: ErrPGvararrayOf (Placeholder PGType)
-     :$$: 'Text " • " :<>: ErrPGfixarrayOf (Placeholder PGType)
-     :$$: 'Text "But got: " :<>: 'ShowType val)
-
--- | Ensure a type is a valid array type with a specific element type.
-type family PGArrayOf name arr ty :: Constraint where
-  PGArrayOf name ('PGvararray x) ty = x ~ ty
-  PGArrayOf name ('PGfixarray n x) ty = x ~ ty
-  PGArrayOf name val ty = TypeError
-    ( 'Text name :<>: 'Text "Unsatisfied PGArrayOf constraint. Expected either: "
-      :$$: 'Text " • " :<>: ErrPGvararrayOf ( 'ShowType ty )
-      :$$: 'Text " • " :<>: ErrPGfixarrayOf ( 'ShowType ty )
-      :$$: 'Text "But got: " :<>: 'ShowType val)
-
--- | Ensure a type is a valid array type whose elements are text.
-type PGTextArray name arr = PGArrayOf name arr ('NotNull 'PGtext)
-
 -- | `PGTypeOf` forgets about @NULL@ and any column constraints.
 type family PGTypeOf (ty :: NullityType) :: PGType where
   PGTypeOf (nullity pg) = pg
@@ -784,3 +753,7 @@ instance (forall t0 t1. RenderSQL (p t0 t1))
 -- | A `single` step.
 single :: p x0 x1 -> AlignedList p x0 x1
 single step = step :>> Done
+
+-- | A useful operator for ending an `NP` list of length at least 2 without `Nil`.
+(*:) :: f x -> f y -> NP f '[x,y]
+x *: y = x :* y :* Nil

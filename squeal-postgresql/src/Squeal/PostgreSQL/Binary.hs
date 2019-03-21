@@ -884,12 +884,9 @@ type family RowPG (hask :: Type) :: RowType where
   RowPG (P (col ::: head)) = '[col ::: NullPG head]
   RowPG hask = RowOf (RecordCodeOf hask)
 
-type family RowOf (fields :: [(Symbol, Type)]) :: RowType where
+type family RowOf (record :: [(Symbol, Type)]) :: RowType where
   RowOf '[] = '[]
-  RowOf (field ': fields) = FieldPG field ': RowOf fields
-
-type family FieldPG (field :: (Symbol, Type)) :: (Symbol, NullityType) where
-  FieldPG (field ::: hask) = field ::: NullPG hask
+  RowOf (col ::: ty ': record) = col ::: NullPG ty ': RowOf record
 
 {- | `NullPG` turns a Haskell type into a `NullityType`.
 
