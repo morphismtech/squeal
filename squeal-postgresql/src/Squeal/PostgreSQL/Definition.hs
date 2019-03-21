@@ -298,7 +298,7 @@ check
      , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify the subcolumns which are getting checked
-  -> (forall t. Condition '[] 'Ungrouped '[] schemas '[] '[t ::: subcolumns])
+  -> (forall t. Condition '[] '[] 'Ungrouped schemas '[] '[t ::: subcolumns])
   -- ^ a closed `Condition` on those subcolumns
   -> TableConstraintExpression sch tab schemas ('Check aliases)
 check _cols condition = UnsafeTableConstraintExpression $
@@ -773,7 +773,7 @@ newtype AlterColumn (schemas :: SchemasType) (ty0 :: ColumnType) (ty1 :: ColumnT
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" SET DEFAULT 5;
 setDefault
-  :: Expression '[] 'Ungrouped '[] schemas '[] '[] ty -- ^ default value to set
+  :: Expression '[] '[] 'Ungrouped schemas '[] '[] ty -- ^ default value to set
   -> AlterColumn schemas (constraint :=> ty) ('Def :=> ty)
 setDefault expression = UnsafeAlterColumn $
   "SET DEFAULT" <+> renderExpression expression
@@ -1003,7 +1003,7 @@ createDomain
   :: (Has sch schemas schema, KnownSymbol dom)
   => QualifiedAlias sch dom
   -> (forall nullity. TypeExpression schemas (nullity ty))
-  -> (forall tab. Condition '[] 'Ungrouped '[] schemas '[] '[tab ::: '["value" ::: 'Null ty]])
+  -> (forall tab. Condition '[] '[] 'Ungrouped schemas '[] '[tab ::: '["value" ::: 'Null ty]])
   -> Definition schemas (Alter sch (Create alias ('Typedef ty) schema) schemas)
 createDomain dom ty condition =
   UnsafeDefinition $ "CREATE DOMAIN" <+> renderSQL dom
@@ -1053,7 +1053,7 @@ notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
 
 -- | used in `createTable` commands as a column constraint to give a default
 default_
-  :: Expression '[] 'Ungrouped '[] schemas '[] '[] ty
+  :: Expression '[] '[] 'Ungrouped schemas '[] '[] ty
   -> ColumnTypeExpression schemas ('NoDef :=> ty)
   -> ColumnTypeExpression schemas ('Def :=> ty)
 default_ x ty = UnsafeColumnTypeExpression $
