@@ -2552,7 +2552,7 @@ instance RenderSQL TimeUnit where
     Millennia -> "millennia"
 
 -- | >>> printSQL $ interval_ 7 Days
--- INTERVAL '7.0 days'
+-- (INTERVAL '7.0 days')
 interval_ :: Double -> TimeUnit -> Expr (null 'PGinterval)
-interval_ num unit = UnsafeExpression $ "INTERVAL" <+>
+interval_ num unit = UnsafeExpression . parenthesized $ "INTERVAL" <+>
   "'" <> fromString (show num) <+> renderSQL unit <> "'"
