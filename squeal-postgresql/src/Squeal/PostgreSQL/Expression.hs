@@ -1570,7 +1570,7 @@ toTSquery = unsafeFunction "to_tsquery"
 
 toTSvector
   :: ty `In` '[ 'PGtext, 'PGjson, 'PGjsonb]
-  => null ty :--> null 'PGtsquery
+  => null ty :--> null 'PGtsvector
 toTSvector = unsafeFunction "to_tsvector"
 
 setWeight
