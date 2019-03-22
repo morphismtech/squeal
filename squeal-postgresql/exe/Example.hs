@@ -12,7 +12,7 @@
 module Main (main, main2) where
 
 import Control.Monad (void)
-import Control.Monad.Base (liftBase, MonadBase)
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int16, Int32)
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -84,22 +84,22 @@ instance SOP.Generic User
 instance SOP.HasDatatypeInfo User
 
 users :: [User]
-users = 
+users =
   [ User "Alice" (Just "alice@gmail.com") (VarArray [Nothing, Just 1])
   , User "Bob" Nothing (VarArray [Just 2, Nothing])
   , User "Carole" (Just "carole@hotmail.com") (VarArray [Just 3])
   ]
 
-session :: (MonadBase IO pq, MonadPQ Schemas pq) => pq ()
+session :: (MonadIO pq, MonadPQ Schemas pq) => pq ()
 session = do
-  liftBase $ Char8.putStrLn "manipulating"
+  liftIO $ Char8.putStrLn "manipulating"
   idResults <- traversePrepared insertUser ([(userName user, userVec user) | user <- users])
   ids <- traverse (fmap fromOnly . getRow 0) idResults
   traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
-  liftBase $ Char8.putStrLn "querying"
+  liftIO $ Char8.putStrLn "querying"
   usersResult <- runQuery getUsers
   usersRows <- getRows usersResult
-  liftBase $ print (usersRows :: [User])
+  liftIO $ print (usersRows :: [User])
 
 main :: IO ()
 main = do
