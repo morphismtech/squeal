@@ -78,6 +78,7 @@ module Squeal.PostgreSQL.Schema
   , GroupedBy
     -- * Aligned lists
   , AlignedList (..)
+  , extractList
   , single
     -- * Data Definitions
   , Create
@@ -749,6 +750,11 @@ instance (forall t0 t1. RenderSQL (p t0 t1))
       Done -> ""
       step :>> Done -> renderSQL step
       step :>> steps -> renderSQL step <> ", " <> renderSQL steps
+
+extractList :: (forall a0 a1. p a0 a1 -> b) -> AlignedList p x0 x1 -> [b]
+extractList f = \case
+  Done -> []
+  step :>> steps -> (f step):extractList f steps
 
 -- | A `single` step.
 single :: p x0 x1 -> AlignedList p x0 x1
