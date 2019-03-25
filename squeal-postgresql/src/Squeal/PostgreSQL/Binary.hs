@@ -16,7 +16,7 @@ Let's see some examples. We'll need some imports
 >>> import Data.Int (Int16)
 >>> import Data.Text (Text)
 >>> import Control.Monad (void)
->>> import Control.Monad.Base (liftBase)
+>>> import Control.Monad.IO.Class (liftIO)
 >>> import Squeal.PostgreSQL
 
 Define a Haskell datatype @Row@ that will serve as both the input and output of a simple
@@ -42,7 +42,7 @@ the input and output should be equal.
 void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
   result <- runQueryParams roundTrip input
   Just output <- firstRow result
-  liftBase . print $ input == output
+  liftIO . print $ input == output
 :}
 True
 
@@ -81,7 +81,7 @@ let
 void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
   result <- runQueryParams roundTrip input
   Just output <- firstRow result
-  liftBase . print $ input == output
+  liftIO . print $ input == output
 :}
 True
 
@@ -168,7 +168,7 @@ let
   session = do
     result <- runQueryParams roundTrip input
     Just output <- firstRow result
-    liftBase . print $ input == output
+    liftIO . print $ input == output
 in
   void . withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
@@ -723,7 +723,7 @@ of the number of cents, i.e. @$2,000.20@ would be expressed as
 @Money { cents = 200020 }@.
 
 >>> import Control.Monad (void)
->>> import Control.Monad.Base (liftBase)
+>>> import Control.Monad.IO.Class (liftIO)
 >>> import Squeal.PostgreSQL
 >>> :{
 let
@@ -737,7 +737,7 @@ let
 void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
   result <- runQueryParams roundTrip input
   Just output <- firstRow result
-  liftBase . print $ input == output
+  liftIO . print $ input == output
 :}
 True
 -}

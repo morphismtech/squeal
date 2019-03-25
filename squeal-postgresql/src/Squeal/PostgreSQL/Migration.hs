@@ -73,7 +73,7 @@ let
   numMigrations = do
     result <- runQuery (select Star (from (table (#migrations ! #schema_migrations `as` #m))))
     num <- ntuples result
-    liftBase $ print num
+    liftIO $ print num
 :}
 
 >>> :{
