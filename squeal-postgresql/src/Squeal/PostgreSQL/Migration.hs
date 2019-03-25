@@ -65,28 +65,20 @@ Now that we have a couple migrations we can chain them together.
 
 >>> let migrations = makeUsers :>> makeEmails :>> Done
 
->>> :{
-let
-  numMigrations
-    :: Has "migrations" schemas MigrationsSchema
-    => PQ schemas schemas IO ()
-  numMigrations = do
-    result <- runQuery (select Star (from (table (#migrations ! #schema_migrations `as` #m))))
-    num <- ntuples result
-    liftBase $ print num
-:}
+Finally, we can run the migration and even roll it back.
 
+>>> import Control.Monad.IO.Class
 >>> :{
 withConnection "host=localhost port=5432 dbname=exampledb" $
   manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
     -- suppress notices
+  & pqThen (liftIO (putStrLn "Migrate"))
   & pqThen (migrateUp migrations)
-  & pqThen numMigrations
+  & pqThen (liftIO (putStrLn "Rollback"))
   & pqThen (migrateDown migrations)
-  & pqThen numMigrations
 :}
-Row 2
-Row 0
+Migrate
+Rollback
 -}
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE DeriveGeneric     #-}
