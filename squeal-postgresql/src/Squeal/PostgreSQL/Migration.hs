@@ -104,6 +104,7 @@ module Squeal.PostgreSQL.Migration
   , selectMigration
    -- * CLI
   , defaultMain
+  , MigrateCommand
   ) where
 
 import           Control.Monad
@@ -235,7 +236,7 @@ type MigrationsTable =
 
 data MigrationRow =
   MigrationRow { migrationName :: Text
-               , executedAt    :: UTCTime }
+               , migrationTime :: UTCTime }
   deriving (GHC.Generic, Show)
 
 instance SOP.Generic MigrationRow
@@ -253,32 +254,41 @@ createMigrations =
         `as` #executed_at )
     ( unique #name `as` #migrations_unique_name )
 
--- | Inserts a `Migration` into the `MigrationsTable`
-insertMigration :: Manipulation_ MigrationsSchemas (Only Text) ()
-insertMigration = insertInto_ #schema_migrations . Values_ $
-  (param @1) `as` #name :* defaultAs #executed_at
+-- | Inserts a `Migration` into the `MigrationsTable`, returning
+-- the time at which it was inserted.
+insertMigration
+  :: Manipulation_ MigrationsSchemas (Only Text) (P ("executed_at" ::: UTCTime))
+insertMigration = insertInto #schema_migrations
+  (Values_ ((param @1) `as` #name :* defaultAs #executed_at))
+  OnConflictDoRaise (Returning #executed_at)
 
--- | Deletes a `Migration` from the `MigrationsTable`
-deleteMigration :: Manipulation_ MigrationsSchemas (Only Text) ()
-deleteMigration = deleteFrom_ #schema_migrations (#name .== param @1)
+-- | Deletes a `Migration` from the `MigrationsTable`, returning
+-- the time at which it was inserted.
+deleteMigration
+  :: Manipulation_ MigrationsSchemas (Only Text) (P ("executed_at" ::: UTCTime))
+deleteMigration = deleteFrom #schema_migrations
+  NoUsing (#name .== param @1) (Returning #executed_at)
 
 -- | Selects a `Migration` from the `MigrationsTable`, returning
--- the time at which it was executed.
+-- the time at which it was inserted.
 selectMigration
   :: Query_ MigrationsSchemas (Only Text) (P ("executed_at" ::: UTCTime))
 selectMigration = select_ #executed_at
   $ from (table (#schema_migrations))
   & where_ (#name .== param @1)
 
-fetchAllMigrations :: Query_ MigrationsSchemas () MigrationRow
-fetchAllMigrations = select_
-  (#name `as` #migrationName :* #executed_at `as` #executedAt)
+selectMigrations :: Query_ MigrationsSchemas () MigrationRow
+selectMigrations = select_
+  (#name `as` #migrationName :* #executed_at `as` #migrationTime)
   (from (table #schema_migrations))
 
 unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
 unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
 
-data Command = Display | AllUp | AllDown deriving (GHC.Generic, Show)
+data MigrateCommand
+  = MigrateStatus
+  | MigrateUp
+  | MigrateDown deriving (GHC.Generic, Show)
 
 defaultMain
   :: ByteString
@@ -288,59 +298,54 @@ defaultMain
   -> IO ()
 defaultMain connectTo migrations = do
   command <- readCommandFromArgs
-  maybe (pure ()) (performCommand connectTo migrations) command
+  maybe (pure ()) performCommand command
 
-readCommandFromArgs :: IO (Maybe Command)
-readCommandFromArgs = getArgs >>= \case
-  ["migrate"]  -> pure . Just $ AllUp
-  ["rollback"] -> pure . Just $ AllDown
-  ["status"]   -> pure . Just $ Display
-  _               -> displayUsage >> pure Nothing
+  where
 
-displayUsage :: IO ()
-displayUsage = do
-  putStrLn "Invalid command. Use:"
-  putStrLn "migrate    to run all available migrations"
-  putStrLn "rollback   to rollback all available migrations"
-  putStrLn "status     to display migrations run and migrations left to run"
+    readCommandFromArgs :: IO (Maybe MigrateCommand)
+    readCommandFromArgs = getArgs >>= \case
+      ["migrate"]  -> pure . Just $ MigrateUp
+      ["rollback"] -> pure . Just $ MigrateDown
+      ["status"]   -> pure . Just $ MigrateStatus
+      _               -> displayUsage >> pure Nothing
 
-getRunMigrationNames :: (MonadBase IO m) => PQ db0 db0 m [Text]
-getRunMigrationNames =
-  fmap migrationName <$> (unsafePQ (define createMigrations & pqThen (runQuery fetchAllMigrations)) >>= getRows)
+    displayUsage :: IO ()
+    displayUsage = do
+      putStrLn "Invalid command. Use:"
+      putStrLn "migrate    to run all available migrations"
+      putStrLn "rollback   to rollback all available migrations"
+      putStrLn "status     to display migrations run and migrations left to run"
 
-displayListOfNames :: [Text] -> IO ()
-displayListOfNames [] = T.putStrLn "\tNone"
-displayListOfNames xs =
-  let singleName n = T.putStrLn $ "\t- " <> n
-  in traverse_ singleName xs
+    getRunMigrationNames :: (MonadBase IO m) => PQ db0 db0 m [Text]
+    getRunMigrationNames =
+      fmap migrationName <$> (unsafePQ (define createMigrations & pqThen (runQuery selectMigrations)) >>= getRows)
 
-displayUnrunned :: [Text] -> IO ()
-displayUnrunned unrunned =
-  T.putStrLn "Migrations left to run:"
-  >> displayListOfNames unrunned
+    displayListOfNames :: [Text] -> IO ()
+    displayListOfNames [] = T.putStrLn "\tNone"
+    displayListOfNames xs =
+      let singleName n = T.putStrLn $ "\t- " <> n
+      in traverse_ singleName xs
 
-displayRunned :: [Text] -> IO ()
-displayRunned runned =
-  T.putStrLn "Migrations already run:"
-  >> displayListOfNames runned
+    displayUnrunned :: [Text] -> IO ()
+    displayUnrunned unrunned =
+      T.putStrLn "Migrations left to run:"
+      >> displayListOfNames unrunned
 
-performCommand
-  :: ByteString
-  -- ^ Connection string
-  -> AlignedList (Migration IO) db0 db1
-  -- ^ Known migrations
-  -> Command
-  -- ^ Operation to perform
-  -> IO ()
-performCommand connectTo migrations Display =
-  withConnection connectTo $ do
-    runNames <- getRunMigrationNames
-    let names = extractList name migrations
-        unrunNames = names \\ runNames
-    liftBase $ displayRunned runNames >> displayUnrunned unrunNames
-performCommand connectTo migrations AllUp =
-  withConnection connectTo (migrateUp migrations)
-  >> performCommand connectTo migrations Display
-performCommand connectTo migrations AllDown =
-  withConnection connectTo (migrateDown migrations)
-  >> performCommand connectTo migrations Display
+    displayRunned :: [Text] -> IO ()
+    displayRunned runned =
+      T.putStrLn "Migrations already run:"
+      >> displayListOfNames runned
+
+    performCommand :: MigrateCommand -> IO ()
+    performCommand = \case
+      MigrateStatus -> withConnection connectTo $ do
+        runNames <- getRunMigrationNames
+        let names = extractList name migrations
+            unrunNames = names \\ runNames
+        liftBase $ displayRunned runNames >> displayUnrunned unrunNames
+      MigrateUp ->
+        withConnection connectTo (migrateUp migrations)
+        >> performCommand MigrateStatus
+      MigrateDown ->
+        withConnection connectTo (migrateDown migrations)
+        >> performCommand MigrateStatus
