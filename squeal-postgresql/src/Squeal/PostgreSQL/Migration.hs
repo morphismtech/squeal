@@ -130,6 +130,7 @@ module Squeal.PostgreSQL.Migration
     Migration (..)
   , Unital
   , unitally
+  , pureMigration
   , Migratory (..)
     -- * Migration table
   , MigrationsTable
