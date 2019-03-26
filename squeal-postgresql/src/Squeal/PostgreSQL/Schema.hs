@@ -78,8 +78,9 @@ module Squeal.PostgreSQL.Schema
   , GroupedBy
     -- * Aligned lists
   , AlignedList (..)
-  , extractList
   , single
+  , extractList
+  , alignedMap
     -- * Data Definitions
   , Create
   , Drop
@@ -703,9 +704,6 @@ There are several reasons why one might want to use schemas:
 -}
 type SchemasType = [(Symbol,SchemaType)]
 
-{-|
-
--}
 type family Public (schema :: SchemaType) :: SchemasType
   where Public schema = '["public" ::: schema]
 
@@ -755,6 +753,14 @@ extractList :: (forall a0 a1. p a0 a1 -> b) -> AlignedList p x0 x1 -> [b]
 extractList f = \case
   Done -> []
   step :>> steps -> (f step):extractList f steps
+
+alignedMap
+  :: (forall z0 z1. p z0 z1 -> q z0 z1)
+  -> AlignedList p x0 x1
+  -> AlignedList q x0 x1
+alignedMap f = \case
+  Done -> Done
+  x :>> xs -> f x :>> alignedMap f xs
 
 -- | A `single` step.
 single :: p x0 x1 -> AlignedList p x0 x1
