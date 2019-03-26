@@ -81,21 +81,33 @@ Rollback
 We can also create a simple executable using `defaultMain`.
 
 >>> let main = defaultMain "host=localhost port=5432 dbname=exampledb" migrations
+
 >>> withArgs [] main
 Invalid command: "". Use:
 migrate    to run all available migrations
 rollback   to rollback all available migrations
 status     to display migrations run and migrations left to run
+
 >>> withArgs ["status"] main
 Migrations already run:
   None
 Migrations left to run:
   - make users table
   - make emails table
+
 >>> withArgs ["migrate"] main
-asdf
+Migrations already run:
+  - make users table
+  - make emails table
+Migrations left to run:
+  None
+
 >>> withArgs ["rollback"] main
-asdf
+Migrations already run:
+  None
+Migrations left to run:
+  - make users table
+  - make emails table
 -}
 {-# LANGUAGE
     DataKinds
