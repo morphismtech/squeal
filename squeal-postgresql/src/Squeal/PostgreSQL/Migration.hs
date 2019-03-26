@@ -118,8 +118,7 @@ module Squeal.PostgreSQL.Migration
     Migration (..)
   , Unital
   , unitally
-  , migrateUp
-  , migrateDown
+  , Migratory (..)
     -- * Migration table
   , MigrationsTable
   , createMigrations
