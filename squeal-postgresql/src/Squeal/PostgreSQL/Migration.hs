@@ -161,6 +161,8 @@ import           Squeal.PostgreSQL
 import           System.Environment
 
 -- | A `Migration` is a named "isomorphism" over a given category.
+-- It should contain an inverse pair of `up` and `down`
+-- instructions and a unique `name`.
 data Migration p schemas0 schemas1 = Migration
   { name :: Text -- ^ The `name` of a `Migration`.
     -- Each `name` in a `Migration` should be unique.
