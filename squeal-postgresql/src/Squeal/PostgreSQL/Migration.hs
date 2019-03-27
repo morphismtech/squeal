@@ -137,8 +137,8 @@ Migrations left to run:
 module Squeal.PostgreSQL.Migration
   ( -- * Migration
     Migration (..)
-  , Unital
-  , unitally
+  , Terminally (..)
+  , terminally
   , pureMigration
   , Migratory (..)
     -- * Migration table
@@ -179,38 +179,38 @@ data Migration p schemas0 schemas1 = Migration
   , down :: p schemas1 schemas0 -- ^ The `down` instruction of a `Migration`.
   } deriving (GHC.Generic)
 
--- | `Unital` turns an indexed monad transformer into a category by
+-- | `Terminally` turns an indexed monad transformer into a category by
 -- restricting the return type to `()` and permuting the type variables.
-newtype Unital trans monad x0 x1 = Unital
-  { runUnital :: trans x0 x1 monad () }
+newtype Terminally trans monad x0 x1 = Terminally
+  { runTerminally :: trans x0 x1 monad () }
   deriving GHC.Generic
 
 -- | A `pureMigration` turns a `Migration` involving only pure SQL
 -- `Definition`s into a `Migration` that may involve `IO`.
 pureMigration
   :: Migration Definition schema0 schema1
-  -> Migration (Unital PQ IO) schema0 schema1
+  -> Migration (Terminally PQ IO) schema0 schema1
 pureMigration migration = Migration
   { name = name migration
-  , up = unitally . define $ up migration
-  , down = unitally . define $ down migration
+  , up = terminally . define $ up migration
+  , down = terminally . define $ down migration
   }
 
 instance
   ( IndexedMonadTransPQ trans
   , Monad monad
   , forall x0 x1. Monad (trans x0 x1 monad) )
-  => Category (Unital trans monad) where
-    id = Unital (return ())
-    Unital g . Unital f = Unital $ pqThen g f
+  => Category (Terminally trans monad) where
+    id = Terminally (return ())
+    Terminally g . Terminally f = Terminally $ pqThen g f
 
--- | unitally ignores the output of a computation, returning `()` and
--- wrapping it up in a `Unital`.
-unitally
+-- | terminally ignores the output of a computation, returning `()` and
+-- wrapping it up in a `Terminally`.
+terminally
   :: Functor (trans x0 x1 monad)
   => trans x0 x1 monad ignore
-  -> Unital trans monad x0 x1
-unitally = Unital . void
+  -> Terminally trans monad x0 x1
+terminally = Terminally . void
 
 class Migratory p where
   migrateUp
@@ -224,7 +224,7 @@ instance Migratory Definition where
   migrateUp = migrateUp . alignedMap pureMigration
   migrateDown = migrateDown . alignedMap pureMigration
 
-instance Migratory (Unital PQ IO) where
+instance Migratory (Terminally PQ IO) where
 
   migrateUp migration = unsafePQ $
     define createMigrations
@@ -234,25 +234,25 @@ instance Migratory (Unital PQ IO) where
     where
 
       upMigrations
-        :: AlignedList (Migration (Unital PQ IO)) schemas0 schemas1
+        :: AlignedList (Migration (Terminally PQ IO)) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       upMigrations = \case
         Done -> return ()
         step :>> steps -> upMigration step & pqThen (upMigrations steps)
 
       upMigration
-        :: Migration (Unital PQ IO) schemas0 schemas1
+        :: Migration (Terminally PQ IO) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       upMigration step =
         queryExecuted step
         & pqBind ( \ executed -> unless (executed == 1)
-          $ unsafePQ (runUnital (up step))
+          $ unsafePQ (runTerminally (up step))
           & pqThen (manipulateParams insertMigration (Only (name step)))
           -- insert execution record
           & pqBind okResult )
 
       queryExecuted
-        :: Migration (Unital PQ IO) schemas0 schemas1
+        :: Migration (Terminally PQ IO) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO Row
       queryExecuted step = do
         result <- runQueryParams selectMigration (Only (name step))
@@ -267,25 +267,25 @@ instance Migratory (Unital PQ IO) where
     where
 
       downMigrations
-        :: AlignedList (Migration (Unital PQ IO)) schemas0 schemas1
+        :: AlignedList (Migration (Terminally PQ IO)) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       downMigrations = \case
         Done -> return ()
         step :>> steps -> downMigrations steps & pqThen (downMigration step)
 
       downMigration
-        :: Migration (Unital PQ IO) schemas0 schemas1
+        :: Migration (Terminally PQ IO) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       downMigration step =
         queryExecuted step
         & pqBind ( \ executed -> unless (executed == 0)
-          $ unsafePQ (runUnital (down step))
+          $ unsafePQ (runTerminally (down step))
           & pqThen (manipulateParams deleteMigration (Only (name step)))
           -- delete execution record
           & pqBind okResult )
 
       queryExecuted
-        :: Migration (Unital PQ IO) schemas0 schemas1
+        :: Migration (Terminally PQ IO) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO Row
       queryExecuted step = do
         result <- runQueryParams selectMigration (Only (name step))
