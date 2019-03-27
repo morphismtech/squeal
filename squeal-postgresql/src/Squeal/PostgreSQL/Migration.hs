@@ -143,11 +143,8 @@ module Squeal.PostgreSQL.Migration
   , Terminally (..)
   , terminally
   , pureMigration
-    -- * Migrations table
   , MigrationsTable
-   -- * CLI
   , defaultMain
-  , MigrateCommand (..)
   ) where
 
 import           Control.Category
@@ -386,6 +383,8 @@ data MigrateCommand
   | MigrateUp
   | MigrateDown deriving (GHC.Generic, Show)
 
+{- | `defaultMain` creates a simple executable
+from a connection string and a list of `Migration`s. -}
 defaultMain
   :: Migratory p
   => ByteString
