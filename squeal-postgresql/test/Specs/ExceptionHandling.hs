@@ -82,10 +82,10 @@ setup =
 teardown :: Definition Schemas (Public '[])
 teardown = dropTable #emails >>> dropTable #users
 
-migration :: Migration IO (Public '[]) Schemas
+migration :: Migration Definition (Public '[]) Schemas
 migration = Migration { name = "test"
-                      , up = void $ define setup
-                      , down = void $ define teardown }
+                      , up = setup
+                      , down = teardown }
 
 setupDB :: IO ()
 setupDB = void . withConnection connectionString $

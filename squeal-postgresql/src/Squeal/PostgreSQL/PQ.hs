@@ -202,8 +202,7 @@ evalPQ (PQ pq) conn = unK <$> pq conn
 -- [enriched category](https://ncatlab.org/nlab/show/enriched+category).
 -- An indexed monad transformer transforms a `Monad` into an indexed monad.
 -- And, `IndexedMonadTransPQ` is a class for indexed monad transformers that
--- support running `Definition`s using `define` and embedding a computation
--- in a larger schema using `pqEmbed`.
+-- support running `Definition`s using `define`.
 class IndexedMonadTransPQ pq where
 
   -- | indexed analog of `<*>`
@@ -243,12 +242,6 @@ class IndexedMonadTransPQ pq where
     -> x -> pq schemas0 schemas2 m z
   pqAndThen g f x = pqBind g (f x)
 
-  -- | Safely embed a computation in a larger schema.
-  pqEmbed
-    :: Monad m
-    => pq schemas0 schemas1 m x
-    -> pq (schema ': schemas0) (schema : schemas1) m x
-
   -- | Run a `Definition` with `LibPQ.exec`, we expect that libpq obeys the law
   --
   -- @define statement1 & pqThen (define statement2) = define (statement1 >>> statement2)@
@@ -267,10 +260,6 @@ instance IndexedMonadTransPQ PQ where
   pqBind f (PQ x) = PQ $ \ conn -> do
     K x' <- x conn
     unPQ (f x') (K (unK conn))
-
-  pqEmbed (PQ pq) = PQ $ \ (K conn) -> do
-    K x <- pq (K conn)
-    return $ K x
 
   define (UnsafeDefinition q) = PQ $ \ (K conn) -> do
     resultMaybe <- liftIO $ LibPQ.exec conn q
