@@ -34,10 +34,8 @@ module Squeal.PostgreSQL.Transaction
   , DeferrableMode (..)
   ) where
 
-import Control.Exception.Lifted
-import Control.Monad.Base
-import Control.Monad.Trans.Control
 import Generics.SOP
+import UnliftIO (MonadUnliftIO, liftIO, mask, onException)
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
@@ -48,7 +46,7 @@ import Squeal.PostgreSQL.Schema
 
 -- | Run a schema invariant computation `transactionally`.
 transactionally
-  :: (MonadBaseControl IO tx, MonadPQ schemas tx)
+  :: (MonadUnliftIO tx, MonadPQ schemas tx)
   => TransactionMode
   -> tx x -- ^ run inside a transaction
   -> tx x
@@ -60,7 +58,7 @@ transactionally mode tx = mask $ \restore -> do
 
 -- | Run a schema invariant computation `transactionally_` in `defaultMode`.
 transactionally_
-  :: (MonadBaseControl IO tx, MonadPQ schemas tx)
+  :: (MonadUnliftIO tx, MonadPQ schemas tx)
   => tx x -- ^ run inside a transaction
   -> tx x
 transactionally_ = transactionally defaultMode
@@ -80,21 +78,21 @@ rollback = manipulate $ UnsafeManipulation "ROLLBACK;"
 
 -- | Run a schema changing computation `transactionallySchema`.
 transactionallySchema
-  :: MonadBaseControl IO io
+  :: MonadUnliftIO io
   => TransactionMode
   -> PQ schemas0 schemas1 io x
   -> PQ schemas0 schemas1 io x
 transactionallySchema mode u = PQ $ \ conn -> mask $ \ restore -> do
-  _ <- liftBase . LibPQ.exec (unK conn) $
+  _ <- liftIO . LibPQ.exec (unK conn) $
     "BEGIN" <+> renderSQL mode <> ";"
   x <- restore (unPQ u conn)
-    `onException` (liftBase (LibPQ.exec (unK conn) "ROLLBACK"))
-  _ <- liftBase $ LibPQ.exec (unK conn) "COMMIT"
+    `onException` (liftIO (LibPQ.exec (unK conn) "ROLLBACK"))
+  _ <- liftIO $ LibPQ.exec (unK conn) "COMMIT"
   return x
 
 -- | Run a schema changing computation `transactionallySchema_` in `defaultMode`.
 transactionallySchema_
-  :: MonadBaseControl IO io
+  :: MonadUnliftIO io
   => PQ schemas0 schemas1 io x
   -> PQ schemas0 schemas1 io x
 transactionallySchema_ = transactionallySchema defaultMode

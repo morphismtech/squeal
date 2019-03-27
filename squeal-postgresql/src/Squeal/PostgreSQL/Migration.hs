@@ -73,7 +73,7 @@ let
   numMigrations = do
     result <- runQuery (select Star (from (table (#migrations ! #schema_migrations `as` #m))))
     num <- ntuples result
-    liftBase $ print num
+    liftIO $ print num
 :}
 
 >>> :{
@@ -115,8 +115,6 @@ module Squeal.PostgreSQL.Migration
   ) where
 
 import           Control.Monad
-import           Control.Monad.Base
-import           Control.Monad.Trans.Control
 import           Data.ByteString             (ByteString)
 import           Data.Foldable               (traverse_)
 import           Data.Function               ((&))
@@ -129,6 +127,7 @@ import qualified Generics.SOP                as SOP
 import qualified GHC.Generics                as GHC
 import           Squeal.PostgreSQL
 import           System.Environment
+import           UnliftIO                    (MonadUnliftIO, MonadIO (..))
 
 -- | A `Migration` should contain an inverse pair of
 -- `up` and `down` instructions and a unique `name`.
@@ -144,7 +143,7 @@ data Migration io schemas0 schemas1 = Migration
 -- query to see if the `Migration` is executed. If not, then
 -- execute the `Migration` and insert its row in the `MigrationsTable`.
 migrateUp
-  :: MonadBaseControl IO io
+  :: MonadUnliftIO io
   => AlignedList (Migration io) schemas0 schemas1 -- ^ migrations to run
   -> PQ
     ("migrations" ::: MigrationsSchema ': schemas0)
@@ -157,7 +156,7 @@ migrateUp migration =
   where
 
     upMigrations
-      :: MonadBaseControl IO io
+      :: MonadUnliftIO io
       => AlignedList (Migration io) schemas0 schemas1
       -> PQ
         ("migrations" ::: MigrationsSchema ': schemas0)
@@ -168,7 +167,7 @@ migrateUp migration =
       step :>> steps -> upMigration step & pqThen (upMigrations steps)
 
     upMigration
-      :: MonadBase IO io
+      :: MonadIO io
       => Migration io schemas0 schemas1 -> PQ
         ("migrations" ::: MigrationsSchema ': schemas0)
         ("migrations" ::: MigrationsSchema ': schemas1)
@@ -185,7 +184,7 @@ migrateUp migration =
             & pqBind okResult)
 
     queryExecuted
-      :: MonadBase IO io
+      :: MonadIO io
       => Migration io schemas0 schemas1 -> PQ
         ("migrations" ::: MigrationsSchema ': schemas0)
         ("migrations" ::: MigrationsSchema ': schemas0)
@@ -200,7 +199,7 @@ migrateUp migration =
 -- query to see if the `Migration` is executed. If it is, then
 -- rewind the `Migration` and delete its row in the `MigrationsTable`.
 migrateDown
-  :: MonadBaseControl IO io
+  :: MonadUnliftIO io
   => AlignedList (Migration io) schemas0 schemas1 -- ^ migrations to rewind
   -> PQ
     ("migrations" ::: MigrationsSchema ': schemas1)
@@ -213,7 +212,7 @@ migrateDown migrations =
   where
 
     downMigrations
-      :: MonadBaseControl IO io
+      :: MonadUnliftIO io
       => AlignedList (Migration io) schemas0 schemas1 -> PQ
         ("migrations" ::: MigrationsSchema ': schemas1)
         ("migrations" ::: MigrationsSchema ': schemas0)
@@ -223,7 +222,7 @@ migrateDown migrations =
       step :>> steps -> downMigrations steps & pqThen (downMigration step)
 
     downMigration
-      :: MonadBase IO io
+      :: MonadIO io
       => Migration io schemas0 schemas1 -> PQ
         ("migrations" ::: MigrationsSchema ': schemas1)
         ("migrations" ::: MigrationsSchema ': schemas0)
@@ -240,7 +239,7 @@ migrateDown migrations =
             & pqBind okResult)
 
     queryExecuted
-      :: MonadBase IO io
+      :: MonadIO io
       => Migration io schemas0 schemas1 -> PQ
         ("migrations" ::: MigrationsSchema ': schemas1)
         ("migrations" ::: MigrationsSchema ': schemas1)
@@ -250,7 +249,7 @@ migrateDown migrations =
       okResult result
       ntuples result
 
-okResult :: MonadBase IO io => K Result results -> PQ schema schema io ()
+okResult :: MonadIO io => K Result results -> PQ schema schema io ()
 okResult result = do
   status <- resultStatus result
   when (not (status `elem` [CommandOk, TuplesOk])) $ do
@@ -355,7 +354,7 @@ displayUsage = do
 
 type RunMigrationName = Text
 
-getRunMigrationNames :: (MonadBase IO m) => PQ db0 db0 m [RunMigrationName]
+getRunMigrationNames :: (MonadIO m) => PQ db0 db0 m [RunMigrationName]
 getRunMigrationNames =
   fmap migrationName <$> (unsafePQ (define createMigrations & pqThen (runQuery fetchAllMigrations)) >>= getRows)
 
@@ -388,7 +387,7 @@ performCommand connectTo migrations Display =
     runNames <- getRunMigrationNames
     let names = extractList name migrations
         unrunNames = names \\ runNames
-    liftBase $ displayRunned runNames >> displayUnrunned unrunNames
+    liftIO $ displayRunned runNames >> displayUnrunned unrunNames
 performCommand connectTo migrations AllUp =
   withConnection connectTo (migrateUp migrations)
   >> performCommand connectTo migrations Display

@@ -12,6 +12,7 @@ A `MonadPQ` for pooled connections.
     DeriveFunctor
   , FlexibleContexts
   , FlexibleInstances
+  , InstanceSigs
   , MultiParamTypeClasses
   , RankNTypes
   , ScopedTypeVariables
@@ -30,13 +31,12 @@ module Squeal.PostgreSQL.Pool
   , poolpqliftWith
   ) where
 
-import Control.Monad.Base
 import Control.Monad.Trans
-import Control.Monad.Trans.Control
 import Data.ByteString
-import Data.Pool
 import Data.Time
 import Generics.SOP (K(..))
+import UnliftIO (MonadUnliftIO (..))
+import UnliftIO.Pool (Pool, createPool, destroyAllResources, withResource)
 
 import qualified Control.Monad.Fail as Fail
 
@@ -72,7 +72,7 @@ newtype PoolPQ (schemas :: SchemasType) m x =
 -- | Create a striped pool of connections.
 -- Although the garbage collector will destroy all idle connections when the pool is garbage collected it's recommended to manually `destroyAllResources` when you're done with the pool so that the connections are freed up as soon as possible.
 createConnectionPool
-  :: MonadBase IO io
+  :: MonadUnliftIO io
   => ByteString
   -- ^ The passed string can be empty to use all default parameters, or it can
   -- contain one or more parameter settings separated by whitespace.
@@ -89,7 +89,7 @@ createConnectionPool
   -- ^ Maximum number of connections to keep open per stripe. The smallest acceptable value is 1.
   -- Requests for connections will block if this limit is reached on a single stripe, even if other stripes have idle connections available.
   -> io (Pool (K Connection schemas))
-createConnectionPool conninfo stripes idle maxResrc = liftBase $
+createConnectionPool conninfo stripes idle maxResrc =
   createPool (connectdb conninfo) finish stripes idle maxResrc
 
 -- | `Applicative` instance for `PoolPQ`.
@@ -115,12 +115,8 @@ instance Monad m => Fail.MonadFail (PoolPQ schemas m) where
 instance MonadTrans (PoolPQ schemas) where
   lift m = PoolPQ $ \ _pool -> m
 
--- | `MonadBase` instance for `PoolPQ`.
-instance MonadBase b m => MonadBase b (PoolPQ schemas m) where
-  liftBase = lift . liftBase
-
 -- | `MonadPQ` instance for `PoolPQ`.
-instance MonadBaseControl IO io => MonadPQ schemas (PoolPQ schemas io) where
+instance MonadUnliftIO io => MonadPQ schemas (PoolPQ schemas io) where
   manipulateParams manipulation params = PoolPQ $ \ pool -> do
     withResource pool $ \ conn -> do
       (K result :: K (K Result ys) schemas) <- flip unPQ conn $
@@ -142,6 +138,21 @@ instance MonadBaseControl IO io => MonadPQ schemas (PoolPQ schemas io) where
         liftPQ m
       return result
 
+-- | 'MonadIO' instance for 'PoolPQ'.
+instance (MonadIO m)
+  => MonadIO (PoolPQ schemas m) where
+  liftIO = lift . liftIO
+
+-- | 'MonadUnliftIO' instance for 'PoolPQ'.
+instance (MonadUnliftIO m)
+  => MonadUnliftIO (PoolPQ schemas m) where
+  withRunInIO
+      :: ((forall a . PoolPQ schemas m a -> IO a) -> IO b)
+      -> PoolPQ schemas m b
+  withRunInIO inner = PoolPQ $ \pool ->
+    withRunInIO $ \(run :: (forall x . m x -> IO x)) ->
+      inner (\poolpq -> run $ runPoolPQ poolpq pool)
+
 -- | A snapshot of the state of a `PoolPQ` computation.
 type PoolPQRun schemas =
   forall m x. Monad m => PoolPQ schemas m x -> m x
@@ -150,10 +161,3 @@ type PoolPQRun schemas =
 poolpqliftWith :: Functor m => (PoolPQRun schemas -> m a) -> PoolPQ schemas m a
 poolpqliftWith f = PoolPQ $ \ pool ->
   (f $ \ pq -> runPoolPQ pq pool)
-
--- | `MonadBaseControl` instance for `PoolPQ`.
-instance MonadBaseControl b m => MonadBaseControl b (PoolPQ schemas m) where
-  type StM (PoolPQ schemas m) x = StM m x
-  liftBaseWith f =
-    poolpqliftWith $ \ run -> liftBaseWith $ \ runInBase -> f $ runInBase . run
-  restoreM = PoolPQ . const . restoreM
