@@ -16,7 +16,7 @@ module ExceptionHandling
 where
 
 import           Control.Monad               (void)
-import           Control.Monad.Base          (MonadBase)
+import Control.Monad.IO.Class (MonadIO (..))
 import qualified Data.ByteString.Char8       as Char8
 import           Data.Int                    (Int16)
 import           Data.Text                   (Text)
@@ -103,10 +103,10 @@ connectionString = "host=localhost port=5432 dbname=exampledb"
 testUser :: User
 testUser = User "TestUser" Nothing (VarArray [])
 
-newUser :: (MonadBase IO m, MonadPQ Schemas m) => User -> m ()
+newUser :: (MonadIO m, MonadPQ Schemas m) => User -> m ()
 newUser u = void $ manipulateParams insertUser (userName u, userVec u)
 
-insertUserTwice :: (MonadBase IO m, MonadPQ Schemas m) => m ()
+insertUserTwice :: (MonadIO m, MonadPQ Schemas m) => m ()
 insertUserTwice = newUser testUser >> newUser testUser
 
 specs :: SpecWith ()

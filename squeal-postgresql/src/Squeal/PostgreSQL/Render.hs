@@ -38,7 +38,7 @@ module Squeal.PostgreSQL.Render
   , printSQL
   ) where
 
-import Control.Monad.Base
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
@@ -126,5 +126,5 @@ renderSymbol = fromString (symbolVal' (proxy# :: Proxy# s))
 class RenderSQL sql where renderSQL :: sql -> ByteString
 
 -- | Print SQL.
-printSQL :: (RenderSQL sql, MonadBase IO io) => sql -> io ()
-printSQL = liftBase . Char8.putStrLn . renderSQL
+printSQL :: (RenderSQL sql, MonadIO io) => sql -> io ()
+printSQL = liftIO . Char8.putStrLn . renderSQL

@@ -17,7 +17,7 @@ features.
 We'll need some imports.
 
 >>> import Control.Monad (void)
->>> import Control.Monad.Base (liftBase)
+>>> import Control.Monad.IO.Class (liftIO)
 >>> import Data.Int (Int32)
 >>> import Data.Text (Text)
 >>> import Squeal.PostgreSQL
@@ -60,7 +60,7 @@ yielding a `TableType`, or to pair a `ColumnConstraint` with a `NullityType`,
 yielding a `ColumnType`. It is intended to connote Haskell's @=>@ operator
 
 Next, we'll write `Definition`s to set up and tear down the schema. In
-Squeal, a `Definition` like `createTable`, `alterTable` or `dropTable` 
+Squeal, a `Definition` like `createTable`, `alterTable` or `dropTable`
 has two type parameters, corresponding to the schema
 before being run and the schema after. We can compose definitions using `>>>`.
 Here and in the rest of our commands we make use of overloaded
@@ -69,7 +69,7 @@ labels to refer to named tables and columns in our schema.
 >>> :{
 let
   setup :: Definition (Public '[]) Schemas
-  setup = 
+  setup =
     createTable #users
       ( serial `as` #id :*
         (text & notNullable) `as` #name )
@@ -119,7 +119,7 @@ We'll need a Haskell type for users. We give the type `Generics.SOP.Generic` and
 `Generics.SOP.HasDatatypeInfo` instances so that we can decode the rows
 we receive when we run @getUsers@. Notice that the record fields of the
 @User@ type match the column names of @getUsers@.
- 
+
 >>> data User = User { userName :: Text, userEmail :: Maybe Text } deriving (Show, GHC.Generic)
 >>> instance SOP.Generic User
 >>> instance SOP.HasDatatypeInfo User
@@ -162,7 +162,7 @@ Let's create some users to add to the database.
 >>> :{
 let
   users :: [User]
-  users = 
+  users =
     [ User "Alice" (Just "alice@gmail.com")
     , User "Bob" Nothing
     , User "Carole" (Just "carole@hotmail.com")
@@ -184,7 +184,7 @@ let
     _ <- traversePrepared_ insertUser users
     usersResult <- runQuery getUsers
     usersRows <- getRows usersResult
-    liftBase $ print (usersRows :: [User])
+    liftIO $ print (usersRows :: [User])
 in
   void . withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup

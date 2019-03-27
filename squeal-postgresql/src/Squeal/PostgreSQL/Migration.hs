@@ -63,7 +63,16 @@ Now that we have a couple migrations we can chain them together.
 
 >>> let migrations = makeUsers :>> makeEmails :>> Done
 
-Finally, we can run the migration and even roll it back.
+>>> :{
+let
+  numMigrations
+    :: Has "migrations" schemas MigrationsSchema
+    => PQ schemas schemas IO ()
+  numMigrations = do
+    result <- runQuery (select Star (from (table (#migrations ! #schema_migrations `as` #m))))
+    num <- ntuples result
+    liftIO $ print num
+:}
 
 >>> import Control.Monad.IO.Class
 >>> :{
@@ -145,7 +154,6 @@ module Squeal.PostgreSQL.Migration
 
 import           Control.Category
 import           Control.Monad
-import           Control.Monad.Base
 import           Data.ByteString             (ByteString)
 import           Data.Foldable               (traverse_)
 import           Data.Function               ((&))
@@ -159,6 +167,7 @@ import qualified GHC.Generics                as GHC
 import           Prelude hiding ((.), id)
 import           Squeal.PostgreSQL
 import           System.Environment
+import           UnliftIO                    (MonadIO (..))
 
 -- | A `Migration` is a named "isomorphism" over a given category.
 -- It should contain an inverse pair of `up` and `down`
@@ -382,7 +391,7 @@ defaultMain connectTo migrations = do
       runNames <- getRunMigrationNames
       let names = extractList name migrations
           unrunNames = names \\ runNames
-      liftBase $ displayRunned runNames >> displayUnrunned unrunNames
+      liftIO $ displayRunned runNames >> displayUnrunned unrunNames
 
     suppressNotices :: PQ schema schema IO ()
     suppressNotices = void . manipulate $
@@ -402,7 +411,7 @@ defaultMain connectTo migrations = do
       putStrLn "rollback   to rollback all available migrations"
       putStrLn "status     to display migrations run and migrations left to run"
 
-    getRunMigrationNames :: (MonadBase IO m) => PQ db0 db0 m [Text]
+    getRunMigrationNames :: (MonadIO m) => PQ db0 db0 m [Text]
     getRunMigrationNames =
       fmap migrationName <$> (unsafePQ (define createMigrations & pqThen (runQuery selectMigrations)) >>= getRows)
 
