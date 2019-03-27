@@ -8,8 +8,13 @@ Stability: experimental
 This module defines a `Migration` type to safely
 change the schema of your database over time. Let's see an example!
 
+First turn on some extensions.
+
 >>> :set -XDataKinds -XOverloadedLabels
 >>> :set -XOverloadedStrings -XFlexibleContexts -XTypeOperators
+
+Next, let's define our `TableType`s.
+
 >>> :{
 type UsersTable =
   '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
@@ -20,7 +25,7 @@ type UsersTable =
 
 >>> :{
 type EmailsTable =
-  '[  "pk_emails" ::: 'PrimaryKey '["id"]
+  '[ "pk_emails" ::: 'PrimaryKey '["id"]
    , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
    ] :=>
   '[ "id" ::: 'Def :=> 'NotNull 'PGint4
@@ -29,6 +34,8 @@ type EmailsTable =
    ]
 :}
 
+Now we can define some `Migration`s to make our tables.
+
 >>> :{
 let
   makeUsers :: Migration Definition (Public '[]) '["public" ::: '["users" ::: 'Table UsersTable]]
@@ -36,7 +43,7 @@ let
     { name = "make users table"
     , up = createTable #users
         ( serial `as` #id :*
-          (text & notNullable) `as` #name )
+          notNullable text `as` #name )
         ( primaryKey #id `as` #pk_users )
     , down = dropTable #users
     }
@@ -50,8 +57,8 @@ let
     { name = "make emails table"
     , up = createTable #emails
           ( serial `as` #id :*
-            (int & notNullable) `as` #user_id :*
-            (text & nullable) `as` #email )
+            notNullable int `as` #user_id :*
+            nullable text `as` #email )
           ( primaryKey #id `as` #pk_emails :*
             foreignKey #user_id #users #id
               OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
@@ -59,20 +66,11 @@ let
     }
 :}
 
-Now that we have a couple migrations we can chain them together.
+Now that we have a couple migrations we can chain them together into an `AlignedList`.
 
 >>> let migrations = makeUsers :>> makeEmails :>> Done
 
->>> :{
-let
-  numMigrations
-    :: Has "migrations" schemas MigrationsSchema
-    => PQ schemas schemas IO ()
-  numMigrations = do
-    result <- runQuery (select Star (from (table (#migrations ! #schema_migrations `as` #m))))
-    num <- ntuples result
-    liftIO $ print num
-:}
+Now run the migrations.
 
 >>> import Control.Monad.IO.Class
 >>> :{
@@ -117,6 +115,10 @@ Migrations already run:
 Migrations left to run:
   - make users table
   - make emails table
+
+In addition to enabling `Migration`s using pure SQL `Definition`s for
+the `up` and `down` instructions, you can also perform impure `IO` actions
+by using a `Migration`s over the `Terminally` `PQ` `IO` category.
 -}
 {-# LANGUAGE
     DataKinds
@@ -206,9 +208,9 @@ instance Migratory Definition where
   migrateUp = migrateUp . alignedMap pureMigration
   migrateDown = migrateDown . alignedMap pureMigration
 
-{- | `Terminally` turns an indexed monad transformer into a category by
-restricting the return type to `()` and permuting the type variables.
-This is similar to how applying a monad to `()` yields a monoid.
+{- | `Terminally` turns an indexed monad transformer and the monad it transforms
+into a category by restricting the return type to @()@ and permuting the type variables.
+This is similar to how applying a monad to @()@ yields a monoid.
 Since a `Terminally` action has a trivial return value, the only reason
 to run one is for the side effects, in particular database effects.
 -}
@@ -224,8 +226,9 @@ instance
     id = Terminally (return ())
     Terminally g . Terminally f = Terminally $ pqThen g f
 
--- | terminally ignores the output of a computation, returning `()` and
--- wrapping it up in a `Terminally`.
+-- | `terminally` ignores the output of a computation, returning @()@ and
+-- wrapping it up into a `Terminally`. You can lift an action in the base monad
+-- by using @terminally . lift@.
 terminally
   :: Functor (trans x0 x1 monad)
   => trans x0 x1 monad ignore
