@@ -137,19 +137,15 @@ Migrations left to run:
 module Squeal.PostgreSQL.Migration
   ( -- * Migration
     Migration (..)
+  , Migratory (..)
   , Terminally (..)
   , terminally
   , pureMigration
-  , Migratory (..)
-    -- * Migration table
+    -- * Migrations table
   , MigrationsTable
-  , createMigrations
-  , insertMigration
-  , deleteMigration
-  , selectMigration
    -- * CLI
   , defaultMain
-  , MigrateCommand
+  , MigrateCommand (..)
   ) where
 
 import           Control.Category
@@ -179,27 +175,51 @@ data Migration p schemas0 schemas1 = Migration
   , down :: p schemas1 schemas0 -- ^ The `down` instruction of a `Migration`.
   } deriving (GHC.Generic)
 
--- | `Terminally` turns an indexed monad transformer into a category by
--- restricting the return type to `()` and permuting the type variables.
+{- |
+A `Migratory` @p@ is a `Category` for which one can execute or rewind
+an `AlignedList` of `Migration`s over @p@. This includes the category of pure
+SQL `Definition`s and the category of impure `Terminally` `PQ` `IO` actions.
+-}
+class Category p => Migratory p where
+
+  {- |
+  Run an `AlignedList` of `Migration`s.
+  Create the `MigrationsTable` as @public.schema_migrations@ if it does not already exist.
+  In a transaction for each each `Migration`, query to see if the `Migration` has been executed;
+  if not, execute the `Migration` and insert a row in the `MigrationsTable`.
+  -}
+  migrateUp
+    :: AlignedList (Migration p) schemas0 schemas1
+    -> PQ schemas0 schemas1 IO ()
+
+  {- |
+  Rewind an `AlignedList` of `Migration`s.
+  Create the `MigrationsTable` as @public.schema_migrations@ if it does not already exist.
+  In a transaction for each each `Migration`, query to see if the `Migration` has been executed;
+  if so, rewind the `Migration` and delete its row in the `MigrationsTable`.
+  -}
+  migrateDown
+    :: AlignedList (Migration p) schemas0 schemas1
+    -> PQ schemas1 schemas0 IO ()
+
+instance Migratory Definition where
+  migrateUp = migrateUp . alignedMap pureMigration
+  migrateDown = migrateDown . alignedMap pureMigration
+
+{- | `Terminally` turns an indexed monad transformer into a category by
+restricting the return type to `()` and permuting the type variables.
+This is similar to how applying a monad to `()` yields a monoid.
+Since a `Terminally` action has a trivial return value, the only reason
+to run one is for the side effects, in particular database effects.
+-}
 newtype Terminally trans monad x0 x1 = Terminally
   { runTerminally :: trans x0 x1 monad () }
   deriving GHC.Generic
 
--- | A `pureMigration` turns a `Migration` involving only pure SQL
--- `Definition`s into a `Migration` that may involve `IO`.
-pureMigration
-  :: Migration Definition schema0 schema1
-  -> Migration (Terminally PQ IO) schema0 schema1
-pureMigration migration = Migration
-  { name = name migration
-  , up = terminally . define $ up migration
-  , down = terminally . define $ down migration
-  }
-
 instance
   ( IndexedMonadTransPQ trans
   , Monad monad
-  , forall x0 x1. Monad (trans x0 x1 monad) )
+  , forall x0 x1. x0 ~ x1 => Monad (trans x0 x1 monad) )
   => Category (Terminally trans monad) where
     id = Terminally (return ())
     Terminally g . Terminally f = Terminally $ pqThen g f
@@ -212,17 +232,16 @@ terminally
   -> Terminally trans monad x0 x1
 terminally = Terminally . void
 
-class Migratory p where
-  migrateUp
-    :: AlignedList (Migration p) schemas0 schemas1
-    -> PQ schemas0 schemas1 IO ()
-  migrateDown
-    :: AlignedList (Migration p) schemas0 schemas1
-    -> PQ schemas1 schemas0 IO ()
-
-instance Migratory Definition where
-  migrateUp = migrateUp . alignedMap pureMigration
-  migrateDown = migrateDown . alignedMap pureMigration
+-- | A `pureMigration` turns a `Migration` involving only pure SQL
+-- `Definition`s into a `Migration` that may be combined with arbitrary `IO`.
+pureMigration
+  :: Migration Definition schema0 schema1
+  -> Migration (Terminally PQ IO) schema0 schema1
+pureMigration migration = Migration
+  { name = name migration
+  , up = terminally . define $ up migration
+  , down = terminally . define $ down migration
+  }
 
 instance Migratory (Terminally PQ IO) where
 
