@@ -666,7 +666,7 @@ where_
 where_ wh rels = rels {whereClause = wh : whereClause rels}
 
 -- | A `groupBy` is a transformation of `TableExpression`s which switches
--- its `Grouping` from `Ungrouped` to `Grouped`. Use @group Nil@ to perform
+-- its `Grouping` from `Ungrouped` to `Grouped`. Use @groupBy Nil@ to perform
 -- a "grand total" aggregation query.
 groupBy
   :: SListI bys
