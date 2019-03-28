@@ -730,7 +730,7 @@ unnest = unsafeSetOfFunction "unnest"
 
 -- | Expands the outermost JSON object into a set of key/value pairs.
 -- >>> import Data.Aeson
--- >>> printSQL (select Star (from (jsonEach (jsonLit (object ["a" .= "foo", "b" .= "bar"])))))
+-- >>> printSQL (select Star (from (jsonEach (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
 -- SELECT * FROM json_each(('{"a":"foo","b":"bar"}' :: json))
 jsonEach
   :: Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjson) -- ^ json object
@@ -740,7 +740,7 @@ jsonEach = unsafeSetOfFunction "json_each"
 
 -- | Expands the outermost binary JSON object into a set of key/value pairs.
 -- >>> import Data.Aeson
--- >>> printSQL (select Star (from (jsonbEach (jsonbLit (object ["a" .= "foo", "b" .= "bar"])))))
+-- >>> printSQL (select Star (from (jsonbEach (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
 -- SELECT * FROM jsonb_each(('{"a":"foo","b":"bar"}' :: jsonb))
 jsonbEach
   :: Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
@@ -750,7 +750,7 @@ jsonbEach = unsafeSetOfFunction "jsonb_each"
 
 -- | Expands the outermost JSON object into a set of key/value pairs.-- | Expands the outermost binary JSON object into a set of key/value pairs.
 -- >>> import Data.Aeson
--- >>> printSQL (select Star (from (jsonEachText (jsonLit (object ["a" .= "foo", "b" .= "bar"])))))
+-- >>> printSQL (select Star (from (jsonEachText (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
 -- SELECT * FROM json_each_text(('{"a":"foo","b":"bar"}' :: json))
 jsonEachText
   :: Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjson) -- ^ json object
@@ -760,7 +760,7 @@ jsonEachText = unsafeSetOfFunction "json_each_text"
 
 -- | Expands the outermost binary JSON object into a set of key/value pairs.
 -- >>> import Data.Aeson
--- >>> printSQL (select Star (from (jsonbEachText (jsonbLit (object ["a" .= "foo", "b" .= "bar"])))))
+-- >>> printSQL (select Star (from (jsonbEachText (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
 -- SELECT * FROM jsonb_each_text(('{"a":"foo","b":"bar"}' :: jsonb))
 jsonbEachText
   :: Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
@@ -770,7 +770,7 @@ jsonbEachText = unsafeSetOfFunction "jsonb_each_text"
 
 -- | Returns set of keys in the outermost JSON object.
 -- >>> import Data.Aeson
--- >>> printSQL (jsonObjectKeys (jsonLit (object ["a" .= "foo", "b" .= "bar"])))
+-- >>> printSQL (jsonObjectKeys (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))
 -- json_object_keys(('{"a":"foo","b":"bar"}' :: json))
 jsonObjectKeys
   :: Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjson) -- ^ json object
@@ -780,7 +780,7 @@ jsonObjectKeys = unsafeSetOfFunction "json_object_keys"
 
 -- | Returns set of keys in the outermost JSON object.
 -- >>> import Data.Aeson
--- >>> printSQL (jsonbObjectKeys (jsonbLit (object ["a" .= "foo", "b" .= "bar"])))
+-- >>> printSQL (jsonbObjectKeys (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))
 -- jsonb_object_keys(('{"a":"foo","b":"bar"}' :: jsonb))
 jsonbObjectKeys
   :: Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb object

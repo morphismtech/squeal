@@ -47,6 +47,7 @@ module Squeal.PostgreSQL.Expression
   , unsafeFunctionHet
   , HasParameter (parameter)
   , param
+  , Literal (..)
     -- ** Null
   , null_
   , notNull
@@ -75,7 +76,6 @@ module Squeal.PostgreSQL.Expression
   , ceiling_
   , greatest
   , least
-  , litChar
     -- ** Conditions
   , true
   , false
@@ -136,8 +136,6 @@ module Squeal.PostgreSQL.Expression
   , (.-.)
   , (#-.)
     -- *** Functions
-  , jsonLit
-  , jsonbLit
   , toJson
   , toJsonb
   , arrayToJson
@@ -262,7 +260,9 @@ import Data.Function ((&))
 import Data.Kind
 import Data.Semigroup hiding (All)
 import qualified Data.Aeson as JSON
+import Data.Int
 import Data.String
+import Data.Text (Text)
 import Data.Word
 import Generics.SOP hiding (All, from)
 import GHC.OverloadedLabels
@@ -271,9 +271,13 @@ import Numeric
 import Prelude hiding (id, (.))
 
 import qualified Data.ByteString as ByteString
+import qualified Data.Text as Text
+import qualified Data.Text.Lazy as Lazy (Text)
+import qualified Data.Text.Lazy as Lazy.Text
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 
+import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
@@ -735,8 +739,8 @@ unsafeFunction :: ByteString {- ^ function -} -> x :--> y
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
--- | >>> printSQL $ unsafeFunctionHet "f" (currentTime :* localTimestamp :* false *: litChar 'a')
--- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, E'a')
+-- | >>> printSQL $ unsafeFunctionHet "f" (currentTime :* localTimestamp :* false *: literal 'a')
+-- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, (E'a' :: char(1)))
 unsafeFunctionHet
   :: SListI xs
   => ByteString {- ^ function -}
@@ -1313,16 +1317,6 @@ infixl 6 #-.
 Table 9.45: JSON creation functions
 -----------------------------------------}
 
--- | Literal binary JSON
-jsonbLit :: JSON.ToJSON x => x -> Expr (null 'PGjsonb)
-jsonbLit = cast jsonb . UnsafeExpression
-  . singleQuotedUtf8 . toStrict . JSON.encode
-
--- | Literal JSON
-jsonLit :: JSON.ToJSON x => x -> Expr (null 'PGjson)
-jsonLit = cast json . UnsafeExpression
-  . singleQuotedUtf8 . toStrict . JSON.encode
-
 -- | Returns the value as json. Arrays and composites are converted
 -- (recursively) to arrays and objects; otherwise, if there is a cast from the
 -- type to json, the cast function will be used to perform the conversion;
@@ -1576,10 +1570,6 @@ toTSvector = unsafeFunction "to_tsvector"
 setWeight
   :: FunctionHet '[null 'PGtsvector, null ('PGchar 1)] (null 'PGtsvector)
 setWeight = unsafeFunctionHet "set_weight"
-
-litChar :: Char -> Expr (null ('PGchar 1))
-litChar chr = UnsafeExpression $
-  "E\'" <> fromString (escape =<< [chr]) <> "\'"
 
 strip :: null 'PGtsvector :--> null 'PGtsvector
 strip = unsafeFunction "strip"
@@ -2556,3 +2546,23 @@ instance RenderSQL TimeUnit where
 interval_ :: Double -> TimeUnit -> Expr (null 'PGinterval)
 interval_ num unit = UnsafeExpression . parenthesized $ "INTERVAL" <+>
   "'" <> fromString (show num) <+> renderSQL unit <> "'"
+
+class Literal hask where
+  literal :: hask -> Expr (null (PG hask))
+instance JSON.ToJSON hask => Literal (Json hask) where
+  literal = cast json . UnsafeExpression
+    . singleQuotedUtf8 . toStrict . JSON.encode . getJson
+instance JSON.ToJSON hask => Literal (Jsonb hask) where
+  literal = cast jsonb . UnsafeExpression
+    . singleQuotedUtf8 . toStrict . JSON.encode . getJsonb
+instance Literal Char where
+  literal chr = cast (char @1) . UnsafeExpression $
+    "E\'" <> fromString (escape chr) <> "\'"
+instance Literal String where literal = fromString
+instance Literal Int16 where literal = fromIntegral
+instance Literal Int32 where literal = fromIntegral
+instance Literal Int64 where literal = fromIntegral
+instance Literal Float where literal = fromRational . toRational
+instance Literal Double where literal = fromRational . toRational
+instance Literal Text where literal = fromString . Text.unpack
+instance Literal Lazy.Text where literal = fromString . Lazy.Text.unpack
