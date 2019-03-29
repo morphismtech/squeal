@@ -297,7 +297,7 @@ The expression syntax allows the calculation of
 values from primitive expression using arithmetic, logical,
 and other operations.
 
-The type paremeters of `Expression` are
+The type parameters of `Expression` are
 
 * @outer :: @ `FromType`, the @from@ clauses of any outer queries in which
   the `Expression` is a correlated subquery expression;
