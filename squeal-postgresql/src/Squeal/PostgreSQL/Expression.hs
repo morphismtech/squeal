@@ -734,32 +734,29 @@ least = unsafeFunctionVar "LEAST"
 
 -- | >>> printSQL $ unsafeBinaryOp "OR" true false
 -- (TRUE OR FALSE)
-unsafeBinaryOp :: ByteString {- ^ operator -} -> Operator ty0 ty1 ty2
+unsafeBinaryOp :: ByteString -> Operator ty0 ty1 ty2
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderSQL x <+> op <+> renderSQL y
 
 -- | >>> printSQL $ unsafeUnaryOpL "NOT" true
 -- (NOT TRUE)
-unsafeUnaryOpL :: ByteString {- ^ operator -} -> x :--> y
+unsafeUnaryOpL :: ByteString -> x :--> y
 unsafeUnaryOpL op x = UnsafeExpression $ parenthesized $ op <+> renderSQL x
 
 -- | >>> printSQL $ true & unsafeUnaryOpR "IS NOT TRUE"
 -- (TRUE IS NOT TRUE)
-unsafeUnaryOpR :: ByteString {- ^ operator -} -> x :--> y
+unsafeUnaryOpR :: ByteString -> x :--> y
 unsafeUnaryOpR op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
 
 -- | >>> printSQL $ unsafeFunction "f" true
 -- f(TRUE)
-unsafeFunction :: ByteString {- ^ function -} -> x :--> y
+unsafeFunction :: ByteString -> x :--> y
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
 -- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: literal 'a')
 -- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, E'a')
-unsafeFunctionN
-  :: SListI xs
-  => ByteString {- ^ function -}
-  -> FunctionN xs y
+unsafeFunctionN :: SListI xs => ByteString -> FunctionN xs y
 unsafeFunctionN fun xs = UnsafeExpression $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
