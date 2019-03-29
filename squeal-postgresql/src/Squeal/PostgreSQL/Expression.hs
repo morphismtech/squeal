@@ -48,7 +48,7 @@ module Squeal.PostgreSQL.Expression
   , HasParameter (parameter)
   , param
   , Literal (..)
-    -- ** Null
+    -- * Null
   , null_
   , notNull
   , coalesce
@@ -57,7 +57,7 @@ module Squeal.PostgreSQL.Expression
   , isNotNull
   , matchNull
   , nullIf
-    -- ** Collections
+    -- * Collections
   , array
   , array1
   , array2
@@ -66,7 +66,7 @@ module Squeal.PostgreSQL.Expression
   , row
   , field
   , PGSubset (..)
-    -- ** Functions
+    -- * Functions
   , atan2_
   , cast
   , quot_
@@ -76,7 +76,7 @@ module Squeal.PostgreSQL.Expression
   , ceiling_
   , greatest
   , least
-    -- ** Conditions
+    -- * Conditions
   , true
   , false
   , not_
@@ -103,7 +103,7 @@ module Squeal.PostgreSQL.Expression
   , isNotFalse
   , isUnknown
   , isNotUnknown
-    -- ** Time
+    -- * Time
   , TimeOp (..)
   , currentDate
   , currentTime
@@ -117,25 +117,25 @@ module Squeal.PostgreSQL.Expression
   , makeTimestamptz
   , interval_
   , TimeUnit (..)
-    -- ** Text
+    -- * Text
   , lower
   , upper
   , charLength
   , like
   , ilike
-    -- ** Json
-    -- *** Json and Jsonb operators
+    -- * Json
+    -- ** Json and Jsonb operators
   , (.->)
   , (.->>)
   , (.#>)
   , (.#>>)
-    -- *** Jsonb operators
+    -- ** Jsonb operators
   , (.?)
   , (.?|)
   , (.?&)
   , (.-.)
   , (#-.)
-    -- *** Functions
+    -- ** Functions
   , toJson
   , toJsonb
   , arrayToJson
@@ -162,7 +162,7 @@ module Squeal.PostgreSQL.Expression
   , jsonbSet
   , jsonbInsert
   , jsonbPretty
-    -- ** Text Search
+    -- * Text Search
   , (@@)
   , (.&)
   , (.|)
@@ -184,7 +184,7 @@ module Squeal.PostgreSQL.Expression
   , tsDelete
   , tsFilter
   , tsHeadline
-    -- ** Aggregation
+    -- * Aggregation
   , Aggregate (..)
   , Distinction (..)
   , PGAvg
