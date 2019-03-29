@@ -301,11 +301,12 @@ The type parameters of `Expression` are
 
 * @outer :: @ `FromType`, the @from@ clauses of any outer queries in which
   the `Expression` is a correlated subquery expression;
-* @commons :: @ `FromType`, `Squeal.PostgreSQL.Query.CommonTableExpression`s that are in
-  scope for the `Expression`;
+* @commons :: @ `FromType`, the `Squeal.PostgreSQL.Query.CommonTableExpression`s
+  that are in scope for the `Expression`;
 * @grp :: @ `Grouping`, the `Grouping` of the @from@ clause which may limit
   which columns may be referenced by alias;
-* @schemas :: @ `SchemasType`, the schemas of your database;
+* @schemas :: @ `SchemasType`, the schemas of your database that are in
+  scope for the `Expression`;
 * @from :: @ `FromType`, the @from@ clause which the `Expression` may use
   to reference columns by alias;
 * @ty :: @ `NullityType`, the type of the `Expression`.
