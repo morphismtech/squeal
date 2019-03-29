@@ -27,8 +27,6 @@ module Squeal.PostgreSQL.Pool
   , createConnectionPool
   , Pool
   , destroyAllResources
-  , PoolPQRun
-  , poolpqliftWith
   ) where
 
 import Control.Monad.Trans
@@ -49,21 +47,23 @@ Typical use case would be to create your pool using `createConnectionPool` and r
 
 Here's a simplified example:
 
-> type Schema = '[ "tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'NotNull 'PGint2])]
->
-> someQuery :: Manipulation Schema '[ 'NotNull 'PGint2] '[]
-> someQuery = insertRow #tab
->  (Set (param @1) `As` #col :* Nil)
-> OnConflictDoNothing (Returning Nil)
->
-> insertOne :: (MonadBaseControl IO m, MonadPQ Schema m) => m ()
-> insertOne = void $ manipulateParams someQuery . Only $ (1 :: Int16)
->
-> insertOneInPool :: ByteString -> IO ()
-> insertOneInPool connectionString = do
->   pool <- createConnectionPool connectionString 1 0.5 10
->   liftIO $ runPoolPQ (insertOne) pool
-
+>>> import Squeal.PostgreSQL
+>>> :{
+do
+  let
+    query :: Query_ (Public '[]) () (Only Char)
+    query = values_ $ literal 'a' `as` #fromOnly
+    session :: PoolPQ (Public '[]) IO Char
+    session = do
+      result <- runQuery query
+      Just (Only chr) <- firstRow result
+      return chr
+  pool <- createConnectionPool "host=localhost port=5432 dbname=exampledb" 1 0.5 10
+  chr <- runPoolPQ session pool
+  destroyAllResources pool
+  putChar chr
+:}
+a
 -}
 newtype PoolPQ (schemas :: SchemasType) m x =
   PoolPQ { runPoolPQ :: Pool (K Connection schemas) -> m x }
@@ -152,12 +152,3 @@ instance (MonadUnliftIO m)
   withRunInIO inner = PoolPQ $ \pool ->
     withRunInIO $ \(run :: (forall x . m x -> IO x)) ->
       inner (\poolpq -> run $ runPoolPQ poolpq pool)
-
--- | A snapshot of the state of a `PoolPQ` computation.
-type PoolPQRun schemas =
-  forall m x. Monad m => PoolPQ schemas m x -> m x
-
--- | Helper function in defining `MonadBaseControl` instance for `PoolPQ`.
-poolpqliftWith :: Functor m => (PoolPQRun schemas -> m a) -> PoolPQ schemas m a
-poolpqliftWith f = PoolPQ $ \ pool ->
-  (f $ \ pq -> runPoolPQ pq pool)

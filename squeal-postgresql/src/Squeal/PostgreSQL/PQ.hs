@@ -49,8 +49,6 @@ module Squeal.PostgreSQL.PQ
   , evalPQ
   , IndexedMonadTransPQ (..)
   , MonadPQ (..)
-  , PQRun
-  , pqliftWith
     -- * Results
   , LibPQ.Result
   , LibPQ.Row
@@ -506,15 +504,6 @@ instance (MonadUnliftIO m, schemas0 ~ schemas1)
   withRunInIO inner = PQ $ \conn ->
     withRunInIO $ \(run :: (forall x . m x -> IO x)) ->
       K <$> inner (\pq -> run $ unK <$> unPQ pq conn)
-
--- | A snapshot of the state of a `PQ` computation.
-type PQRun schemas =
-  forall m x. Monad m => PQ schemas schemas m x -> m (K x schemas)
-
--- | Helper function in defining `MonadBaseControl` instance for `PQ`.
-pqliftWith :: Functor m => (PQRun schemas -> m a) -> PQ schemas schemas m a
-pqliftWith f = PQ $ \ conn ->
-  fmap K (f $ \ pq -> unPQ pq conn)
 
 -- | Get a row corresponding to a given row number from a `LibPQ.Result`,
 -- throwing an exception if the row number is out of bounds.
