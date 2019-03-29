@@ -94,6 +94,7 @@ module Squeal.PostgreSQL.Schema
   , In
   , Length
   , (*:)
+  , (+++)
     -- * Type Classifications
   , HasOid (..)
   , PGNum
@@ -769,3 +770,11 @@ single step = step :>> Done
 -- | A useful operator for ending an `NP` list of length at least 2 without `Nil`.
 (*:) :: f x -> f y -> NP f '[x,y]
 x *: y = x :* y :* Nil
+infixl 9 *:
+
+-- | Concatenate `NP` lists.
+(+++) :: NP f xs -> NP f ys -> NP f (Join xs ys)
+xs +++ ys = case xs of
+  Nil -> ys
+  x :* xs' -> x :* (xs' +++ ys)
+infixr 5 +++
