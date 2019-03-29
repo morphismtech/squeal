@@ -35,19 +35,19 @@ module Squeal.PostgreSQL.Expression
   ( -- * Expression
     Expression (..)
   , Expr
-  , Operator
-  , unsafeBinaryOp
   , (:-->)
+  , unsafeFunction
   , unsafeUnaryOpL
   , unsafeUnaryOpR
-  , unsafeFunction
-  , FunctionHom
-  , unsafeFunctionHom
-  , FunctionHet
-  , unsafeFunctionHet
+  , Operator
+  , unsafeBinaryOp
+  , FunctionVar
+  , unsafeFunctionVar
+  , FunctionN
+  , unsafeFunctionN
+  , Literal (..)
   , HasParameter (parameter)
   , param
-  , Literal (..)
     -- * Null
   , null_
   , notNull
@@ -66,31 +66,31 @@ module Squeal.PostgreSQL.Expression
   , row
   , field
   , PGSubset (..)
-    -- * Functions
+    -- * Numerical
   , atan2_
-  , cast
   , quot_
   , rem_
   , trunc
   , round_
   , ceiling_
-  , greatest
-  , least
-    -- * Conditions
+    -- * Logic
+  , Condition
   , true
   , false
   , not_
   , (.&&)
   , (.||)
-  , Condition
   , caseWhenThenElse
   , ifThenElse
+    -- * Comparison
   , (.==)
   , (./=)
   , (.>=)
   , (.<)
   , (.<=)
   , (.>)
+  , greatest
+  , least
   , between
   , notBetween
   , betweenSymmetric
@@ -208,6 +208,7 @@ module Squeal.PostgreSQL.Expression
   , OrderBy (..)
     -- * Types
   , TypeExpression (..)
+  , cast
   , PGTyped (..)
   , typedef
   , typetable
@@ -286,7 +287,8 @@ column expressions
 -----------------------------------------}
 
 {- | `Expression`s are used in a variety of contexts,
-such as in the target list of the `Squeal.PostgreSQL.Query.select` command,
+such as in the target `Squeal.PostgreSQL.Query.List` of the
+`Squeal.PostgreSQL.Query.select` command,
 as new column values in `Squeal.PostgreSQL.Manipulation.insertRow` or
 `Squeal.PostgreSQL.Manipulation.update`,
 or in search `Condition`s in a number of commands.
@@ -294,6 +296,19 @@ or in search `Condition`s in a number of commands.
 The expression syntax allows the calculation of
 values from primitive expression using arithmetic, logical,
 and other operations.
+
+The type paremeters of `Expression` are
+
+* @outer :: @ `FromType`, the @from@ clauses of any outer queries in which
+  the `Expression` is a correlated subquery expression;
+* @commons :: @ `FromType`, `Squeal.PostgreSQL.Query.CommonTableExpression`s that are in
+  scope for the `Expression`;
+* @grp :: @ `Grouping`, the `Grouping` of the @from@ clause which may limit
+  which columns may be referenced by alias;
+* @schemas :: @ `SchemasType`, the schemas of your database;
+* @from :: @ `FromType`, the @from@ clause which the `Expression` may use
+  to reference columns by alias;
+* @ty :: @ `NullityType`, the type of the `Expression`.
 -}
 newtype Expression
   (outer :: FromType)
@@ -344,10 +359,10 @@ type (:-->) x y
 {- | A `RankNType` for functions with a fixed-length list of heterogeneous arguments.
 Use the `*:` operator to end your argument lists, like so.
 
->>> printSQL (unsafeFunctionHet "fun" (true :* false :* localTime *: true))
+>>> printSQL (unsafeFunctionN "fun" (true :* false :* localTime *: true))
 fun(TRUE, FALSE, LOCALTIME, TRUE)
 -}
-type FunctionHet xs y
+type FunctionN xs y
   =  forall outer commons grp schemas params from
   .  NP (Expression outer commons grp schemas params from) xs
      -- ^ inputs
@@ -357,7 +372,7 @@ type FunctionHet xs y
 {- | A `RankNType` for functions with a variable-length list of
 homogeneous arguments and at least 1 more argument.
 -}
-type FunctionHom x0 x1 y
+type FunctionVar x0 x1 y
   =  forall outer commons grp schemas params from
   .  [Expression outer commons grp schemas params from x0]
      -- ^ inputs
@@ -366,11 +381,11 @@ type FunctionHom x0 x1 y
   -> Expression outer commons grp schemas params from y
      -- ^ output
 
-{- | >>> printSQL (unsafeFunctionHom "greatest" [true, null_] false)
+{- | >>> printSQL (unsafeFunctionVar "greatest" [true, null_] false)
 greatest(TRUE, NULL, FALSE)
 -}
-unsafeFunctionHom :: ByteString -> FunctionHom x0 x1 y
-unsafeFunctionHom fun xs x = UnsafeExpression $ fun <> parenthesized
+unsafeFunctionVar :: ByteString -> FunctionVar x0 x1 y
+unsafeFunctionVar fun xs x = UnsafeExpression $ fun <> parenthesized
   (commaSeparated (renderSQL <$> xs) <> ", " <> renderSQL x)
 
 {- | A `HasParameter` constraint is used to indicate a value that is
@@ -527,7 +542,7 @@ notNull = UnsafeExpression . renderSQL
 --
 -- >>> printSQL $ coalesce [null_, true] false
 -- COALESCE(NULL, TRUE, FALSE)
-coalesce :: FunctionHom ('Null ty) ('NotNull ty) ('NotNull ty)
+coalesce :: FunctionVar ('Null ty) ('NotNull ty) ('NotNull ty)
 coalesce nullxs notNullx = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
     ((renderSQL <$> nullxs) <> [renderSQL notNullx]))
@@ -576,8 +591,8 @@ matchNull y f x = ifThenElse (isNull x) y
 >>> printSQL expr
 NULLIF(FALSE, ($1 :: bool))
 -}
-nullIf :: FunctionHet '[ 'NotNull ty, 'NotNull ty] ('Null ty)
-nullIf = unsafeFunctionHet "NULLIF"
+nullIf :: FunctionN '[ 'NotNull ty, 'NotNull ty] ('Null ty)
+nullIf = unsafeFunctionN "NULLIF"
 
 -- | >>> printSQL $ array [null_, false, true]
 -- ARRAY[NULL, FALSE, TRUE]
@@ -709,13 +724,13 @@ instance Monoid
 -- | >>> let expr = greatest [param @1] currentTimestamp :: Expression outer commons grp schemas '[ 'NotNull 'PGtimestamptz] from ('NotNull 'PGtimestamptz)
 -- >>> printSQL expr
 -- GREATEST(($1 :: timestamp with time zone), CURRENT_TIMESTAMP)
-greatest :: FunctionHom ty ty ty
-greatest = unsafeFunctionHom "GREATEST"
+greatest :: FunctionVar ty ty ty
+greatest = unsafeFunctionVar "GREATEST"
 
 -- | >>> printSQL $ least [null_] currentTimestamp
 -- LEAST(NULL, CURRENT_TIMESTAMP)
-least :: FunctionHom ty ty ty
-least = unsafeFunctionHom "LEAST"
+least :: FunctionVar ty ty ty
+least = unsafeFunctionVar "LEAST"
 
 -- | >>> printSQL $ unsafeBinaryOp "OR" true false
 -- (TRUE OR FALSE)
@@ -739,13 +754,13 @@ unsafeFunction :: ByteString {- ^ function -} -> x :--> y
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
--- | >>> printSQL $ unsafeFunctionHet "f" (currentTime :* localTimestamp :* false *: literal 'a')
--- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, (E'a' :: char(1)))
-unsafeFunctionHet
+-- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: literal 'a')
+-- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, E'a')
+unsafeFunctionN
   :: SListI xs
   => ByteString {- ^ function -}
-  -> FunctionHet xs y
-unsafeFunctionHet fun xs = UnsafeExpression $
+  -> FunctionN xs y
+unsafeFunctionN fun xs = UnsafeExpression $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
 instance ty `In` PGNum
@@ -801,8 +816,8 @@ instance (ty `In` PGNum, ty `In` PGFloating) => Floating
 -- atan2(pi(), 2)
 atan2_
   :: float `In` PGFloating
-  => FunctionHet '[ null float, null float] (null float)
-atan2_ = unsafeFunctionHet "atan2"
+  => FunctionN '[ null float, null float] (null float)
+atan2_ = unsafeFunctionN "atan2"
 
 -- When a `cast` is applied to an `Expression` of a known type, it
 -- represents a run-time type conversion. The cast will succeed only if a
@@ -1284,7 +1299,6 @@ infixl 9 .?|
 infixl 9 .?&
 (.?&) = unsafeBinaryOp "?&"
 
--- | Concatenate two jsonb values into a new jsonb value.
 instance Semigroup
   (Expression outer commons grp schemas params from (null 'PGjsonb)) where
     (<>) = unsafeBinaryOp "||"
@@ -1346,13 +1360,13 @@ rowToJson = unsafeFunction "row_to_json"
 
 -- | Builds a possibly-heterogeneously-typed JSON array out of a variadic
 -- argument list.
-jsonBuildArray :: SListI tuple => FunctionHet tuple (null 'PGjson)
-jsonBuildArray = unsafeFunctionHet "json_build_array"
+jsonBuildArray :: SListI tuple => FunctionN tuple (null 'PGjson)
+jsonBuildArray = unsafeFunctionN "json_build_array"
 
 -- | Builds a possibly-heterogeneously-typed (binary) JSON array out of a
 -- variadic argument list.
-jsonbBuildArray :: SListI tuple => FunctionHet tuple (null 'PGjsonb)
-jsonbBuildArray = unsafeFunctionHet "jsonb_build_array"
+jsonbBuildArray :: SListI tuple => FunctionN tuple (null 'PGjsonb)
+jsonbBuildArray = unsafeFunctionN "jsonb_build_array"
 
 class PGBuildObject tys where
 instance PGBuildObject '[]
@@ -1364,16 +1378,16 @@ instance (PGBuildObject tys, key `In` PGJsonKey)
 -- and values.
 jsonBuildObject
   :: (SListI elems, PGBuildObject elems)
-  => FunctionHet elems (null 'PGjson)
-jsonBuildObject = unsafeFunctionHet "json_build_object"
+  => FunctionN elems (null 'PGjson)
+jsonBuildObject = unsafeFunctionN "json_build_object"
 
 -- | Builds a possibly-heterogeneously-typed (binary) JSON object out of a
 -- variadic argument list. The elements of the argument list must alternate
 -- between keys and values.
 jsonbBuildObject
   :: (SListI elems, PGBuildObject elems)
-  => FunctionHet elems (null 'PGjsonb)
-jsonbBuildObject = unsafeFunctionHet "jsonb_build_object"
+  => FunctionN elems (null 'PGjsonb)
+jsonbBuildObject = unsafeFunctionN "jsonb_build_object"
 
 -- | Builds a JSON object out of a text array.
 -- The array must have two dimensions
@@ -1395,20 +1409,20 @@ jsonbObject = unsafeFunction "jsonb_object"
 
 -- | This is an alternate form of 'jsonObject' that takes two arrays; one for
 -- keys and one for values, that are zipped pairwise to create a JSON object.
-jsonZipObject :: FunctionHet
+jsonZipObject :: FunctionN
   '[ null ('PGvararray ('NotNull 'PGtext))
    , null ('PGvararray ('NotNull 'PGtext)) ]
    ( null 'PGjson )
-jsonZipObject = unsafeFunctionHet "json_object"
+jsonZipObject = unsafeFunctionN "json_object"
 
 -- | This is an alternate form of 'jsonbObject' that takes two arrays; one for
 -- keys and one for values, that are zipped pairwise to create a binary JSON
 -- object.
-jsonbZipObject :: FunctionHet
+jsonbZipObject :: FunctionN
   '[ null ('PGvararray ('NotNull 'PGtext))
    , null ('PGvararray ('NotNull 'PGtext)) ]
    ( null 'PGjsonb )
-jsonbZipObject = unsafeFunctionHet "jsonb_object"
+jsonbZipObject = unsafeFunctionN "jsonb_object"
 
 {-----------------------------------------
 Table 9.46: JSON processing functions
@@ -1430,7 +1444,7 @@ jsonExtractPath
   -> NP (Expression outer commons grp schemas params from) elems
   -> Expression outer commons grp schemas params from (null 'PGjsonb)
 jsonExtractPath x xs =
-  unsafeFunctionHet "json_extract_path" (x :* xs)
+  unsafeFunctionN "json_extract_path" (x :* xs)
 
 -- | Returns JSON value pointed to by the given path (equivalent to #>
 -- operator).
@@ -1440,7 +1454,7 @@ jsonbExtractPath
   -> NP (Expression outer commons grp schemas params from) elems
   -> Expression outer commons grp schemas params from (null 'PGjsonb)
 jsonbExtractPath x xs =
-  unsafeFunctionHet "jsonb_extract_path" (x :* xs)
+  unsafeFunctionN "jsonb_extract_path" (x :* xs)
 
 -- | Returns JSON value pointed to by the given path (equivalent to #>
 -- operator), as text.
@@ -1450,7 +1464,7 @@ jsonExtractPathAsText
   -> NP (Expression outer commons grp schemas params from) elems
   -> Expression outer commons grp schemas params from (null 'PGjson)
 jsonExtractPathAsText x xs =
-  unsafeFunctionHet "json_extract_path_text" (x :* xs)
+  unsafeFunctionN "json_extract_path_text" (x :* xs)
 
 -- | Returns JSON value pointed to by the given path (equivalent to #>
 -- operator), as text.
@@ -1460,7 +1474,7 @@ jsonbExtractPathAsText
   -> NP (Expression outer commons grp schemas params from) elems
   -> Expression outer commons grp schemas params from (null 'PGjsonb)
 jsonbExtractPathAsText x xs =
-  unsafeFunctionHet "jsonb_extract_path_text" (x :* xs)
+  unsafeFunctionN "jsonb_extract_path_text" (x :* xs)
 
 -- | Returns the type of the outermost JSON value as a text string. Possible
 -- types are object, array, string, number, boolean, and null.
@@ -1496,8 +1510,8 @@ jsonbSet
   -> Maybe (Expression outer commons grp schemas params from (null 'PGbool))
   -> Expression outer commons grp schemas params from (null 'PGjsonb)
 jsonbSet tgt path val createMissing = case createMissing of
-  Just m -> unsafeFunctionHet "jsonb_set" (tgt :* path :* val :* m :* Nil)
-  Nothing -> unsafeFunctionHet "jsonb_set" (tgt :* path :* val :* Nil)
+  Just m -> unsafeFunctionN "jsonb_set" (tgt :* path :* val :* m :* Nil)
+  Nothing -> unsafeFunctionN "jsonb_set" (tgt :* path :* val :* Nil)
 
 -- | @ jsonbInsert target path new_value insert_after @
 --
@@ -1514,8 +1528,8 @@ jsonbInsert
   -> Maybe (Expression outer commons grp schemas params from (null 'PGbool))
   -> Expression outer commons grp schemas params from (null 'PGjsonb)
 jsonbInsert tgt path val insertAfter = case insertAfter of
-  Just i -> unsafeFunctionHet "jsonb_insert" (tgt :* path :* val :* i :* Nil)
-  Nothing -> unsafeFunctionHet "jsonb_insert" (tgt :* path :* val :* Nil)
+  Just i -> unsafeFunctionN "jsonb_insert" (tgt :* path :* val :* i :* Nil)
+  Nothing -> unsafeFunctionN "jsonb_insert" (tgt :* path :* val :* Nil)
 
 -- | Returns its argument as indented JSON text.
 jsonbPretty :: null 'PGjsonb :--> null 'PGtext
@@ -1568,32 +1582,32 @@ toTSvector
 toTSvector = unsafeFunction "to_tsvector"
 
 setWeight
-  :: FunctionHet '[null 'PGtsvector, null ('PGchar 1)] (null 'PGtsvector)
-setWeight = unsafeFunctionHet "set_weight"
+  :: FunctionN '[null 'PGtsvector, null ('PGchar 1)] (null 'PGtsvector)
+setWeight = unsafeFunctionN "set_weight"
 
 strip :: null 'PGtsvector :--> null 'PGtsvector
 strip = unsafeFunction "strip"
 
-jsonToTSvector :: FunctionHet '[null 'PGjson, null 'PGjson] (null 'PGtsvector)
-jsonToTSvector = unsafeFunctionHet "json_to_tsvector"
+jsonToTSvector :: FunctionN '[null 'PGjson, null 'PGjson] (null 'PGtsvector)
+jsonToTSvector = unsafeFunctionN "json_to_tsvector"
 
-jsonbToTSvector :: FunctionHet '[null 'PGjsonb, null 'PGjsonb] (null 'PGtsvector)
-jsonbToTSvector = unsafeFunctionHet "jsonb_to_tsvector"
+jsonbToTSvector :: FunctionN '[null 'PGjsonb, null 'PGjsonb] (null 'PGtsvector)
+jsonbToTSvector = unsafeFunctionN "jsonb_to_tsvector"
 
-tsDelete :: FunctionHet
+tsDelete :: FunctionN
   '[null 'PGtsvector, null ('PGvararray ('NotNull 'PGtext))]
    (null 'PGtsvector)
-tsDelete = unsafeFunctionHet "ts_delete"
+tsDelete = unsafeFunctionN "ts_delete"
 
-tsFilter :: FunctionHet
+tsFilter :: FunctionN
   '[null 'PGtsvector, null ('PGvararray ('NotNull ('PGchar 1)))]
    (null 'PGtsvector)
-tsFilter = unsafeFunctionHet "ts_filter"
+tsFilter = unsafeFunctionN "ts_filter"
 
 tsHeadline
   :: document `In` '[ 'PGtext, 'PGjson, 'PGjsonb]
-  => FunctionHet '[null document, null 'PGtsquery] (null 'PGtext)
-tsHeadline = unsafeFunctionHet "ts_headline"
+  => FunctionN '[null document, null 'PGtsquery] (null 'PGtext)
+tsHeadline = unsafeFunctionN "ts_headline"
 {-----------------------------------------
 aggregation
 -----------------------------------------}
@@ -1989,18 +2003,18 @@ instance Aggregate
     max_ = unsafeWindowFunction1 "max"
     min_ = unsafeWindowFunction1 "min"
     avg = unsafeWindowFunction1 "avg"
-    corr = unsafeWindowFunctionHet "corr"
-    covarPop = unsafeWindowFunctionHet "covar_pop"
-    covarSamp = unsafeWindowFunctionHet "covar_samp"
-    regrAvgX = unsafeWindowFunctionHet "regr_avgx"
-    regrAvgY = unsafeWindowFunctionHet "regr_avgy"
-    regrCount = unsafeWindowFunctionHet "regr_count"
-    regrIntercept = unsafeWindowFunctionHet "regr_intercept"
-    regrR2 = unsafeWindowFunctionHet "regr_r2"
-    regrSlope = unsafeWindowFunctionHet "regr_slope"
-    regrSxx = unsafeWindowFunctionHet "regr_sxx"
-    regrSxy = unsafeWindowFunctionHet "regr_sxy"
-    regrSyy = unsafeWindowFunctionHet "regr_syy"
+    corr = unsafeWindowFunctionN "corr"
+    covarPop = unsafeWindowFunctionN "covar_pop"
+    covarSamp = unsafeWindowFunctionN "covar_samp"
+    regrAvgX = unsafeWindowFunctionN "regr_avgx"
+    regrAvgY = unsafeWindowFunctionN "regr_avgy"
+    regrCount = unsafeWindowFunctionN "regr_count"
+    regrIntercept = unsafeWindowFunctionN "regr_intercept"
+    regrR2 = unsafeWindowFunctionN "regr_r2"
+    regrSlope = unsafeWindowFunctionN "regr_slope"
+    regrSxx = unsafeWindowFunctionN "regr_sxx"
+    regrSxy = unsafeWindowFunctionN "regr_sxy"
+    regrSyy = unsafeWindowFunctionN "regr_syy"
     stddev = unsafeWindowFunction1 "stddev"
     stddevPop = unsafeWindowFunction1 "stddev_pop"
     stddevSamp = unsafeWindowFunction1 "stddev_samp"
@@ -2353,8 +2367,8 @@ unsafeWindowFunction1 :: ByteString -> WinFun1 x y
 unsafeWindowFunction1 fun x
   = UnsafeWindowFunction $ fun <> parenthesized (renderSQL x)
 
-unsafeWindowFunctionHet :: SOP.SListI xs => ByteString -> WinFunHet xs y
-unsafeWindowFunctionHet fun xs = UnsafeWindowFunction $ fun <>
+unsafeWindowFunctionN :: SOP.SListI xs => ByteString -> WinFunHet xs y
+unsafeWindowFunctionN fun xs = UnsafeWindowFunction $ fun <>
   parenthesized (renderCommaSeparated renderSQL xs)
 
 {- | rank of the current row with gaps; same as `rowNumber` of its first peer
@@ -2405,7 +2419,7 @@ row within the partition; if there is no such row, instead return default
 evaluated with respect to the current row.
 -}
 lag :: WinFunHet '[ty, 'NotNull 'PGint4, ty] ty
-lag = unsafeWindowFunctionHet "lag"
+lag = unsafeWindowFunctionN "lag"
 
 {- | returns value evaluated at the row that is offset rows after the current
 row within the partition; if there is no such row, instead return default
@@ -2413,7 +2427,7 @@ row within the partition; if there is no such row, instead return default
 evaluated with respect to the current row.
 -}
 lead :: WinFunHet '[ty, 'NotNull 'PGint4, ty] ty
-lead = unsafeWindowFunctionHet "lag"
+lead = unsafeWindowFunctionN "lag"
 
 {- | returns value evaluated at the row that is the
 first row of the window frame
@@ -2431,7 +2445,7 @@ lastValue = unsafeWindowFunction1 "last_value"
 row of the window frame (counting from 1); null if no such row
 -}
 nthValue :: WinFunHet '[null ty, 'NotNull 'PGint4] ('Null ty)
-nthValue = unsafeWindowFunctionHet "nth_value"
+nthValue = unsafeWindowFunctionN "nth_value"
 
 {-|
 Create date from year, month and day fields
@@ -2439,10 +2453,10 @@ Create date from year, month and day fields
 >>> printSQL (makeDate (1984 :* 7 *: 3))
 make_date(1984, 7, 3)
 -}
-makeDate :: FunctionHet
+makeDate :: FunctionN
   '[ null 'PGint4, null 'PGint4, null 'PGint4 ]
    ( null 'PGdate )
-makeDate = unsafeFunctionHet "make_date"
+makeDate = unsafeFunctionN "make_date"
 
 {-|
 Create time from hour, minute and seconds fields
@@ -2450,10 +2464,10 @@ Create time from hour, minute and seconds fields
 >>> printSQL (makeTime (8 :* 15 *: 23.5))
 make_time(8, 15, 23.5)
 -}
-makeTime :: FunctionHet
+makeTime :: FunctionN
   '[ null 'PGint4, null 'PGint4, null 'PGfloat8 ]
    ( null 'PGtime )
-makeTime = unsafeFunctionHet "make_time"
+makeTime = unsafeFunctionN "make_time"
 
 {-|
 Create timestamp from year, month, day, hour, minute and seconds fields
@@ -2461,11 +2475,11 @@ Create timestamp from year, month, day, hour, minute and seconds fields
 >>> printSQL (makeTimestamp (2013 :* 7 :* 15 :* 8 :* 15 *: 23.5))
 make_timestamp(2013, 7, 15, 8, 15, 23.5)
 -}
-makeTimestamp :: FunctionHet
+makeTimestamp :: FunctionN
   '[ null 'PGint4, null 'PGint4, null 'PGint4
    , null 'PGint4, null 'PGint4, null 'PGfloat8 ]
    ( null 'PGtimestamp )
-makeTimestamp = unsafeFunctionHet "make_timestamp"
+makeTimestamp = unsafeFunctionN "make_timestamp"
 
 {-|
 Create timestamp with time zone from
@@ -2475,11 +2489,11 @@ the current time zone is used
 >>> printSQL (makeTimestamptz (2013 :* 7 :* 15 :* 8 :* 15 *: 23.5))
 make_timestamptz(2013, 7, 15, 8, 15, 23.5)
 -}
-makeTimestamptz :: FunctionHet
+makeTimestamptz :: FunctionN
   '[ null 'PGint4, null 'PGint4, null 'PGint4
    , null 'PGint4, null 'PGint4, null 'PGfloat8 ]
    ( null 'PGtimestamptz )
-makeTimestamptz = unsafeFunctionHet "make_timestamptz"
+makeTimestamptz = unsafeFunctionN "make_timestamptz"
 
 {-|
 Affine space operations on time types.
@@ -2526,6 +2540,8 @@ data TimeUnit
   | Microseconds | Milliseconds
   | Decades | Centuries | Millennia
   deriving (Eq, Ord, Show, Read, Enum, GHC.Generic)
+instance SOP.Generic TimeUnit
+instance SOP.HasDatatypeInfo TimeUnit
 instance RenderSQL TimeUnit where
   renderSQL = \case
     Years -> "years"
@@ -2556,7 +2572,7 @@ instance JSON.ToJSON hask => Literal (Jsonb hask) where
   literal = cast jsonb . UnsafeExpression
     . singleQuotedUtf8 . toStrict . JSON.encode . getJsonb
 instance Literal Char where
-  literal chr = cast (char @1) . UnsafeExpression $
+  literal chr = UnsafeExpression $
     "E\'" <> fromString (escape chr) <> "\'"
 instance Literal String where literal = fromString
 instance Literal Int16 where literal = fromIntegral
