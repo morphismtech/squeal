@@ -86,6 +86,7 @@ module Squeal.PostgreSQL.Schema
   , Drop
   , Alter
   , Rename
+  , ConstraintInvolves
   , DropIfConstraintsInvolve
     -- * Lists
   , Join
