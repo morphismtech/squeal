@@ -1609,20 +1609,20 @@ tsHeadline = unsafeFunctionN "ts_headline"
 aggregation
 -----------------------------------------}
 
-unsafeAggregateHet
+unsafeAggregateN
   :: SOP.SListI xs
   => ByteString -- ^ function
   -> Distinction (NP (Expression outer commons 'Ungrouped schemas params from)) xs
   -> Expression outer commons ('Grouped bys) schemas params from y
-unsafeAggregateHet fun xs = UnsafeExpression $ fun <> parenthesized (renderSQL xs)
+unsafeAggregateN fun xs = UnsafeExpression $ fun <> parenthesized (renderSQL xs)
 
 {- |
 `Aggregate` functions compute a single result from a set of input values.
 `Aggregate` functions can be used as `GroupedBy` `Expression`s as well
 as `WindowFunction`s.
 -}
-class Aggregate expr1 exprHet aggr
-  | aggr -> expr1, aggr -> exprHet where
+class Aggregate expr1 exprN aggr
+  | aggr -> expr1, aggr -> exprN where
 
   -- | A special aggregation that does not require an input
   --
@@ -1783,7 +1783,7 @@ class Aggregate expr1 exprHet aggr
   corr(ALL "y", "x")
   -}
   corr
-    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
+    :: exprN '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   {- | population covariance
@@ -1796,7 +1796,7 @@ class Aggregate expr1 exprHet aggr
   covar_pop(ALL "y", "x")
   -}
   covarPop
-    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
+    :: exprN '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   {- | sample covariance
@@ -1809,7 +1809,7 @@ class Aggregate expr1 exprHet aggr
   covar_samp("y", "x")
   -}
   covarSamp
-    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
+    :: exprN '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   {- | average of the independent variable (sum(X)/N)
@@ -1822,7 +1822,7 @@ class Aggregate expr1 exprHet aggr
   regr_avgx(ALL "y", "x")
   -}
   regrAvgX
-    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
+    :: exprN '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   {- | average of the dependent variable (sum(Y)/N)
@@ -1835,7 +1835,7 @@ class Aggregate expr1 exprHet aggr
   regr_avgy("y", "x")
   -}
   regrAvgY
-    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
+    :: exprN '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   {- | number of input rows in which both expressions are nonnull
@@ -1848,7 +1848,7 @@ class Aggregate expr1 exprHet aggr
   regr_count("y", "x")
   -}
   regrCount
-    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
+    :: exprN '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGint8)
 
   {- | y-intercept of the least-squares-fit linear equation determined by the (X, Y) pairs
@@ -1861,36 +1861,36 @@ class Aggregate expr1 exprHet aggr
   regr_intercept(ALL "y", "x")
   -}
   regrIntercept
-    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
+    :: exprN '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_r2(Y, X)@, square of the correlation coefficient
   regrR2
-    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
+    :: exprN '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_slope(Y, X)@, slope of the least-squares-fit linear equation
   -- determined by the (X, Y) pairs
   regrSlope
-    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
+    :: exprN '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_sxx(Y, X)@, sum(X^2) - sum(X)^2/N
   -- (“sum of squares” of the independent variable)
   regrSxx
-    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
+    :: exprN '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_sxy(Y, X)@, sum(X*Y) - sum(X) * sum(Y)/N
   -- (“sum of products” of independent times dependent variable)
   regrSxy
-    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
+    :: exprN '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   -- | @regr_syy(Y, X)@, sum(Y^2) - sum(Y)^2/N
   -- (“sum of squares” of the dependent variable)
   regrSyy
-    :: exprHet '[null 'PGfloat8, null 'PGfloat8]
+    :: exprN '[null 'PGfloat8, null 'PGfloat8]
     -> aggr ('Null 'PGfloat8)
 
   -- | historical alias for `stddevSamp`
@@ -1964,18 +1964,18 @@ instance Aggregate
     max_ = unsafeAggregate1 "max"
     min_ = unsafeAggregate1 "min"
     avg = unsafeAggregate1 "avg"
-    corr = unsafeAggregateHet "corr"
-    covarPop = unsafeAggregateHet "covar_pop"
-    covarSamp = unsafeAggregateHet "covar_samp"
-    regrAvgX = unsafeAggregateHet "regr_avgx"
-    regrAvgY = unsafeAggregateHet "regr_avgy"
-    regrCount = unsafeAggregateHet "regr_count"
-    regrIntercept = unsafeAggregateHet "regr_intercept"
-    regrR2 = unsafeAggregateHet "regr_r2"
-    regrSlope = unsafeAggregateHet "regr_slope"
-    regrSxx = unsafeAggregateHet "regr_sxx"
-    regrSxy = unsafeAggregateHet "regr_sxy"
-    regrSyy = unsafeAggregateHet "regr_syy"
+    corr = unsafeAggregateN "corr"
+    covarPop = unsafeAggregateN "covar_pop"
+    covarSamp = unsafeAggregateN "covar_samp"
+    regrAvgX = unsafeAggregateN "regr_avgx"
+    regrAvgY = unsafeAggregateN "regr_avgy"
+    regrCount = unsafeAggregateN "regr_count"
+    regrIntercept = unsafeAggregateN "regr_intercept"
+    regrR2 = unsafeAggregateN "regr_r2"
+    regrSlope = unsafeAggregateN "regr_slope"
+    regrSxx = unsafeAggregateN "regr_sxx"
+    regrSxy = unsafeAggregateN "regr_sxy"
+    regrSyy = unsafeAggregateN "regr_syy"
     stddev = unsafeAggregate1 "stddev"
     stddevPop = unsafeAggregate1 "stddev_pop"
     stddevSamp = unsafeAggregate1 "stddev_samp"
@@ -2353,7 +2353,7 @@ type WinFun1 x y
   -> WindowFunction outer commons grp schemas params from y
      -- ^ output
 
-type WinFunHet xs y
+type WinFunN xs y
   =  forall outer commons grp schemas params from
   .  NP (Expression outer commons grp schemas params from) xs
      -- ^ inputs
@@ -2364,7 +2364,7 @@ unsafeWindowFunction1 :: ByteString -> WinFun1 x y
 unsafeWindowFunction1 fun x
   = UnsafeWindowFunction $ fun <> parenthesized (renderSQL x)
 
-unsafeWindowFunctionN :: SOP.SListI xs => ByteString -> WinFunHet xs y
+unsafeWindowFunctionN :: SOP.SListI xs => ByteString -> WinFunN xs y
 unsafeWindowFunctionN fun xs = UnsafeWindowFunction $ fun <>
   parenthesized (renderCommaSeparated renderSQL xs)
 
@@ -2415,7 +2415,7 @@ row within the partition; if there is no such row, instead return default
 (which must be of the same type as value). Both offset and default are
 evaluated with respect to the current row.
 -}
-lag :: WinFunHet '[ty, 'NotNull 'PGint4, ty] ty
+lag :: WinFunN '[ty, 'NotNull 'PGint4, ty] ty
 lag = unsafeWindowFunctionN "lag"
 
 {- | returns value evaluated at the row that is offset rows after the current
@@ -2423,7 +2423,7 @@ row within the partition; if there is no such row, instead return default
 (which must be of the same type as value). Both offset and default are
 evaluated with respect to the current row.
 -}
-lead :: WinFunHet '[ty, 'NotNull 'PGint4, ty] ty
+lead :: WinFunN '[ty, 'NotNull 'PGint4, ty] ty
 lead = unsafeWindowFunctionN "lag"
 
 {- | returns value evaluated at the row that is the
@@ -2441,7 +2441,7 @@ lastValue = unsafeWindowFunction1 "last_value"
 {- | returns value evaluated at the row that is the nth
 row of the window frame (counting from 1); null if no such row
 -}
-nthValue :: WinFunHet '[null ty, 'NotNull 'PGint4] ('Null ty)
+nthValue :: WinFunN '[null ty, 'NotNull 'PGint4] ('Null ty)
 nthValue = unsafeWindowFunctionN "nth_value"
 
 {-|
