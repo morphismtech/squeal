@@ -257,6 +257,7 @@ import Control.Category
 import Control.DeepSeq
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (toStrict)
+import ByteString.StrictBuilder (builderBytes)
 import Data.Function ((&))
 import Data.Kind
 import Data.Semigroup hiding (All)
@@ -2580,3 +2581,11 @@ instance Literal Float where literal = fromRational . toRational
 instance Literal Double where literal = fromRational . toRational
 instance Literal Text where literal = fromString . Text.unpack
 instance Literal Lazy.Text where literal = fromString . Lazy.Text.unpack
+instance ToParam (Enumerated enum) (PG (Enumerated enum))
+  => Literal (Enumerated enum) where
+    literal
+      = UnsafeExpression
+      . singleQuotedUtf8
+      . builderBytes
+      . unK
+      . toParam @(Enumerated enum) @(PG (Enumerated enum))
