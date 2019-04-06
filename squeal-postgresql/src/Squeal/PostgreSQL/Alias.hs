@@ -51,6 +51,9 @@ import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Render
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 -- | The alias operator `:::` is like a promoted version of `As`,
 -- a type level pair between an alias and some type.
 type (:::) (alias :: Symbol) ty = '(alias,ty)
@@ -95,8 +98,7 @@ instance aliases ~ '[alias] => IsLabel alias (SOP.NP Alias aliases) where
 instance KnownSymbol alias => RenderSQL (Alias alias) where
   renderSQL = doubleQuoted . fromString . symbolVal
 
--- | >>> import Generics.SOP (SOP.NP(..))
--- >>> printSQL (#jimbob SOP.:* #kandi :: SOP.NP Alias '["jimbob", "kandi"])
+-- >>> printSQL (#jimbob :* #kandi :: NP Alias '["jimbob", "kandi"])
 -- "jimbob", "kandi"
 instance SOP.All KnownSymbol aliases => RenderSQL (SOP.NP Alias aliases) where
   renderSQL

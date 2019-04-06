@@ -73,6 +73,10 @@ import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Schema
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+-- >>> import Data.Text (Text)
+
 {- | The `PG` type family embeds a subset of Haskell types
 as Postgres types. As an open type family, `PG` is extensible.
 
@@ -115,8 +119,8 @@ type instance PG Value = 'PGjson
 Haskell enum type.
 
 >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
->>> instance Generic Schwarma
->>> instance HasDatatypeInfo Schwarma
+>>> instance SOP.Generic Schwarma
+>>> instance SOP.HasDatatypeInfo Schwarma
 >>> :kind! LabelsPG Schwarma
 LabelsPG Schwarma :: [Type.ConstructorName]
 = '["Beef", "Lamb", "Chicken"]
@@ -132,8 +136,8 @@ type family LabelsPG (hask :: Type) :: [Type.ConstructorName] where
 have the `Generic` and `HasDatatypeInfo` instances;
 
 >>> data Person = Person { name :: Text, age :: Int32 } deriving GHC.Generic
->>> instance Generic Person
->>> instance HasDatatypeInfo Person
+>>> instance SOP.Generic Person
+>>> instance SOP.HasDatatypeInfo Person
 >>> :kind! RowPG Person
 RowPG Person :: [(Symbol, NullityType)]
 = '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
@@ -180,8 +184,8 @@ type family ColumnsOf (record :: [(Symbol, Type)]) :: ColumnsType where
 have the `Generic` and `HasDatatypeInfo` instances;
 
 >>> data Person = Person { name :: Text, age :: Int32 } deriving GHC.Generic
->>> instance Generic Person
->>> instance HasDatatypeInfo Person
+>>> instance SOP.Generic Person
+>>> instance SOP.HasDatatypeInfo Person
 >>> :kind! Entity Person
 Entity Person :: [(Symbol, (ColumnConstraint, NullityType))]
 = '["name" ::: ('NoDef :=> 'NotNull 'PGtext),

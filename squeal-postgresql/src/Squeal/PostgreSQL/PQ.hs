@@ -103,6 +103,9 @@ import qualified Control.Monad.Trans.Writer.Strict as Strict
 import qualified Control.Monad.Trans.RWS.Lazy as Lazy
 import qualified Control.Monad.Trans.RWS.Strict as Strict
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 {- | Makes a new connection to the database server.
 
 This function opens a new database connection using the parameters taken
