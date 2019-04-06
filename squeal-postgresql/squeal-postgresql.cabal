@@ -22,12 +22,15 @@ library
   hs-source-dirs: src
   exposed-modules:
     Squeal.PostgreSQL
+    Squeal.PostgreSQL.Alias
     Squeal.PostgreSQL.Binary
     Squeal.PostgreSQL.Definition
     Squeal.PostgreSQL.Expression
+    Squeal.PostgreSQL.List
     Squeal.PostgreSQL.Manipulation
     Squeal.PostgreSQL.Migration
     Squeal.PostgreSQL.Pool
+    Squeal.PostgreSQL.PG
     Squeal.PostgreSQL.PQ
     Squeal.PostgreSQL.Render
     Squeal.PostgreSQL.Query

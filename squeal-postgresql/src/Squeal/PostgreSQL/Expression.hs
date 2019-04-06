@@ -279,7 +279,10 @@ import qualified Data.Text.Lazy as Lazy.Text
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 
+import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Binary
+import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 

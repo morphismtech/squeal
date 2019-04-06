@@ -10,7 +10,6 @@ tables, schema, constraints, aliases, enumerated labels, and groupings.
 It also defines useful type families to operate on these. Finally,
 it defines an embedding of Haskell types into Postgres types.
 -}
-{-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors #-}
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
@@ -54,33 +53,9 @@ module Squeal.PostgreSQL.Schema
   , TableConstraint (..)
   , TableConstraints
   , Uniquely
-    -- * Aliases
-  , (:::)
-  , Alias (..)
-  , IsLabel (..)
-  , Aliased (As)
-  , Aliasable (as)
-  , renderAliased
-  , Has
-  , HasUnique
-  , HasAll
-  , QualifiedAlias (..)
-  , IsQualified (..)
-  , HasIn
-  , IsNotElem
-  , AllUnique
-  , DefaultAliasable (..)
     -- * Enumerated Labels
   , IsPGlabel (..)
   , PGlabel (..)
-    -- * Grouping
-  , Grouping (..)
-  , GroupedBy
-    -- * Aligned lists
-  , AlignedList (..)
-  , single
-  , extractList
-  , alignedMap
     -- * Data Definitions
   , Create
   , Drop
@@ -88,14 +63,8 @@ module Squeal.PostgreSQL.Schema
   , Rename
   , ConstraintInvolves
   , DropIfConstraintsInvolve
-    -- * Lists
-  , Join
-  , disjoin
-  , Elem
-  , In
-  , Length
-  , (*:)
-  , (+++)
+  , IsNotElem
+  , AllUnique
     -- * Type Classifications
   , HasOid (..)
   , PGNum
@@ -118,20 +87,15 @@ module Squeal.PostgreSQL.Schema
   ) where
 
 import Control.Category
-import Control.DeepSeq
-import Data.ByteString (ByteString)
 import Data.Kind
 import Data.Monoid hiding (All)
-import Data.String
 import Data.Type.Bool
 import Data.Word (Word32)
 import Generics.SOP
-import GHC.OverloadedLabels
 import GHC.TypeLits
 import Prelude hiding (id, (.))
 
-import qualified GHC.Generics as GHC
-
+import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Render
 
 -- | `PGType` is the promoted datakind of PostgreSQL types.
@@ -215,11 +179,6 @@ data NullityType
 -- or a `TableConstraints` and a `ColumnsType` to produce a `TableType`.
 type (:=>) constraint ty = '(constraint,ty)
 infixr 7 :=>
-
--- | The alias operator `:::` is like a promoted version of `As`,
--- a type level pair between an alias and some type.
-type (:::) (alias :: Symbol) ty = '(alias,ty)
-infixr 6 :::
 
 -- | `ColumnConstraint` encodes the availability of @DEFAULT@ for inserts and updates.
 -- A column can be assigned a default value.
@@ -327,203 +286,6 @@ type family TableToColumns (table :: TableType) :: ColumnsType where
 type family TableToRow (table :: TableType) :: RowType where
   TableToRow tab = ColumnsToRow (TableToColumns tab)
 
--- | `Grouping` is an auxiliary namespace, created by
--- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
--- for typesafe aggregation
-data Grouping
-  = Ungrouped -- ^ no aggregation permitted
-  | Grouped [(Symbol,Symbol)] -- ^ aggregation required for any column which is not grouped
-
-{- | A `GroupedBy` constraint indicates that a table qualified column is
-a member of the auxiliary namespace created by @GROUP BY@ clauses and thus,
-may be called in an output `Squeal.PostgreSQL.Expression.Expression` without aggregating.
--}
-class (KnownSymbol table, KnownSymbol column)
-  => GroupedBy table column bys where
-instance {-# OVERLAPPING #-} (KnownSymbol table, KnownSymbol column)
-  => GroupedBy table column ('(table,column) ': bys)
-instance {-# OVERLAPPABLE #-}
-  ( KnownSymbol table
-  , KnownSymbol column
-  , GroupedBy table column bys
-  ) => GroupedBy table column (tabcol ': bys)
-
--- | `Alias`es are proxies for a type level string or `Symbol`
--- and have an `IsLabel` instance so that with @-XOverloadedLabels@
---
--- >>> :set -XOverloadedLabels
--- >>> #foobar :: Alias "foobar"
--- Alias
-data Alias (alias :: Symbol) = Alias
-  deriving (Eq,GHC.Generic,Ord,Show,NFData)
-instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
-  fromLabel = Alias
-instance aliases ~ '[alias] => IsLabel alias (NP Alias aliases) where
-  fromLabel = fromLabel :* Nil
--- | >>> printSQL (#jimbob :: Alias "jimbob")
--- "jimbob"
-instance KnownSymbol alias => RenderSQL (Alias alias) where
-  renderSQL = doubleQuoted . fromString . symbolVal
-
--- | >>> import Generics.SOP (NP(..))
--- >>> printSQL (#jimbob :* #kandi :: NP Alias '["jimbob", "kandi"])
--- "jimbob", "kandi"
-instance All KnownSymbol aliases => RenderSQL (NP Alias aliases) where
-  renderSQL
-    = commaSeparated
-    . hcollapse
-    . hcmap (Proxy @KnownSymbol) (K . renderSQL)
-
--- | The `As` operator is used to name an expression. `As` is like a demoted
--- version of `:::`.
---
--- >>> Just "hello" `As` #hi :: Aliased Maybe ("hi" ::: String)
--- As (Just "hello") Alias
-data Aliased expression aliased where
-  As
-    :: KnownSymbol alias
-    => expression ty
-    -> Alias alias
-    -> Aliased expression (alias ::: ty)
-deriving instance Show (expression ty)
-  => Show (Aliased expression (alias ::: ty))
-deriving instance Eq (expression ty)
-  => Eq (Aliased expression (alias ::: ty))
-deriving instance Ord (expression ty)
-  => Ord (Aliased expression (alias ::: ty))
-instance (alias0 ~ alias1, alias0 ~ alias2, KnownSymbol alias2)
-  => IsLabel alias0 (Aliased Alias (alias1 ::: alias2)) where
-    fromLabel = fromLabel @alias2 `As` fromLabel @alias1
-
--- | The `Aliasable` class provides a way to scrap your `Nil`s
--- in an `NP` list of `Aliased` expressions.
-class KnownSymbol alias => Aliasable alias expression aliased
-  | aliased -> expression
-  , aliased -> alias
-  where as :: expression -> Alias alias -> aliased
-instance (KnownSymbol alias, aliased ~ (alias ::: ty)) => Aliasable alias
-  (expression ty)
-  (Aliased expression aliased)
-    where
-      as = As
-instance (KnownSymbol alias, tys ~ '[alias ::: ty]) => Aliasable alias
-  (expression ty)
-  (NP (Aliased expression) tys)
-    where
-      expression `as` alias = expression `As` alias :* Nil
-
--- | >>> let renderMaybe = fromString . maybe "Nothing" (const "Just")
--- >>> renderAliased renderMaybe (Just (3::Int) `As` #an_int)
--- "Just AS \"an_int\""
-renderAliased
-  :: (forall ty. expression ty -> ByteString)
-  -> Aliased expression aliased
-  -> ByteString
-renderAliased render (expression `As` alias) =
-  render expression <> " AS " <> renderSQL alias
-
--- | @HasUnique alias fields field@ is a constraint that proves that
--- @fields@ is a singleton of @alias ::: field@.
-type HasUnique alias fields field = fields ~ '[alias ::: field]
-
--- | @Has alias fields field@ is a constraint that proves that
--- @fields@ has a field of @alias ::: field@, inferring @field@
--- from @alias@ and @fields@.
-class KnownSymbol alias =>
-  Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
-  | alias fields -> field where
-instance {-# OVERLAPPING #-} KnownSymbol alias
-  => Has alias (alias ::: field ': fields) field
-instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
-  => Has alias (field' ': fields) field
-
-{-| @HasIn fields (alias ::: field)@ is a constraint that proves that
-@fields@ has a field of @alias ::: field@. It is used in @UPDATE@s to
-choose which subfields to update.
--}
-class HasIn fields field where
-instance (Has alias fields field) => HasIn fields (alias ::: field) where
-
--- | Utility class for `AllUnique` to provide nicer error messages.
-class IsNotElem x isElem where
-instance IsNotElem x 'False where
-instance (TypeError (      'Text "Cannot assign to "
-                      ':<>: 'ShowType alias
-                      ':<>: 'Text " more than once"))
-   => IsNotElem '(alias, a) 'True where
-
--- | No elem of @xs@ appears more than once, in the context of assignment.
-class AllUnique (xs :: [(Symbol, a)]) where
-instance AllUnique '[] where
-instance (IsNotElem x (Elem x xs), AllUnique xs) => AllUnique (x ': xs) where
-
-{- |
-The `DefaultAliasable` class is intended to help with Scrap your Nils
-for default inserts and updates.
--}
-class KnownSymbol alias
-  => DefaultAliasable alias aliased | aliased -> alias where
-    defaultAs :: Alias alias -> aliased
-
--- | `HasAll` extends `Has` to take lists of @aliases@ and @fields@ and infer
--- a list of @subfields@.
-class
-  ( All KnownSymbol aliases
-  ) => HasAll
-    (aliases :: [Symbol])
-    (fields :: [(Symbol,kind)])
-    (subfields :: [(Symbol,kind)])
-    | aliases fields -> subfields where
-instance {-# OVERLAPPING #-} HasAll '[] fields '[]
-instance {-# OVERLAPPABLE #-}
-  (Has alias fields field, HasAll aliases fields subfields)
-  => HasAll (alias ': aliases) fields (alias ::: field ': subfields)
-
--- | Analagous to `IsLabel`, the constraint
--- `IsQualified` defines `!` for a column alias qualified
--- by a table alias.
-class IsQualified table column expression where
-  (!) :: Alias table -> Alias column -> expression
-  infixl 9 !
-instance IsQualified table column (Alias table, Alias column) where (!) = (,)
-
-{-| `QualifiedAlias`es enables multi-schema support by allowing a reference
-to a `Table`, `Typedef` or `View` to be qualified by their schemas. By default,
-a qualifier of @public@ is provided.
-
->>> :{
-let
-  alias1 :: QualifiedAlias "sch" "tab"
-  alias1 = #sch ! #tab
-  alias2 :: QualifiedAlias "public" "vw"
-  alias2 = #vw
-in printSQL alias1 >> printSQL alias2
-:}
-"sch"."tab"
-"vw"
--}
-data QualifiedAlias (qualifier :: Symbol) (alias :: Symbol) = QualifiedAlias
-  deriving (Eq,GHC.Generic,Ord,Show,NFData)
-instance (q ~ q', a ~ a') => IsQualified q a (QualifiedAlias q' a') where
-  _!_ = QualifiedAlias
-instance (q' ~ "public", a ~ a') => IsLabel a (QualifiedAlias q' a') where
-  fromLabel = QualifiedAlias
-instance (q0 ~ q1, a0 ~ a1, a1 ~ a2, KnownSymbol a2) =>
-  IsQualified q0 a0 (Aliased (QualifiedAlias q1) (a1 ::: a2)) where
-    _!_ = QualifiedAlias `As` Alias
-instance (q ~ "public", a0 ~ a1, a1 ~ a2, KnownSymbol a2) =>
-  IsLabel a0 (Aliased (QualifiedAlias q) (a1 ::: a2)) where
-    fromLabel = QualifiedAlias `As` Alias
-
-instance (KnownSymbol q, KnownSymbol a)
-  => RenderSQL (QualifiedAlias q a) where
-    renderSQL _ =
-      let
-        qualifier = renderSQL (Alias @q)
-        alias = renderSQL (Alias @a)
-      in
-        if qualifier == "\"public\"" then alias else qualifier <> "." <> alias
-
 -- | @Elem@ is a promoted `Data.List.elem`.
 type family Elem x xs where
   Elem x '[] = 'False
@@ -583,22 +345,6 @@ type family NullifyFrom (tables :: FromType) :: FromType where
   NullifyFrom '[] = '[]
   NullifyFrom (table ::: columns ': tables) =
     table ::: NullifyRow columns ': NullifyFrom tables
-
--- | `Join` is simply promoted `++` and is used in @JOIN@s in
--- `Squeal.PostgreSQL.Query.FromClause`s.
-type family Join xs ys where
-  Join '[] ys = ys
-  Join (x ': xs) ys = x ': Join xs ys
-
--- | `disjoin` is a utility function for splitting an `NP` list into pieces.
-disjoin
- :: forall xs ys expr. SListI xs
- => NP expr (Join xs ys)
- -> (NP expr xs, NP expr ys)
-disjoin = case sList @xs of
-  SNil -> \ys -> (Nil, ys)
-  SCons -> \(x :* xsys) ->
-    case disjoin xsys of (xs,ys) -> (x :* xs, ys)
 
 -- | @Create alias x xs@ adds @alias ::: x@ to the end of @xs@ and is used in
 -- `Squeal.PostgreSQL.Definition.createTable` statements and in @ALTER TABLE@
@@ -734,48 +480,15 @@ type PGJsonKey = '[ 'PGint2, 'PGint4, 'PGtext ]
 -- | Is a type a valid JSON type?
 type PGJsonType = '[ 'PGjson, 'PGjsonb ]
 
--- | An `AlignedList` is a type-aligned list or free category.
-data AlignedList p x0 x1 where
-  Done :: AlignedList p x x
-  (:>>) :: p x0 x1 -> AlignedList p x1 x2 -> AlignedList p x0 x2
-infixr 7 :>>
-instance Category (AlignedList p) where
-  id = Done
-  (.) list = \case
-    Done -> list
-    step :>> steps -> step :>> (steps >>> list)
-instance (forall t0 t1. RenderSQL (p t0 t1))
-  => RenderSQL (AlignedList p x0 x1) where
-    renderSQL = \case
-      Done -> ""
-      step :>> Done -> renderSQL step
-      step :>> steps -> renderSQL step <> ", " <> renderSQL steps
+-- | Utility class for `AllUnique` to provide nicer error messages.
+class IsNotElem x isElem where
+instance IsNotElem x 'False where
+instance (TypeError (      'Text "Cannot assign to "
+                      ':<>: 'ShowType alias
+                      ':<>: 'Text " more than once"))
+    => IsNotElem '(alias, a) 'True where
 
-extractList :: (forall a0 a1. p a0 a1 -> b) -> AlignedList p x0 x1 -> [b]
-extractList f = \case
-  Done -> []
-  step :>> steps -> (f step):extractList f steps
-
-alignedMap
-  :: (forall z0 z1. p z0 z1 -> q z0 z1)
-  -> AlignedList p x0 x1
-  -> AlignedList q x0 x1
-alignedMap f = \case
-  Done -> Done
-  x :>> xs -> f x :>> alignedMap f xs
-
--- | A `single` step.
-single :: p x0 x1 -> AlignedList p x0 x1
-single step = step :>> Done
-
--- | A useful operator for ending an `NP` list of length at least 2 without `Nil`.
-(*:) :: f x -> f y -> NP f '[x,y]
-x *: y = x :* y :* Nil
-infixl 9 *:
-
--- | Concatenate `NP` lists.
-(+++) :: NP f xs -> NP f ys -> NP f (Join xs ys)
-xs +++ ys = case xs of
-  Nil -> ys
-  x :* xs' -> x :* (xs' +++ ys)
-infixr 5 +++
+-- | No elem of @xs@ appears more than once, in the context of assignment.
+class AllUnique (xs :: [(Symbol, a)]) where
+instance AllUnique '[] where
+instance (IsNotElem x (Elem x xs), AllUnique xs) => AllUnique (x ': xs) where

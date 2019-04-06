@@ -95,8 +95,10 @@ import Prelude hiding ((.), id)
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
+import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Expression
+import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
