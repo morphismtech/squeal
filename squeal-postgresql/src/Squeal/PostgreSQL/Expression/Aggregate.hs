@@ -96,6 +96,7 @@ class Aggregate expr1 exprN aggr
 
   {- |
   the bitwise AND of all non-null input values, or null if none
+
   >>> :{
   let
     expression :: Expression '[] commons ('Grouped bys) schemas params '[tab ::: '["col" ::: null 'PGint4]] ('Null 'PGint4)
@@ -194,6 +195,7 @@ class Aggregate expr1 exprN aggr
     -> aggr ('Null (PGAvg ty))
 
   {- | correlation coefficient
+
   >>> :{
   let
     expression :: Expression '[] c ('Grouped g) s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
@@ -207,6 +209,7 @@ class Aggregate expr1 exprN aggr
     -> aggr ('Null 'PGfloat8)
 
   {- | population covariance
+
   >>> :{
   let
     expression :: Expression '[] c ('Grouped g) s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
@@ -220,6 +223,7 @@ class Aggregate expr1 exprN aggr
     -> aggr ('Null 'PGfloat8)
 
   {- | sample covariance
+
   >>> :{
   let
     winFun :: WindowFunction '[] c 'Ungrouped s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
@@ -233,6 +237,7 @@ class Aggregate expr1 exprN aggr
     -> aggr ('Null 'PGfloat8)
 
   {- | average of the independent variable (sum(X)/N)
+
   >>> :{
   let
     expression :: Expression '[] c ('Grouped g) s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
@@ -246,6 +251,7 @@ class Aggregate expr1 exprN aggr
     -> aggr ('Null 'PGfloat8)
 
   {- | average of the dependent variable (sum(Y)/N)
+
   >>> :{
   let
     winFun :: WindowFunction '[] c 'Ungrouped s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
@@ -259,6 +265,7 @@ class Aggregate expr1 exprN aggr
     -> aggr ('Null 'PGfloat8)
 
   {- | number of input rows in which both expressions are nonnull
+
   >>> :{
   let
     winFun :: WindowFunction '[] c 'Ungrouped s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGint8)
