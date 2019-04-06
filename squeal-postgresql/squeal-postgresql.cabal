@@ -33,10 +33,12 @@ library
     Squeal.PostgreSQL.Expression.Logic
     Squeal.PostgreSQL.Expression.Math
     Squeal.PostgreSQL.Expression.Null
+    Squeal.PostgreSQL.Expression.Parameter
     Squeal.PostgreSQL.Expression.Sort
     Squeal.PostgreSQL.Expression.Text
     Squeal.PostgreSQL.Expression.TextSearch
     Squeal.PostgreSQL.Expression.Time
+    Squeal.PostgreSQL.Expression.Type
     Squeal.PostgreSQL.Expression.Window
     Squeal.PostgreSQL.List
     Squeal.PostgreSQL.Manipulation

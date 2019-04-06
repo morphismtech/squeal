@@ -205,9 +205,11 @@ module Squeal.PostgreSQL
   , module Squeal.PostgreSQL.Expression.Logic
   , module Squeal.PostgreSQL.Expression.Math
   , module Squeal.PostgreSQL.Expression.Null
+  , module Squeal.PostgreSQL.Expression.Parameter
   , module Squeal.PostgreSQL.Expression.Text
   , module Squeal.PostgreSQL.Expression.TextSearch
   , module Squeal.PostgreSQL.Expression.Time
+  , module Squeal.PostgreSQL.Expression.Type
   , module Squeal.PostgreSQL.Expression.Window
   , module Squeal.PostgreSQL.List
   , module Squeal.PostgreSQL.Manipulation
@@ -229,9 +231,11 @@ import Squeal.PostgreSQL.Expression.Json
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Math
 import Squeal.PostgreSQL.Expression.Null
+import Squeal.PostgreSQL.Expression.Parameter
 import Squeal.PostgreSQL.Expression.Text
 import Squeal.PostgreSQL.Expression.TextSearch
 import Squeal.PostgreSQL.Expression.Time
+import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.Expression.Window
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Manipulation
