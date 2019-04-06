@@ -49,6 +49,7 @@ import GHC.TypeLits
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
+import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Render
 
 -- $setup
@@ -91,8 +92,8 @@ data Alias (alias :: Symbol) = Alias
   deriving (Eq,GHC.Generic,Ord,Show,NFData)
 instance alias1 ~ alias2 => IsLabel alias1 (Alias alias2) where
   fromLabel = Alias
-instance aliases ~ '[alias] => IsLabel alias (SOP.NP Alias aliases) where
-  fromLabel = fromLabel SOP.:* SOP.Nil
+instance aliases ~ '[alias] => IsLabel alias (NP Alias aliases) where
+  fromLabel = fromLabel SOP.:* Nil
 -- | >>> printSQL (#jimbob :: Alias "jimbob")
 -- "jimbob"
 instance KnownSymbol alias => RenderSQL (Alias alias) where
@@ -100,7 +101,7 @@ instance KnownSymbol alias => RenderSQL (Alias alias) where
 
 -- >>> printSQL (#jimbob :* #kandi :: NP Alias '["jimbob", "kandi"])
 -- "jimbob", "kandi"
-instance SOP.All KnownSymbol aliases => RenderSQL (SOP.NP Alias aliases) where
+instance SOP.All KnownSymbol aliases => RenderSQL (NP Alias aliases) where
   renderSQL
     = commaSeparated
     . SOP.hcollapse
@@ -127,8 +128,8 @@ instance (alias0 ~ alias1, alias0 ~ alias2, KnownSymbol alias2)
   => IsLabel alias0 (Aliased Alias (alias1 ::: alias2)) where
     fromLabel = fromLabel @alias2 `As` fromLabel @alias1
 
--- | The `Aliasable` class provides a way to scrap your `SOP.Nil`s
--- in an `SOP.NP` list of `Aliased` expressions.
+-- | The `Aliasable` class provides a way to scrap your `Nil`s
+-- in an `NP` list of `Aliased` expressions.
 class KnownSymbol alias => Aliasable alias expression aliased
   | aliased -> expression
   , aliased -> alias
@@ -140,9 +141,9 @@ instance (KnownSymbol alias, aliased ~ (alias ::: ty)) => Aliasable alias
       as = As
 instance (KnownSymbol alias, tys ~ '[alias ::: ty]) => Aliasable alias
   (expression ty)
-  (SOP.NP (Aliased expression) tys)
+  (NP (Aliased expression) tys)
     where
-      expression `as` alias = expression `As` alias SOP.:* SOP.Nil
+      expression `as` alias = expression `As` alias SOP.:* Nil
 
 -- | >>> let renderMaybe = fromString . maybe "Nothing" (const "Just")
 -- >>> renderAliased renderMaybe (Just (3::Int) `As` #an_int)
@@ -177,7 +178,7 @@ class HasIn fields field where
 instance (Has alias fields field) => HasIn fields (alias ::: field) where
 
 {- |
-The `DefaultAliasable` class is intended to help with Scrap your SOP.Nils
+The `DefaultAliasable` class is intended to help with Scrap your Nils
 for default inserts and updates.
 -}
 class KnownSymbol alias

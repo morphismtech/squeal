@@ -64,11 +64,15 @@ import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
+import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
+
+-- $setup
+-- >>> import Squeal.PostgreSQL
 
 {- |
 A `Manipulation` is a statement which may modify data in the database,
