@@ -23,12 +23,22 @@
 #-}
 
 module Squeal.PostgreSQL.PG
-  ( PG
+  ( -- * PG embeddings
+    PG
   , NullPG
   , TuplePG
   , RowPG
   , Entity
+    -- * Storage newtypes
+  , Money (..)
+  , Json (..)
+  , Jsonb (..)
+  , Composite (..)
+  , Enumerated (..)
+  , VarArray (..)
+  , FixArray (..)
   , SOP.P (..)
+    -- * Type families
   , LabelsPG
   , DimPG
   , FixPG
@@ -44,6 +54,7 @@ import Data.Kind (Type)
 import Data.Int (Int16, Int32, Int64)
 import Data.Scientific (Scientific)
 import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime)
+import Data.Vector (Vector)
 import Data.Word (Word16, Word32, Word64)
 import Data.UUID.Types (UUID)
 import GHC.TypeLits
@@ -53,6 +64,7 @@ import qualified Data.ByteString.Lazy as Lazy (ByteString)
 import qualified Data.ByteString as Strict (ByteString)
 import qualified Data.Text.Lazy as Lazy (Text)
 import qualified Data.Text as Strict (Text)
+import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
 import qualified Generics.SOP.Type.Metadata as Type
@@ -295,3 +307,72 @@ type family FixPG (hask :: Type) :: NullityType where
   FixPG (x,x,x,x,x,x,x,x,x,x) = FixPG x
   FixPG (x,x,x,x,x,x,x,x,x,x,x) = FixPG x
   FixPG x = NullPG x
+
+{- | The `Money` newtype stores a monetary value in terms
+of the number of cents, i.e. @$2,000.20@ would be expressed as
+@Money { cents = 200020 }@.
+
+>>> import Control.Monad (void)
+>>> import Control.Monad.IO.Class (liftIO)
+>>> import Squeal.PostgreSQL
+>>> :{
+let
+  roundTrip :: Query_ (Public '[]) (Only Money) (Only Money)
+  roundTrip = values_ $ parameter @1 money `as` #fromOnly
+:}
+
+>>> let input = Only (Money 20020)
+
+>>> :{
+void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+  result <- runQueryParams roundTrip input
+  Just output <- firstRow result
+  liftIO . print $ input == output
+:}
+True
+-}
+newtype Money = Money { cents :: Int64 }
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG Money = 'PGmoney
+
+{- | The `Json` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGjson`.
+-}
+newtype Json hask = Json {getJson :: hask}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG (Json hask) = 'PGjson
+
+{- | The `Jsonb` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGjsonb`.
+-}
+newtype Jsonb hask = Jsonb {getJsonb :: hask}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG (Jsonb hask) = 'PGjsonb
+
+{- | The `Composite` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGcomposite`.
+-}
+newtype Composite record = Composite {getComposite :: record}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG (Composite hask) = 'PGcomposite (RowPG hask)
+
+{- | The `Enumerated` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGenum`.
+-}
+newtype Enumerated enum = Enumerated {getEnumerated :: enum}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG (Enumerated hask) = 'PGenum (LabelsPG hask)
+
+{- | The `VarArray` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGvararray`.
+-}
+newtype VarArray arr = VarArray {getVarArray :: arr}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG (VarArray (Vector hask)) = 'PGvararray (NullPG hask)
+
+{- | The `FixArray` newtype is an indication that the Haskell
+type it's applied to should be stored as a `PGfixarray`.
+-}
+newtype FixArray arr = FixArray {getFixArray :: arr}
+  deriving (Eq, Ord, Show, Read, GHC.Generic)
+type instance PG (FixArray x) = 'PGfixarray (DimPG x) (FixPG x)

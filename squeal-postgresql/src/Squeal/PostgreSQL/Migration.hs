@@ -210,7 +210,7 @@ instance Migratory Definition where
 into a category by restricting the return type to @()@ and permuting the type variables.
 This is similar to how applying a monad to @()@ yields a monoid.
 Since a `Terminally` action has a trivial return value, the only reason
-to run one is for the side effects, in particular database effects.
+to run one is for the side effects, in particular database and other IO effects.
 -}
 newtype Terminally trans monad x0 x1 = Terminally
   { runTerminally :: trans x0 x1 monad () }

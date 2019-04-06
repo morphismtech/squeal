@@ -202,16 +202,8 @@ True
 #-}
 
 module Squeal.PostgreSQL.Binary
-  ( -- * Storage newtypes
-    Money (..)
-  , Json (..)
-  , Jsonb (..)
-  , Composite (..)
-  , Enumerated (..)
-  , VarArray (..)
-  , FixArray (..)
-    -- * Encoding
-  , ToParam (..)
+  ( -- * Encoding
+    ToParam (..)
   , ToParams (..)
   , ToNullityParam
   , ToField
@@ -712,72 +704,3 @@ replicateMN
   => m x -> m (NP I xs)
 replicateMN mx = hsequence' $
   hcpure (Proxy :: Proxy ((~) x)) (Comp (I <$> mx))
-
-{- | The `Money` newtype stores a monetary value in terms
-of the number of cents, i.e. @$2,000.20@ would be expressed as
-@Money { cents = 200020 }@.
-
->>> import Control.Monad (void)
->>> import Control.Monad.IO.Class (liftIO)
->>> import Squeal.PostgreSQL
->>> :{
-let
-  roundTrip :: Query_ (Public '[]) (Only Money) (Only Money)
-  roundTrip = values_ $ parameter @1 money `as` #fromOnly
-:}
-
->>> let input = Only (Money 20020)
-
->>> :{
-void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
-  result <- runQueryParams roundTrip input
-  Just output <- firstRow result
-  liftIO . print $ input == output
-:}
-True
--}
-newtype Money = Money { cents :: Int64 }
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
-type instance PG Money = 'PGmoney
-
-{- | The `Json` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGjson`.
--}
-newtype Json hask = Json {getJson :: hask}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
-type instance PG (Json hask) = 'PGjson
-
-{- | The `Jsonb` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGjsonb`.
--}
-newtype Jsonb hask = Jsonb {getJsonb :: hask}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
-type instance PG (Jsonb hask) = 'PGjsonb
-
-{- | The `Composite` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGcomposite`.
--}
-newtype Composite record = Composite {getComposite :: record}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
-type instance PG (Composite hask) = 'PGcomposite (RowPG hask)
-
-{- | The `Enumerated` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGenum`.
--}
-newtype Enumerated enum = Enumerated {getEnumerated :: enum}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
-type instance PG (Enumerated hask) = 'PGenum (LabelsPG hask)
-
-{- | The `VarArray` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGvararray`.
--}
-newtype VarArray arr = VarArray {getVarArray :: arr}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
-type instance PG (VarArray (Vector hask)) = 'PGvararray (NullPG hask)
-
-{- | The `FixArray` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGfixarray`.
--}
-newtype FixArray arr = FixArray {getFixArray :: arr}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
-type instance PG (FixArray x) = 'PGfixarray (DimPG x) (FixPG x)
