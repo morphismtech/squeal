@@ -115,8 +115,8 @@ type instance PG Value = 'PGjson
 Haskell enum type.
 
 >>> data Schwarma = Beef | Lamb | Chicken deriving GHC.Generic
->>> instance Generic Schwarma
->>> instance HasDatatypeInfo Schwarma
+>>> instance SOP.Generic Schwarma
+>>> instance SOP.HasDatatypeInfo Schwarma
 >>> :kind! LabelsPG Schwarma
 LabelsPG Schwarma :: [Type.ConstructorName]
 = '["Beef", "Lamb", "Chicken"]
@@ -129,27 +129,27 @@ type family LabelsPG (hask :: Type) :: [Type.ConstructorName] where
 `RowPG` turns a Haskell `Type` into a `RowType`.
 
 `RowPG` may be applied to normal Haskell record types provided they
-have the `Generic` and `HasDatatypeInfo` instances;
+have the `SOP.Generic` and `SOP.HasDatatypeInfo` instances;
 
->>> data Person = Person { name :: Text, age :: Int32 } deriving GHC.Generic
->>> instance Generic Person
->>> instance HasDatatypeInfo Person
+>>> data Person = Person { name :: Strict.Text, age :: Int32 } deriving GHC.Generic
+>>> instance SOP.Generic Person
+>>> instance SOP.HasDatatypeInfo Person
 >>> :kind! RowPG Person
 RowPG Person :: [(Symbol, NullityType)]
 = '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
 
-Or to tuples of `P` types;
+Or to tuples of `SOP.P` types;
 
->>> :kind! RowPG (P ("id" ::: Int32), P ("foreign_id" ::: Int32))
-RowPG (P ("id" ::: Int32), P ("foreign_id" ::: Int32)) :: [(Symbol,
-                                                            NullityType)]
+>>> :kind! RowPG (SOP.P ("id" ::: Int32), SOP.P ("foreign_id" ::: Int32))
+RowPG (SOP.P ("id" ::: Int32), SOP.P ("foreign_id" ::: Int32)) :: [(Symbol,
+                                                                    NullityType)]
 = '[ '("id", 'NotNull 'PGint4), "foreign_id" ::: 'NotNull 'PGint4]
 
-Or to tuples which mix `P` types and record types.
+Or to tuples which mix `SOP.P` types and record types.
 
->>> :kind! RowPG (P ("id" ::: Int32), Person, P ("foreign_id" ::: Int32))
-RowPG (P ("id" ::: Int32), Person, P ("foreign_id" ::: Int32)) :: [(Symbol,
-                                                                    NullityType)]
+>>> :kind! RowPG (SOP.P ("id" ::: Int32), Person, SOP.P ("foreign_id" ::: Int32))
+RowPG (SOP.P ("id" ::: Int32), Person, SOP.P ("foreign_id" ::: Int32)) :: [(Symbol,
+                                                                            NullityType)]
 = '[ '("id", 'NotNull 'PGint4), '("name", 'NotNull 'PGtext),
      '("age", 'NotNull 'PGint4), "foreign_id" ::: 'NotNull 'PGint4]
 -}
@@ -161,7 +161,7 @@ type family RowPG (hask :: Type) :: RowType where
     Join (RowPG hask1) (RowPG (hask2, hask3, hask4))
   RowPG (hask1, hask2, hask3, hask4, hask5) =
     Join (RowPG hask1) (RowPG (hask2, hask3, hask4, hask5))
-  RowPG (SOP.P (col ::: head)) = '[col ::: NullPG head]
+  RowPG (SOP.P (col ::: ty)) = '[col ::: NullPG ty]
   RowPG hask = RowOf (SOP.RecordCodeOf hask)
 
 type family RowOf (record :: [(Symbol, Type)]) :: RowType where
@@ -177,29 +177,29 @@ type family ColumnsOf (record :: [(Symbol, Type)]) :: ColumnsType where
 `Entity` turns a Haskell `Type` into a `ColumnsType`.
 
 `Entity` may be applied to normal Haskell record types provided they
-have the `Generic` and `HasDatatypeInfo` instances;
+have the `SOP.Generic` and `SOP.HasDatatypeInfo` instances;
 
->>> data Person = Person { name :: Text, age :: Int32 } deriving GHC.Generic
->>> instance Generic Person
->>> instance HasDatatypeInfo Person
+>>> data Person = Person { name :: Strict.Text, age :: Int32 } deriving GHC.Generic
+>>> instance SOP.Generic Person
+>>> instance SOP.HasDatatypeInfo Person
 >>> :kind! Entity Person
 Entity Person :: [(Symbol, (ColumnConstraint, NullityType))]
 = '["name" ::: ('NoDef :=> 'NotNull 'PGtext),
     "age" ::: ('NoDef :=> 'NotNull 'PGint4)]
 
-Or to tuples of `P` types;
+Or to tuples of `SOP.P` types;
 
->>> :kind! Entity (P ("id" ::: Int32), P ("foreign_id" ::: Int32))
-Entity (P ("id" ::: Int32), P ("foreign_id" ::: Int32)) :: [(Symbol,
-                                                             ColumnType)]
+>>> :kind! Entity (SOP.P ("id" ::: Int32), SOP.P ("foreign_id" ::: Int32))
+Entity (SOP.P ("id" ::: Int32), SOP.P ("foreign_id" ::: Int32)) :: [(Symbol,
+                                                                     ColumnType)]
 = '[ '("id", 'Def :=> 'NotNull 'PGint4),
      "foreign_id" ::: ('Def :=> 'NotNull 'PGint4)]
 
-Or to tuples which mix `P` types and record types.
+Or to tuples which mix `SOP.P` types and record types.
 
->>> :kind! Entity (P ("id" ::: Int32), Person, P ("foreign_id" ::: Int32))
-Entity (P ("id" ::: Int32), Person, P ("foreign_id" ::: Int32)) :: [(Symbol,
-                                                                     ColumnType)]
+>>> :kind! Entity (SOP.P ("id" ::: Int32), Person, SOP.P ("foreign_id" ::: Int32))
+Entity (SOP.P ("id" ::: Int32), Person, SOP.P ("foreign_id" ::: Int32)) :: [(Symbol,
+                                                                             ColumnType)]
 = '[ '("id", 'Def :=> 'NotNull 'PGint4),
      '("name", 'NoDef :=> 'NotNull 'PGtext),
      '("age", 'NoDef :=> 'NotNull 'PGint4),
@@ -213,7 +213,7 @@ type family Entity (hask :: Type) :: ColumnsType where
     Join (Entity hask1) (Entity (hask2, hask3, hask4))
   Entity (hask1, hask2, hask3, hask4, hask5) =
     Join (Entity hask1) (Entity (hask2, hask3, hask4, hask5))
-  Entity (SOP.P (col ::: head)) = '[col ::: 'Def :=> NullPG head]
+  Entity (SOP.P (col ::: ty)) = '[col ::: 'Def :=> NullPG ty]
   Entity hask = ColumnsOf (SOP.RecordCodeOf hask)
 
 {- | `NullPG` turns a Haskell type into a `NullityType`.

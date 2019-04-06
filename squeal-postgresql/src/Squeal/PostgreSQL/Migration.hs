@@ -120,6 +120,7 @@ In addition to enabling `Migration`s using pure SQL `Definition`s for
 the `up` and `down` instructions, you can also perform impure `IO` actions
 by using a `Migration`s over the `Terminally` `PQ` `IO` category.
 -}
+
 {-# LANGUAGE
     DataKinds
   , DeriveGeneric
@@ -157,13 +158,14 @@ import Data.Text (Text)
 import Data.Time (UTCTime)
 import Generics.SOP (K (..))
 import Prelude hiding ((.), id)
-import Squeal.PostgreSQL
 import System.Environment
 import UnliftIO (MonadIO (..))
 
 import qualified Data.Text.IO as Text (putStrLn)
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
+
+import Squeal.PostgreSQL
 
 -- | A `Migration` is a named "isomorphism" over a given category.
 -- It should contain an inverse pair of `up` and `down`
@@ -353,18 +355,14 @@ createMigrations =
 
 -- | Inserts a `Migration` into the `MigrationsTable`, returning
 -- the time at which it was inserted.
-insertMigration
-  :: Manipulation_ MigrationsSchemas (Only Text) (P ("executed_at" ::: UTCTime))
-insertMigration = insertInto #schema_migrations
+insertMigration :: Manipulation_ MigrationsSchemas (Only Text) ()
+insertMigration = insertInto_ #schema_migrations
   (Values_ ((param @1) `as` #name :* defaultAs #executed_at))
-  OnConflictDoRaise (Returning #executed_at)
 
 -- | Deletes a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was inserted.
-deleteMigration
-  :: Manipulation_ MigrationsSchemas (Only Text) (P ("executed_at" ::: UTCTime))
-deleteMigration = deleteFrom #schema_migrations
-  NoUsing (#name .== param @1) (Returning #executed_at)
+deleteMigration :: Manipulation_ MigrationsSchemas (Only Text) ()
+deleteMigration = deleteFrom_ #schema_migrations (#name .== param @1)
 
 -- | Selects a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was inserted.
