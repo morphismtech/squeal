@@ -20,6 +20,9 @@ import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 -- | analagous to `Nothing`
 --
 -- >>> printSQL null_

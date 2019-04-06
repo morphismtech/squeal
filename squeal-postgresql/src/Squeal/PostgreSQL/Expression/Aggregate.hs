@@ -20,7 +20,7 @@ module Squeal.PostgreSQL.Expression.Aggregate
   ) where
 
 import Control.DeepSeq
-import Data.ByteString
+import Data.ByteString (ByteString)
 import Data.Kind
 import GHC.TypeLits
 
@@ -32,6 +32,9 @@ import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
+
+-- $setup
+-- >>> import Squeal.PostgreSQL
 
 {- |
 `Aggregate` functions compute a single result from a set of input values.

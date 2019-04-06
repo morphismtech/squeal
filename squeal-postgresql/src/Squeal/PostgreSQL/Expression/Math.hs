@@ -17,6 +17,10 @@ import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Schema
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+-- >>> import Squeal.PostgreSQL.Render
+
 -- | >>> :{
 -- let
 --   expression :: Expr (null 'PGfloat4)

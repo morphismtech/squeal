@@ -71,6 +71,9 @@ import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 {- |
 A `Manipulation` is a statement which may modify data in the database,
 but does not alter its schemas. Examples are inserts, updates and deletes.

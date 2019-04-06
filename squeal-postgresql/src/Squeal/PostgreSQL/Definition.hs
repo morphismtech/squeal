@@ -104,6 +104,9 @@ import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 {-----------------------------------------
 statements
 -----------------------------------------}

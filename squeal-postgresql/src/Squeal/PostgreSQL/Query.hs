@@ -122,6 +122,9 @@ import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 {- |
 The process of retrieving or the command to retrieve data from a database
 is called a `Query`. Let's see some examples of queries.

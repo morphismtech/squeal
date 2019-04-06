@@ -34,6 +34,9 @@ import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 -- | >>> printSQL currentDate
 -- CURRENT_DATE
 currentDate :: Expr (null 'PGdate)

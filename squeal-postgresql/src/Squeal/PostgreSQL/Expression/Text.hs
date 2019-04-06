@@ -15,6 +15,10 @@ module Squeal.PostgreSQL.Expression.Text
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Schema
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+-- >>> import Squeal.PostgreSQL.Render
+
 -- | >>> printSQL $ lower "ARRRGGG"
 -- lower(E'ARRRGGG')
 lower :: null 'PGtext :--> null 'PGtext

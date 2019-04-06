@@ -32,6 +32,9 @@ import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 -- | Comparison operations like `.==`, `./=`, `.>`, `.>=`, `.<` and `.<=`
 -- will produce @NULL@s if one of their arguments is @NULL@.
 --

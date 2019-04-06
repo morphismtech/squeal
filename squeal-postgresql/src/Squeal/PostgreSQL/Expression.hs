@@ -126,6 +126,9 @@ import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 {-----------------------------------------
 column expressions
 -----------------------------------------}
