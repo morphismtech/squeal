@@ -44,6 +44,8 @@ module Squeal.PostgreSQL.PG
   , FixPG
   , TupleOf
   , TupleCodeOf
+  , RowOf
+  , ColumnsOf
   , ConstructorsOf
   , ConstructorNameOf
   , ConstructorNamesOf
