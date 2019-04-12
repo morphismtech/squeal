@@ -1,7 +1,7 @@
 {-|
 Module: Squeal.PostgreSQL.Query
 Description: Squeal queries
-Copyright: (c) Eitan Chatav, 2017
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
@@ -723,7 +723,7 @@ table (tab `As` alias) = UnsafeFromClause $
 subquery
   :: Aliased (Query outer commons schemas params) query
   -> FromClause outer commons schemas params '[query]
-subquery = UnsafeFromClause . renderAliased (parenthesized . renderQuery)
+subquery = UnsafeFromClause . renderAliased (parenthesized . renderSQL)
 
 -- | `view` derives a table from a `View`.
 view

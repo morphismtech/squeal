@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Schema
 Description: Embedding of PostgreSQL type and alias system
-Copyright: (c) Eitan Chatav, 2017
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-This module provides a type-level DSL for kinds of Postgres types,
+`Squeal.PostgreSQL.Schema` provides a type-level DSL for kinds of Postgres types,
 tables, schema, constraints, aliases, enumerated labels, and groupings.
 It also defines useful type families to operate on these. Finally,
 it defines an embedding of Haskell types into Postgres types.
@@ -452,6 +452,7 @@ There are several reasons why one might want to use schemas:
 -}
 type SchemasType = [(Symbol,SchemaType)]
 
+-- | A type family to use for a single schema database.
 type family Public (schema :: SchemaType) :: SchemasType
   where Public schema = '["public" ::: schema]
 

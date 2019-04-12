@@ -205,8 +205,8 @@ class Category p => Migratory p where
     -> PQ schemas1 schemas0 IO ()
 
 instance Migratory Definition where
-  migrateUp = migrateUp . alignedMap pureMigration
-  migrateDown = migrateDown . alignedMap pureMigration
+  migrateUp = migrateUp . mapAligned pureMigration
+  migrateDown = migrateDown . mapAligned pureMigration
 
 {- | `Terminally` turns an indexed monad transformer and the monad it transforms
 into a category by restricting the return type to @()@ and permuting the type variables.

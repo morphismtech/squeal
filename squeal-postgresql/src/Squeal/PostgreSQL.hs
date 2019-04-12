@@ -1,7 +1,7 @@
 {-|
 Module: Squeal.PostgreSQL
 Description: Squeal export module
-Copyright: (c) Eitan Chatav, 2017
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 

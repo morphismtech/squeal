@@ -1,3 +1,15 @@
+{-|
+Module: Squeal.PostgreSQL.Alias
+Description: Aliases
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+This module embeds Postgres's alias system in Haskell in
+a typesafe fashion. Thanks to GHC's @OverloadedLabels@ extension,
+Squeal can reference aliases by prepending with a @#@.
+-}
+
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
@@ -208,7 +220,8 @@ class IsQualified table column expression where
 instance IsQualified table column (Alias table, Alias column) where (!) = (,)
 
 {-| `QualifiedAlias`es enables multi-schema support by allowing a reference
-to a `Table`, `Typedef` or `View` to be qualified by their schemas. By default,
+to a `Squeal.PostgreSQL.Schema.Table`, `Squeal.PostgreSQL.Schema.Typedef`
+or `Squeal.PostgreSQL.Schema.View` to be qualified by their schemas. By default,
 a qualifier of @public@ is provided.
 
 >>> :{

@@ -1,3 +1,15 @@
+{-|
+Module: Squeal.PostgreSQL.List
+Description: List related types and functions
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Haskell singly-linked lists are very powerful. This module
+provides functionality for type-level lists, heterogeneous
+lists and type aligned lists.
+-}
+
 {-# LANGUAGE
     DataKinds
   , FlexibleContexts
@@ -24,7 +36,7 @@ module Squeal.PostgreSQL.List
   , AlignedList (..)
   , single
   , extractList
-  , alignedMap
+  , mapAligned
   , Elem
   , In
   , Length
@@ -56,9 +68,11 @@ disjoin = case sList @xs of
   SCons -> \(x :* xsys) ->
     case disjoin xsys of (xs,ys) -> (x :* xs, ys)
 
+-- | The `Additionally` class is for appending
+-- type-level list parameterized constructors such as `NP`,
+-- `Squeal.PostgreSQL.Query.Selection`, and `Squeal.PostgreSQL.Query.FromClause`.
 class Additionally expr where
   also :: expr ys -> expr xs -> expr (Join xs ys)
-
 instance Additionally (NP expr) where
   also ys = \case
     Nil -> ys
@@ -81,18 +95,20 @@ instance (forall t0 t1. RenderSQL (p t0 t1))
       step :>> Done -> renderSQL step
       step :>> steps -> renderSQL step <> ", " <> renderSQL steps
 
+-- | `extractList` turns an `AlignedList` into a standard list.
 extractList :: (forall a0 a1. p a0 a1 -> b) -> AlignedList p x0 x1 -> [b]
 extractList f = \case
   Done -> []
   step :>> steps -> (f step):extractList f steps
 
-alignedMap
+-- | `mapAligned` applies a function to each element of an `AlignedList`.
+mapAligned
   :: (forall z0 z1. p z0 z1 -> q z0 z1)
   -> AlignedList p x0 x1
   -> AlignedList q x0 x1
-alignedMap f = \case
+mapAligned f = \case
   Done -> Done
-  x :>> xs -> f x :>> alignedMap f xs
+  x :>> xs -> f x :>> mapAligned f xs
 
 -- | A `single` step.
 single :: p x0 x1 -> AlignedList p x0 x1

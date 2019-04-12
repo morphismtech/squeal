@@ -1,4 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.PG
+Description: Embedding of Haskell types into Postgres's type system
+Copyright: (c) Eitan Chatav, 2010
+Maintainer: eitan@morphism.tech
+Stability: experimental
 
+`Squeal.PostgreSQL.PG` provides type families for turning Haskell
+`Type`s into corresponding Postgres types.
+-}
 {-# LANGUAGE
     AllowAmbiguousTypes
   , DeriveFoldable
@@ -28,7 +37,6 @@ module Squeal.PostgreSQL.PG
   , NullPG
   , TuplePG
   , RowPG
-  , Entity
     -- * Storage newtypes
   , Money (..)
   , Json (..)
@@ -45,7 +53,6 @@ module Squeal.PostgreSQL.PG
   , TupleOf
   , TupleCodeOf
   , RowOf
-  , ColumnsOf
   , ConstructorsOf
   , ConstructorNameOf
   , ConstructorNamesOf
@@ -91,30 +98,55 @@ PG LocalTime :: PGType
 >>> type instance PG MyDouble = 'PGfloat8
 -}
 type family PG (hask :: Type) :: PGType
+-- | `PGbool`
 type instance PG Bool = 'PGbool
+-- | `PGint2`
 type instance PG Int16 = 'PGint2
+-- | `PGint4`
 type instance PG Int32 = 'PGint4
+-- | `PGint8`
 type instance PG Int64 = 'PGint8
+-- | `PGint2`
 type instance PG Word16 = 'PGint2
+-- | `PGint4`
 type instance PG Word32 = 'PGint4
+-- | `PGint8`
 type instance PG Word64 = 'PGint8
+-- | `PGnumeric`
 type instance PG Scientific = 'PGnumeric
+-- | `PGfloat4`
 type instance PG Float = 'PGfloat4
+-- | `PGfloat8`
 type instance PG Double = 'PGfloat8
+-- | `PGchar` @1@
 type instance PG Char = 'PGchar 1
+-- | `PGtext`
 type instance PG Strict.Text = 'PGtext
+-- | `PGtext`
 type instance PG Lazy.Text = 'PGtext
+-- | `PGtext`
 type instance PG String = 'PGtext
+-- | `PGbytea`
 type instance PG Strict.ByteString = 'PGbytea
+-- | `PGbytea`
 type instance PG Lazy.ByteString = 'PGbytea
+-- | `PGtimestamp`
 type instance PG LocalTime = 'PGtimestamp
+-- | `PGtimestamptz`
 type instance PG UTCTime = 'PGtimestamptz
+-- | `PGdate`
 type instance PG Day = 'PGdate
+-- | `PGtime`
 type instance PG TimeOfDay = 'PGtime
+-- | `PGtimetz`
 type instance PG (TimeOfDay, TimeZone) = 'PGtimetz
+-- | `PGinterval`
 type instance PG DiffTime = 'PGinterval
+-- | `PGuuid`
 type instance PG UUID = 'PGuuid
+-- | `PGinet`
 type instance PG (NetAddr IP) = 'PGinet
+-- | `PGjson`
 type instance PG Value = 'PGjson
 
 {-| The `LabelsPG` type family calculates the constructors of a
@@ -170,57 +202,10 @@ type family RowPG (hask :: Type) :: RowType where
   RowPG (SOP.P (col ::: ty)) = '[col ::: NullPG ty]
   RowPG hask = RowOf (SOP.RecordCodeOf hask)
 
+-- | `RowOf` applies `NullPG` to the fields of a list.
 type family RowOf (record :: [(Symbol, Type)]) :: RowType where
   RowOf '[] = '[]
   RowOf (col ::: ty ': record) = col ::: NullPG ty ': RowOf record
-
-type family ColumnsOf (record :: [(Symbol, Type)]) :: ColumnsType where
-  ColumnsOf '[] = '[]
-  ColumnsOf (col ::: ty ': record) =
-    col ::: 'NoDef :=> NullPG ty ': ColumnsOf record
-
-{- |
-`Entity` turns a Haskell `Type` into a `ColumnsType`.
-
-`Entity` may be applied to normal Haskell record types provided they
-have the `SOP.Generic` and `SOP.HasDatatypeInfo` instances;
-
->>> data Person = Person { name :: Strict.Text, age :: Int32 } deriving GHC.Generic
->>> instance SOP.Generic Person
->>> instance SOP.HasDatatypeInfo Person
->>> :kind! Entity Person
-Entity Person :: [(Symbol, (ColumnConstraint, NullityType))]
-= '["name" ::: ('NoDef :=> 'NotNull 'PGtext),
-    "age" ::: ('NoDef :=> 'NotNull 'PGint4)]
-
-Or to tuples of `SOP.P` types;
-
->>> :kind! Entity (SOP.P ("id" ::: Int32), SOP.P ("foreign_id" ::: Int32))
-Entity (SOP.P ("id" ::: Int32), SOP.P ("foreign_id" ::: Int32)) :: [(Symbol,
-                                                                     ColumnType)]
-= '[ '("id", 'Def :=> 'NotNull 'PGint4),
-     "foreign_id" ::: ('Def :=> 'NotNull 'PGint4)]
-
-Or to tuples which mix `SOP.P` types and record types.
-
->>> :kind! Entity (SOP.P ("id" ::: Int32), Person, SOP.P ("foreign_id" ::: Int32))
-Entity (SOP.P ("id" ::: Int32), Person, SOP.P ("foreign_id" ::: Int32)) :: [(Symbol,
-                                                                             ColumnType)]
-= '[ '("id", 'Def :=> 'NotNull 'PGint4),
-     '("name", 'NoDef :=> 'NotNull 'PGtext),
-     '("age", 'NoDef :=> 'NotNull 'PGint4),
-     "foreign_id" ::: ('Def :=> 'NotNull 'PGint4)]
--}
-type family Entity (hask :: Type) :: ColumnsType where
-  Entity (hask1, hask2) = Join (Entity hask1) (Entity hask2)
-  Entity (hask1, hask2, hask3) =
-    Join (Entity hask1) (Entity (hask2, hask3))
-  Entity (hask1, hask2, hask3, hask4) =
-    Join (Entity hask1) (Entity (hask2, hask3, hask4))
-  Entity (hask1, hask2, hask3, hask4, hask5) =
-    Join (Entity hask1) (Entity (hask2, hask3, hask4, hask5))
-  Entity (SOP.P (col ::: ty)) = '[col ::: 'Def :=> NullPG ty]
-  Entity hask = ColumnsOf (SOP.RecordCodeOf hask)
 
 {- | `NullPG` turns a Haskell type into a `NullityType`.
 
@@ -245,10 +230,13 @@ TuplePG (Double, Maybe Char) :: [NullityType]
 type family TuplePG (hask :: Type) :: [NullityType] where
   TuplePG hask = TupleOf (TupleCodeOf hask (SOP.Code hask))
 
+-- | `TupleOf` turns a list of Haskell `Type`s into a list of `NullityType`s.
 type family TupleOf (tuple :: [Type]) :: [NullityType] where
   TupleOf '[] = '[]
   TupleOf (hask ': tuple) = NullPG hask ': TupleOf tuple
 
+-- | `TupleCodeOf` takes the `SOP.Code` of a haskell `Type`
+-- and if it's a simple product returns it, otherwise giving a `TypeError`.
 type family TupleCodeOf (hask :: Type) (code :: [[Type]]) :: [Type] where
   TupleCodeOf hask '[tuple] = tuple
   TupleCodeOf hask '[] =
@@ -289,6 +277,7 @@ type family ConstructorNamesOf (constructors :: [Type.ConstructorInfo])
     ConstructorNamesOf (constructor ': constructors) =
       ConstructorNameOf constructor ': ConstructorNamesOf constructors
 
+-- | `DimPG` turns Haskell nested homogeneous tuples into a list of lengths.
 type family DimPG (hask :: Type) :: [Nat] where
   DimPG (x,x) = 2 ': DimPG x
   DimPG (x,x,x) = 3 ': DimPG x
@@ -301,6 +290,7 @@ type family DimPG (hask :: Type) :: [Nat] where
   DimPG (x,x,x,x,x,x,x,x,x,x) = 10 ': DimPG x
   DimPG x = '[]
 
+-- | `FixPG` extracts `NullPG` of the base type of nested homogeneous tuples.
 type family FixPG (hask :: Type) :: NullityType where
   FixPG (x,x) = FixPG x
   FixPG (x,x,x) = FixPG x
@@ -339,6 +329,7 @@ True
 -}
 newtype Money = Money { cents :: Int64 }
   deriving (Eq, Ord, Show, Read, GHC.Generic)
+-- | `PGmoney`
 type instance PG Money = 'PGmoney
 
 {- | The `Json` newtype is an indication that the Haskell
@@ -346,6 +337,7 @@ type it's applied to should be stored as a `PGjson`.
 -}
 newtype Json hask = Json {getJson :: hask}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
+-- | `PGjson`
 type instance PG (Json hask) = 'PGjson
 
 {- | The `Jsonb` newtype is an indication that the Haskell
@@ -353,6 +345,7 @@ type it's applied to should be stored as a `PGjsonb`.
 -}
 newtype Jsonb hask = Jsonb {getJsonb :: hask}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
+-- | `PGjsonb`
 type instance PG (Jsonb hask) = 'PGjsonb
 
 {- | The `Composite` newtype is an indication that the Haskell
@@ -360,6 +353,7 @@ type it's applied to should be stored as a `PGcomposite`.
 -}
 newtype Composite record = Composite {getComposite :: record}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
+-- | `PGcomposite` @(@`RowPG` @hask)@
 type instance PG (Composite hask) = 'PGcomposite (RowPG hask)
 
 {- | The `Enumerated` newtype is an indication that the Haskell
@@ -367,6 +361,7 @@ type it's applied to should be stored as a `PGenum`.
 -}
 newtype Enumerated enum = Enumerated {getEnumerated :: enum}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
+-- | `PGenum` @(@`LabelsPG` @hask)@
 type instance PG (Enumerated hask) = 'PGenum (LabelsPG hask)
 
 {- | The `VarArray` newtype is an indication that the Haskell
@@ -374,6 +369,7 @@ type it's applied to should be stored as a `PGvararray`.
 -}
 newtype VarArray arr = VarArray {getVarArray :: arr}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
+-- | `PGvararray` @(@`NullPG` @hask)@
 type instance PG (VarArray (Vector hask)) = 'PGvararray (NullPG hask)
 
 {- | The `FixArray` newtype is an indication that the Haskell
@@ -381,4 +377,5 @@ type it's applied to should be stored as a `PGfixarray`.
 -}
 newtype FixArray arr = FixArray {getFixArray :: arr}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
-type instance PG (FixArray x) = 'PGfixarray (DimPG x) (FixPG x)
+-- | `PGfixarray` @(@`DimPG` @hask) (@`FixPG` @hask)@
+type instance PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
