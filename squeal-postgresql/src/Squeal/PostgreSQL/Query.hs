@@ -426,6 +426,8 @@ data Selection outer commons grp schemas params from row where
     => NP (Aliased (WindowFunction outer commons grp schemas params from)) row
     -> WindowDefinition outer commons grp schemas params from
     -> Selection outer commons grp schemas params from row
+instance Additionally (Selection outer commons grp schemas params from) where
+  also = Also
 instance (KnownSymbol col, row ~ '[col ::: ty])
   => Aliasable col
     (Expression outer commons grp schemas params from ty)
@@ -921,11 +923,16 @@ common
 common (cte `As` alias) = UnsafeFromClause $
   renderSQL cte <+> "AS" <+> renderSQL alias
 
-{- | @left & crossJoin right@. For every possible combination of rows from
-    @left@ and @right@ (i.e., a Cartesian product), the joined table will contain
-    a row consisting of all columns in @left@ followed by all columns in @right@.
-    If the tables have @n@ and @m@ rows respectively, the joined table will
-    have @n * m@ rows.
+instance Additionally (FromClause outer commons schemas params) where
+  also right left = UnsafeFromClause $
+    renderSQL left <> ", " <> renderSQL right
+
+{- |
+@left & crossJoin right@. For every possible combination of rows from
+@left@ and @right@ (i.e., a Cartesian product), the joined table will contain
+a row consisting of all columns in @left@ followed by all columns in @right@.
+If the tables have @n@ and @m@ rows respectively, the joined table will
+have @n * m@ rows.
 -}
 crossJoin
   :: FromClause outer commons schemas params right

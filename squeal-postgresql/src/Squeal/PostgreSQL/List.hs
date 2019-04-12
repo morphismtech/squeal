@@ -19,8 +19,8 @@ module Squeal.PostgreSQL.List
   ( SOP.NP (..)
   , (*:)
   , Join
-  , (+++)
   , disjoin
+  , Additionally (..)
   , AlignedList (..)
   , single
   , extractList
@@ -31,6 +31,7 @@ module Squeal.PostgreSQL.List
   ) where
 
 import Control.Category
+import Data.Function ((&))
 import Data.Kind
 import Data.Type.Bool
 import GHC.TypeLits
@@ -45,13 +46,6 @@ type family Join xs ys where
   Join '[] ys = ys
   Join (x ': xs) ys = x ': Join xs ys
 
--- | Concatenate `NP` lists.
-(+++) :: NP f xs -> NP f ys -> NP f (Join xs ys)
-xs +++ ys = case xs of
-  Nil -> ys
-  x :* xs' -> x :* (xs' +++ ys)
-infixr 5 +++
-
 -- | `disjoin` is a utility function for splitting an `NP` list into pieces.
 disjoin
  :: forall xs ys expr. SListI xs
@@ -61,6 +55,14 @@ disjoin = case sList @xs of
   SNil -> \ys -> (Nil, ys)
   SCons -> \(x :* xsys) ->
     case disjoin xsys of (xs,ys) -> (x :* xs, ys)
+
+class Additionally expr where
+  also :: expr ys -> expr xs -> expr (Join xs ys)
+
+instance Additionally (NP expr) where
+  also ys = \case
+    Nil -> ys
+    x :* xs -> x :* (xs & also ys)
 
 -- | An `AlignedList` is a type-aligned list or free category.
 data AlignedList p x0 x1 where

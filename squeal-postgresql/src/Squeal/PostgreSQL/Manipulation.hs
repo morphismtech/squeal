@@ -51,7 +51,6 @@ module Squeal.PostgreSQL.Manipulation
     -- * Delete
   , deleteFrom
   , deleteFrom_
-  , also
   ) where
 
 import Control.DeepSeq
@@ -575,17 +574,3 @@ deleteFrom_
   -- ^ condition under which to delete a row
   -> Manipulation commons schemas params '[]
 deleteFrom_ tab wh = deleteFrom tab NoUsing wh (Returning_ Nil)
-
--- | This has the behaviour of a cartesian product, taking all
--- possible combinations between @left@ and @right@ - exactly like a
--- `crossJoin`. Used when no `crossJoin` syntax is required but simply
--- a comma separated list of tables. Typical case is the `UsingClause`
--- of a `deleteFrom` query.
-also
-  :: FromClause outer commons schemas params right
-  -- ^ right
-  -> FromClause outer commons schemas params left
-  -- ^ left
-  -> FromClause outer commons schemas params (Join left right)
-also right left = UnsafeFromClause $
-  renderSQL left <> "," <+> renderSQL right
