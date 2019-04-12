@@ -206,6 +206,7 @@ module Squeal.PostgreSQL
   , module Squeal.PostgreSQL.Expression.Math
   , module Squeal.PostgreSQL.Expression.Null
   , module Squeal.PostgreSQL.Expression.Parameter
+  , module Squeal.PostgreSQL.Expression.Sort
   , module Squeal.PostgreSQL.Expression.Text
   , module Squeal.PostgreSQL.Expression.TextSearch
   , module Squeal.PostgreSQL.Expression.Time
@@ -232,6 +233,7 @@ import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Math
 import Squeal.PostgreSQL.Expression.Null
 import Squeal.PostgreSQL.Expression.Parameter
+import Squeal.PostgreSQL.Expression.Sort
 import Squeal.PostgreSQL.Expression.Text
 import Squeal.PostgreSQL.Expression.TextSearch
 import Squeal.PostgreSQL.Expression.Time
