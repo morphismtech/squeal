@@ -35,6 +35,7 @@ library
     Squeal.PostgreSQL.Expression.Null
     Squeal.PostgreSQL.Expression.Parameter
     Squeal.PostgreSQL.Expression.Sort
+    Squeal.PostgreSQL.Expression.Subquery
     Squeal.PostgreSQL.Expression.Text
     Squeal.PostgreSQL.Expression.TextSearch
     Squeal.PostgreSQL.Expression.Time
