@@ -366,6 +366,10 @@ type instance PG (Enumerated hask) = 'PGenum (LabelsPG hask)
 
 {- | The `VarArray` newtype is an indication that the Haskell
 type it's applied to should be stored as a `PGvararray`.
+
+>>> :kind! PG (VarArray (Vector Double))
+PG (VarArray (Vector Double)) :: PGType
+= 'PGvararray ('NotNull 'PGfloat8)
 -}
 newtype VarArray arr = VarArray {getVarArray :: arr}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
@@ -374,6 +378,10 @@ type instance PG (VarArray (Vector hask)) = 'PGvararray (NullPG hask)
 
 {- | The `FixArray` newtype is an indication that the Haskell
 type it's applied to should be stored as a `PGfixarray`.
+
+>>> :kind! PG (FixArray ((Double, Double), (Double, Double)))
+PG (FixArray ((Double, Double), (Double, Double))) :: PGType
+= 'PGfixarray '[2, 2] ('NotNull 'PGfloat8)
 -}
 newtype FixArray arr = FixArray {getFixArray :: arr}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
