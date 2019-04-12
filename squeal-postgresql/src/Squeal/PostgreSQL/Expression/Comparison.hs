@@ -1,5 +1,6 @@
 {-# LANGUAGE
     OverloadedStrings
+  , RankNTypes
   , TypeInType
   , TypeOperators
 #-}
@@ -13,6 +14,7 @@ module Squeal.PostgreSQL.Expression.Comparison
   , (.>)
   , greatest
   , least
+  , BetweenExpr
   , between
   , notBetween
   , betweenSymmetric
@@ -85,25 +87,24 @@ greatest = unsafeFunctionVar "GREATEST"
 least :: FunctionVar ty ty ty
 least = unsafeFunctionVar "LEAST"
 
-{- | >>> printSQL $ true `between` (null_, false)
-TRUE BETWEEN NULL AND FALSE
--}
-between
-  :: Expression outer commons grp schemas params from (null ty)
+type BetweenExpr
+  =  forall outer commons grp schemas params from null ty
+  .  Expression outer commons grp schemas params from (null ty)
   -> ( Expression outer commons grp schemas params from (null ty)
      , Expression outer commons grp schemas params from (null ty) ) -- ^ bounds
   -> Condition outer commons grp schemas params from
+
+{- | >>> printSQL $ true `between` (null_, false)
+TRUE BETWEEN NULL AND FALSE
+-}
+between :: BetweenExpr
 between a (x,y) = UnsafeExpression $ renderSQL a <+> "BETWEEN"
   <+> renderSQL x <+> "AND" <+> renderSQL y
 
 {- | >>> printSQL $ true `notBetween` (null_, false)
 TRUE NOT BETWEEN NULL AND FALSE
 -}
-notBetween
-  :: Expression outer commons grp schemas params from (null ty)
-  -> ( Expression outer commons grp schemas params from (null ty)
-     , Expression outer commons grp schemas params from (null ty) ) -- ^ bounds
-  -> Condition outer commons grp schemas params from
+notBetween :: BetweenExpr
 notBetween a (x,y) = UnsafeExpression $ renderSQL a <+> "NOT BETWEEN"
   <+> renderSQL x <+> "AND" <+> renderSQL y
 
@@ -112,11 +113,7 @@ notBetween a (x,y) = UnsafeExpression $ renderSQL a <+> "NOT BETWEEN"
 >>> printSQL $ true `betweenSymmetric` (null_, false)
 TRUE BETWEEN SYMMETRIC NULL AND FALSE
 -}
-betweenSymmetric
-  :: Expression outer commons grp schemas params from (null ty)
-  -> ( Expression outer commons grp schemas params from (null ty)
-     , Expression outer commons grp schemas params from (null ty) ) -- ^ bounds
-  -> Condition outer commons grp schemas params from
+betweenSymmetric :: BetweenExpr
 betweenSymmetric a (x,y) = UnsafeExpression $ renderSQL a
   <+> "BETWEEN SYMMETRIC" <+> renderSQL x <+> "AND" <+> renderSQL y
 
@@ -125,11 +122,7 @@ betweenSymmetric a (x,y) = UnsafeExpression $ renderSQL a
 >>> printSQL $ true `notBetweenSymmetric` (null_, false)
 TRUE NOT BETWEEN SYMMETRIC NULL AND FALSE
 -}
-notBetweenSymmetric
-  :: Expression outer commons grp schemas params from (null ty)
-  -> ( Expression outer commons grp schemas params from (null ty)
-     , Expression outer commons grp schemas params from (null ty) ) -- ^ bounds
-  -> Condition outer commons grp schemas params from
+notBetweenSymmetric :: BetweenExpr
 notBetweenSymmetric a (x,y) = UnsafeExpression $ renderSQL a
   <+> "NOT BETWEEN SYMMETRIC" <+> renderSQL x <+> "AND" <+> renderSQL y
 
