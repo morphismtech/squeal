@@ -88,10 +88,10 @@ least :: FunctionVar ty ty ty
 least = unsafeFunctionVar "LEAST"
 
 type BetweenExpr
-  =  forall outer commons grp schemas params from null0 null1 ty
-  .  Expression outer commons grp schemas params from (null0 ty)
-  -> ( Expression outer commons grp schemas params from (null1 ty)
-     , Expression outer commons grp schemas params from (null1 ty) ) -- ^ bounds
+  =  forall outer commons grp schemas params from ty
+  .  Expression outer commons grp schemas params from ty
+  -> ( Expression outer commons grp schemas params from ty
+     , Expression outer commons grp schemas params from ty ) -- ^ bounds
   -> Condition outer commons grp schemas params from
 
 {- | >>> printSQL $ true `between` (null_, false)
