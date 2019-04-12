@@ -34,6 +34,7 @@ library
     Squeal.PostgreSQL.Expression.Math
     Squeal.PostgreSQL.Expression.Null
     Squeal.PostgreSQL.Expression.Parameter
+    Squeal.PostgreSQL.Expression.SetOf
     Squeal.PostgreSQL.Expression.Sort
     Squeal.PostgreSQL.Expression.Subquery
     Squeal.PostgreSQL.Expression.Text

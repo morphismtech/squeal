@@ -53,8 +53,6 @@ module Squeal.PostgreSQL.Query
     -- ** With
   , With (..)
   , CommonTableExpression (..)
-    -- ** Unnest
-  , unnest
     -- ** Json
   , jsonEach
   , jsonbEach
@@ -725,12 +723,6 @@ unsafeSetOfFunction
   -> FromClause outer commons schemas params from
 unsafeSetOfFunction fun expr = UnsafeFromClause $
   fun <> "(" <> renderSQL expr <> ")"
-
--- | Expand an array to a set of rows
-unnest
-  :: Expression outer commons 'Ungrouped schemas params '[] (nullity ('PGvararray ty))
-  -> FromClause outer commons schemas params '["unnest" ::: '["unnest" ::: ty]]
-unnest = unsafeSetOfFunction "unnest"
 
 -- | Expands the outermost JSON object into a set of key/value pairs.
 -- >>> import Data.Aeson

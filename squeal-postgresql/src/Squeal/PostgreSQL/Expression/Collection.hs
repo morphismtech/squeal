@@ -19,6 +19,7 @@ module Squeal.PostgreSQL.Expression.Collection
   , array2
   , cardinality
   , index
+  , unnest
   , row
   , field
   ) where
@@ -30,6 +31,7 @@ import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
+import Squeal.PostgreSQL.Expression.SetOf
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
@@ -108,6 +110,11 @@ index
   -> null ('PGvararray ty) :--> NullifyType ty
 index n expr = UnsafeExpression $
   parenthesized (renderSQL expr) <> "[" <> fromString (show n) <> "]"
+
+-- | Expand an array to a set of rows
+unnest
+  :: SetOfFunction (null ('PGvararray ty)) '["unnest" ::: '["unnest" ::: ty]]
+unnest = unsafeSetOfFunction "unnest"
 
 -- | A row constructor is an expression that builds a row value
 -- (also called a composite value) using values for its member fields.
