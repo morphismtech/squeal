@@ -5,7 +5,7 @@ Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Text Search Functions and Operators
+Text search functions and operators
 -}
 
 {-# LANGUAGE

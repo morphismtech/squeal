@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Expression.Logic
+Description: Logical expressions
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Logical expressions and operators
+-}
+
 {-# LANGUAGE
     DataKinds
   , OverloadedStrings
@@ -20,7 +30,7 @@ import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
 -- | A `Condition` is an `Expression`, which can evaluate
--- to `true`, `false` or `null_`. This is because SQL uses
+-- to `true`, `false` or `Squeal.PostgreSQL.Null.null_`. This is because SQL uses
 -- a three valued logic.
 type Condition outer commons grp schemas params from =
   Expression outer commons grp schemas params from ('Null 'PGbool)

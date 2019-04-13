@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Expression.Parameter
+Description: Parameters
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Parameters, out-of-line data values
+-}
+
 {-# LANGUAGE
     AllowAmbiguousTypes
   , DataKinds

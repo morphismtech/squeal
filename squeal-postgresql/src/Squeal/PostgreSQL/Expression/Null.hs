@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Expression.Null
+Description: Null
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Null values and null handling functions
+-}
+
 {-# LANGUAGE
     DataKinds
   , OverloadedStrings
