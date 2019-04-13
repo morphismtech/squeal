@@ -100,7 +100,9 @@ data WindowDefinition outer commons grp schemas params from where
   WindowDefinition
     :: SOP.SListI bys
     => NP (Expression outer commons grp schemas params from) bys
+       -- ^ partitions
     -> [SortExpression outer commons grp schemas params from]
+       -- ^ ordering
     -> WindowDefinition outer commons grp schemas params from
 
 instance OrderBy WindowDefinition where
@@ -127,7 +129,7 @@ the same partition as the current row.
 -}
 partitionBy
   :: SOP.SListI bys
-  => NP (Expression outer commons grp schemas params from) bys
+  => NP (Expression outer commons grp schemas params from) bys -- ^ partitions
   -> WindowDefinition outer commons grp schemas params from
 partitionBy bys = WindowDefinition bys []
 
@@ -193,6 +195,7 @@ unsafeWindowFunctionN fun xs = UnsafeWindowFunction $ fun <>
   parenthesized (renderCommaSeparated renderSQL xs)
 
 {- | rank of the current row with gaps; same as `rowNumber` of its first peer
+
 >>> printSQL rank
 rank()
 -}
@@ -200,6 +203,7 @@ rank :: WinFun0 ('NotNull 'PGint8)
 rank = UnsafeWindowFunction "rank()"
 
 {- | number of the current row within its partition, counting from 1
+
 >>> printSQL rowNumber
 row_number()
 -}
@@ -207,6 +211,7 @@ rowNumber :: WinFun0 ('NotNull 'PGint8)
 rowNumber = UnsafeWindowFunction "row_number()"
 
 {- | rank of the current row without gaps; this function counts peer groups
+
 >>> printSQL denseRank
 dense_rank()
 -}
@@ -214,6 +219,7 @@ denseRank :: WinFun0 ('NotNull 'PGint8)
 denseRank = UnsafeWindowFunction "dense_rank()"
 
 {- | relative rank of the current row: (rank - 1) / (total partition rows - 1)
+
 >>> printSQL percentRank
 percent_rank()
 -}
@@ -222,6 +228,7 @@ percentRank = UnsafeWindowFunction "percent_rank()"
 
 {- | cumulative distribution: (number of partition rows
 preceding or peer with current row) / total partition rows
+
 >>> printSQL cumeDist
 cume_dist()
 -}
@@ -230,6 +237,9 @@ cumeDist = UnsafeWindowFunction "cume_dist()"
 
 {- | integer ranging from 1 to the argument value,
 dividing the partition as equally as possible
+
+>>> printSQL $ ntile 5
+ntile(5)
 -}
 ntile :: WinFun1 ('NotNull 'PGint4) ('NotNull 'PGint4)
 ntile = unsafeWindowFunction1 "ntile"
