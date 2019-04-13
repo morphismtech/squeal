@@ -8,7 +8,6 @@ Stability: experimental
 Squeal expressions are the atoms used to build statements.
 -}
 
-{-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds

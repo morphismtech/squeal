@@ -4,6 +4,7 @@
   , FlexibleContexts
   , FlexibleInstances
   , MultiParamTypeClasses
+  , OverloadedLabels
   , OverloadedStrings
   , RankNTypes
   , ScopedTypeVariables
@@ -112,9 +113,8 @@ index n expr = UnsafeExpression $
   parenthesized (renderSQL expr) <> "[" <> fromString (show n) <> "]"
 
 -- | Expand an array to a set of rows
-unnest
-  :: SetOfFunction (null ('PGvararray ty)) '["unnest" ::: '["unnest" ::: ty]]
-unnest = unsafeSetOfFunction "unnest"
+unnest :: SetOfFunction "unnest" (null ('PGvararray ty)) '["unnest" ::: ty]
+unnest = unsafeSetOfFunction #unnest
 
 -- | A row constructor is an expression that builds a row value
 -- (also called a composite value) using values for its member fields.

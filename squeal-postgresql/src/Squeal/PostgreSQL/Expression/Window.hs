@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Expression.Window
+Description: Window functions
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Window functions and definitions
+-}
+
 {-# LANGUAGE
     DataKinds
   , DeriveGeneric
@@ -27,6 +37,9 @@ module Squeal.PostgreSQL.Expression.Window
   , firstValue
   , lastValue
   , nthValue
+  , WinFun0
+  , WinFun1
+  , WinFunN
   ) where
 
 import Control.DeepSeq
@@ -142,11 +155,17 @@ newtype WindowFunction
 instance RenderSQL (WindowFunction outer commons grp schemas params from ty) where
   renderSQL = renderWindowFunction
 
+{- |
+A @RankNType@ for window functions with no arguments.
+-}
 type WinFun0 x
   = forall outer commons grp schemas params from
   . WindowFunction outer commons grp schemas params from x
     -- ^ cannot reference aliases
 
+{- |
+A @RankNType@ for window functions with 1 argument.
+-}
 type WinFun1 x y
   =  forall outer commons grp schemas params from
   .  Expression outer commons grp schemas params from x
@@ -154,6 +173,10 @@ type WinFun1 x y
   -> WindowFunction outer commons grp schemas params from y
      -- ^ output
 
+{- | A @RankNType@ for window functions with a fixed-length
+list of heterogeneous arguments.
+Use the `*:` operator to end your argument lists.
+-}
 type WinFunN xs y
   =  forall outer commons grp schemas params from
   .  NP (Expression outer commons grp schemas params from) xs

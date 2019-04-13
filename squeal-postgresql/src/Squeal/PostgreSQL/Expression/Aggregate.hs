@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Expression.Aggregate
+Description: Aggregate functions
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Aggregate functions
+-}
+
 {-# LANGUAGE
     DataKinds
   , DeriveGeneric
@@ -39,7 +49,7 @@ import Squeal.PostgreSQL.Schema
 {- |
 `Aggregate` functions compute a single result from a set of input values.
 `Aggregate` functions can be used as `GroupedBy` `Expression`s as well
-as `WindowFunction`s.
+as `Squeal.PostgreSQL.Expression.Window.WindowFunction`s.
 -}
 class Aggregate expr1 exprN aggr
   | aggr -> expr1, aggr -> exprN where

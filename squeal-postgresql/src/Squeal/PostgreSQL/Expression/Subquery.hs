@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Expression.Subquery
+Description: Subquery expressions
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Subquery expressions
+-}
+
 {-# LANGUAGE
     DataKinds
   , OverloadedStrings
@@ -49,8 +59,9 @@ row of the subquery result using the given `Operator`,
 which must yield a Boolean result. The result of `subAll` is `true`
 if all rows yield true (including the case where the subquery returns no rows).
 The result is `false` if any `false` result is found.
-The result is `null_` if no comparison with a subquery row returns `false`,
-and at least one comparison returns `null_`.
+The result is `Squeal.PostgreSQL.Expression.Null.null_` if
+  no comparison with a subquery row returns `false`,
+and at least one comparison returns `Squeal.PostgreSQL.Expression.Null.null_`.
 
 >>> printSQL $ subAll true (.==) (values_ (true `as` #foo))
 (TRUE = ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo")))
