@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Expression
+Description: Type expressions
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Type expressions.
+-}
+
 {-# LANGUAGE
     AllowAmbiguousTypes
   , DataKinds
@@ -230,8 +240,10 @@ fixarray ty = UnsafeTypeExpression $
       $ SOP.hcmap (SOP.Proxy @KnownNat)
         (K . fromString . show . natVal)
         (SOP.hpure SOP.Proxy :: SOP.NP SOP.Proxy ns)
+-- | text search query
 tsvector :: TypeExpression schemas (null 'PGtsvector)
 tsvector = UnsafeTypeExpression "tsvector"
+-- | text search document
 tsquery :: TypeExpression schemas (null 'PGtsquery)
 tsquery = UnsafeTypeExpression "tsquery"
 

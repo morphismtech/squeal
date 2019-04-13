@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Expression.Time
+Description: Date/Time expressions
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Date/Time Functions and Operators
+-}
+
 {-# LANGUAGE
     DataKinds
   , DeriveGeneric
@@ -156,6 +166,7 @@ infixl 6 +!
 infixl 6 !-
 infixl 6 !-!
 
+-- | A `TimeUnit` to use in `interval_` construction.
 data TimeUnit
   = Years | Months | Weeks | Days
   | Hours | Minutes | Seconds
