@@ -258,7 +258,7 @@ row within the partition; if there is no such row, instead return default
 evaluated with respect to the current row.
 -}
 lead :: WinFunN '[ty, 'NotNull 'PGint4, ty] ty
-lead = unsafeWindowFunctionN "lag"
+lead = unsafeWindowFunctionN "lead"
 
 {- | returns value evaluated at the row that is the
 first row of the window frame
