@@ -205,12 +205,14 @@ module Squeal.PostgreSQL.Binary
   ( -- * Encoding
     ToParam (..)
   , ToParams (..)
-  , ToNullityParam
-  , ToField
-  , ToFixArray
+  , ToNullityParam (..)
+  , ToField (..)
+  , ToFixArray (..)
     -- * Decoding
   , FromValue (..)
   , FromRow (..)
+  , FromField (..)
+  , FromFixArray (..)
     -- * Only
   , Only (..)
   ) where
@@ -394,6 +396,8 @@ class HasAliasedOid (field :: (Symbol, NullityType)) where
 instance HasOid ty => HasAliasedOid (alias ::: nullity ty) where
   aliasedOid = oid @ty
 
+-- | A `ToNullityParam` constraint gives an encoding of a Haskell `Type` into
+-- into the binary format of a PostgreSQL `NullityType`.
 class ToNullityParam (x :: Type) (ty :: NullityType) where
   toNullityParam :: x -> K (Maybe Encoding.Encoding) ty
 instance ToParam x pg => ToNullityParam x ('NotNull pg) where
@@ -401,11 +405,19 @@ instance ToParam x pg => ToNullityParam x ('NotNull pg) where
 instance ToParam x pg => ToNullityParam (Maybe x) ('Null pg) where
   toNullityParam = K . fmap (unK . toParam @x @pg)
 
+-- | A `ToField` constraint lifts the `ToParam` parser
+-- to an encoding of a @(Symbol, Type)@ to a @(Symbol, NullityType)@,
+-- encoding `Null`s to `Maybe`s. You should not define instances for
+-- `FromField`, just use the provided instances.
 class ToField (x :: (Symbol, Type)) (field :: (Symbol, NullityType)) where
   toField :: P x -> K (Maybe Encoding.Encoding) field
 instance ToNullityParam x ty => ToField (alias ::: x) (alias ::: ty) where
   toField (P x) = K . unK $ toNullityParam @x @ty x
 
+-- | A `ToFixArray` constraint gives an encoding of a Haskell `Type`
+-- into the binary format of a PostgreSQL fixed-length array.
+-- You should not define instances for
+-- `ToFixArray`, just use the provided instances.
 class ToFixArray (x :: Type) (dims :: [Nat]) (array :: NullityType) where
   toFixArray :: x -> K (K Encoding.Array dims) array
 instance ToNullityParam x ty => ToFixArray x '[] ty where
@@ -589,6 +601,10 @@ instance FromValue pg y
       K (Just bytestring) -> P . Just <$>
         Decoding.valueParser (fromValue @pg) bytestring
 
+-- | A `FromFixArray` constraint gives a decoding to a Haskell `Type`
+-- from the binary format of a PostgreSQL fixed-length array.
+-- You should not define instances for
+-- `FromFixArray`, just use the provided instances.
 class FromFixArray (dims :: [Nat]) (ty :: NullityType) (y :: Type) where
   fromFixArray :: Decoding.Array y
 instance FromValue pg y => FromFixArray '[] ('NotNull pg) y where

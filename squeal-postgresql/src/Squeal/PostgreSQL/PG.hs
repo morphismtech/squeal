@@ -167,7 +167,7 @@ type family LabelsPG (hask :: Type) :: [Type.ConstructorName] where
 `RowPG` turns a Haskell `Type` into a `RowType`.
 
 `RowPG` may be applied to normal Haskell record types provided they
-have the `SOP.Generic` and `SOP.HasDatatypeInfo` instances;
+have `SOP.Generic` and `SOP.HasDatatypeInfo` instances;
 
 >>> data Person = Person { name :: Strict.Text, age :: Int32 } deriving GHC.Generic
 >>> instance SOP.Generic Person
