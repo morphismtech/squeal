@@ -30,6 +30,7 @@ library
     Squeal.PostgreSQL.Expression.Collection
     Squeal.PostgreSQL.Expression.Comparison
     Squeal.PostgreSQL.Expression.Json
+    Squeal.PostgreSQL.Expression.Literal
     Squeal.PostgreSQL.Expression.Logic
     Squeal.PostgreSQL.Expression.Math
     Squeal.PostgreSQL.Expression.Null

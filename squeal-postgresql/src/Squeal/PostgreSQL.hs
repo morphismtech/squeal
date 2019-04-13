@@ -202,6 +202,7 @@ module Squeal.PostgreSQL
   , module Squeal.PostgreSQL.Expression.Collection
   , module Squeal.PostgreSQL.Expression.Comparison
   , module Squeal.PostgreSQL.Expression.Json
+  , module Squeal.PostgreSQL.Expression.Literal
   , module Squeal.PostgreSQL.Expression.Logic
   , module Squeal.PostgreSQL.Expression.Math
   , module Squeal.PostgreSQL.Expression.Null
@@ -231,6 +232,7 @@ import Squeal.PostgreSQL.Expression.Aggregate
 import Squeal.PostgreSQL.Expression.Collection
 import Squeal.PostgreSQL.Expression.Comparison
 import Squeal.PostgreSQL.Expression.Json
+import Squeal.PostgreSQL.Expression.Literal
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Math
 import Squeal.PostgreSQL.Expression.Null

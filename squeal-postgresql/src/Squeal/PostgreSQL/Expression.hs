@@ -45,39 +45,29 @@ module Squeal.PostgreSQL.Expression
   , unsafeFunctionVar
   , FunctionN
   , unsafeFunctionN
-  , Literal (..)
   , PGSubset (..)
     -- * Re-export
   , (&)
   , K (..)
+  , unK
   ) where
 
 import Control.Category
 import Control.DeepSeq
 import Data.ByteString (ByteString)
-import Data.ByteString.Lazy (toStrict)
-import ByteString.StrictBuilder (builderBytes)
 import Data.Function ((&))
 import Data.Semigroup hiding (All)
-import qualified Data.Aeson as JSON
-import Data.Int
 import Data.String
-import Data.Text (Text)
 import Generics.SOP hiding (All, from)
 import GHC.OverloadedLabels
 import GHC.TypeLits
 import Numeric
 import Prelude hiding (id, (.))
 
-import qualified Data.Text as Text
-import qualified Data.Text.Lazy as Lazy (Text)
-import qualified Data.Text.Lazy as Lazy.Text
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Alias
-import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.List
-import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
@@ -93,7 +83,7 @@ such as in the target `Squeal.PostgreSQL.Query.List` of the
 `Squeal.PostgreSQL.Query.select` command,
 as new column values in `Squeal.PostgreSQL.Manipulation.insertRow` or
 `Squeal.PostgreSQL.Manipulation.update`,
-or in search `Condition`s in a number of commands.
+or in search `Squeal.PostgreSQL.Logic.Condition`s in a number of commands.
 
 The expression syntax allows the calculation of
 values from primitive expression using arithmetic, logical,
@@ -127,7 +117,7 @@ instance RenderSQL (Expression outer commons grp schemas params from ty) where
   renderSQL = renderExpression
 
 -- | An `Expr` is a closed `Expression`.
--- It is a F`RankNType` but don't be scared.
+-- It is a F@RankNType@ but don't be scared.
 -- Think of it as an expression which sees no
 -- namespaces, so you can't use parameters
 -- or alias references. It can be used as
@@ -137,7 +127,7 @@ type Expr x
   . Expression outer commons grp schemas params from x
     -- ^ cannot reference aliases
 
--- | A `RankNType` for binary operators.
+-- | A @RankNType@ for binary operators.
 type Operator x1 x2 y
   =  forall outer commons grp schemas params from
   .  Expression outer commons grp schemas params from x1
@@ -147,7 +137,7 @@ type Operator x1 x2 y
   -> Expression outer commons grp schemas params from y
      -- ^ output
 
--- | A `RankNType` for functions with a single argument.
+-- | A @RankNType@ for functions with a single argument.
 -- These could be either function calls or unary operators.
 -- This is a subtype of the usual Haskell function type `Prelude.->`,
 -- indeed a subcategory as it is closed under the usual
@@ -159,7 +149,7 @@ type (:-->) x y
   -> Expression outer commons grp schemas params from y
      -- ^ output
 
-{- | A `RankNType` for functions with a fixed-length list of heterogeneous arguments.
+{- | A @RankNType@ for functions with a fixed-length list of heterogeneous arguments.
 Use the `*:` operator to end your argument lists, like so.
 
 >>> printSQL (unsafeFunctionN "fun" (true :* false :* localTime *: true))
@@ -172,7 +162,7 @@ type FunctionN xs y
   -> Expression outer commons grp schemas params from y
      -- ^ output
 
-{- | A `RankNType` for functions with a variable-length list of
+{- | A @RankNType@ for functions with a variable-length list of
 homogeneous arguments and at least 1 more argument.
 -}
 type FunctionVar x0 x1 y
@@ -363,6 +353,7 @@ instance (ty `In` PGNum, ty `In` PGFloating) => Floating
     acosh x = log (x + sqrt (x*x - 1))
     atanh x = log ((1 + x) / (1 - x)) / 2
 
+-- | Contained by operators
 class PGSubset container where
   (@>) :: Operator (null0 container) (null1 container) ('Null 'PGbool)
   (@>) = unsafeBinaryOp "@>"
@@ -406,31 +397,3 @@ instance Monoid
   (Expression outer commons grp schemas params from (null 'PGtsvector)) where
     mempty = fromString ""
     mappend = (<>)
-
-class Literal hask where
-  literal :: hask -> Expr (null (PG hask))
-instance JSON.ToJSON hask => Literal (Json hask) where
-  literal = UnsafeExpression . parenthesized . (<> " :: json")
-    . singleQuotedUtf8 . toStrict . JSON.encode . getJson
-instance JSON.ToJSON hask => Literal (Jsonb hask) where
-  literal =  UnsafeExpression . parenthesized . (<> " :: jsonb")
-    . singleQuotedUtf8 . toStrict . JSON.encode . getJsonb
-instance Literal Char where
-  literal chr = UnsafeExpression $
-    "E\'" <> fromString (escape chr) <> "\'"
-instance Literal String where literal = fromString
-instance Literal Int16 where literal = fromIntegral
-instance Literal Int32 where literal = fromIntegral
-instance Literal Int64 where literal = fromIntegral
-instance Literal Float where literal = fromRational . toRational
-instance Literal Double where literal = fromRational . toRational
-instance Literal Text where literal = fromString . Text.unpack
-instance Literal Lazy.Text where literal = fromString . Lazy.Text.unpack
-instance ToParam (Enumerated enum) (PG (Enumerated enum))
-  => Literal (Enumerated enum) where
-    literal
-      = UnsafeExpression
-      . singleQuotedUtf8
-      . builderBytes
-      . unK
-      . toParam @(Enumerated enum) @(PG (Enumerated enum))
