@@ -85,6 +85,7 @@ import qualified Generics.SOP as SOP
 
 -- $setup
 -- >>> import Squeal.PostgreSQL
+-- >>> import Data.Aeson
 
 {-----------------------------------------
  -- json and jsonb support
@@ -379,58 +380,64 @@ jsonbPretty :: null 'PGjsonb :--> null 'PGtext
 jsonbPretty = unsafeFunction "jsonb_pretty"
 
 
--- | Expands the outermost JSON object into a set of key/value pairs.
--- >>> import Data.Aeson
--- >>> printSQL (select Star (from (jsonEach (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
--- SELECT * FROM json_each(('{"a":"foo","b":"bar"}' :: json))
+{- | Expands the outermost JSON object into a set of key/value pairs.
+
+>>> printSQL (select Star (from (jsonEach (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
+SELECT * FROM json_each(('{"a":"foo","b":"bar"}' :: json))
+-}
 jsonEach :: SetOfFunction "json_each" (null 'PGjson)
   '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]
-jsonEach = unsafeSetOfFunction #json_each
+jsonEach = unsafeSetOfFunction
 
--- | Expands the outermost binary JSON object into a set of key/value pairs.
--- >>> import Data.Aeson
--- >>> printSQL (select Star (from (jsonbEach (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
--- SELECT * FROM jsonb_each(('{"a":"foo","b":"bar"}' :: jsonb))
+{- | Expands the outermost binary JSON object into a set of key/value pairs.
+
+>>> printSQL (select Star (from (jsonbEach (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
+SELECT * FROM jsonb_each(('{"a":"foo","b":"bar"}' :: jsonb))
+-}
 jsonbEach
   :: SetOfFunction "jsonb_each" (nullity 'PGjsonb)
     '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]
-jsonbEach = unsafeSetOfFunction #jsonb_each
+jsonbEach = unsafeSetOfFunction
 
--- | Expands the outermost JSON object into a set of key/value pairs.-- | Expands the outermost binary JSON object into a set of key/value pairs.
--- >>> import Data.Aeson
--- >>> printSQL (select Star (from (jsonEachText (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
--- SELECT * FROM json_each_text(('{"a":"foo","b":"bar"}' :: json))
+{- | Expands the outermost JSON object into a set of key/value pairs.
+
+>>> printSQL (select Star (from (jsonEachText (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
+SELECT * FROM json_each_text(('{"a":"foo","b":"bar"}' :: json))
+-}
 jsonEachText
   :: SetOfFunction "json_each_text" (null 'PGjson)
     '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
-jsonEachText = unsafeSetOfFunction #json_each_text
+jsonEachText = unsafeSetOfFunction
 
--- | Expands the outermost binary JSON object into a set of key/value pairs.
--- >>> import Data.Aeson
--- >>> printSQL (select Star (from (jsonbEachText (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
--- SELECT * FROM jsonb_each_text(('{"a":"foo","b":"bar"}' :: jsonb))
+{- | Expands the outermost binary JSON object into a set of key/value pairs.
+
+>>> printSQL (select Star (from (jsonbEachText (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
+SELECT * FROM jsonb_each_text(('{"a":"foo","b":"bar"}' :: jsonb))
+-}
 jsonbEachText
   :: SetOfFunction "jsonb_each_text" (null 'PGjsonb)
     '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
-jsonbEachText = unsafeSetOfFunction #jsonb_each_text
+jsonbEachText = unsafeSetOfFunction
 
--- | Returns set of keys in the outermost JSON object.
--- >>> import Data.Aeson
--- >>> printSQL (jsonObjectKeys (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))
--- json_object_keys(('{"a":"foo","b":"bar"}' :: json))
+{- | Returns set of keys in the outermost JSON object.
+
+>>> printSQL (jsonObjectKeys (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))
+json_object_keys(('{"a":"foo","b":"bar"}' :: json))
+-}
 jsonObjectKeys
   :: SetOfFunction "json_object_keys" (nullity 'PGjson)
     '["json_object_keys" ::: 'NotNull 'PGtext]
-jsonObjectKeys = unsafeSetOfFunction #json_object_keys
+jsonObjectKeys = unsafeSetOfFunction
 
--- | Returns set of keys in the outermost JSON object.
--- >>> import Data.Aeson
--- >>> printSQL (jsonbObjectKeys (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))
--- jsonb_object_keys(('{"a":"foo","b":"bar"}' :: jsonb))
+{- | Returns set of keys in the outermost JSON object.
+
+>>> printSQL (jsonbObjectKeys (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))
+jsonb_object_keys(('{"a":"foo","b":"bar"}' :: jsonb))
+-}
 jsonbObjectKeys
   :: SetOfFunction "jsonb_object_keys" (null 'PGjsonb)
     '["jsonb_object_keys" ::: 'NotNull 'PGtext]
-jsonbObjectKeys = unsafeSetOfFunction #jsonb_object_keys
+jsonbObjectKeys = unsafeSetOfFunction
 
 unsafePopulateFunction
   :: forall fun schemas null outer commons params ty row

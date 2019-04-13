@@ -114,7 +114,7 @@ index n expr = UnsafeExpression $
 
 -- | Expand an array to a set of rows
 unnest :: SetOfFunction "unnest" (null ('PGvararray ty)) '["unnest" ::: ty]
-unnest = unsafeSetOfFunction #unnest
+unnest = unsafeSetOfFunction
 
 -- | A row constructor is an expression that builds a row value
 -- (also called a composite value) using values for its member fields.
