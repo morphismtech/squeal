@@ -114,7 +114,7 @@ specs = before_ setupDB $ after_ dropDB $
   describe "Exceptions" $ do
 
     let
-      dupKeyErr = PQException FatalError (Just "23505")
+      dupKeyErr = PQException $ PQState FatalError (Just "23505")
         (Just "ERROR:  duplicate key value violates unique constraint \"unique_names\"\nDETAIL:  Key (name)=(TestUser) already exists.\n")
 
     it "should be thrown for unique constraint violation in a manipulation" $

@@ -644,7 +644,7 @@ okResult_ result = liftIO $ do
 
 -- | Check if a `Result`'s status is either `LibPQ.CommandOk`
 -- or `LibPQ.TuplesOk` otherwise `throw` a `PQException`.
-okResult :: MonadIO io => K LibPQ.Result xs -> io ()
+okResult :: MonadIO io => K LibPQ.Result row -> io ()
 okResult = okResult_ . unK
 
 -- | Catch `SquealException`s.
