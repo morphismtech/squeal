@@ -339,7 +339,7 @@ createMigrations =
 -- the time at which it was inserted.
 insertMigration :: Manipulation_ MigrationsSchemas (Only Text) ()
 insertMigration = insertInto_ #schema_migrations
-  (Values_ ((param @1) `as` #name :* defaultAs #executed_at))
+  (Values_ (Set (param @1) `as` #name :* Default `as` #executed_at))
 
 -- | Deletes a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was inserted.

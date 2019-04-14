@@ -130,10 +130,11 @@ let
   insertUser = with (u `as` #u) e
     where
       u = insertInto #users
-        (Values_ (defaultAs #id :* param @1 `as` #name))
+        (Values_ (Default `as` #id :* Set (param @1) `as` #name))
         OnConflictDoRaise (Returning_ (#id :* param @2 `as` #email))
-      e = insertInto_ #emails
-        (Select (defaultAs #id :* #u ! #id `as` #user_id :* #u ! #email) (from (common #u)))
+      e = insertInto_ #emails $ Select
+        (Default `as` #id :* Set (#u ! #id) `as` #user_id :* Set (#u ! #email) `as` #email)
+        (from (common #u))
 :}
 
 >>> printSQL insertUser

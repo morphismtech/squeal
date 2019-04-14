@@ -46,7 +46,6 @@ module Squeal.PostgreSQL.Alias
   , HasIn
   , QualifiedAlias (..)
   , IsQualified (..)
-  , DefaultAliasable (..)
     -- * Grouping
   , Grouping (..)
   , GroupedBy
@@ -188,14 +187,6 @@ choose which subfields to update.
 -}
 class HasIn fields field where
 instance (Has alias fields field) => HasIn fields (alias ::: field) where
-
-{- |
-The `DefaultAliasable` class is intended to help with Scrap your Nils
-for default inserts and updates.
--}
-class KnownSymbol alias
-  => DefaultAliasable alias aliased | aliased -> alias where
-    defaultAs :: Alias alias -> aliased
 
 -- | `HasAll` extends `Has` to take lists of @aliases@ and @fields@ and infer
 -- a list of @subfields@.
