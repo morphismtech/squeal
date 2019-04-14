@@ -156,7 +156,6 @@ import Data.Function ((&))
 import Data.List ((\\))
 import Data.Text (Text)
 import Data.Time (UTCTime)
-import Generics.SOP (K (..))
 import Prelude hiding ((.), id)
 import System.Environment
 import UnliftIO (MonadIO (..))
@@ -313,15 +312,6 @@ instance Migratory (Terminally PQ IO) where
         result <- runQueryParams selectMigration (Only (name step))
         okResult result
         ntuples result
-
-okResult :: K Result results -> PQ schema schema IO ()
-okResult result = do
-  status <- resultStatus result
-  when (not (status `elem` [CommandOk, TuplesOk])) $ do
-    errorMessageMaybe <- resultErrorMessage result
-    case errorMessageMaybe of
-      Nothing  -> error "migration: unknown error"
-      Just msg -> error ("migration: " <> show msg)
 
 unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
 unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
