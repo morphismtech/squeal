@@ -281,7 +281,11 @@ instance IndexedMonadTransPQ PQ where
    with a `ToParams` constraint. It calls `LibPQ.execParams` and
    doesn't afraid of anything.
 
+* `manipulateParams_` is like `manipulateParams` for a returning-free statement.
+
 * `manipulate` is like `manipulateParams` for a parameter-free statement.
+
+* `manipulate_` is like `manipulate` for a returning-free statement.
 
 * `runQueryParams` is like `manipulateParams` for query statements.
 
