@@ -251,7 +251,7 @@ instance Migratory (Terminally PQ IO) where
   migrateUp migration = unsafePQ $
     define createMigrations
     & pqBind okResult
-    & pqThen (transactionallySchema_ (upMigrations migration))
+    & pqThen (transactionally_ (upMigrations migration))
 
     where
 
@@ -284,7 +284,7 @@ instance Migratory (Terminally PQ IO) where
   migrateDown migrations = unsafePQ $
     define createMigrations
     & pqBind okResult
-    & pqThen (transactionallySchema_ (downMigrations migrations))
+    & pqThen (transactionally_ (downMigrations migrations))
 
     where
 
