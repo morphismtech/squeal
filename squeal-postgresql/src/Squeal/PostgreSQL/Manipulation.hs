@@ -377,7 +377,7 @@ data ConflictAction tab commons schemas params columns where
        , columns ~ (col0 ': cols)
        , SOP.All (HasIn columns) subcolumns
        , AllUnique subcolumns )
-    => NP (Aliased (Optional (Expression '[] '[] 'Ungrouped schemas params '[tab ::: row, "excluded" ::: row]))) subcolumns
+    => NP (Aliased (Optional (Expression '[] commons 'Ungrouped schemas params '[tab ::: row, "excluded" ::: row]))) subcolumns
     -> [Condition '[] commons 'Ungrouped schemas params '[tab ::: row, "excluded" ::: row]]
     -> ConflictAction tab commons schemas params columns
 
