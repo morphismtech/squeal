@@ -24,8 +24,6 @@ module Squeal.PostgreSQL.Transaction
   , begin
   , commit
   , rollback
-  , transactionallySchema
-  , transactionallySchema_
     -- * Transaction Mode
   , TransactionMode (..)
   , defaultMode
@@ -36,18 +34,17 @@ module Squeal.PostgreSQL.Transaction
   ) where
 
 import Control.Monad
-import Generics.SOP
 import UnliftIO
-
-import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.PQ
 
-{- | Run a computation `transactionally`; first `begin`,
-then run the computation, then if it raises an exception
-`rollback`, otherwise `commit` and `return` the result.
+{- | Run a computation `transactionally`;
+first `begin`,
+then run the computation,
+`onException` `rollback` and rethrow the exception,
+otherwise `commit` and `return` the result.
 -}
 transactionally
   :: (MonadUnliftIO tx, MonadPQ schemas tx)
@@ -60,7 +57,7 @@ transactionally mode tx = mask $ \restore -> do
   commit
   return result
 
--- | Run a computation `transactionally_` in `defaultMode`.
+-- | Run a computation `transactionally_`, in `defaultMode`.
 transactionally_
   :: (MonadUnliftIO tx, MonadPQ schemas tx)
   => tx x -- ^ run inside a transaction
@@ -69,11 +66,12 @@ transactionally_ = transactionally defaultMode
 
 {- |
 `transactionallyRetry` a computation;
-first `begin`,
-then `try` the computation,
-if it raises an serialization failure then `rollback` and restart the transaction,
-if it raises any other exception then `rollback` and rethrow the exception,
-otherwise `commit` and `return` the result.
+
+* first `begin`,
+* then `try` the computation,
+  - if it raises a serialization failure then `rollback` and restart the transaction,
+  - if it raises any other exception then `rollback` and rethrow the exception,
+  - otherwise `commit` and `return` the result.
 -}
 transactionallyRetry
   :: (MonadUnliftIO tx, MonadPQ schemas tx)
@@ -98,34 +96,13 @@ begin :: MonadPQ schemas tx => TransactionMode -> tx ()
 begin mode = void . manipulate . UnsafeManipulation $
   "BEGIN" <+> renderSQL mode <> ";"
 
--- | @COMMIT@ a schema invariant transaction.
+-- | @COMMIT@ a transaction.
 commit :: MonadPQ schemas tx => tx ()
 commit = void . manipulate $ UnsafeManipulation "COMMIT;"
 
--- | @ROLLBACK@ a schema invariant transaction.
+-- | @ROLLBACK@ a transaction.
 rollback :: MonadPQ schemas tx => tx ()
 rollback = void . manipulate $ UnsafeManipulation "ROLLBACK;"
-
--- | Run a schema changing computation `transactionallySchema`.
-transactionallySchema
-  :: MonadUnliftIO io
-  => TransactionMode
-  -> PQ schemas0 schemas1 io x
-  -> PQ schemas0 schemas1 io x
-transactionallySchema mode u = PQ $ \ conn -> mask $ \ restore -> do
-  _ <- liftIO . LibPQ.exec (unK conn) $
-    "BEGIN" <+> renderSQL mode <> ";"
-  x <- restore (unPQ u conn)
-    `onException` (liftIO (LibPQ.exec (unK conn) "ROLLBACK"))
-  _ <- liftIO $ LibPQ.exec (unK conn) "COMMIT"
-  return x
-
--- | Run a schema changing computation `transactionallySchema_` in `defaultMode`.
-transactionallySchema_
-  :: MonadUnliftIO io
-  => PQ schemas0 schemas1 io x
-  -> PQ schemas0 schemas1 io x
-transactionallySchema_ = transactionallySchema defaultMode
 
 -- | The available transaction characteristics are the transaction `IsolationLevel`,
 -- the transaction `AccessMode` (`ReadWrite` or `ReadOnly`), and the `DeferrableMode`.
