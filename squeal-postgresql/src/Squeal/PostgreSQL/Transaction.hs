@@ -33,7 +33,6 @@ module Squeal.PostgreSQL.Transaction
   , DeferrableMode (..)
   ) where
 
-import Control.Monad
 import UnliftIO
 
 import Squeal.PostgreSQL.Manipulation
@@ -52,9 +51,9 @@ transactionally
   -> tx x -- ^ run inside a transaction
   -> tx x
 transactionally mode tx = mask $ \restore -> do
-  begin mode
-  result <- restore tx `onException` rollback
-  commit
+  manipulate_ $ begin mode
+  result <- restore tx `onException` (manipulate_ rollback)
+  manipulate_ commit
   return result
 
 -- | Run a computation `transactionally_`, in `defaultMode`.
@@ -81,32 +80,31 @@ transactionallyRetry
 transactionallyRetry mode tx = mask $ \restore ->
   loop . try $ do
     x <- restore tx
-    commit
+    manipulate_ commit
     return x
   where
     loop attempt = do
-      begin mode
+      manipulate_ $ begin mode
       attempt >>= \case
         Left (PQException (PQState _ (Just "40001") _)) -> do
-          rollback
+          manipulate_ rollback
           loop attempt
         Left err -> do
-          rollback
+          manipulate_ rollback
           throwIO err
         Right x -> return x
 
 -- | @BEGIN@ a transaction.
-begin :: MonadPQ schemas tx => TransactionMode -> tx ()
-begin mode = void . manipulate . UnsafeManipulation $
-  "BEGIN" <+> renderSQL mode <> ";"
+begin :: TransactionMode -> Manipulation_ schemas () ()
+begin mode = UnsafeManipulation $ "BEGIN" <+> renderSQL mode
 
 -- | @COMMIT@ a transaction.
-commit :: MonadPQ schemas tx => tx ()
-commit = void . manipulate $ UnsafeManipulation "COMMIT;"
+commit :: Manipulation_ schemas () ()
+commit = UnsafeManipulation "COMMIT"
 
 -- | @ROLLBACK@ a transaction.
-rollback :: MonadPQ schemas tx => tx ()
-rollback = void . manipulate $ UnsafeManipulation "ROLLBACK;"
+rollback :: Manipulation_ schemas () ()
+rollback = UnsafeManipulation "ROLLBACK"
 
 -- | The available transaction characteristics are the transaction `IsolationLevel`,
 -- the transaction `AccessMode` (`ReadWrite` or `ReadOnly`), and the `DeferrableMode`.

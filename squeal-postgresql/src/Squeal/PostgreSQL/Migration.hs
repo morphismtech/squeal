@@ -186,8 +186,8 @@ class Category p => Migratory p where
   {- |
   Run an `AlignedList` of `Migration`s.
   Create the `MigrationsTable` as @public.schema_migrations@ if it does not already exist.
-  In a transaction for each each `Migration`, query to see if the `Migration` has been executed;
-  if not, execute the `Migration` and insert a row in the `MigrationsTable`.
+  In one transaction, for each each `Migration` query to see if the `Migration` has been executed;
+  if not, `up` the `Migration` and insert its `name` in the `MigrationsTable`.
   -}
   migrateUp
     :: AlignedList (Migration p) schemas0 schemas1
@@ -196,8 +196,8 @@ class Category p => Migratory p where
   {- |
   Rewind an `AlignedList` of `Migration`s.
   Create the `MigrationsTable` as @public.schema_migrations@ if it does not already exist.
-  In a transaction for each each `Migration`, query to see if the `Migration` has been executed;
-  if so, rewind the `Migration` and delete its row in the `MigrationsTable`.
+  In one transaction, for each each `Migration` query to see if the `Migration` has been executed;
+  if so, `down` the `Migration` and delete its `name` in the `MigrationsTable`.
   -}
   migrateDown
     :: AlignedList (Migration p) schemas0 schemas1
@@ -249,7 +249,6 @@ instance Migratory (Terminally PQ IO) where
 
   migrateUp migration = unsafePQ $
     define createMigrations
-    & pqBind okResult
     & pqThen (transactionally_ (upMigrations migration))
 
     where
@@ -282,7 +281,6 @@ instance Migratory (Terminally PQ IO) where
 
   migrateDown migrations = unsafePQ $
     define createMigrations
-    & pqBind okResult
     & pqThen (transactionally_ (downMigrations migrations))
 
     where
@@ -404,7 +402,7 @@ defaultMain connectTo migrations = do
       liftIO $ displayRunned runNames >> displayUnrunned unrunNames
 
     suppressNotices :: PQ schema schema IO ()
-    suppressNotices = void . manipulate $
+    suppressNotices = manipulate_ $
       UnsafeManipulation "SET client_min_messages TO WARNING;"
 
     readCommandFromArgs :: IO (Maybe MigrateCommand)

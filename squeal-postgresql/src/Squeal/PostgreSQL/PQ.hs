@@ -245,13 +245,16 @@ class IndexedMonadTransPQ pq where
     -> x -> pq schemas0 schemas2 m z
   pqAndThen g f x = pqBind g (f x)
 
-  -- | Run a `Definition` with `LibPQ.exec`, we expect that libpq obeys the law
+  -- | Run a `Definition` with `LibPQ.exec`.
   --
-  -- @define statement1 & pqThen (define statement2) = define (statement1 >>> statement2)@
+  -- It should be functorial in effect.
+  --
+  -- @define id = return ()@
+  -- @define (statement1 >>> statement2) = define statement1 & pqThen (define statement2)@
   define
     :: MonadIO io
     => Definition schemas0 schemas1
-    -> pq schemas0 schemas1 io (K LibPQ.Result '[])
+    -> pq schemas0 schemas1 io ()
 
 instance IndexedMonadTransPQ PQ where
 
@@ -269,7 +272,7 @@ instance IndexedMonadTransPQ PQ where
     case resultMaybe of
       Nothing -> throw $ ResultException
         "define: LibPQ.exec returned no results"
-      Just result -> return $ K (K result)
+      Just result -> K <$> okResult_ result
 
 {- | `MonadPQ` is an @mtl@ style constraint, similar to
 `Control.Monad.State.Class.MonadState`, for using `Database.PostgreSQL.LibPQ` to
@@ -322,6 +325,9 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
 
   manipulate :: Manipulation '[] schemas '[] ys -> pq (K LibPQ.Result ys)
   manipulate statement = manipulateParams statement ()
+
+  manipulate_ :: Manipulation '[] schemas '[] '[] -> pq ()
+  manipulate_ = void . manipulate
 
   runQueryParams
     :: ToParams x params
