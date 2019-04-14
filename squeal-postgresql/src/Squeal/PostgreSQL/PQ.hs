@@ -64,6 +64,8 @@ module Squeal.PostgreSQL.PQ
   , resultErrorCode
     -- * Exceptions
   , SquealException (..)
+  , PQState (..)
+  , okResult
   , catchSqueal
   , handleSqueal
   ) where
@@ -398,7 +400,7 @@ instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
           Nothing -> throw $ ResultException
             "manipulateParams: LibPQ.execParams returned no results"
           Just result -> do
-            tryResult result
+            okResult_ result
             return $ K (K result)
 
   traversePrepared
@@ -409,7 +411,7 @@ instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
         case prepResultMaybe of
           Nothing -> throw $ ResultException
             "traversePrepared: LibPQ.prepare returned no results"
-          Just prepResult -> tryResult prepResult
+          Just prepResult -> okResult_ prepResult
         results <- for list $ \ params -> do
           let
             toParam' encoding = (encodingBytes encoding,LibPQ.Binary)
@@ -419,13 +421,13 @@ instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
             Nothing -> throw $ ResultException
               "traversePrepared: LibPQ.execParams returned no results"
             Just result -> do
-              tryResult result
+              okResult_ result
               return $ K result
         deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
         case deallocResultMaybe of
           Nothing -> throw $ ResultException
             "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
-          Just deallocResult -> tryResult deallocResult
+          Just deallocResult -> okResult_ deallocResult
         return (K results)
 
   traversePrepared_
@@ -436,7 +438,7 @@ instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
         case prepResultMaybe of
           Nothing -> throw $ ResultException
             "traversePrepared_: LibPQ.prepare returned no results"
-          Just prepResult -> tryResult prepResult
+          Just prepResult -> okResult_ prepResult
         for_ list $ \ params -> do
           let
             toParam' encoding = (encodingBytes encoding, LibPQ.Binary)
@@ -445,12 +447,12 @@ instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
           case resultMaybe of
             Nothing -> throw $ ResultException
               "traversePrepared_: LibPQ.execParams returned no results"
-            Just result -> tryResult result
+            Just result -> okResult_ result
         deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
         case deallocResultMaybe of
           Nothing -> throw $ ResultException
             "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
-          Just deallocResult -> tryResult deallocResult
+          Just deallocResult -> okResult_ deallocResult
         return (K ())
 
   liftPQ pq = PQ $ \ (K conn) -> do
@@ -613,24 +615,24 @@ resultErrorCode
   -> io (Maybe ByteString)
 resultErrorCode = liftResult (flip LibPQ.resultErrorField LibPQ.DiagSqlstate)
 
--- | `Exception`s that can be thrown by Squeal.
-data SquealException
-  = PQException
+-- | the state of LibPQ
+data PQState = PQState
   { sqlExecStatus :: LibPQ.ExecStatus
   , sqlStateCode :: Maybe ByteString
     -- ^ https://www.postgresql.org/docs/current/static/errcodes-appendix.html
   , sqlErrorMessage :: Maybe ByteString
-  }
+  } deriving (Eq, Show)
+
+-- | `Exception`s that can be thrown by Squeal.
+data SquealException
+  = PQException PQState
   | ResultException Text
   | ParseException Text
   deriving (Eq, Show)
 instance Exception SquealException
 
-tryResult
-  :: MonadIO io
-  => LibPQ.Result
-  -> io ()
-tryResult result = liftIO $ do
+okResult_ :: MonadIO io => LibPQ.Result -> io ()
+okResult_ result = liftIO $ do
   status <- LibPQ.resultStatus result
   case status of
     LibPQ.CommandOk -> return ()
@@ -638,7 +640,12 @@ tryResult result = liftIO $ do
     _ -> do
       stateCode <- LibPQ.resultErrorField result LibPQ.DiagSqlstate
       msg <- LibPQ.resultErrorMessage result
-      throw $ PQException status stateCode msg
+      throw . PQException $ PQState status stateCode msg
+
+-- | Check if a `Result`'s status is either `LibPQ.CommandOk`
+-- or `LibPQ.TuplesOk` otherwise `throw` a `PQException`.
+okResult :: MonadIO io => K LibPQ.Result row -> io ()
+okResult = okResult_ . unK
 
 -- | Catch `SquealException`s.
 catchSqueal
