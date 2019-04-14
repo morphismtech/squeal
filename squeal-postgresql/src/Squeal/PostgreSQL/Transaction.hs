@@ -87,8 +87,12 @@ transactionallyRetry mode tx = mask $ \restore ->
     loop attempt = do
       begin mode
       attempt >>= \case
-        Left (PQException _ (Just "40001") _) -> rollback >> loop attempt
-        Left err -> rollback >> throwIO err
+        Left (PQException (PQState _ (Just "40001") _)) -> do
+          rollback
+          loop attempt
+        Left err -> do
+          rollback
+          throwIO err
         Right x -> return x
 
 -- | @BEGIN@ a transaction.

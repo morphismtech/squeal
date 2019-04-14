@@ -64,6 +64,7 @@ module Squeal.PostgreSQL.PQ
   , resultErrorCode
     -- * Exceptions
   , SquealException (..)
+  , PQState (..)
   , catchSqueal
   , handleSqueal
   ) where
@@ -613,14 +614,17 @@ resultErrorCode
   -> io (Maybe ByteString)
 resultErrorCode = liftResult (flip LibPQ.resultErrorField LibPQ.DiagSqlstate)
 
--- | `Exception`s that can be thrown by Squeal.
-data SquealException
-  = PQException
+-- | the state of LibPQ
+data PQState = PQState
   { sqlExecStatus :: LibPQ.ExecStatus
   , sqlStateCode :: Maybe ByteString
     -- ^ https://www.postgresql.org/docs/current/static/errcodes-appendix.html
   , sqlErrorMessage :: Maybe ByteString
-  }
+  } deriving (Eq, Show)
+
+-- | `Exception`s that can be thrown by Squeal.
+data SquealException
+  = PQException PQState
   | ResultException Text
   | ParseException Text
   deriving (Eq, Show)
@@ -638,7 +642,7 @@ tryResult result = liftIO $ do
     _ -> do
       stateCode <- LibPQ.resultErrorField result LibPQ.DiagSqlstate
       msg <- LibPQ.resultErrorMessage result
-      throw $ PQException status stateCode msg
+      throw . PQException $ PQState status stateCode msg
 
 -- | Catch `SquealException`s.
 catchSqueal
