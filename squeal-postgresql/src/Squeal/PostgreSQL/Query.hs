@@ -53,6 +53,7 @@ module Squeal.PostgreSQL.Query
     -- ** With
   , With (..)
   , CommonTableExpression (..)
+  , withRecursive
     -- * Table Expressions
   , TableExpression (..)
   , from
@@ -965,3 +966,32 @@ instance With (Query outer) where
   with Done query = query
   with ctes query = UnsafeQuery $
     "WITH" <+> renderSQL ctes <+> renderSQL query
+
+{- |
+>>> import Data.Monoid (Sum (..))
+>>> import Data.Int (Int32)
+>>> :{
+  let
+    one :: Expr ('NotNull 'PGint4)
+    one = 1
+    query :: Query_ schema () (Sum Int32)
+    query = withRecursive
+      ( values_ (one `as` #n)
+        `unionAll`
+        select_ ((#n + 1) `as` #n)
+          (from (common #t) & where_ (#n .< 100)) `as` #t )
+      ( select_ (sum_ (All #n) `as` #getSum) (from (common #t) & groupBy Nil))
+  in printSQL query
+:}
+WITH RECURSIVE "t"("n") AS ((SELECT * FROM (VALUES (1)) AS t ("n")) UNION ALL (SELECT ("n" + 1) AS "n" FROM "t" AS "t" WHERE ("n" < 100))) SELECT sum(ALL "n") AS "getSum" FROM "t" AS "t"
+-}
+withRecursive
+  :: RenderFields recursive
+  => Aliased (Query outer (cte ::: recursive ': commons) schemas params) (cte ::: recursive)
+  -> Query outer (cte ::: recursive ': commons) schemas params row
+  -> Query outer commons schemas params row
+withRecursive (recursive `As` cte) query = UnsafeQuery $
+  "WITH RECURSIVE" <+> renderSQL cte
+    <> parenthesized (commaSeparated (renderFields recursive))
+    <+> "AS" <+> parenthesized (renderSQL recursive)
+    <+> renderSQL query
