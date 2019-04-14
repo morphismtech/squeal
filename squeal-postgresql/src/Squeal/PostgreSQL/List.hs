@@ -32,7 +32,7 @@ module Squeal.PostgreSQL.List
   , (*:)
   , Join
   , disjoin
-  , Additionally (..)
+  , Additional (..)
   , AlignedList (..)
   , single
   , extractList
@@ -68,12 +68,12 @@ disjoin = case sList @xs of
   SCons -> \(x :* xsys) ->
     case disjoin xsys of (xs,ys) -> (x :* xs, ys)
 
--- | The `Additionally` class is for appending
+-- | The `Additional` class is for appending
 -- type-level list parameterized constructors such as `NP`,
 -- `Squeal.PostgreSQL.Query.Selection`, and `Squeal.PostgreSQL.Query.FromClause`.
-class Additionally expr where
+class Additional expr where
   also :: expr ys -> expr xs -> expr (Join xs ys)
-instance Additionally (NP expr) where
+instance Additional (NP expr) where
   also ys = \case
     Nil -> ys
     x :* xs -> x :* (xs & also ys)

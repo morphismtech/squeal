@@ -23,9 +23,8 @@ Window functions and definitions
 #-}
 
 module Squeal.PostgreSQL.Expression.Window
-  ( WindowDefinition (..)
-  , partitionBy
-  , WindowFunction (..)
+  ( -- * functions
+    partitionBy
   , rank
   , rowNumber
   , denseRank
@@ -37,6 +36,11 @@ module Squeal.PostgreSQL.Expression.Window
   , firstValue
   , lastValue
   , nthValue
+  , unsafeWindowFunction1
+  , unsafeWindowFunctionN
+    -- * types
+  , WindowFunction (..)
+  , WindowDefinition (..)
   , WinFun0
   , WinFun1
   , WinFunN
@@ -93,16 +97,15 @@ instance Aggregate
     varPop = unsafeWindowFunction1 "var_pop"
     varSamp = unsafeWindowFunction1 "var_samp"
 
-
 -- | A `WindowDefinition` is a set of table rows that are somehow related
 -- to the current row
 data WindowDefinition outer commons grp schemas params from where
   WindowDefinition
     :: SOP.SListI bys
     => NP (Expression outer commons grp schemas params from) bys
-       -- ^ partitions
+       -- ^ `partitionBy` clause
     -> [SortExpression outer commons grp schemas params from]
-       -- ^ ordering
+       -- ^ `Squeal.PostgreSQL.Expression.Sort.orderBy` clause
     -> WindowDefinition outer commons grp schemas params from
 
 instance OrderBy WindowDefinition where
@@ -186,10 +189,12 @@ type WinFunN xs y
   -> WindowFunction outer commons grp schemas params from y
      -- ^ output
 
+-- | escape hatch for defining window functions
 unsafeWindowFunction1 :: ByteString -> WinFun1 x y
 unsafeWindowFunction1 fun x
   = UnsafeWindowFunction $ fun <> parenthesized (renderSQL x)
 
+-- | escape hatch for defining multi-argument window functions
 unsafeWindowFunctionN :: SOP.SListI xs => ByteString -> WinFunN xs y
 unsafeWindowFunctionN fun xs = UnsafeWindowFunction $ fun <>
   parenthesized (renderCommaSeparated renderSQL xs)

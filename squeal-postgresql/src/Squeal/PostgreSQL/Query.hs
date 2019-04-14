@@ -387,28 +387,39 @@ q1 `exceptAll` q2 = UnsafeQuery $
 SELECT queries
 -----------------------------------------}
 
+{- | The simplest kinds of `Selection` are `Star` and `DotStar` which
+emits all columns that a `TableExpression` produces. A select `List`
+is a list of `Expression`s. A `Selection` could be a list of
+`WindowFunction`s `Over` `WindowDefinition`. `Additional` `Selection`s can
+be selected with `Also`.
+-}
 data Selection outer commons grp schemas params from row where
-  List
-    :: SListI row
-    => NP (Aliased (Expression outer commons grp schemas params from)) row
-    -> Selection outer commons grp schemas params from row
   Star
     :: HasUnique tab from row
     => Selection outer commons 'Ungrouped schemas params from row
+    -- ^ `HasUnique` table in the `FromClause`
   DotStar
     :: Has tab from row
     => Alias tab
+       -- ^ `Has` table with `Alias`
     -> Selection outer commons 'Ungrouped schemas params from row
-  Also
-    :: Selection outer commons grp schemas params from right
-    -> Selection outer commons grp schemas params from left
-    -> Selection outer commons grp schemas params from (Join left right)
+  List
+    :: SListI row
+    => NP (Aliased (Expression outer commons grp schemas params from)) row
+       -- ^ `NP` list of `Aliased` `Expression`s
+    -> Selection outer commons grp schemas params from row
   Over
     :: SListI row
     => NP (Aliased (WindowFunction outer commons grp schemas params from)) row
+       -- ^ `NP` list of `Aliased` `WindowFunction`s
     -> WindowDefinition outer commons grp schemas params from
     -> Selection outer commons grp schemas params from row
-instance Additionally (Selection outer commons grp schemas params from) where
+  Also
+    :: Selection outer commons grp schemas params from right
+       -- ^ `Additional` `Selection`
+    -> Selection outer commons grp schemas params from left
+    -> Selection outer commons grp schemas params from (Join left right)
+instance Additional (Selection outer commons grp schemas params from) where
   also = Also
 instance (KnownSymbol col, row ~ '[col ::: ty])
   => Aliasable col
@@ -741,7 +752,7 @@ common
 common (cte `As` alias) = UnsafeFromClause $
   renderSQL cte <+> "AS" <+> renderSQL alias
 
-instance Additionally (FromClause outer commons schemas params) where
+instance Additional (FromClause outer commons schemas params) where
   also right left = UnsafeFromClause $
     renderSQL left <> ", " <> renderSQL right
 
