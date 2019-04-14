@@ -247,9 +247,9 @@ pureMigration migration = Migration
 
 instance Migratory (Terminally PQ IO) where
 
-  migrateUp migration = unsafePQ $
+  migrateUp migration = unsafePQ . transactionally_ $ do
     define createMigrations
-    & pqThen (transactionally_ (upMigrations migration))
+    upMigrations migration
 
     where
 
@@ -258,30 +258,27 @@ instance Migratory (Terminally PQ IO) where
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       upMigrations = \case
         Done -> return ()
-        step :>> steps -> upMigration step & pqThen (upMigrations steps)
+        step :>> steps -> upMigration step >> upMigrations steps
 
       upMigration
         :: Migration (Terminally PQ IO) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
-      upMigration step =
-        queryExecuted step
-        & pqBind ( \ executed -> unless (executed == 1)
-          $ unsafePQ (runTerminally (up step))
-          & pqThen (manipulateParams insertMigration (Only (name step)))
-          -- insert execution record
-          & pqBind okResult )
+      upMigration step = do
+        executed <- queryExecuted step
+        unless (executed == 1) $ do
+          unsafePQ . runTerminally $ up step
+          manipulateParams_ insertMigration (Only (name step))
 
       queryExecuted
         :: Migration (Terminally PQ IO) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO Row
       queryExecuted step = do
         result <- runQueryParams selectMigration (Only (name step))
-        okResult result
         ntuples result
 
-  migrateDown migrations = unsafePQ $
+  migrateDown migrations = unsafePQ . transactionally_ $ do
     define createMigrations
-    & pqThen (transactionally_ (downMigrations migrations))
+    downMigrations migrations
 
     where
 
@@ -290,25 +287,22 @@ instance Migratory (Terminally PQ IO) where
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       downMigrations = \case
         Done -> return ()
-        step :>> steps -> downMigrations steps & pqThen (downMigration step)
+        step :>> steps -> downMigrations steps >> downMigration step
 
       downMigration
         :: Migration (Terminally PQ IO) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
-      downMigration step =
-        queryExecuted step
-        & pqBind ( \ executed -> unless (executed == 0)
-          $ unsafePQ (runTerminally (down step))
-          & pqThen (manipulateParams deleteMigration (Only (name step)))
-          -- delete execution record
-          & pqBind okResult )
+      downMigration step = do
+        executed <- queryExecuted step
+        unless (executed == 0) $ do
+          unsafePQ . runTerminally $ down step
+          manipulateParams_ deleteMigration (Only (name step))
 
       queryExecuted
         :: Migration (Terminally PQ IO) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO Row
       queryExecuted step = do
         result <- runQueryParams selectMigration (Only (name step))
-        okResult result
         ntuples result
 
 unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x

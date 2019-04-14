@@ -323,6 +323,13 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
   manipulateParams manipulation params = lift $
     manipulateParams manipulation params
 
+  manipulateParams_
+    :: ToParams x params
+    => Manipulation '[] schemas params '[]
+    -- ^ `insertInto`, `update` or `deleteFrom`
+    -> x -> pq ()
+  manipulateParams_ q x = void $ manipulateParams q x
+
   manipulate :: Manipulation '[] schemas '[] ys -> pq (K LibPQ.Result ys)
   manipulate statement = manipulateParams statement ()
 
