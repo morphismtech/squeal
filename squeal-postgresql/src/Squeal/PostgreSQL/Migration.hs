@@ -120,6 +120,7 @@ In addition to enabling `Migration`s using pure SQL `Definition`s for
 the `up` and `down` instructions, you can also perform impure `IO` actions
 by using a `Migration`s over the `Terminally` `PQ` `IO` category.
 -}
+
 {-# LANGUAGE
     DataKinds
   , DeriveGeneric
@@ -147,22 +148,24 @@ module Squeal.PostgreSQL.Migration
   , defaultMain
   ) where
 
-import           Control.Category
-import           Control.Monad
-import           Data.ByteString             (ByteString)
-import           Data.Foldable               (traverse_)
-import           Data.Function               ((&))
-import           Data.List                   ((\\))
-import           Data.Text                   (Text)
-import qualified Data.Text.IO                as T (putStrLn)
-import           Data.Time                   (UTCTime)
-import           Generics.SOP                (K (..))
-import qualified Generics.SOP                as SOP
-import qualified GHC.Generics                as GHC
-import           Prelude hiding ((.), id)
-import           Squeal.PostgreSQL
-import           System.Environment
-import           UnliftIO                    (MonadIO (..))
+import Control.Category
+import Control.Monad
+import Data.ByteString (ByteString)
+import Data.Foldable (traverse_)
+import Data.Function ((&))
+import Data.List ((\\))
+import Data.Text (Text)
+import Data.Time (UTCTime)
+import Generics.SOP (K (..))
+import Prelude hiding ((.), id)
+import System.Environment
+import UnliftIO (MonadIO (..))
+
+import qualified Data.Text.IO as Text (putStrLn)
+import qualified Generics.SOP as SOP
+import qualified GHC.Generics as GHC
+
+import Squeal.PostgreSQL
 
 -- | A `Migration` is a named "isomorphism" over a given category.
 -- It should contain an inverse pair of `up` and `down`
@@ -202,14 +205,14 @@ class Category p => Migratory p where
     -> PQ schemas1 schemas0 IO ()
 
 instance Migratory Definition where
-  migrateUp = migrateUp . alignedMap pureMigration
-  migrateDown = migrateDown . alignedMap pureMigration
+  migrateUp = migrateUp . mapAligned pureMigration
+  migrateDown = migrateDown . mapAligned pureMigration
 
 {- | `Terminally` turns an indexed monad transformer and the monad it transforms
 into a category by restricting the return type to @()@ and permuting the type variables.
 This is similar to how applying a monad to @()@ yields a monoid.
 Since a `Terminally` action has a trivial return value, the only reason
-to run one is for the side effects, in particular database effects.
+to run one is for the side effects, in particular database and other IO effects.
 -}
 newtype Terminally trans monad x0 x1 = Terminally
   { runTerminally :: trans x0 x1 monad () }
@@ -352,18 +355,14 @@ createMigrations =
 
 -- | Inserts a `Migration` into the `MigrationsTable`, returning
 -- the time at which it was inserted.
-insertMigration
-  :: Manipulation_ MigrationsSchemas (Only Text) (P ("executed_at" ::: UTCTime))
-insertMigration = insertInto #schema_migrations
+insertMigration :: Manipulation_ MigrationsSchemas (Only Text) ()
+insertMigration = insertInto_ #schema_migrations
   (Values_ ((param @1) `as` #name :* defaultAs #executed_at))
-  OnConflictDoRaise (Returning #executed_at)
 
 -- | Deletes a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was inserted.
-deleteMigration
-  :: Manipulation_ MigrationsSchemas (Only Text) (P ("executed_at" ::: UTCTime))
-deleteMigration = deleteFrom #schema_migrations
-  NoUsing (#name .== param @1) (Returning #executed_at)
+deleteMigration :: Manipulation_ MigrationsSchemas (Only Text) ()
+deleteMigration = deleteFrom_ #schema_migrations (#name .== param @1)
 
 -- | Selects a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was inserted.
@@ -437,17 +436,17 @@ defaultMain connectTo migrations = do
       fmap migrationName <$> (unsafePQ (define createMigrations & pqThen (runQuery selectMigrations)) >>= getRows)
 
     displayListOfNames :: [Text] -> IO ()
-    displayListOfNames [] = T.putStrLn "  None"
+    displayListOfNames [] = Text.putStrLn "  None"
     displayListOfNames xs =
-      let singleName n = T.putStrLn $ "  - " <> n
+      let singleName n = Text.putStrLn $ "  - " <> n
       in traverse_ singleName xs
 
     displayUnrunned :: [Text] -> IO ()
     displayUnrunned unrunned =
-      T.putStrLn "Migrations left to run:"
+      Text.putStrLn "Migrations left to run:"
       >> displayListOfNames unrunned
 
     displayRunned :: [Text] -> IO ()
     displayRunned runned =
-      T.putStrLn "Migrations already run:"
+      Text.putStrLn "Migrations already run:"
       >> displayListOfNames runned

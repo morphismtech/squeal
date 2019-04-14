@@ -1,7 +1,7 @@
 {-|
 Module: Squeal.PostgreSQL
 Description: Squeal export module
-Copyright: (c) Eitan Chatav, 2017
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
@@ -194,20 +194,60 @@ in
 [User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole@hotmail.com"}]
 -}
 module Squeal.PostgreSQL
-  ( module Squeal.PostgreSQL.Binary
+  ( module Squeal.PostgreSQL.Alias
+  , module Squeal.PostgreSQL.Binary
   , module Squeal.PostgreSQL.Definition
   , module Squeal.PostgreSQL.Expression
+  , module Squeal.PostgreSQL.Expression.Aggregate
+  , module Squeal.PostgreSQL.Expression.Collection
+  , module Squeal.PostgreSQL.Expression.Comparison
+  , module Squeal.PostgreSQL.Expression.Json
+  , module Squeal.PostgreSQL.Expression.Literal
+  , module Squeal.PostgreSQL.Expression.Logic
+  , module Squeal.PostgreSQL.Expression.Math
+  , module Squeal.PostgreSQL.Expression.Null
+  , module Squeal.PostgreSQL.Expression.Parameter
+  , module Squeal.PostgreSQL.Expression.SetOf
+  , module Squeal.PostgreSQL.Expression.Sort
+  , module Squeal.PostgreSQL.Expression.Subquery
+  , module Squeal.PostgreSQL.Expression.Text
+  , module Squeal.PostgreSQL.Expression.TextSearch
+  , module Squeal.PostgreSQL.Expression.Time
+  , module Squeal.PostgreSQL.Expression.Type
+  , module Squeal.PostgreSQL.Expression.Window
+  , module Squeal.PostgreSQL.List
   , module Squeal.PostgreSQL.Manipulation
+  , module Squeal.PostgreSQL.PG
   , module Squeal.PostgreSQL.PQ
   , module Squeal.PostgreSQL.Query
   , module Squeal.PostgreSQL.Schema
   , module Squeal.PostgreSQL.Transaction
   ) where
 
+import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Expression
+import Squeal.PostgreSQL.Expression.Aggregate
+import Squeal.PostgreSQL.Expression.Collection
+import Squeal.PostgreSQL.Expression.Comparison
+import Squeal.PostgreSQL.Expression.Json
+import Squeal.PostgreSQL.Expression.Literal
+import Squeal.PostgreSQL.Expression.Logic
+import Squeal.PostgreSQL.Expression.Math
+import Squeal.PostgreSQL.Expression.Null
+import Squeal.PostgreSQL.Expression.Parameter
+import Squeal.PostgreSQL.Expression.SetOf
+import Squeal.PostgreSQL.Expression.Sort
+import Squeal.PostgreSQL.Expression.Subquery
+import Squeal.PostgreSQL.Expression.Text
+import Squeal.PostgreSQL.Expression.TextSearch
+import Squeal.PostgreSQL.Expression.Time
+import Squeal.PostgreSQL.Expression.Type
+import Squeal.PostgreSQL.Expression.Window
+import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Manipulation
+import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema

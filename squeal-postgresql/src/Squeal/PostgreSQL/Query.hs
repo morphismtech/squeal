@@ -1,7 +1,7 @@
 {-|
 Module: Squeal.PostgreSQL.Query
 Description: Squeal queries
-Copyright: (c) Eitan Chatav, 2017
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
@@ -53,23 +53,6 @@ module Squeal.PostgreSQL.Query
     -- ** With
   , With (..)
   , CommonTableExpression (..)
-    -- ** Unnest
-  , unnest
-    -- ** Json
-  , jsonEach
-  , jsonbEach
-  , jsonEachText
-  , jsonbEachText
-  , jsonObjectKeys
-  , jsonbObjectKeys
-  , jsonPopulateRecord
-  , jsonbPopulateRecord
-  , jsonPopulateRecordSet
-  , jsonbPopulateRecordSet
-  , jsonToRecord
-  , jsonbToRecord
-  , jsonToRecordSet
-  , jsonbToRecordSet
     -- * Table Expressions
   , TableExpression (..)
   , from
@@ -93,13 +76,6 @@ module Squeal.PostgreSQL.Query
   , By (..)
   , GroupByClause (..)
   , HavingClause (..)
-    -- * Subquery Expressions
-  , exists
-  , in_
-  , notIn
-  , Operator
-  , subAll
-  , subAny
   ) where
 
 import Control.DeepSeq
@@ -112,10 +88,18 @@ import GHC.TypeLits
 
 import qualified GHC.Generics as GHC
 
-import Squeal.PostgreSQL.Binary
+import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
+import Squeal.PostgreSQL.Expression.Logic
+import Squeal.PostgreSQL.Expression.Sort
+import Squeal.PostgreSQL.Expression.Window
+import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
+
+-- $setup
+-- >>> import Squeal.PostgreSQL
 
 {- |
 The process of retrieving or the command to retrieve data from a database
@@ -403,27 +387,40 @@ q1 `exceptAll` q2 = UnsafeQuery $
 SELECT queries
 -----------------------------------------}
 
+{- | The simplest kinds of `Selection` are `Star` and `DotStar` which
+emits all columns that a `TableExpression` produces. A select `List`
+is a list of `Expression`s. A `Selection` could be a list of
+`WindowFunction`s `Over` `WindowDefinition`. `Additional` `Selection`s can
+be selected with `Also`.
+-}
 data Selection outer commons grp schemas params from row where
-  List
-    :: SListI row
-    => NP (Aliased (Expression outer commons grp schemas params from)) row
-    -> Selection outer commons grp schemas params from row
   Star
     :: HasUnique tab from row
     => Selection outer commons 'Ungrouped schemas params from row
+    -- ^ `HasUnique` table in the `FromClause`
   DotStar
     :: Has tab from row
     => Alias tab
+       -- ^ `Has` table with `Alias`
     -> Selection outer commons 'Ungrouped schemas params from row
-  Also
-    :: Selection outer commons grp schemas params from right
-    -> Selection outer commons grp schemas params from left
-    -> Selection outer commons grp schemas params from (Join left right)
+  List
+    :: SListI row
+    => NP (Aliased (Expression outer commons grp schemas params from)) row
+       -- ^ `NP` list of `Aliased` `Expression`s
+    -> Selection outer commons grp schemas params from row
   Over
     :: SListI row
     => NP (Aliased (WindowFunction outer commons grp schemas params from)) row
+       -- ^ `NP` list of `Aliased` `WindowFunction`s
     -> WindowDefinition outer commons grp schemas params from
     -> Selection outer commons grp schemas params from row
+  Also
+    :: Selection outer commons grp schemas params from right
+       -- ^ `Additional` `Selection`
+    -> Selection outer commons grp schemas params from left
+    -> Selection outer commons grp schemas params from (Join left right)
+instance Additional (Selection outer commons grp schemas params from) where
+  also = Also
 instance (KnownSymbol col, row ~ '[col ::: ty])
   => Aliasable col
     (Expression outer commons grp schemas params from ty)
@@ -712,170 +709,6 @@ offset
 offset off rels = rels {offsetClause = off : offsetClause rels}
 
 {-----------------------------------------
-JSON stuff
------------------------------------------}
-
-unsafeSetOfFunction
-  :: ByteString
-  -> Expression outer commons 'Ungrouped schemas params '[]  ty
-  -> FromClause outer commons schemas params from
-unsafeSetOfFunction fun expr = UnsafeFromClause $
-  fun <> "(" <> renderSQL expr <> ")"
-
--- | Expand an array to a set of rows
-unnest
-  :: Expression outer commons 'Ungrouped schemas params '[] (nullity ('PGvararray ty))
-  -> FromClause outer commons schemas params '["unnest" ::: '["unnest" ::: ty]]
-unnest = unsafeSetOfFunction "unnest"
-
--- | Expands the outermost JSON object into a set of key/value pairs.
--- >>> import Data.Aeson
--- >>> printSQL (select Star (from (jsonEach (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
--- SELECT * FROM json_each(('{"a":"foo","b":"bar"}' :: json))
-jsonEach
-  :: Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjson) -- ^ json object
-  -> FromClause outer commons schemas params
-      '["json_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]]
-jsonEach = unsafeSetOfFunction "json_each"
-
--- | Expands the outermost binary JSON object into a set of key/value pairs.
--- >>> import Data.Aeson
--- >>> printSQL (select Star (from (jsonbEach (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
--- SELECT * FROM jsonb_each(('{"a":"foo","b":"bar"}' :: jsonb))
-jsonbEach
-  :: Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
-  -> FromClause outer commons schemas params
-      '["jsonb_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]]
-jsonbEach = unsafeSetOfFunction "jsonb_each"
-
--- | Expands the outermost JSON object into a set of key/value pairs.-- | Expands the outermost binary JSON object into a set of key/value pairs.
--- >>> import Data.Aeson
--- >>> printSQL (select Star (from (jsonEachText (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
--- SELECT * FROM json_each_text(('{"a":"foo","b":"bar"}' :: json))
-jsonEachText
-  :: Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjson) -- ^ json object
-  -> FromClause outer commons schemas params
-      '["json_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]]
-jsonEachText = unsafeSetOfFunction "json_each_text"
-
--- | Expands the outermost binary JSON object into a set of key/value pairs.
--- >>> import Data.Aeson
--- >>> printSQL (select Star (from (jsonbEachText (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
--- SELECT * FROM jsonb_each_text(('{"a":"foo","b":"bar"}' :: jsonb))
-jsonbEachText
-  :: Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
-  -> FromClause outer commons schemas params
-      '["jsonb_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]]
-jsonbEachText = unsafeSetOfFunction "jsonb_each_text"
-
--- | Returns set of keys in the outermost JSON object.
--- >>> import Data.Aeson
--- >>> printSQL (jsonObjectKeys (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))
--- json_object_keys(('{"a":"foo","b":"bar"}' :: json))
-jsonObjectKeys
-  :: Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjson) -- ^ json object
-  -> FromClause outer commons schemas params
-      '["json_object_keys" ::: '["json_object_keys" ::: 'NotNull 'PGtext]]
-jsonObjectKeys = unsafeSetOfFunction "json_object_keys"
-
--- | Returns set of keys in the outermost JSON object.
--- >>> import Data.Aeson
--- >>> printSQL (jsonbObjectKeys (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))
--- jsonb_object_keys(('{"a":"foo","b":"bar"}' :: jsonb))
-jsonbObjectKeys
-  :: Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb object
-  -> FromClause outer commons schemas params
-      '["jsonb_object_keys" ::: '["jsonb_object_keys" ::: 'NotNull 'PGtext]]
-jsonbObjectKeys = unsafeSetOfFunction "jsonb_object_keys"
-
-unsafePopulateFunction
-  :: KnownSymbol fun
-  => Alias fun
-  -> TypeExpression schemas (nullity ('PGcomposite row))
-  -> Expression outer commons 'Ungrouped schemas params '[]  ty
-  -> FromClause outer commons schemas params '[fun ::: row]
-unsafePopulateFunction fun ty expr = UnsafeFromClause $ renderSQL fun
-  <> parenthesized ("null::" <> renderSQL ty <> ", " <> renderSQL expr)
-
--- | Expands the JSON expression to a row whose columns match the record
--- type defined by the given table.
-jsonPopulateRecord
-  :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjson) -- ^ json object
-  -> FromClause outer commons schemas params '["json_populate_record" ::: row]
-jsonPopulateRecord = unsafePopulateFunction #json_populate_record
-
--- | Expands the binary JSON expression to a row whose columns match the record
--- type defined by the given table.
-jsonbPopulateRecord
-  :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
-  -> FromClause outer commons schemas params '["jsonb_populate_record" ::: row]
-jsonbPopulateRecord = unsafePopulateFunction #jsonb_populate_record
-
--- | Expands the outermost array of objects in the given JSON expression to a
--- set of rows whose columns match the record type defined by the given table.
-jsonPopulateRecordSet
-  :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjson) -- ^ json array
-  -> FromClause outer commons schemas params '["json_populate_record_set" ::: row]
-jsonPopulateRecordSet = unsafePopulateFunction #json_populate_record_set
-
--- | Expands the outermost array of objects in the given binary JSON expression
--- to a set of rows whose columns match the record type defined by the given
--- table.
-jsonbPopulateRecordSet
-  :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb array
-  -> FromClause outer commons schemas params '["jsonb_populate_record_set" ::: row]
-jsonbPopulateRecordSet = unsafePopulateFunction #jsonb_populate_record_set
-
-unsafeRecordFunction
-  :: (SListI record, json `In` PGJsonType)
-  => ByteString
-  -> Expression outer commons 'Ungrouped schemas params '[] (nullity json)
-  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
-  -> FromClause outer commons schemas params '[tab ::: record]
-unsafeRecordFunction fun expr (types `As` tab) = UnsafeFromClause $
-  fun <> parenthesized (renderSQL expr) <+> "AS" <+> renderSQL tab
-    <> parenthesized (renderCommaSeparated renderTy types)
-    where
-      renderTy :: Aliased (TypeExpression schemas) ty -> ByteString
-      renderTy (ty `As` alias) = renderSQL alias <+> renderSQL ty
-
--- | Builds an arbitrary record from a JSON object.
-jsonToRecord
-  :: SListI record
-  => Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjson) -- ^ json object
-  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
-  -> FromClause outer commons schemas params '[tab ::: record]
-jsonToRecord = unsafeRecordFunction "json_to_record"
-
--- | Builds an arbitrary record from a binary JSON object.
-jsonbToRecord
-  :: SListI record
-  => Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
-  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
-  -> FromClause outer commons schemas params '[tab ::: record]
-jsonbToRecord = unsafeRecordFunction "jsonb_to_record"
-
--- | Builds an arbitrary set of records from a JSON array of objects.
-jsonToRecordSet
-  :: SListI record
-  => Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjson) -- ^ json array
-  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
-  -> FromClause outer commons schemas params '[tab ::: record]
-jsonToRecordSet = unsafeRecordFunction "json_to_record_set"
-
--- | Builds an arbitrary set of records from a binary JSON array of objects.
-jsonbToRecordSet
-  :: SListI record
-  => Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb array
-  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
-  -> FromClause outer commons schemas params '[tab ::: record]
-jsonbToRecordSet = unsafeRecordFunction "jsonb_to_record_set"
-
-{-----------------------------------------
 FROM clauses
 -----------------------------------------}
 
@@ -901,7 +734,7 @@ table (tab `As` alias) = UnsafeFromClause $
 subquery
   :: Aliased (Query outer commons schemas params) query
   -> FromClause outer commons schemas params '[query]
-subquery = UnsafeFromClause . renderAliased (parenthesized . renderQuery)
+subquery = UnsafeFromClause . renderAliased (parenthesized . renderSQL)
 
 -- | `view` derives a table from a `View`.
 view
@@ -919,11 +752,16 @@ common
 common (cte `As` alias) = UnsafeFromClause $
   renderSQL cte <+> "AS" <+> renderSQL alias
 
-{- | @left & crossJoin right@. For every possible combination of rows from
-    @left@ and @right@ (i.e., a Cartesian product), the joined table will contain
-    a row consisting of all columns in @left@ followed by all columns in @right@.
-    If the tables have @n@ and @m@ rows respectively, the joined table will
-    have @n * m@ rows.
+instance Additional (FromClause outer commons schemas params) where
+  also right left = UnsafeFromClause $
+    renderSQL left <> ", " <> renderSQL right
+
+{- |
+@left & crossJoin right@. For every possible combination of rows from
+@left@ and @right@ (i.e., a Cartesian product), the joined table will contain
+a row consisting of all columns in @left@ followed by all columns in @right@.
+If the tables have @n@ and @m@ rows respectively, the joined table will
+have @n * m@ rows.
 -}
 crossJoin
   :: FromClause outer commons schemas params right
@@ -1083,90 +921,6 @@ instance RenderSQL (HavingClause outer commons grp schemas params from) where
     Having [] -> ""
     Having conditions ->
       " HAVING" <+> commaSeparated (renderSQL <$> conditions)
-
-{- |
-The argument of `exists` is an arbitrary subquery. The subquery is evaluated
-to determine whether it returns any rows. If it returns at least one row,
-the result of `exists` is `true`; if the subquery returns no rows,
-the result of `exists` is `false`.
-
-The subquery can refer to variables from the surrounding query,
-which will act as constants during any one evaluation of the subquery.
-
-The subquery will generally only be executed long enough to determine whether
-at least one row is returned, not all the way to completion.
--}
-exists
-  :: Query (Join outer from) commons schemas params row
-  -> Condition outer commons grp schemas params from
-exists query = UnsafeExpression $ "EXISTS" <+> parenthesized (renderSQL query)
-
-{- |
-The right-hand side is a parenthesized subquery, which must return
-exactly one column. The left-hand expression is evaluated and compared to each
-row of the subquery result using the given `Operator`,
-which must yield a Boolean result. The result of `subAll` is `true`
-if all rows yield true (including the case where the subquery returns no rows).
-The result is `false` if any `false` result is found.
-The result is `null_` if no comparison with a subquery row returns `false`,
-and at least one comparison returns `null_`.
-
->>> printSQL $ subAll true (.==) (values_ (true `as` #foo))
-(TRUE = ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo")))
--}
-subAll
-  :: Expression outer commons grp schemas params from ty1 -- ^ expression
-  -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
-  -> Query (Join outer from) commons schemas params '[col ::: ty2] -- ^ subquery
-  -> Condition outer commons grp schemas params from
-subAll expr (?) qry = expr ?
-  (UnsafeExpression $ "ALL" <+> parenthesized (renderSQL qry))
-
-{- |
-The right-hand side is a parenthesized subquery, which must return exactly one column.
-The left-hand expression is evaluated and compared to each row of the subquery result
-using the given `Operator`, which must yield a Boolean result. The result of `subAny` is `true`
-if any `true` result is obtained. The result is `false` if no true result is found
-(including the case where the subquery returns no rows).
-
->>> printSQL $ subAll "foo" like (values_ ("foobar" `as` #foo))
-(E'foo' LIKE ALL (SELECT * FROM (VALUES (E'foobar')) AS t ("foo")))
--}
-subAny
-  :: Expression outer commons grp schemas params from ty1 -- ^ expression
-  -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
-  -> Query (Join outer from) commons schemas params '[col ::: ty2] -- ^ subquery
-  -> Condition outer commons grp schemas params from
-subAny expr (?) qry = expr ?
-  (UnsafeExpression $ "ANY" <+> parenthesized (renderSQL qry))
-
-{- |
-The result is `true` if the left-hand expression's result is equal
-to any of the right-hand expressions.
-
->>> printSQL $ true `in_` [true, false, null_]
-TRUE IN (TRUE, FALSE, NULL)
--}
-in_
-  :: Expression outer commons grp schemas params from ty -- ^ expression
-  -> [Expression outer commons grp schemas params from ty]
-  -> Condition outer commons grp schemas params from
-expr `in_` exprs = UnsafeExpression $ renderSQL expr <+> "IN"
-  <+> parenthesized (commaSeparated (renderSQL <$> exprs))
-
-{- |
-The result is `true` if the left-hand expression's result is not equal
-to any of the right-hand expressions.
-
->>> printSQL $ true `notIn` [false, null_]
-TRUE NOT IN (FALSE, NULL)
--}
-notIn
-  :: Expression outer commons grp schemas params from ty -- ^ expression
-  -> [Expression outer commons grp schemas params from ty]
-  -> Condition outer commons grp schemas params from
-expr `notIn` exprs = UnsafeExpression $ renderSQL expr <+> "NOT IN"
-  <+> parenthesized (commaSeparated (renderSQL <$> exprs))
 
 -- | A `CommonTableExpression` is an auxiliary statement in a `with` clause.
 data CommonTableExpression statement

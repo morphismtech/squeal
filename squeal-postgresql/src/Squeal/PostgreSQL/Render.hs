@@ -12,6 +12,7 @@ Rendering helper functions.
     AllowAmbiguousTypes
   , ConstraintKinds
   , FlexibleContexts
+  , LambdaCase
   , MagicHash
   , OverloadedStrings
   , PolyKinds
@@ -22,7 +23,10 @@ Rendering helper functions.
 
 module Squeal.PostgreSQL.Render
   ( -- * Render
-    parenthesized
+    RenderSQL (..)
+  , printSQL
+  , escape
+  , parenthesized
   , bracketed
   , (<+>)
   , commaSeparated
@@ -34,8 +38,6 @@ module Squeal.PostgreSQL.Render
   , renderCommaSeparatedMaybe
   , renderNat
   , renderSymbol
-  , RenderSQL (..)
-  , printSQL
   ) where
 
 import Control.Monad.IO.Class (MonadIO (..))
@@ -128,3 +130,16 @@ class RenderSQL sql where renderSQL :: sql -> ByteString
 -- | Print SQL.
 printSQL :: (RenderSQL sql, MonadIO io) => sql -> io ()
 printSQL = liftIO . Char8.putStrLn . renderSQL
+
+-- | `escape` a character to prevent injection
+escape :: Char -> String
+escape = \case
+  '\NUL' -> "\\0"
+  '\'' -> "''"
+  '"' -> "\\\""
+  '\b' -> "\\b"
+  '\n' -> "\\n"
+  '\r' -> "\\r"
+  '\t' -> "\\t"
+  '\\' -> "\\\\"
+  c -> [c]

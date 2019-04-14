@@ -22,19 +22,39 @@ library
   hs-source-dirs: src
   exposed-modules:
     Squeal.PostgreSQL
+    Squeal.PostgreSQL.Alias
     Squeal.PostgreSQL.Binary
     Squeal.PostgreSQL.Definition
     Squeal.PostgreSQL.Expression
+    Squeal.PostgreSQL.Expression.Aggregate
+    Squeal.PostgreSQL.Expression.Collection
+    Squeal.PostgreSQL.Expression.Comparison
+    Squeal.PostgreSQL.Expression.Json
+    Squeal.PostgreSQL.Expression.Literal
+    Squeal.PostgreSQL.Expression.Logic
+    Squeal.PostgreSQL.Expression.Math
+    Squeal.PostgreSQL.Expression.Null
+    Squeal.PostgreSQL.Expression.Parameter
+    Squeal.PostgreSQL.Expression.SetOf
+    Squeal.PostgreSQL.Expression.Sort
+    Squeal.PostgreSQL.Expression.Subquery
+    Squeal.PostgreSQL.Expression.Text
+    Squeal.PostgreSQL.Expression.TextSearch
+    Squeal.PostgreSQL.Expression.Time
+    Squeal.PostgreSQL.Expression.Type
+    Squeal.PostgreSQL.Expression.Window
+    Squeal.PostgreSQL.List
     Squeal.PostgreSQL.Manipulation
     Squeal.PostgreSQL.Migration
     Squeal.PostgreSQL.Pool
+    Squeal.PostgreSQL.PG
     Squeal.PostgreSQL.PQ
     Squeal.PostgreSQL.Render
     Squeal.PostgreSQL.Query
     Squeal.PostgreSQL.Schema
     Squeal.PostgreSQL.Transaction
   default-language: Haskell2010
-  ghc-options: -Wall
+  ghc-options: -Wall -Werror
   build-depends:
       aeson >= 1.2.4.0
     , base >= 4.11.1.0 && < 5.0
