@@ -300,7 +300,7 @@ instance IndexedMonadTransPQ PQ where
 * `forPrepared` is a flipped `traversePrepared`
 
 * `traversePrepared_` is like `traversePrepared` but works on `Foldable`
-  containers and returns unit.
+  containers for a returning-free statement.
 
 * `forPrepared_` is a flipped `traversePrepared_`.
 
