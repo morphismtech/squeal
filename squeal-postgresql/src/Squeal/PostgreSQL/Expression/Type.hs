@@ -28,6 +28,7 @@ Type expressions.
 module Squeal.PostgreSQL.Expression.Type
   ( TypeExpression (..)
   , cast
+  , astype
   , PGTyped (..)
   , typedef
   , typetable
@@ -100,6 +101,17 @@ cast
 cast ty x = UnsafeExpression $ parenthesized $
   renderSQL x <+> "::" <+> renderSQL ty
 
+-- | A safe version of `cast` which just matches a value with its type.
+--
+-- >>> printSQL (1 & astype int)
+-- (1 :: int)
+astype
+  :: TypeExpression schemas ty
+  -- ^ type to specify as
+  -> Expression outer commons grp schemas params from ty
+  -- ^ value
+  -> Expression outer commons grp schemas params from ty
+astype = cast
 
 {-----------------------------------------
 type expressions

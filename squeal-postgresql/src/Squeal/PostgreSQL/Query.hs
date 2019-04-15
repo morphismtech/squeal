@@ -972,11 +972,9 @@ instance With (Query outer) where
 >>> import Data.Int (Int32)
 >>> :{
   let
-    one :: Expr ('NotNull 'PGint4)
-    one = 1
     query :: Query_ schema () (Sum Int32)
     query = withRecursive
-      ( values_ (one `as` #n)
+      ( values_ (1 `as` #n)
         `unionAll`
         select_ ((#n + 1) `as` #n)
           (from (common #t) & where_ (#n .< 100)) `as` #t )
