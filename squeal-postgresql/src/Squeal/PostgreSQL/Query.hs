@@ -986,12 +986,10 @@ instance With (Query outer) where
 WITH RECURSIVE "t"("n") AS ((SELECT * FROM (VALUES (1)) AS t ("n")) UNION ALL (SELECT ("n" + 1) AS "n" FROM "t" AS "t" WHERE ("n" < 100))) SELECT sum(ALL "n") AS "getSum" FROM "t" AS "t"
 -}
 withRecursive
-  :: RenderFields recursive
-  => Aliased (Query outer (cte ::: recursive ': commons) schemas params) (cte ::: recursive)
-  -> Query outer (cte ::: recursive ': commons) schemas params row
+  :: Aliased (Query outer (recursive ': commons) schemas params) recursive
+  -> Query outer (recursive ': commons) schemas params row
   -> Query outer commons schemas params row
 withRecursive (recursive `As` cte) query = UnsafeQuery $
   "WITH RECURSIVE" <+> renderSQL cte
-    <> parenthesized (commaSeparated (renderFields recursive))
     <+> "AS" <+> parenthesized (renderSQL recursive)
     <+> renderSQL query

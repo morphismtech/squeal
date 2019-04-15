@@ -40,7 +40,6 @@ module Squeal.PostgreSQL.Alias
   , Aliased (As)
   , Aliasable (as)
   , renderAliased
-  , RenderFields (..)
   , Has
   , HasUnique
   , HasAll
@@ -166,13 +165,6 @@ renderAliased
   -> ByteString
 renderAliased render (expression `As` alias) =
   render expression <> " AS " <> renderSQL alias
-
-class RenderFields (row :: [(Symbol, ty)]) where
-  renderFields :: p row -> [ByteString]
-instance RenderFields '[] where renderFields _ = []
-instance (KnownSymbol col, RenderFields row)
-  => RenderFields (col ::: ty ': row) where
-    renderFields _ = renderSQL (Alias @col) : renderFields (SOP.Proxy @row)
 
 -- | @HasUnique alias fields field@ is a constraint that proves that
 -- @fields@ is a singleton of @alias ::: field@.
