@@ -983,7 +983,7 @@ instance With (Query outer) where
       ( select_ (sum_ (All #n) `as` #getSum) (from (common #t) & groupBy Nil))
   in printSQL query
 :}
-WITH RECURSIVE "t"("n") AS ((SELECT * FROM (VALUES (1)) AS t ("n")) UNION ALL (SELECT ("n" + 1) AS "n" FROM "t" AS "t" WHERE ("n" < 100))) SELECT sum(ALL "n") AS "getSum" FROM "t" AS "t"
+WITH RECURSIVE "t" AS ((SELECT * FROM (VALUES (1)) AS t ("n")) UNION ALL (SELECT ("n" + 1) AS "n" FROM "t" AS "t" WHERE ("n" < 100))) SELECT sum(ALL "n") AS "getSum" FROM "t" AS "t"
 -}
 withRecursive
   :: Aliased (Query outer (recursive ': commons) schemas params) recursive
