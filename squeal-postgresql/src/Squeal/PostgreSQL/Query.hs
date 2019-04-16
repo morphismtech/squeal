@@ -32,8 +32,8 @@ Squeal queries.
 
 module Squeal.PostgreSQL.Query
   ( -- * Queries
-    Query (..)
-  , Query_
+    Query_
+  , Query (..)
     -- ** Select
   , select
   , select_
@@ -101,10 +101,46 @@ import Squeal.PostgreSQL.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL
+-- >>> import Data.Int (Int32, Int64)
+-- >>> import Data.Monoid (Sum (..))
+-- >>> import Data.Text (Text)
+-- >>> import qualified Generics.SOP as SOP
 
 {- |
-The process of retrieving or the command to retrieve data from a database
-is called a `Query`. Let's see some examples of queries.
+The general `Query` type is parameterized by
+
+* @outer :: FromType@ - outer scope for a correlated subquery,
+* @commons :: FromType@ - scope for all `common` table expressions,
+* @schemas :: SchemasType@ - scope for all `table`s and `view`s,
+* @params :: [NullityType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
+* @row :: RowType@ - return type of the `Query`.
+-}
+newtype Query
+  (outer :: FromType)
+  (commons :: FromType)
+  (schemas :: SchemasType)
+  (params :: [NullityType])
+  (row :: RowType)
+    = UnsafeQuery { renderQuery :: ByteString }
+    deriving (GHC.Generic,Show,Eq,Ord,NFData)
+instance RenderSQL (Query outer commons schemas params row) where renderSQL = renderQuery
+
+{- |
+The top level `Query_` type is parameterized by a @schemas@ `SchemasType`,
+against which the query is type-checked, an input @parameters@ Haskell `Type`,
+and an ouput row Haskell `Type`.
+
+A top-level query can be run
+using `Squeal.PostgreSQL.PQ.runQueryParams`, or if @parameters = ()@
+using `Squeal.PostgreSQL.PQ.runQuery`.
+
+Generally, @parameters@ will be a Haskell tuple or record whose entries
+may be referenced using positional
+`Squeal.PostgreSQL.Expression.Parameter.parameter`s and @row@ will be a
+Haskell record or a generalized record using tuples of `P` types and normal Haskell
+records, whose entries will be targeted using overloaded labels.
+
+Let's see some examples of queries.
 
 simple query:
 
@@ -112,7 +148,7 @@ simple query:
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  query :: Query '[] '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
   query = select Star (from (table #tab))
 in printSQL query
 :}
@@ -122,21 +158,21 @@ restricted query:
 
 >>> :{
 let
-  query :: Query '[] '[] (Public Schema) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4]
+  query :: Query_ (Public Schema) () (Sum Int32, P ("col1" ::: Int32))
   query =
-    select_ ((#col1 + #col2) `as` #sum :* #col1)
+    select_ ((#col1 + #col2) `as` #getSum :* #col1)
       ( from (table #tab)
         & where_ (#col1 .> #col2)
         & where_ (#col2 .> 0) )
 in printSQL query
 :}
-SELECT ("col1" + "col2") AS "sum", "col1" AS "col1" FROM "tab" AS "tab" WHERE (("col1" > "col2") AND ("col2" > 0))
+SELECT ("col1" + "col2") AS "getSum", "col1" AS "col1" FROM "tab" AS "tab" WHERE (("col1" > "col2") AND ("col2" > 0))
 
 subquery:
 
 >>> :{
 let
-  query :: Query '[] '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
   query = select Star (from (subquery (select Star (from (table #tab)) `as` #sub)))
 in printSQL query
 :}
@@ -146,7 +182,7 @@ limits and offsets:
 
 >>> :{
 let
-  query :: Query '[] '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
   query = select Star (from (table #tab) & limit 100 & offset 2 & limit 50 & offset 2)
 in printSQL query
 :}
@@ -156,7 +192,7 @@ parameterized query:
 
 >>> :{
 let
-  query :: Query '[] '[] (Public Schema) '[ 'NotNull 'PGint4] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query_ (Public Schema) (Only Int32) (P ("col1" ::: Int32), P ("col2" ::: Int32))
   query = select Star (from (table #tab) & where_ (#col1 .> param @1))
 in printSQL query
 :}
@@ -166,21 +202,21 @@ aggregation query:
 
 >>> :{
 let
-  query :: Query '[] '[] (Public Schema) '[] '["sum" ::: 'NotNull 'PGint4, "col1" ::: 'NotNull 'PGint4 ]
+  query :: Query_ (Public Schema) () (Sum Int32, P ("col1" ::: Int32))
   query =
-    select_ (sum_ (All #col2) `as` #sum :* #col1)
+    select_ (sum_ (All #col2) `as` #getSum :* #col1)
     ( from (table (#tab `as` #table1))
       & groupBy #col1
       & having (#col1 + sum_ (Distinct #col2) .> 1) )
 in printSQL query
 :}
-SELECT sum(ALL "col2") AS "sum", "col1" AS "col1" FROM "tab" AS "table1" GROUP BY "col1" HAVING (("col1" + sum(DISTINCT "col2")) > 1)
+SELECT sum(ALL "col2") AS "getSum", "col1" AS "col1" FROM "tab" AS "table1" GROUP BY "col1" HAVING (("col1" + sum(DISTINCT "col2")) > 1)
 
 sorted query:
 
 >>> :{
 let
-  query :: Query '[] '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
   query = select Star (from (table #tab) & orderBy [#col1 & Asc])
 in printSQL query
 :}
@@ -188,14 +224,12 @@ SELECT * FROM "tab" AS "tab" ORDER BY "col1" ASC
 
 joins:
 
->>> :set -XFlexibleContexts
 >>> :{
 type OrdersColumns =
   '[ "id"         ::: 'NoDef :=> 'NotNull 'PGint4
-  , "price"       ::: 'NoDef :=> 'NotNull 'PGfloat4
-  , "customer_id" ::: 'NoDef :=> 'NotNull 'PGint4
-  , "shipper_id"  ::: 'NoDef :=> 'NotNull 'PGint4
-  ]
+   , "price"       ::: 'NoDef :=> 'NotNull 'PGfloat4
+   , "customer_id" ::: 'NoDef :=> 'NotNull 'PGint4
+   , "shipper_id"  ::: 'NoDef :=> 'NotNull 'PGint4  ]
 :}
 
 >>> :{
@@ -211,22 +245,27 @@ type OrdersConstraints =
 >>> :{
 type OrdersSchema =
   '[ "orders"   ::: 'Table (OrdersConstraints :=> OrdersColumns)
-  , "customers" ::: 'Table (CustomersConstraints :=> NamesColumns)
-  , "shippers" ::: 'Table (ShippersConstraints :=> NamesColumns) ]
+   , "customers" ::: 'Table (CustomersConstraints :=> NamesColumns)
+   , "shippers" ::: 'Table (ShippersConstraints :=> NamesColumns) ]
+:}
+
+>>> :{
+data Order = Order
+  { price :: Float
+  , customerName :: Text
+  , shipperName :: Text
+  } deriving GHC.Generic
+instance SOP.Generic Order
+instance SOP.HasDatatypeInfo Order
 :}
 
 >>> :{
 let
-  query :: Query '[] '[] (Public OrdersSchema)
-    '[]
-    '[ "order_price" ::: 'NotNull 'PGfloat4
-     , "customer_name" ::: 'NotNull 'PGtext
-     , "shipper_name" ::: 'NotNull 'PGtext
-     ]
+  query :: Query_ (Public OrdersSchema) () Order
   query = select_
-    ( #o ! #price `as` #order_price :*
-      #c ! #name `as` #customer_name :*
-      #s ! #name `as` #shipper_name )
+    ( #o ! #price `as` #price :*
+      #c ! #name `as` #customerName :*
+      #s ! #name `as` #shipperName )
     ( from (table (#orders `as` #o)
       & innerJoin (table (#customers `as` #c))
         (#o ! #customer_id .== #c ! #id)
@@ -234,13 +273,13 @@ let
         (#o ! #shipper_id .== #s ! #id)) )
 in printSQL query
 :}
-SELECT "o"."price" AS "order_price", "c"."name" AS "customer_name", "s"."name" AS "shipper_name" FROM "orders" AS "o" INNER JOIN "customers" AS "c" ON ("o"."customer_id" = "c"."id") INNER JOIN "shippers" AS "s" ON ("o"."shipper_id" = "s"."id")
+SELECT "o"."price" AS "price", "c"."name" AS "customerName", "s"."name" AS "shipperName" FROM "orders" AS "o" INNER JOIN "customers" AS "c" ON ("o"."customer_id" = "c"."id") INNER JOIN "shippers" AS "s" ON ("o"."shipper_id" = "s"."id")
 
 self-join:
 
 >>> :{
 let
-  query :: Query '[] '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
   query = select (#t1 & DotStar) (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
 in printSQL query
 :}
@@ -250,7 +289,7 @@ value queries:
 
 >>> :{
 let
-  query :: Query '[] commons schemas '[] '["foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGbool]
+  query :: Query_ schemas () (P ("foo" ::: Int32), P ("bar" ::: Bool))
   query = values (1 `as` #foo :* true `as` #bar) [2 `as` #foo :* false `as` #bar]
 in printSQL query
 :}
@@ -260,7 +299,7 @@ set operations:
 
 >>> :{
 let
-  query :: Query '[] '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
   query = select Star (from (table #tab)) `unionAll` select Star (from (table #tab))
 in printSQL query
 :}
@@ -270,7 +309,7 @@ with queries:
 
 >>> :{
 let
-  query :: Query '[] '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
   query = with (
     select Star (from (table #tab)) `as` #cte1 :>>
     select Star (from (common #cte1)) `as` #cte2
@@ -283,7 +322,7 @@ window function queries
 
 >>> :{
 let
-  query :: Query '[] '[] (Public Schema) '[] ["col1" ::: 'NotNull 'PGint4, "rank" ::: 'NotNull 'PGint8]
+  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("rank" ::: Int64))
   query = select
     (#col1 & Also (rank `as` #rank `Over` (partitionBy #col1 & orderBy [#col2 & Asc])))
     (from (table #tab))
@@ -295,7 +334,7 @@ correlated subqueries
 
 >>> :{
 let
-  query :: Query '[] '[] (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4]
+  query :: Query_ (Public Schema) () (P ("col1" ::: Int32))
   query =
     select #col1 (from (table (#tab `as` #t1))
     & where_ (exists (
@@ -304,19 +343,14 @@ let
 in printSQL query
 :}
 SELECT "col1" AS "col1" FROM "tab" AS "t1" WHERE EXISTS (SELECT * FROM "tab" AS "t2" WHERE ("t2"."col2" = "t1"."col1"))
--}
-newtype Query
-  (outer :: FromType)
-  (commons :: FromType)
-  (schemas :: SchemasType)
-  (params :: [NullityType])
-  (row :: RowType)
-    = UnsafeQuery { renderQuery :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance RenderSQL (Query outer commons schemas params row) where renderSQL = renderQuery
 
-type family Query_ (schemas :: SchemasType) (params :: Type) (row :: Type) where
-  Query_ schemas params row = Query '[] '[] schemas (TuplePG params) (RowPG row)
+-}
+type family Query_
+  (schemas :: SchemasType)
+  (parameters :: Type)
+  (row :: Type) where
+    Query_ schemas params row =
+      Query '[] '[] schemas (TuplePG params) (RowPG row)
 
 -- | The results of two queries can be combined using the set operation
 -- `union`. Duplicate rows are eliminated.
@@ -481,7 +515,7 @@ instance IsString
 select
   :: (SListI row, row ~ (x ': xs))
   => Selection outer commons grp schemas params from row
-  -- ^ select list
+  -- ^ selection
   -> TableExpression outer commons grp schemas params from
   -- ^ intermediate virtual table
   -> Query outer commons schemas params row
@@ -490,19 +524,23 @@ select selection tabexpr = UnsafeQuery $
   <+> renderSQL selection
   <+> renderSQL tabexpr
 
+-- | Like `select` but takes an `NP` list of `Expression`s instead
+-- of a general `Selection`.
 select_
   :: (SListI row, row ~ (x ': xs))
   => NP (Aliased (Expression outer commons grp schemas params from)) row
+  -- ^ select list
   -> TableExpression outer commons grp schemas params from
+  -- ^ intermediate virtual table
   -> Query outer commons schemas params row
-select_ list = select (List list)
+select_ = select . List
 
 -- | After the select list has been processed, the result table can
 -- be subject to the elimination of duplicate rows using `selectDistinct`.
 selectDistinct
   :: (SListI columns, columns ~ (col ': cols))
   => Selection outer commons 'Ungrouped schemas params from columns
-  -- ^ select list
+  -- ^ selection
   -> TableExpression outer commons 'Ungrouped schemas params from
   -- ^ intermediate virtual table
   -> Query outer commons schemas params columns
@@ -511,6 +549,8 @@ selectDistinct selection tabexpr = UnsafeQuery $
   <+> renderSQL selection
   <+> renderSQL tabexpr
 
+-- | Like `selectDistinct` but takes an `NP` list of `Expression`s instead
+-- of a general `Selection`.
 selectDistinct_
   :: (SListI columns, columns ~ (col ': cols))
   => NP (Aliased (Expression outer commons 'Ungrouped schemas params from)) columns
@@ -518,7 +558,7 @@ selectDistinct_
   -> TableExpression outer commons 'Ungrouped schemas params from
   -- ^ intermediate virtual table
   -> Query outer commons schemas params columns
-selectDistinct_ list = select (List list)
+selectDistinct_ = selectDistinct . List
 
 -- | `values` computes a row value or set of row values
 -- specified by value expressions. It is most commonly used
