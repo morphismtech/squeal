@@ -1,10 +1,13 @@
 {-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE StandaloneDeriving    #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving    #-}
 {-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedLists       #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeInType            #-}
@@ -20,12 +23,16 @@ import Control.Monad.IO.Class (MonadIO (..))
 import qualified Data.ByteString.Char8       as Char8
 import           Data.Int                    (Int16)
 import           Data.Text                   (Text)
-import           Data.Vector                 (Vector)
+import           Data.Vector                 (Vector, fromList)
 import qualified Generics.SOP                as SOP
 import qualified GHC.Generics                as GHC
 import           Squeal.PostgreSQL
 import           Squeal.PostgreSQL.Migration
 import           Test.Hspec
+import           Test.QuickCheck
+import Generic.Random(withBaseCase, (%), genericArbitraryRec)
+import Generic.Random (listOf1', genericArbitrary, uniform)
+import Test.QuickCheck.Instances.Text()
 
 type Schema =
   '[ "users" ::: 'Table (
@@ -52,15 +59,19 @@ data User =
   User { userName  :: Text
        , userEmail :: Maybe Text
        , userVec   :: VarArray (Vector (Maybe Int16)) }
-  deriving (Show, GHC.Generic)
+  deriving (Show, GHC.Generic, Eq)
 instance SOP.Generic User
 instance SOP.HasDatatypeInfo User
 
-insertUser :: Manipulation '[] Schemas '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
-  '[ "fromOnly" ::: 'NotNull 'PGint4 ]
-insertUser = insertInto #users
-  (Values_ (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec))
-  OnConflictDoRaise (Returning (#id `as` #fromOnly))
+instance Arbitrary User where
+  arbitrary = genericArbitrary uniform
+
+instance Arbitrary a => Arbitrary (Vector a) where
+  arbitrary = fromList <$> arbitrary
+
+
+deriving instance Arbitrary a => Arbitrary (VarArray a)
+
 
 setup :: Definition (Public '[]) Schemas
 setup =
@@ -98,16 +109,47 @@ dropDB = void . withConnection connectionString $
   & pqThen (migrateDown (single migration))
 
 connectionString :: Char8.ByteString
-connectionString = "host=localhost port=5432 dbname=exampledb"
+-- connectionString = "host=localhost port=5432 dbname=exampledb"
+-- connectionString = "host=localhost port=5432 dbname=exampledb"
+connectionString = "postgres:///exampledb"
 
 testUser :: User
 testUser = User "TestUser" Nothing (VarArray [])
 
 newUser :: (MonadIO m, MonadPQ Schemas m) => User -> m ()
-newUser u = void $ manipulateParams insertUser (userName u, userVec u)
+newUser u = void $ manipulateParams insertUser u
+
+
+insertUser :: Manipulation_ Schemas User ()
+insertUser = with (u `as` #u) e
+    where
+      u = insertInto #users
+        (Values_ (Default `as` #id :* Set (param @1) `as` #name :* Set (param @3) `as` #vec) )
+        OnConflictDoRaise (Returning_ (#id :* param @2 `as` #email))
+      e = insertInto_ #emails $ Select
+        (Default `as` #id :* Set (#u ! #id) `as` #user_id :* Set (#u ! #email) `as` #email)
+        (from (common #u))
+
+insertUser' :: Manipulation '[] Schemas '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
+  '[ "fromOnly" ::: 'NotNull 'PGint4 ]
+insertUser' = insertInto #users
+  (Values_ (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec))
+  OnConflictDoRaise (Returning (#id `as` #fromOnly))
+
 
 insertUserTwice :: (MonadIO m, MonadPQ Schemas m) => m ()
 insertUserTwice = newUser testUser >> newUser testUser
+
+
+getUsers :: Query_ Schemas () User
+getUsers = select_
+    (#u ! #name `as`  #userName :*
+     #e ! #email `as` #userEmail :*
+     #u ! #vec `as`   #userVec )
+    ( from (table (#users `as` #u)
+         & innerJoin (table (#emails `as` #e ) )
+           (#u ! #id .== #e ! #user_id   )))
+
 
 specs :: SpecWith ()
 specs = before_ setupDB $ after_ dropDB $
@@ -124,3 +166,9 @@ specs = before_ setupDB $ after_ dropDB $
     it "should be rethrown for unique constraint violation in a manipulation by a transaction" $
       withConnection connectionString (transactionally_ insertUserTwice)
        `shouldThrow` (== dupKeyErr)
+
+    it "should be able to insert and then read a user" $ property $ \(user :: User) -> do
+      (fetchedUsers :: [User]) <- withConnection connectionString $ do
+        newUser user
+        & pqThen (getRows =<< runQuery  getUsers)
+      fetchedUsers `shouldBe` [user]
