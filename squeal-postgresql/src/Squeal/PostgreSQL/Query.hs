@@ -107,6 +107,9 @@ import Squeal.PostgreSQL.Schema
 -- >>> import qualified Generics.SOP as SOP
 
 {- |
+The process of retrieving or the command to retrieve data from
+a database is called a `Query`.
+
 The general `Query` type is parameterized by
 
 * @outer :: FromType@ - outer scope for a correlated subquery,
