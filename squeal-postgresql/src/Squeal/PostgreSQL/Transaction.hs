@@ -21,6 +21,8 @@ module Squeal.PostgreSQL.Transaction
     transactionally
   , transactionally_
   , transactionallyRetry
+  , ephemerally
+  , ephemerally_
   , begin
   , commit
   , rollback
@@ -93,6 +95,28 @@ transactionallyRetry mode tx = mask $ \restore ->
           manipulate_ rollback
           throwIO err
         Right x -> return x
+
+{- | Run a computation `ephemerally`;
+First `begin`, then run the computation, `rollback` and `return`
+its result.
+-}
+ephemerally
+  :: (MonadIO tx, MonadPQ schemas tx)
+  => TransactionMode
+  -> tx x -- ^ run inside an ephemeral transaction
+  -> tx x
+ephemerally mode tx = do
+  manipulate_ $ begin mode
+  result <- tx
+  manipulate_ rollback
+  return result
+
+{- | Run a computation `ephemerally` in `defaultMode`. -}
+ephemerally_
+  :: (MonadIO tx, MonadPQ schemas tx)
+  => tx x -- ^ run inside an ephemeral transaction
+  -> tx x
+ephemerally_ = ephemerally defaultMode
 
 -- | @BEGIN@ a transaction.
 begin :: TransactionMode -> Manipulation_ schemas () ()
