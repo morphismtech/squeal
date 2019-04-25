@@ -215,6 +215,9 @@ module Squeal.PostgreSQL.Binary
   , FromFixArray (..)
     -- * Only
   , Only (..)
+    -- * Oid
+  , HasOid (..)
+  , HasAliasedOid (..)
   ) where
 
 import BinaryParser
@@ -391,6 +394,35 @@ instance
       in
         composite . encoders . toRecord . getComposite
 
+-- | The object identifier of a `PGType`.
+--
+-- >>> :set -XTypeApplications
+-- >>> oid @'PGbool
+-- 16
+class HasOid (ty :: PGType) where oid :: Word32
+instance HasOid 'PGbool where oid = 16
+instance HasOid 'PGint2 where oid = 21
+instance HasOid 'PGint4 where oid = 23
+instance HasOid 'PGint8 where oid = 20
+instance HasOid 'PGnumeric where oid = 1700
+instance HasOid 'PGfloat4 where oid = 700
+instance HasOid 'PGfloat8 where oid = 701
+instance HasOid ('PGchar n) where oid = 18
+instance HasOid ('PGvarchar n) where oid = 1043
+instance HasOid 'PGtext where oid = 25
+instance HasOid 'PGbytea where oid = 17
+instance HasOid 'PGtimestamp where oid = 1114
+instance HasOid 'PGtimestamptz where oid = 1184
+instance HasOid 'PGdate where oid = 1082
+instance HasOid 'PGtime where oid = 1083
+instance HasOid 'PGtimetz where oid = 1266
+instance HasOid 'PGinterval where oid = 1186
+instance HasOid 'PGuuid where oid = 2950
+instance HasOid 'PGinet where oid = 869
+instance HasOid 'PGjson where oid = 114
+instance HasOid 'PGjsonb where oid = 3802
+
+-- | Lifts a `HasOid` constraint to a field.
 class HasAliasedOid (field :: (Symbol, NullityType)) where
   aliasedOid :: Word32
 instance HasOid ty => HasAliasedOid (alias ::: nullity ty) where

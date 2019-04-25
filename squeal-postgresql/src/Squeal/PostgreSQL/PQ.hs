@@ -659,7 +659,7 @@ okResult_ result = liftIO $ do
       msg <- LibPQ.resultErrorMessage result
       throw . PQException $ PQState status stateCode msg
 
--- | Check if a `Result`'s status is either `LibPQ.CommandOk`
+-- | Check if a `LibPQ.Result`'s status is either `LibPQ.CommandOk`
 -- or `LibPQ.TuplesOk` otherwise `throw` a `PQException`.
 okResult :: MonadIO io => K LibPQ.Result row -> io ()
 okResult = okResult_ . unK

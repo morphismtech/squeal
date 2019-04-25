@@ -42,6 +42,7 @@ module Squeal.PostgreSQL.Definition
   , createTypeEnumFrom
   , createTypeComposite
   , createTypeCompositeFrom
+  , FieldTyped (..)
   , createDomain
   , TableConstraintExpression (..)
   , check
@@ -1029,6 +1030,7 @@ createDomain dom ty condition =
     <+> "AS" <+> renderTypeExpression ty
     <+> "CHECK" <+> parenthesized (renderSQL condition) <> ";"
 
+-- | Lift `PGTyped` to a field
 class FieldTyped schemas ty where
   fieldtype :: Aliased (TypeExpression schemas) ty
 instance (KnownSymbol alias, PGTyped schemas ty)

@@ -66,7 +66,6 @@ module Squeal.PostgreSQL.Schema
   , IsNotElem
   , AllUnique
     -- * Type Classifications
-  , HasOid (..)
   , PGNum
   , PGIntegral
   , PGFloating
@@ -90,12 +89,12 @@ import Control.Category
 import Data.Kind
 import Data.Monoid hiding (All)
 import Data.Type.Bool
-import Data.Word (Word32)
 import Generics.SOP
 import GHC.TypeLits
 import Prelude hiding (id, (.))
 
 import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Render
 
 -- | `PGType` is the promoted datakind of PostgreSQL types.
@@ -133,34 +132,6 @@ data PGType
   | PGtsvector -- ^ A tsvector value is a sorted list of distinct lexemes, which are words that have been normalized to merge different variants of the same word.
   | PGtsquery -- ^ A tsquery value stores lexemes that are to be searched for
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
-
--- | The object identifier of a `PGType`.
---
--- >>> :set -XTypeApplications
--- >>> oid @'PGbool
--- 16
-class HasOid (ty :: PGType) where oid :: Word32
-instance HasOid 'PGbool where oid = 16
-instance HasOid 'PGint2 where oid = 21
-instance HasOid 'PGint4 where oid = 23
-instance HasOid 'PGint8 where oid = 20
-instance HasOid 'PGnumeric where oid = 1700
-instance HasOid 'PGfloat4 where oid = 700
-instance HasOid 'PGfloat8 where oid = 701
-instance HasOid ('PGchar n) where oid = 18
-instance HasOid ('PGvarchar n) where oid = 1043
-instance HasOid 'PGtext where oid = 25
-instance HasOid 'PGbytea where oid = 17
-instance HasOid 'PGtimestamp where oid = 1114
-instance HasOid 'PGtimestamptz where oid = 1184
-instance HasOid 'PGdate where oid = 1082
-instance HasOid 'PGtime where oid = 1083
-instance HasOid 'PGtimetz where oid = 1266
-instance HasOid 'PGinterval where oid = 1186
-instance HasOid 'PGuuid where oid = 2950
-instance HasOid 'PGinet where oid = 869
-instance HasOid 'PGjson where oid = 114
-instance HasOid 'PGjsonb where oid = 3802
 
 -- | `NullityType` encodes the potential presence or definite absence of a
 -- @NULL@ allowing operations which are sensitive to such to be well typed.
@@ -286,15 +257,6 @@ type family TableToColumns (table :: TableType) :: ColumnsType where
 type family TableToRow (table :: TableType) :: RowType where
   TableToRow tab = ColumnsToRow (TableToColumns tab)
 
--- | @Elem@ is a promoted `Data.List.elem`.
-type family Elem x xs where
-  Elem x '[] = 'False
-  Elem x (x ': xs) = 'True
-  Elem x (_ ': xs) = Elem x xs
-
--- | @In x xs@ is a constraint that proves that @x@ is in @xs@.
-type family In x xs :: Constraint where In x xs = Elem x xs ~ 'True
-
 -- | Numeric Postgres types.
 type PGNum =
   '[ 'PGint2, 'PGint4, 'PGint8, 'PGnumeric, 'PGfloat4, 'PGfloat8]
@@ -393,16 +355,6 @@ type family DropIfConstraintsInvolve column constraints where
     = If (ConstraintInvolves column constraint)
         (DropIfConstraintsInvolve column constraints)
         (alias ::: constraint ': DropIfConstraintsInvolve column constraints)
-
-{- | Calculate the `Length` of a type level list
-
->>> :kind! Length '[Char,String,Bool,Double]
-Length '[Char,String,Bool,Double] :: Nat
-= 4
--}
-type family Length (xs :: [k]) :: Nat where
-  Length (x : xs) = 1 + Length xs
-  Length '[] = 0
 
 -- | A `SchemumType` is a user-defined type, either a `Table`,
 -- `View` or `Typedef`.
