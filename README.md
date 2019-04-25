@@ -46,7 +46,7 @@ composable and cover a large portion of SQL.
 * transactions
 * views
 * array, composite and enumerated types
-* json operations
+* json functions and operations
 * multischema support
 * correlated subqueries
 * window functions
