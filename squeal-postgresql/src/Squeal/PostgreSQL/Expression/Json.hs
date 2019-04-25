@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Expression.Json
+Description: Json and Jsonb functions and operators
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Json and Jsonb functions and operators
+-}
+
 {-# LANGUAGE
     DataKinds
   , FlexibleContexts
@@ -11,6 +21,7 @@
   , TypeApplications
   , TypeOperators
   , UndecidableInstances
+  , UndecidableSuperClasses
 #-}
 
 module Squeal.PostgreSQL.Expression.Json
@@ -32,19 +43,13 @@ module Squeal.PostgreSQL.Expression.Json
   , rowToJson
   , jsonBuildArray
   , jsonbBuildArray
-  , PGBuildObject
-  , jsonBuildObject
-  , jsonbBuildObject
+  , JsonBuildObject (..)
   , jsonObject
   , jsonbObject
   , jsonZipObject
   , jsonbZipObject
   , jsonArrayLength
   , jsonbArrayLength
-  , jsonExtractPath
-  , jsonbExtractPath
-  , jsonExtractPathAsText
-  , jsonbExtractPathAsText
   , jsonTypeof
   , jsonbTypeof
   , jsonStripNulls
@@ -59,10 +64,12 @@ module Squeal.PostgreSQL.Expression.Json
   , jsonbEachText
   , jsonObjectKeys
   , jsonbObjectKeys
+  , JsonPopulateFunction
   , jsonPopulateRecord
   , jsonbPopulateRecord
   , jsonPopulateRecordSet
   , jsonbPopulateRecordSet
+  , JsonToRecordFunction
   , jsonToRecord
   , jsonbToRecord
   , jsonToRecordSet
@@ -149,18 +156,18 @@ infixl 9 .?&
 
 -- | Delete a key or keys from a JSON object, or remove an array element.
 --
--- If the right operand is..
+-- If the right operand is
 --
--- @ text @: Delete key/value pair or string element from left operand. Key/value pairs
--- are matched based on their key value.
+-- @ text @: Delete key / value pair or string element from left operand.
+-- Key / value pairs are matched based on their key value,
 --
--- @ text[] @: Delete multiple key/value pairs or string elements
--- from left operand. Key/value pairs are matched based on their key value.
+-- @ text[] @: Delete multiple key / value pairs or string elements
+-- from left operand. Key / value pairs are matched based on their key value,
 --
 -- @ integer @: Delete the array element with specified index (Negative integers
 -- count from the end). Throws an error if top level container is not an array.
 (.-.)
-  :: (key `In` '[ 'PGtext, 'PGvararray ('NotNull 'PGtext), 'PGint4, 'PGint2 ]) -- hlint error without parens here
+  :: key `In` '[ 'PGtext, 'PGvararray ('NotNull 'PGtext), 'PGint4, 'PGint2 ]
   => Operator (null 'PGjsonb) (null key) (null 'PGjsonb)
 infixl 6 .-.
 (.-.) = unsafeBinaryOp "-"
@@ -212,26 +219,20 @@ jsonBuildArray = unsafeFunctionN "json_build_array"
 jsonbBuildArray :: SOP.SListI tuple => FunctionN tuple (null 'PGjsonb)
 jsonbBuildArray = unsafeFunctionN "jsonb_build_array"
 
-class PGBuildObject tys where
-instance PGBuildObject '[]
-instance (PGBuildObject tys, key `In` PGJsonKey)
-  => PGBuildObject ('NotNull key ': value ': tys)
-
 -- | Builds a possibly-heterogeneously-typed JSON object out of a variadic
 -- argument list. The elements of the argument list must alternate between text
 -- and values.
-jsonBuildObject
-  :: (SOP.SListI elems, PGBuildObject elems)
-  => FunctionN elems (null 'PGjson)
-jsonBuildObject = unsafeFunctionN "json_build_object"
+class SOP.SListI tys => JsonBuildObject tys where
 
--- | Builds a possibly-heterogeneously-typed (binary) JSON object out of a
--- variadic argument list. The elements of the argument list must alternate
--- between keys and values.
-jsonbBuildObject
-  :: (SOP.SListI elems, PGBuildObject elems)
-  => FunctionN elems (null 'PGjsonb)
-jsonbBuildObject = unsafeFunctionN "jsonb_build_object"
+  jsonBuildObject :: FunctionN tys (null 'PGjson)
+  jsonBuildObject = unsafeFunctionN "json_build_object"
+
+  jsonbBuildObject :: FunctionN tys (null 'PGjsonb)
+  jsonbBuildObject = unsafeFunctionN "jsonb_build_object"
+
+instance JsonBuildObject '[]
+instance (JsonBuildObject tys, key `In` PGJsonKey)
+  => JsonBuildObject ('NotNull key ': value ': tys)
 
 -- | Builds a JSON object out of a text array.
 -- The array must have two dimensions
@@ -280,46 +281,6 @@ jsonArrayLength = unsafeFunction "json_array_length"
 jsonbArrayLength :: null 'PGjsonb :--> null 'PGint4
 jsonbArrayLength = unsafeFunction "jsonb_array_length"
 
--- | Returns JSON value pointed to by the given path (equivalent to #>
--- operator).
-jsonExtractPath
-  :: SOP.SListI elems
-  => Expression outer commons grp schemas params from (null 'PGjson)
-  -> NP (Expression outer commons grp schemas params from) elems
-  -> Expression outer commons grp schemas params from (null 'PGjsonb)
-jsonExtractPath x xs =
-  unsafeFunctionN "json_extract_path" (x :* xs)
-
--- | Returns JSON value pointed to by the given path (equivalent to #>
--- operator).
-jsonbExtractPath
-  :: SOP.SListI elems
-  => Expression outer commons grp schemas params from (null 'PGjsonb)
-  -> NP (Expression outer commons grp schemas params from) elems
-  -> Expression outer commons grp schemas params from (null 'PGjsonb)
-jsonbExtractPath x xs =
-  unsafeFunctionN "jsonb_extract_path" (x :* xs)
-
--- | Returns JSON value pointed to by the given path (equivalent to #>
--- operator), as text.
-jsonExtractPathAsText
-  :: SOP.SListI elems
-  => Expression outer commons grp schemas params from (null 'PGjson)
-  -> NP (Expression outer commons grp schemas params from) elems
-  -> Expression outer commons grp schemas params from (null 'PGjson)
-jsonExtractPathAsText x xs =
-  unsafeFunctionN "json_extract_path_text" (x :* xs)
-
--- | Returns JSON value pointed to by the given path (equivalent to #>
--- operator), as text.
-jsonbExtractPathAsText
-  :: SOP.SListI elems
-  => Expression outer commons grp schemas params from (null 'PGjsonb)
-  -> NP (Expression outer commons grp schemas params from) elems
-  -> Expression outer commons grp schemas params from (null 'PGjsonb)
-jsonbExtractPathAsText x xs =
-  unsafeFunctionN "jsonb_extract_path_text" (x :* xs)
-
 -- | Returns the type of the outermost JSON value as a text string. Possible
 -- types are object, array, string, number, boolean, and null.
 jsonTypeof :: null 'PGjson :--> null 'PGtext
@@ -342,38 +303,36 @@ jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
 
 -- | @ jsonbSet target path new_value create_missing @
 --
--- Returns target with the section designated by path replaced by new_value,
--- or with new_value added if create_missing is true ( default is true) and the
+-- Returns target with the section designated by path replaced by @new_value@,
+-- or with @new_value@ added if create_missing is
+-- `Squeal.PostgreSQL.Expression.Logic.true` and the
 -- item designated by path does not exist. As with the path orientated
 -- operators, negative integers that appear in path count from the end of JSON
 -- arrays.
 jsonbSet
-  :: Expression outer commons grp schemas params from (null 'PGjsonb)
-  -> Expression outer commons grp schemas params from (null ('PGvararray ('NotNull 'PGtext)))
-  -> Expression outer commons grp schemas params from (null 'PGjsonb)
-  -> Maybe (Expression outer commons grp schemas params from (null 'PGbool))
-  -> Expression outer commons grp schemas params from (null 'PGjsonb)
-jsonbSet tgt path val createMissing = case createMissing of
-  Just m -> unsafeFunctionN "jsonb_set" (tgt :* path :* val :* m :* Nil)
-  Nothing -> unsafeFunctionN "jsonb_set" (tgt :* path :* val :* Nil)
+  :: FunctionN
+      '[ null 'PGjsonb
+       , null ('PGvararray ('NotNull 'PGtext))
+       , null 'PGjsonb
+       , null 'PGbool ] (null 'PGjsonb)
+jsonbSet = unsafeFunctionN "jsonbSet"
 
 -- | @ jsonbInsert target path new_value insert_after @
 --
--- Returns target with new_value inserted. If target section designated by
--- path is in a JSONB array, new_value will be inserted before target or after
--- if insert_after is true (default is false). If target section designated by
--- path is in JSONB object, new_value will be inserted only if target does not
+-- Returns target with @new_value@ inserted. If target section designated by
+-- path is in a JSONB array, @new_value@ will be inserted before target or after
+-- if @insert_after@ is `Squeal.PostgreSQL.Expression.Logic.true`.
+-- If target section designated by
+-- path is in JSONB object, @new_value@ will be inserted only if target does not
 -- exist. As with the path orientated operators, negative integers that appear
 -- in path count from the end of JSON arrays.
 jsonbInsert
-  :: Expression outer commons grp schemas params from (null 'PGjsonb)
-  -> Expression outer commons grp schemas params from (null ('PGvararray ('NotNull 'PGtext)))
-  -> Expression outer commons grp schemas params from (null 'PGjsonb)
-  -> Maybe (Expression outer commons grp schemas params from (null 'PGbool))
-  -> Expression outer commons grp schemas params from (null 'PGjsonb)
-jsonbInsert tgt path val insertAfter = case insertAfter of
-  Just i -> unsafeFunctionN "jsonb_insert" (tgt :* path :* val :* i :* Nil)
-  Nothing -> unsafeFunctionN "jsonb_insert" (tgt :* path :* val :* Nil)
+  :: FunctionN
+      '[ null 'PGjsonb
+       , null ('PGvararray ('NotNull 'PGtext))
+       , null 'PGjsonb
+       , null 'PGbool ] (null 'PGjsonb)
+jsonbInsert = unsafeFunctionN "jsonb_insert"
 
 -- | Returns its argument as indented JSON text.
 jsonbPretty :: null 'PGjsonb :--> null 'PGtext
@@ -439,55 +398,53 @@ jsonbObjectKeys
     '["jsonb_object_keys" ::: 'NotNull 'PGtext]
 jsonbObjectKeys = unsafeSetOfFunction
 
-unsafePopulateFunction
-  :: forall fun schemas null outer commons params ty row
-  . KnownSymbol fun
-  => Alias fun
-  -> TypeExpression schemas (null ('PGcomposite row))
-  -> Expression outer commons 'Ungrouped schemas params '[] ty
+-- | Build rows from Json types.
+type JsonPopulateFunction fun json
+  =  forall schemas row outer commons params
+  .  json `In` PGJsonType
+  => TypeExpression schemas ('NotNull ('PGcomposite row)) -- ^ row type
+  -> Expression outer commons 'Ungrouped schemas params '[] ('NotNull json)
+      -- ^ json type
   -> FromClause outer commons schemas params '[fun ::: row]
+
+unsafePopulateFunction
+  :: forall fun ty
+   . KnownSymbol fun => Alias fun -> JsonPopulateFunction fun ty
 unsafePopulateFunction _fun ty expr = UnsafeFromClause $ renderSymbol @fun
   <> parenthesized ("null::" <> renderSQL ty <> ", " <> renderSQL expr)
 
 -- | Expands the JSON expression to a row whose columns match the record
 -- type defined by the given table.
-jsonPopulateRecord
-  :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjson) -- ^ json object
-  -> FromClause outer commons schemas params '["json_populate_record" ::: row]
+jsonPopulateRecord :: JsonPopulateFunction "json_populate_record" 'PGjson
 jsonPopulateRecord = unsafePopulateFunction #json_populate_record
 
 -- | Expands the binary JSON expression to a row whose columns match the record
 -- type defined by the given table.
-jsonbPopulateRecord
-  :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
-  -> FromClause outer commons schemas params '["jsonb_populate_record" ::: row]
+jsonbPopulateRecord :: JsonPopulateFunction "jsonb_populate_record" 'PGjsonb
 jsonbPopulateRecord = unsafePopulateFunction #jsonb_populate_record
 
 -- | Expands the outermost array of objects in the given JSON expression to a
 -- set of rows whose columns match the record type defined by the given table.
-jsonPopulateRecordSet
-  :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjson) -- ^ json array
-  -> FromClause outer commons schemas params '["json_populate_record_set" ::: row]
+jsonPopulateRecordSet :: JsonPopulateFunction "json_populate_record_set" 'PGjson
 jsonPopulateRecordSet = unsafePopulateFunction #json_populate_record_set
 
 -- | Expands the outermost array of objects in the given binary JSON expression
 -- to a set of rows whose columns match the record type defined by the given
 -- table.
-jsonbPopulateRecordSet
-  :: TypeExpression schemas (nullity ('PGcomposite row)) -- ^ row type
-  -> Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb array
-  -> FromClause outer commons schemas params '["jsonb_populate_record_set" ::: row]
+jsonbPopulateRecordSet :: JsonPopulateFunction "jsonb_populate_record_set" 'PGjsonb
 jsonbPopulateRecordSet = unsafePopulateFunction #jsonb_populate_record_set
 
-unsafeRecordFunction
-  :: (SOP.SListI record, json `In` PGJsonType)
-  => ByteString
-  -> Expression outer commons 'Ungrouped schemas params '[] (nullity json)
-  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
-  -> FromClause outer commons schemas params '[tab ::: record]
+-- | Build rows from Json types.
+type JsonToRecordFunction json
+  =  forall outer commons schemas params tab row
+  .  (SOP.SListI row, json `In` PGJsonType)
+  => Expression outer commons 'Ungrouped schemas params '[] ('NotNull json)
+      -- ^ json type
+  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: row)
+      -- ^ row type
+  -> FromClause outer commons schemas params '[tab ::: row]
+
+unsafeRecordFunction :: ByteString -> JsonToRecordFunction json
 unsafeRecordFunction fun expr (types `As` tab) = UnsafeFromClause $
   fun <> parenthesized (renderSQL expr) <+> "AS" <+> renderSQL tab
     <> parenthesized (renderCommaSeparated renderTy types)
@@ -496,33 +453,17 @@ unsafeRecordFunction fun expr (types `As` tab) = UnsafeFromClause $
       renderTy (ty `As` alias) = renderSQL alias <+> renderSQL ty
 
 -- | Builds an arbitrary record from a JSON object.
-jsonToRecord
-  :: SOP.SListI record
-  => Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjson) -- ^ json object
-  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
-  -> FromClause outer commons schemas params '[tab ::: record]
+jsonToRecord :: JsonToRecordFunction 'PGjson
 jsonToRecord = unsafeRecordFunction "json_to_record"
 
 -- | Builds an arbitrary record from a binary JSON object.
-jsonbToRecord
-  :: SOP.SListI record
-  => Expression outer commons 'Ungrouped schemas params '[] (nullity 'PGjsonb) -- ^ jsonb object
-  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
-  -> FromClause outer commons schemas params '[tab ::: record]
+jsonbToRecord :: JsonToRecordFunction 'PGjsonb
 jsonbToRecord = unsafeRecordFunction "jsonb_to_record"
 
 -- | Builds an arbitrary set of records from a JSON array of objects.
-jsonToRecordSet
-  :: SOP.SListI record
-  => Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjson) -- ^ json array
-  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
-  -> FromClause outer commons schemas params '[tab ::: record]
+jsonToRecordSet :: JsonToRecordFunction 'PGjson
 jsonToRecordSet = unsafeRecordFunction "json_to_record_set"
 
 -- | Builds an arbitrary set of records from a binary JSON array of objects.
-jsonbToRecordSet
-  :: SOP.SListI record
-  => Expression outer commons 'Ungrouped schemas params '[]  (nullity 'PGjsonb) -- ^ jsonb array
-  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: record)
-  -> FromClause outer commons schemas params '[tab ::: record]
+jsonbToRecordSet :: JsonToRecordFunction 'PGjsonb
 jsonbToRecordSet = unsafeRecordFunction "jsonb_to_record_set"
