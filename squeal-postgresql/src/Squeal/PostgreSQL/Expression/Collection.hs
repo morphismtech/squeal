@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.Expression.Collection
+Description: Array and composite functions
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Array and composite functions
+-}
+
 {-# LANGUAGE
     AllowAmbiguousTypes
   , DataKinds
