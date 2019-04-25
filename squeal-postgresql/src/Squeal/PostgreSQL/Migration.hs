@@ -164,7 +164,20 @@ import qualified Data.Text.IO as Text (putStrLn)
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
-import Squeal.PostgreSQL
+import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Binary
+import Squeal.PostgreSQL.Definition
+import Squeal.PostgreSQL.Expression.Comparison
+import Squeal.PostgreSQL.Expression.Parameter
+import Squeal.PostgreSQL.Expression.Time
+import Squeal.PostgreSQL.Expression.Type
+import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.Manipulation
+import Squeal.PostgreSQL.PG
+import Squeal.PostgreSQL.PQ
+import Squeal.PostgreSQL.Query
+import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Transaction
 
 -- | A `Migration` is a named "isomorphism" over a given category.
 -- It should contain an inverse pair of `up` and `down`

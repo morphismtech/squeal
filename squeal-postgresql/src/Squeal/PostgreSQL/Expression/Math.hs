@@ -29,7 +29,6 @@ import Squeal.PostgreSQL.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL
--- >>> import Squeal.PostgreSQL.Render
 
 -- | >>> :{
 -- let

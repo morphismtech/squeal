@@ -97,9 +97,11 @@ import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Render
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 -- | `PGType` is the promoted datakind of PostgreSQL types.
 --
--- >>> import Squeal.PostgreSQL.Schema
 -- >>> :kind 'PGbool
 -- 'PGbool :: PGType
 data PGType

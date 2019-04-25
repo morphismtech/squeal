@@ -11,17 +11,15 @@ Let's see an example!
 First, we need some language extensions because Squeal uses modern GHC
 features.
 
->>> :set -XDataKinds -XDeriveGeneric -XOverloadedLabels
+>>> :set -XDataKinds -XDeriveGeneric -XOverloadedLabels -XFlexibleContexts
 >>> :set -XOverloadedStrings -XTypeApplications -XTypeOperators -XGADTs
 
 We'll need some imports.
 
->>> import Control.Monad (void)
 >>> import Control.Monad.IO.Class (liftIO)
 >>> import Data.Int (Int32)
 >>> import Data.Text (Text)
 >>> import Squeal.PostgreSQL
->>> import Squeal.PostgreSQL.Render
 
 We'll use generics to easily convert between Haskell and PostgreSQL values.
 
@@ -104,25 +102,23 @@ let
 DROP TABLE "emails";
 DROP TABLE "users";
 
-Next, we'll write `Manipulation`s to insert data into our two tables.
-A `Manipulation` like `insertInto`, `update` or `deleteFrom`
-has three type parameters, the schema it refers to, a list of parameters
-it can take as input, and a list of columns it produces as output. When
-we insert into the users table, we will need a parameter for the @name@
-field but not for the @id@ field. Since it's serial, we can use a default
-value. However, since the emails table refers to the users table, we will
-need to retrieve the user id that the insert generates and insert it into
-the emails table. Take a careful look at the type and definition of both
-of our inserts.
-
-We'll need a Haskell type for users. We give the type `Generics.SOP.Generic` and
-`Generics.SOP.HasDatatypeInfo` instances so that we can decode the rows
-we receive when we run @getUsers@. Notice that the record fields of the
-@User@ type match the column names of @getUsers@.
+We'll need a Haskell type for @User@s. We give the type `Generics.SOP.Generic` and
+`Generics.SOP.HasDatatypeInfo` instances so that we can encode and decode @User@s.
 
 >>> data User = User { userName :: Text, userEmail :: Maybe Text } deriving (Show, GHC.Generic)
 >>> instance SOP.Generic User
 >>> instance SOP.HasDatatypeInfo User
+
+Next, we'll write `Manipulation_`s to insert @User@s into our two tables.
+A `Manipulation_` like `insertInto`, `update` or `deleteFrom`
+has three type parameters, the schemas it refers to, input parameters
+and an output row. When
+we insert into the users table, we will need a parameter for the @name@
+field but not for the @id@ field. Since it's serial, we can use a default
+value. However, since the emails table refers to the users table, we will
+need to retrieve the user id that the insert generates and insert it into
+the emails table. We can do this in a single `Manipulation_` by using a
+`with` statement.
 
 >>> :{
 let
@@ -140,10 +136,10 @@ let
 >>> printSQL insertUser
 WITH "u" AS (INSERT INTO "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) RETURNING "id" AS "id", ($2 :: text) AS "email") INSERT INTO "emails" ("user_id", "email") SELECT "u"."id", "u"."email" FROM "u" AS "u"
 
-Next we write a `Query` to retrieve users from the database. We're not
+Next we write a `Query_` to retrieve users from the database. We're not
 interested in the ids here, just the usernames and email addresses. We
-need to use an inner join to get the right result. A `Query` is like a
-`Manipulation` with the same kind of type parameters.
+need to use an `innerJoin` to get the right result. A `Query_` is like a
+`Manipulation_` with the same kind of type parameters.
 
 >>> :{
 let
@@ -187,69 +183,42 @@ let
     usersRows <- getRows usersResult
     liftIO $ print (usersRows :: [User])
 in
-  void . withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
     & pqThen session
     & pqThen (define teardown)
 :}
 [User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole@hotmail.com"}]
 -}
-module Squeal.PostgreSQL
-  ( module Squeal.PostgreSQL.Alias
-  , module Squeal.PostgreSQL.Binary
-  , module Squeal.PostgreSQL.Definition
-  , module Squeal.PostgreSQL.Expression
-  , module Squeal.PostgreSQL.Expression.Aggregate
-  , module Squeal.PostgreSQL.Expression.Collection
-  , module Squeal.PostgreSQL.Expression.Comparison
-  , module Squeal.PostgreSQL.Expression.Json
-  , module Squeal.PostgreSQL.Expression.Literal
-  , module Squeal.PostgreSQL.Expression.Logic
-  , module Squeal.PostgreSQL.Expression.Math
-  , module Squeal.PostgreSQL.Expression.Null
-  , module Squeal.PostgreSQL.Expression.Parameter
-  , module Squeal.PostgreSQL.Expression.SetOf
-  , module Squeal.PostgreSQL.Expression.Sort
-  , module Squeal.PostgreSQL.Expression.Subquery
-  , module Squeal.PostgreSQL.Expression.Text
-  , module Squeal.PostgreSQL.Expression.TextSearch
-  , module Squeal.PostgreSQL.Expression.Time
-  , module Squeal.PostgreSQL.Expression.Type
-  , module Squeal.PostgreSQL.Expression.Window
-  , module Squeal.PostgreSQL.List
-  , module Squeal.PostgreSQL.Manipulation
-  , module Squeal.PostgreSQL.PG
-  , module Squeal.PostgreSQL.PQ
-  , module Squeal.PostgreSQL.Query
-  , module Squeal.PostgreSQL.Schema
-  , module Squeal.PostgreSQL.Transaction
-  ) where
+module Squeal.PostgreSQL (module X) where
 
-import Squeal.PostgreSQL.Alias
-import Squeal.PostgreSQL.Binary
-import Squeal.PostgreSQL.Definition
-import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Expression.Aggregate
-import Squeal.PostgreSQL.Expression.Collection
-import Squeal.PostgreSQL.Expression.Comparison
-import Squeal.PostgreSQL.Expression.Json
-import Squeal.PostgreSQL.Expression.Literal
-import Squeal.PostgreSQL.Expression.Logic
-import Squeal.PostgreSQL.Expression.Math
-import Squeal.PostgreSQL.Expression.Null
-import Squeal.PostgreSQL.Expression.Parameter
-import Squeal.PostgreSQL.Expression.SetOf
-import Squeal.PostgreSQL.Expression.Sort
-import Squeal.PostgreSQL.Expression.Subquery
-import Squeal.PostgreSQL.Expression.Text
-import Squeal.PostgreSQL.Expression.TextSearch
-import Squeal.PostgreSQL.Expression.Time
-import Squeal.PostgreSQL.Expression.Type
-import Squeal.PostgreSQL.Expression.Window
-import Squeal.PostgreSQL.List
-import Squeal.PostgreSQL.Manipulation
-import Squeal.PostgreSQL.PG
-import Squeal.PostgreSQL.PQ
-import Squeal.PostgreSQL.Query
-import Squeal.PostgreSQL.Schema
-import Squeal.PostgreSQL.Transaction
+import Squeal.PostgreSQL.Alias as X
+import Squeal.PostgreSQL.Binary as X
+import Squeal.PostgreSQL.Definition as X
+import Squeal.PostgreSQL.Expression as X
+import Squeal.PostgreSQL.Expression.Aggregate as X
+import Squeal.PostgreSQL.Expression.Collection as X
+import Squeal.PostgreSQL.Expression.Comparison as X
+import Squeal.PostgreSQL.Expression.Json as X
+import Squeal.PostgreSQL.Expression.Literal as X
+import Squeal.PostgreSQL.Expression.Logic as X
+import Squeal.PostgreSQL.Expression.Math as X
+import Squeal.PostgreSQL.Expression.Null as X
+import Squeal.PostgreSQL.Expression.Parameter as X
+import Squeal.PostgreSQL.Expression.SetOf as X
+import Squeal.PostgreSQL.Expression.Sort as X
+import Squeal.PostgreSQL.Expression.Subquery as X
+import Squeal.PostgreSQL.Expression.Text as X
+import Squeal.PostgreSQL.Expression.TextSearch as X
+import Squeal.PostgreSQL.Expression.Time as X
+import Squeal.PostgreSQL.Expression.Type as X
+import Squeal.PostgreSQL.Expression.Window as X
+import Squeal.PostgreSQL.List as X
+import Squeal.PostgreSQL.Manipulation as X
+import Squeal.PostgreSQL.Migration as X
+import Squeal.PostgreSQL.PG as X
+import Squeal.PostgreSQL.PQ as X
+import Squeal.PostgreSQL.Query as X
+import Squeal.PostgreSQL.Render as X
+import Squeal.PostgreSQL.Schema as X
+import Squeal.PostgreSQL.Transaction as X

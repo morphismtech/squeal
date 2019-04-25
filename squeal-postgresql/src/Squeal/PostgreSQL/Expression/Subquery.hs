@@ -33,7 +33,6 @@ import Squeal.PostgreSQL.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL
--- >>> import Squeal.PostgreSQL.Render
 
 {- |
 The argument of `exists` is an arbitrary subquery. The subquery is evaluated
