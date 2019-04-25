@@ -133,6 +133,17 @@ instance Category Definition where
 CREATE statements
 -----------------------------------------}
 
+{- |
+`createSchema` enters a new schema into the current database.
+The schema name must be distinct from the name of any existing schema
+in the current database.
+
+A schema is essentially a namespace: it contains named objects
+(tables, data types, functions, and operators) whose names
+can duplicate those of other objects existing in other schemas.
+Named objects are accessed by `QualifiedAlias`es with the schema
+name as a prefix.
+-}
 createSchema
   :: KnownSymbol sch
   => Alias sch
@@ -140,6 +151,7 @@ createSchema
 createSchema sch = UnsafeDefinition $
   "CREATE" <+> "SCHEMA" <+> renderSQL sch <> ";"
 
+{- | Idempotent version of `createSchema`. -}
 createSchemaIfNotExists
   :: (KnownSymbol sch, Has sch schemas schema)
   => Alias sch
@@ -537,7 +549,7 @@ instance RenderSQL OnUpdateClause where
 DROP statements
 -----------------------------------------}
 
--- >>> :{
+-- | >>> :{
 -- let
 --   definition :: Definition '["muh_schema" ::: schema, "public" ::: public] '["public" ::: public]
 --   definition = dropSchema #muh_schema
