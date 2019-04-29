@@ -79,7 +79,7 @@ class Aggregate expr1 exprN aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression '[] commons ('Grouped bys) schemas params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('NotNull 'PGnumeric)
+  --   expression :: Expression '[] commons ('Grouped bys) schemas params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null 'PGnumeric)
   --   expression = sum_ (Distinct #col)
   -- in printSQL expression
   -- :}
@@ -87,7 +87,7 @@ class Aggregate expr1 exprN aggr
   sum_
     :: ty `In` PGNum
     => expr1 (null ty)
-    -> aggr ('NotNull ty)
+    -> aggr ('Null ty)
 
   -- | input values, including nulls, concatenated into an array
   arrayAgg
