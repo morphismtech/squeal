@@ -80,8 +80,8 @@ using the given `Operator`, which must yield a Boolean result. The result of `su
 if any `true` result is obtained. The result is `false` if no true result is found
 (including the case where the subquery returns no rows).
 
->>> printSQL $ subAll "foo" like (values_ ("foobar" `as` #foo))
-(E'foo' LIKE ALL (SELECT * FROM (VALUES (E'foobar')) AS t ("foo")))
+>>> printSQL $ subAny "foo" like (values_ ("foobar" `as` #foo))
+(E'foo' LIKE ANY (SELECT * FROM (VALUES (E'foobar')) AS t ("foo")))
 -}
 subAny
   :: Expression outer commons grp schemas params from ty1 -- ^ expression
