@@ -320,7 +320,7 @@ let
 >>> let input = Only (Money 20020)
 
 >>> :{
-void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+withConnection "host=localhost port=5432 dbname=exampledb" $ do
   result <- runQueryParams roundTrip input
   Just output <- firstRow result
   liftIO . print $ input == output

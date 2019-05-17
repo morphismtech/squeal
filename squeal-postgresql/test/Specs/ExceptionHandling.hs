@@ -24,7 +24,6 @@ import           Data.Vector                 (Vector)
 import qualified Generics.SOP                as SOP
 import qualified GHC.Generics                as GHC
 import           Squeal.PostgreSQL
-import           Squeal.PostgreSQL.Migration
 import           Test.Hspec
 
 type Schema =
@@ -88,12 +87,12 @@ migration = Migration { name = "test"
                       , down = teardown }
 
 setupDB :: IO ()
-setupDB = void . withConnection connectionString $
+setupDB = withConnection connectionString $
   manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
   & pqThen (migrateUp (single migration))
 
 dropDB :: IO ()
-dropDB = void . withConnection connectionString $
+dropDB = withConnection connectionString $
   manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
   & pqThen (migrateDown (single migration))
 

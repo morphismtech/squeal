@@ -39,7 +39,7 @@ the input and output should be equal.
 
 >>> let input = Row 2 "hi" (Just True)
 >>> :{
-void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+withConnection "host=localhost port=5432 dbname=exampledb" $ do
   result <- runQueryParams roundTrip input
   Just output <- firstRow result
   liftIO . print $ input == output
@@ -78,7 +78,7 @@ let
 >>> :set -XOverloadedLists
 >>> let input = Row (VarArray [1,2]) (FixArray (Just 1,Nothing)) (FixArray ((1,2),(3,4),(5,6)))
 >>> :{
-void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+withConnection "host=localhost port=5432 dbname=exampledb" $ do
   result <- runQueryParams roundTrip input
   Just output <- firstRow result
   liftIO . print $ input == output
@@ -170,7 +170,7 @@ let
     Just output <- firstRow result
     liftIO . print $ input == output
 in
-  void . withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
     & pqThen session
     & pqThen (define teardown)

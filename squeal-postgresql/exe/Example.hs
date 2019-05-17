@@ -11,7 +11,6 @@
 
 module Main (main, main2) where
 
-import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int16, Int32)
 import Data.Monoid ((<>))
@@ -117,7 +116,7 @@ main = do
 
 main2 :: IO ()
 main2 =
-  void . withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
     & pqThen session
     & pqThen (define teardown)
