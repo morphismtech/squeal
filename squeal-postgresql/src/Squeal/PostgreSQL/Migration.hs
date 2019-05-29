@@ -250,8 +250,8 @@ terminally = Terminally . void
 -- | A `pureMigration` turns a `Migration` involving only pure SQL
 -- `Definition`s into a `Migration` that may be combined with arbitrary `IO`.
 pureMigration
-  :: Migration Definition schema0 schema1
-  -> Migration (Terminally PQ IO) schema0 schema1
+  :: Migration Definition schemas0 schemas1
+  -> Migration (Terminally PQ IO) schemas0 schemas1
 pureMigration migration = Migration
   { name = name migration
   , up = terminally . define $ up migration
