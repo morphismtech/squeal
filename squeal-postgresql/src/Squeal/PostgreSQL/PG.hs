@@ -375,6 +375,7 @@ newtype VarArray arr = VarArray {getVarArray :: arr}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
 -- | `PGvararray` @(@`NullPG` @hask)@
 type instance PG (VarArray (Vector hask)) = 'PGvararray (NullPG hask)
+type instance PG (VarArray [hask]) = 'PGvararray (NullPG hask)
 
 {- | The `FixArray` newtype is an indication that the Haskell
 type it's applied to should be stored as a `PGfixarray`.
