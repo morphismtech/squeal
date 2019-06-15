@@ -35,6 +35,9 @@ module Squeal.PostgreSQL.Expression.Parameter
   ) where
 
 import Data.ByteString (ByteString)
+import qualified Data.ByteString as ByteString
+import qualified Data.ByteString.Char8 as Char8
+import Data.Int (Int32)
 import Generics.SOP (NP(..), hmap, SListI)
 import GHC.TypeLits
 
@@ -105,18 +108,19 @@ instance
   , PGTyped schemas ty
   , SListI columns
   , Insertable schemas params row columns ) =>
-    Insertable schemas (ty ': params) (col ::: ty ': row)
-      (col ::: 'NoDef :=> ty ': columns) where
-        params =
-          Set (param @1) `as` (Alias @col)
-          :* hmap (overValue paramsPlus1) (params @schemas)
+    Insertable schemas params row (col ::: 'Def :=> ty ': columns) where
+      params = Default `as` (Alias @col) :* (params @schemas)
 instance
   ( KnownSymbol col
   , PGTyped schemas ty
   , SListI columns
   , Insertable schemas params row columns ) =>
-    Insertable schemas params row (col ::: 'Def :=> ty ': columns) where
-      params = Default `as` (Alias @col) :* (params @schemas)
+    Insertable schemas (ty ': params) (col ::: ty ': row)
+      (col ::: 'NoDef :=> ty ': columns) where
+        params =
+          Set (param @1) `as` (Alias @col)
+          :* hmap (overValue paramPlus1) (params @schemas)
+
 overValue
   :: ( forall o c g s f x
       . Expression o c g s p0 f x -> Expression o c g s p1 f x )
@@ -130,13 +134,20 @@ overValue f = \case
   Set expr `As` alias -> Set (f expr) `as` alias
   Default `As` alias -> Default `as` alias
 
-paramsPlus1
+paramPlus1
   :: Expression outer commons grp schemas params from ty
   -> Expression outer commons grp schemas (param ': params) from ty
-paramsPlus1 = UnsafeExpression . paramsPlus1_ . renderSQL
+paramPlus1 = UnsafeExpression . paramsPlus1_ . renderSQL
   where
     paramsPlus1_ :: ByteString -> ByteString
-    paramsPlus1_ = undefined -- replace $n with $n+1
+    paramsPlus1_ p =
+      let
+        (left_n, right) = ByteString.breakSubstring "::" p
+        isDigit w = w - 48 <= 9
+        (left, n) = ByteString.break isDigit left_n
+        add1 = Char8.pack . show . (+ 1) . read @Int32 . Char8.unpack
+      in
+        left <> add1 n <> right
 
 insertParamsInto
   :: ( Has sch schemas schema
