@@ -116,6 +116,13 @@ may be referenced using positional
 Haskell record or a generalized record using tuples of `P` types and normal Haskell
 records, whose entries will be targeted using overloaded labels.
 
+>>> :set -XDeriveAnyClass -XDerivingStrategies
+>>> :{
+data Row a b = Row { col1 :: a, col2 :: b }
+  deriving stock (GHC.Generic)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+:}
+
 simple insert:
 
 >>> type Columns = '["col1" ::: 'NoDef :=> 'Null 'PGint4, "col2" ::: 'Def :=> 'NotNull 'PGint4]
@@ -196,8 +203,7 @@ delete:
 
 >>> :{
 let
-  manipulation :: Manipulation_ (Public Schema) ()
-    (P ("col1" ::: Int32), P ("col2" ::: Int32))
+  manipulation :: Manipulation_ (Public Schema) () (Row Int32 Int32)
   manipulation = deleteFrom #tab NoUsing (#col1 .== #col2) (Returning Star)
 in printSQL manipulation
 :}
