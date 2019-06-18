@@ -4,7 +4,7 @@
 
 Version 0.5 makes a number of large changes and additions to Squeal.
 I want to thank folks who contributed issues and pull requests;
-Raveline, ilyakooo0, chshersh, reygoch, and more.
+Raveline, rimmington, ilyakooo0, chshersh, reygoch, and more.
 
 **Multi-schema support**
 
