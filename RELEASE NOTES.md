@@ -230,9 +230,11 @@ Squeal 0.5 refactors this pattern into a `QueryClause` GADT.
 ```
 -- Squeal 0.4
 insertRow_ #tab (Set 2 `as` #col1 :* Default `as` #col2)
+insertQuery_ #tab (selectStar (from (table #other_tab)))
 
 -- Squeal 0.5
-insertInto_ #tab (Values (Set 2 `as` #col1 :* Default `as` #col2))
+insertInto_ #tab (Values_ (Set 2 `as` #col1 :* Default `as` #col2))
+insertInto_ #tab (Subquery (select Star (from (table #other_tab))))
 ```
 
 **Window functions and aggregation**
