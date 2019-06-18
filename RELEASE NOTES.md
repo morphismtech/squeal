@@ -3,6 +3,8 @@
 ### Version 0.5
 
 Version 0.5 makes a number of large changes and additions to Squeal.
+I want to thank folks who contributed issues and pull requests;
+Raveline, ilyakooo0, chshersh, reygoch, and more.
 
 **Multi-schema support**
 
@@ -218,6 +220,21 @@ automatically applies it, so to upgrade from Squeal 0.4, replace `select`
 with `select_`. There are also independent `selectDistinct` and `selectDistinct_`
 functions to filter out duplicate rows.
 
+**Query clauses**
+
+Previously, Squeal provided a couple versions of `INSERT` depending
+on whether you wanted to insert `VALUES` or a query.
+
+Squeal 0.5 refactors this pattern into a `QueryClause` GADT.
+
+```
+-- Squeal 0.4
+insertRow_ #tab (Set 2 `as` #col1 :* Default `as` #col2)
+
+-- Squeal 0.5
+insertInto_ #tab (Values (Set 2 `as` #col1 :* Default `as` #col2))
+```
+
 **Window functions and aggregation**
 
 Previous versions of Squeal provided no support for window functions.
@@ -329,19 +346,57 @@ to make them easier to compose with other `PQ` actions.
 
 **Transactions**
 
-**Money**
+You can now run transactions `ephemerally`, guaranteed to roll back,
+but return the result or throw the exception that the transaction
+would have generated. This is useful for testing. You can also
+`transactionallyRetry` computations, retrying the transaction if
+a [serialization failure](https://www.postgresql.org/docs/11/transaction-iso.html#XACT-REPEATABLE-READ) occurs.
 
-**Domains**
+**Types**
 
-**Time operations**
+Squeal now supports money via a `Money` Haskell `Type` and a `'PGmoney`
+`PGType`. Squeal 0.5 also adds support for creating domain types
+with `createDomain`.
+
+**Time**
+
+Squeal 0.5 adds support for new functions; `now`, `makeDate`, `makeTime`,
+, `makeTimestamp`, and `makeTimestamptz`, a function `interval_` for
+constructing time intervals out multiples of `TimeUnit`s, and a new
+`TimeOp` class, defining affine space operators for time types and their
+differences.
 
 **Literals**
 
+Squeal allows you to include Haskell values in your statements using
+out of line `parameter`s, but often you want to include them inline,
+as a SQL `literal`. Squeal 0.5 enables this using the `Literal` class.
+
 **Set returning functions**
+
+Squeal 0.5 adds support for set returning functions such as `unnest`,
+with the `RankNType` `SetOfFunction`, which can be used as as a `FromClause`.
 
 **Text search**
 
-**Lists**
+Squeal 0.5 adds extensive support for text search types, functions and operators.
+
+**Much more**
+
+Lots more changes went into and under the hood of the new version.
+The `Expression` module was split into coherent submodules since it
+had grown to immense proportions. New modules `Alias`, `PG` and `List`
+were added to relieve some of the burden that the `Schema` module
+had been carrying. Rendering has been better unified with a new
+`RenderSQL` typeclass. Type level list concatenation with the `Additional`
+typeclass has been added. `Manipulation`s `update` and `delete`
+were upgraded, so you can leave out fields you don't want to update and
+use `USING` clauses in deletes. Upserts which were previously broken
+now work. The `IO` typeclass hierarchy was changed from `MonadBase`
+and `MonadBaseControl` to `MonadIO` and `MonadUnliftIO`. A new
+`withRecursive` `Manipulation` was added. `SquealException`s were
+refactored and a `trySqueal` function added. Arrays were refactored.
+And there was probably more I've forgotten.
 
 ### Version 0.4
 
