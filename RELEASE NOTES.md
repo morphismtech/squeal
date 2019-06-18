@@ -237,9 +237,9 @@ is constructed using the `partitionBy` function, optionally with an `orderBy`
 clause. For example,
 
 ```Haskell
-query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("rank" ::: Int64))
+query :: Query_ (Public Schema) () (Row Int32 Int32)
 query = select
-  (#col1 & Also (rank `as` #rank `Over` (partitionBy #col1 & orderBy [#col2 & Asc])))
+  (#col1 & Also (rank `as` #col2 `Over` (partitionBy #col1 & orderBy [#col2 & Asc])))
   (from (table #tab))
 ```
 
