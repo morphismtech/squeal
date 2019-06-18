@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: haskell:8.6.3
+      - image: haskell:8.6.5
       - image: circleci/postgres:latest
         environment:
           POSTGRES_USER: root
