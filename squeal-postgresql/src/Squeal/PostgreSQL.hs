@@ -190,7 +190,7 @@ in
 :}
 [User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole@hotmail.com"}]
 -}
-module Squeal.PostgreSQL (module X) where
+module Squeal.PostgreSQL (module X, RenderSQL(..), printSQL) where
 
 import Squeal.PostgreSQL.Alias as X
 import Squeal.PostgreSQL.Binary as X
@@ -219,6 +219,6 @@ import Squeal.PostgreSQL.Migration as X
 import Squeal.PostgreSQL.PG as X
 import Squeal.PostgreSQL.PQ as X
 import Squeal.PostgreSQL.Query as X
-import Squeal.PostgreSQL.Render as X
+import Squeal.PostgreSQL.Render (RenderSQL(..), printSQL)
 import Squeal.PostgreSQL.Schema as X
 import Squeal.PostgreSQL.Transaction as X
