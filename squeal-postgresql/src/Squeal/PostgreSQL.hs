@@ -1,7 +1,7 @@
 {-|
 Module: Squeal.PostgreSQL
-Description: Squeel export module
-Copyright: (c) Eitan Chatav, 2017
+Description: Squeal export module
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
@@ -11,17 +11,15 @@ Let's see an example!
 First, we need some language extensions because Squeal uses modern GHC
 features.
 
->>> :set -XDataKinds -XDeriveGeneric -XOverloadedLabels
->>> :set -XOverloadedStrings -XTypeApplications -XTypeOperators
- 
+>>> :set -XDataKinds -XDeriveGeneric -XOverloadedLabels -XFlexibleContexts
+>>> :set -XOverloadedStrings -XTypeApplications -XTypeOperators -XGADTs
+
 We'll need some imports.
 
->>> import Control.Monad (void)
->>> import Control.Monad.Base (liftBase)
+>>> import Control.Monad.IO.Class (liftIO)
 >>> import Data.Int (Int32)
 >>> import Data.Text (Text)
 >>> import Squeal.PostgreSQL
->>> import Squeal.PostgreSQL.Render
 
 We'll use generics to easily convert between Haskell and PostgreSQL values.
 
@@ -32,26 +30,26 @@ The first step is to define the schema of our database. This is where
 we use @DataKinds@ and @TypeOperators@.
 
 >>> :{
+type UsersColumns =
+  '[ "id"   :::   'Def :=> 'NotNull 'PGint4
+   , "name" ::: 'NoDef :=> 'NotNull 'PGtext ]
+type UsersConstraints = '[ "pk_users" ::: 'PrimaryKey '["id"] ]
+type EmailsColumns =
+  '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+   , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
+   , "email" ::: 'NoDef :=> 'Null 'PGtext ]
+type EmailsConstraints =
+  '[ "pk_emails"  ::: 'PrimaryKey '["id"]
+   , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"] ]
 type Schema =
-  '[ "users" ::: 'Table (
-      '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
-      '[ "id"   :::   'Def :=> 'NotNull 'PGint4
-       , "name" ::: 'NoDef :=> 'NotNull 'PGtext
-       ])
-  , "emails" ::: 'Table (
-      '[ "pk_emails"  ::: 'PrimaryKey '["id"]
-       , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
-       ] :=>
-      '[ "id"      :::   'Def :=> 'NotNull 'PGint4
-       , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
-       , "email"   ::: 'NoDef :=>    'Null 'PGtext
-       ])
-  ]
+  '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns)
+   , "emails" ::: 'Table (EmailsConstraints :=> EmailsColumns) ]
+type Schemas = Public Schema
 :}
 
 Notice the use of type operators.
 
-`:::` is used to pair an alias `GHC.TypeLits.Symbol` with a `SchemumType`,
+`:::` is used to pair an alias `GHC.TypeLits.Symbol` with a `SchemasType`, a `SchemumType`,
 a `TableConstraint` or a `ColumnType`. It is intended to connote Haskell's @::@
 operator.
 
@@ -60,7 +58,7 @@ yielding a `TableType`, or to pair a `ColumnConstraint` with a `NullityType`,
 yielding a `ColumnType`. It is intended to connote Haskell's @=>@ operator
 
 Next, we'll write `Definition`s to set up and tear down the schema. In
-Squeal, a `Definition` like `createTable`, `alterTable` or `dropTable` 
+Squeal, a `Definition` like `createTable`, `alterTable` or `dropTable`
 has two type parameters, corresponding to the schema
 before being run and the schema after. We can compose definitions using `>>>`.
 Here and in the rest of our commands we make use of overloaded
@@ -68,8 +66,8 @@ labels to refer to named tables and columns in our schema.
 
 >>> :{
 let
-  setup :: Definition '[] Schema
-  setup = 
+  setup :: Definition (Public '[]) Schemas
+  setup =
     createTable #users
       ( serial `as` #id :*
         (text & notNullable) `as` #name )
@@ -89,14 +87,14 @@ We can easily see the generated SQL is unsurprising looking.
 CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));
 CREATE TABLE "emails" ("id" serial, "user_id" int NOT NULL, "email" text NULL, CONSTRAINT "pk_emails" PRIMARY KEY ("id"), CONSTRAINT "fk_user_id" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 
-Notice that @setup@ starts with an empty schema @'[]@ and produces @Schema@.
+Notice that @setup@ starts with an empty public schema @(Public '[])@ and produces @Schemas@.
 In our `createTable` commands we included `TableConstraint`s to define
 primary and foreign keys, making them somewhat complex. Our @teardown@
 `Definition` is simpler.
 
 >>> :{
 let
-  teardown :: Definition Schema '[]
+  teardown :: Definition Schemas (Public '[])
   teardown = dropTable #emails >>> dropTable #users
 :}
 
@@ -104,51 +102,49 @@ let
 DROP TABLE "emails";
 DROP TABLE "users";
 
-Next, we'll write `Manipulation`s to insert data into our two tables.
-A `Manipulation` like `insertRow`, `update` or `deleteFrom`
-has three type parameters, the schema it refers to, a list of parameters
-it can take as input, and a list of columns it produces as output. When
+We'll need a Haskell type for @User@s. We give the type `Generics.SOP.Generic` and
+`Generics.SOP.HasDatatypeInfo` instances so that we can encode and decode @User@s.
+
+>>> data User = User { userName :: Text, userEmail :: Maybe Text } deriving (Show, GHC.Generic)
+>>> instance SOP.Generic User
+>>> instance SOP.HasDatatypeInfo User
+
+Next, we'll write `Manipulation_`s to insert @User@s into our two tables.
+A `Manipulation_` like `insertInto`, `update` or `deleteFrom`
+has three type parameters, the schemas it refers to, input parameters
+and an output row. When
 we insert into the users table, we will need a parameter for the @name@
 field but not for the @id@ field. Since it's serial, we can use a default
 value. However, since the emails table refers to the users table, we will
 need to retrieve the user id that the insert generates and insert it into
-the emails table. Take a careful look at the type and definition of both
-of our inserts.
+the emails table. We can do this in a single `Manipulation_` by using a
+`with` statement.
 
 >>> :{
 let
-  insertUser :: Manipulation Schema '[ 'NotNull 'PGtext ] '[ "fromOnly" ::: 'NotNull 'PGint4 ]
-  insertUser = insertRow #users
-    (Default `as` #id :* Set (param @1) `as` #name)
-    OnConflictDoNothing (Returning (#id `as` #fromOnly))
-:}
-
->>> :{
-let
-  insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
-  insertEmail = insertRow #emails
-    ( Default `as` #id :*
-      Set (param @1) `as` #user_id :*
-      Set (param @2) `as` #email )
-    OnConflictDoNothing (Returning Nil)
+  insertUser :: Manipulation_ Schemas User ()
+  insertUser = with (u `as` #u) e
+    where
+      u = insertInto #users
+        (Values_ (Default `as` #id :* Set (param @1) `as` #name))
+        OnConflictDoRaise (Returning_ (#id :* param @2 `as` #email))
+      e = insertInto_ #emails $ Select
+        (Default `as` #id :* Set (#u ! #id) `as` #user_id :* Set (#u ! #email) `as` #email)
+        (from (common #u))
 :}
 
 >>> printSQL insertUser
-INSERT INTO "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) ON CONFLICT DO NOTHING RETURNING "id" AS "fromOnly"
->>> printSQL insertEmail
-INSERT INTO "emails" ("id", "user_id", "email") VALUES (DEFAULT, ($1 :: int4), ($2 :: text)) ON CONFLICT DO NOTHING
+WITH "u" AS (INSERT INTO "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) RETURNING "id" AS "id", ($2 :: text) AS "email") INSERT INTO "emails" ("user_id", "email") SELECT "u"."id", "u"."email" FROM "u" AS "u"
 
-Next we write a `Query` to retrieve users from the database. We're not
+Next we write a `Query_` to retrieve users from the database. We're not
 interested in the ids here, just the usernames and email addresses. We
-need to use an inner join to get the right result. A `Query` is like a
-`Manipulation` with the same kind of type parameters.
+need to use an `innerJoin` to get the right result. A `Query_` is like a
+`Manipulation_` with the same kind of type parameters.
 
 >>> :{
 let
-  getUsers :: Query Schema '[]
-    '[ "userName"  ::: 'NotNull 'PGtext
-     , "userEmail" :::    'Null 'PGtext ]
-  getUsers = select
+  getUsers :: Query_ Schemas () User
+  getUsers = select_
     (#u ! #name `as` #userName :* #e ! #email `as` #userEmail)
     ( from (table (#users `as` #u)
       & innerJoin (table (#emails `as` #e))
@@ -158,22 +154,12 @@ let
 >>> printSQL getUsers
 SELECT "u"."name" AS "userName", "e"."email" AS "userEmail" FROM "users" AS "u" INNER JOIN "emails" AS "e" ON ("u"."id" = "e"."user_id")
 
-Now that we've defined the SQL side of things, we'll need a Haskell type
-for users. We give the type `Generics.SOP.Generic` and
-`Generics.SOP.HasDatatypeInfo` instances so that we can decode the rows
-we receive when we run @getUsers@. Notice that the record fields of the
-@User@ type match the column names of @getUsers@.
- 
->>> data User = User { userName :: Text, userEmail :: Maybe Text } deriving (Show, GHC.Generic)
->>> instance SOP.Generic User
->>> instance SOP.HasDatatypeInfo User
-
-Let's also create some users to add to the database.
+Let's create some users to add to the database.
 
 >>> :{
 let
   users :: [User]
-  users = 
+  users =
     [ User "Alice" (Just "alice@gmail.com")
     , User "Bob" Nothing
     , User "Carole" (Just "carole@hotmail.com")
@@ -190,38 +176,49 @@ transformer and when the schema doesn't change we can use `Monad` and
 
 >>> :{
 let
-  session :: PQ Schema Schema IO ()
+  session :: PQ Schemas Schemas IO ()
   session = do
-    idResults <- traversePrepared insertUser (Only . userName <$> users)
-    ids <- traverse (fmap fromOnly . getRow 0) idResults
-    traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
+    _ <- traversePrepared_ insertUser users
     usersResult <- runQuery getUsers
     usersRows <- getRows usersResult
-    liftBase $ print (usersRows :: [User])
+    liftIO $ print (usersRows :: [User])
 in
-  void . withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
     & pqThen session
     & pqThen (define teardown)
 :}
 [User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole@hotmail.com"}]
 -}
-module Squeal.PostgreSQL
-  ( module Squeal.PostgreSQL.Binary
-  , module Squeal.PostgreSQL.Definition
-  , module Squeal.PostgreSQL.Expression
-  , module Squeal.PostgreSQL.Manipulation
-  , module Squeal.PostgreSQL.PQ
-  , module Squeal.PostgreSQL.Query
-  , module Squeal.PostgreSQL.Schema
-  , module Squeal.PostgreSQL.Transaction
-  ) where
+module Squeal.PostgreSQL (module X, RenderSQL(..), printSQL) where
 
-import Squeal.PostgreSQL.Binary
-import Squeal.PostgreSQL.Definition
-import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Manipulation
-import Squeal.PostgreSQL.PQ
-import Squeal.PostgreSQL.Query
-import Squeal.PostgreSQL.Schema
-import Squeal.PostgreSQL.Transaction
+import Squeal.PostgreSQL.Alias as X
+import Squeal.PostgreSQL.Binary as X
+import Squeal.PostgreSQL.Definition as X
+import Squeal.PostgreSQL.Expression as X
+import Squeal.PostgreSQL.Expression.Aggregate as X
+import Squeal.PostgreSQL.Expression.Collection as X
+import Squeal.PostgreSQL.Expression.Comparison as X
+import Squeal.PostgreSQL.Expression.Json as X
+import Squeal.PostgreSQL.Expression.Literal as X
+import Squeal.PostgreSQL.Expression.Logic as X
+import Squeal.PostgreSQL.Expression.Math as X
+import Squeal.PostgreSQL.Expression.Null as X
+import Squeal.PostgreSQL.Expression.Parameter as X
+import Squeal.PostgreSQL.Expression.SetOf as X
+import Squeal.PostgreSQL.Expression.Sort as X
+import Squeal.PostgreSQL.Expression.Subquery as X
+import Squeal.PostgreSQL.Expression.Text as X
+import Squeal.PostgreSQL.Expression.TextSearch as X
+import Squeal.PostgreSQL.Expression.Time as X
+import Squeal.PostgreSQL.Expression.Type as X
+import Squeal.PostgreSQL.Expression.Window as X
+import Squeal.PostgreSQL.List as X
+import Squeal.PostgreSQL.Manipulation as X
+import Squeal.PostgreSQL.Migration as X
+import Squeal.PostgreSQL.PG as X
+import Squeal.PostgreSQL.PQ as X
+import Squeal.PostgreSQL.Query as X
+import Squeal.PostgreSQL.Render (RenderSQL(..), printSQL)
+import Squeal.PostgreSQL.Schema as X
+import Squeal.PostgreSQL.Transaction as X

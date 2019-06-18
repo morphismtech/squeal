@@ -10,7 +10,9 @@ Rendering helper functions.
 
 {-# LANGUAGE
     AllowAmbiguousTypes
+  , ConstraintKinds
   , FlexibleContexts
+  , LambdaCase
   , MagicHash
   , OverloadedStrings
   , PolyKinds
@@ -21,36 +23,44 @@ Rendering helper functions.
 
 module Squeal.PostgreSQL.Render
   ( -- * Render
-    parenthesized
+    RenderSQL (..)
+  , printSQL
+  , escape
+  , parenthesized
+  , bracketed
   , (<+>)
   , commaSeparated
   , doubleQuoted
   , singleQuotedText
   , singleQuotedUtf8
   , renderCommaSeparated
+  , renderCommaSeparatedConstraint
   , renderCommaSeparatedMaybe
   , renderNat
   , renderSymbol
-  , RenderSQL (..)
-  , printSQL
   ) where
 
-import Control.Monad.Base
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
-import Data.Maybe
+import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import Generics.SOP
 import GHC.Exts
-import GHC.TypeLits
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
+import GHC.TypeLits hiding (Text)
+
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
 
 -- | Parenthesize a `ByteString`.
 parenthesized :: ByteString -> ByteString
 parenthesized str = "(" <> str <> ")"
+
+-- | Square bracket a `ByteString`
+bracketed :: ByteString -> ByteString
+bracketed str = "[" <> str <> "]"
 
 -- | Concatenate two `ByteString`s with a space between.
 (<+>) :: ByteString -> ByteString -> ByteString
@@ -67,11 +77,12 @@ doubleQuoted str = "\"" <> str <> "\""
 
 -- | Add single quotes around a `Text` and escape single quotes within it.
 singleQuotedText :: Text -> ByteString
-singleQuotedText str = "'" <> T.encodeUtf8 (T.replace "'" "''" str) <> "'"
+singleQuotedText str =
+  "'" <> Text.encodeUtf8 (Text.replace "'" "''" str) <> "'"
 
 -- | Add single quotes around a `ByteString` and escape single quotes within it.
 singleQuotedUtf8 :: ByteString -> ByteString
-singleQuotedUtf8 = singleQuotedText . T.decodeUtf8
+singleQuotedUtf8 = singleQuotedText . Text.decodeUtf8
 
 -- | Comma separate the renderings of a heterogeneous list.
 renderCommaSeparated
@@ -82,6 +93,16 @@ renderCommaSeparated render
   = commaSeparated
   . hcollapse
   . hmap (K . render)
+
+-- | Comma separate the renderings of a heterogeneous list.
+renderCommaSeparatedConstraint
+  :: forall c xs expression. (All c xs, SListI xs)
+  => (forall x. c x => expression x -> ByteString)
+  -> NP expression xs -> ByteString
+renderCommaSeparatedConstraint render
+  = commaSeparated
+  . hcollapse
+  . hcmap (Proxy @c) (K . render)
 
 -- | Comma separate the `Maybe` renderings of a heterogeneous list, dropping
 -- `Nothing`s.
@@ -104,9 +125,21 @@ renderSymbol :: forall s. KnownSymbol s => ByteString
 renderSymbol = fromString (symbolVal' (proxy# :: Proxy# s))
 
 -- | A class for rendering SQL
-class RenderSQL sql where
-  renderSQL :: sql -> ByteString
+class RenderSQL sql where renderSQL :: sql -> ByteString
 
 -- | Print SQL.
-printSQL :: (RenderSQL sql, MonadBase IO io) => sql -> io ()
-printSQL = liftBase . Char8.putStrLn . renderSQL
+printSQL :: (RenderSQL sql, MonadIO io) => sql -> io ()
+printSQL = liftIO . Char8.putStrLn . renderSQL
+
+-- | `escape` a character to prevent injection
+escape :: Char -> String
+escape = \case
+  '\NUL' -> "\\0"
+  '\'' -> "''"
+  '"' -> "\\\""
+  '\b' -> "\\b"
+  '\n' -> "\\n"
+  '\r' -> "\\r"
+  '\t' -> "\\t"
+  '\\' -> "\\\\"
+  c -> [c]

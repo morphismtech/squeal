@@ -11,8 +11,7 @@
 
 module Main (main, main2) where
 
-import Control.Monad (void)
-import Control.Monad.Base (liftBase, MonadBase)
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int16, Int32)
 import Data.Monoid ((<>))
 import Data.Text (Text)
@@ -41,8 +40,10 @@ type Schema =
         ])
    ]
 
-setup :: Definition '[] Schema
-setup = 
+type Schemas = Public Schema
+
+setup :: Definition (Public '[]) Schemas
+setup =
   createTable #users
     ( serial `as` #id :*
       (text & notNullable) `as` #name :*
@@ -57,54 +58,47 @@ setup =
       foreignKey #user_id #users #id
         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
 
-teardown :: Definition Schema '[]
+teardown :: Definition Schemas (Public '[])
 teardown = dropTable #emails >>> dropTable #users
 
-insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
-  '[ "fromOnly" ::: 'NotNull 'PGint4 ]
-insertUser = insertRows #users
-  (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec) []
-  OnConflictDoNothing (Returning (#id `as` #fromOnly))
+insertUser :: Manipulation_ Schemas (Text, VarArray (Vector (Maybe Int16))) (Only Int32)
+insertUser = insertInto #users
+  (Values_ (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec))
+  (OnConflict (OnConstraint #pk_users) DoNothing) (Returning_ (#id `as` #fromOnly))
 
-insertEmail :: Manipulation Schema '[ 'NotNull 'PGint4, 'Null 'PGtext] '[]
-insertEmail = insertRows #emails
-  ( Default `as` #id :*
-    Set (param @1) `as` #user_id :*
-    Set (param @2) `as` #email ) []
-  OnConflictDoNothing (Returning Nil)
+insertEmail :: Manipulation_ Schemas (Int32, Maybe Text) ()
+insertEmail = insertInto_ #emails
+  (Values_ (Default `as` #id :* Set (param @1) `as` #user_id :* Set (param @2) `as` #email))
 
-getUsers :: Query Schema '[]
-  '[ "userName" ::: 'NotNull 'PGtext
-   , "userEmail" ::: 'Null 'PGtext
-   , "userVec" ::: 'NotNull ('PGvararray ('Null 'PGint2))]
-getUsers = select
+getUsers :: Query_ Schemas () User
+getUsers = select_
   (#u ! #name `as` #userName :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)
   ( from (table (#users `as` #u)
     & innerJoin (table (#emails `as` #e))
       (#u ! #id .== #e ! #user_id)) )
 
-data User = User { userName :: Text, userEmail :: Maybe Text, userVec :: Vector (Maybe Int16) }
+data User = User { userName :: Text, userEmail :: Maybe Text, userVec :: VarArray (Vector (Maybe Int16)) }
   deriving (Show, GHC.Generic)
 instance SOP.Generic User
 instance SOP.HasDatatypeInfo User
 
 users :: [User]
-users = 
-  [ User "Alice" (Just "alice@gmail.com") [Nothing, Just 1]
-  , User "Bob" Nothing [Just 2, Nothing]
-  , User "Carole" (Just "carole@hotmail.com") [Just 3]
+users =
+  [ User "Alice" (Just "alice@gmail.com") (VarArray [Nothing, Just 1])
+  , User "Bob" Nothing (VarArray [Just 2, Nothing])
+  , User "Carole" (Just "carole@hotmail.com") (VarArray [Just 3])
   ]
 
-session :: (MonadBase IO pq, MonadPQ Schema pq) => pq ()
+session :: (MonadIO pq, MonadPQ Schemas pq) => pq ()
 session = do
-  liftBase $ Char8.putStrLn "manipulating"
+  liftIO $ Char8.putStrLn "manipulating"
   idResults <- traversePrepared insertUser ([(userName user, userVec user) | user <- users])
   ids <- traverse (fmap fromOnly . getRow 0) idResults
   traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
-  liftBase $ Char8.putStrLn "querying"
+  liftIO $ Char8.putStrLn "querying"
   usersResult <- runQuery getUsers
   usersRows <- getRows usersResult
-  liftBase $ print (usersRows :: [User])
+  liftIO $ print (usersRows :: [User])
 
 main :: IO ()
 main = do
@@ -122,7 +116,7 @@ main = do
 
 main2 :: IO ()
 main2 =
-  void . withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
     & pqThen session
     & pqThen (define teardown)

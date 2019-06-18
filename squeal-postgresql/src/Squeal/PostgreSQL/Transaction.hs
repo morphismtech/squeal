@@ -1,7 +1,7 @@
 {-|
 Module: Squeal.PostgreSQL.Transaction
 Description: Squeal transaction control language
-Copyright: (c) Eitan Chatav, 2017
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
@@ -20,88 +20,114 @@ module Squeal.PostgreSQL.Transaction
   ( -- * Transaction
     transactionally
   , transactionally_
+  , transactionallyRetry
+  , ephemerally
+  , ephemerally_
   , begin
   , commit
   , rollback
-  , transactionallySchema
-  , transactionallySchema_
     -- * Transaction Mode
   , TransactionMode (..)
   , defaultMode
   , longRunningMode
   , IsolationLevel (..)
-  , renderIsolationLevel
   , AccessMode (..)
-  , renderAccessMode
   , DeferrableMode (..)
-  , renderDeferrableMode
   ) where
 
-import Control.Exception.Lifted
-import Control.Monad.Base
-import Control.Monad.Trans.Control
-import Data.ByteString
-import Generics.SOP
-
-import qualified Database.PostgreSQL.LibPQ as LibPQ
+import UnliftIO
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.PQ
-import Squeal.PostgreSQL.Schema
 
--- | Run a schema invariant computation `transactionally`.
+{- | Run a computation `transactionally`;
+first `begin`,
+then run the computation,
+`onException` `rollback` and rethrow the exception,
+otherwise `commit` and `return` the result.
+-}
 transactionally
-  :: (MonadBaseControl IO tx, MonadPQ schema tx)
+  :: (MonadUnliftIO tx, MonadPQ schemas tx)
   => TransactionMode
   -> tx x -- ^ run inside a transaction
   -> tx x
 transactionally mode tx = mask $ \restore -> do
-  _ <- begin mode
-  result <- restore tx `onException` rollback
-  _ <- commit
+  manipulate_ $ begin mode
+  result <- restore tx `onException` (manipulate_ rollback)
+  manipulate_ commit
   return result
 
--- | Run a schema invariant computation `transactionally_` in `defaultMode`.
+-- | Run a computation `transactionally_`, in `defaultMode`.
 transactionally_
-  :: (MonadBaseControl IO tx, MonadPQ schema tx)
+  :: (MonadUnliftIO tx, MonadPQ schemas tx)
   => tx x -- ^ run inside a transaction
   -> tx x
 transactionally_ = transactionally defaultMode
 
--- | @BEGIN@ a transaction.
-begin :: MonadPQ schema tx => TransactionMode -> tx (K Result ('[] :: RowType))
-begin mode = manipulate . UnsafeManipulation $
-  "BEGIN" <+> renderTransactionMode mode <> ";"
+{- |
+`transactionallyRetry` a computation;
 
--- | @COMMIT@ a schema invariant transaction.
-commit :: MonadPQ schema tx => tx (K Result ('[] :: RowType))
-commit = manipulate $ UnsafeManipulation "COMMIT;"
-
--- | @ROLLBACK@ a schema invariant transaction.
-rollback :: MonadPQ schema tx => tx (K Result ('[] :: RowType))
-rollback = manipulate $ UnsafeManipulation "ROLLBACK;"
-
--- | Run a schema changing computation `transactionallySchema`.
-transactionallySchema
-  :: MonadBaseControl IO io
+* first `begin`,
+* then `try` the computation,
+  - if it raises a serialization failure then `rollback` and restart the transaction,
+  - if it raises any other exception then `rollback` and rethrow the exception,
+  - otherwise `commit` and `return` the result.
+-}
+transactionallyRetry
+  :: (MonadUnliftIO tx, MonadPQ schemas tx)
   => TransactionMode
-  -> PQ schema0 schema1 io x
-  -> PQ schema0 schema1 io x
-transactionallySchema mode u = PQ $ \ conn -> mask $ \ restore -> do
-  _ <- liftBase . LibPQ.exec (unK conn) $
-    "BEGIN" <+> renderTransactionMode mode <> ";"
-  x <- restore (unPQ u conn)
-    `onException` (liftBase (LibPQ.exec (unK conn) "ROLLBACK"))
-  _ <- liftBase $ LibPQ.exec (unK conn) "COMMIT"
-  return x
+  -> tx x -- ^ run inside a transaction
+  -> tx x
+transactionallyRetry mode tx = mask $ \restore ->
+  loop . try $ do
+    x <- restore tx
+    manipulate_ commit
+    return x
+  where
+    loop attempt = do
+      manipulate_ $ begin mode
+      attempt >>= \case
+        Left (PQException (PQState _ (Just "40001") _)) -> do
+          manipulate_ rollback
+          loop attempt
+        Left err -> do
+          manipulate_ rollback
+          throwIO err
+        Right x -> return x
 
--- | Run a schema changing computation `transactionallySchema_` in `DefaultMode`.
-transactionallySchema_
-  :: MonadBaseControl IO io
-  => PQ schema0 schema1 io x
-  -> PQ schema0 schema1 io x
-transactionallySchema_ = transactionallySchema defaultMode
+{- | Run a computation `ephemerally`;
+Like `transactionally` but always `rollback`, useful in testing.
+-}
+ephemerally
+  :: (MonadUnliftIO tx, MonadPQ schemas tx)
+  => TransactionMode
+  -> tx x -- ^ run inside an ephemeral transaction
+  -> tx x
+ephemerally mode tx = mask $ \restore -> do
+  manipulate_ $ begin mode
+  result <- restore tx `onException` (manipulate_ rollback)
+  manipulate_ rollback
+  return result
+
+{- | Run a computation `ephemerally` in `defaultMode`. -}
+ephemerally_
+  :: (MonadUnliftIO tx, MonadPQ schemas tx)
+  => tx x -- ^ run inside an ephemeral transaction
+  -> tx x
+ephemerally_ = ephemerally defaultMode
+
+-- | @BEGIN@ a transaction.
+begin :: TransactionMode -> Manipulation_ schemas () ()
+begin mode = UnsafeManipulation $ "BEGIN" <+> renderSQL mode
+
+-- | @COMMIT@ a transaction.
+commit :: Manipulation_ schemas () ()
+commit = UnsafeManipulation "COMMIT"
+
+-- | @ROLLBACK@ a transaction.
+rollback :: Manipulation_ schemas () ()
+rollback = UnsafeManipulation "ROLLBACK"
 
 -- | The available transaction characteristics are the transaction `IsolationLevel`,
 -- the transaction `AccessMode` (`ReadWrite` or `ReadOnly`), and the `DeferrableMode`.
@@ -114,7 +140,7 @@ data TransactionMode = TransactionMode
 -- | `TransactionMode` with a `Serializable` `IsolationLevel`,
 -- `ReadWrite` `AccessMode` and `NotDeferrable` `DeferrableMode`.
 defaultMode :: TransactionMode
-defaultMode = TransactionMode Serializable ReadWrite NotDeferrable
+defaultMode = TransactionMode ReadCommitted ReadWrite NotDeferrable
 
 -- | `TransactionMode` with a `Serializable` `IsolationLevel`,
 -- `ReadOnly` `AccessMode` and `Deferrable` `DeferrableMode`.
@@ -123,12 +149,12 @@ longRunningMode :: TransactionMode
 longRunningMode = TransactionMode Serializable ReadOnly Deferrable
 
 -- | Render a `TransactionMode`.
-renderTransactionMode :: TransactionMode -> ByteString
-renderTransactionMode mode =
-  "ISOLATION LEVEL"
-    <+> renderIsolationLevel (isolationLevel mode)
-    <+> renderAccessMode (accessMode mode)
-    <+> renderDeferrableMode (deferrableMode mode)
+instance RenderSQL TransactionMode where
+  renderSQL mode =
+    "ISOLATION LEVEL"
+      <+> renderSQL (isolationLevel mode)
+      <+> renderSQL (accessMode mode)
+      <+> renderSQL (deferrableMode mode)
 
 -- | The SQL standard defines four levels of transaction isolation.
 -- The most strict is `Serializable`, which is defined by the standard in a paragraph
@@ -179,12 +205,12 @@ data IsolationLevel
   deriving (Show, Eq)
 
 -- | Render an `IsolationLevel`.
-renderIsolationLevel :: IsolationLevel -> ByteString
-renderIsolationLevel = \case
-  Serializable -> "SERIALIZABLE"
-  ReadCommitted -> "READ COMMITTED"
-  ReadUncommitted -> "READ UNCOMMITTED"
-  RepeatableRead -> "REPEATABLE READ"
+instance RenderSQL IsolationLevel where
+  renderSQL = \case
+    Serializable -> "SERIALIZABLE"
+    ReadCommitted -> "READ COMMITTED"
+    ReadUncommitted -> "READ UNCOMMITTED"
+    RepeatableRead -> "REPEATABLE READ"
 
 -- | The transaction access mode determines whether the transaction is `ReadWrite` or `ReadOnly`.
 -- `ReadWrite` is the default. When a transaction is `ReadOnly`,
@@ -201,10 +227,10 @@ data AccessMode
   deriving (Show, Eq)
 
 -- | Render an `AccessMode`.
-renderAccessMode :: AccessMode -> ByteString
-renderAccessMode = \case
-  ReadWrite -> "READ WRITE"
-  ReadOnly -> "READ ONLY"
+instance RenderSQL AccessMode where
+  renderSQL = \case
+    ReadWrite -> "READ WRITE"
+    ReadOnly -> "READ ONLY"
 
 -- | The `Deferrable` transaction property has no effect
 -- unless the transaction is also `Serializable` and `ReadOnly`.
@@ -220,7 +246,7 @@ data DeferrableMode
   deriving (Show, Eq)
 
 -- | Render a `DeferrableMode`.
-renderDeferrableMode :: DeferrableMode -> ByteString
-renderDeferrableMode = \case
-  Deferrable -> "DEFERRABLE"
-  NotDeferrable -> "NOT DEFERRABLE"
+instance RenderSQL DeferrableMode where
+  renderSQL = \case
+    Deferrable -> "DEFERRABLE"
+    NotDeferrable -> "NOT DEFERRABLE"

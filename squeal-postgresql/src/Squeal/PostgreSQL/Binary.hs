@@ -7,7 +7,7 @@ Stability: experimental
 
 This module provides binary encoding and decoding between Haskell and PostgreSQL types.
 
-Instances are governed by the `Generic` and `HasDatatypeInfo` typeclasses, so you absolutely
+Instances are governed by the `SOP.Generic` and `SOP.HasDatatypeInfo` typeclasses, so you absolutely
 do not need to define your own instances to decode retrieved rows into Haskell values or
 to encode Haskell values into statement parameters.
 
@@ -16,10 +16,10 @@ Let's see some examples. We'll need some imports
 >>> import Data.Int (Int16)
 >>> import Data.Text (Text)
 >>> import Control.Monad (void)
->>> import Control.Monad.Base (liftBase)
+>>> import Control.Monad.IO.Class (liftIO)
 >>> import Squeal.PostgreSQL
 
-Define a Haskell datatype `Row` that will serve as both the input and output of a simple
+Define a Haskell datatype @Row@ that will serve as both the input and output of a simple
 round trip query.
 
 >>> data Row = Row { col1 :: Int16, col2 :: Text, col3 :: Maybe Bool } deriving (Eq, GHC.Generic)
@@ -27,7 +27,7 @@ round trip query.
 >>> instance HasDatatypeInfo Row
 >>> :{
 let
-  roundTrip :: Query '[] (TuplePG Row) (RowPG Row)
+  roundTrip :: Query_ (Public '[]) Row Row
   roundTrip = values_ $
     parameter @1 int2 `as` #col1 :*
     parameter @2 text `as` #col2 :*
@@ -39,15 +39,15 @@ the input and output should be equal.
 
 >>> let input = Row 2 "hi" (Just True)
 >>> :{
-void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+withConnection "host=localhost port=5432 dbname=exampledb" $ do
   result <- runQueryParams roundTrip input
   Just output <- firstRow result
-  liftBase . print $ input == output
+  liftIO . print $ input == output
 :}
 True
 
 In addition to being able to encode and decode basic Haskell types
-like `Int16` and `Text`, Squeal permits you to encode and decode Haskell types to
+like `Int16` and `Data.Text.Text`, Squeal permits you to encode and decode Haskell types to
 Postgres array, enumerated and composite types and json. Let's see another example,
 this time using the `Vector` type which corresponds to variable length arrays
 and homogeneous tuples which correspond to fixed length arrays. We can even
@@ -55,9 +55,9 @@ create multi-dimensional fixed length arrays.
 
 >>> :{
 data Row = Row
-  { col1 :: Vector Int16
-  , col2 :: (Maybe Int16,Maybe Int16)
-  , col3 :: ((Int16,Int16),(Int16,Int16),(Int16,Int16))
+  { col1 :: VarArray (Vector Int16)
+  , col2 :: FixArray (Maybe Int16,Maybe Int16)
+  , col3 :: FixArray ((Int16,Int16),(Int16,Int16),(Int16,Int16))
   } deriving (Eq, GHC.Generic)
 :}
 
@@ -68,20 +68,20 @@ Once again, we define a simple round trip query.
 
 >>> :{
 let
-  roundTrip :: Query '[] (TuplePG Row) (RowPG Row)
+  roundTrip :: Query_ (Public '[]) Row Row
   roundTrip = values_ $
-    parameter @1 (int2 & vararray)                  `as` #col1 :*
-    parameter @2 (int2 & fixarray @2)               `as` #col2 :*
-    parameter @3 (int2 & fixarray @2 & fixarray @3) `as` #col3
+    parameter @1 (int2 & vararray) `as` #col1 :*
+    parameter @2 (int2 & fixarray @'[2]) `as` #col2 :*
+    parameter @3 (int2 & fixarray @'[3,2]) `as` #col3
 :}
 
 >>> :set -XOverloadedLists
->>> let input = Row [1,2] (Just 1,Nothing) ((1,2),(3,4),(5,6))
+>>> let input = Row (VarArray [1,2]) (FixArray (Just 1,Nothing)) (FixArray ((1,2),(3,4),(5,6)))
 >>> :{
-void . withConnection "host=localhost port=5432 dbname=exampledb" $ do
+withConnection "host=localhost port=5432 dbname=exampledb" $ do
   result <- runQueryParams roundTrip input
   Just output <- firstRow result
-  liftBase . print $ input == output
+  liftIO . print $ input == output
 :}
 True
 
@@ -114,15 +114,15 @@ type Schema =
 
 >>> :{
 let
-  setup :: Definition '[] Schema
+  setup :: Definition (Public '[]) (Public Schema)
   setup =
     createTypeEnumFrom @Schwarma #schwarma >>>
     createTypeCompositeFrom @Person #person
 :}
 
-Let's demonstrate how to associate our Haskell types `Schwarma` and `Person`
+Let's demonstrate how to associate our Haskell types @Schwarma@ and @Person@
 with enumerated, composite or json types in Postgres. First create a Haskell
-`Row` type using the `Enumerated`, `Composite` and `Json` newtypes as fields.
+@Row@ type using the `Enumerated`, `Composite` and `Json` newtypes as fields.
 
 >>> :{
 data Row = Row
@@ -146,7 +146,7 @@ Once again, define a round trip query.
 
 >>> :{
 let
-  roundTrip :: Query Schema (TuplePG Row) (RowPG Row)
+  roundTrip :: Query_ (Public Schema) Row Row
   roundTrip = values_ $
     parameter @1 (typedef #schwarma) `as` #schwarma :*
     parameter @2 (typedef #person)   `as` #person1  :*
@@ -157,7 +157,7 @@ Finally, we can drop our type definitions.
 
 >>> :{
 let
-  teardown :: Definition Schema '[]
+  teardown :: Definition (Public Schema) (Public '[])
   teardown = dropType #schwarma >>> dropType #person
 :}
 
@@ -168,9 +168,9 @@ let
   session = do
     result <- runQueryParams roundTrip input
     Just output <- firstRow result
-    liftBase . print $ input == output
+    liftIO . print $ input == output
 in
-  void . withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
     & pqThen session
     & pqThen (define teardown)
@@ -194,20 +194,30 @@ True
   , MultiParamTypeClasses
   , ScopedTypeVariables
   , TypeApplications
+  , TypeFamilies
   , TypeInType
   , TypeOperators
   , UndecidableInstances
+  , UndecidableSuperClasses
 #-}
 
 module Squeal.PostgreSQL.Binary
   ( -- * Encoding
     ToParam (..)
   , ToParams (..)
+  , ToNullityParam (..)
+  , ToField (..)
+  , ToFixArray (..)
     -- * Decoding
   , FromValue (..)
   , FromRow (..)
+  , FromField (..)
+  , FromFixArray (..)
     -- * Only
   , Only (..)
+    -- * Oid
+  , HasOid (..)
+  , HasAliasedOid (..)
   ) where
 
 import BinaryParser
@@ -238,6 +248,9 @@ import qualified GHC.Generics as GHC
 import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
 
+import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Schema
 
 -- | A `ToParam` constraint gives an encoding of a Haskell `Type` into
@@ -269,6 +282,7 @@ instance ToParam Word64 'PGint8 where toParam = K . Encoding.int8_word64
 instance ToParam Float 'PGfloat4 where toParam = K . Encoding.float4
 instance ToParam Double 'PGfloat8 where toParam = K . Encoding.float8
 instance ToParam Scientific 'PGnumeric where toParam = K . Encoding.numeric
+instance ToParam Money 'PGmoney where toParam = K . Encoding.int8_int64 . cents
 instance ToParam UUID 'PGuuid where toParam = K . Encoding.uuid
 instance ToParam (NetAddr IP) 'PGinet where toParam = K . Encoding.inet
 instance ToParam Char ('PGchar 1) where toParam = K . Encoding.char_utf8
@@ -297,16 +311,25 @@ instance Aeson.ToJSON x => ToParam (Json x) 'PGjson where
 instance Aeson.ToJSON x => ToParam (Jsonb x) 'PGjsonb where
   toParam = K . Encoding.jsonb_bytes
     . Lazy.ByteString.toStrict . Aeson.encode . getJsonb
-instance ToArray x ('NotNull ('PGvararray ty))
-  => ToParam x ('PGvararray ty) where
-    toParam
-      = K . Encoding.array (baseOid @x @('NotNull ('PGvararray ty)))
-      . unK . toArray @x @('NotNull ('PGvararray ty))
-instance ToArray x ('NotNull ('PGfixarray n ty))
-  => ToParam x ('PGfixarray n ty) where
-    toParam
-      = K . Encoding.array (baseOid @x @('NotNull ('PGfixarray n ty)))
-      . unK . toArray @x @('NotNull ('PGfixarray n ty))
+instance (ToNullityParam x ty, ty ~ nullity pg, HasOid pg)
+  => ToParam (VarArray [x]) ('PGvararray ty) where
+    toParam = K
+      . Encoding.array_foldable (oid @pg) (unK . toNullityParam @x @ty)
+      . getVarArray
+instance (ToParam x pg, HasOid pg)
+  => ToParam (VarArray (Vector x)) ('PGvararray ('NotNull pg)) where
+    toParam = K
+      . Encoding.array_vector (oid @pg) (unK . toParam @x @pg)
+      . getVarArray
+instance (ToParam x pg, HasOid pg)
+  => ToParam (VarArray (Vector (Maybe x))) ('PGvararray ('Null pg)) where
+    toParam = K
+      . Encoding.nullableArray_vector (oid @pg) (unK . toParam @x @pg)
+      . getVarArray
+instance (ToFixArray x dims ty, ty ~ nullity pg, HasOid pg)
+  => ToParam (FixArray x) ('PGfixarray dims ty) where
+    toParam = K . Encoding.array (oid @pg)
+      . unK . unK . toFixArray @x @dims @ty . getFixArray
 instance
   ( IsEnumType x
   , HasDatatypeInfo x
@@ -371,11 +394,42 @@ instance
       in
         composite . encoders . toRecord . getComposite
 
+-- | The object identifier of a `PGType`.
+--
+-- >>> :set -XTypeApplications
+-- >>> oid @'PGbool
+-- 16
+class HasOid (ty :: PGType) where oid :: Word32
+instance HasOid 'PGbool where oid = 16
+instance HasOid 'PGint2 where oid = 21
+instance HasOid 'PGint4 where oid = 23
+instance HasOid 'PGint8 where oid = 20
+instance HasOid 'PGnumeric where oid = 1700
+instance HasOid 'PGfloat4 where oid = 700
+instance HasOid 'PGfloat8 where oid = 701
+instance HasOid ('PGchar n) where oid = 18
+instance HasOid ('PGvarchar n) where oid = 1043
+instance HasOid 'PGtext where oid = 25
+instance HasOid 'PGbytea where oid = 17
+instance HasOid 'PGtimestamp where oid = 1114
+instance HasOid 'PGtimestamptz where oid = 1184
+instance HasOid 'PGdate where oid = 1082
+instance HasOid 'PGtime where oid = 1083
+instance HasOid 'PGtimetz where oid = 1266
+instance HasOid 'PGinterval where oid = 1186
+instance HasOid 'PGuuid where oid = 2950
+instance HasOid 'PGinet where oid = 869
+instance HasOid 'PGjson where oid = 114
+instance HasOid 'PGjsonb where oid = 3802
+
+-- | Lifts a `HasOid` constraint to a field.
 class HasAliasedOid (field :: (Symbol, NullityType)) where
   aliasedOid :: Word32
 instance HasOid ty => HasAliasedOid (alias ::: nullity ty) where
   aliasedOid = oid @ty
 
+-- | A `ToNullityParam` constraint gives an encoding of a Haskell `Type` into
+-- into the binary format of a PostgreSQL `NullityType`.
 class ToNullityParam (x :: Type) (ty :: NullityType) where
   toNullityParam :: x -> K (Maybe Encoding.Encoding) ty
 instance ToParam x pg => ToNullityParam x ('NotNull pg) where
@@ -383,55 +437,36 @@ instance ToParam x pg => ToNullityParam x ('NotNull pg) where
 instance ToParam x pg => ToNullityParam (Maybe x) ('Null pg) where
   toNullityParam = K . fmap (unK . toParam @x @pg)
 
+-- | A `ToField` constraint lifts the `ToParam` parser
+-- to an encoding of a @(Symbol, Type)@ to a @(Symbol, NullityType)@,
+-- encoding `Null`s to `Maybe`s. You should not define instances for
+-- `FromField`, just use the provided instances.
 class ToField (x :: (Symbol, Type)) (field :: (Symbol, NullityType)) where
   toField :: P x -> K (Maybe Encoding.Encoding) field
 instance ToNullityParam x ty => ToField (alias ::: x) (alias ::: ty) where
   toField (P x) = K . unK $ toNullityParam @x @ty x
 
-class ToArray (x :: Type) (array :: NullityType) where
-  toArray :: x -> K Encoding.Array array
-  baseOid :: Word32
-  default baseOid :: HasOid (PGTypeOf array) => Word32
-  baseOid = oid @(PGTypeOf array)
-instance {-# OVERLAPPABLE #-} (HasOid pg, ToParam x pg)
-  => ToArray x ('NotNull pg) where
-    toArray = K . Encoding.encodingArray . unK . toParam @x @pg
-instance {-# OVERLAPPABLE #-} (HasOid pg, ToParam x pg)
-  => ToArray (Maybe x) ('Null pg) where
-    toArray = K . maybe Encoding.nullArray
-      (Encoding.encodingArray . unK . toParam @x @pg)
-instance {-# OVERLAPPING #-} ToArray x array
-  => ToArray (Vector x) ('NotNull ('PGvararray array)) where
-    toArray = K . Encoding.dimensionArray Vector.foldl'
-      (unK . toArray @x @array)
-    baseOid = baseOid @x @array
-instance {-# OVERLAPPING #-} ToArray x array
-  => ToArray (Maybe (Vector x)) ('Null ('PGvararray array)) where
-    toArray = K . maybe Encoding.nullArray
-      (Encoding.dimensionArray Vector.foldl' (unK . toArray @x @array))
-    baseOid = baseOid @x @array
-instance {-# OVERLAPPING #-}
+-- | A `ToFixArray` constraint gives an encoding of a Haskell `Type`
+-- into the binary format of a PostgreSQL fixed-length array.
+-- You should not define instances for
+-- `ToFixArray`, just use the provided instances.
+class ToFixArray (x :: Type) (dims :: [Nat]) (array :: NullityType) where
+  toFixArray :: x -> K (K Encoding.Array dims) array
+instance ToNullityParam x ty => ToFixArray x '[] ty where
+  toFixArray = K . K . maybe Encoding.nullArray Encoding.encodingArray . unK
+    . toNullityParam @x @ty
+instance
   ( IsProductType product xs
-  , Length xs ~ n
+  , Length xs ~ dim
   , All ((~) x) xs
-  , ToArray x array )
-  => ToArray product ('NotNull ('PGfixarray n array)) where
-    toArray = K . Encoding.dimensionArray foldlN
-      (unK . toArray @x @array) . unZ . unSOP . from
-    baseOid = baseOid @x @array
-instance {-# OVERLAPPING #-}
-  ( IsProductType product xs
-  , Length xs ~ n
-  , All ((~) x) xs
-  , ToArray x array )
-  => ToArray (Maybe product) ('Null ('PGfixarray n array)) where
-    toArray = K . maybe Encoding.nullArray
-      (Encoding.dimensionArray foldlN (unK . toArray @x @array) . unZ . unSOP . from)
-    baseOid = baseOid @x @array
+  , ToFixArray x dims ty )
+  => ToFixArray product (dim ': dims) ty where
+    toFixArray = K . K . Encoding.dimensionArray foldlN
+      (unK . unK . toFixArray @x @dims @ty) . unZ . unSOP . from
 
 -- | A `ToParams` constraint generically sequences the encodings of `Type`s
 -- of the fields of a tuple or record to a row of `ColumnType`s. You should
--- not define instances of `ToParams`. Instead define `Generic` instances
+-- not define instances of `ToParams`. Instead define `SOP.Generic` instances
 -- which in turn provide `ToParams` instances.
 class SListI tys => ToParams (x :: Type) (tys :: [NullityType]) where
   -- | >>> type Params = '[ 'NotNull 'PGbool, 'Null 'PGint2]
@@ -463,6 +498,7 @@ instance FromValue 'PGint8 Int64 where fromValue = Decoding.int
 instance FromValue 'PGfloat4 Float where fromValue = Decoding.float4
 instance FromValue 'PGfloat8 Double where fromValue = Decoding.float8
 instance FromValue 'PGnumeric Scientific where fromValue = Decoding.numeric
+instance FromValue 'PGmoney Money where fromValue = Money <$> Decoding.int
 instance FromValue 'PGuuid UUID where fromValue = Decoding.uuid
 instance FromValue 'PGinet (NetAddr IP) where fromValue = Decoding.inet
 instance FromValue ('PGchar 1) Char where fromValue = Decoding.char
@@ -492,12 +528,41 @@ instance Aeson.FromJSON x => FromValue 'PGjson (Json x) where
 instance Aeson.FromJSON x => FromValue 'PGjsonb (Jsonb x) where
   fromValue = Jsonb <$>
     Decoding.jsonb_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
-instance FromArray ('NotNull ('PGvararray ty)) y
-  => FromValue ('PGvararray ty) y where
-    fromValue = Decoding.array (fromArray @('NotNull ('PGvararray ty)) @y)
-instance FromArray ('NotNull ('PGfixarray n ty)) y
-  => FromValue ('PGfixarray n ty) y where
-    fromValue = Decoding.array (fromArray @('NotNull ('PGfixarray n ty)) @y)
+instance FromValue pg y
+  => FromValue ('PGvararray ('NotNull pg)) (VarArray (Vector y)) where
+    fromValue =
+      let
+        rep n x = VarArray <$> Vector.replicateM n x
+      in
+        Decoding.array $ Decoding.dimensionArray rep
+          (fromFixArray @'[] @('NotNull pg))
+instance FromValue pg y
+  => FromValue ('PGvararray ('Null pg)) (VarArray (Vector (Maybe y))) where
+    fromValue =
+      let
+        rep n x = VarArray <$> Vector.replicateM n x
+      in
+        Decoding.array $ Decoding.dimensionArray rep
+          (fromFixArray @'[] @('Null pg))
+instance FromValue pg y
+  => FromValue ('PGvararray ('NotNull pg)) (VarArray [y]) where
+    fromValue =
+      let
+        rep n x = VarArray <$> replicateM n x
+      in
+        Decoding.array $ Decoding.dimensionArray rep
+          (fromFixArray @'[] @('NotNull pg))
+instance FromValue pg y
+  => FromValue ('PGvararray ('Null pg)) (VarArray [Maybe y]) where
+    fromValue =
+      let
+        rep n x = VarArray <$> replicateM n x
+      in
+        Decoding.array $ Decoding.dimensionArray rep
+          (fromFixArray @'[] @('Null pg))
+instance FromFixArray dims ty y
+  => FromValue ('PGfixarray dims ty) (FixArray y) where
+    fromValue = FixArray <$> Decoding.array (fromFixArray @dims @ty @y)
 instance
   ( IsEnumType y
   , HasDatatypeInfo y
@@ -568,49 +633,32 @@ instance FromValue pg y
       K (Just bytestring) -> P . Just <$>
         Decoding.valueParser (fromValue @pg) bytestring
 
-class FromArray (ty :: NullityType) (y :: Type) where
-  fromArray :: Decoding.Array y
-instance {-# OVERLAPPABLE #-} FromValue pg y
-  => FromArray ('NotNull pg) y where
-    fromArray = Decoding.valueArray (fromValue @pg @y)
-instance {-# OVERLAPPABLE #-} FromValue pg y
-  => FromArray ('Null pg) (Maybe y) where
-    fromArray = Decoding.nullableValueArray (fromValue @pg @y)
-instance {-# OVERLAPPING #-} FromArray array y
-  => FromArray ('NotNull ('PGvararray array)) (Vector y) where
-    fromArray =
-      Decoding.dimensionArray Vector.replicateM (fromArray @array @y)
-instance {-# OVERLAPPING #-} FromArray array y
-  => FromArray ('Null ('PGvararray array)) (Maybe (Vector y)) where
-    fromArray = Just <$> 
-      Decoding.dimensionArray Vector.replicateM (fromArray @array @y)
-instance {-# OVERLAPPING #-}
-  ( FromArray array y
+-- | A `FromFixArray` constraint gives a decoding to a Haskell `Type`
+-- from the binary format of a PostgreSQL fixed-length array.
+-- You should not define instances for
+-- `FromFixArray`, just use the provided instances.
+class FromFixArray (dims :: [Nat]) (ty :: NullityType) (y :: Type) where
+  fromFixArray :: Decoding.Array y
+instance FromValue pg y => FromFixArray '[] ('NotNull pg) y where
+  fromFixArray = Decoding.valueArray (fromValue @pg @y)
+instance FromValue pg y => FromFixArray '[] ('Null pg) (Maybe y) where
+  fromFixArray = Decoding.nullableValueArray (fromValue @pg @y)
+instance
+  ( IsProductType product ys
+  , Length ys ~ dim
   , All ((~) y) ys
-  , SListI ys
-  , IsProductType product ys )
-  => FromArray ('NotNull ('PGfixarray n array)) product where
-    fromArray =
+  , FromFixArray dims ty y )
+  => FromFixArray (dim ': dims) ty product where
+    fromFixArray =
       let
         rep _ = fmap (to . SOP . Z) . replicateMN
       in
-        Decoding.dimensionArray rep (fromArray @array @y)
-instance {-# OVERLAPPING #-}
-  ( FromArray array y
-  , All ((~) y) ys
-  , SListI ys
-  , IsProductType product ys )
-  => FromArray ('Null ('PGfixarray n array)) (Maybe product) where
-    fromArray =
-      let
-        rep _ = fmap (to . SOP . Z) . replicateMN
-      in
-        Just <$> Decoding.dimensionArray rep (fromArray @array @y)
+        Decoding.dimensionArray rep (fromFixArray @dims @ty @y)
 
 -- | A `FromRow` constraint generically sequences the parsings of the columns
 -- of a `RowType` into the fields of a record `Type` provided they have
 -- the same field names. You should not define instances of `FromRow`.
--- Instead define `Generic` and `HasDatatypeInfo` instances which in turn
+-- Instead define `SOP.Generic` and `SOP.HasDatatypeInfo` instances which in turn
 -- provide `FromRow` instances.
 class SListI result => FromRow (result :: RowType) y where
   -- | >>> :set -XOverloadedStrings
@@ -633,6 +681,53 @@ instance
       = fmap fromRecord
       . hsequence'
       . htrans (Proxy @FromField) fromField
+------------------------------------------------------
+-- P records
+------------------------------------------------------
+-- instance (FromField (col ::: pg) (col ::: hask))
+--   => FromRow '[col ::: pg] (P (col ::: hask)) where
+--     fromRow (pg :* Nil) = (unComp . fromField) pg
+-- instance
+--   ( row ~ Join row1 row2
+--   , FromRow row1 hask1
+--   , FromRow row2 hask2
+--   , SListI row
+--   ) => FromRow row (hask1, hask2) where
+--     fromRow row = case disjoin @row1 @row2 row of
+--       (row1, row2) -> (,) <$> fromRow row1 <*> fromRow row2
+-- instance
+--   ( row ~ Join row1 row23
+--   , FromRow row1 hask1
+--   , FromRow row23 (hask2, hask3)
+--   , SListI row
+--   ) => FromRow row (hask1, hask2, hask3) where
+--     fromRow row = case disjoin @row1 @row23 row of
+--       (row1, row23) -> do
+--         hask1 <- fromRow row1
+--         (hask2, hask3) <- fromRow row23
+--         return (hask1, hask2, hask3)
+-- instance
+--   ( row ~ Join row1 row234
+--   , FromRow row1 hask1
+--   , FromRow row234 (hask2, hask3, hask4)
+--   , SListI row
+--   ) => FromRow row (hask1, hask2, hask3, hask4) where
+--     fromRow row = case disjoin @row1 @row234 row of
+--       (row1, row234) -> do
+--         hask1 <- fromRow row1
+--         (hask2, hask3, hask4) <- fromRow row234
+--         return (hask1, hask2, hask3, hask4)
+-- instance
+--   ( row ~ Join row1 row2345
+--   , FromRow row1 hask1
+--   , FromRow row2345 (hask2, hask3, hask4, hask5)
+--   , SListI row
+--   ) => FromRow row (hask1, hask2, hask3, hask4, hask5) where
+--     fromRow row = case disjoin @row1 @row2345 row of
+--       (row1, row2345) -> do
+--         hask1 <- fromRow row1
+--         (hask2, hask3, hask4, hask5) <- fromRow row2345
+--         return (hask1, hask2, hask3, hask4, hask5)
 
 -- | `Only` is a 1-tuple type, useful for encoding a single parameter with
 -- `toParams` or decoding a single value with `fromRow`.
@@ -659,4 +754,4 @@ replicateMN
   :: forall x xs m. (All ((~) x) xs, Monad m, SListI xs)
   => m x -> m (NP I xs)
 replicateMN mx = hsequence' $
-  hcpure (Proxy :: Proxy ((~) x)) (Comp (I <$> mx)) 
+  hcpure (Proxy :: Proxy ((~) x)) (Comp (I <$> mx))

@@ -7,6 +7,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeInType            #-}
 {-# LANGUAGE TypeOperators         #-}
 module ExceptionHandling
   ( specs
@@ -15,7 +16,7 @@ module ExceptionHandling
 where
 
 import           Control.Monad               (void)
-import           Control.Monad.Base          (MonadBase)
+import Control.Monad.IO.Class (MonadIO (..))
 import qualified Data.ByteString.Char8       as Char8
 import           Data.Int                    (Int16)
 import           Data.Text                   (Text)
@@ -23,7 +24,6 @@ import           Data.Vector                 (Vector)
 import qualified Generics.SOP                as SOP
 import qualified GHC.Generics                as GHC
 import           Squeal.PostgreSQL
-import           Squeal.PostgreSQL.Migration
 import           Test.Hspec
 
 type Schema =
@@ -45,21 +45,23 @@ type Schema =
         ])
    ]
 
+type Schemas = Public Schema
+
 data User =
   User { userName  :: Text
        , userEmail :: Maybe Text
-       , userVec   :: Vector (Maybe Int16) }
+       , userVec   :: VarArray (Vector (Maybe Int16)) }
   deriving (Show, GHC.Generic)
 instance SOP.Generic User
 instance SOP.HasDatatypeInfo User
 
-insertUser :: Manipulation Schema '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
+insertUser :: Manipulation '[] Schemas '[ 'NotNull 'PGtext, 'NotNull ('PGvararray ('Null 'PGint2))]
   '[ "fromOnly" ::: 'NotNull 'PGint4 ]
-insertUser = insertRows #users
-  (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec) []
+insertUser = insertInto #users
+  (Values_ (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec))
   OnConflictDoRaise (Returning (#id `as` #fromOnly))
 
-setup :: Definition '[] Schema
+setup :: Definition (Public '[]) Schemas
 setup =
   createTable #users
     ( serial `as` #id :*
@@ -76,32 +78,34 @@ setup =
       foreignKey #user_id #users #id
         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
 
-teardown :: Definition Schema '[]
+teardown :: Definition Schemas (Public '[])
 teardown = dropTable #emails >>> dropTable #users
 
-migration :: Migration IO '[] Schema
+migration :: Migration Definition (Public '[]) Schemas
 migration = Migration { name = "test"
-                      , up = void $ define setup
-                      , down = void $ define teardown }
+                      , up = setup
+                      , down = teardown }
 
 setupDB :: IO ()
-setupDB = void . withConnection connectionString $
-  migrateUp $ single migration
+setupDB = withConnection connectionString $
+  manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
+  & pqThen (migrateUp (single migration))
 
 dropDB :: IO ()
-dropDB = void . withConnection connectionString $
-  migrateDown $ single migration
+dropDB = withConnection connectionString $
+  manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
+  & pqThen (migrateDown (single migration))
 
 connectionString :: Char8.ByteString
 connectionString = "host=localhost port=5432 dbname=exampledb"
 
 testUser :: User
-testUser = User "TestUser" Nothing []
+testUser = User "TestUser" Nothing (VarArray [])
 
-newUser :: (MonadBase IO m, MonadPQ Schema m) => User -> m ()
+newUser :: (MonadIO m, MonadPQ Schemas m) => User -> m ()
 newUser u = void $ manipulateParams insertUser (userName u, userVec u)
 
-insertUserTwice :: (MonadBase IO m, MonadPQ Schema m) => m ()
+insertUserTwice :: (MonadIO m, MonadPQ Schemas m) => m ()
 insertUserTwice = newUser testUser >> newUser testUser
 
 specs :: SpecWith ()
@@ -109,7 +113,7 @@ specs = before_ setupDB $ after_ dropDB $
   describe "Exceptions" $ do
 
     let
-      dupKeyErr = PQException FatalError (Just "23505")
+      dupKeyErr = PQException $ PQState FatalError (Just "23505")
         (Just "ERROR:  duplicate key value violates unique constraint \"unique_names\"\nDETAIL:  Key (name)=(TestUser) already exists.\n")
 
     it "should be thrown for unique constraint violation in a manipulation" $

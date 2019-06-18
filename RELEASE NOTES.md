@@ -1,5 +1,405 @@
 ## RELEASE NOTES
 
+### Version 0.5
+
+Version 0.5 makes a number of large changes and additions to Squeal.
+I want to thank folks who contributed issues and pull requests;
+Raveline, rimmington, ilyakooo0, chshersh, reygoch, and more.
+
+**Multi-schema support**
+
+Previous versions of Squeal only supported definitions in the "public"
+schema. Squeal 0.5 adds support for multiple schemas with the new kind
+
+```Haskell
+type SchemasType = [(Symbol,SchemaType)]
+```
+
+In order to upgrade your queries, manipulations and definitions from
+Squeal 0.4, you will have to apply the `Public` type family, which indicates
+that your only schema is the "public" schema.
+
+```Haskell
+-- Squeal 0.4
+setup :: Definition '[] Schema
+
+-- Squeal 0.5
+setup :: Definition (Public '[]) (Public Schema)
+```
+
+You can create non-public schemas using `createSchema` and inversely
+remove them using `dropSchema`. There is also an idempotent
+`createSchemaIfNotExists`.
+
+In order to handle aliases which may refer to non-public schemas, Squeal 0.5
+introduces `QualifiedAlias`es. A `QualifiedAlias` can be referred to using
+the `(!)` operator from the `IsQualified` typeclass; but if you want to refer
+to an alias from the "public" schema, you can continue to use a single
+overloaded label, no need to write `#public ! #tab`, just write `#tab`.
+
+**Top-level statements**
+
+As a consequence of multi-schema support, common table expressions that
+a `Query` or `Manipulation` may refer to had to be broken into a new parameter.
+Additionally, `Query` gained another new parameter for its outer scope which
+will be discussed in the next section.
+
+To simplify type signatures that you have to write for top-level queries
+and manipulations, Squeal 0.5 introduces the `Query_` and `Manipulation_`
+type families.
+
+```
+type family Query_
+  (schemas :: SchemasType)
+  (parameters :: Type)
+  (row :: Type) where
+    Query_ schemas params row =
+      Query '[] '[] schemas (TuplePG params) (RowPG row)
+```
+
+As you see, a top-level `Query_` has no outer scope and no common
+table expressions in scope, they are empty `'[]`. Moreover,
+its parameters and row parameters are now `Type`s, which are
+converted to corresponding Postgres types using the `TuplePG`
+and `RowPG` type families. This means you can write the type signatures
+for your top-level statements using the Haskell types that you
+intend to input and retrieve when running the statements. Similar
+to `Query_`, there is a `Manipulation_` type, the only difference
+being that a general `Manipulation` doesn't have an outer scope,
+only a scope for common table expressions.
+
+**Subquery expressions**
+
+Previous versions of Squeal offered subquery expression support
+but there were issues. The common use case of using the `IN` operator
+from SQL was overly complex. There was a proliferation of subquery
+functions to handle different comparison operators, each with two versions
+for comparing `ALL` or `ANY` of the query rows. And, most confoundedly,
+there was no way to support the `EXISTS` subquery because the "outer scope"
+for a query was not available.
+
+Squeal adds an outer scope to the `Query` type.
+
+```Haskell
+newtype Query
+  (outer :: FromType)
+  (commons :: FromType)
+  (schemas :: SchemasType)
+  (params :: [NullityType])
+  (row :: RowType)
+    = UnsafeQuery { renderQuery :: ByteString }
+```
+
+This enables a well-typed `exists` function.
+
+```Haskell
+exists
+  :: Query (Join outer from) commons schemas params row
+  -> Condition outer commons grp schemas params from
+```
+
+The `in_` and `notIn` functions were simplified to handle the most
+common use case of comparing to a list of values.
+
+```Haskell
+in_
+  :: Expression outer commons grp schemas params from ty -- ^ expression
+  -> [Expression outer commons grp schemas params from ty]
+  -> Condition outer commons grp schemas params from
+```
+
+Finally, general subquery comparisons were abstracted to work with
+any comparison operators, using the `Operator` type which will be discussed in
+the next section.
+
+```Haskell
+subAll
+  :: Expression outer commons grp schemas params from ty1
+  -> Operator ty1 ty2 ('Null 'PGbool)
+  -> Query (Join outer from) commons schemas params '[col ::: ty2]
+  -> Condition outer commons grp schemas params from
+
+subAny
+  :: Expression outer commons grp schemas params from ty1
+  -> Operator ty1 ty2 ('Null 'PGbool)
+  -> Query (Join outer from) commons schemas params '[col ::: ty2]
+  -> Condition outer commons grp schemas params from
+```
+
+**Expression RankNTypes**
+
+Squeal 0.5 introduces RankNType type synonyms for common expression patterns.
+The simplest example is the `Expr` type, a type for "closed" expressions
+that cannot reference any aliases or parameters.
+
+```Haskell
+type Expr x
+  = forall outer commons grp schemas params from
+  . Expression outer commons grp schemas params from x
+```
+
+There is also a function type `(:-->)`, which is a subtype of the usual Haskell function
+type `(->)`.
+
+```Haskell
+type (:-->) x y
+  =  forall outer commons grp schemas params from
+  .  Expression outer commons grp schemas params from x
+  -> Expression outer commons grp schemas params from y
+```
+
+We saw in the subquery section that there is an `Operator` type.
+
+```Haskell
+type Operator x1 x2 y
+  =  forall outer commons grp schemas params from
+  .  Expression outer commons grp schemas params from x1
+  -> Expression outer commons grp schemas params from x2
+  -> Expression outer commons grp schemas params from y
+```
+
+There are also types `FunctionN` and `FunctionVar` for n-ary functions
+and variadic functions.
+
+```
+type FunctionN xs y
+  =  forall outer commons grp schemas params from
+  .  NP (Expression outer commons grp schemas params from) xs
+  -> Expression outer commons grp schemas params from y
+```
+
+An n-ary function takes an `NP` list of `Expression`s as its argument.
+Squeal 0.5 adds a helpful operator `(*:)`, to help scrap your `Nil`s.
+You can construct an `NP` list now by using the operator `(:*)`,
+until your last element, using `(*:)` there. For instance, the function
+`atan2_` takes two arguments, `atan2_ (pi *: 2)`.
+
+**Selections**
+
+Previously, Squeal provided a couple versions of `SELECT` depending
+on whether you wanted to select all columns of a unique table
+in the from clause, i.e. `*`, all columns of a particular table
+in the from clause, i.e. `.*`, or a list of columns from the from clause.
+
+Squeal 0.5 refactors this pattern into a `Selection` GADT type, allowing
+for abstraction and combinations that were not possible before.
+
+```Haskell
+data Selection outer commons grp schemas params from row where
+  Star
+    :: HasUnique tab from row
+    => Selection outer commons 'Ungrouped schemas params from row
+  DotStar
+    :: Has tab from row
+    => Alias tab
+    -> Selection outer commons 'Ungrouped schemas params from row
+  List
+    :: SListI row
+    => NP (Aliased (Expression outer commons grp schemas params from)) row
+    -> Selection outer commons grp schemas params from row
+  Over
+    :: SListI row
+    => NP (Aliased (WindowFunction outer commons grp schemas params from)) row
+    -> WindowDefinition outer commons grp schemas params from
+    -> Selection outer commons grp schemas params from row
+  Also
+    :: Selection outer commons grp schemas params from right
+    -> Selection outer commons grp schemas params from left
+    -> Selection outer commons grp schemas params from (Join left right)
+```
+
+In addition to the `Star`, `DotStar` and `List` constructors, there is an
+`Also` constructor combinator, which enables users to combine `Selection`s.
+Additionally, there is an `Over` constructor that is used to enable
+window functions, described in the next section.
+
+To upgrade from Squeal 0.4, you will replace `selectStar` with `select Star`,
+replace `selectDotStar #tab` with `select (DotStar #tab)`. The `List`
+selection is such a common use case that there is a function `select_` which
+automatically applies it, so to upgrade from Squeal 0.4, replace `select`
+with `select_`. There are also independent `selectDistinct` and `selectDistinct_`
+functions to filter out duplicate rows.
+
+**Query clauses**
+
+Previously, Squeal provided a couple versions of `INSERT` depending
+on whether you wanted to insert `VALUES` or a query.
+
+Squeal 0.5 refactors this pattern into a `QueryClause` GADT.
+
+```
+-- Squeal 0.4
+insertRow_ #tab (Set 2 `as` #col1 :* Default `as` #col2)
+insertQuery_ #tab (selectStar (from (table #other_tab)))
+
+-- Squeal 0.5
+insertInto_ #tab (Values_ (Set 2 `as` #col1 :* Default `as` #col2))
+insertInto_ #tab (Subquery (select Star (from (table #other_tab))))
+```
+
+**Window functions and aggregation**
+
+Previous versions of Squeal provided no support for window functions.
+Squeal 0.5 adds support for window functions. We saw `Over` in the
+previous section.
+
+```Haskell
+Over
+  :: SListI row
+  => NP (Aliased (WindowFunction outer commons grp schemas params from)) row
+  -> WindowDefinition outer commons grp schemas params from
+  -> Selection outer commons grp schemas params from row
+```
+
+`Over` combines window functions with window definitions. A `WindowDefinition`
+is constructed using the `partitionBy` function, optionally with an `orderBy`
+clause. For example,
+
+```Haskell
+query :: Query_ (Public Schema) () (Row Int32 Int32)
+query = select
+  (#col1 & Also (rank `as` #col2 `Over` (partitionBy #col1 & orderBy [#col2 & Asc])))
+  (from (table #tab))
+```
+
+Here the `rank` function is a `WindowFunction`
+
+```Haskell
+rank :: WinFun0 ('NotNull 'PGint8)
+rank = UnsafeWindowFunction "rank()"
+```
+
+`WinFun0` is a RankNType, like `Expr` was, used for no argument window functions.
+Similarly, there are also `WinFun1` and `WinFunN` types for
+window functions and n-ary window functions.
+
+In order to use the same syntax for certain window functions and aggregate functions,
+a new typeclass `Aggregate` was introduced. So for instance, `sum_` can be
+either a `Distinction` `Expression` or a `WindowFunction`, used either with
+a `groupBy` or with a `partitionBy` in the appropriate way.
+
+```
+data Distinction (expr :: kind -> Type) (ty :: kind)
+  = All (expr ty)
+  | Distinct (expr ty)
+```
+
+Aggregate functions can be run over all rows or only over distinct rows,
+while window functions bear no such distinction.
+
+**Migrations**
+
+Thanks to [https://github.com/Raveline](Raveline) Squeal 0.5 introduces
+a function `defaultMain` to easily create a command line program to
+run or rewind your migrations.
+
+Previously, Squeal's migrations were impure, allowing in addition to
+running `Definition`s to run arbitrary `IO` operations, such as inserting
+data into the database or printing out status messages. In order to
+provide compatibility with other migration systems, Squeal 0.5 introduces
+pure migrations, that is migrations that are only `Definition`s.
+
+```Haskell
+data Migration p schemas0 schemas1 = Migration
+  { name :: Text -- ^ The `name` of a `Migration`.
+    -- Each `name` in a `Migration` should be unique.
+  , up   :: p schemas0 schemas1 -- ^ The `up` instruction of a `Migration`.
+  , down :: p schemas1 schemas0 -- ^ The `down` instruction of a `Migration`.
+  } deriving (GHC.Generic)
+```
+
+A pure migration is a `Migration Definition`, a pair of inverse
+`Definition`s with a unique name. To recover impure migrations, Squeal 0.5
+introduces the `Terminally` type.
+
+```Haskell
+newtype Terminally trans monad x0 x1 = Terminally
+  { runTerminally :: trans x0 x1 monad () }
+```
+
+`Terminally` applies the indexed monad transformer and the monad it transforms
+to the unit type `()`, thereby turning an indexed monad into a `Category`. An
+impure migration is a `Migration (Terminally PQ IO)`. You can always cast
+a pure migration into an impure migration with the functor, `pureMigration`.
+
+```Haskell
+pureMigration
+  :: Migration Definition schemas0 schemas1
+  -> Migration (Terminally PQ IO) schemas0 schemas1
+```
+
+To run either pure or impure migrations, Squeal 0.5 introduces
+a typeclass, `Migratory`.
+
+```
+class Category p => Migratory p where
+
+  migrateUp
+    :: AlignedList (Migration p) schemas0 schemas1
+    -> PQ schemas0 schemas1 IO ()
+
+  migrateDown
+    :: AlignedList (Migration p) schemas0 schemas1
+    -> PQ schemas1 schemas0 IO ()
+```
+
+The signatures of `migrateUp` and `migrateDown` have been changed
+to make them easier to compose with other `PQ` actions.
+
+**Transactions**
+
+You can now run transactions `ephemerally`, guaranteed to roll back,
+but return the result or throw the exception that the transaction
+would have generated. This is useful for testing. You can also
+`transactionallyRetry` computations, retrying the transaction if
+a [serialization failure](https://www.postgresql.org/docs/11/transaction-iso.html#XACT-REPEATABLE-READ) occurs.
+
+**Types**
+
+Squeal now supports money via a `Money` Haskell `Type` and a `'PGmoney`
+`PGType`. Squeal 0.5 also adds support for creating domain types
+with `createDomain`.
+
+**Time**
+
+Squeal 0.5 adds support for new functions; `now`, `makeDate`, `makeTime`,
+, `makeTimestamp`, and `makeTimestamptz`, a function `interval_` for
+constructing time intervals out multiples of `TimeUnit`s, and a new
+`TimeOp` class, defining affine space operators for time types and their
+differences.
+
+**Literals**
+
+Squeal allows you to include Haskell values in your statements using
+out of line `parameter`s, but often you want to include them inline,
+as a SQL `literal`. Squeal 0.5 enables this using the `Literal` class.
+
+**Set returning functions**
+
+Squeal 0.5 adds support for set returning functions such as `unnest`,
+with the `RankNType` `SetOfFunction`, which can be used as as a `FromClause`.
+
+**Text search**
+
+Squeal 0.5 adds extensive support for text search types, functions and operators.
+
+**Much more**
+
+Lots more changes went into and under the hood of the new version.
+The `Expression` module was split into coherent submodules since it
+had grown to immense proportions. New modules `Alias`, `PG` and `List`
+were added to relieve some of the burden that the `Schema` module
+had been carrying. Rendering has been better unified with a new
+`RenderSQL` typeclass. Type level list concatenation with the `Additional`
+typeclass has been added. `Manipulation`s `update` and `delete`
+were upgraded, so you can leave out fields you don't want to update and
+use `USING` clauses in deletes. Upserts which were previously broken
+now work. The `IO` typeclass hierarchy was changed from `MonadBase`
+and `MonadBaseControl` to `MonadIO` and `MonadUnliftIO`. A new
+`withRecursive` `Manipulation` was added. `SquealException`s were
+refactored and a `trySqueal` function added. Arrays were refactored.
+And there was probably more I've forgotten.
+
 ### Version 0.4
 
 Version 0.4 strengthens Squeal's type system, adds
