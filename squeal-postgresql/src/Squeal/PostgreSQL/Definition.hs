@@ -31,6 +31,7 @@ module Squeal.PostgreSQL.Definition
   ( -- * Definition
     Definition (..)
   , (>>>)
+  , manipDefinition
     -- * Tables
     -- ** Create
   , createSchema
@@ -103,6 +104,7 @@ import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Query
+import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
@@ -129,6 +131,14 @@ instance Category Definition where
   id = UnsafeDefinition ";"
   ddl1 . ddl0 = UnsafeDefinition $
     renderSQL ddl0 <> "\n" <> renderSQL ddl1
+
+-- | A `Manipulation` without input or output can be run as a statement
+-- along with other `Definition`s, by embedding it using `manipDefinition`.
+manipDefinition
+  :: Manipulation '[] schemas '[] '[]
+  -- ^ no input or output
+  -> Definition schemas schemas
+manipDefinition = UnsafeDefinition . (<> ";") . renderSQL
 
 {-----------------------------------------
 CREATE statements

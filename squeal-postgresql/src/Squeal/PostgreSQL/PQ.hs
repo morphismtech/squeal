@@ -68,12 +68,13 @@ module Squeal.PostgreSQL.PQ
   , okResult
   , catchSqueal
   , handleSqueal
+  , trySqueal
   ) where
 
 import Control.Exception (Exception, throw)
 import Control.Monad.Except
 import Control.Monad.Morph
-import UnliftIO (MonadUnliftIO (..), bracket, catch, handle)
+import UnliftIO (MonadUnliftIO (..), bracket, catch, handle, try)
 import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Function ((&))
@@ -678,3 +679,10 @@ handleSqueal
   => (SquealException -> io a) -- ^ handler
   -> io a -> io a
 handleSqueal = handle
+
+-- | `Either` return a `SquealException` or a result.
+trySqueal
+  :: MonadUnliftIO io
+  => io a
+  -> io (Either SquealException a)
+trySqueal = try
