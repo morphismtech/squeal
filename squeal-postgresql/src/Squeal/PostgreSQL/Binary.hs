@@ -681,6 +681,9 @@ instance
       = fmap fromRecord
       . hsequence'
       . htrans (Proxy @FromField) fromField
+------------------------------------------------------
+-- P records
+------------------------------------------------------
 -- instance (FromField (col ::: pg) (col ::: hask))
 --   => FromRow '[col ::: pg] (P (col ::: hask)) where
 --     fromRow (pg :* Nil) = (unComp . fromField) pg
