@@ -173,7 +173,6 @@ import Squeal.PostgreSQL.Expression.Time
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Manipulation
-import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
@@ -362,8 +361,8 @@ deleteMigration = deleteFrom_ #schema_migrations (#name .== param @1)
 -- | Selects a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was inserted.
 selectMigration
-  :: Query_ MigrationsSchemas (Only Text) (P ("executed_at" ::: UTCTime))
-selectMigration = select_ #executed_at
+  :: Query_ MigrationsSchemas (Only Text) (Only UTCTime)
+selectMigration = select_ (#executed_at `as` #fromOnly)
   $ from (table (#schema_migrations))
   & where_ (#name .== param @1)
 

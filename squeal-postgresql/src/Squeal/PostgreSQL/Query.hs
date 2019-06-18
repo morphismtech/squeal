@@ -145,13 +145,20 @@ records, whose entries will be targeted using overloaded labels.
 
 Let's see some examples of queries.
 
+>>> :set -XDeriveAnyClass -XDerivingStrategies
+>>> :{
+data Row a b = Row { col1 :: a, col2 :: b }
+  deriving stock (GHC.Generic)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+:}
+
 simple query:
 
 >>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
+  query :: Query_ (Public Schema) () (Row Int32 Int32)
   query = select Star (from (table #tab))
 in printSQL query
 :}
@@ -161,21 +168,21 @@ restricted query:
 
 >>> :{
 let
-  query :: Query_ (Public Schema) () (Sum Int32, P ("col1" ::: Int32))
+  query :: Query_ (Public Schema) () (Row Int32 Int32)
   query =
-    select_ ((#col1 + #col2) `as` #getSum :* #col1)
+    select_ ((#col1 + #col2) `as` #col1 :* #col1 `as` #col2)
       ( from (table #tab)
         & where_ (#col1 .> #col2)
         & where_ (#col2 .> 0) )
 in printSQL query
 :}
-SELECT ("col1" + "col2") AS "getSum", "col1" AS "col1" FROM "tab" AS "tab" WHERE (("col1" > "col2") AND ("col2" > 0))
+SELECT ("col1" + "col2") AS "col1", "col1" AS "col2" FROM "tab" AS "tab" WHERE (("col1" > "col2") AND ("col2" > 0))
 
 subquery:
 
 >>> :{
 let
-  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
+  query :: Query_ (Public Schema) () (Row Int32 Int32)
   query = select Star (from (subquery (select Star (from (table #tab)) `as` #sub)))
 in printSQL query
 :}
@@ -185,7 +192,7 @@ limits and offsets:
 
 >>> :{
 let
-  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
+  query :: Query_ (Public Schema) () (Row Int32 Int32)
   query = select Star (from (table #tab) & limit 100 & offset 2 & limit 50 & offset 2)
 in printSQL query
 :}
@@ -195,7 +202,7 @@ parameterized query:
 
 >>> :{
 let
-  query :: Query_ (Public Schema) (Only Int32) (P ("col1" ::: Int32), P ("col2" ::: Int32))
+  query :: Query_ (Public Schema) (Only Int32) (Row Int32 Int32)
   query = select Star (from (table #tab) & where_ (#col1 .> param @1))
 in printSQL query
 :}
@@ -205,21 +212,21 @@ aggregation query:
 
 >>> :{
 let
-  query :: Query_ (Public Schema) () (Sum Int32, P ("col1" ::: Int32))
+  query :: Query_ (Public Schema) () (Row Int32 Int32)
   query =
-    select_ ((fromNull 0 (sum_ (All #col2))) `as` #getSum :* #col1)
+    select_ ((fromNull 0 (sum_ (All #col2))) `as` #col1 :* #col1 `as` #col2)
     ( from (table (#tab `as` #table1))
       & groupBy #col1
       & having (#col1 + (fromNull 0 (sum_ (Distinct #col2))) .> 1) )
 in printSQL query
 :}
-SELECT COALESCE(sum(ALL "col2"), 0) AS "getSum", "col1" AS "col1" FROM "tab" AS "table1" GROUP BY "col1" HAVING (("col1" + COALESCE(sum(DISTINCT "col2"), 0)) > 1)
+SELECT COALESCE(sum(ALL "col2"), 0) AS "col1", "col1" AS "col2" FROM "tab" AS "table1" GROUP BY "col1" HAVING (("col1" + COALESCE(sum(DISTINCT "col2"), 0)) > 1)
 
 sorted query:
 
 >>> :{
 let
-  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
+  query :: Query_ (Public Schema) () (Row Int32 Int32)
   query = select Star (from (table #tab) & orderBy [#col1 & Asc])
 in printSQL query
 :}
@@ -282,8 +289,10 @@ self-join:
 
 >>> :{
 let
-  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
-  query = select (#t1 & DotStar) (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
+  query :: Query_ (Public Schema) () (Row Int32 Int32)
+  query = select
+    (#t1 & DotStar)
+    (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
 in printSQL query
 :}
 SELECT "t1".* FROM "tab" AS "t1" CROSS JOIN "tab" AS "t2"
@@ -292,17 +301,19 @@ value queries:
 
 >>> :{
 let
-  query :: Query_ schemas () (P ("foo" ::: Int32), P ("bar" ::: Bool))
-  query = values (1 `as` #foo :* true `as` #bar) [2 `as` #foo :* false `as` #bar]
+  query :: Query_ schemas () (Row String Bool)
+  query = values
+    ("true" `as` #col1 :* true `as` #col2)
+    ["false" `as` #col1 :* false `as` #col2]
 in printSQL query
 :}
-SELECT * FROM (VALUES (1, TRUE), (2, FALSE)) AS t ("foo", "bar")
+SELECT * FROM (VALUES (E'true', TRUE), (E'false', FALSE)) AS t ("col1", "col2")
 
 set operations:
 
 >>> :{
 let
-  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
+  query :: Query_ (Public Schema) () (Row Int32 Int32)
   query = select Star (from (table #tab)) `unionAll` select Star (from (table #tab))
 in printSQL query
 :}
@@ -312,7 +323,7 @@ with queries:
 
 >>> :{
 let
-  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("col2" ::: Int32))
+  query :: Query_ (Public Schema) () (Row Int32 Int32)
   query = with (
     select Star (from (table #tab)) `as` #cte1 :>>
     select Star (from (common #cte1)) `as` #cte2
@@ -325,27 +336,27 @@ window function queries
 
 >>> :{
 let
-  query :: Query_ (Public Schema) () (P ("col1" ::: Int32), P ("rank" ::: Int64))
+  query :: Query_ (Public Schema) () (Row Int32 Int64)
   query = select
-    (#col1 & Also (rank `as` #rank `Over` (partitionBy #col1 & orderBy [#col2 & Asc])))
+    (#col1 & Also (rank `as` #col2 `Over` (partitionBy #col1 & orderBy [#col2 & Asc])))
     (from (table #tab))
 in printSQL query
 :}
-SELECT "col1" AS "col1", rank() OVER (PARTITION BY "col1" ORDER BY "col2" ASC) AS "rank" FROM "tab" AS "tab"
+SELECT "col1" AS "col1", rank() OVER (PARTITION BY "col1" ORDER BY "col2" ASC) AS "col2" FROM "tab" AS "tab"
 
 correlated subqueries
 
 >>> :{
 let
-  query :: Query_ (Public Schema) () (P ("col1" ::: Int32))
+  query :: Query_ (Public Schema) () (Only Int32)
   query =
-    select #col1 (from (table (#tab `as` #t1))
+    select (#col1 `as` #fromOnly) (from (table (#tab `as` #t1))
     & where_ (exists (
       select Star (from (table (#tab `as` #t2))
       & where_ (#t2 ! #col2 .== #t1 ! #col1)))))
 in printSQL query
 :}
-SELECT "col1" AS "col1" FROM "tab" AS "t1" WHERE EXISTS (SELECT * FROM "tab" AS "t2" WHERE ("t2"."col2" = "t1"."col1"))
+SELECT "col1" AS "fromOnly" FROM "tab" AS "t1" WHERE EXISTS (SELECT * FROM "tab" AS "t2" WHERE ("t2"."col2" = "t1"."col1"))
 
 -}
 type family Query_

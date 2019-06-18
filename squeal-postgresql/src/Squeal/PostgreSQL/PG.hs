@@ -79,7 +79,6 @@ import qualified Generics.SOP.Record as SOP
 import qualified Generics.SOP.Type.Metadata as Type
 
 import Squeal.PostgreSQL.Alias
-import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Schema
 
 -- $setup
@@ -175,31 +174,8 @@ have `SOP.Generic` and `SOP.HasDatatypeInfo` instances;
 >>> :kind! RowPG Person
 RowPG Person :: [(Symbol, NullityType)]
 = '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
-
-Or to tuples of `SOP.P` types;
-
->>> :kind! RowPG (SOP.P ("id" ::: Int32), SOP.P ("foreign_id" ::: Int32))
-RowPG (SOP.P ("id" ::: Int32), SOP.P ("foreign_id" ::: Int32)) :: [(Symbol,
-                                                                    NullityType)]
-= '[ '("id", 'NotNull 'PGint4), "foreign_id" ::: 'NotNull 'PGint4]
-
-Or to tuples which mix `SOP.P` types and record types.
-
->>> :kind! RowPG (SOP.P ("id" ::: Int32), Person, SOP.P ("foreign_id" ::: Int32))
-RowPG (SOP.P ("id" ::: Int32), Person, SOP.P ("foreign_id" ::: Int32)) :: [(Symbol,
-                                                                            NullityType)]
-= '[ '("id", 'NotNull 'PGint4), '("name", 'NotNull 'PGtext),
-     '("age", 'NotNull 'PGint4), "foreign_id" ::: 'NotNull 'PGint4]
 -}
 type family RowPG (hask :: Type) :: RowType where
-  RowPG (hask1, hask2) = Join (RowPG hask1) (RowPG hask2)
-  RowPG (hask1, hask2, hask3) =
-    Join (RowPG hask1) (RowPG (hask2, hask3))
-  RowPG (hask1, hask2, hask3, hask4) =
-    Join (RowPG hask1) (RowPG (hask2, hask3, hask4))
-  RowPG (hask1, hask2, hask3, hask4, hask5) =
-    Join (RowPG hask1) (RowPG (hask2, hask3, hask4, hask5))
-  RowPG (SOP.P (col ::: ty)) = '[col ::: NullPG ty]
   RowPG hask = RowOf (SOP.RecordCodeOf hask)
 
 -- | `RowOf` applies `NullPG` to the fields of a list.
@@ -375,6 +351,7 @@ newtype VarArray arr = VarArray {getVarArray :: arr}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
 -- | `PGvararray` @(@`NullPG` @hask)@
 type instance PG (VarArray (Vector hask)) = 'PGvararray (NullPG hask)
+type instance PG (VarArray [hask]) = 'PGvararray (NullPG hask)
 
 {- | The `FixArray` newtype is an indication that the Haskell
 type it's applied to should be stored as a `PGfixarray`.
