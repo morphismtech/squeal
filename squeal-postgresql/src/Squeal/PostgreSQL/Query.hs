@@ -140,8 +140,7 @@ using `Squeal.PostgreSQL.PQ.runQuery`.
 Generally, @parameters@ will be a Haskell tuple or record whose entries
 may be referenced using positional
 `Squeal.PostgreSQL.Expression.Parameter.parameter`s and @row@ will be a
-Haskell record or a generalized record using tuples of `P` types and normal Haskell
-records, whose entries will be targeted using overloaded labels.
+Haskell record, whose entries will be targeted using overloaded labels.
 
 Let's see some examples of queries.
 
@@ -212,15 +211,15 @@ aggregation query:
 
 >>> :{
 let
-  query :: Query_ (Public Schema) () (Row Int32 Int32)
+  query :: Query_ (Public Schema) () (Row Int64 Int32)
   query =
     select_ ((fromNull 0 (sum_ (All #col2))) `as` #col1 :* #col1 `as` #col2)
     ( from (table (#tab `as` #table1))
       & groupBy #col1
-      & having (#col1 + (fromNull 0 (sum_ (Distinct #col2))) .> 1) )
+      & having (sum_ (Distinct #col2) .> 1) )
 in printSQL query
 :}
-SELECT COALESCE(sum(ALL "col2"), 0) AS "col1", "col1" AS "col2" FROM "tab" AS "table1" GROUP BY "col1" HAVING (("col1" + COALESCE(sum(DISTINCT "col2"), 0)) > 1)
+SELECT COALESCE(sum(ALL "col2"), 0) AS "col1", "col1" AS "col2" FROM "tab" AS "table1" GROUP BY "col1" HAVING (sum(DISTINCT "col2") > 1)
 
 sorted query:
 
@@ -1023,19 +1022,19 @@ instance With (Query outer) where
 
 {- |
 >>> import Data.Monoid (Sum (..))
->>> import Data.Int (Int32)
+>>> import Data.Int (Int64)
 >>> :{
   let
-    query :: Query_ schema () (Sum Int32)
+    query :: Query_ schema () (Sum Int64)
     query = withRecursive
-      ( values_ (1 `as` #n)
+      ( values_ ((1 & astype int) `as` #n)
         `unionAll`
         select_ ((#n + 1) `as` #n)
           (from (common #t) & where_ (#n .< 100)) `as` #t )
       ( select_ (fromNull 0 (sum_ (All #n)) `as` #getSum) (from (common #t) & groupBy Nil))
   in printSQL query
 :}
-WITH RECURSIVE "t" AS ((SELECT * FROM (VALUES (1)) AS t ("n")) UNION ALL (SELECT ("n" + 1) AS "n" FROM "t" AS "t" WHERE ("n" < 100))) SELECT COALESCE(sum(ALL "n"), 0) AS "getSum" FROM "t" AS "t"
+WITH RECURSIVE "t" AS ((SELECT * FROM (VALUES ((1 :: int))) AS t ("n")) UNION ALL (SELECT ("n" + 1) AS "n" FROM "t" AS "t" WHERE ("n" < 100))) SELECT COALESCE(sum(ALL "n"), 0) AS "getSum" FROM "t" AS "t"
 -}
 withRecursive
   :: Aliased (Query outer (recursive ': commons) schemas params) recursive

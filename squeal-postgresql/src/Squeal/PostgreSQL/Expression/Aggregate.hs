@@ -26,6 +26,7 @@ Aggregate functions
 module Squeal.PostgreSQL.Expression.Aggregate
   ( Aggregate (..)
   , Distinction (..)
+  , PGSum
   , PGAvg
   ) where
 
@@ -85,9 +86,8 @@ class Aggregate expr1 exprN aggr
   -- :}
   -- sum(DISTINCT "col")
   sum_
-    :: ty `In` PGNum
-    => expr1 (null ty)
-    -> aggr ('Null ty)
+    :: expr1 (null ty)
+    -> aggr ('Null (PGSum ty))
 
   -- | input values, including nulls, concatenated into an array
   arrayAgg
@@ -433,6 +433,21 @@ unsafeAggregateN
   -> Distinction (NP (Expression outer commons 'Ungrouped schemas params from)) xs
   -> Expression outer commons ('Grouped bys) schemas params from y
 unsafeAggregateN fun xs = UnsafeExpression $ fun <> parenthesized (renderSQL xs)
+
+-- | A type family that calculates `PGSum``PGType` of
+-- a given argument `PGType`.
+type family PGSum ty where
+  PGSum 'PGint2 = 'PGint8
+  PGSum 'PGint4 = 'PGint8
+  PGSum 'PGint8 = 'PGnumeric
+  PGSum 'PGfloat4 = 'PGfloat4
+  PGSum 'PGfloat8 = 'PGfloat8
+  PGSum 'PGnumeric = 'PGnumeric
+  PGSum 'PGinterval = 'PGinterval
+  PGSum 'PGmoney = 'PGmoney
+  PGSum pg = TypeError
+    ( 'Text "Squeal type error: Cannot sum with argument type "
+      ':<>: 'ShowType pg )
 
 -- | A type family that calculates `PGAvg` type of a `PGType`.
 type family PGAvg ty where

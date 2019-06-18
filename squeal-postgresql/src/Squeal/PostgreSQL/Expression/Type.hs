@@ -29,6 +29,7 @@ module Squeal.PostgreSQL.Expression.Type
   ( TypeExpression (..)
   , cast
   , astype
+  , inferredtype
   , PGTyped (..)
   , typedef
   , typetable
@@ -112,6 +113,17 @@ astype
   -- ^ value
   -> Expression outer commons grp schemas params from ty
 astype = cast
+
+-- | `inferredtype` will add a type annotation to an `Expression`
+-- which can be useful for fixing the storage type of a value.
+--
+-- >>> printSQL (inferredtype true)
+-- (TRUE :: bool)
+inferredtype
+  :: PGTyped schemas ty
+  => Expression outer common grp schemas params from ty
+  -> Expression outer common grp schemas params from ty
+inferredtype = astype pgtype
 
 {-----------------------------------------
 type expressions

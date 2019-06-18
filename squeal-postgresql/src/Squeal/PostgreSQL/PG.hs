@@ -45,7 +45,6 @@ module Squeal.PostgreSQL.PG
   , Enumerated (..)
   , VarArray (..)
   , FixArray (..)
-  , SOP.P (..)
     -- * Type families
   , LabelsPG
   , DimPG

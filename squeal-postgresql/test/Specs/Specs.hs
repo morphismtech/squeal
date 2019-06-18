@@ -1,4 +1,4 @@
-module Specs where
+module Main where
 
 import           Test.Hspec
 import qualified ExceptionHandling

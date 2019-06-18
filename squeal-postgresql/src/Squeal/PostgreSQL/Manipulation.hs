@@ -113,8 +113,7 @@ using `Squeal.PostgreSQL.PQ.manipulate`.
 Generally, @parameters@ will be a Haskell tuple or record whose entries
 may be referenced using positional
 `Squeal.PostgreSQL.Expression.Parameter.parameter`s and @row@ will be a
-Haskell record or a generalized record using tuples of `P` types and normal Haskell
-records, whose entries will be targeted using overloaded labels.
+Haskell record, whose entries will be targeted using overloaded labels.
 
 >>> :set -XDeriveAnyClass -XDerivingStrategies
 >>> :{
