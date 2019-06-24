@@ -98,6 +98,7 @@ test-suite squeal-postgresql-specs
   other-modules: ExceptionHandling
   build-depends:
       base >= 4.10.0.0
+    , async >= 2.2.2
     , bytestring >= 0.10.8.2
     , generics-sop >= 0.3.1.0
     , hspec >= 2.4.8
