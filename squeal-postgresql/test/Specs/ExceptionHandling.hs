@@ -132,7 +132,7 @@ specs = before_ setupDB $ after_ dropDB $
       let
         query :: Query_ (Public '[]) () (Only Char)
         query = values_ (literal 'a' `as` #fromOnly)
-        session = useConnectionPool pool . transactionally_ $ do
+        session = usingConnectionPool pool . transactionally_ $ do
           result <- runQuery query
           Just (Only chr) <- firstRow result
           return chr

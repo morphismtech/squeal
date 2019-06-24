@@ -8,7 +8,7 @@ Stability: experimental
 Connection pools.
 
 Typical use case would be to create your pool using `createConnectionPool`
-and run anything that requires the pool connection with `useConnectionPool`.
+and run anything that requires the pool connection with `usingConnectionPool`.
 
 Here's a simplified example:
 
@@ -20,7 +20,7 @@ do
     query :: Query_ (Public '[]) () (Only Char)
     query = values_ (literal 'a' `as` #fromOnly)
   pool <- createConnectionPool "host=localhost port=5432 dbname=exampledb" 1 0.5 10
-  chr <- useConnectionPool pool $ do
+  chr <- usingConnectionPool pool $ do
     result <- runQuery query
     Just (Only a) <- firstRow result
     return a
@@ -47,7 +47,7 @@ module Squeal.PostgreSQL.Pool
   ( -- * Pools
     Pool
   , createConnectionPool
-  , useConnectionPool
+  , usingConnectionPool
   , destroyConnectionPool
   ) where
 
@@ -82,12 +82,12 @@ createConnectionPool
 createConnectionPool conninfo stripes idle maxResrc =
   createPool (connectdb conninfo) finish stripes idle maxResrc
 
-useConnectionPool
+usingConnectionPool
   :: MonadUnliftIO io
   => Pool (K Connection schemas) -- ^ pool
   -> PQ schemas schemas io x -- ^ session
   -> io x
-useConnectionPool pool (PQ session) = unK <$> withResource pool session
+usingConnectionPool pool (PQ session) = unK <$> withResource pool session
 
 {- |
 Destroy all connections in all stripes in the pool.
@@ -97,7 +97,7 @@ This function is useful when you detect that all connections
 in the pool are broken. For example after a database has been
 restarted all connections opened before the restart will be broken.
 In that case it's better to close those connections so that
-`useConnectionPool` won't take a broken connection from the pool
+`usingConnectionPool` won't take a broken connection from the pool
 but will open a new connection instead.
 
 Another use-case for this function is that when you know you are done
