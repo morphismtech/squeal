@@ -82,6 +82,16 @@ createConnectionPool
 createConnectionPool conninfo stripes idle maxResrc =
   createPool (connectdb conninfo) finish stripes idle maxResrc
 
+{-|
+Temporarily take a connection from a `Pool`, perform an action with it,
+and return it to the pool afterwards.
+
+If the pool has an idle connection available, it is used immediately.
+Otherwise, if the maximum number of connections has not yet been reached,
+a new connection is created and used.
+If the maximum number of connections has been reached, this function blocks
+until a connection becomes available.
+-}
 usingConnectionPool
   :: MonadUnliftIO io
   => Pool (K Connection schemas) -- ^ pool
