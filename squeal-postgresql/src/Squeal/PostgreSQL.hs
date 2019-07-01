@@ -217,6 +217,7 @@ import Squeal.PostgreSQL.List as X
 import Squeal.PostgreSQL.Manipulation as X
 import Squeal.PostgreSQL.Migration as X
 import Squeal.PostgreSQL.PG as X
+import Squeal.PostgreSQL.Pool as X
 import Squeal.PostgreSQL.PQ as X
 import Squeal.PostgreSQL.Query as X
 import Squeal.PostgreSQL.Render (RenderSQL(..), printSQL)

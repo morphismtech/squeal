@@ -12,19 +12,21 @@
 module ExceptionHandling
   ( specs
   , User (..)
-  )
-where
+  ) where
 
-import           Control.Monad               (void)
+import Control.Concurrent.Async (replicateConcurrently)
+import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO (..))
-import qualified Data.ByteString.Char8       as Char8
-import           Data.Int                    (Int16)
-import           Data.Text                   (Text)
-import           Data.Vector                 (Vector)
-import qualified Generics.SOP                as SOP
-import qualified GHC.Generics                as GHC
-import           Squeal.PostgreSQL
-import           Test.Hspec
+import Data.Int (Int16)
+import Data.Text (Text)
+import Data.Vector (Vector)
+import Test.Hspec
+
+import qualified Data.ByteString.Char8 as Char8
+import qualified Generics.SOP as SOP
+import qualified GHC.Generics as GHC
+
+import Squeal.PostgreSQL
 
 type Schema =
   '[ "users" ::: 'Table (
@@ -123,3 +125,16 @@ specs = before_ setupDB $ after_ dropDB $
     it "should be rethrown for unique constraint violation in a manipulation by a transaction" $
       withConnection connectionString (transactionally_ insertUserTwice)
        `shouldThrow` (== dupKeyErr)
+
+    it "should handle concurrent transactions using pooled connections" $ do
+      pool <- createConnectionPool
+        "host=localhost port=5432 dbname=exampledb" 1 0.5 10
+      let
+        query :: Query_ (Public '[]) () (Only Char)
+        query = values_ (literal 'a' `as` #fromOnly)
+        session = usingConnectionPool pool . transactionally_ $ do
+          result <- runQuery query
+          Just (Only chr) <- firstRow result
+          return chr
+      chrs <- replicateConcurrently 10 session
+      chrs `shouldSatisfy` (all (== 'a'))

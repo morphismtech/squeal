@@ -1,11 +1,33 @@
 {-|
-Module: Squeal.PostgreSQL.Definition
-Description: Pooled connections
+Module: Squeal.PostgreSQL.Pool
+Description: Connection pools
 Copyright: (c) Eitan Chatav, 2017
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-A `MonadPQ` for pooled connections.
+Connection pools.
+
+Typical use case would be to create your pool using `createConnectionPool`
+and run anything that requires the pool connection with `usingConnectionPool`.
+
+Here's a simplified example:
+
+>>> import Squeal.PostgreSQL
+
+>>> :{
+do
+  let
+    query :: Query_ (Public '[]) () (Only Char)
+    query = values_ (literal 'a' `as` #fromOnly)
+  pool <- createConnectionPool "host=localhost port=5432 dbname=exampledb" 1 0.5 10
+  chr <- usingConnectionPool pool $ do
+    result <- runQuery query
+    Just (Only a) <- firstRow result
+    return a
+  destroyConnectionPool pool
+  putChar chr
+:}
+a
 -}
 
 {-# LANGUAGE
@@ -23,51 +45,19 @@ A `MonadPQ` for pooled connections.
 
 module Squeal.PostgreSQL.Pool
   ( -- * Pools
-    PoolPQ (..)
+    Pool
   , createConnectionPool
-  , Pool
-  , destroyAllResources
+  , usingConnectionPool
+  , destroyConnectionPool
   ) where
 
-import Control.Monad.Trans
 import Data.ByteString
 import Data.Time
-import Generics.SOP (K(..))
+import Generics.SOP (K(..), unK)
 import UnliftIO (MonadUnliftIO (..))
 import UnliftIO.Pool (Pool, createPool, destroyAllResources, withResource)
 
-import qualified Control.Monad.Fail as Fail
-
 import Squeal.PostgreSQL.PQ
-import Squeal.PostgreSQL.Schema
-
-{- | `PoolPQ` @schemas@ should be a drop-in replacement for `PQ` @schemas schemas@.
-
-Typical use case would be to create your pool using `createConnectionPool` and run anything that requires the pool connection with it.
-
-Here's a simplified example:
-
->>> import Squeal.PostgreSQL
->>> :{
-do
-  let
-    query :: Query_ (Public '[]) () (Only Char)
-    query = values_ $ literal 'a' `as` #fromOnly
-    session :: PoolPQ (Public '[]) IO Char
-    session = do
-      result <- runQuery query
-      Just (Only chr) <- firstRow result
-      return chr
-  pool <- createConnectionPool "host=localhost port=5432 dbname=exampledb" 1 0.5 10
-  chr <- runPoolPQ session pool
-  destroyAllResources pool
-  putChar chr
-:}
-a
--}
-newtype PoolPQ (schemas :: SchemasType) m x =
-  PoolPQ { runPoolPQ :: Pool (K Connection schemas) -> m x }
-  deriving Functor
 
 -- | Create a striped pool of connections.
 -- Although the garbage collector will destroy all idle connections when the pool is garbage collected it's recommended to manually `destroyAllResources` when you're done with the pool so that the connections are freed up as soon as possible.
@@ -92,63 +82,41 @@ createConnectionPool
 createConnectionPool conninfo stripes idle maxResrc =
   createPool (connectdb conninfo) finish stripes idle maxResrc
 
--- | `Applicative` instance for `PoolPQ`.
-instance Monad m => Applicative (PoolPQ schemas m) where
-  pure x = PoolPQ $ \ _ -> pure x
-  PoolPQ f <*> PoolPQ x = PoolPQ $ \ pool -> do
-    f' <- f pool
-    x' <- x pool
-    return $ f' x'
+{-|
+Temporarily take a connection from a `Pool`, perform an action with it,
+and return it to the pool afterwards.
 
--- | `Monad` instance for `PoolPQ`.
-instance Monad m => Monad (PoolPQ schemas m) where
-  return = pure
-  PoolPQ x >>= f = PoolPQ $ \ pool -> do
-    x' <- x pool
-    runPoolPQ (f x') pool
+If the pool has an idle connection available, it is used immediately.
+Otherwise, if the maximum number of connections has not yet been reached,
+a new connection is created and used.
+If the maximum number of connections has been reached, this function blocks
+until a connection becomes available.
+-}
+usingConnectionPool
+  :: MonadUnliftIO io
+  => Pool (K Connection schemas) -- ^ pool
+  -> PQ schemas schemas io x -- ^ session
+  -> io x
+usingConnectionPool pool (PQ session) = unK <$> withResource pool session
 
--- | `Fail.MonadFail` instance for `PoolPQ`.
-instance Monad m => Fail.MonadFail (PoolPQ schemas m) where
-  fail = Fail.fail
+{- |
+Destroy all connections in all stripes in the pool.
+Note that this will ignore any exceptions in the destroy function.
 
--- | `MonadTrans` instance for `PoolPQ`.
-instance MonadTrans (PoolPQ schemas) where
-  lift m = PoolPQ $ \ _pool -> m
+This function is useful when you detect that all connections
+in the pool are broken. For example after a database has been
+restarted all connections opened before the restart will be broken.
+In that case it's better to close those connections so that
+`usingConnectionPool` won't take a broken connection from the pool
+but will open a new connection instead.
 
--- | `MonadPQ` instance for `PoolPQ`.
-instance MonadUnliftIO io => MonadPQ schemas (PoolPQ schemas io) where
-  manipulateParams manipulation params = PoolPQ $ \ pool -> do
-    withResource pool $ \ conn -> do
-      (K result :: K (K Result ys) schemas) <- flip unPQ conn $
-        manipulateParams manipulation params
-      return result
-  traversePrepared manipulation params = PoolPQ $ \ pool ->
-    withResource pool $ \ conn -> do
-      (K result :: K (list (K Result ys)) schemas) <- flip unPQ conn $
-        traversePrepared manipulation params
-      return result
-  traversePrepared_ manipulation params = PoolPQ $ \ pool -> do
-    withResource pool $ \ conn -> do
-      (_ :: K () schemas) <- flip unPQ conn $
-        traversePrepared_ manipulation params
-      return ()
-  liftPQ m = PoolPQ $ \ pool ->
-    withResource pool $ \ conn -> do
-      (K result :: K result schemas) <- flip unPQ conn $
-        liftPQ m
-      return result
-
--- | 'MonadIO' instance for 'PoolPQ'.
-instance (MonadIO m)
-  => MonadIO (PoolPQ schemas m) where
-  liftIO = lift . liftIO
-
--- | 'MonadUnliftIO' instance for 'PoolPQ'.
-instance (MonadUnliftIO m)
-  => MonadUnliftIO (PoolPQ schemas m) where
-  withRunInIO
-      :: ((forall a . PoolPQ schemas m a -> IO a) -> IO b)
-      -> PoolPQ schemas m b
-  withRunInIO inner = PoolPQ $ \pool ->
-    withRunInIO $ \(run :: (forall x . m x -> IO x)) ->
-      inner (\poolpq -> run $ runPoolPQ poolpq pool)
+Another use-case for this function is that when you know you are done
+with the pool you can destroy all idle connections immediately
+instead of waiting on the garbage collector to destroy them,
+thus freeing up those connections sooner.
+-}
+destroyConnectionPool
+  :: MonadUnliftIO io
+  => Pool (K Connection schemas) -- ^ pool
+  -> io ()
+destroyConnectionPool = destroyAllResources
