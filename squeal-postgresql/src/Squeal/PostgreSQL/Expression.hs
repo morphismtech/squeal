@@ -361,6 +361,7 @@ class PGSubset container where
 instance PGSubset 'PGjsonb
 instance PGSubset 'PGtsquery
 instance PGSubset ('PGvararray ty)
+instance PGSubset ('PGrange ty)
 
 instance IsString
   (Expression outer commons grp schemas params from (null 'PGtext)) where

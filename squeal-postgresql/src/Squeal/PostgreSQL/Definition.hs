@@ -45,6 +45,7 @@ module Squeal.PostgreSQL.Definition
   , createTypeCompositeFrom
   , FieldTyped (..)
   , createDomain
+  , createTypeRange
   , TableConstraintExpression (..)
   , check
   , unique
@@ -1032,13 +1033,22 @@ CREATE DOMAIN "positive" AS real CHECK ((("value" > 0) AND "value" IS NOT NULL))
 createDomain
   :: (Has sch schemas schema, KnownSymbol dom)
   => QualifiedAlias sch dom
-  -> (forall nullity. TypeExpression schemas (nullity ty))
+  -> (forall null. TypeExpression schemas (null ty))
   -> (forall tab. Condition '[] '[] 'Ungrouped schemas '[] '[tab ::: '["value" ::: 'Null ty]])
-  -> Definition schemas (Alter sch (Create alias ('Typedef ty) schema) schemas)
+  -> Definition schemas (Alter sch (Create dom ('Typedef ty) schema) schemas)
 createDomain dom ty condition =
   UnsafeDefinition $ "CREATE DOMAIN" <+> renderSQL dom
     <+> "AS" <+> renderTypeExpression ty
     <+> "CHECK" <+> parenthesized (renderSQL condition) <> ";"
+
+createTypeRange
+  :: (Has sch schemas schema, KnownSymbol range)
+  => QualifiedAlias sch range
+  -> (forall null. TypeExpression schemas (null ty))
+  -> Definition schemas (Alter sch (Create range ('Typedef ('PGrange ty)) schema) schemas)
+createTypeRange range ty = UnsafeDefinition $
+  "CREATE" <+> "TYPE" <+> renderSQL range <+> "AS" <+> "RANGE" <+>
+  parenthesized ("subtype" <+> "=" <+> renderTypeExpression ty)
 
 -- | Lift `PGTyped` to a field
 class FieldTyped schemas ty where

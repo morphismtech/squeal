@@ -68,6 +68,12 @@ module Squeal.PostgreSQL.Expression.Type
   , fixarray
   , tsvector
   , tsquery
+  , int4range
+  , int8range
+  , numrange
+  , tsrange
+  , tstzrange
+  , daterange
   ) where
 
 import Control.DeepSeq
@@ -270,6 +276,24 @@ tsvector = UnsafeTypeExpression "tsvector"
 -- | text search document
 tsquery :: TypeExpression schemas (null 'PGtsquery)
 tsquery = UnsafeTypeExpression "tsquery"
+-- | Range of integer
+int4range :: TypeExpression schemas (null ('PGrange 'PGint4))
+int4range = UnsafeTypeExpression "int4range"
+-- | Range of bigint
+int8range :: TypeExpression schemas (null ('PGrange 'PGint8))
+int8range = UnsafeTypeExpression "int8range"
+-- | Range of numeric
+numrange :: TypeExpression schemas (null ('PGrange 'PGnumeric))
+numrange = UnsafeTypeExpression "numrange"
+-- | Range of timestamp without time zone
+tsrange  :: TypeExpression schemas (null ('PGrange 'PGtimestamp))
+tsrange = UnsafeTypeExpression "tsrange"
+-- | Range of timestamp with time zone
+tstzrange :: TypeExpression schemas (null ('PGrange 'PGtimestamptz))
+tstzrange = UnsafeTypeExpression "tstzrange"
+-- | Range of date
+daterange :: TypeExpression schemas (null ('PGrange 'PGdate))
+daterange = UnsafeTypeExpression "daterange"
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped schemas (ty :: NullityType) where
