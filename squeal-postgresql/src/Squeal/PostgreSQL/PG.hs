@@ -20,8 +20,9 @@ Stability: experimental
   , FunctionalDependencies
   , GADTs
   , LambdaCase
-  , OverloadedStrings
   , MultiParamTypeClasses
+  , OverloadedStrings
+  , PatternSynonyms
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
@@ -37,7 +38,7 @@ module Squeal.PostgreSQL.PG
   , NullPG
   , TuplePG
   , RowPG
-    -- * Storage newtypes
+    -- * Storage types
   , Money (..)
   , Json (..)
   , Jsonb (..)
@@ -45,6 +46,9 @@ module Squeal.PostgreSQL.PG
   , Enumerated (..)
   , VarArray (..)
   , FixArray (..)
+  , Bound (..)
+  , pattern Closed
+  , pattern Open
     -- * Type families
   , LabelsPG
   , DimPG
@@ -363,3 +367,14 @@ newtype FixArray arr = FixArray {getFixArray :: arr}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
 -- | `PGfixarray` @(@`DimPG` @hask) (@`FixPG` @hask)@
 type instance PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
+
+data Bound x = Bound
+  { closedBound :: Bool
+  , getBound :: Maybe x
+  } deriving
+    ( Eq, Ord, Show, Read, GHC.Generic
+    , Functor, Foldable, Traversable )
+pattern Closed, Open :: Maybe x -> Bound x
+pattern Closed x = Bound True x
+pattern Open x = Bound False x
+type instance PG (Bound x, Bound x) = 'PGrange (PG x)
