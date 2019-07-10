@@ -33,10 +33,8 @@ module Squeal.PostgreSQL.Expression.Collection
   , unnest
   , row
   , field
-  , range
   ) where
 
-import Data.Bool
 import Data.String
 import Data.Word (Word64)
 
@@ -46,7 +44,6 @@ import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.SetOf
 import Squeal.PostgreSQL.List
-import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
@@ -170,16 +167,3 @@ field
 field td fld expr = UnsafeExpression $
   parenthesized (renderSQL expr <> "::" <> renderSQL td)
     <> "." <> renderSQL fld
-
--- | >>> printSQL $ range (Closed (Just now)) (Open Nothing)
--- [now(), )
-range
-  :: Bound (Expression outer commons grp schemas params from ('NotNull ty))
-  -> Bound (Expression outer commons grp schemas params from ('NotNull ty))
-  -> Expression outer commons grp schemas params from (null ('PGrange ty))
-range l u = UnsafeExpression $ commaSeparated [renderLower l, renderUpper u]
-  where
-    renderLower (Bound isClosed x) =
-      bool "(" "[" isClosed <> maybe "" renderSQL x
-    renderUpper (Bound isClosed x) =
-      maybe "" renderSQL x <> bool ")" "]" isClosed

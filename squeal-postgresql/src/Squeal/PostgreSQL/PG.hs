@@ -46,10 +46,6 @@ module Squeal.PostgreSQL.PG
   , Enumerated (..)
   , VarArray (..)
   , FixArray (..)
-  , Bound (..)
-  , pattern Closed
-  , pattern Open
-  , (<=..<=), (<..<), (<=..<), (<..<=)
     -- * Type families
   , LabelsPG
   , DimPG
@@ -368,30 +364,3 @@ newtype FixArray arr = FixArray {getFixArray :: arr}
   deriving (Eq, Ord, Show, Read, GHC.Generic)
 -- | `PGfixarray` @(@`DimPG` @hask) (@`FixPG` @hask)@
 type instance PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
-
-data Bound x = Bound
-  { closedBound :: Bool
-  , getBound :: Maybe x
-  } deriving
-    ( Eq, Ord, Show, Read, GHC.Generic
-    , Functor, Foldable, Traversable )
-pattern Closed, Open :: Maybe x -> Bound x
-pattern Closed x = Bound True x
-pattern Open x = Bound False x
-type instance PG (Bound x, Bound x) = 'PGrange (PG x)
-
-data Range x
-  = Empty
-  | NonEmpty (Bound x) (Bound x)
-  deriving
-    ( Eq, Ord, Show, Read, GHC.Generic
-    , Functor, Foldable, Traversable )
--- instance RenderSQL x => RenderSQL
-(<=..<=), (<..<), (<=..<), (<..<=) :: x -> x -> Range x
-x <=..<= y = NonEmpty (Closed (Just x)) (Closed (Just y))
-x <..< y = NonEmpty (Open (Just x)) (Open (Just y))
-x <=..< y = NonEmpty (Closed (Just x)) (Open (Just y))
-x <..<= y = NonEmpty (Open (Just x)) (Closed (Just y))
-pattern Above, Below :: Bound x -> Range x
-pattern Above x = NonEmpty (Open Nothing) x
-pattern Below x = NonEmpty x (Open Nothing)
