@@ -35,10 +35,10 @@ module Squeal.PostgreSQL.Expression.Range
   ( range
   , Range (..)
   , (<=..<=), (<..<), (<=..<), (<..<=)
-  , pattern HalfGT, pattern HalfGTE
-  , pattern HalfLT, pattern HalfLTE
+  , halfGT, halfGTE, halfLT, halfLTE
+  , point
   , Bound (..)
-  , pattern Closed, pattern Open
+  , closed, open
   ) where
 
 import Data.Bool
@@ -54,7 +54,7 @@ import Squeal.PostgreSQL.Schema
 -- $setup
 -- >>> import Squeal.PostgreSQL
 
--- | >>> printSQL $ range (HalfGTE now)
+-- | >>> printSQL $ range (halfGTE now)
 -- [now(), )
 -- >>> printSQL $ range (0 <..<= (pi & astype numeric))
 -- (0, (pi() :: numeric)]
@@ -70,9 +70,9 @@ data Bound x = Bound
     ( Eq, Ord, Show, Read, GHC.Generic
     , Functor, Foldable, Traversable )
     deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-pattern Closed, Open :: Maybe x -> Bound x
-pattern Closed x = Bound True x
-pattern Open x = Bound False x
+closed, open :: Maybe x -> Bound x
+closed x = Bound True x
+open x = Bound False x
 
 data Range x
   = Empty
@@ -88,19 +88,22 @@ instance RenderSQL x => RenderSQL (Range x) where
     Empty -> "empty"
     NonEmpty l u -> commaSeparated [renderLower l, renderUpper u]
       where
-        renderLower (Bound isClosed x) =
-          bool "(" "[" isClosed <> maybe "" renderSQL x
-        renderUpper (Bound isClosed x) =
-          maybe "" renderSQL x <> bool ")" "]" isClosed
+        renderLower (Bound isclosed x) =
+          bool "(" "[" isclosed <> maybe "" renderSQL x
+        renderUpper (Bound isclosed x) =
+          maybe "" renderSQL x <> bool ")" "]" isclosed
 
 (<=..<=), (<..<), (<=..<), (<..<=) :: x -> x -> Range x
-x <=..<= y = NonEmpty (Closed (Just x)) (Closed (Just y))
-x <..< y = NonEmpty (Open (Just x)) (Open (Just y))
-x <=..< y = NonEmpty (Closed (Just x)) (Open (Just y))
-x <..<= y = NonEmpty (Open (Just x)) (Closed (Just y))
+x <=..<= y = NonEmpty (closed (Just x)) (closed (Just y))
+x <..< y = NonEmpty (open (Just x)) (open (Just y))
+x <=..< y = NonEmpty (closed (Just x)) (open (Just y))
+x <..<= y = NonEmpty (open (Just x)) (closed (Just y))
 
-pattern HalfGT, HalfGTE, HalfLT, HalfLTE :: x -> Range x
-pattern HalfGT x = NonEmpty (Open (Just x)) (Open Nothing)
-pattern HalfGTE x = NonEmpty (Closed (Just x)) (Open Nothing)
-pattern HalfLT x = NonEmpty (Open Nothing) (Open (Just x))
-pattern HalfLTE x = NonEmpty (Open Nothing) (Closed (Just x))
+halfGT, halfGTE, halfLT, halfLTE :: x -> Range x
+halfGT x = NonEmpty (open (Just x)) (open Nothing)
+halfGTE x = NonEmpty (closed (Just x)) (open Nothing)
+halfLT x = NonEmpty (open Nothing) (open (Just x))
+halfLTE x = NonEmpty (open Nothing) (closed (Just x))
+
+point :: x -> Range x
+point x = x <=..<= x
