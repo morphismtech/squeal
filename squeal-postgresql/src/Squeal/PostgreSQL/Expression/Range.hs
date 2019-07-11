@@ -36,7 +36,7 @@ module Squeal.PostgreSQL.Expression.Range
   , Range (..)
   , (<=..<=), (<..<), (<=..<), (<..<=)
   , halfGT, halfGTE, halfLT, halfLTE
-  , point
+  , singleton, whole
   , Bound (..)
   , closed, open
   ) where
@@ -105,5 +105,8 @@ halfGTE x = NonEmpty (closed (Just x)) (open Nothing)
 halfLT x = NonEmpty (open Nothing) (open (Just x))
 halfLTE x = NonEmpty (open Nothing) (closed (Just x))
 
-point :: x -> Range x
-point x = x <=..<= x
+singleton :: x -> Range x
+singleton x = x <=..<= x
+
+whole :: Range x
+whole = NonEmpty (open Nothing) (open Nothing)
