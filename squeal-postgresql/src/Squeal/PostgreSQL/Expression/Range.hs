@@ -59,8 +59,8 @@ import Squeal.PostgreSQL.Schema
 --
 -- >>> printSQL $ range tstzrange (atLeast now)
 -- tstzrange(now(), NULL, '[)')
--- >>> printSQL $ range numrange (0 <=..<= 2*pi)
--- numrange(0, (2 * pi()), '(]')
+-- >>> printSQL $ range numrange (0 <=..< 2*pi)
+-- numrange(0, (2 * pi()), '[)')
 range
   :: TypeExpression schemas (null ('PGrange ty))
   -> Range (Expression outer commons grp schemas params from ('NotNull ty))
