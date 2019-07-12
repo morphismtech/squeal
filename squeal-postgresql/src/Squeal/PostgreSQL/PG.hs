@@ -22,7 +22,6 @@ Stability: experimental
   , LambdaCase
   , MultiParamTypeClasses
   , OverloadedStrings
-  , PatternSynonyms
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
@@ -38,7 +37,7 @@ module Squeal.PostgreSQL.PG
   , NullPG
   , TuplePG
   , RowPG
-    -- * Storage types
+    -- * Storage newtypes
   , Money (..)
   , Json (..)
   , Jsonb (..)
