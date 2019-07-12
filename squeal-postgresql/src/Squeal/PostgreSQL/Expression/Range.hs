@@ -39,6 +39,25 @@ module Squeal.PostgreSQL.Expression.Range
   , singleton, whole
   , Bound (..)
   , closed, open
+  , (<@.)
+  , (@>.)
+  , (&&.)
+  , (<<.)
+  , (>>.)
+  , (&<.)
+  , (&>.)
+  , (=|=.)
+  , (+.)
+  , (*.)
+  , (-.)
+  , lowerBound
+  , upperBound
+  , isEmpty
+  , lowerInc
+  , lowerInf
+  , upperInc
+  , upperInf
+  , rangeMerge
   ) where
 
 import Data.Bool
@@ -112,3 +131,61 @@ singleton x = x <=..<= x
 
 whole :: Range x
 whole = NonEmpty (open Nothing) (open Nothing)
+
+(<@.) :: Operator ('NotNull ty) (null ('PGrange ty)) ('Null 'PGbool)
+(<@.) = unsafeBinaryOp "<@"
+
+(@>.) :: Operator (null ('PGrange ty)) ('NotNull ty) ('Null 'PGbool)
+(@>.) = unsafeBinaryOp "<@"
+
+(&&.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
+(&&.) = unsafeBinaryOp "&&"
+
+(<<.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
+(<<.) = unsafeBinaryOp "<<"
+
+(>>.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
+(>>.) = unsafeBinaryOp ">>"
+
+(&<.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
+(&<.) = unsafeBinaryOp "&<"
+
+(&>.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
+(&>.) = unsafeBinaryOp "&>"
+
+(=|=.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
+(=|=.) = unsafeBinaryOp "&>"
+
+(+.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
+(+.) = unsafeBinaryOp "+"
+
+(*.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
+(*.) = unsafeBinaryOp "*"
+
+(-.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
+(-.) = unsafeBinaryOp "-"
+
+lowerBound :: null ('PGrange ty) :--> null ty
+lowerBound = unsafeFunction "lower"
+
+upperBound :: null ('PGrange ty) :--> null ty
+upperBound = unsafeFunction "upper"
+
+isEmpty :: null ('PGrange ty) :--> 'Null 'PGbool
+isEmpty = unsafeFunction "isempty"
+
+lowerInc :: null ('PGrange ty) :--> 'Null 'PGbool
+lowerInc = unsafeFunction "lower_inc"
+
+lowerInf :: null ('PGrange ty) :--> 'Null 'PGbool
+lowerInf = unsafeFunction "lower_inf"
+
+upperInc :: null ('PGrange ty) :--> 'Null 'PGbool
+upperInc = unsafeFunction "upper_inc"
+
+upperInf :: null ('PGrange ty) :--> 'Null 'PGbool
+upperInf = unsafeFunction "upper_inf"
+
+rangeMerge :: FunctionN
+  '[ null ('PGrange ty), null ('PGrange ty)] (null ('PGrange ty))
+rangeMerge = unsafeFunctionN "range_merge"

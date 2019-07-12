@@ -353,10 +353,10 @@ instance (ty `In` PGNum, ty `In` PGFloating) => Floating
     atanh x = log ((1 + x) / (1 - x)) / 2
 
 -- | Contained by operators
-class PGSubset container where
-  (@>) :: Operator (null0 container) (null1 container) ('Null 'PGbool)
+class PGSubset subset where
+  (@>) :: Operator (null0 subset) (null1 subset) ('Null 'PGbool)
   (@>) = unsafeBinaryOp "@>"
-  (<@) :: Operator (null0 container) (null1 container) ('Null 'PGbool)
+  (<@) :: Operator (null0 subset) (null1 subset) ('Null 'PGbool)
   (<@) = unsafeBinaryOp "<@"
 instance PGSubset 'PGjsonb
 instance PGSubset 'PGtsquery
