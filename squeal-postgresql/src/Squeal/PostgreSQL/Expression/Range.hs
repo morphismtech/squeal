@@ -35,7 +35,7 @@ module Squeal.PostgreSQL.Expression.Range
   ( range
   , Range (..)
   , (<=..<=), (<..<), (<=..<), (<..<=)
-  , greaterThan, atLeast, lessThan, atMost
+  , moreThan, atLeast, lessThan, atMost
   , singleton, whole
   , Bound (..)
   , closed, open
@@ -71,10 +71,8 @@ range ty = \case
     (commaSeparated [renderArg l, renderArg u, renderClopen l u])
     where
       renderArg (Bound _ x) = maybe "NULL" renderSQL x
-      clopenLeft = bool "(" "["
-      clopenRight = bool ")" "]"
       renderClopen (Bound l' _) (Bound u' _) =
-        "\'" <> clopenLeft l' <> clopenRight u' <> "\'"
+        "\'" <> bool "(" "[" l' <> bool ")" "]" u' <> "\'"
 
 data Bound x = Bound
   { closedBound :: Bool
@@ -84,8 +82,8 @@ data Bound x = Bound
     , Functor, Foldable, Traversable )
     deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
 closed, open :: Maybe x -> Bound x
-closed x = Bound True x
-open x = Bound False x
+closed = Bound True
+open = Bound False
 
 data Range x
   = Empty
@@ -103,8 +101,8 @@ x <..< y = NonEmpty (open (Just x)) (open (Just y))
 x <=..< y = NonEmpty (closed (Just x)) (open (Just y))
 x <..<= y = NonEmpty (open (Just x)) (closed (Just y))
 
-greaterThan, atLeast, lessThan, atMost :: x -> Range x
-greaterThan x = NonEmpty (open (Just x)) (open Nothing)
+moreThan, atLeast, lessThan, atMost :: x -> Range x
+moreThan x = NonEmpty (open (Just x)) (open Nothing)
 atLeast x = NonEmpty (closed (Just x)) (open Nothing)
 lessThan x = NonEmpty (open Nothing) (open (Just x))
 atMost x = NonEmpty (open Nothing) (closed (Just x))
