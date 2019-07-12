@@ -38,7 +38,6 @@ module Squeal.PostgreSQL.Expression.Range
   , moreThan, atLeast, lessThan, atMost
   , singleton, whole
   , Bound (..)
-  , closed, open
   , (<@.)
   , (@>.)
   , (&&.)
@@ -60,8 +59,6 @@ module Squeal.PostgreSQL.Expression.Range
   , rangeMerge
   ) where
 
-import Data.Bool
-
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 
@@ -81,35 +78,31 @@ import Squeal.PostgreSQL.Schema
 -- >>> printSQL $ range numrange (0 <=..< 2*pi)
 -- numrange(0, (2 * pi()), '[)')
 -- >>> printSQL $ range int4range Empty
--- (empty :: int4range)
+-- ('empty' :: int4range)
 range
   :: TypeExpression schemas (null ('PGrange ty))
   -> Range (Expression outer commons grp schemas params from ('NotNull ty))
   -> Expression outer commons grp schemas params from (null ('PGrange ty))
 range ty = \case
   Empty -> UnsafeExpression $ parenthesized
-    ("empty" <+> "::" <+> renderSQL ty)
+    (empty <+> "::" <+> renderSQL ty)
   NonEmpty l u -> UnsafeExpression $ renderSQL ty <> parenthesized
-    (commaSeparated [renderArg l, renderArg u, renderClopen l u])
-    where
-      renderArg (Bound _ x) = maybe "NULL" renderSQL x
-      renderClopen (Bound l' _) (Bound u' _) =
-        "\'" <> bool "(" "[" l' <> bool ")" "]" u' <> "\'"
+    (commaSeparated (args l u))
+  where
+    empty = singleQuote <> "empty" <> singleQuote
+    args l u = [arg l, arg u, singleQuote <> bra l <> ket u <> singleQuote]
+    singleQuote = "\'"
+    arg = \case
+      Infinite -> "NULL"; Closed x -> renderSQL x; Open x -> renderSQL x
+    bra = \case Infinite -> "("; Closed _ -> "["; Open _ -> "("
+    ket = \case Infinite -> ")"; Closed _ -> "]"; Open _ -> ")"
 
-data Bound x = Bound
-  { closedBound :: Bool
-  , getBound :: Maybe x
-  } deriving
+data Bound x = Infinite | Closed x | Open x
+  deriving
     ( Eq, Ord, Show, Read, GHC.Generic
     , Functor, Foldable, Traversable )
-    deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-closed, open :: Maybe x -> Bound x
-closed = Bound True
-open = Bound False
 
-data Range x
-  = Empty
-  | NonEmpty (Bound x) (Bound x)
+data Range x = Empty | NonEmpty (Bound x) (Bound x)
   deriving
     ( Eq, Ord, Show, Read, GHC.Generic
     , Functor, Foldable, Traversable )
@@ -118,22 +111,22 @@ type instance PG (Range x) = 'PGrange (PG x)
 
 (<=..<=), (<..<), (<=..<), (<..<=) :: x -> x -> Range x
 infix 4 <=..<=, <..<, <=..<, <..<=
-x <=..<= y = NonEmpty (closed (Just x)) (closed (Just y))
-x <..< y = NonEmpty (open (Just x)) (open (Just y))
-x <=..< y = NonEmpty (closed (Just x)) (open (Just y))
-x <..<= y = NonEmpty (open (Just x)) (closed (Just y))
+x <=..<= y = NonEmpty (Closed x) (Closed y)
+x <..< y = NonEmpty (Open x) (Open y)
+x <=..< y = NonEmpty (Closed x) (Open y)
+x <..<= y = NonEmpty (Open x) (Closed y)
 
 moreThan, atLeast, lessThan, atMost :: x -> Range x
-moreThan x = NonEmpty (open (Just x)) (open Nothing)
-atLeast x = NonEmpty (closed (Just x)) (open Nothing)
-lessThan x = NonEmpty (open Nothing) (open (Just x))
-atMost x = NonEmpty (open Nothing) (closed (Just x))
+moreThan x = NonEmpty (Open x) Infinite
+atLeast x = NonEmpty (Closed x) Infinite
+lessThan x = NonEmpty Infinite (Open x)
+atMost x = NonEmpty Infinite (Closed x)
 
 singleton :: x -> Range x
 singleton x = x <=..<= x
 
 whole :: Range x
-whole = NonEmpty (open Nothing) (open Nothing)
+whole = NonEmpty Infinite Infinite
 
 (<@.) :: Operator ('NotNull ty) (null ('PGrange ty)) ('Null 'PGbool)
 (<@.) = unsafeBinaryOp "<@"
@@ -168,10 +161,10 @@ whole = NonEmpty (open Nothing) (open Nothing)
 (-.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
 (-.) = unsafeBinaryOp "-"
 
-lowerBound :: null ('PGrange ty) :--> null ty
+lowerBound :: null ('PGrange ty) :--> 'Null ty
 lowerBound = unsafeFunction "lower"
 
-upperBound :: null ('PGrange ty) :--> null ty
+upperBound :: null ('PGrange ty) :--> 'Null ty
 upperBound = unsafeFunction "upper"
 
 isEmpty :: null ('PGrange ty) :--> 'Null 'PGbool
