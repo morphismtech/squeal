@@ -80,12 +80,15 @@ import Squeal.PostgreSQL.Schema
 -- tstzrange(now(), NULL, '[)')
 -- >>> printSQL $ range numrange (0 <=..< 2*pi)
 -- numrange(0, (2 * pi()), '[)')
+-- >>> printSQL $ range int4range Empty
+-- (empty :: int4range)
 range
   :: TypeExpression schemas (null ('PGrange ty))
   -> Range (Expression outer commons grp schemas params from ('NotNull ty))
   -> Expression outer commons grp schemas params from (null ('PGrange ty))
 range ty = \case
-  Empty -> UnsafeExpression "empty"
+  Empty -> UnsafeExpression $ parenthesized
+    ("empty" <+> "::" <+> renderSQL ty)
   NonEmpty l u -> UnsafeExpression $ renderSQL ty <> parenthesized
     (commaSeparated [renderArg l, renderArg u, renderClopen l u])
     where
