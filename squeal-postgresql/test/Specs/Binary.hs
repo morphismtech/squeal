@@ -19,12 +19,13 @@ import qualified Hedgehog.Range as Range
 
 roundtrips :: IO ()
 roundtrips = Main.defaultMain
-  [ check $ roundtrip int2 (Gen.int16 Range.constantBounded)
-  , check $ roundtrip int4 (Gen.int32 Range.constantBounded)
-  , check $ roundtrip int8 (Gen.int64 Range.constantBounded)
-  , check $ roundtrip bool Gen.bool
-  , check $ roundtrip numeric (scientific (Range.exponentialFloatFrom 0 (-1E9) 1E9))
-  , check $ roundtrip float4 (Gen.float (Range.exponentialFloatFrom 0 (-1E9) 1E9))
+  [ roundtrip int2 (Gen.int16 Range.exponentialBounded)
+  , roundtrip int4 (Gen.int32 Range.exponentialBounded)
+  , roundtrip int8 (Gen.int64 Range.exponentialBounded)
+  , roundtrip bool Gen.bool
+  , roundtrip numeric (scientific (Range.exponentialFloatFrom 0 (-1E9) 1E9))
+  , roundtrip float4 (Gen.float (Range.exponentialFloatFrom 0 (-1E9) 1E9))
+  , roundtrip float8 (Gen.double (Range.exponentialFloatFrom 0 (-1E308) 1E308))
   ]
   where
     scientific = fmap fromFloatDigits . Gen.float
@@ -36,8 +37,8 @@ roundtrip
   :: (ToParam x ty, FromValue ty x, Show x, Eq x)
   => TypeExpression schemas ('NotNull ty)
   -> Gen x
-  -> Property
-roundtrip ty gen = property $ do
+  -> IO Bool
+roundtrip ty gen = check . property $ do
   x <- forAll gen
   Just (Only y) <- lift . withConnection connectionString $
     firstRow =<< runQueryParams
