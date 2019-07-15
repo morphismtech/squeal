@@ -2,6 +2,9 @@ module Main where
 
 import           Test.Hspec
 import qualified ExceptionHandling
+import qualified Binary
 
 main :: IO ()
-main = hspec ExceptionHandling.specs
+main = do
+  hspec ExceptionHandling.specs
+  Binary.roundtrips
