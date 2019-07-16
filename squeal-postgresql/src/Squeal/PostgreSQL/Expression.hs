@@ -45,6 +45,7 @@ module Squeal.PostgreSQL.Expression
   , FunctionN
   , unsafeFunctionN
   , PGSubset (..)
+  , PGIntersect (..)
     -- * Re-export
   , (&)
   , K (..)
@@ -353,15 +354,21 @@ instance (ty `In` PGNum, ty `In` PGFloating) => Floating
     atanh x = log ((1 + x) / (1 - x)) / 2
 
 -- | Contained by operators
-class PGSubset subset where
-  (@>) :: Operator (null0 subset) (null1 subset) ('Null 'PGbool)
+class PGSubset ty where
+  (@>) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
   (@>) = unsafeBinaryOp "@>"
-  (<@) :: Operator (null0 subset) (null1 subset) ('Null 'PGbool)
+  (<@) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
   (<@) = unsafeBinaryOp "<@"
 instance PGSubset 'PGjsonb
 instance PGSubset 'PGtsquery
 instance PGSubset ('PGvararray ty)
 instance PGSubset ('PGrange ty)
+
+class PGIntersect ty where
+  (@&&) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
+  (@&&) = unsafeBinaryOp "&&"
+instance PGIntersect ('PGvararray ty)
+instance PGIntersect ('PGrange ty)
 
 instance IsString
   (Expression outer commons grp schemas params from (null 'PGtext)) where

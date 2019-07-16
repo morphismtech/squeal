@@ -38,17 +38,16 @@ module Squeal.PostgreSQL.Expression.Range
   , moreThan, atLeast, lessThan, atMost
   , singleton, whole
   , Bound (..)
-  , (<@.)
+  , (.<@)
   , (@>.)
-  , (&&.)
-  , (<<.)
-  , (>>.)
-  , (&<.)
-  , (&>.)
-  , (=|=.)
-  , (+.)
-  , (*.)
-  , (-.)
+  , (<<@)
+  , (@>>)
+  , (&<)
+  , (&>)
+  , (-|-)
+  , (@+)
+  , (@*)
+  , (@-)
   , lowerBound
   , upperBound
   , isEmpty
@@ -128,38 +127,35 @@ singleton x = x <=..<= x
 whole :: Range x
 whole = NonEmpty Infinite Infinite
 
-(<@.) :: Operator ('NotNull ty) (null ('PGrange ty)) ('Null 'PGbool)
-(<@.) = unsafeBinaryOp "<@"
+(.<@) :: Operator ('NotNull ty) (null ('PGrange ty)) ('Null 'PGbool)
+(.<@) = unsafeBinaryOp "<@"
 
 (@>.) :: Operator (null ('PGrange ty)) ('NotNull ty) ('Null 'PGbool)
 (@>.) = unsafeBinaryOp "<@"
 
-(&&.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
-(&&.) = unsafeBinaryOp "&&"
+(<<@) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
+(<<@) = unsafeBinaryOp "<<"
 
-(<<.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
-(<<.) = unsafeBinaryOp "<<"
+(@>>) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
+(@>>) = unsafeBinaryOp ">>"
 
-(>>.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
-(>>.) = unsafeBinaryOp ">>"
+(&<) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
+(&<) = unsafeBinaryOp "&<"
 
-(&<.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
-(&<.) = unsafeBinaryOp "&<"
+(&>) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
+(&>) = unsafeBinaryOp "&>"
 
-(&>.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
-(&>.) = unsafeBinaryOp "&>"
+(-|-) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
+(-|-) = unsafeBinaryOp "-|-"
 
-(=|=.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
-(=|=.) = unsafeBinaryOp "&>"
+(@+) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
+(@+) = unsafeBinaryOp "+"
 
-(+.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
-(+.) = unsafeBinaryOp "+"
+(@*) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
+(@*) = unsafeBinaryOp "*"
 
-(*.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
-(*.) = unsafeBinaryOp "*"
-
-(-.) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
-(-.) = unsafeBinaryOp "-"
+(@-) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
+(@-) = unsafeBinaryOp "-"
 
 lowerBound :: null ('PGrange ty) :--> 'Null ty
 lowerBound = unsafeFunction "lower"
