@@ -111,6 +111,7 @@ data Range x = Empty | NonEmpty (Bound x) (Bound x)
     , Functor, Foldable, Traversable )
   deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
 type instance PG (Range x) = 'PGrange (PG x)
+-- https://github.com/postgres/postgres/blob/8255c7a5eeba8f1a38b7a431c04909bde4f5e67d/src/backend/utils/adt/rangetypes.c
 instance ToParam x pg => ToParam (Range x) ('PGrange pg) where
   toParam = \case
     Empty -> K (bytes "\'empty\'")
