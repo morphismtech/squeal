@@ -58,9 +58,13 @@ module Squeal.PostgreSQL.Expression.Range
   , rangeMerge
   ) where
 
+import Control.Applicative
+import BinaryParser
+import ByteString.StrictBuilder
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 
+import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Type hiding (bool)
 import Squeal.PostgreSQL.PG
@@ -84,11 +88,11 @@ range
   -> Expression outer commons grp schemas params from (null ('PGrange ty))
 range ty = \case
   Empty -> UnsafeExpression $ parenthesized
-    (empty <+> "::" <+> renderSQL ty)
+    (emp <+> "::" <+> renderSQL ty)
   NonEmpty l u -> UnsafeExpression $ renderSQL ty <> parenthesized
     (commaSeparated (args l u))
   where
-    empty = singleQuote <> "empty" <> singleQuote
+    emp = singleQuote <> "empty" <> singleQuote
     args l u = [arg l, arg u, singleQuote <> bra l <> ket u <> singleQuote]
     singleQuote = "\'"
     arg = \case
@@ -107,6 +111,32 @@ data Range x = Empty | NonEmpty (Bound x) (Bound x)
     , Functor, Foldable, Traversable )
   deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
 type instance PG (Range x) = 'PGrange (PG x)
+instance ToParam x pg => ToParam (Range x) ('PGrange pg) where
+  toParam = \case
+    Empty -> K (bytes "\'empty\'")
+    NonEmpty l u -> K $ mconcat
+      [bytes (bra l), arg l, utf8Char ',', arg u, bytes (ket u)]
+    where
+      arg = \case
+        Infinite -> ""
+        Closed x -> unK (toParam @x @pg x)
+        Open x -> unK (toParam @x @pg x)
+      bra = \case Infinite -> "("; Closed _ -> "["; Open _ -> "("
+      ket = \case Infinite -> ")"; Closed _ -> "]"; Open _ -> ")"
+instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
+  fromValue =
+    Empty <$ unitOfBytes "\'empty\'" <|> do
+      boundL <- boundLOpen <|> boundLClosed <|> boundLInfinite
+      unitOfBytes ","
+      boundR <- boundROpen <|> boundRClosed <|> boundRInfinite
+      return $ NonEmpty boundL boundR
+    where
+      boundLClosed = unitOfBytes "[" *> (Closed <$> fromValue @pg @y)
+      boundLOpen = unitOfBytes "(" *> (Open <$> fromValue @pg @y)
+      boundLInfinite = Infinite <$ unitOfBytes "("
+      boundRClosed = (Closed <$> fromValue @pg @y) <* unitOfBytes "]"
+      boundROpen = (Open <$> fromValue @pg @y) <* unitOfBytes ")"
+      boundRInfinite = Infinite <$ unitOfBytes ")"
 
 (<=..<=), (<..<), (<=..<), (<..<=) :: x -> x -> Range x
 infix 4 <=..<=, <..<, <=..<, <..<=
