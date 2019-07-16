@@ -6,7 +6,7 @@
   , TypeOperators
 #-}
 
-module Binary (roundtrips) where
+module Property (propertyTests) where
 
 import Control.Monad.Trans
 import Data.ByteString (ByteString)
@@ -17,8 +17,8 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Main as Main
 import qualified Hedgehog.Range as Range
 
-roundtrips :: IO ()
-roundtrips = Main.defaultMain
+propertyTests :: IO ()
+propertyTests = Main.defaultMain
   [ roundtrip int2 (Gen.int16 Range.exponentialBounded)
   , roundtrip int4 (Gen.int32 Range.exponentialBounded)
   , roundtrip int8 (Gen.int64 Range.exponentialBounded)
