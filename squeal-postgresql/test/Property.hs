@@ -9,7 +9,6 @@
 module Property (propertyTests) where
 
 import Control.Monad.Trans
-import Data.Int (Int32)
 import Data.ByteString (ByteString)
 import Data.Scientific (fromFloatDigits)
 import Squeal.PostgreSQL hiding (check, defaultMain)
@@ -27,11 +26,9 @@ propertyTests = Main.defaultMain
   , roundtrip numeric (scientific (Range.exponentialFloatFrom 0 (-1E9) 1E9))
   , roundtrip float4 (Gen.float (Range.exponentialFloatFrom 0 (-1E9) 1E9))
   , roundtrip float8 (Gen.double (Range.exponentialFloatFrom 0 (-1E308) 1E308))
-  , roundtrip int4range gen_int4range
   ]
   where
     scientific = fmap fromFloatDigits . Gen.float
-    gen_int4range = Gen.constant (Empty :: Range Int32)
 
 connectionString :: ByteString
 connectionString = "host=localhost port=5432 dbname=exampledb"

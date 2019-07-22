@@ -58,11 +58,12 @@ module Squeal.PostgreSQL.Expression.Range
   , rangeMerge
   ) where
 
-import Control.Applicative
 import BinaryParser
 import ByteString.StrictBuilder
+import Data.Bits
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
+import qualified PostgreSQL.Binary.Decoding as Decoding
 
 import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Expression
@@ -111,33 +112,49 @@ data Range x = Empty | NonEmpty (Bound x) (Bound x)
     , Functor, Foldable, Traversable )
   deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
 type instance PG (Range x) = 'PGrange (PG x)
--- https://github.com/postgres/postgres/blob/8255c7a5eeba8f1a38b7a431c04909bde4f5e67d/src/backend/utils/adt/rangetypes.c
 instance ToParam x pg => ToParam (Range x) ('PGrange pg) where
-  toParam = \case
-    Empty -> K (bytes "\'empty\'")
-    NonEmpty l u -> K $ mconcat
-      [bytes (bra l), arg l, utf8Char ',', arg u, bytes (ket u)]
+  toParam rng = K $
+    word8 (setFlags rng 0) <>
+      case rng of
+        Empty -> mempty
+        NonEmpty lower upper -> putBound lower <> putBound upper
     where
-      arg = \case
-        Infinite -> ""
-        Closed x -> unK (toParam @x @pg x)
-        Open x -> unK (toParam @x @pg x)
-      bra = \case Infinite -> "("; Closed _ -> "["; Open _ -> "("
-      ket = \case Infinite -> ")"; Closed _ -> "]"; Open _ -> ")"
+      putBound = \case
+        Infinite -> mempty
+        Closed value -> putValue (unK (toParam @x @pg value))
+        Open value -> putValue (unK (toParam @x @pg value))
+      putValue value = int32BE (fromIntegral (builderLength value)) <> value
+      setFlags = \case
+        Empty -> (`setBit` 0)
+        NonEmpty lower upper ->
+          setLowerFlags lower . setUpperFlags upper
+      setLowerFlags = \case
+        Infinite -> (`setBit` 3)
+        Closed _ -> (`setBit` 1)
+        Open _ -> id
+      setUpperFlags = \case
+        Infinite -> (`setBit` 4)
+        Closed _ -> (`setBit` 2)
+        Open _ -> id
 instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
-  fromValue =
-    Empty <$ unitOfBytes "\'empty\'" <|> do
-      boundL <- boundLOpen <|> boundLClosed <|> boundLInfinite
-      unitOfBytes ","
-      boundR <- boundROpen <|> boundRClosed <|> boundRInfinite
-      return $ NonEmpty boundL boundR
-    where
-      boundLClosed = unitOfBytes "[" *> (Closed <$> fromValue @pg @y)
-      boundLOpen = unitOfBytes "(" *> (Open <$> fromValue @pg @y)
-      boundLInfinite = Infinite <$ unitOfBytes "("
-      boundRClosed = (Closed <$> fromValue @pg @y) <* unitOfBytes "]"
-      boundROpen = (Open <$> fromValue @pg @y) <* unitOfBytes ")"
-      boundRInfinite = Infinite <$ unitOfBytes ")"
+  fromValue = do
+    flag <- byte
+    if testBit flag 0 then return Empty else do
+      lower <-
+        if testBit flag 3
+          then return Infinite
+          else do
+            len <- sized 4 Decoding.int
+            l <- sized len (fromValue @pg)
+            return $ if testBit flag 1 then Closed l else Open l
+      upper <-
+        if testBit flag 4
+          then return Infinite
+          else do
+            len <- sized 4 Decoding.int
+            l <- sized len (fromValue @pg)
+            return $ if testBit flag 2 then Closed l else Open l
+      return $ NonEmpty lower upper
 
 (<=..<=), (<..<), (<=..<), (<..<=) :: x -> x -> Range x
 infix 4 <=..<=, <..<, <=..<, <..<=
