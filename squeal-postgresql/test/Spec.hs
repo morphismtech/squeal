@@ -18,6 +18,7 @@ module Spec (specTests) where
 
 import Control.Concurrent.Async (replicateConcurrently)
 import Data.ByteString (ByteString)
+import Data.Int (Int32)
 import Data.Text (Text)
 import Test.Hspec
 
@@ -89,7 +90,7 @@ spec = before_ setupDB . after_ dropDB $ do
       withConnection connectionString (transactionally_ insertUserTwice)
        `shouldThrow` (== err23505)
 
-  describe "Pools" $ do
+  describe "Pools" $
 
     it "should manage concurrent transactions" $ do
       pool <- createConnectionPool
@@ -102,7 +103,23 @@ spec = before_ setupDB . after_ dropDB $ do
           Just (Only chr) <- firstRow result
           return chr
       chrs <- replicateConcurrently 10 session
-      chrs `shouldSatisfy` (all (== 'a'))
+      chrs `shouldSatisfy` all (== 'a')
+
+  describe "Ranges" $
+
+    it "should correctly decode ranges" $ do
+
+      rangesOut <- withConnection connectionString $ do
+        let
+          query :: Query_ (Public '[]) () (Only (Range Int32))
+          query = values
+            ( range int4range (atLeast 3) `as` #fromOnly )
+            [ range int4range (3 <=..< 5) `as` #fromOnly
+            , range int4range Empty `as` #fromOnly
+            , range int4range whole `as` #fromOnly ]
+        getRows =<< runQuery query
+      (fromOnly <$> rangesOut :: [Range Int32]) `shouldBe`
+        [ atLeast 3, 3 <=..< 5, Empty, whole ]
 
 specTests :: IO ()
 specTests = hspec spec
