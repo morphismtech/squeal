@@ -63,7 +63,7 @@ import Data.Int (Int16, Int32, Int64)
 import Data.Scientific (Scientific)
 import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime)
 import Data.Vector (Vector)
-import Data.Word (Word16, Word32, Word64)
+import Data.Word (Word32)
 import Data.UUID.Types (UUID)
 import GHC.TypeLits
 import Network.IP.Addr (NetAddr, IP)
@@ -105,11 +105,7 @@ type instance PG Int32 = 'PGint4
 -- | `PGint8`
 type instance PG Int64 = 'PGint8
 -- | `PGint2`
-type instance PG Word16 = 'PGint2
--- | `PGint4`
-type instance PG Word32 = 'PGint4
--- | `PGint8`
-type instance PG Word64 = 'PGint8
+type instance PG Word32 = 'PGoid
 -- | `PGnumeric`
 type instance PG Scientific = 'PGnumeric
 -- | `PGfloat4`

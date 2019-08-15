@@ -68,6 +68,7 @@ module Squeal.PostgreSQL.Expression.Type
   , fixarray
   , tsvector
   , tsquery
+  , oid
   ) where
 
 import Control.DeepSeq
@@ -270,6 +271,10 @@ tsvector = UnsafeTypeExpression "tsvector"
 -- | text search document
 tsquery :: TypeExpression schemas (null 'PGtsquery)
 tsquery = UnsafeTypeExpression "tsquery"
+-- | Object identifiers (OIDs) are used internally by PostgreSQL
+-- as primary keys for various system tables.
+oid :: TypeExpression schemas (null 'PGoid)
+oid = UnsafeTypeExpression "oid"
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped schemas (ty :: NullityType) where
@@ -305,3 +310,4 @@ instance (SOP.All KnownNat dims, PGTyped schemas ty)
     pgtype = fixarray @dims (pgtype @schemas @ty)
 instance PGTyped schemas (null 'PGtsvector) where pgtype = tsvector
 instance PGTyped schemas (null 'PGtsquery) where pgtype = tsquery
+instance PGTyped schemas (null 'PGoid) where pgtype = oid
