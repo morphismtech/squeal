@@ -38,6 +38,7 @@ type Schema =
         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
         , "email" ::: 'NoDef :=> 'Null 'PGtext
         ])
+   , "positive" ::: 'Typedef 'PGfloat4
    ]
 
 type Schemas = Public Schema
@@ -57,9 +58,11 @@ setup =
     ( primaryKey #id `as` #pk_emails :*
       foreignKey #user_id #users #id
         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
+    >>>
+    createDomain #positive real (#value .> 0 .&& (#value & isNotNull))
 
 teardown :: Definition Schemas (Public '[])
-teardown = dropTable #emails >>> dropTable #users
+teardown = dropType #positive >>> dropTable #emails >>> dropTable #users
 
 insertUser :: Manipulation_ Schemas (Text, VarArray (Vector (Maybe Int16))) (Only Int32)
 insertUser = insertInto #users
