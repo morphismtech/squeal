@@ -56,9 +56,11 @@ module Squeal.PostgreSQL.Expression.Type
   , bytea
   , timestamp
   , timestampWithTimeZone
+  , timestamptz
   , date
   , time
   , timeWithTimeZone
+  , timetz
   , interval
   , uuid
   , inet
@@ -219,8 +221,9 @@ bytea = UnsafeTypeExpression "bytea"
 timestamp :: TypeExpression schemas (null 'PGtimestamp)
 timestamp = UnsafeTypeExpression "timestamp"
 -- | date and time, including time zone
-timestampWithTimeZone :: TypeExpression schemas (null 'PGtimestamptz)
+timestampWithTimeZone, timestamptz :: TypeExpression schemas (null 'PGtimestamptz)
 timestampWithTimeZone = UnsafeTypeExpression "timestamp with time zone"
+timestamptz = UnsafeTypeExpression "timestamptz"
 -- | calendar date (year, month, day)
 date :: TypeExpression schemas (null 'PGdate)
 date = UnsafeTypeExpression "date"
@@ -228,8 +231,9 @@ date = UnsafeTypeExpression "date"
 time :: TypeExpression schemas (null 'PGtime)
 time = UnsafeTypeExpression "time"
 -- | time of day, including time zone
-timeWithTimeZone :: TypeExpression schemas (null 'PGtimetz)
+timeWithTimeZone, timetz :: TypeExpression schemas (null 'PGtimetz)
 timeWithTimeZone = UnsafeTypeExpression "time with time zone"
+timetz = UnsafeTypeExpression "timetz"
 -- | time span
 interval :: TypeExpression schemas (null 'PGinterval)
 interval = UnsafeTypeExpression "interval"
