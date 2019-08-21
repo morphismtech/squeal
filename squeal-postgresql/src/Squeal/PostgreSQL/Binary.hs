@@ -398,7 +398,7 @@ instance
 --
 -- >>> :set -XTypeApplications
 -- >>> oidOf @'PGbool
--- 16
+-- Oid {getOid = 16}
 class HasOid (ty :: PGType) where oidOf :: Oid
 instance HasOid 'PGbool where oidOf = Oid 16
 instance HasOid 'PGint2 where oidOf = Oid 21
