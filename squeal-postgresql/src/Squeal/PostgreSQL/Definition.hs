@@ -1034,7 +1034,7 @@ createDomain
   => QualifiedAlias sch dom
   -> (forall nullity. TypeExpression schemas (nullity ty))
   -> (forall tab. Condition '[] '[] 'Ungrouped schemas '[] '[tab ::: '["value" ::: 'Null ty]])
-  -> Definition schemas (Alter sch (Create alias ('Typedef ty) schema) schemas)
+  -> Definition schemas (Alter sch (Create dom ('Typedef ty) schema) schemas)
 createDomain dom ty condition =
   UnsafeDefinition $ "CREATE DOMAIN" <+> renderSQL dom
     <+> "AS" <+> renderTypeExpression ty
