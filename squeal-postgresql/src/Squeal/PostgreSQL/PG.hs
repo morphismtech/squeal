@@ -10,10 +10,12 @@ Stability: experimental
 -}
 {-# LANGUAGE
     AllowAmbiguousTypes
+  , DeriveAnyClass
   , DeriveFoldable
   , DeriveFunctor
   , DeriveGeneric
   , DeriveTraversable
+  , DerivingStrategies
   , DefaultSignatures
   , FlexibleContexts
   , FlexibleInstances
@@ -45,6 +47,7 @@ module Squeal.PostgreSQL.PG
   , Enumerated (..)
   , VarArray (..)
   , FixArray (..)
+  , Oid (..)
     -- * Type families
   , LabelsPG
   , DimPG
@@ -105,7 +108,7 @@ type instance PG Int32 = 'PGint4
 -- | `PGint8`
 type instance PG Int64 = 'PGint8
 -- | `PGint2`
-type instance PG Word32 = 'PGoid
+type instance PG Oid = 'PGoid
 -- | `PGnumeric`
 type instance PG Scientific = 'PGnumeric
 -- | `PGfloat4`
@@ -299,7 +302,8 @@ withConnection "host=localhost port=5432 dbname=exampledb" $ do
 True
 -}
 newtype Money = Money { cents :: Int64 }
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
+  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
+  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 -- | `PGmoney`
 type instance PG Money = 'PGmoney
 
@@ -307,7 +311,8 @@ type instance PG Money = 'PGmoney
 type it's applied to should be stored as a `PGjson`.
 -}
 newtype Json hask = Json {getJson :: hask}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
+  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
+  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 -- | `PGjson`
 type instance PG (Json hask) = 'PGjson
 
@@ -315,7 +320,8 @@ type instance PG (Json hask) = 'PGjson
 type it's applied to should be stored as a `PGjsonb`.
 -}
 newtype Jsonb hask = Jsonb {getJsonb :: hask}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
+  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
+  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 -- | `PGjsonb`
 type instance PG (Jsonb hask) = 'PGjsonb
 
@@ -323,7 +329,8 @@ type instance PG (Jsonb hask) = 'PGjsonb
 type it's applied to should be stored as a `PGcomposite`.
 -}
 newtype Composite record = Composite {getComposite :: record}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
+  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
+  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 -- | `PGcomposite` @(@`RowPG` @hask)@
 type instance PG (Composite hask) = 'PGcomposite (RowPG hask)
 
@@ -331,7 +338,8 @@ type instance PG (Composite hask) = 'PGcomposite (RowPG hask)
 type it's applied to should be stored as a `PGenum`.
 -}
 newtype Enumerated enum = Enumerated {getEnumerated :: enum}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
+  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
+  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 -- | `PGenum` @(@`LabelsPG` @hask)@
 type instance PG (Enumerated hask) = 'PGenum (LabelsPG hask)
 
@@ -343,7 +351,8 @@ PG (VarArray (Vector Double)) :: PGType
 = 'PGvararray ('NotNull 'PGfloat8)
 -}
 newtype VarArray arr = VarArray {getVarArray :: arr}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
+  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
+  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 -- | `PGvararray` @(@`NullPG` @hask)@
 type instance PG (VarArray (Vector hask)) = 'PGvararray (NullPG hask)
 type instance PG (VarArray [hask]) = 'PGvararray (NullPG hask)
@@ -356,6 +365,14 @@ PG (FixArray ((Double, Double), (Double, Double))) :: PGType
 = 'PGfixarray '[2, 2] ('NotNull 'PGfloat8)
 -}
 newtype FixArray arr = FixArray {getFixArray :: arr}
-  deriving (Eq, Ord, Show, Read, GHC.Generic)
+  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
+  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 -- | `PGfixarray` @(@`DimPG` @hask) (@`FixPG` @hask)@
 type instance PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
+
+{- | Object identifiers (`Oid`s) are used internally by PostgreSQL
+as primary keys for various system tables.
+-}
+newtype Oid = Oid { getOid :: Word32 }
+  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
+  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
