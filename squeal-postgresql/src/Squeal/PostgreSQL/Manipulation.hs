@@ -249,6 +249,7 @@ type family Manipulation_ (schemas :: SchemasType) (params :: Type) (row :: Type
 -- | Convert a `Query` into a `Manipulation`.
 queryStatement
   :: Query '[] commons schemas params columns
+  -- ^ `Query` to embed as a `Manipulation`
   -> Manipulation commons schemas params columns
 queryStatement q = UnsafeManipulation $ renderSQL q
 
@@ -271,9 +272,13 @@ insertInto
      , SOP.SListI columns
      , SOP.SListI row1 )
   => QualifiedAlias sch tab
+  -- ^ table
   -> QueryClause commons schemas params columns
+  -- ^ what to insert
   -> ConflictClause tab commons schemas params table
+  -- ^ what to do in case of conflict
   -> ReturningClause commons schemas params '[tab ::: row0] row1
+  -- ^ what to return
   -> Manipulation commons schemas params row1
 insertInto tab qry conflict ret = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderSQL tab
@@ -281,7 +286,7 @@ insertInto tab qry conflict ret = UnsafeManipulation $
   <> renderSQL conflict
   <> renderSQL ret
 
--- | Like `insertInto` but with `OnConflictDoRaise` and no `ReturningClause`.
+-- | Like `insertInto` but with `OnConflictDoRaise` and `no` `ReturningClause`.
 insertInto_
   :: ( Has sch schemas schema
      , Has tab schema ('Table table)
@@ -289,30 +294,33 @@ insertInto_
      , row ~ TableToRow table
      , SOP.SListI columns )
   => QualifiedAlias sch tab
+  -- ^ table
   -> QueryClause commons schemas params columns
+  -- ^ what to insert
   -> Manipulation commons schemas params '[]
 insertInto_ tab qry =
   insertInto tab qry OnConflictDoRaise (Returning_ Nil)
 
 -- | A `QueryClause` describes what to `insertInto` a table.
 data QueryClause commons schemas params columns where
-  -- | `Values` describes `NP` lists of `Aliased` `Optional` `Expression`s
-  -- whose `ColumnsType` must match the tables'.
   Values
     :: SOP.SListI columns
     => NP (Aliased (Optional (Expression '[] commons 'Ungrouped schemas params '[]))) columns
+    -- ^ row of values
     -> [NP (Aliased (Optional (Expression '[] commons 'Ungrouped schemas params '[]))) columns]
+    -- ^ additional rows of values
     -> QueryClause commons schemas params columns
-  -- | `Select` describes a subquery that permits use of `Optional` `Expression`s.
   Select
     :: SOP.SListI columns
     => NP (Aliased (Optional (Expression '[] commons grp schemas params from))) columns
+    -- ^ row of values
     -> TableExpression '[] commons grp schemas params from
+    -- ^ from a table expression
     -> QueryClause commons schemas params columns
-  -- | `Subquery` describes a subquery whose `RowType` must match the tables'.
   Subquery
     :: ColumnsToRow columns ~ row
     => Query '[] commons schemas params row
+    -- ^ subquery to insert
     -> QueryClause commons schemas params columns
 
 instance RenderSQL (QueryClause commons schemas params columns) where
@@ -350,6 +358,7 @@ instance RenderSQL (QueryClause commons schemas params columns) where
 pattern Values_
   :: SOP.SListI columns
   => NP (Aliased (Optional (Expression '[] commons 'Ungrouped schemas params '[]))) columns
+  -- ^ row of values
   -> QueryClause commons schemas params columns
 pattern Values_ vals = Values vals []
 
@@ -374,7 +383,7 @@ instance (forall x. RenderSQL (expr x)) => RenderSQL (Optional expr ty) where
 -- deleted will be returned. For example, if a row was locked
 -- but not updated because an `OnConflict` `DoUpdate` condition was not satisfied,
 -- the row will not be returned. `Returning` `Star` will return all columns
--- in the row. Use @Returning Nil@ in the common case where no return
+-- in the row. Use `Returning` `Nil` in the common case where no return
 -- values are desired.
 newtype ReturningClause commons schemas params from row =
   Returning (Selection '[] commons 'Ungrouped schemas params from row)
@@ -388,6 +397,7 @@ instance RenderSQL (ReturningClause commons schemas params from row) where
 pattern Returning_
   :: SOP.SListI row
   => NP (Aliased (Expression '[] commons 'Ungrouped schemas params from)) row
+  -- ^ row of values
   -> ReturningClause commons schemas params from row
 pattern Returning_ list = Returning (List list)
 
@@ -400,7 +410,9 @@ data ConflictClause tab commons schemas params table where
   OnConflictDoRaise :: ConflictClause tab commons schemas params table
   OnConflict
     :: ConflictTarget constraints
+    -- ^ conflict target
     -> ConflictAction tab commons schemas params columns
+    -- ^ conflict action
     -> ConflictClause tab commons schemas params (constraints :=> columns)
 
 -- | Render a `ConflictClause`.
@@ -418,12 +430,12 @@ the exact details of the `update` action to be performed in case of a conflict.
 The `Set` and WHERE `Condition`s in `OnConflict` `DoUpdate` have access to the
 existing row using the table's name (or an alias), and to rows proposed
 for insertion using the special @#excluded@ table.
+`OnConflict` `DoNothing` simply avoids inserting a row as its alternative action.
+`OnConflict` `DoUpdate` updates the existing row that conflicts
+with the row proposed for insertion as its alternative action.
 -}
 data ConflictAction tab commons schemas params columns where
-  -- | `OnConflict` `DoNothing` simply avoids inserting a row as its alternative action.
   DoNothing :: ConflictAction tab commons schemas params columns
-  -- | `OnConflict` `DoUpdate` updates the existing row that conflicts
-  -- with the row proposed for insertion as its alternative action.
   DoUpdate
     :: ( row ~ ColumnsToRow columns
        , SOP.SListI columns
@@ -473,7 +485,6 @@ UPDATE statements
 update
   :: ( SOP.SListI columns
      , SOP.SListI row1
-     , db ~ (commons :=> schemas)
      , Has sch schemas schema
      , Has tab schema ('Table table)
      , row0 ~ TableToRow table
@@ -498,7 +509,6 @@ update tab columns wh returning = UnsafeManipulation $
 -- | Update a row returning `Nil`.
 update_
   :: ( SOP.SListI columns
-     , db ~ (commons :=> schemas)
      , Has sch schemas schema
      , Has tab schema ('Table table)
      , row ~ TableToRow table
@@ -517,25 +527,25 @@ update_ tab columns wh = update tab columns wh (Returning_ Nil)
 DELETE statements
 -----------------------------------------}
 
--- | Specify additional tables.
+-- | Specify additional tables with `Using`
+-- an `also` list of table expressions, allowing columns
+-- from other tables to appear in the WHERE condition.
+-- This is similar to the list of tables that can be specified
+-- in the FROM Clause of a SELECT statement;
+-- for example, an alias for the table name can be specified.
+-- Do not repeat the target table in the `Using` list,
+-- unless you wish to set up a self-join.
+-- `NoUsing` if no additional tables are to be used.
 data UsingClause commons schemas params from where
-  -- | No `UsingClause`
   NoUsing :: UsingClause commons schemas params '[]
-  -- | An `also` list of table expressions, allowing columns
-  -- from other tables to appear in the WHERE condition.
-  -- This is similar to the list of tables that can be specified
-  -- in the FROM Clause of a SELECT statement;
-  -- for example, an alias for the table name can be specified.
-  -- Do not repeat the target table in the `Using` list,
-  -- unless you wish to set up a self-join.
   Using
     :: FromClause '[] commons schemas params from
+    -- ^ what to use
     -> UsingClause commons schemas params from
 
 -- | Delete rows from a table.
 deleteFrom
   :: ( SOP.SListI row1
-     , db ~ (commons :=> schemas)
      , Has sch schemas schema
      , Has tab schema ('Table table)
      , row0 ~ TableToRow table
@@ -557,8 +567,7 @@ deleteFrom tab using wh returning = UnsafeManipulation $
 
 -- | Delete rows returning `Nil`.
 deleteFrom_
-  :: ( db ~ (commons :=> schemas)
-     , Has sch schemas schema
+  :: ( Has sch schemas schema
      , Has tab schema ('Table table)
      , row ~ TableToRow table
      , columns ~ TableToColumns table )
