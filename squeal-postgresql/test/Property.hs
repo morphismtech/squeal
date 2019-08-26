@@ -12,7 +12,7 @@ module Property (propertyTests) where
 
 import Control.Monad.Trans
 import Data.ByteString (ByteString)
-import Data.Scientific (fromFloatDigits)
+import Data.Scientific (fromFloatDigits,Scientific)
 import Data.Fixed (Fixed(MkFixed), Micro, Pico)
 import Data.Time
 import Squeal.PostgreSQL hiding (check, defaultMain)
@@ -23,48 +23,50 @@ import qualified Hedgehog.Range as Range
 
 propertyTests :: IO ()
 propertyTests = Main.defaultMain
-  [ roundtrip int2 genInt16 id
-  , roundtrip int4 genInt32 id
-  , roundtrip int8 genInt64 id
-  , roundtrip bool Gen.bool id
-  , roundtrip numeric genScientific id
-  , roundtrip float4 genFloat id
-  , roundtrip float8 genDouble id
-  , roundtrip time genTimeOfDay normalizeTimeOfDay
+  [ roundtrip int2 genInt16
+  , roundtrip int4 genInt32
+  , roundtrip int8 genInt64
+  , roundtrip bool Gen.bool
+  , roundtrip numeric genScientific
+  , roundtrip float4 genFloat
+  , roundtrip float8 genDouble
+  , roundtripOn normalizeTimeOfDay time genTimeOfDay
   -- , roundtrip timetz genTimeWithZone normalizeTimeWithZone
-  , roundtrip timestamp genLocalTime normalizeLocalTime
-  , roundtrip timestamptz genUTCTime id
-  , roundtrip date genDay id
-  , roundtrip interval genDiffTime id
-  , roundtrip int4range (genRange genInt32) normalizeIntRange
-  , roundtrip int8range (genRange genInt64) normalizeIntRange
-  , roundtrip numrange (genRange genScientific) id
-  , roundtrip tsrange (genRange genLocalTime) (fmap normalizeLocalTime)
-  , roundtrip tstzrange (genRange genUTCTime) id
-  , roundtrip daterange (genRange genDay) normalizeIntRange
+  , roundtripOn normalizeLocalTime timestamp genLocalTime
+  , roundtrip timestamptz genUTCTime
+  , roundtrip date genDay
+  , roundtrip interval genDiffTime
+  , roundtripOn normalizeIntRange int4range (genRange genInt32)
+  , roundtripOn normalizeIntRange int8range (genRange genInt64)
+  , roundtrip numrange (genRange genScientific)
+  , roundtripOn (fmap normalizeLocalTime) tsrange (genRange genLocalTime)
+  , roundtrip tstzrange (genRange genUTCTime)
+  , roundtripOn normalizeIntRange daterange (genRange genDay)
   ]
   where
     genInt16 = Gen.int16 Range.exponentialBounded
     genInt32 = Gen.int32 Range.exponentialBounded
     genInt64 = Gen.int64 Range.exponentialBounded
-    genScientific = fromFloatDigits <$>
-      Gen.float (Range.exponentialFloatFrom 0 (-1E9) 1E9)
-    genFloat = Gen.float (Range.exponentialFloatFrom 0 (-1E9) 1E9)
-    genDouble = Gen.double (Range.exponentialFloatFrom 0 (-1E308) 1E308)
+    genScientific = fromFloatDigits <$> genFloat
+    genPosFloat = Gen.float
+      (Range.exponentialFloatFrom 1 minPosFloat maxPosFloat)
+    genFloat = Gen.prune $ Gen.choice
+      [ genPosFloat
+      , negate <$> genPosFloat
+      , Gen.element [0,1/0] ]
+    genPosDouble = Gen.double
+      (Range.exponentialFloatFrom 1 minPosFloat maxPosFloat)
+    genDouble = Gen.prune $ Gen.choice
+      [ genPosDouble
+      , negate <$> genPosDouble
+      , Gen.element [0,1/0] ]
     genRange gen = do
       lb <- gen
-      ub <- Gen.filter (lb <=) gen
+      ub <- Gen.filter (lb <) gen
       Gen.element
-        [ Empty
-        , NonEmpty (Closed lb) (Closed ub)
-        , NonEmpty (Closed lb) (Open ub)
-        , NonEmpty (Closed lb) Infinite
-        , NonEmpty (Open lb) (Closed ub)
-        , NonEmpty (Open lb) (Open ub)
-        , NonEmpty (Open lb) Infinite
-        , NonEmpty Infinite (Closed ub)
-        , NonEmpty Infinite (Open ub)
-        , NonEmpty Infinite Infinite ]
+        [ Empty, singleton lb, whole
+        , lb <=..<= ub , lb <=..< ub, lb <..<= ub, lb <..< ub
+        , atLeast lb, moreThan lb, atMost ub, lessThan ub ]
     genDay = do
       y <- toInteger <$> Gen.int (Range.constant 2000 2019)
       m <- Gen.int (Range.constant 1 12)
@@ -83,6 +85,42 @@ propertyTests = Main.defaultMain
       [ "UTC", "UT", "GMT", "EST", "EDT", "CST"
       , "CDT", "MST", "MDT", "PST", "PDT" ]
     genTimeWithZone = (,) <$> genTimeOfDay <*> genTimeZone
+
+roundtrip
+  :: (ToParam x ty, FromValue ty x, Show x, Eq x)
+  => TypeExpression schemas ('NotNull ty)
+  -> Gen x
+  -> IO Bool
+roundtrip = roundtripOn id
+
+roundtripOn
+  :: (ToParam x ty, FromValue ty x, Show x, Eq x)
+  => (x -> x)
+  -> TypeExpression schemas ('NotNull ty)
+  -> Gen x
+  -> IO Bool
+roundtripOn norm ty gen = check . property $ do
+  x <- forAll gen
+  Just (Only y) <- lift . withConnection connectionString $
+    firstRow =<< runQueryParams
+      (values_ (parameter @1 ty `as` #fromOnly)) (Only x)
+  norm x === y
+
+maxPosFloat :: RealFloat a => a
+maxPosFloat = x
+  where
+    n = floatDigits x
+    b = floatRadix x
+    (_, u) = floatRange x
+    x = encodeFloat (b^n - 1) (u - n)
+
+minPosFloat :: RealFloat a => a
+minPosFloat = x
+  where
+    n = floatDigits x
+    b = floatRadix x
+    (l, _) = floatRange x
+    x = encodeFloat (b^n - 1) (l - n - 1)
 
 connectionString :: ByteString
 connectionString = "host=localhost port=5432 dbname=exampledb"
@@ -118,16 +156,3 @@ normalizeLocalTime (LocalTime d t) = LocalTime d (normalizeTimeOfDay t)
 
 normalizeTimeWithZone :: (TimeOfDay, TimeZone) -> (TimeOfDay, TimeZone)
 normalizeTimeWithZone (t, z) = (normalizeTimeOfDay t, z)
-
-roundtrip
-  :: (ToParam x ty, FromValue ty x, Show x, Eq x)
-  => TypeExpression schemas ('NotNull ty)
-  -> Gen x
-  -> (x -> x)
-  -> IO Bool
-roundtrip ty gen norm = check . property $ do
-  x <- forAll gen
-  Just (Only y) <- lift . withConnection connectionString $
-    firstRow =<< runQueryParams
-      (values_ (parameter @1 ty `as` #fromOnly)) (Only x)
-  norm x === y
