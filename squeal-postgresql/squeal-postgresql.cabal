@@ -80,7 +80,7 @@ library
     , uuid-types >= 1.0.3
     , vector >= 0.12.0.1
 
-test-suite squeal-postgresql-doctest
+test-suite doctest
   default-language: Haskell2010
   type: exitcode-stdio-1.0
   hs-source-dirs: test
@@ -91,7 +91,7 @@ test-suite squeal-postgresql-doctest
     , doctest >= 0.11.4
     , squeal-postgresql
 
-test-suite squeal-postgresql-properties
+test-suite properties
   default-language: Haskell2010
   type: exitcode-stdio-1.0
   hs-source-dirs: test
@@ -106,7 +106,7 @@ test-suite squeal-postgresql-properties
     , squeal-postgresql
     , time >= 1.8.0.2
 
-test-suite squeal-postgresql-spec
+test-suite spec
   default-language: Haskell2010
   type: exitcode-stdio-1.0
   hs-source-dirs: test
@@ -123,7 +123,7 @@ test-suite squeal-postgresql-spec
     , text >= 1.2.2.2
     , vector >= 0.12.0.1
 
-executable squeal-postgresql-example
+executable example
   default-language: Haskell2010
   hs-source-dirs: exe
   ghc-options: -Wall

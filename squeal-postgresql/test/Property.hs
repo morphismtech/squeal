@@ -12,17 +12,22 @@ module Main (main) where
 
 import Control.Monad.Trans
 import Data.ByteString (ByteString)
-import Data.Scientific (fromFloatDigits,Scientific)
+import Data.ByteString.Char8 (unpack)
+import Data.Scientific (fromFloatDigits)
 import Data.Fixed (Fixed(MkFixed), Micro, Pico)
+import Data.String (IsString(fromString))
 import Data.Time
-import Squeal.PostgreSQL hiding (check, defaultMain)
+import Squeal.PostgreSQL hiding (check, defaultMain, Group)
 import Hedgehog hiding (Range)
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Main as Main
 import qualified Hedgehog.Range as Range
 
 main :: IO ()
-main = Main.defaultMain
+main = Main.defaultMain [checkParallel roundtrips]
+
+roundtrips :: Group
+roundtrips = Group "roundtrips"
   [ roundtrip int2 genInt16
   , roundtrip int4 genInt32
   , roundtrip int8 genInt64
@@ -81,16 +86,16 @@ main = Main.defaultMain
       s <- MkFixed . toInteger <$> Gen.int (Range.constant 0 59)
       return $ TimeOfDay h m s
     genLocalTime = LocalTime <$> genDay <*> genTimeOfDay
-    genTimeZone = Gen.element $ map (read @TimeZone)
-      [ "UTC", "UT", "GMT", "EST", "EDT", "CST"
-      , "CDT", "MST", "MDT", "PST", "PDT" ]
-    genTimeWithZone = (,) <$> genTimeOfDay <*> genTimeZone
+    -- genTimeZone = Gen.element $ map (read @TimeZone)
+    --   [ "UTC", "UT", "GMT", "EST", "EDT", "CST"
+    --   , "CDT", "MST", "MDT", "PST", "PDT" ]
+    -- genTimeWithZone = (,) <$> genTimeOfDay <*> genTimeZone
 
 roundtrip
   :: (ToParam x ty, FromValue ty x, Show x, Eq x)
   => TypeExpression schemas ('NotNull ty)
   -> Gen x
-  -> IO Bool
+  -> (PropertyName, Property)
 roundtrip = roundtripOn id
 
 roundtripOn
@@ -98,13 +103,16 @@ roundtripOn
   => (x -> x)
   -> TypeExpression schemas ('NotNull ty)
   -> Gen x
-  -> IO Bool
-roundtripOn norm ty gen = check . property $ do
+  -> (PropertyName, Property)
+roundtripOn norm ty gen = propertyWithName $ do
   x <- forAll gen
   Just (Only y) <- lift . withConnection connectionString $
     firstRow =<< runQueryParams
       (values_ (parameter @1 ty `as` #fromOnly)) (Only x)
   norm x === y
+  where
+    propertyWithName prop =
+      (fromString (unpack (renderSQL ty)), property prop)
 
 maxPosFloat :: RealFloat a => a
 maxPosFloat = x
@@ -154,5 +162,5 @@ normalizeTimeOfDay (TimeOfDay h m s) = TimeOfDay h m
 normalizeLocalTime :: LocalTime -> LocalTime
 normalizeLocalTime (LocalTime d t) = LocalTime d (normalizeTimeOfDay t)
 
-normalizeTimeWithZone :: (TimeOfDay, TimeZone) -> (TimeOfDay, TimeZone)
-normalizeTimeWithZone (t, z) = (normalizeTimeOfDay t, z)
+-- normalizeTimeWithZone :: (TimeOfDay, TimeZone) -> (TimeOfDay, TimeZone)
+-- normalizeTimeWithZone (t, z) = (normalizeTimeOfDay t, z)
