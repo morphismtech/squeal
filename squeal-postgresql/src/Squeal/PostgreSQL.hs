@@ -205,6 +205,7 @@ import Squeal.PostgreSQL.Expression.Logic as X
 import Squeal.PostgreSQL.Expression.Math as X
 import Squeal.PostgreSQL.Expression.Null as X
 import Squeal.PostgreSQL.Expression.Parameter as X
+import Squeal.PostgreSQL.Expression.Range as X
 import Squeal.PostgreSQL.Expression.SetOf as X
 import Squeal.PostgreSQL.Expression.Sort as X
 import Squeal.PostgreSQL.Expression.Subquery as X

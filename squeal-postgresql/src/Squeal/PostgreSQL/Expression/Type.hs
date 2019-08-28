@@ -56,9 +56,11 @@ module Squeal.PostgreSQL.Expression.Type
   , bytea
   , timestamp
   , timestampWithTimeZone
+  , timestamptz
   , date
   , time
   , timeWithTimeZone
+  , timetz
   , interval
   , uuid
   , inet
@@ -68,6 +70,12 @@ module Squeal.PostgreSQL.Expression.Type
   , fixarray
   , tsvector
   , tsquery
+  , int4range
+  , int8range
+  , numrange
+  , tsrange
+  , tstzrange
+  , daterange
   ) where
 
 import Control.DeepSeq
@@ -213,8 +221,9 @@ bytea = UnsafeTypeExpression "bytea"
 timestamp :: TypeExpression schemas (null 'PGtimestamp)
 timestamp = UnsafeTypeExpression "timestamp"
 -- | date and time, including time zone
-timestampWithTimeZone :: TypeExpression schemas (null 'PGtimestamptz)
+timestampWithTimeZone, timestamptz :: TypeExpression schemas (null 'PGtimestamptz)
 timestampWithTimeZone = UnsafeTypeExpression "timestamp with time zone"
+timestamptz = UnsafeTypeExpression "timestamptz"
 -- | calendar date (year, month, day)
 date :: TypeExpression schemas (null 'PGdate)
 date = UnsafeTypeExpression "date"
@@ -222,8 +231,9 @@ date = UnsafeTypeExpression "date"
 time :: TypeExpression schemas (null 'PGtime)
 time = UnsafeTypeExpression "time"
 -- | time of day, including time zone
-timeWithTimeZone :: TypeExpression schemas (null 'PGtimetz)
+timeWithTimeZone, timetz :: TypeExpression schemas (null 'PGtimetz)
 timeWithTimeZone = UnsafeTypeExpression "time with time zone"
+timetz = UnsafeTypeExpression "timetz"
 -- | time span
 interval :: TypeExpression schemas (null 'PGinterval)
 interval = UnsafeTypeExpression "interval"
@@ -270,6 +280,24 @@ tsvector = UnsafeTypeExpression "tsvector"
 -- | text search document
 tsquery :: TypeExpression schemas (null 'PGtsquery)
 tsquery = UnsafeTypeExpression "tsquery"
+-- | Range of integer
+int4range :: TypeExpression schemas (null ('PGrange 'PGint4))
+int4range = UnsafeTypeExpression "int4range"
+-- | Range of bigint
+int8range :: TypeExpression schemas (null ('PGrange 'PGint8))
+int8range = UnsafeTypeExpression "int8range"
+-- | Range of numeric
+numrange :: TypeExpression schemas (null ('PGrange 'PGnumeric))
+numrange = UnsafeTypeExpression "numrange"
+-- | Range of timestamp without time zone
+tsrange  :: TypeExpression schemas (null ('PGrange 'PGtimestamp))
+tsrange = UnsafeTypeExpression "tsrange"
+-- | Range of timestamp with time zone
+tstzrange :: TypeExpression schemas (null ('PGrange 'PGtimestamptz))
+tstzrange = UnsafeTypeExpression "tstzrange"
+-- | Range of date
+daterange :: TypeExpression schemas (null ('PGrange 'PGdate))
+daterange = UnsafeTypeExpression "daterange"
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped schemas (ty :: NullityType) where

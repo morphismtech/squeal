@@ -132,7 +132,8 @@ data PGType
   | PGenum [Symbol] -- ^ enumerated (enum) types are data types that comprise a static, ordered set of values.
   | PGcomposite RowType -- ^ a composite type represents the structure of a row or record; it is essentially just a list of field names and their data types.
   | PGtsvector -- ^ A tsvector value is a sorted list of distinct lexemes, which are words that have been normalized to merge different variants of the same word.
-  | PGtsquery -- ^ A tsquery value stores lexemes that are to be searched for
+  | PGtsquery -- ^ A tsquery value stores lexemes that are to be searched for.
+  | PGrange PGType -- ^ Range types are data types representing a range of values of some element type (called the range's subtype).
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
 -- | `NullityType` encodes the potential presence or definite absence of a

@@ -432,7 +432,7 @@ instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
           Just prepResult -> okResult_ prepResult
         results <- for list $ \ params -> do
           let
-            toParam' encoding = (encodingBytes encoding,LibPQ.Binary)
+            toParam' encoding = (encodingBytes encoding, LibPQ.Binary)
             params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
           resultMaybe <- LibPQ.execPrepared conn temp params' LibPQ.Binary
           case resultMaybe of
