@@ -24,7 +24,7 @@ import qualified Hedgehog.Main as Main
 import qualified Hedgehog.Range as Range
 
 main :: IO ()
-main = Main.defaultMain [checkParallel roundtrips]
+main = Main.defaultMain [checkSequential roundtrips]
 
 roundtrips :: Group
 roundtrips = Group "roundtrips"
