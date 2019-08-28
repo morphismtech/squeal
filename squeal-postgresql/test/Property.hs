@@ -8,7 +8,7 @@
   , TypeOperators
 #-}
 
-module Property (propertyTests) where
+module Main (main) where
 
 import Control.Monad.Trans
 import Data.ByteString (ByteString)
@@ -21,8 +21,8 @@ import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Main as Main
 import qualified Hedgehog.Range as Range
 
-propertyTests :: IO ()
-propertyTests = Main.defaultMain
+main :: IO ()
+main = Main.defaultMain
   [ roundtrip int2 genInt16
   , roundtrip int4 genInt32
   , roundtrip int8 genInt64

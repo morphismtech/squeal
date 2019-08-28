@@ -14,7 +14,7 @@
   , TypeOperators
 #-}
 
-module Spec (specTests) where
+module Main (main) where
 
 import Control.Concurrent.Async (replicateConcurrently)
 import Data.ByteString (ByteString)
@@ -26,6 +26,9 @@ import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL
+
+main :: IO ()
+main = hspec spec
 
 type Schemas = Public
   '[ "users" ::: 'Table (
@@ -120,6 +123,3 @@ spec = before_ setupDB . after_ dropDB $ do
         getRows =<< runQuery query
       (fromOnly <$> rangesOut :: [Range Int32]) `shouldBe`
         [ atLeast 3, 3 <=..< 5, Empty, whole ]
-
-specTests :: IO ()
-specTests = hspec spec

@@ -1,9 +1,9 @@
-module Doc (docTests) where
+module Main (main) where
 
 import Test.DocTest
 
-docTests :: IO ()
-docTests = doctest
+main :: IO ()
+main = doctest
   [ "-isrc"
   , "src/Squeal/PostgreSQL.hs"
   , "src/Squeal/PostgreSQL/Binary.hs"
