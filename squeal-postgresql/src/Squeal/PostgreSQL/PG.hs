@@ -22,8 +22,8 @@ Stability: experimental
   , FunctionalDependencies
   , GADTs
   , LambdaCase
-  , OverloadedStrings
   , MultiParamTypeClasses
+  , OverloadedStrings
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
