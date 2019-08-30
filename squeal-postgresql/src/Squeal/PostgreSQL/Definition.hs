@@ -46,6 +46,7 @@ module Squeal.PostgreSQL.Definition
   , FieldTyped (..)
   , createDomain
   , createTypeRange
+  , createIndex
   , TableConstraintExpression (..)
   , check
   , unique
@@ -101,6 +102,7 @@ import qualified GHC.Generics as GHC
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Logic
+import Squeal.PostgreSQL.Expression.Sort
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
@@ -1041,6 +1043,15 @@ createDomain dom ty condition =
     <+> "AS" <+> renderTypeExpression ty
     <+> "CHECK" <+> parenthesized (renderSQL condition) <> ";"
 
+{- |
+>>> :{
+let
+  createSmallIntRange :: Definition (Public '[]) (Public '["int2range" ::: 'Typedef ('PGrange 'PGint2)])
+  createSmallIntRange = createTypeRange #int2range int2
+in printSQL createSmallIntRange
+:}
+CREATE TYPE "int2range" AS RANGE (subtype = int2);
+-}
 createTypeRange
   :: (Has sch schemas schema, KnownSymbol range)
   => QualifiedAlias sch range
@@ -1048,7 +1059,17 @@ createTypeRange
   -> Definition schemas (Alter sch (Create range ('Typedef ('PGrange ty)) schema) schemas)
 createTypeRange range ty = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderSQL range <+> "AS" <+> "RANGE" <+>
-  parenthesized ("subtype" <+> "=" <+> renderTypeExpression ty)
+  parenthesized ("subtype" <+> "=" <+> renderTypeExpression ty) <> ";"
+
+createIndex
+  :: (Has sch schemas schema, Has tab schema ('Table table), KnownSymbol ix)
+  => Alias ix
+  -> QualifiedAlias sch tab
+  -> [SortExpression '[] '[] 'Ungrouped schemas '[] '[tab ::: TableToRow table]]
+  -> Definition schemas (Alter sch (Create ix 'Index schema) schemas)
+createIndex ix tab cols = UnsafeDefinition $
+  "CREATE" <+> "INDEX" <+> renderSQL ix <+> "ON" <+> renderSQL tab
+    <+> parenthesized (commaSeparated (parenthesized . renderSQL <$> cols))
 
 -- | Lift `PGTyped` to a field
 class FieldTyped schemas ty where
