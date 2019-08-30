@@ -274,11 +274,9 @@ class ToParam (x :: Type) (pg :: PGType) where
   toParam :: x -> K Encoding.Encoding pg
 instance ToParam Bool 'PGbool where toParam = K . Encoding.bool
 instance ToParam Int16 'PGint2 where toParam = K . Encoding.int2_int16
-instance ToParam Word16 'PGint2 where toParam = K . Encoding.int2_word16
 instance ToParam Int32 'PGint4 where toParam = K . Encoding.int4_int32
-instance ToParam Word32 'PGint4 where toParam = K . Encoding.int4_word32
 instance ToParam Int64 'PGint8 where toParam = K . Encoding.int8_int64
-instance ToParam Word64 'PGint8 where toParam = K . Encoding.int8_word64
+instance ToParam Oid 'PGoid where toParam = K . Encoding.int4_word32 . getOid
 instance ToParam Float 'PGfloat4 where toParam = K . Encoding.float4
 instance ToParam Double 'PGfloat8 where toParam = K . Encoding.float8
 instance ToParam Scientific 'PGnumeric where toParam = K . Encoding.numeric
@@ -314,21 +312,23 @@ instance Aeson.ToJSON x => ToParam (Jsonb x) 'PGjsonb where
 instance (ToNullityParam x ty, ty ~ nullity pg, HasOid pg)
   => ToParam (VarArray [x]) ('PGvararray ty) where
     toParam = K
-      . Encoding.array_foldable (oid @pg) (unK . toNullityParam @x @ty)
+      . Encoding.array_foldable
+        (getOid (oidOf @pg)) (unK . toNullityParam @x @ty)
       . getVarArray
 instance (ToParam x pg, HasOid pg)
   => ToParam (VarArray (Vector x)) ('PGvararray ('NotNull pg)) where
     toParam = K
-      . Encoding.array_vector (oid @pg) (unK . toParam @x @pg)
+      . Encoding.array_vector (getOid (oidOf @pg)) (unK . toParam @x @pg)
       . getVarArray
 instance (ToParam x pg, HasOid pg)
   => ToParam (VarArray (Vector (Maybe x))) ('PGvararray ('Null pg)) where
     toParam = K
-      . Encoding.nullableArray_vector (oid @pg) (unK . toParam @x @pg)
+      . Encoding.nullableArray_vector
+        (getOid (oidOf @pg)) (unK . toParam @x @pg)
       . getVarArray
 instance (ToFixArray x dims ty, ty ~ nullity pg, HasOid pg)
   => ToParam (FixArray x) ('PGfixarray dims ty) where
-    toParam = K . Encoding.array (oid @pg)
+    toParam = K . Encoding.array (getOid (oidOf @pg))
       . unK . unK . toFixArray @x @dims @ty . getFixArray
 instance
   ( IsEnumType x
@@ -382,7 +382,7 @@ instance
                 => K (Maybe Encoding.Encoding) field
                 -> Encoding.Encoding
               each (K field :: K (Maybe Encoding.Encoding) field) =
-                word32BE (aliasedOid @field)
+                word32BE (getOid (aliasedOid @field))
                 <> case field of
                   Nothing -> int64BE (-1)
                   Just value ->
@@ -397,36 +397,36 @@ instance
 -- | The object identifier of a `PGType`.
 --
 -- >>> :set -XTypeApplications
--- >>> oid @'PGbool
--- 16
-class HasOid (ty :: PGType) where oid :: Word32
-instance HasOid 'PGbool where oid = 16
-instance HasOid 'PGint2 where oid = 21
-instance HasOid 'PGint4 where oid = 23
-instance HasOid 'PGint8 where oid = 20
-instance HasOid 'PGnumeric where oid = 1700
-instance HasOid 'PGfloat4 where oid = 700
-instance HasOid 'PGfloat8 where oid = 701
-instance HasOid ('PGchar n) where oid = 18
-instance HasOid ('PGvarchar n) where oid = 1043
-instance HasOid 'PGtext where oid = 25
-instance HasOid 'PGbytea where oid = 17
-instance HasOid 'PGtimestamp where oid = 1114
-instance HasOid 'PGtimestamptz where oid = 1184
-instance HasOid 'PGdate where oid = 1082
-instance HasOid 'PGtime where oid = 1083
-instance HasOid 'PGtimetz where oid = 1266
-instance HasOid 'PGinterval where oid = 1186
-instance HasOid 'PGuuid where oid = 2950
-instance HasOid 'PGinet where oid = 869
-instance HasOid 'PGjson where oid = 114
-instance HasOid 'PGjsonb where oid = 3802
+-- >>> oidOf @'PGbool
+-- Oid {getOid = 16}
+class HasOid (ty :: PGType) where oidOf :: Oid
+instance HasOid 'PGbool where oidOf = Oid 16
+instance HasOid 'PGint2 where oidOf = Oid 21
+instance HasOid 'PGint4 where oidOf = Oid 23
+instance HasOid 'PGint8 where oidOf = Oid 20
+instance HasOid 'PGnumeric where oidOf = Oid 1700
+instance HasOid 'PGfloat4 where oidOf = Oid 700
+instance HasOid 'PGfloat8 where oidOf = Oid 701
+instance HasOid ('PGchar n) where oidOf = Oid 18
+instance HasOid ('PGvarchar n) where oidOf = Oid 1043
+instance HasOid 'PGtext where oidOf = Oid 25
+instance HasOid 'PGbytea where oidOf = Oid 17
+instance HasOid 'PGtimestamp where oidOf = Oid 1114
+instance HasOid 'PGtimestamptz where oidOf = Oid 1184
+instance HasOid 'PGdate where oidOf = Oid 1082
+instance HasOid 'PGtime where oidOf = Oid 1083
+instance HasOid 'PGtimetz where oidOf = Oid 1266
+instance HasOid 'PGinterval where oidOf = Oid 1186
+instance HasOid 'PGuuid where oidOf = Oid 2950
+instance HasOid 'PGinet where oidOf = Oid 869
+instance HasOid 'PGjson where oidOf = Oid 114
+instance HasOid 'PGjsonb where oidOf = Oid 3802
 
 -- | Lifts a `HasOid` constraint to a field.
 class HasAliasedOid (field :: (Symbol, NullityType)) where
-  aliasedOid :: Word32
+  aliasedOid :: Oid
 instance HasOid ty => HasAliasedOid (alias ::: nullity ty) where
-  aliasedOid = oid @ty
+  aliasedOid = oidOf @ty
 
 -- | A `ToNullityParam` constraint gives an encoding of a Haskell `Type` into
 -- into the binary format of a PostgreSQL `NullityType`.
@@ -495,6 +495,7 @@ instance FromValue 'PGbool Bool where fromValue = Decoding.bool
 instance FromValue 'PGint2 Int16 where fromValue = Decoding.int
 instance FromValue 'PGint4 Int32 where fromValue = Decoding.int
 instance FromValue 'PGint8 Int64 where fromValue = Decoding.int
+instance FromValue 'PGoid Word32 where fromValue = Decoding.int
 instance FromValue 'PGfloat4 Float where fromValue = Decoding.float4
 instance FromValue 'PGfloat8 Double where fromValue = Decoding.float8
 instance FromValue 'PGnumeric Scientific where fromValue = Decoding.numeric

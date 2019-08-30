@@ -128,7 +128,7 @@ type family Elem x xs where
 -- | @In x xs@ is a constraint that proves that @x@ is in @xs@.
 type family In x xs :: Constraint where
   In x xs = If (Elem x xs) (() :: Constraint)
-    (TypeError ('ShowType x ':<>: 'Text "is not in " ':<>: 'ShowType xs))
+    (TypeError ('ShowType x ':<>: 'Text " is not in " ':<>: 'ShowType xs))
 
 {- | Calculate the `Length` of a type level list
 
