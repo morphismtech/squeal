@@ -63,6 +63,7 @@ module Squeal.PostgreSQL.Definition
   , dropView
   , dropType
   , dropIndex
+  , dropFunction
     -- ** Alter
   , alterTable
   , alterTableRename
@@ -1124,6 +1125,14 @@ createFunction fun arg ret fundef = UnsafeDefinition $
   "CREATE" <+> "FUNCTION" <+> renderSQL fun <+> parenthesized (renderSQL arg)
     <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
 
+dropFunction
+  :: (Has sch schemas schema, Has fun schema ('Function arg ret))
+  => QualifiedAlias sch fun
+  -- ^ name of the user defined function
+  -> Definition schemas (Alter sch (Drop ix schema) schemas)
+dropFunction fun = UnsafeDefinition $
+  "DROP" <+> "Function" <+> renderSQL fun <> ";"
+
 newtype FunctionDefinition schemas arg ret = UnsafeFunctionDefinition
   { renderFunctionDefinition :: ByteString }
   deriving (Eq,Show,GHC.Generic,NFData)
@@ -1136,7 +1145,7 @@ instance RenderSQL (FunctionDefinition schemas arg ret) where
 dropIndex
   :: (Has sch schemas schema, Has ix schema 'Index)
   => QualifiedAlias sch ix
-  -- ^ name of the user defined type
+  -- ^ name of the user defined index
   -> Definition schemas (Alter sch (Drop ix schema) schemas)
 dropIndex ix = UnsafeDefinition $ "DROP" <+> "INDEX" <+> renderSQL ix <> ";"
 
