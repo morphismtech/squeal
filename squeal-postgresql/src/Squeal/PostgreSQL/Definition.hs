@@ -61,6 +61,7 @@ module Squeal.PostgreSQL.Definition
   , dropTable
   , dropView
   , dropType
+  , dropIndex
     -- ** Alter
   , alterTable
   , alterTableRename
@@ -1110,6 +1111,16 @@ instance RenderSQL IndexMethod where
     Spgist -> "spgist"
     Gin -> "gin"
     Brin -> "brin"
+
+-- |
+-- >>> printSQL (dropIndex #ix :: Definition (Public '["ix" ::: 'Index]) (Public '[]))
+-- DROP INDEX "ix";
+dropIndex
+  :: (Has sch schemas schema, Has ix schema 'Index)
+  => QualifiedAlias sch ix
+  -- ^ name of the user defined type
+  -> Definition schemas (Alter sch (Drop ix schema) schemas)
+dropIndex ix = UnsafeDefinition $ "DROP" <+> "INDEX" <+> renderSQL ix <> ";"
 
 -- | Lift `PGTyped` to a field
 class FieldTyped schemas ty where
