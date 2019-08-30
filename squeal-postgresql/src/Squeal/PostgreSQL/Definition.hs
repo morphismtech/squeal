@@ -48,6 +48,7 @@ module Squeal.PostgreSQL.Definition
   , createDomain
   , createTypeRange
   , createIndex
+  , createFunction
   , TableConstraintExpression (..)
   , check
   , unique
@@ -1111,6 +1112,23 @@ instance RenderSQL IndexMethod where
     Spgist -> "spgist"
     Gin -> "gin"
     Brin -> "brin"
+
+createFunction
+  :: (Has sch schemas schema, KnownSymbol fun)
+  => QualifiedAlias sch fun
+  -> TypeExpression schemas arg
+  -> TypeExpression schemas ret
+  -> FunctionDefinition schemas arg ret
+  -> Definition schemas (Alter sch (Create fun ('Function arg ret) schema) schemas)
+createFunction fun arg ret fundef = UnsafeDefinition $
+  "CREATE" <+> "FUNCTION" <+> renderSQL fun <+> parenthesized (renderSQL arg)
+    <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
+
+newtype FunctionDefinition schemas arg ret = UnsafeFunctionDefinition
+  { renderFunctionDefinition :: ByteString }
+  deriving (Eq,Show,GHC.Generic,NFData)
+instance RenderSQL (FunctionDefinition schemas arg ret) where
+  renderSQL = renderFunctionDefinition
 
 -- |
 -- >>> printSQL (dropIndex #ix :: Definition (Public '["ix" ::: 'Index]) (Public '[]))

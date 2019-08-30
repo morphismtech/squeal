@@ -36,6 +36,7 @@ module Squeal.PostgreSQL.Expression
   , Expr
   , (:-->)
   , unsafeFunction
+  , function
   , unsafeUnaryOpL
   , unsafeUnaryOpR
   , Operator
@@ -302,6 +303,12 @@ unsafeUnaryOpR op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
 unsafeFunction :: ByteString -> x :--> y
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
+
+function
+  :: (Has sch schemas schema, Has fun schema ('Function x y))
+  => QualifiedAlias sch fun
+  -> x :--> y
+function = unsafeFunction . renderSQL
 
 -- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: literal 'a')
 -- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, E'a')

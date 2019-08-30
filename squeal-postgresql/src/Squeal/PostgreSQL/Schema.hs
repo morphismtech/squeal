@@ -367,6 +367,7 @@ data SchemumType
   | View RowType
   | Typedef PGType
   | Index
+  | Function NullityType NullityType
   | UnsafeSchemum Symbol
 
 {- | The schema of a database consists of a list of aliased,
