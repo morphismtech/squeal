@@ -11,11 +11,12 @@ Squeal data definition language.
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
+  , DeriveAnyClass
   , DeriveGeneric
+  , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
-  , GeneralizedNewtypeDeriving
   , LambdaCase
   , MultiParamTypeClasses
   , OverloadedStrings
@@ -1061,15 +1062,54 @@ createTypeRange range ty = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderSQL range <+> "AS" <+> "RANGE" <+>
   parenthesized ("subtype" <+> "=" <+> renderTypeExpression ty) <> ";"
 
+{- |
+>>> :{
+type Table = '[] :=>
+  '[ "a" ::: 'NoDef :=> 'Null 'PGint4
+   , "b" ::: 'NoDef :=> 'Null 'PGfloat4 ]
+:}
+
+>>> :{
+let
+  setup :: Definition (Public '[]) (Public '["tab" ::: 'Table Table, "ix" ::: 'Index])
+  setup =
+    createTable #tab (nullable int `as` #a :* nullable real `as` #b) Nil >>>
+    createIndex #ix #tab Gin [#a & AscNullsFirst, #b & AscNullsLast]
+in printSQL setup
+:}
+CREATE TABLE "tab" ("a" int NULL, "b" real NULL);
+CREATE INDEX "ix" ON "tab" USING gin (("a" ASC NULLS FIRST), ("b" ASC NULLS LAST));
+-}
 createIndex
   :: (Has sch schemas schema, Has tab schema ('Table table), KnownSymbol ix)
   => Alias ix
   -> QualifiedAlias sch tab
+  -> IndexMethod
   -> [SortExpression '[] '[] 'Ungrouped schemas '[] '[tab ::: TableToRow table]]
   -> Definition schemas (Alter sch (Create ix 'Index schema) schemas)
-createIndex ix tab cols = UnsafeDefinition $
+createIndex ix tab method cols = UnsafeDefinition $
   "CREATE" <+> "INDEX" <+> renderSQL ix <+> "ON" <+> renderSQL tab
+    <+> "USING" <+> renderSQL method
     <+> parenthesized (commaSeparated (parenthesized . renderSQL <$> cols))
+    <> ";"
+
+data IndexMethod
+  = Btree
+  | Hash
+  | Gist
+  | Spgist
+  | Gin
+  | Brin
+  deriving stock (Eq, Ord, Show, GHC.Generic)
+  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
+instance RenderSQL IndexMethod where
+  renderSQL = \case
+    Btree -> "btree"
+    Hash -> "hash"
+    Gist -> "gist"
+    Spgist -> "spgist"
+    Gin -> "gin"
+    Brin -> "brin"
 
 -- | Lift `PGTyped` to a field
 class FieldTyped schemas ty where
