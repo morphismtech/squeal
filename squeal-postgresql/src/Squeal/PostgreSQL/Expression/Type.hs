@@ -70,6 +70,7 @@ module Squeal.PostgreSQL.Expression.Type
   , fixarray
   , tsvector
   , tsquery
+  , oid
   , int4range
   , int8range
   , numrange
@@ -280,6 +281,10 @@ tsvector = UnsafeTypeExpression "tsvector"
 -- | text search document
 tsquery :: TypeExpression schemas (null 'PGtsquery)
 tsquery = UnsafeTypeExpression "tsquery"
+-- | Object identifiers (OIDs) are used internally by PostgreSQL
+-- as primary keys for various system tables.
+oid :: TypeExpression schemas (null 'PGoid)
+oid = UnsafeTypeExpression "oid"
 -- | Range of integer
 int4range :: TypeExpression schemas (null ('PGrange 'PGint4))
 int4range = UnsafeTypeExpression "int4range"
@@ -333,3 +338,4 @@ instance (SOP.All KnownNat dims, PGTyped schemas ty)
     pgtype = fixarray @dims (pgtype @schemas @ty)
 instance PGTyped schemas (null 'PGtsvector) where pgtype = tsvector
 instance PGTyped schemas (null 'PGtsquery) where pgtype = tsquery
+instance PGTyped schemas (null 'PGoid) where pgtype = oid

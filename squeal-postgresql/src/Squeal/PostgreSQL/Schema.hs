@@ -133,6 +133,7 @@ data PGType
   | PGcomposite RowType -- ^ a composite type represents the structure of a row or record; it is essentially just a list of field names and their data types.
   | PGtsvector -- ^ A tsvector value is a sorted list of distinct lexemes, which are words that have been normalized to merge different variants of the same word.
   | PGtsquery -- ^ A tsquery value stores lexemes that are to be searched for.
+  | PGoid -- Object identifiers (OIDs) are used internally by PostgreSQL as primary keys for various system tables.
   | PGrange PGType -- ^ Range types are data types representing a range of values of some element type (called the range's subtype).
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
