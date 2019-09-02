@@ -1167,7 +1167,7 @@ languageSqlExpr
   -> FunctionDefinition schemas args ('Returns ret)
 languageSqlExpr expr = UnsafeFunctionDefinition $
   "language sql as"
-    <+> "$$" <+> renderSQL (values_ (expr `as` #ret :* Nil)) <+> "$$"
+    <+> "$$" <+> renderSQL (values_ (expr `as` #ret)) <+> "$$"
 
 languageSqlQuery
   :: Query '[] '[] schemas args rets
