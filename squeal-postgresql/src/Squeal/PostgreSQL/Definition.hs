@@ -58,6 +58,8 @@ module Squeal.PostgreSQL.Definition
   , ForeignKeyed
   , OnDeleteClause (..)
   , OnUpdateClause (..)
+  , FunctionDefinition(..)
+  , languageSql
     -- ** Drop
   , dropSchema
   , dropTable
@@ -1128,26 +1130,38 @@ instance RenderSQL IndexMethod where
     Brin -> "brin"
 
 createFunction
-  :: (Has sch schemas schema, KnownSymbol fun)
+  :: ( Has sch schemas schema
+     , KnownSymbol fun
+     , SOP.SListI args )
   => QualifiedAlias sch fun
-  -> TypeExpression schemas arg
+  -> NP (TypeExpression schemas) args
   -> TypeExpression schemas ret
-  -> FunctionDefinition schemas arg ret
-  -> Definition schemas (Alter sch (Create fun ('Function ('UnaryFun arg ret)) schema) schemas)
-createFunction fun arg ret fundef = UnsafeDefinition $
-  "CREATE" <+> "FUNCTION" <+> renderSQL fun <+> parenthesized (renderSQL arg)
+  -> FunctionDefinition schemas ('Fun args ret)
+  -> Definition schemas (Alter sch (Create fun ('Function ('Fun args ret)) schema) schemas)
+createFunction fun args ret fundef = UnsafeDefinition $
+  "CREATE" <+> "FUNCTION" <+> renderSQL fun
+    <+> parenthesized (renderCommaSeparated renderSQL args)
     <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
 
 createOrReplaceFunction
-  :: (Has sch schemas schema, Has fun schema ('Function ('UnaryFun arg ret)))
+  :: ( Has sch schemas schema
+     , Has fun schema ('Function ('Fun args0 ret0))
+     , SOP.SListI args )
   => QualifiedAlias sch fun
-  -> TypeExpression schemas arg
+  -> NP (TypeExpression schemas) args
   -> TypeExpression schemas ret
-  -> FunctionDefinition schemas arg ret
-  -> Definition schemas (Alter sch (Alter fun ('Function ('UnaryFun arg ret)) schema) schemas)
-createOrReplaceFunction fun arg ret fundef = UnsafeDefinition $
-  "CREATE" <+> "FUNCTION" <+> renderSQL fun <+> parenthesized (renderSQL arg)
+  -> FunctionDefinition schemas ('Fun args ret)
+  -> Definition schemas (Alter sch (Alter fun ('Function ('Fun args ret)) schema) schemas)
+createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
+  "CREATE" <+> "OR" <+> "REPLACE" <+> "FUNCTION" <+> renderSQL fun
+    <+> parenthesized (renderCommaSeparated renderSQL args)
     <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
+
+languageSql
+  :: Query '[] '[] schemas args '[col ::: ty]
+  -> FunctionDefinition schemas ('Fun arg ret)
+languageSql qry = UnsafeFunctionDefinition $
+  "language sql as" <+> "$$" <+> renderSQL qry <+> "$$"
 
 dropFunction
   :: (Has sch schemas schema, Has fun schema ('Function funty))
@@ -1157,10 +1171,10 @@ dropFunction
 dropFunction fun = UnsafeDefinition $
   "DROP" <+> "Function" <+> renderSQL fun <> ";"
 
-newtype FunctionDefinition schemas arg ret = UnsafeFunctionDefinition
+newtype FunctionDefinition schemas funty = UnsafeFunctionDefinition
   { renderFunctionDefinition :: ByteString }
   deriving (Eq,Show,GHC.Generic,NFData)
-instance RenderSQL (FunctionDefinition schemas arg ret) where
+instance RenderSQL (FunctionDefinition schemas funty) where
   renderSQL = renderFunctionDefinition
 
 -- |

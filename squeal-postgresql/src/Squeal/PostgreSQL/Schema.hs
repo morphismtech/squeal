@@ -374,10 +374,8 @@ data SchemumType
   | UnsafeSchemum Symbol
 
 data FunctionType
-  = UnaryFun NullityType NullityType
-  | NaryFun [NullityType] NullityType
-  | UnarySetFun NullityType [NullityType]
-  | NarySetFun [NullityType] [NullityType]
+  = Fun [NullityType] NullityType
+  | SetFun [NullityType] [NullityType]
 
 data OperatorType
   = BinaryOp NullityType NullityType NullityType
