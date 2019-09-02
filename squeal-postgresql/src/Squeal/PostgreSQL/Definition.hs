@@ -584,6 +584,7 @@ DROP statements
 dropSchema
   :: Has sch schemas schema
   => Alias sch
+  -- ^ user defined schema
   -> Definition schemas (Drop sch schemas)
 dropSchema sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch <> ";"
 
