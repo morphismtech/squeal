@@ -366,6 +366,8 @@ data SchemumType
   = Table TableType
   | View RowType
   | Typedef PGType
+  | Index
+  | UnsafeSchemum Symbol
 
 {- | The schema of a database consists of a list of aliased,
 user-defined `SchemumType`s.

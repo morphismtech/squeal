@@ -11,11 +11,12 @@ Squeal data definition language.
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
+  , DeriveAnyClass
   , DeriveGeneric
+  , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
-  , GeneralizedNewtypeDeriving
   , LambdaCase
   , MultiParamTypeClasses
   , OverloadedStrings
@@ -46,6 +47,7 @@ module Squeal.PostgreSQL.Definition
   , FieldTyped (..)
   , createDomain
   , createTypeRange
+  , createIndex
   , TableConstraintExpression (..)
   , check
   , unique
@@ -59,6 +61,7 @@ module Squeal.PostgreSQL.Definition
   , dropTable
   , dropView
   , dropType
+  , dropIndex
     -- ** Alter
   , alterTable
   , alterTableRename
@@ -101,6 +104,7 @@ import qualified GHC.Generics as GHC
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Logic
+import Squeal.PostgreSQL.Expression.Sort
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
@@ -1041,6 +1045,15 @@ createDomain dom ty condition =
     <+> "AS" <+> renderTypeExpression ty
     <+> "CHECK" <+> parenthesized (renderSQL condition) <> ";"
 
+{- |
+>>> :{
+let
+  createSmallIntRange :: Definition (Public '[]) (Public '["int2range" ::: 'Typedef ('PGrange 'PGint2)])
+  createSmallIntRange = createTypeRange #int2range int2
+in printSQL createSmallIntRange
+:}
+CREATE TYPE "int2range" AS RANGE (subtype = int2);
+-}
 createTypeRange
   :: (Has sch schemas schema, KnownSymbol range)
   => QualifiedAlias sch range
@@ -1048,7 +1061,78 @@ createTypeRange
   -> Definition schemas (Alter sch (Create range ('Typedef ('PGrange ty)) schema) schemas)
 createTypeRange range ty = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderSQL range <+> "AS" <+> "RANGE" <+>
-  parenthesized ("subtype" <+> "=" <+> renderTypeExpression ty)
+  parenthesized ("subtype" <+> "=" <+> renderTypeExpression ty) <> ";"
+
+{- |
+>>> :{
+type Table = '[] :=>
+  '[ "a" ::: 'NoDef :=> 'Null 'PGint4
+   , "b" ::: 'NoDef :=> 'Null 'PGfloat4 ]
+:}
+
+>>> :{
+let
+  setup :: Definition (Public '[]) (Public '["tab" ::: 'Table Table, "ix" ::: 'Index])
+  setup =
+    createTable #tab (nullable int `as` #a :* nullable real `as` #b) Nil >>>
+    createIndex #ix #tab Btree [#a & AscNullsFirst, #b & AscNullsLast]
+in printSQL setup
+:}
+CREATE TABLE "tab" ("a" int NULL, "b" real NULL);
+CREATE INDEX "ix" ON "tab" USING btree (("a") ASC NULLS FIRST, ("b") ASC NULLS LAST);
+-}
+createIndex
+  :: (Has sch schemas schema, Has tab schema ('Table table), KnownSymbol ix)
+  => Alias ix
+  -> QualifiedAlias sch tab
+  -> IndexMethod
+  -> [SortExpression '[] '[] 'Ungrouped schemas '[] '[tab ::: TableToRow table]]
+  -> Definition schemas (Alter sch (Create ix 'Index schema) schemas)
+createIndex ix tab method cols = UnsafeDefinition $
+  "CREATE" <+> "INDEX" <+> renderSQL ix <+> "ON" <+> renderSQL tab
+    <+> "USING" <+> renderSQL method
+    <+> parenthesized (commaSeparated (renderIndex <$> cols))
+    <> ";"
+  where
+    renderIndex = \case
+      Asc expression -> parenthesized (renderSQL expression) <+> "ASC"
+      Desc expression -> parenthesized (renderSQL expression) <+> "DESC"
+      AscNullsFirst expression -> parenthesized (renderSQL expression)
+        <+> "ASC NULLS FIRST"
+      DescNullsFirst expression -> parenthesized (renderSQL expression)
+        <+> "DESC NULLS FIRST"
+      AscNullsLast expression -> parenthesized (renderSQL expression)
+        <+> "ASC NULLS LAST"
+      DescNullsLast expression -> parenthesized (renderSQL expression)
+        <+> "DESC NULLS LAST"
+
+data IndexMethod
+  = Btree
+  | Hash
+  | Gist
+  | Spgist
+  | Gin
+  | Brin
+  deriving stock (Eq, Ord, Show, GHC.Generic)
+  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
+instance RenderSQL IndexMethod where
+  renderSQL = \case
+    Btree -> "btree"
+    Hash -> "hash"
+    Gist -> "gist"
+    Spgist -> "spgist"
+    Gin -> "gin"
+    Brin -> "brin"
+
+-- |
+-- >>> printSQL (dropIndex #ix :: Definition (Public '["ix" ::: 'Index]) (Public '[]))
+-- DROP INDEX "ix";
+dropIndex
+  :: (Has sch schemas schema, Has ix schema 'Index)
+  => QualifiedAlias sch ix
+  -- ^ name of the user defined type
+  -> Definition schemas (Alter sch (Drop ix schema) schemas)
+dropIndex ix = UnsafeDefinition $ "DROP" <+> "INDEX" <+> renderSQL ix <> ";"
 
 -- | Lift `PGTyped` to a field
 class FieldTyped schemas ty where
