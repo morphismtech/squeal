@@ -1078,11 +1078,11 @@ let
   setup :: Definition (Public '[]) (Public '["tab" ::: 'Table Table, "ix" ::: 'Index])
   setup =
     createTable #tab (nullable int `as` #a :* nullable real `as` #b) Nil >>>
-    createIndex #ix #tab Gin [#a & AscNullsFirst, #b & AscNullsLast]
+    createIndex #ix #tab Btree [#a & AscNullsFirst, #b & AscNullsLast]
 in printSQL setup
 :}
 CREATE TABLE "tab" ("a" int NULL, "b" real NULL);
-CREATE INDEX "ix" ON "tab" USING gin (("a" ASC NULLS FIRST), ("b" ASC NULLS LAST));
+CREATE INDEX "ix" ON "tab" USING btree (("a") ASC NULLS FIRST, ("b") ASC NULLS LAST);
 -}
 createIndex
   :: (Has sch schemas schema, Has tab schema ('Table table), KnownSymbol ix)
@@ -1094,8 +1094,20 @@ createIndex
 createIndex ix tab method cols = UnsafeDefinition $
   "CREATE" <+> "INDEX" <+> renderSQL ix <+> "ON" <+> renderSQL tab
     <+> "USING" <+> renderSQL method
-    <+> parenthesized (commaSeparated (parenthesized . renderSQL <$> cols))
+    <+> parenthesized (commaSeparated (renderIndex <$> cols))
     <> ";"
+  where
+    renderIndex = \case
+      Asc expression -> parenthesized (renderSQL expression) <+> "ASC"
+      Desc expression -> parenthesized (renderSQL expression) <+> "DESC"
+      AscNullsFirst expression -> parenthesized (renderSQL expression)
+        <+> "ASC NULLS FIRST"
+      DescNullsFirst expression -> parenthesized (renderSQL expression)
+        <+> "DESC NULLS FIRST"
+      AscNullsLast expression -> parenthesized (renderSQL expression)
+        <+> "ASC NULLS LAST"
+      DescNullsLast expression -> parenthesized (renderSQL expression)
+        <+> "DESC NULLS LAST"
 
 data IndexMethod
   = Btree
