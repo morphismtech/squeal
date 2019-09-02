@@ -1172,7 +1172,6 @@ languageSqlSet
 languageSqlSet qry = UnsafeFunctionDefinition $
   "language sql as" <+> "$$" <+> renderSQL qry <+> "$$"
 
-
 createSetFunction
   :: ( Has sch schemas schema
      , KnownSymbol fun
