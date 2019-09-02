@@ -49,6 +49,7 @@ module Squeal.PostgreSQL.Definition
   , createTypeRange
   , createIndex
   , createFunction
+  , createOrReplaceFunction
   , TableConstraintExpression (..)
   , check
   , unique
@@ -1120,13 +1121,24 @@ createFunction
   -> TypeExpression schemas arg
   -> TypeExpression schemas ret
   -> FunctionDefinition schemas arg ret
-  -> Definition schemas (Alter sch (Create fun ('Function arg ret) schema) schemas)
+  -> Definition schemas (Alter sch (Create fun ('Function ('UnaryFun arg ret)) schema) schemas)
 createFunction fun arg ret fundef = UnsafeDefinition $
   "CREATE" <+> "FUNCTION" <+> renderSQL fun <+> parenthesized (renderSQL arg)
     <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
 
+createOrReplaceFunction
+  :: (Has sch schemas schema, Has fun schema ('Function ('UnaryFun arg ret)))
+  => QualifiedAlias sch fun
+  -> TypeExpression schemas arg
+  -> TypeExpression schemas ret
+  -> FunctionDefinition schemas arg ret
+  -> Definition schemas (Alter sch (Alter fun ('Function ('UnaryFun arg ret)) schema) schemas)
+createOrReplaceFunction fun arg ret fundef = UnsafeDefinition $
+  "CREATE" <+> "FUNCTION" <+> renderSQL fun <+> parenthesized (renderSQL arg)
+    <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
+
 dropFunction
-  :: (Has sch schemas schema, Has fun schema ('Function arg ret))
+  :: (Has sch schemas schema, Has fun schema ('Function funty))
   => QualifiedAlias sch fun
   -- ^ name of the user defined function
   -> Definition schemas (Alter sch (Drop ix schema) schemas)

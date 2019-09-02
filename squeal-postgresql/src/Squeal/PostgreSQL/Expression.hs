@@ -38,13 +38,17 @@ module Squeal.PostgreSQL.Expression
   , unsafeFunction
   , function
   , unsafeUnaryOpL
+  , unaryOpL
   , unsafeUnaryOpR
+  , unaryOpR
   , Operator
   , unsafeBinaryOp
+  , binaryOp
   , FunctionVar
   , unsafeFunctionVar
   , FunctionN
   , unsafeFunctionN
+  , functionN
   , PGSubset (..)
   , PGIntersect (..)
     -- * Re-export
@@ -288,15 +292,30 @@ unsafeBinaryOp :: ByteString -> Operator ty0 ty1 ty2
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderSQL x <+> op <+> renderSQL y
 
+binaryOp
+  :: (Has sch schemas schema, Has op schema ('Operator ('BinaryOp x1 x2 y)))
+  => Alias op -> Operator x1 x2 y
+binaryOp = unsafeBinaryOp . renderSQL
+
 -- | >>> printSQL $ unsafeUnaryOpL "NOT" true
 -- (NOT TRUE)
 unsafeUnaryOpL :: ByteString -> x :--> y
 unsafeUnaryOpL op x = UnsafeExpression $ parenthesized $ op <+> renderSQL x
 
+unaryOpL
+  :: (Has sch schemas schema, Has op schema ('Operator ('UnaryOpL x y)))
+  => Alias op -> x :--> y
+unaryOpL = unsafeUnaryOpL . renderSQL
+
 -- | >>> printSQL $ true & unsafeUnaryOpR "IS NOT TRUE"
 -- (TRUE IS NOT TRUE)
 unsafeUnaryOpR :: ByteString -> x :--> y
 unsafeUnaryOpR op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
+
+unaryOpR
+  :: (Has sch schemas schema, Has op schema ('Operator ('UnaryOpR x y)))
+  => Alias op -> x :--> y
+unaryOpR = unsafeUnaryOpR . renderSQL
 
 -- | >>> printSQL $ unsafeFunction "f" true
 -- f(TRUE)
@@ -305,7 +324,7 @@ unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
 function
-  :: (Has sch schemas schema, Has fun schema ('Function x y))
+  :: (Has sch schemas schema, Has fun schema ('Function ('UnaryFun x y)))
   => QualifiedAlias sch fun
   -> x :--> y
 function = unsafeFunction . renderSQL
@@ -315,6 +334,12 @@ function = unsafeFunction . renderSQL
 unsafeFunctionN :: SListI xs => ByteString -> FunctionN xs y
 unsafeFunctionN fun xs = UnsafeExpression $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
+
+functionN
+  :: (Has sch schemas schema, Has fun schema ('Function ('NaryFun xs y)), SListI xs)
+  => QualifiedAlias sch fun
+  -> FunctionN xs y
+functionN = unsafeFunctionN . renderSQL
 
 instance ty `In` PGNum
   => Num (Expression outer commons grp schemas params from (null ty)) where

@@ -44,6 +44,8 @@ module Squeal.PostgreSQL.Schema
   , ColumnsType
   , TableType
   , SchemumType (..)
+  , OperatorType (..)
+  , FunctionType (..)
   , SchemaType
   , SchemasType
   , Public
@@ -367,8 +369,20 @@ data SchemumType
   | View RowType
   | Typedef PGType
   | Index
-  | Function NullityType NullityType
+  | Function FunctionType
+  | Operator OperatorType
   | UnsafeSchemum Symbol
+
+data FunctionType
+  = UnaryFun NullityType NullityType
+  | NaryFun [NullityType] NullityType
+  | UnarySetFun NullityType [NullityType]
+  | NarySetFun [NullityType] [NullityType]
+
+data OperatorType
+  = BinaryOp NullityType NullityType NullityType
+  | UnaryOpL NullityType NullityType
+  | UnaryOpR NullityType NullityType
 
 {- | The schema of a database consists of a list of aliased,
 user-defined `SchemumType`s.
