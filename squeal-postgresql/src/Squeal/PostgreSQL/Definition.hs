@@ -1158,8 +1158,8 @@ createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
     <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
 
 languageSql
-  :: Query '[] '[] schemas args '[col ::: ty]
-  -> FunctionDefinition schemas ('Fun arg ret)
+  :: Query '[] '[] schemas args '[col ::: ret]
+  -> FunctionDefinition schemas ('Fun args ret)
 languageSql qry = UnsafeFunctionDefinition $
   "language sql as" <+> "$$" <+> renderSQL qry <+> "$$"
 
