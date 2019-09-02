@@ -19,6 +19,7 @@ Squeal data definition language.
   , GADTs
   , LambdaCase
   , MultiParamTypeClasses
+  , OverloadedLabels
   , OverloadedStrings
   , RankNTypes
   , ScopedTypeVariables
@@ -61,8 +62,8 @@ module Squeal.PostgreSQL.Definition
   , OnDeleteClause (..)
   , OnUpdateClause (..)
   , FunctionDefinition(..)
-  , languageSql
-  , languageSqlSet
+  , languageSqlExpr
+  , languageSqlQuery
     -- ** Drop
   , dropSchema
   , dropTable
@@ -1161,16 +1162,17 @@ createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
     <+> parenthesized (renderCommaSeparated renderSQL args)
     <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
 
-languageSql
-  :: Query '[] '[] schemas args '[col ::: ret]
+languageSqlExpr
+  :: Expression '[] '[] 'Ungrouped schemas args '[] ret
   -> FunctionDefinition schemas args ('Returns ret)
-languageSql qry = UnsafeFunctionDefinition $
-  "language sql as" <+> "$$" <+> renderSQL qry <+> "$$"
+languageSqlExpr expr = UnsafeFunctionDefinition $
+  "language sql as"
+    <+> "$$" <+> renderSQL (values_ (expr `as` #ret :* Nil)) <+> "$$"
 
-languageSqlSet
+languageSqlQuery
   :: Query '[] '[] schemas args rets
   -> FunctionDefinition schemas args ('ReturnsTable rets)
-languageSqlSet qry = UnsafeFunctionDefinition $
+languageSqlQuery qry = UnsafeFunctionDefinition $
   "language sql as" <+> "$$" <+> renderSQL qry <+> "$$"
 
 createSetFunction
