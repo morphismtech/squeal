@@ -324,9 +324,11 @@ unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
 function
-  :: (Has sch schemas schema, Has fun schema ('Function ('Fun '[x] y)))
+  :: (Has sch schemas schema, Has fun schema ('Function '[x] ('Returns y)))
   => QualifiedAlias sch fun
-  -> x :--> y
+  -> ( forall outer commons grp params from
+       .  Expression outer commons grp schemas params from x
+       -> Expression outer commons grp schemas params from y )
 function = unsafeFunction . renderSQL
 
 -- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: literal 'a')
@@ -336,9 +338,13 @@ unsafeFunctionN fun xs = UnsafeExpression $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
 functionN
-  :: (Has sch schemas schema, Has fun schema ('Function ('Fun xs y)), SListI xs)
+  :: ( Has sch schemas schema
+     , Has fun schema ('Function xs ('Returns y))
+     , SListI xs )
   => QualifiedAlias sch fun
-  -> FunctionN xs y
+  -> ( forall outer commons grp params from
+        .  NP (Expression outer commons grp schemas params from) xs
+        -> Expression outer commons grp schemas params from y )
 functionN = unsafeFunctionN . renderSQL
 
 instance ty `In` PGNum

@@ -45,7 +45,7 @@ module Squeal.PostgreSQL.Schema
   , TableType
   , SchemumType (..)
   , OperatorType (..)
-  , FunctionType (..)
+  , ReturnsType (..)
   , SchemaType
   , SchemasType
   , Public
@@ -369,13 +369,13 @@ data SchemumType
   | View RowType
   | Typedef PGType
   | Index
-  | Function FunctionType
+  | Function [NullityType] ReturnsType
   | Operator OperatorType
   | UnsafeSchemum Symbol
 
-data FunctionType
-  = Fun [NullityType] NullityType
-  | SetFun [NullityType] [NullityType]
+data ReturnsType
+  = Returns NullityType
+  | ReturnsTable RowType
 
 data OperatorType
   = BinaryOp NullityType NullityType NullityType

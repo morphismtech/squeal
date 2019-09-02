@@ -26,8 +26,10 @@ module Squeal.PostgreSQL.Expression.SetOf
   , generateSeriesTimestamp
   , SetOfFunction
   , unsafeSetOfFunction
+  , setOfFunction
   , SetOfFunctionN
   , unsafeSetOfFunctionN
+  , setOfFunctionN
   ) where
 
 import GHC.TypeLits
@@ -58,6 +60,15 @@ unsafeSetOfFunction
 unsafeSetOfFunction x = UnsafeFromClause $
   renderSymbol @fun <> parenthesized (renderSQL x)
 
+setOfFunction
+  :: ( Has sch schemas schema
+     , Has fun schema ('Function '[ty] ('ReturnsTable setof)) )
+  => Alias fun
+  -> ( forall outer commons params
+        .  Expression outer commons 'Ungrouped schemas params '[] ty
+        -> FromClause outer commons schemas params '[fun ::: setof] )
+setOfFunction _ = unsafeSetOfFunction
+
 {- |
 A @RankNType@ for set returning functions with multiple argument.
 -}
@@ -74,6 +85,16 @@ unsafeSetOfFunctionN
   => SetOfFunctionN fun tys setof -- ^ set returning function
 unsafeSetOfFunctionN xs = UnsafeFromClause $
   renderSymbol @fun <> parenthesized (renderCommaSeparated renderSQL xs)
+
+setOfFunctionN
+  :: ( Has sch schemas schema
+     , Has fun schema ('Function tys ('ReturnsTable setof))
+     , SOP.SListI tys )
+  => Alias fun
+  -> ( forall outer commons params
+        .  NP (Expression outer commons 'Ungrouped schemas params '[]) tys
+        -> FromClause outer commons schemas params '[fun ::: setof] )
+setOfFunctionN _ = unsafeSetOfFunctionN
 
 {- | @generateSeries (start *: stop)@
 
