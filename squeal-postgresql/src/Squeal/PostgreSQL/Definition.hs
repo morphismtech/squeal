@@ -53,6 +53,9 @@ module Squeal.PostgreSQL.Definition
   , createOrReplaceFunction
   , createSetFunction
   , createOrReplaceSetFunction
+  , createBinaryOp
+  , createUnaryOpL
+  , createUnaryOpR
   , TableConstraintExpression (..)
   , check
   , unique
@@ -71,6 +74,7 @@ module Squeal.PostgreSQL.Definition
   , dropType
   , dropIndex
   , dropFunction
+  , dropOperator
     -- ** Alter
   , alterTable
   , alterTableRename
@@ -1215,13 +1219,74 @@ createOrReplaceSetFunction fun args rets fundef = UnsafeDefinition $
     renderRet :: Aliased (TypeExpression s) r -> ByteString
     renderRet (ty `As` col) = renderSQL col <+> renderSQL ty
 
+createBinaryOp
+  :: ( Has sch schemas schema
+     , Has fun schema ('Function '[x,y] ('Returns z))
+     , KnownSymbol op )
+  => Alias op
+  -> Alias fun
+  -> TypeExpression schemas x
+  -> TypeExpression schemas y
+  -> Definition schemas
+      (Alter sch (Create op ('Operator ('BinaryOp x y z)) schema) schemas)
+createBinaryOp op fun x y = UnsafeDefinition $
+  "CREATE" <+> "OPERATOR" <+> renderSQL op
+    <+> parenthesized (commaSeparated opdef)
+    where
+      opdef =
+        [ "FUNCTION" <+> "=" <+> renderSQL fun
+        , "LEFTARG" <+> "=" <+> renderSQL x
+        , "RIGHTARG" <+> "=" <+> renderSQL y ]
+
+createUnaryOpL
+  :: ( Has sch schemas schema
+     , Has fun schema ('Function '[x] ('Returns y))
+     , KnownSymbol op )
+  => Alias op
+  -> Alias fun
+  -> TypeExpression schemas x
+  -> Definition schemas
+      (Alter sch (Create op ('Operator ('UnaryOpL x y)) schema) schemas)
+createUnaryOpL op fun x = UnsafeDefinition $
+  "CREATE" <+> "OPERATOR" <+> renderSQL op
+    <+> parenthesized (commaSeparated opdef)
+    where
+      opdef =
+        [ "FUNCTION" <+> "=" <+> renderSQL fun
+        , "RIGHTARG" <+> "=" <+> renderSQL x ]
+
+createUnaryOpR
+  :: ( Has sch schemas schema
+     , Has fun schema ('Function '[x] ('Returns y))
+     , KnownSymbol op )
+  => Alias op
+  -> Alias fun
+  -> TypeExpression schemas x
+  -> Definition schemas
+      (Alter sch (Create op ('Operator ('UnaryOpR x y)) schema) schemas)
+createUnaryOpR op fun x = UnsafeDefinition $
+  "CREATE" <+> "OPERATOR" <+> renderSQL op
+    <+> parenthesized (commaSeparated opdef)
+    where
+      opdef =
+        [ "FUNCTION" <+> "=" <+> renderSQL fun
+        , "LEFTARG" <+> "=" <+> renderSQL x ]
+
 dropFunction
   :: (Has sch schemas schema, Has fun schema ('Function args ret))
   => QualifiedAlias sch fun
   -- ^ name of the user defined function
-  -> Definition schemas (Alter sch (Drop ix schema) schemas)
+  -> Definition schemas (Alter sch (Drop fun schema) schemas)
 dropFunction fun = UnsafeDefinition $
-  "DROP" <+> "Function" <+> renderSQL fun <> ";"
+  "DROP" <+> "FUNCTION" <+> renderSQL fun <> ";"
+
+dropOperator
+  :: (Has sch schemas schema, Has op schema ('Operator oper))
+  => QualifiedAlias sch op
+  -- ^ name of the user defined operator
+  -> Definition schemas (Alter sch (Drop op schema) schemas)
+dropOperator op = UnsafeDefinition $
+  "DROP" <+> "OPERATOR" <+> renderSQL op <> ";"
 
 newtype FunctionDefinition schemas args ret = UnsafeFunctionDefinition
   { renderFunctionDefinition :: ByteString }
