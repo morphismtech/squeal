@@ -56,7 +56,7 @@ import Squeal.PostgreSQL.Schema
 
 -- | negate a `Squeal.PostgreSQL.Expression.Type.tsquery`
 (.!) :: null 'PGtsquery :--> null 'PGtsquery
-(.!) = unsafeUnaryOpL "!!"
+(.!) = unsafeLeftOp "!!"
 
 -- | `Squeal.PostgreSQL.Expression.Type.tsquery` followed by
 -- `Squeal.PostgreSQL.Expression.Type.tsquery`

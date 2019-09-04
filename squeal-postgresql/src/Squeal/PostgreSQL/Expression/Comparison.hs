@@ -163,7 +163,7 @@ isNotDistinctFrom = unsafeBinaryOp "IS NOT DISTINCT FROM"
 (TRUE IS TRUE)
 -}
 isTrue :: null0 'PGbool :--> null1 'PGbool
-isTrue = unsafeUnaryOpR "IS TRUE"
+isTrue = unsafeRightOp "IS TRUE"
 
 {- | is false or unknown
 
@@ -171,7 +171,7 @@ isTrue = unsafeUnaryOpR "IS TRUE"
 (TRUE IS NOT TRUE)
 -}
 isNotTrue :: null0 'PGbool :--> null1 'PGbool
-isNotTrue = unsafeUnaryOpR "IS NOT TRUE"
+isNotTrue = unsafeRightOp "IS NOT TRUE"
 
 {- | is false
 
@@ -179,7 +179,7 @@ isNotTrue = unsafeUnaryOpR "IS NOT TRUE"
 (TRUE IS FALSE)
 -}
 isFalse :: null0 'PGbool :--> null1 'PGbool
-isFalse = unsafeUnaryOpR "IS FALSE"
+isFalse = unsafeRightOp "IS FALSE"
 
 {- | is true or unknown
 
@@ -187,7 +187,7 @@ isFalse = unsafeUnaryOpR "IS FALSE"
 (TRUE IS NOT FALSE)
 -}
 isNotFalse :: null0 'PGbool :--> null1 'PGbool
-isNotFalse = unsafeUnaryOpR "IS NOT FALSE"
+isNotFalse = unsafeRightOp "IS NOT FALSE"
 
 {- | is unknown
 
@@ -195,7 +195,7 @@ isNotFalse = unsafeUnaryOpR "IS NOT FALSE"
 (TRUE IS UNKNOWN)
 -}
 isUnknown :: null0 'PGbool :--> null1 'PGbool
-isUnknown = unsafeUnaryOpR "IS UNKNOWN"
+isUnknown = unsafeRightOp "IS UNKNOWN"
 
 {- | is true or false
 
@@ -203,4 +203,4 @@ isUnknown = unsafeUnaryOpR "IS UNKNOWN"
 (TRUE IS NOT UNKNOWN)
 -}
 isNotUnknown :: null0 'PGbool :--> null1 'PGbool
-isNotUnknown = unsafeUnaryOpR "IS NOT UNKNOWN"
+isNotUnknown = unsafeRightOp "IS NOT UNKNOWN"

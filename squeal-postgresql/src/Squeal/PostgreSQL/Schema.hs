@@ -379,8 +379,8 @@ data ReturnsType
 
 data OperatorType
   = BinaryOp NullityType NullityType NullityType
-  | UnaryOpL NullityType NullityType
-  | UnaryOpR NullityType NullityType
+  | LeftOp NullityType NullityType
+  | RightOp NullityType NullityType
 
 {- | The schema of a database consists of a list of aliased,
 user-defined `SchemumType`s.

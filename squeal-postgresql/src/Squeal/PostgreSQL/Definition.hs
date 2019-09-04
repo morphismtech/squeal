@@ -54,8 +54,8 @@ module Squeal.PostgreSQL.Definition
   , createSetFunction
   , createOrReplaceSetFunction
   , createBinaryOp
-  , createUnaryOpL
-  , createUnaryOpR
+  , createLeftOp
+  , createRightOp
   , TableConstraintExpression (..)
   , check
   , unique
@@ -1220,17 +1220,17 @@ createOrReplaceSetFunction fun args rets fundef = UnsafeDefinition $
     renderRet (ty `As` col) = renderSQL col <+> renderSQL ty
 
 createBinaryOp
-  :: ( Has sch schemas schema
+  :: forall op fun sch schemas schema x y z.
+     ( Has sch schemas schema
      , Has fun schema ('Function '[x,y] ('Returns z))
      , KnownSymbol op )
-  => Alias op
-  -> Alias fun
+  => Alias fun
   -> TypeExpression schemas x
   -> TypeExpression schemas y
   -> Definition schemas
       (Alter sch (Create op ('Operator ('BinaryOp x y z)) schema) schemas)
-createBinaryOp op fun x y = UnsafeDefinition $
-  "CREATE" <+> "OPERATOR" <+> renderSQL op
+createBinaryOp fun x y = UnsafeDefinition $
+  "CREATE" <+> "OPERATOR" <+> renderSymbol @op
     <+> parenthesized (commaSeparated opdef)
     where
       opdef =
@@ -1238,34 +1238,34 @@ createBinaryOp op fun x y = UnsafeDefinition $
         , "LEFTARG" <+> "=" <+> renderSQL x
         , "RIGHTARG" <+> "=" <+> renderSQL y ]
 
-createUnaryOpL
-  :: ( Has sch schemas schema
+createLeftOp
+  :: forall op fun sch schemas schema x y.
+     ( Has sch schemas schema
      , Has fun schema ('Function '[x] ('Returns y))
      , KnownSymbol op )
-  => Alias op
-  -> Alias fun
+  => Alias fun
   -> TypeExpression schemas x
   -> Definition schemas
-      (Alter sch (Create op ('Operator ('UnaryOpL x y)) schema) schemas)
-createUnaryOpL op fun x = UnsafeDefinition $
-  "CREATE" <+> "OPERATOR" <+> renderSQL op
+      (Alter sch (Create op ('Operator ('LeftOp x y)) schema) schemas)
+createLeftOp fun x = UnsafeDefinition $
+  "CREATE" <+> "OPERATOR" <+> renderSymbol @op
     <+> parenthesized (commaSeparated opdef)
     where
       opdef =
         [ "FUNCTION" <+> "=" <+> renderSQL fun
         , "RIGHTARG" <+> "=" <+> renderSQL x ]
 
-createUnaryOpR
-  :: ( Has sch schemas schema
+createRightOp
+  :: forall op fun sch schemas schema x y.
+     ( Has sch schemas schema
      , Has fun schema ('Function '[x] ('Returns y))
      , KnownSymbol op )
-  => Alias op
-  -> Alias fun
+  => Alias fun
   -> TypeExpression schemas x
   -> Definition schemas
-      (Alter sch (Create op ('Operator ('UnaryOpR x y)) schema) schemas)
-createUnaryOpR op fun x = UnsafeDefinition $
-  "CREATE" <+> "OPERATOR" <+> renderSQL op
+      (Alter sch (Create op ('Operator ('RightOp x y)) schema) schemas)
+createRightOp fun x = UnsafeDefinition $
+  "CREATE" <+> "OPERATOR" <+> renderSymbol @op
     <+> parenthesized (commaSeparated opdef)
     where
       opdef =

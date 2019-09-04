@@ -38,10 +38,10 @@ module Squeal.PostgreSQL.Expression
   , FunctionDB
   , unsafeFunction
   , function
-  , unsafeUnaryOpL
-  , unaryOpL
-  , unsafeUnaryOpR
-  , unaryOpR
+  , unsafeLeftOp
+  , leftOp
+  , unsafeRightOp
+  , rightOp
   , Operator
   , OperatorDB
   , unsafeBinaryOp
@@ -319,29 +319,35 @@ unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderSQL x <+> op <+> renderSQL y
 
 binaryOp
-  :: (Has sch schemas schema, Has op schema ('Operator ('BinaryOp x1 x2 y)))
-  => Alias op -> OperatorDB schemas x1 x2 y
-binaryOp = unsafeBinaryOp . renderSQL
+  :: forall op sch schemas schema x y z.
+    ( Has sch schemas schema
+    , Has op schema ('Operator ('BinaryOp x y z)) )
+  => OperatorDB schemas x y z
+binaryOp = unsafeBinaryOp $ renderSymbol @op
 
--- | >>> printSQL $ unsafeUnaryOpL "NOT" true
+-- | >>> printSQL $ unsafeLeftOp "NOT" true
 -- (NOT TRUE)
-unsafeUnaryOpL :: ByteString -> x :--> y
-unsafeUnaryOpL op x = UnsafeExpression $ parenthesized $ op <+> renderSQL x
+unsafeLeftOp :: ByteString -> x :--> y
+unsafeLeftOp op x = UnsafeExpression $ parenthesized $ op <+> renderSQL x
 
-unaryOpL
-  :: (Has sch schemas schema, Has op schema ('Operator ('UnaryOpL x y)))
-  => Alias op -> FunctionDB schemas x y
-unaryOpL = unsafeUnaryOpL . renderSQL
+leftOp
+  :: forall op sch schemas schema x y.
+    ( Has sch schemas schema
+    , Has op schema ('Operator ('LeftOp x y)) )
+  => FunctionDB schemas x y
+leftOp = unsafeLeftOp $ renderSymbol @op
 
--- | >>> printSQL $ true & unsafeUnaryOpR "IS NOT TRUE"
+-- | >>> printSQL $ true & unsafeRightOp "IS NOT TRUE"
 -- (TRUE IS NOT TRUE)
-unsafeUnaryOpR :: ByteString -> x :--> y
-unsafeUnaryOpR op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
+unsafeRightOp :: ByteString -> x :--> y
+unsafeRightOp op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
 
-unaryOpR
-  :: (Has sch schemas schema, Has op schema ('Operator ('UnaryOpR x y)))
-  => Alias op -> FunctionDB schemas x y
-unaryOpR = unsafeUnaryOpR . renderSQL
+rightOp
+  :: forall op sch schemas schema x y.
+    ( Has sch schemas schema
+    , Has op schema ('Operator ('RightOp x y)) )
+  => FunctionDB schemas x y
+rightOp = unsafeRightOp $ renderSymbol @op
 
 -- | >>> printSQL $ unsafeFunction "f" true
 -- f(TRUE)
