@@ -35,6 +35,7 @@ module Squeal.PostgreSQL.Expression
     Expression (..)
   , Expr
   , (:-->)
+  , FunctionDB
   , unsafeFunction
   , function
   , unsafeUnaryOpL
@@ -42,11 +43,13 @@ module Squeal.PostgreSQL.Expression
   , unsafeUnaryOpR
   , unaryOpR
   , Operator
+  , OperatorDB
   , unsafeBinaryOp
   , binaryOp
   , FunctionVar
   , unsafeFunctionVar
   , FunctionN
+  , FunctionNDB
   , unsafeFunctionN
   , functionN
   , PGSubset (..)
@@ -142,6 +145,15 @@ type Operator x1 x2 y
   -> Expression outer commons grp schemas params from y
      -- ^ output
 
+type OperatorDB schemas x1 x2 y
+  =  forall outer commons grp params from
+  .  Expression outer commons grp schemas params from x1
+     -- ^ left input
+  -> Expression outer commons grp schemas params from x2
+     -- ^ right input
+  -> Expression outer commons grp schemas params from y
+     -- ^ output
+
 -- | A @RankNType@ for functions with a single argument.
 -- These could be either function calls or unary operators.
 -- This is a subtype of the usual Haskell function type `Prelude.->`,
@@ -149,6 +161,13 @@ type Operator x1 x2 y
 -- `Prelude..` and `Prelude.id`.
 type (:-->) x y
   =  forall outer commons grp schemas params from
+  .  Expression outer commons grp schemas params from x
+     -- ^ input
+  -> Expression outer commons grp schemas params from y
+     -- ^ output
+
+type FunctionDB schemas x y
+  =  forall outer commons grp params from
   .  Expression outer commons grp schemas params from x
      -- ^ input
   -> Expression outer commons grp schemas params from y
@@ -162,6 +181,13 @@ fun(TRUE, FALSE, LOCALTIME, TRUE)
 -}
 type FunctionN xs y
   =  forall outer commons grp schemas params from
+  .  NP (Expression outer commons grp schemas params from) xs
+     -- ^ inputs
+  -> Expression outer commons grp schemas params from y
+     -- ^ output
+
+type FunctionNDB schemas xs y
+  =  forall outer commons grp params from
   .  NP (Expression outer commons grp schemas params from) xs
      -- ^ inputs
   -> Expression outer commons grp schemas params from y
@@ -294,7 +320,7 @@ unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
 
 binaryOp
   :: (Has sch schemas schema, Has op schema ('Operator ('BinaryOp x1 x2 y)))
-  => Alias op -> Operator x1 x2 y
+  => Alias op -> OperatorDB schemas x1 x2 y
 binaryOp = unsafeBinaryOp . renderSQL
 
 -- | >>> printSQL $ unsafeUnaryOpL "NOT" true
@@ -304,7 +330,7 @@ unsafeUnaryOpL op x = UnsafeExpression $ parenthesized $ op <+> renderSQL x
 
 unaryOpL
   :: (Has sch schemas schema, Has op schema ('Operator ('UnaryOpL x y)))
-  => Alias op -> x :--> y
+  => Alias op -> FunctionDB schemas x y
 unaryOpL = unsafeUnaryOpL . renderSQL
 
 -- | >>> printSQL $ true & unsafeUnaryOpR "IS NOT TRUE"
@@ -314,7 +340,7 @@ unsafeUnaryOpR op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
 
 unaryOpR
   :: (Has sch schemas schema, Has op schema ('Operator ('UnaryOpR x y)))
-  => Alias op -> x :--> y
+  => Alias op -> FunctionDB schemas x y
 unaryOpR = unsafeUnaryOpR . renderSQL
 
 -- | >>> printSQL $ unsafeFunction "f" true
@@ -326,9 +352,7 @@ unsafeFunction fun x = UnsafeExpression $
 function
   :: (Has sch schemas schema, Has fun schema ('Function '[x] ('Returns y)))
   => QualifiedAlias sch fun
-  -> ( forall outer commons grp params from
-       .  Expression outer commons grp schemas params from x
-       -> Expression outer commons grp schemas params from y )
+  -> FunctionDB schemas x y
 function = unsafeFunction . renderSQL
 
 -- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: literal 'a')
@@ -342,9 +366,7 @@ functionN
      , Has fun schema ('Function xs ('Returns y))
      , SListI xs )
   => QualifiedAlias sch fun
-  -> ( forall outer commons grp params from
-        .  NP (Expression outer commons grp schemas params from) xs
-        -> Expression outer commons grp schemas params from y )
+  -> FunctionNDB schemas xs y
 functionN = unsafeFunctionN . renderSQL
 
 instance ty `In` PGNum
