@@ -1041,8 +1041,8 @@ instance
   , commons1 ~ (cte ::: common ': commons)
   ) => Aliasable cte
     (statement commons schemas params common)
-    (AlignedList (CommonTableExpression statement schemas params) commons commons1) where
-      statement `as` cte = single (statement `as` cte)
+    (Path (CommonTableExpression statement schemas params) commons commons1) where
+      statement `as` cte = csingleton (statement `as` cte)
 
 instance (forall c s p r. RenderSQL (statement c s p r)) => RenderSQL
   (CommonTableExpression statement schemas params commons0 commons1) where
@@ -1054,7 +1054,7 @@ instance (forall c s p r. RenderSQL (statement c s p r)) => RenderSQL
 -- defining temporary tables that exist just for one query.
 class With statement where
   with
-    :: AlignedList (CommonTableExpression statement schemas params) commons0 commons1
+    :: Path (CommonTableExpression statement schemas params) commons0 commons1
     -- ^ common table expressions
     -> statement commons1 schemas params row
     -- ^ larger query
@@ -1062,7 +1062,7 @@ class With statement where
 instance With (Query outer) where
   with Done query = query
   with ctes query = UnsafeQuery $
-    "WITH" <+> renderSQL ctes <+> renderSQL query
+    "WITH" <+> commaSeparated (ctoList renderSQL ctes) <+> renderSQL query
 
 {- |
 >>> import Data.Monoid (Sum (..))

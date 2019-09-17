@@ -30,19 +30,19 @@ lists and type aligned lists.
 module Squeal.PostgreSQL.List
   ( SOP.NP (..)
   , (*:)
+  , Path (..)
+  , CFunctor (..)
+  , CFoldable (..)
+  , CFree (..)
   , Join
   , disjoin
   , Additional (..)
-  , AlignedList (..)
-  , single
-  , extractList
-  , mapAligned
   , Elem
   , In
   , Length
   ) where
 
-import Control.Category
+import Control.Category.Free
 import Data.Function ((&))
 import Data.Kind
 import Data.Type.Bool
@@ -50,7 +50,7 @@ import GHC.TypeLits
 
 import Generics.SOP as SOP
 
-import Squeal.PostgreSQL.Render
+-- import Squeal.PostgreSQL.Render
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.
@@ -77,7 +77,7 @@ instance Additional (NP expr) where
   also ys = \case
     Nil -> ys
     x :* xs -> x :* (xs & also ys)
-
+{-
 -- | An `AlignedList` is a type-aligned list or free category.
 data AlignedList p x0 x1 where
   Done :: AlignedList p x x
@@ -113,7 +113,7 @@ mapAligned f = \case
 -- | A `single` step.
 single :: p x0 x1 -> AlignedList p x0 x1
 single step = step :>> Done
-
+-}
 -- | A useful operator for ending an `NP` list of length at least 2 without `Nil`.
 (*:) :: f x -> f y -> NP f '[x,y]
 x *: y = x :* y :* Nil
