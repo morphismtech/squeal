@@ -30,13 +30,13 @@ lists and type aligned lists.
 module Squeal.PostgreSQL.List
   ( SOP.NP (..)
   , (*:)
+  , Join
+  , disjoin
+  , Additional (..)
   , Path (..)
   , CFunctor (..)
   , CFoldable (..)
   , CFree (..)
-  , Join
-  , disjoin
-  , Additional (..)
   , Elem
   , In
   , Length
