@@ -50,8 +50,6 @@ import GHC.TypeLits
 
 import Generics.SOP as SOP
 
--- import Squeal.PostgreSQL.Render
-
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.
 type family Join xs ys where
