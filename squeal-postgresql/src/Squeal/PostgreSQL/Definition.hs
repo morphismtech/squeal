@@ -50,6 +50,8 @@ module Squeal.PostgreSQL.Definition
   , createDomain
   , createTypeRange
   , createIndex
+  , IndexMethod (..)
+  , btree, hash, gist, spgist, gin, brin
   , createFunction
   , createOrReplaceFunction
   , createSetFunction
@@ -70,10 +72,15 @@ module Squeal.PostgreSQL.Definition
   , languageSqlQuery
     -- ** Drop
   , dropSchema
+  , dropSchemaIfExists
   , dropTable
+  , dropTableIfExists
   , dropView
+  , dropViewIfExists
   , dropType
+  , dropTypeIfExists
   , dropIndex
+  , dropIndexIfExists
   , dropFunction
   , dropOperator
     -- ** Alter
@@ -591,11 +598,18 @@ DROP statements
 -- >>> printSQL definition
 -- DROP SCHEMA "muh_schema";
 dropSchema
-  :: Has sch schemas schema
+  :: KnownSymbol sch
   => Alias sch
   -- ^ user defined schema
   -> Definition schemas (Drop sch schemas)
 dropSchema sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch <> ";"
+
+dropSchemaIfExists
+  :: KnownSymbol sch
+  => Alias sch
+  -- ^ user defined schema
+  -> Definition schemas (DropIfExists sch schemas)
+dropSchemaIfExists sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch <> ";"
 
 -- | `dropTable` removes a table from the schema.
 --
@@ -609,10 +623,17 @@ dropSchema sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch <> ";"
 -- DROP TABLE "muh_table";
 dropTable
   :: ( Has sch schemas schema
+     , KnownSymbol tab )
+  => QualifiedAlias sch tab -- ^ table to remove
+  -> Definition schemas (Alter sch (DropSchemum tab 'Table schema) schemas)
+dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderSQL tab <> ";"
+
+dropTableIfExists
+  :: ( Has sch schemas schema
      , Has tab schema ('Table table))
   => QualifiedAlias sch tab -- ^ table to remove
-  -> Definition schemas (Alter sch (Drop tab schema) schemas)
-dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderSQL tab <> ";"
+  -> Definition schemas (Alter sch (DropIfExists tab schema) schemas)
+dropTableIfExists tab = UnsafeDefinition $ "DROP TABLE IF EXISTS" <+> renderSQL tab <> ";"
 
 {-----------------------------------------
 ALTER statements
@@ -940,10 +961,16 @@ createOrReplaceView alias query = UnsafeDefinition $
 -- :}
 -- DROP VIEW "bc";
 dropView
-  :: (Has sch schemas schema, Has vw schema ('View view))
+  :: (Has sch schemas schema, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ view to remove
-  -> Definition schemas (Alter sch (Drop vw schema) schemas)
+  -> Definition schemas (Alter sch (DropSchemum vw 'View schema) schemas)
 dropView vw = UnsafeDefinition $ "DROP VIEW" <+> renderSQL vw <> ";"
+
+dropViewIfExists
+  :: (Has sch schemas schema, KnownSymbol vw)
+  => QualifiedAlias sch vw -- ^ view to remove
+  -> Definition schemas (Alter sch (DropIfExists vw schema) schemas)
+dropViewIfExists vw = UnsafeDefinition $ "DROP VIEW IF EXISTS" <+> renderSQL vw <> ";"
 
 -- | Enumerated types are created using the `createTypeEnum` command, for example
 --
@@ -1100,10 +1127,10 @@ type Table = '[] :=>
 
 >>> :{
 let
-  setup :: Definition (Public '[]) (Public '["tab" ::: 'Table Table, "ix" ::: 'Index])
+  setup :: Definition (Public '[]) (Public '["tab" ::: 'Table Table, "ix" ::: 'Index 'Btree])
   setup =
     createTable #tab (nullable int `as` #a :* nullable real `as` #b) Nil >>>
-    createIndex #ix #tab Btree [#a & AscNullsFirst, #b & AscNullsLast]
+    createIndex #ix #tab btree [#a & AscNullsFirst, #b & AscNullsLast]
 in printSQL setup
 :}
 CREATE TABLE "tab" ("a" int NULL, "b" real NULL);
@@ -1113,9 +1140,9 @@ createIndex
   :: (Has sch schemas schema, Has tab schema ('Table table), KnownSymbol ix)
   => Alias ix
   -> QualifiedAlias sch tab
-  -> IndexMethod
+  -> IndexMethod method
   -> [SortExpression '[] '[] 'Ungrouped schemas '[] '[tab ::: TableToRow table]]
-  -> Definition schemas (Alter sch (Create ix 'Index schema) schemas)
+  -> Definition schemas (Alter sch (Create ix ('Index method) schema) schemas)
 createIndex ix tab method cols = UnsafeDefinition $
   "CREATE" <+> "INDEX" <+> renderSQL ix <+> "ON" <+> renderSQL tab
     <+> "USING" <+> renderSQL method
@@ -1134,23 +1161,21 @@ createIndex ix tab method cols = UnsafeDefinition $
       DescNullsLast expression -> parenthesized (renderSQL expression)
         <+> "DESC NULLS LAST"
 
-data IndexMethod
-  = Btree
-  | Hash
-  | Gist
-  | Spgist
-  | Gin
-  | Brin
+newtype IndexMethod ty = UnsafeIndexMethod {renderIndexMethod :: ByteString}
   deriving stock (Eq, Ord, Show, GHC.Generic)
-  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
-instance RenderSQL IndexMethod where
-  renderSQL = \case
-    Btree -> "btree"
-    Hash -> "hash"
-    Gist -> "gist"
-    Spgist -> "spgist"
-    Gin -> "gin"
-    Brin -> "brin"
+instance RenderSQL (IndexMethod ty) where renderSQL = renderIndexMethod
+btree :: IndexMethod 'Btree
+btree = UnsafeIndexMethod "btree"
+hash :: IndexMethod 'Hash
+hash = UnsafeIndexMethod "hash"
+gist :: IndexMethod 'Gist
+gist = UnsafeIndexMethod "gist"
+spgist :: IndexMethod 'Spgist
+spgist = UnsafeIndexMethod "spgist"
+gin :: IndexMethod 'Gin
+gin = UnsafeIndexMethod "gin"
+brin :: IndexMethod 'Brin
+brin = UnsafeIndexMethod "brin"
 
 createFunction
   :: ( Has sch schemas schema
@@ -1309,14 +1334,21 @@ instance RenderSQL (FunctionDefinition schemas args ret) where
   renderSQL = renderFunctionDefinition
 
 -- |
--- >>> printSQL (dropIndex #ix :: Definition (Public '["ix" ::: 'Index]) (Public '[]))
+-- >>> printSQL (dropIndex #ix :: Definition (Public '["ix" ::: 'Index 'Btree]) (Public '[]))
 -- DROP INDEX "ix";
 dropIndex
-  :: (Has sch schemas schema, Has ix schema 'Index)
+  :: (Has sch schemas schema, KnownSymbol ix)
   => QualifiedAlias sch ix
   -- ^ name of the user defined index
-  -> Definition schemas (Alter sch (Drop ix schema) schemas)
+  -> Definition schemas (Alter sch (DropSchemum ix 'Index schema) schemas)
 dropIndex ix = UnsafeDefinition $ "DROP" <+> "INDEX" <+> renderSQL ix <> ";"
+
+dropIndexIfExists
+  :: (Has sch schemas schema, KnownSymbol ix)
+  => QualifiedAlias sch ix
+  -- ^ name of the user defined index
+  -> Definition schemas (Alter sch (DropSchemumIfExists ix 'Index schema) schemas)
+dropIndexIfExists ix = UnsafeDefinition $ "DROP INDEX IF EXISTS" <+> renderSQL ix <> ";"
 
 -- | Lift `PGTyped` to a field
 class FieldTyped schemas ty where
@@ -1333,11 +1365,18 @@ instance (KnownSymbol alias, PGTyped schemas ty)
 -- >>> printSQL (dropType #schwarma :: Definition '["public" ::: '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))]] (Public '[]))
 -- DROP TYPE "schwarma";
 dropType
-  :: (Has sch schemas schema, Has td schema ('Typedef ty))
+  :: (Has sch schemas schema, KnownSymbol td)
   => QualifiedAlias sch td
   -- ^ name of the user defined type
-  -> Definition schemas (Alter sch (Drop td schema) schemas)
+  -> Definition schemas (Alter sch (DropSchemum td 'Typedef schema) schemas)
 dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderSQL tydef <> ";"
+
+dropTypeIfExists
+  :: (Has sch schemas schema, KnownSymbol td)
+  => QualifiedAlias sch td
+  -- ^ name of the user defined type
+  -> Definition schemas (Alter sch (DropSchemumIfExists td 'Typedef schema) schemas)
+dropTypeIfExists tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderSQL tydef <> ";"
 
 -- | `ColumnTypeExpression`s are used in `createTable` commands.
 newtype ColumnTypeExpression (schemas :: SchemasType) (ty :: ColumnType)

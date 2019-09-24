@@ -44,6 +44,7 @@ module Squeal.PostgreSQL.Schema
   , ColumnsType
   , TableType
   , SchemumType (..)
+  , IndexType (..)
   , OperatorType (..)
   , ReturnsType (..)
   , SchemaType
@@ -63,6 +64,9 @@ module Squeal.PostgreSQL.Schema
   , CreateIfNotExists
   , CreateOrReplace
   , Drop
+  , DropSchemum
+  , DropIfExists
+  , DropSchemumIfExists
   , Alter
   , Rename
   , ConstraintInvolves
@@ -324,7 +328,7 @@ type family Create alias x xs where
   Create alias x (alias ::: y ': xs) = TypeError
     ('Text "Create: alias "
     ':<>: 'ShowType alias
-    ':<>: 'Text "already in use")
+    ':<>: 'Text "already exists")
   Create alias y (x ': xs) = x ': Create alias y xs
 
 type family CreateIfNotExists alias x xs where
@@ -336,20 +340,56 @@ type family CreateOrReplace alias x xs where
   CreateOrReplace alias x '[] = '[alias ::: x]
   CreateOrReplace alias x (alias ::: x ': xs) = alias ::: x ': xs
   CreateOrReplace alias x (alias ::: y ': xs) = TypeError
-    ('Text "CreateOrReplace: alias "
+    ('Text "CreateOrReplace: expected type "
+    ':<>: 'ShowType y
+    ':<>: 'Text " but alias "
     ':<>: 'ShowType alias
-    ':<>: 'Text " of type "
-    ':<>: 'ShowType x
-    ':<>: 'Text " cannot be replaced by unequal type "
-    ':<>: 'ShowType y)
+    ':<>: 'Text " has type "
+    ':<>: 'ShowType x)
   CreateOrReplace alias y (x ': xs) = x ': CreateOrReplace alias y xs
 
 -- | @Drop alias xs@ removes the type associated with @alias@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.dropTable` statements
 -- and in @ALTER TABLE@ `Squeal.PostgreSQL.Definition.dropColumn` statements.
 type family Drop alias xs where
-  Drop alias ((alias ::: x) ': xs) = xs
+  Drop alias '[] = TypeError
+    ('Text "Drop: alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text " does not exist" )
+  Drop alias (alias ::: x ': xs) = xs
   Drop alias (x ': xs) = x ': Drop alias xs
+
+type family DropSchemum alias sch xs where
+  DropSchemum alias sch '[] = TypeError
+    ('Text "DropSchemum: alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text " does not exist" )
+  DropSchemum alias sch (alias ::: sch x ': xs) = xs
+  DropSchemum alias sch0 (alias ::: sch1 x ': xs) = TypeError
+    ('Text "DropSchemum: expected schemum "
+    ':<>: 'ShowType sch1
+    ':<>: 'Text " but alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text " has schemum "
+    ':<>: 'ShowType sch0)
+  DropSchemum alias sch (x ': xs) = x ': DropSchemum alias sch xs
+
+type family DropIfExists alias xs where
+  DropIfExists alias '[] = '[]
+  DropIfExists alias (alias ::: x ': xs) = xs
+  DropIfExists alias (x ': xs) = x ': DropIfExists alias xs
+
+type family DropSchemumIfExists alias sch xs where
+  DropSchemumIfExists alias sch '[] = '[]
+  DropSchemumIfExists alias sch (alias ::: sch x ': xs) = xs
+  DropSchemumIfExists alias sch0 (alias ::: sch1 x ': xs) = TypeError
+    ('Text "DropSchemumIfExists: expected schemum "
+    ':<>: 'ShowType sch1
+    ':<>: 'Text " but alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text " has schemum "
+    ':<>: 'ShowType sch0)
+  DropSchemumIfExists alias sch (x ': xs) = x ': DropSchemumIfExists alias sch xs
 
 -- | @Alter alias x xs@ replaces the type associated with an @alias@ in @xs@
 -- with the type @x@ and is used in `Squeal.PostgreSQL.Definition.alterTable`
@@ -387,10 +427,18 @@ data SchemumType
   = Table TableType
   | View RowType
   | Typedef PGType
-  | Index
+  | Index IndexType
   | Function [NullityType] ReturnsType
   | Operator OperatorType
   | UnsafeSchemum Symbol
+
+data IndexType
+  = Btree
+  | Hash
+  | Gist
+  | Spgist
+  | Gin
+  | Brin
 
 data ReturnsType
   = Returns NullityType
