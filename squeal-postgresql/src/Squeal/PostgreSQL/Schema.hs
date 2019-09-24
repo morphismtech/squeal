@@ -60,6 +60,7 @@ module Squeal.PostgreSQL.Schema
   , PGlabel (..)
     -- * Data Definitions
   , Create
+  , CreateIfNotExists
   , Drop
   , Alter
   , Rename
@@ -324,6 +325,11 @@ type family Create alias x xs where
     ':<>: 'ShowType alias
     ':<>: 'Text "already in use")
   Create alias y (x ': xs) = x ': Create alias y xs
+
+type family CreateIfNotExists alias x xs where
+  CreateIfNotExists alias x '[] = '[alias ::: x]
+  CreateIfNotExists alias x (alias ::: y ': xs) = (alias ::: y ': xs)
+  CreateIfNotExists alias y (x ': xs) = x ': Create alias y xs
 
 -- | @Drop alias xs@ removes the type associated with @alias@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.dropTable` statements

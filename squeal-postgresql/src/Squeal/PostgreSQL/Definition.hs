@@ -184,7 +184,7 @@ createSchema sch = UnsafeDefinition $
 createSchemaIfNotExists
   :: (KnownSymbol sch, Has sch schemas schema)
   => Alias sch
-  -> Definition schemas schemas
+  -> Definition schemas (CreateIfNotExists sch '[] schemas)
 createSchemaIfNotExists sch = UnsafeDefinition $
   "CREATE" <+> "SCHEMA" <+> "IF" <+> "NOT" <+> "EXISTS"
   <+> renderSQL sch <> ";"
@@ -248,16 +248,19 @@ in printSQL setup
 CREATE TABLE IF NOT EXISTS "tab" ("a" int NULL, "b" real NULL);
 -}
 createTableIfNotExists
-  :: ( Has sch schemas schema
-     , Has tab schema ('Table (constraints :=> columns))
+  :: ( KnownSymbol sch
+     , KnownSymbol tab
+     , columns ~ (col ': cols)
      , SOP.SListI columns
-     , SOP.SListI constraints )
+     , SOP.SListI constraints
+     , Has sch schemas0 schema0
+     , schemas1 ~ Alter sch (CreateIfNotExists tab ('Table (constraints :=> columns)) schema0) schemas0 )
   => QualifiedAlias sch tab -- ^ the name of the table to add
-  -> NP (Aliased (ColumnTypeExpression schemas)) columns
+  -> NP (Aliased (ColumnTypeExpression schemas0)) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression sch tab schemas)) constraints
+  -> NP (Aliased (TableConstraintExpression sch tab schemas1)) constraints
     -- ^ constraints that must hold for the table
-  -> Definition schemas schemas
+  -> Definition schemas0 schemas1
 createTableIfNotExists tab columns constraints = UnsafeDefinition $
   "CREATE TABLE IF NOT EXISTS"
   <+> renderCreation tab columns constraints
