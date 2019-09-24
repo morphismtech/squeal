@@ -39,7 +39,7 @@ module Squeal.PostgreSQL.Definition.Schema
 import GHC.TypeLits
 
 import Squeal.PostgreSQL.Alias
-import Squeal.PostgreSQL.Definition (Definition (..))
+import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 

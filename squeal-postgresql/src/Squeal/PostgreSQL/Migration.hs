@@ -168,6 +168,8 @@ import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Definition.Table
+import Squeal.PostgreSQL.Definition.Table.Column
+import Squeal.PostgreSQL.Definition.Table.Constraint
 import Squeal.PostgreSQL.Expression.Comparison
 import Squeal.PostgreSQL.Expression.Parameter
 import Squeal.PostgreSQL.Expression.Time

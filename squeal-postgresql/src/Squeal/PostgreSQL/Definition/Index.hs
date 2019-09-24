@@ -49,7 +49,7 @@ import GHC.TypeLits
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Alias
-import Squeal.PostgreSQL.Definition (Definition (..))
+import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Expression.Sort
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema

@@ -54,7 +54,7 @@ import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Alias
-import Squeal.PostgreSQL.Definition (Definition (..))
+import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.List

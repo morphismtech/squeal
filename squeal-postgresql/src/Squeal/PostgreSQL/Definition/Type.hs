@@ -50,7 +50,7 @@ import qualified Generics.SOP as SOP
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Type
-import Squeal.PostgreSQL.Definition (Definition (..))
+import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
