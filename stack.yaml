@@ -5,4 +5,4 @@ packages:
 extra-deps:
 - unliftio-pool-0.2.1.0
 - github: morphismtech/free-categories
-  commit: b28b4c0d2f56d447b5f81964d1313a5f7c1a0015
+  commit: c0e555fbefb5c21619e532264c4dfeac556d0630
