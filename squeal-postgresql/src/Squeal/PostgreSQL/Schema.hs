@@ -342,11 +342,11 @@ type family CreateOrReplace alias x xs where
   CreateOrReplace alias x (alias ::: x ': xs) = alias ::: x ': xs
   CreateOrReplace alias x (alias ::: y ': xs) = TypeError
     ('Text "CreateOrReplace: expected type "
-    ':<>: 'ShowType y
+    ':<>: 'ShowType x
     ':<>: 'Text " but alias "
     ':<>: 'ShowType alias
     ':<>: 'Text " has type "
-    ':<>: 'ShowType x)
+    ':<>: 'ShowType y)
   CreateOrReplace alias y (x ': xs) = x ': CreateOrReplace alias y xs
 
 -- | @Drop alias xs@ removes the type associated with @alias@ in @xs@
@@ -368,11 +368,11 @@ type family DropSchemum alias sch xs where
   DropSchemum alias sch (alias ::: sch x ': xs) = xs
   DropSchemum alias sch0 (alias ::: sch1 x ': xs) = TypeError
     ('Text "DropSchemum: expected schemum "
-    ':<>: 'ShowType sch1
+    ':<>: 'ShowType sch0
     ':<>: 'Text " but alias "
     ':<>: 'ShowType alias
     ':<>: 'Text " has schemum "
-    ':<>: 'ShowType sch0)
+    ':<>: 'ShowType sch1)
   DropSchemum alias sch (x ': xs) = x ': DropSchemum alias sch xs
 
 type family DropIfExists alias xs where

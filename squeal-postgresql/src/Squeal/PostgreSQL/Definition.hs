@@ -46,9 +46,9 @@ module Squeal.PostgreSQL.Definition
   , createTypeEnumFrom
   , createTypeComposite
   , createTypeCompositeFrom
-  , FieldTyped (..)
-  , createDomain
   , createTypeRange
+  , createDomain
+  , FieldTyped (..)
   , createIndex
   , createIndexIfNotExists
   , IndexMethod (..)
@@ -83,7 +83,9 @@ module Squeal.PostgreSQL.Definition
   , dropIndex
   , dropIndexIfExists
   , dropFunction
+  , dropFunctionIfExists
   , dropOperator
+  , dropOperatorIfExists
     -- ** Alter
   , alterTable
   , alterTableRename
@@ -931,7 +933,7 @@ in printSQL definition
 CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
 -}
 createView
-  :: (KnownSymbol sch, KnownSymbol vw, Has sch schemas schema)
+  :: (Has sch schemas schema, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ the name of the view to add
   -> Query '[] '[] schemas '[] view -- ^ query
   -> Definition schemas (Alter sch (Create vw ('View view) schema) schemas)
@@ -939,9 +941,8 @@ createView alias query = UnsafeDefinition $
   "CREATE" <+> "VIEW" <+> renderSQL alias <+> "AS"
   <+> renderQuery query <> ";"
 
-
 createOrReplaceView
-  :: (KnownSymbol sch, KnownSymbol vw, Has sch schemas schema)
+  :: (Has sch schemas schema, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ the name of the view to add
   -> Query '[] '[] schemas '[] view -- ^ query
   -> Definition schemas (Alter sch (CreateOrReplace vw ('View view) schema) schemas)
@@ -1338,20 +1339,36 @@ createRightOp fun x = UnsafeDefinition $
         , "LEFTARG" <+> "=" <+> renderSQL x ]
 
 dropFunction
-  :: (Has sch schemas schema, Has fun schema ('Function (args '::--> ret)))
+  :: (Has sch schemas schema, KnownSymbol fun)
   => QualifiedAlias sch fun
   -- ^ name of the user defined function
-  -> Definition schemas (Alter sch (Drop fun schema) schemas)
+  -> Definition schemas (Alter sch (DropSchemum fun 'Function schema) schemas)
 dropFunction fun = UnsafeDefinition $
   "DROP" <+> "FUNCTION" <+> renderSQL fun <> ";"
 
+dropFunctionIfExists
+  :: (Has sch schemas schema, KnownSymbol fun)
+  => QualifiedAlias sch fun
+  -- ^ name of the user defined function
+  -> Definition schemas (Alter sch (DropSchemumIfExists fun 'Function schema) schemas)
+dropFunctionIfExists fun = UnsafeDefinition $
+  "DROP FUNCTION IF EXISTS" <+> renderSQL fun <> ";"
+
 dropOperator
-  :: (Has sch schemas schema, Has op schema ('Operator oper))
+  :: (Has sch schemas schema, KnownSymbol op)
   => QualifiedAlias sch op
   -- ^ name of the user defined operator
-  -> Definition schemas (Alter sch (Drop op schema) schemas)
+  -> Definition schemas (Alter sch (DropSchemum op 'Operator schema) schemas)
 dropOperator op = UnsafeDefinition $
   "DROP" <+> "OPERATOR" <+> renderSQL op <> ";"
+
+dropOperatorIfExists
+  :: (Has sch schemas schema, KnownSymbol op)
+  => QualifiedAlias sch op
+  -- ^ name of the user defined operator
+  -> Definition schemas (Alter sch (DropSchemumIfExists op 'Operator schema) schemas)
+dropOperatorIfExists op = UnsafeDefinition $
+  "DROP OPERATOR IF EXISTS" <+> renderSQL op <> ";"
 
 newtype FunctionDefinition schemas args ret = UnsafeFunctionDefinition
   { renderFunctionDefinition :: ByteString }
