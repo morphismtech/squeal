@@ -25,6 +25,12 @@ library
     Squeal.PostgreSQL.Alias
     Squeal.PostgreSQL.Binary
     Squeal.PostgreSQL.Definition
+    Squeal.PostgreSQL.Definition.Function
+    Squeal.PostgreSQL.Definition.Index
+    Squeal.PostgreSQL.Definition.Table
+    Squeal.PostgreSQL.Definition.Type
+    Squeal.PostgreSQL.Definition.Schema
+    Squeal.PostgreSQL.Definition.View
     Squeal.PostgreSQL.Expression
     Squeal.PostgreSQL.Expression.Aggregate
     Squeal.PostgreSQL.Expression.Collection

@@ -31,6 +31,7 @@ module Squeal.PostgreSQL.Expression.Type
   , astype
   , inferredtype
   , PGTyped (..)
+  , FieldTyped (..)
   , typedef
   , typetable
   , typeview
@@ -339,3 +340,10 @@ instance (SOP.All KnownNat dims, PGTyped schemas ty)
 instance PGTyped schemas (null 'PGtsvector) where pgtype = tsvector
 instance PGTyped schemas (null 'PGtsquery) where pgtype = tsquery
 instance PGTyped schemas (null 'PGoid) where pgtype = oid
+
+-- | Lift `PGTyped` to a field
+class FieldTyped schemas ty where
+  fieldtype :: Aliased (TypeExpression schemas) ty
+instance (KnownSymbol alias, PGTyped schemas ty)
+  => FieldTyped schemas (alias ::: ty) where
+    fieldtype = pgtype `As` Alias
