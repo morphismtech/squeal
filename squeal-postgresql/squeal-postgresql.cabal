@@ -63,6 +63,7 @@ library
     , bytestring >= 0.10.8.2
     , bytestring-strict-builder >= 0.4.5
     , deepseq >= 1.4.3.0
+    , free-categories >= 0.1.0.0
     , generics-sop >= 0.3.2.0 && < 0.5.0.0
     , mmorph >= 1.1.1
     , mtl >= 2.2.2

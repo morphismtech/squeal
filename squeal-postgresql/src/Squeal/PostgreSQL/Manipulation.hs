@@ -99,7 +99,7 @@ instance RenderSQL (Manipulation commons schemas params columns) where
 instance With Manipulation where
   with Done manip = manip
   with ctes manip = UnsafeManipulation $
-    "WITH" <+> renderSQL ctes <+> renderSQL manip
+    "WITH" <+> commaSeparated (ctoList renderSQL ctes) <+> renderSQL manip
 
 {- |
 The top level `Manipulation_` type is parameterized by a @schemas@ `SchemasType`,

@@ -33,24 +33,22 @@ module Squeal.PostgreSQL.List
   , Join
   , disjoin
   , Additional (..)
-  , AlignedList (..)
-  , single
-  , extractList
-  , mapAligned
+  , Path (..)
+  , CFunctor (..)
+  , CFoldable (..)
+  , CFree (..)
   , Elem
   , In
   , Length
   ) where
 
-import Control.Category
+import Control.Category.Free
 import Data.Function ((&))
 import Data.Kind
 import Data.Type.Bool
 import GHC.TypeLits
 
 import Generics.SOP as SOP
-
-import Squeal.PostgreSQL.Render
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.
@@ -77,42 +75,6 @@ instance Additional (NP expr) where
   also ys = \case
     Nil -> ys
     x :* xs -> x :* (xs & also ys)
-
--- | An `AlignedList` is a type-aligned list or free category.
-data AlignedList p x0 x1 where
-  Done :: AlignedList p x x
-  (:>>) :: p x0 x1 -> AlignedList p x1 x2 -> AlignedList p x0 x2
-infixr 7 :>>
-instance Category (AlignedList p) where
-  id = Done
-  (.) list = \case
-    Done -> list
-    step :>> steps -> step :>> (steps >>> list)
-instance (forall t0 t1. RenderSQL (p t0 t1))
-  => RenderSQL (AlignedList p x0 x1) where
-    renderSQL = \case
-      Done -> ""
-      step :>> Done -> renderSQL step
-      step :>> steps -> renderSQL step <> ", " <> renderSQL steps
-
--- | `extractList` turns an `AlignedList` into a standard list.
-extractList :: (forall a0 a1. p a0 a1 -> b) -> AlignedList p x0 x1 -> [b]
-extractList f = \case
-  Done -> []
-  step :>> steps -> (f step):extractList f steps
-
--- | `mapAligned` applies a function to each element of an `AlignedList`.
-mapAligned
-  :: (forall z0 z1. p z0 z1 -> q z0 z1)
-  -> AlignedList p x0 x1
-  -> AlignedList q x0 x1
-mapAligned f = \case
-  Done -> Done
-  x :>> xs -> f x :>> mapAligned f xs
-
--- | A `single` step.
-single :: p x0 x1 -> AlignedList p x0 x1
-single step = step :>> Done
 
 -- | A useful operator for ending an `NP` list of length at least 2 without `Nil`.
 (*:) :: f x -> f y -> NP f '[x,y]
