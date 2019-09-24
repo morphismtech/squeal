@@ -61,6 +61,7 @@ module Squeal.PostgreSQL.Schema
     -- * Data Definitions
   , Create
   , CreateIfNotExists
+  , CreateOrReplace
   , Drop
   , Alter
   , Rename
@@ -328,8 +329,20 @@ type family Create alias x xs where
 
 type family CreateIfNotExists alias x xs where
   CreateIfNotExists alias x '[] = '[alias ::: x]
-  CreateIfNotExists alias x (alias ::: y ': xs) = (alias ::: y ': xs)
-  CreateIfNotExists alias y (x ': xs) = x ': Create alias y xs
+  CreateIfNotExists alias x (alias ::: y ': xs) = alias ::: y ': xs
+  CreateIfNotExists alias y (x ': xs) = x ': CreateIfNotExists alias y xs
+
+type family CreateOrReplace alias x xs where
+  CreateOrReplace alias x '[] = '[alias ::: x]
+  CreateOrReplace alias x (alias ::: x ': xs) = alias ::: x ': xs
+  CreateOrReplace alias x (alias ::: y ': xs) = TypeError
+    ('Text "CreateOrReplace: alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text " of type "
+    ':<>: 'ShowType x
+    ':<>: 'Text " cannot be replaced by unequal type "
+    ':<>: 'ShowType y)
+  CreateOrReplace alias y (x ': xs) = x ': CreateOrReplace alias y xs
 
 -- | @Drop alias xs@ removes the type associated with @alias@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.dropTable` statements

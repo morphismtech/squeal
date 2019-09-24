@@ -41,6 +41,7 @@ module Squeal.PostgreSQL.Definition
   , createTable
   , createTableIfNotExists
   , createView
+  , createOrReplaceView
   , createTypeEnum
   , createTypeEnumFrom
   , createTypeComposite
@@ -916,6 +917,16 @@ createView alias query = UnsafeDefinition $
   "CREATE" <+> "VIEW" <+> renderSQL alias <+> "AS"
   <+> renderQuery query <> ";"
 
+
+createOrReplaceView
+  :: (KnownSymbol sch, KnownSymbol vw, Has sch schemas schema)
+  => QualifiedAlias sch vw -- ^ the name of the view to add
+  -> Query '[] '[] schemas '[] view -- ^ query
+  -> Definition schemas (Alter sch (CreateOrReplace vw ('View view) schema) schemas)
+createOrReplaceView alias query = UnsafeDefinition $
+  "CREATE OR REPLACE VIEW" <+> renderSQL alias <+> "AS"
+  <+> renderQuery query <> ";"
+
 -- | Drop a view.
 --
 -- >>> :{
@@ -1163,7 +1174,7 @@ createOrReplaceFunction
   -> NP (TypeExpression schemas) args
   -> TypeExpression schemas ret
   -> FunctionDefinition schemas args ('Returns ret)
-  -> Definition schemas (Alter sch (Alter fun ('Function args ('Returns ret)) schema) schemas)
+  -> Definition schemas (Alter sch (CreateOrReplace fun ('Function args ('Returns ret)) schema) schemas)
 createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
   "CREATE" <+> "OR" <+> "REPLACE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
@@ -1211,7 +1222,7 @@ createOrReplaceSetFunction
   -> NP (TypeExpression schemas) args
   -> NP (Aliased (TypeExpression schemas)) rets
   -> FunctionDefinition schemas args ('ReturnsTable rets)
-  -> Definition schemas (Alter sch (Alter fun ('Function args ('ReturnsTable rets)) schema) schemas)
+  -> Definition schemas (Alter sch (CreateOrReplace fun ('Function args ('ReturnsTable rets)) schema) schemas)
 createOrReplaceSetFunction fun args rets fundef = UnsafeDefinition $
   "CREATE" <+> "OR" <+> "REPLACE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
