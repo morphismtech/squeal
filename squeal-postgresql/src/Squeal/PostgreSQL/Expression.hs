@@ -356,7 +356,7 @@ unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
 function
-  :: (Has sch schemas schema, Has fun schema ('Function '[x] ('Returns y)))
+  :: (Has sch schemas schema, Has fun schema ('Function ('[x] '::--> 'Returns y)))
   => QualifiedAlias sch fun
   -> FunctionDB schemas x y
 function = unsafeFunction . renderSQL
@@ -369,7 +369,7 @@ unsafeFunctionN fun xs = UnsafeExpression $
 
 functionN
   :: ( Has sch schemas schema
-     , Has fun schema ('Function xs ('Returns y))
+     , Has fun schema ('Function (xs '::--> 'Returns y))
      , SListI xs )
   => QualifiedAlias sch fun
   -> FunctionNDB schemas xs y

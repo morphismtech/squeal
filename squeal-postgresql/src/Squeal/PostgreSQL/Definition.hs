@@ -50,6 +50,7 @@ module Squeal.PostgreSQL.Definition
   , createDomain
   , createTypeRange
   , createIndex
+  , createIndexIfNotExists
   , IndexMethod (..)
   , btree, hash, gist, spgist, gin, brin
   , createFunction
@@ -1161,6 +1162,31 @@ createIndex ix tab method cols = UnsafeDefinition $
       DescNullsLast expression -> parenthesized (renderSQL expression)
         <+> "DESC NULLS LAST"
 
+createIndexIfNotExists
+  :: (Has sch schemas schema, Has tab schema ('Table table), KnownSymbol ix)
+  => Alias ix
+  -> QualifiedAlias sch tab
+  -> IndexMethod method
+  -> [SortExpression '[] '[] 'Ungrouped schemas '[] '[tab ::: TableToRow table]]
+  -> Definition schemas (Alter sch (CreateIfNotExists ix ('Index method) schema) schemas)
+createIndexIfNotExists ix tab method cols = UnsafeDefinition $
+  "CREATE INDEX IF NOT EXISTS" <+> renderSQL ix <+> "ON" <+> renderSQL tab
+    <+> "USING" <+> renderSQL method
+    <+> parenthesized (commaSeparated (renderIndex <$> cols))
+    <> ";"
+  where
+    renderIndex = \case
+      Asc expression -> parenthesized (renderSQL expression) <+> "ASC"
+      Desc expression -> parenthesized (renderSQL expression) <+> "DESC"
+      AscNullsFirst expression -> parenthesized (renderSQL expression)
+        <+> "ASC NULLS FIRST"
+      DescNullsFirst expression -> parenthesized (renderSQL expression)
+        <+> "DESC NULLS FIRST"
+      AscNullsLast expression -> parenthesized (renderSQL expression)
+        <+> "ASC NULLS LAST"
+      DescNullsLast expression -> parenthesized (renderSQL expression)
+        <+> "DESC NULLS LAST"
+
 newtype IndexMethod ty = UnsafeIndexMethod {renderIndexMethod :: ByteString}
   deriving stock (Eq, Ord, Show, GHC.Generic)
 instance RenderSQL (IndexMethod ty) where renderSQL = renderIndexMethod
@@ -1185,7 +1211,7 @@ createFunction
   -> NP (TypeExpression schemas) args
   -> TypeExpression schemas ret
   -> FunctionDefinition schemas args ('Returns ret)
-  -> Definition schemas (Alter sch (Create fun ('Function args ('Returns ret)) schema) schemas)
+  -> Definition schemas (Alter sch (Create fun ('Function (args '::--> 'Returns ret)) schema) schemas)
 createFunction fun args ret fundef = UnsafeDefinition $
   "CREATE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
@@ -1193,13 +1219,13 @@ createFunction fun args ret fundef = UnsafeDefinition $
 
 createOrReplaceFunction
   :: ( Has sch schemas schema
-     , Has fun schema ('Function args0 ret0)
+     , KnownSymbol fun
      , SOP.SListI args )
   => QualifiedAlias sch fun
   -> NP (TypeExpression schemas) args
   -> TypeExpression schemas ret
   -> FunctionDefinition schemas args ('Returns ret)
-  -> Definition schemas (Alter sch (CreateOrReplace fun ('Function args ('Returns ret)) schema) schemas)
+  -> Definition schemas (Alter sch (CreateOrReplace fun ('Function (args '::--> 'Returns ret)) schema) schemas)
 createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
   "CREATE" <+> "OR" <+> "REPLACE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
@@ -1227,7 +1253,7 @@ createSetFunction
   -> NP (TypeExpression schemas) args
   -> NP (Aliased (TypeExpression schemas)) rets
   -> FunctionDefinition schemas args ('ReturnsTable rets)
-  -> Definition schemas (Alter sch (Create fun ('Function args ('ReturnsTable rets)) schema) schemas)
+  -> Definition schemas (Alter sch (Create fun ('Function (args '::--> 'ReturnsTable rets)) schema) schemas)
 createSetFunction fun args rets fundef = UnsafeDefinition $
   "CREATE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
@@ -1240,14 +1266,14 @@ createSetFunction fun args rets fundef = UnsafeDefinition $
 
 createOrReplaceSetFunction
   :: ( Has sch schemas schema
-     , Has fun schema ('Function args0 ret0)
+     , Has fun schema ('Function (args0 '::--> ret0))
      , SOP.SListI args
      , SOP.SListI rets )
   => QualifiedAlias sch fun
   -> NP (TypeExpression schemas) args
   -> NP (Aliased (TypeExpression schemas)) rets
   -> FunctionDefinition schemas args ('ReturnsTable rets)
-  -> Definition schemas (Alter sch (CreateOrReplace fun ('Function args ('ReturnsTable rets)) schema) schemas)
+  -> Definition schemas (Alter sch (CreateOrReplace fun ('Function (args '::--> 'ReturnsTable rets)) schema) schemas)
 createOrReplaceSetFunction fun args rets fundef = UnsafeDefinition $
   "CREATE" <+> "OR" <+> "REPLACE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
@@ -1261,7 +1287,7 @@ createOrReplaceSetFunction fun args rets fundef = UnsafeDefinition $
 createBinaryOp
   :: forall op fun sch schemas schema x y z.
      ( Has sch schemas schema
-     , Has fun schema ('Function '[x,y] ('Returns z))
+     , Has fun schema ('Function ('[x,y] '::--> 'Returns z))
      , KnownSymbol op )
   => Alias fun
   -> TypeExpression schemas x
@@ -1280,7 +1306,7 @@ createBinaryOp fun x y = UnsafeDefinition $
 createLeftOp
   :: forall op fun sch schemas schema x y.
      ( Has sch schemas schema
-     , Has fun schema ('Function '[x] ('Returns y))
+     , Has fun schema ('Function ('[x] '::--> 'Returns y))
      , KnownSymbol op )
   => Alias fun
   -> TypeExpression schemas x
@@ -1297,7 +1323,7 @@ createLeftOp fun x = UnsafeDefinition $
 createRightOp
   :: forall op fun sch schemas schema x y.
      ( Has sch schemas schema
-     , Has fun schema ('Function '[x] ('Returns y))
+     , Has fun schema ('Function ('[x] '::--> 'Returns y))
      , KnownSymbol op )
   => Alias fun
   -> TypeExpression schemas x
@@ -1312,7 +1338,7 @@ createRightOp fun x = UnsafeDefinition $
         , "LEFTARG" <+> "=" <+> renderSQL x ]
 
 dropFunction
-  :: (Has sch schemas schema, Has fun schema ('Function args ret))
+  :: (Has sch schemas schema, Has fun schema ('Function (args '::--> ret)))
   => QualifiedAlias sch fun
   -- ^ name of the user defined function
   -> Definition schemas (Alter sch (Drop fun schema) schemas)

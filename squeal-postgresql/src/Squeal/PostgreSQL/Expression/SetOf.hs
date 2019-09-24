@@ -62,7 +62,7 @@ unsafeSetOfFunction x = UnsafeFromClause $
 
 setOfFunction
   :: ( Has sch schemas schema
-     , Has fun schema ('Function '[ty] ('ReturnsTable setof)) )
+     , Has fun schema ('Function ('[ty] '::--> 'ReturnsTable setof)) )
   => Alias fun
   -> ( forall outer commons params
         .  Expression outer commons 'Ungrouped schemas params '[] ty
@@ -88,7 +88,7 @@ unsafeSetOfFunctionN xs = UnsafeFromClause $
 
 setOfFunctionN
   :: ( Has sch schemas schema
-     , Has fun schema ('Function tys ('ReturnsTable setof))
+     , Has fun schema ('Function (tys '::--> 'ReturnsTable setof))
      , SOP.SListI tys )
   => Alias fun
   -> ( forall outer commons params

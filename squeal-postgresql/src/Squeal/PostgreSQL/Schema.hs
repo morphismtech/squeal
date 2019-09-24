@@ -45,6 +45,7 @@ module Squeal.PostgreSQL.Schema
   , TableType
   , SchemumType (..)
   , IndexType (..)
+  , FunctionType (..)
   , OperatorType (..)
   , ReturnsType (..)
   , SchemaType
@@ -428,9 +429,11 @@ data SchemumType
   | View RowType
   | Typedef PGType
   | Index IndexType
-  | Function [NullityType] ReturnsType
+  | Function FunctionType
   | Operator OperatorType
   | UnsafeSchemum Symbol
+
+data FunctionType = (::-->) [NullityType] ReturnsType
 
 data IndexType
   = Btree
