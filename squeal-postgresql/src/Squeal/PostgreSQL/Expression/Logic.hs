@@ -47,7 +47,7 @@ false = UnsafeExpression "FALSE"
 
 -- | >>> printSQL $ not_ true
 -- (NOT TRUE)
-not_ :: null 'PGbool :--> null 'PGbool
+not_ :: null 'PGbool --> null 'PGbool
 not_ = unsafeLeftOp "NOT"
 
 -- | >>> printSQL $ true .&& false

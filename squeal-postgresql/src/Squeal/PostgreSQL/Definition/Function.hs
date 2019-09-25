@@ -73,7 +73,7 @@ createFunction
   -> NP (TypeExpression schemas) args
   -> TypeExpression schemas ret
   -> FunctionDefinition schemas args ('Returns ret)
-  -> Definition schemas (Alter sch (Create fun ('Function (args '::--> 'Returns ret)) schema) schemas)
+  -> Definition schemas (Alter sch (Create fun ('Function (args :=> 'Returns ret)) schema) schemas)
 createFunction fun args ret fundef = UnsafeDefinition $
   "CREATE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
@@ -87,7 +87,7 @@ createOrReplaceFunction
   -> NP (TypeExpression schemas) args
   -> TypeExpression schemas ret
   -> FunctionDefinition schemas args ('Returns ret)
-  -> Definition schemas (Alter sch (CreateOrReplace fun ('Function (args '::--> 'Returns ret)) schema) schemas)
+  -> Definition schemas (Alter sch (CreateOrReplace fun ('Function (args :=> 'Returns ret)) schema) schemas)
 createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
   "CREATE" <+> "OR" <+> "REPLACE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
@@ -115,7 +115,7 @@ createSetFunction
   -> NP (TypeExpression schemas) args
   -> NP (Aliased (TypeExpression schemas)) rets
   -> FunctionDefinition schemas args ('ReturnsTable rets)
-  -> Definition schemas (Alter sch (Create fun ('Function (args '::--> 'ReturnsTable rets)) schema) schemas)
+  -> Definition schemas (Alter sch (Create fun ('Function (args :=> 'ReturnsTable rets)) schema) schemas)
 createSetFunction fun args rets fundef = UnsafeDefinition $
   "CREATE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
@@ -128,14 +128,14 @@ createSetFunction fun args rets fundef = UnsafeDefinition $
 
 createOrReplaceSetFunction
   :: ( Has sch schemas schema
-     , Has fun schema ('Function (args0 '::--> ret0))
+     , Has fun schema ('Function (args0 :=> ret0))
      , SOP.SListI args
      , SOP.SListI rets )
   => QualifiedAlias sch fun
   -> NP (TypeExpression schemas) args
   -> NP (Aliased (TypeExpression schemas)) rets
   -> FunctionDefinition schemas args ('ReturnsTable rets)
-  -> Definition schemas (Alter sch (CreateOrReplace fun ('Function (args '::--> 'ReturnsTable rets)) schema) schemas)
+  -> Definition schemas (Alter sch (CreateOrReplace fun ('Function (args :=> 'ReturnsTable rets)) schema) schemas)
 createOrReplaceSetFunction fun args rets fundef = UnsafeDefinition $
   "CREATE" <+> "OR" <+> "REPLACE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
@@ -149,9 +149,9 @@ createOrReplaceSetFunction fun args rets fundef = UnsafeDefinition $
 createBinaryOp
   :: forall op fun sch schemas schema x y z.
      ( Has sch schemas schema
-     , Has fun schema ('Function ('[x,y] '::--> 'Returns z))
+     , Has fun schema ('Function ('[x,y] :=> 'Returns z))
      , KnownSymbol op )
-  => Alias fun
+  => QualifiedAlias sch fun
   -> TypeExpression schemas x
   -> TypeExpression schemas y
   -> Definition schemas
@@ -168,9 +168,9 @@ createBinaryOp fun x y = UnsafeDefinition $
 createLeftOp
   :: forall op fun sch schemas schema x y.
      ( Has sch schemas schema
-     , Has fun schema ('Function ('[x] '::--> 'Returns y))
+     , Has fun schema ('Function ('[x] :=> 'Returns y))
      , KnownSymbol op )
-  => Alias fun
+  => QualifiedAlias sch fun
   -> TypeExpression schemas x
   -> Definition schemas
       (Alter sch (Create op ('Operator ('LeftOp x y)) schema) schemas)
@@ -185,9 +185,9 @@ createLeftOp fun x = UnsafeDefinition $
 createRightOp
   :: forall op fun sch schemas schema x y.
      ( Has sch schemas schema
-     , Has fun schema ('Function ('[x] '::--> 'Returns y))
+     , Has fun schema ('Function ('[x] :=> 'Returns y))
      , KnownSymbol op )
-  => Alias fun
+  => QualifiedAlias sch fun
   -> TypeExpression schemas x
   -> Definition schemas
       (Alter sch (Create op ('Operator ('RightOp x y)) schema) schemas)

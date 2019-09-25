@@ -26,9 +26,11 @@ module Squeal.PostgreSQL.Expression.SetOf
   , generateSeriesTimestamp
   , SetOfFunction
   , unsafeSetOfFunction
+  , SetOfFunctionDB
   , setOfFunction
   , SetOfFunctionN
   , unsafeSetOfFunctionN
+  , SetOfFunctionNDB
   , setOfFunctionN
   ) where
 
@@ -53,6 +55,13 @@ type SetOfFunction fun ty setof
   -> FromClause outer commons schemas params '[fun ::: setof]
      -- ^ output
 
+type SetOfFunctionDB fun schemas ty setof
+  =  forall outer commons params
+  .  Expression outer commons 'Ungrouped schemas params '[] ty
+     -- ^ input
+  -> FromClause outer commons schemas params '[fun ::: setof]
+     -- ^ output
+
 -- | Escape hatch for a set returning function with 1 argument.
 unsafeSetOfFunction
   :: forall fun ty setof. KnownSymbol fun
@@ -62,11 +71,9 @@ unsafeSetOfFunction x = UnsafeFromClause $
 
 setOfFunction
   :: ( Has sch schemas schema
-     , Has fun schema ('Function ('[ty] '::--> 'ReturnsTable setof)) )
-  => Alias fun
-  -> ( forall outer commons params
-        .  Expression outer commons 'Ungrouped schemas params '[] ty
-        -> FromClause outer commons schemas params '[fun ::: setof] )
+     , Has fun schema ('Function ('[ty] :=> 'ReturnsTable setof)) )
+  => QualifiedAlias sch fun
+  -> SetOfFunctionDB fun schemas ty setof
 setOfFunction _ = unsafeSetOfFunction
 
 {- |
@@ -86,14 +93,19 @@ unsafeSetOfFunctionN
 unsafeSetOfFunctionN xs = UnsafeFromClause $
   renderSymbol @fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
+type SetOfFunctionNDB fun schemas tys setof
+  =  forall outer commons params
+  .  NP (Expression outer commons 'Ungrouped schemas params '[]) tys
+     -- ^ inputs
+  -> FromClause outer commons schemas params '[fun ::: setof]
+     -- ^ output
+
 setOfFunctionN
   :: ( Has sch schemas schema
-     , Has fun schema ('Function (tys '::--> 'ReturnsTable setof))
+     , Has fun schema ('Function (tys :=> 'ReturnsTable setof))
      , SOP.SListI tys )
-  => Alias fun
-  -> ( forall outer commons params
-        .  NP (Expression outer commons 'Ungrouped schemas params '[]) tys
-        -> FromClause outer commons schemas params '[fun ::: setof] )
+  => QualifiedAlias sch fun
+  -> SetOfFunctionNDB fun schemas tys setof
 setOfFunctionN _ = unsafeSetOfFunctionN
 
 {- | @generateSeries (start *: stop)@

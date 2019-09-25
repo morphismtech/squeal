@@ -44,7 +44,7 @@ null_ = UnsafeExpression "NULL"
 --
 -- >>> printSQL $ notNull true
 -- TRUE
-notNull :: 'NotNull ty :--> 'Null ty
+notNull :: 'NotNull ty --> 'Null ty
 notNull = UnsafeExpression . renderSQL
 
 -- | return the leftmost value which is not NULL
@@ -69,12 +69,12 @@ fromNull notNullx nullx = coalesce [nullx] notNullx
 
 -- | >>> printSQL $ null_ & isNull
 -- NULL IS NULL
-isNull :: 'Null ty :--> null 'PGbool
+isNull :: 'Null ty --> null 'PGbool
 isNull x = UnsafeExpression $ renderSQL x <+> "IS NULL"
 
 -- | >>> printSQL $ null_ & isNotNull
 -- NULL IS NOT NULL
-isNotNull :: 'Null ty :--> null 'PGbool
+isNotNull :: 'Null ty --> null 'PGbool
 isNotNull x = UnsafeExpression $ renderSQL x <+> "IS NOT NULL"
 
 -- | analagous to `maybe` using @IS NULL@
@@ -100,5 +100,5 @@ matchNull y f x = ifThenElse (isNull x) y
 >>> printSQL expr
 NULLIF(FALSE, ($1 :: bool))
 -}
-nullIf :: FunctionN '[ 'NotNull ty, 'NotNull ty] ('Null ty)
+nullIf :: '[ 'NotNull ty, 'NotNull ty] ---> 'Null ty
 nullIf = unsafeFunctionN "NULLIF"

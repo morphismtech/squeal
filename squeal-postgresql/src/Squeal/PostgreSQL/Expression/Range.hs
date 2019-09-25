@@ -205,27 +205,26 @@ whole = NonEmpty Infinite Infinite
 (@-) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
 (@-) = unsafeBinaryOp "-"
 
-lowerBound :: null ('PGrange ty) :--> 'Null ty
+lowerBound :: null ('PGrange ty) --> 'Null ty
 lowerBound = unsafeFunction "lower"
 
-upperBound :: null ('PGrange ty) :--> 'Null ty
+upperBound :: null ('PGrange ty) --> 'Null ty
 upperBound = unsafeFunction "upper"
 
-isEmpty :: null ('PGrange ty) :--> 'Null 'PGbool
+isEmpty :: null ('PGrange ty) --> 'Null 'PGbool
 isEmpty = unsafeFunction "isempty"
 
-lowerInc :: null ('PGrange ty) :--> 'Null 'PGbool
+lowerInc :: null ('PGrange ty) --> 'Null 'PGbool
 lowerInc = unsafeFunction "lower_inc"
 
-lowerInf :: null ('PGrange ty) :--> 'Null 'PGbool
+lowerInf :: null ('PGrange ty) --> 'Null 'PGbool
 lowerInf = unsafeFunction "lower_inf"
 
-upperInc :: null ('PGrange ty) :--> 'Null 'PGbool
+upperInc :: null ('PGrange ty) --> 'Null 'PGbool
 upperInc = unsafeFunction "upper_inc"
 
-upperInf :: null ('PGrange ty) :--> 'Null 'PGbool
+upperInf :: null ('PGrange ty) --> 'Null 'PGbool
 upperInf = unsafeFunction "upper_inf"
 
-rangeMerge :: FunctionN
-  '[ null ('PGrange ty), null ('PGrange ty)] (null ('PGrange ty))
+rangeMerge :: '[null ('PGrange ty), null ('PGrange ty)] ---> null ('PGrange ty)
 rangeMerge = unsafeFunctionN "range_merge"

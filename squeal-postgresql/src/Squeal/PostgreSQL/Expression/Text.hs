@@ -30,17 +30,17 @@ import Squeal.PostgreSQL.Schema
 
 -- | >>> printSQL $ lower "ARRRGGG"
 -- lower(E'ARRRGGG')
-lower :: null 'PGtext :--> null 'PGtext
+lower :: null 'PGtext --> null 'PGtext
 lower = unsafeFunction "lower"
 
 -- | >>> printSQL $ upper "eeee"
 -- upper(E'eeee')
-upper :: null 'PGtext :--> null 'PGtext
+upper :: null 'PGtext --> null 'PGtext
 upper = unsafeFunction "upper"
 
 -- | >>> printSQL $ charLength "four"
 -- char_length(E'four')
-charLength :: null 'PGtext :--> null 'PGint4
+charLength :: null 'PGtext --> null 'PGint4
 charLength = unsafeFunction "char_length"
 
 -- | The `like` expression returns true if the @string@ matches

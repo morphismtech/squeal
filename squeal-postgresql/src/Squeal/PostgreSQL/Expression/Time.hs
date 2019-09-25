@@ -17,6 +17,7 @@ Date/Time functions and operators
   , OverloadedStrings
   , PolyKinds
   , RankNTypes
+  , TypeOperators
 #-}
 
 module Squeal.PostgreSQL.Expression.Time
@@ -85,9 +86,7 @@ Create date from year, month and day fields
 >>> printSQL (makeDate (1984 :* 7 *: 3))
 make_date(1984, 7, 3)
 -}
-makeDate :: FunctionN
-  '[ null 'PGint4, null 'PGint4, null 'PGint4 ]
-   ( null 'PGdate )
+makeDate :: '[ null 'PGint4, null 'PGint4, null 'PGint4 ] ---> null 'PGdate
 makeDate = unsafeFunctionN "make_date"
 
 {-|
@@ -96,9 +95,7 @@ Create time from hour, minute and seconds fields
 >>> printSQL (makeTime (8 :* 15 *: 23.5))
 make_time(8, 15, 23.5)
 -}
-makeTime :: FunctionN
-  '[ null 'PGint4, null 'PGint4, null 'PGfloat8 ]
-   ( null 'PGtime )
+makeTime :: '[ null 'PGint4, null 'PGint4, null 'PGfloat8 ] ---> null 'PGtime
 makeTime = unsafeFunctionN "make_time"
 
 {-|
@@ -107,10 +104,9 @@ Create timestamp from year, month, day, hour, minute and seconds fields
 >>> printSQL (makeTimestamp (2013 :* 7 :* 15 :* 8 :* 15 *: 23.5))
 make_timestamp(2013, 7, 15, 8, 15, 23.5)
 -}
-makeTimestamp :: FunctionN
+makeTimestamp ::
   '[ null 'PGint4, null 'PGint4, null 'PGint4
-   , null 'PGint4, null 'PGint4, null 'PGfloat8 ]
-   ( null 'PGtimestamp )
+   , null 'PGint4, null 'PGint4, null 'PGfloat8 ] ---> null 'PGtimestamp
 makeTimestamp = unsafeFunctionN "make_timestamp"
 
 {-|
@@ -121,10 +117,9 @@ the current time zone is used
 >>> printSQL (makeTimestamptz (2013 :* 7 :* 15 :* 8 :* 15 *: 23.5))
 make_timestamptz(2013, 7, 15, 8, 15, 23.5)
 -}
-makeTimestamptz :: FunctionN
+makeTimestamptz ::
   '[ null 'PGint4, null 'PGint4, null 'PGint4
-   , null 'PGint4, null 'PGint4, null 'PGfloat8 ]
-   ( null 'PGtimestamptz )
+   , null 'PGint4, null 'PGint4, null 'PGfloat8 ] ---> null 'PGtimestamptz
 makeTimestamptz = unsafeFunctionN "make_timestamptz"
 
 {-|

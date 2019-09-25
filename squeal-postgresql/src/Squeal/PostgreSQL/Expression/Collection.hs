@@ -111,14 +111,14 @@ array2 xss = UnsafeExpression $ "ARRAY" <>
 
 -- | >>> printSQL $ cardinality (array [null_, false, true])
 -- cardinality(ARRAY[NULL, FALSE, TRUE])
-cardinality :: null ('PGvararray ty) :--> null 'PGint8
+cardinality :: null ('PGvararray ty) --> null 'PGint8
 cardinality = unsafeFunction "cardinality"
 
 -- | >>> printSQL $ array [null_, false, true] & index 2
 -- (ARRAY[NULL, FALSE, TRUE])[2]
 index
   :: Word64 -- ^ index
-  -> null ('PGvararray ty) :--> NullifyType ty
+  -> null ('PGvararray ty) --> NullifyType ty
 index n expr = UnsafeExpression $
   parenthesized (renderSQL expr) <> "[" <> fromString (show n) <> "]"
 

@@ -138,11 +138,11 @@ type Expr x
   . Expression outer commons grp schemas params from x
 ```
 
-There is also a function type `(:-->)`, which is a subtype of the usual Haskell function
+There is also a function type `(-->)`, which is a subtype of the usual Haskell function
 type `(->)`.
 
 ```Haskell
-type (:-->) x y
+type (-->) x y
   =  forall outer commons grp schemas params from
   .  Expression outer commons grp schemas params from x
   -> Expression outer commons grp schemas params from y
