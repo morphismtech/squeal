@@ -128,7 +128,7 @@ createSetFunction fun args rets fundef = UnsafeDefinition $
 
 createOrReplaceSetFunction
   :: ( Has sch schemas schema
-     , Has fun schema ('Function (args0 :=> ret0))
+     , KnownSymbol fun
      , SOP.SListI args
      , SOP.SListI rets )
   => QualifiedAlias sch fun
