@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.Expression.SetOf
+Module: Squeal.PostgreSQL.Expression.Set
 Description: Set returning functions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -20,17 +20,17 @@ Set returning functions
   , TypeOperators
 #-}
 
-module Squeal.PostgreSQL.Expression.SetOf
+module Squeal.PostgreSQL.Expression.Set
   ( generateSeries
   , generateSeriesStep
   , generateSeriesTimestamp
-  , SetOfFunction
-  , unsafeSetOfFunction
-  , SetOfFunctionDB
+  , SetFunction
+  , unsafeSetFunction
+  , SetFunctionDB
   , setOfFunction
-  , SetOfFunctionN
-  , unsafeSetOfFunctionN
-  , SetOfFunctionNDB
+  , SetFunctionN
+  , unsafeSetFunctionN
+  , SetFunctionNDB
   , setOfFunctionN
   ) where
 
@@ -48,65 +48,65 @@ import Squeal.PostgreSQL.Schema
 {- |
 A @RankNType@ for set returning functions with 1 argument.
 -}
-type SetOfFunction fun ty setof
+type SetFunction fun ty row
   =  forall outer commons schemas params
   .  Expression outer commons 'Ungrouped schemas params '[] ty
      -- ^ input
-  -> FromClause outer commons schemas params '[fun ::: setof]
+  -> FromClause outer commons schemas params '[fun ::: row]
      -- ^ output
 
-type SetOfFunctionDB fun schemas ty setof
+type SetFunctionDB fun schemas ty row
   =  forall outer commons params
   .  Expression outer commons 'Ungrouped schemas params '[] ty
      -- ^ input
-  -> FromClause outer commons schemas params '[fun ::: setof]
+  -> FromClause outer commons schemas params '[fun ::: row]
      -- ^ output
 
 -- | Escape hatch for a set returning function with 1 argument.
-unsafeSetOfFunction
-  :: forall fun ty setof. KnownSymbol fun
-  => SetOfFunction fun ty setof -- ^ set returning function
-unsafeSetOfFunction x = UnsafeFromClause $
+unsafeSetFunction
+  :: forall fun ty row. KnownSymbol fun
+  => SetFunction fun ty row -- ^ set returning function
+unsafeSetFunction x = UnsafeFromClause $
   renderSymbol @fun <> parenthesized (renderSQL x)
 
 setOfFunction
   :: ( Has sch schemas schema
-     , Has fun schema ('Function ('[ty] :=> 'ReturnsTable setof)) )
+     , Has fun schema ('Function ('[ty] :=> 'ReturnsTable row)) )
   => QualifiedAlias sch fun
-  -> SetOfFunctionDB fun schemas ty setof
-setOfFunction _ = unsafeSetOfFunction
+  -> SetFunctionDB fun schemas ty row
+setOfFunction _ = unsafeSetFunction
 
 {- |
 A @RankNType@ for set returning functions with multiple argument.
 -}
-type SetOfFunctionN fun tys setof
+type SetFunctionN fun tys row
   =  forall outer commons schemas params
   .  NP (Expression outer commons 'Ungrouped schemas params '[]) tys
      -- ^ inputs
-  -> FromClause outer commons schemas params '[fun ::: setof]
+  -> FromClause outer commons schemas params '[fun ::: row]
      -- ^ output
 
 -- | Escape hatch for a set returning function with multiple argument.
-unsafeSetOfFunctionN
-  :: forall fun tys setof. (SOP.SListI tys, KnownSymbol fun)
-  => SetOfFunctionN fun tys setof -- ^ set returning function
-unsafeSetOfFunctionN xs = UnsafeFromClause $
+unsafeSetFunctionN
+  :: forall fun tys row. (SOP.SListI tys, KnownSymbol fun)
+  => SetFunctionN fun tys row -- ^ set returning function
+unsafeSetFunctionN xs = UnsafeFromClause $
   renderSymbol @fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
-type SetOfFunctionNDB fun schemas tys setof
+type SetFunctionNDB fun schemas tys row
   =  forall outer commons params
   .  NP (Expression outer commons 'Ungrouped schemas params '[]) tys
      -- ^ inputs
-  -> FromClause outer commons schemas params '[fun ::: setof]
+  -> FromClause outer commons schemas params '[fun ::: row]
      -- ^ output
 
 setOfFunctionN
   :: ( Has sch schemas schema
-     , Has fun schema ('Function (tys :=> 'ReturnsTable setof))
+     , Has fun schema ('Function (tys :=> 'ReturnsTable row))
      , SOP.SListI tys )
   => QualifiedAlias sch fun
-  -> SetOfFunctionNDB fun schemas tys setof
-setOfFunctionN _ = unsafeSetOfFunctionN
+  -> SetFunctionNDB fun schemas tys row
+setOfFunctionN _ = unsafeSetFunctionN
 
 {- | @generateSeries (start *: stop)@
 
@@ -114,9 +114,9 @@ Generate a series of values, from @start@ to @stop@ with a step size of one
 -}
 generateSeries
   :: ty `In` '[ 'PGint4, 'PGint8, 'PGnumeric]
-  => SetOfFunctionN "generate_series" '[ null ty, null ty]
+  => SetFunctionN "generate_series" '[ null ty, null ty]
     '["generate_series" ::: null ty] -- ^ set returning function
-generateSeries = unsafeSetOfFunctionN
+generateSeries = unsafeSetFunctionN
 
 {- | @generateSeries (start :* stop *: step)@
 
@@ -124,9 +124,9 @@ Generate a series of values, from @start@ to @stop@ with a step size of @step@
 -}
 generateSeriesStep
   :: ty `In` '[ 'PGint4, 'PGint8, 'PGnumeric]
-  => SetOfFunctionN "generate_series" '[null ty, null ty, null ty]
+  => SetFunctionN "generate_series" '[null ty, null ty, null ty]
     '["generate_series" ::: null ty] -- ^ set returning function
-generateSeriesStep = unsafeSetOfFunctionN
+generateSeriesStep = unsafeSetFunctionN
 
 {- | @generateSeries (start :* stop *: step)@
 
@@ -134,6 +134,6 @@ Generate a series of values, from @start@ to @stop@ with a step size of @step@
 -}
 generateSeriesTimestamp
   :: ty `In` '[ 'PGtimestamp, 'PGtimestamptz]
-  => SetOfFunctionN "generate_series" '[null ty, null ty, null 'PGinterval]
+  => SetFunctionN "generate_series" '[null ty, null ty, null 'PGinterval]
     '["generate_series" ::: null ty] -- ^ set returning function
-generateSeriesTimestamp = unsafeSetOfFunctionN
+generateSeriesTimestamp = unsafeSetFunctionN

@@ -42,7 +42,7 @@ import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Expression.SetOf
+import Squeal.PostgreSQL.Expression.Set
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
@@ -123,8 +123,8 @@ index n expr = UnsafeExpression $
   parenthesized (renderSQL expr) <> "[" <> fromString (show n) <> "]"
 
 -- | Expand an array to a set of rows
-unnest :: SetOfFunction "unnest" (null ('PGvararray ty)) '["unnest" ::: ty]
-unnest = unsafeSetOfFunction
+unnest :: SetFunction "unnest" (null ('PGvararray ty)) '["unnest" ::: ty]
+unnest = unsafeSetFunction
 
 -- | A row constructor is an expression that builds a row value
 -- (also called a composite value) using values for its member fields.

@@ -44,7 +44,7 @@ library
     Squeal.PostgreSQL.Expression.Null
     Squeal.PostgreSQL.Expression.Parameter
     Squeal.PostgreSQL.Expression.Range
-    Squeal.PostgreSQL.Expression.SetOf
+    Squeal.PostgreSQL.Expression.Set
     Squeal.PostgreSQL.Expression.Sort
     Squeal.PostgreSQL.Expression.Subquery
     Squeal.PostgreSQL.Expression.Text

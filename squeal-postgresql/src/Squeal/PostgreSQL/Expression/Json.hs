@@ -81,7 +81,7 @@ import GHC.TypeLits
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Expression.SetOf
+import Squeal.PostgreSQL.Expression.Set
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Query
@@ -337,9 +337,9 @@ jsonbPretty = unsafeFunction "jsonb_pretty"
 >>> printSQL (select Star (from (jsonEach (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
 SELECT * FROM json_each(('{"a":"foo","b":"bar"}' :: json))
 -}
-jsonEach :: SetOfFunction "json_each" (null 'PGjson)
+jsonEach :: SetFunction "json_each" (null 'PGjson)
   '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]
-jsonEach = unsafeSetOfFunction
+jsonEach = unsafeSetFunction
 
 {- | Expands the outermost binary JSON object into a set of key/value pairs.
 
@@ -347,9 +347,9 @@ jsonEach = unsafeSetOfFunction
 SELECT * FROM jsonb_each(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbEach
-  :: SetOfFunction "jsonb_each" (nullity 'PGjsonb)
+  :: SetFunction "jsonb_each" (nullity 'PGjsonb)
     '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]
-jsonbEach = unsafeSetOfFunction
+jsonbEach = unsafeSetFunction
 
 {- | Expands the outermost JSON object into a set of key/value pairs.
 
@@ -357,9 +357,9 @@ jsonbEach = unsafeSetOfFunction
 SELECT * FROM json_each_text(('{"a":"foo","b":"bar"}' :: json))
 -}
 jsonEachText
-  :: SetOfFunction "json_each_text" (null 'PGjson)
+  :: SetFunction "json_each_text" (null 'PGjson)
     '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
-jsonEachText = unsafeSetOfFunction
+jsonEachText = unsafeSetFunction
 
 {- | Expands the outermost binary JSON object into a set of key/value pairs.
 
@@ -367,9 +367,9 @@ jsonEachText = unsafeSetOfFunction
 SELECT * FROM jsonb_each_text(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbEachText
-  :: SetOfFunction "jsonb_each_text" (null 'PGjsonb)
+  :: SetFunction "jsonb_each_text" (null 'PGjsonb)
     '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
-jsonbEachText = unsafeSetOfFunction
+jsonbEachText = unsafeSetFunction
 
 {- | Returns set of keys in the outermost JSON object.
 
@@ -377,9 +377,9 @@ jsonbEachText = unsafeSetOfFunction
 json_object_keys(('{"a":"foo","b":"bar"}' :: json))
 -}
 jsonObjectKeys
-  :: SetOfFunction "json_object_keys" (nullity 'PGjson)
+  :: SetFunction "json_object_keys" (nullity 'PGjson)
     '["json_object_keys" ::: 'NotNull 'PGtext]
-jsonObjectKeys = unsafeSetOfFunction
+jsonObjectKeys = unsafeSetFunction
 
 {- | Returns set of keys in the outermost JSON object.
 
@@ -387,9 +387,9 @@ jsonObjectKeys = unsafeSetOfFunction
 jsonb_object_keys(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbObjectKeys
-  :: SetOfFunction "jsonb_object_keys" (null 'PGjsonb)
+  :: SetFunction "jsonb_object_keys" (null 'PGjsonb)
     '["jsonb_object_keys" ::: 'NotNull 'PGtext]
-jsonbObjectKeys = unsafeSetOfFunction
+jsonbObjectKeys = unsafeSetFunction
 
 -- | Build rows from Json types.
 type JsonPopulateFunction fun json
