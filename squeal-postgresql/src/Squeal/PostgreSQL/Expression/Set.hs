@@ -27,11 +27,11 @@ module Squeal.PostgreSQL.Expression.Set
   , SetFunction
   , unsafeSetFunction
   , SetFunctionDB
-  , setOfFunction
+  , setFunction
   , SetFunctionN
   , unsafeSetFunctionN
   , SetFunctionNDB
-  , setOfFunctionN
+  , setFunctionN
   ) where
 
 import GHC.TypeLits
@@ -69,12 +69,12 @@ unsafeSetFunction
 unsafeSetFunction x = UnsafeFromClause $
   renderSymbol @fun <> parenthesized (renderSQL x)
 
-setOfFunction
+setFunction
   :: ( Has sch schemas schema
      , Has fun schema ('Function ('[ty] :=> 'ReturnsTable row)) )
   => QualifiedAlias sch fun
   -> SetFunctionDB fun schemas ty row
-setOfFunction _ = unsafeSetFunction
+setFunction _ = unsafeSetFunction
 
 {- |
 A @RankNType@ for set returning functions with multiple argument.
@@ -100,13 +100,13 @@ type SetFunctionNDB fun schemas tys row
   -> FromClause outer commons schemas params '[fun ::: row]
      -- ^ output
 
-setOfFunctionN
+setFunctionN
   :: ( Has sch schemas schema
      , Has fun schema ('Function (tys :=> 'ReturnsTable row))
      , SOP.SListI tys )
   => QualifiedAlias sch fun
   -> SetFunctionNDB fun schemas tys row
-setOfFunctionN _ = unsafeSetFunctionN
+setFunctionN _ = unsafeSetFunctionN
 
 {- | @generateSeries (start *: stop)@
 
