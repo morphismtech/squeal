@@ -55,7 +55,7 @@ import Squeal.PostgreSQL.Schema
 (.|) = unsafeBinaryOp "||"
 
 -- | negate a `Squeal.PostgreSQL.Expression.Type.tsquery`
-(.!) :: null 'PGtsquery :--> null 'PGtsquery
+(.!) :: null 'PGtsquery --> null 'PGtsquery
 (.!) = unsafeLeftOp "!!"
 
 -- | `Squeal.PostgreSQL.Expression.Type.tsquery` followed by
@@ -66,51 +66,50 @@ import Squeal.PostgreSQL.Schema
 -- | convert array of lexemes to `Squeal.PostgreSQL.Expression.Type.tsvector`
 arrayToTSvector
   ::   null ('PGvararray ('NotNull 'PGtext))
-  :--> null 'PGtsvector
+  --> null 'PGtsvector
 arrayToTSvector = unsafeFunction "array_to_tsvector"
 
 -- | number of lexemes in `Squeal.PostgreSQL.Expression.Type.tsvector`
-tsvectorLength :: null 'PGtsvector :--> null 'PGint4
+tsvectorLength :: null 'PGtsvector --> null 'PGint4
 tsvectorLength = unsafeFunction "length"
 
 -- | number of lexemes plus operators in `Squeal.PostgreSQL.Expression.Type.tsquery`
-numnode :: null 'PGtsquery :--> null 'PGint4
+numnode :: null 'PGtsquery --> null 'PGint4
 numnode = unsafeFunction "numnode"
 
 -- | produce `Squeal.PostgreSQL.Expression.Type.tsquery` ignoring punctuation
-plainToTSquery :: null 'PGtext :--> null 'PGtsquery
+plainToTSquery :: null 'PGtext --> null 'PGtsquery
 plainToTSquery = unsafeFunction "plainto_tsquery"
 
 -- | produce `Squeal.PostgreSQL.Expression.Type.tsquery` that searches for a phrase,
 -- ignoring punctuation
-phraseToTSquery :: null 'PGtext :--> null 'PGtsquery
+phraseToTSquery :: null 'PGtext --> null 'PGtsquery
 phraseToTSquery = unsafeFunction "phraseto_tsquery"
 
 -- | produce `Squeal.PostgreSQL.Expression.Type.tsquery` from a web search style query
-websearchToTSquery :: null 'PGtext :--> null 'PGtsquery
+websearchToTSquery :: null 'PGtext --> null 'PGtsquery
 websearchToTSquery = unsafeFunction "websearch_to_tsquery"
 
 -- | get indexable part of a `Squeal.PostgreSQL.Expression.Type.tsquery`
-queryTree :: null 'PGtsquery :--> null 'PGtext
+queryTree :: null 'PGtsquery --> null 'PGtext
 queryTree = unsafeFunction "query_tree"
 
 -- | normalize words and convert to `Squeal.PostgreSQL.Expression.Type.tsquery`
-toTSquery :: null 'PGtext :--> null 'PGtsquery
+toTSquery :: null 'PGtext --> null 'PGtsquery
 toTSquery = unsafeFunction "to_tsquery"
 
 -- | reduce document text to `Squeal.PostgreSQL.Expression.Type.tsvector`
 toTSvector
   :: ty `In` '[ 'PGtext, 'PGjson, 'PGjsonb]
-  => null ty :--> null 'PGtsvector
+  => null ty --> null 'PGtsvector
 toTSvector = unsafeFunction "to_tsvector"
 
 -- | assign weight to each element of `Squeal.PostgreSQL.Expression.Type.tsvector`
-setWeight
-  :: FunctionN '[null 'PGtsvector, null ('PGchar 1)] (null 'PGtsvector)
+setWeight :: '[null 'PGtsvector, null ('PGchar 1)] ---> null 'PGtsvector
 setWeight = unsafeFunctionN "set_weight"
 
 -- | remove positions and weights from `Squeal.PostgreSQL.Expression.Type.tsvector`
-strip :: null 'PGtsvector :--> null 'PGtsvector
+strip :: null 'PGtsvector --> null 'PGtsvector
 strip = unsafeFunction "strip"
 
 -- | @jsonToTSvector (document *: filter)@
@@ -123,7 +122,7 @@ strip = unsafeFunction "strip"
 -- "boolean" (to include all Boolean values in the string format "true"/"false"),
 -- "key" (to include all keys) or "all" (to include all above).
 -- These values can be combined together to include, e.g. all string and numeric values.
-jsonToTSvector :: FunctionN '[null 'PGjson, null 'PGjson] (null 'PGtsvector)
+jsonToTSvector :: '[null 'PGjson, null 'PGjson] ---> null 'PGtsvector
 jsonToTSvector = unsafeFunctionN "json_to_tsvector"
 
 -- | @jsonbToTSvector (document *: filter)@
@@ -136,23 +135,23 @@ jsonToTSvector = unsafeFunctionN "json_to_tsvector"
 -- "boolean" (to include all Boolean values in the string format "true"/"false"),
 -- "key" (to include all keys) or "all" (to include all above).
 -- These values can be combined together to include, e.g. all string and numeric values.
-jsonbToTSvector :: FunctionN '[null 'PGjsonb, null 'PGjsonb] (null 'PGtsvector)
+jsonbToTSvector :: '[null 'PGjsonb, null 'PGjsonb] ---> null 'PGtsvector
 jsonbToTSvector = unsafeFunctionN "jsonb_to_tsvector"
 
 -- | remove given lexeme from `Squeal.PostgreSQL.Expression.Type.tsvector`
-tsDelete :: FunctionN
+tsDelete ::
   '[null 'PGtsvector, null ('PGvararray ('NotNull 'PGtext))]
-   (null 'PGtsvector)
+   ---> null 'PGtsvector
 tsDelete = unsafeFunctionN "ts_delete"
 
 -- | select only elements with given weights from `Squeal.PostgreSQL.Expression.Type.tsvector`
-tsFilter :: FunctionN
+tsFilter ::
   '[null 'PGtsvector, null ('PGvararray ('NotNull ('PGchar 1)))]
-   (null 'PGtsvector)
+   ---> null 'PGtsvector
 tsFilter = unsafeFunctionN "ts_filter"
 
 -- | display a `Squeal.PostgreSQL.Expression.Type.tsquery` match
 tsHeadline
   :: document `In` '[ 'PGtext, 'PGjson, 'PGjsonb]
-  => FunctionN '[null document, null 'PGtsquery] (null 'PGtext)
+  => '[null document, null 'PGtsquery] ---> null 'PGtext
 tsHeadline = unsafeFunctionN "ts_headline"

@@ -34,7 +34,7 @@ module Squeal.PostgreSQL.Expression
   ( -- * Expression
     Expression (..)
   , Expr
-  , (:-->)
+  , type (-->)
   , FunctionDB
   , unsafeFunction
   , function
@@ -48,7 +48,7 @@ module Squeal.PostgreSQL.Expression
   , binaryOp
   , FunctionVar
   , unsafeFunctionVar
-  , FunctionN
+  , type (--->)
   , FunctionNDB
   , unsafeFunctionN
   , functionN
@@ -159,7 +159,7 @@ type OperatorDB schemas x1 x2 y
 -- This is a subtype of the usual Haskell function type `Prelude.->`,
 -- indeed a subcategory as it is closed under the usual
 -- `Prelude..` and `Prelude.id`.
-type (:-->) x y
+type (-->) x y
   =  forall outer commons grp schemas params from
   .  Expression outer commons grp schemas params from x
      -- ^ input
@@ -179,7 +179,7 @@ Use the `*:` operator to end your argument lists, like so.
 >>> printSQL (unsafeFunctionN "fun" (true :* false :* localTime *: true))
 fun(TRUE, FALSE, LOCALTIME, TRUE)
 -}
-type FunctionN xs y
+type (--->) xs y
   =  forall outer commons grp schemas params from
   .  NP (Expression outer commons grp schemas params from) xs
      -- ^ inputs
@@ -327,7 +327,7 @@ binaryOp = unsafeBinaryOp $ renderSymbol @op
 
 -- | >>> printSQL $ unsafeLeftOp "NOT" true
 -- (NOT TRUE)
-unsafeLeftOp :: ByteString -> x :--> y
+unsafeLeftOp :: ByteString -> x --> y
 unsafeLeftOp op x = UnsafeExpression $ parenthesized $ op <+> renderSQL x
 
 leftOp
@@ -339,7 +339,7 @@ leftOp = unsafeLeftOp $ renderSymbol @op
 
 -- | >>> printSQL $ true & unsafeRightOp "IS NOT TRUE"
 -- (TRUE IS NOT TRUE)
-unsafeRightOp :: ByteString -> x :--> y
+unsafeRightOp :: ByteString -> x --> y
 unsafeRightOp op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
 
 rightOp
@@ -351,25 +351,25 @@ rightOp = unsafeRightOp $ renderSymbol @op
 
 -- | >>> printSQL $ unsafeFunction "f" true
 -- f(TRUE)
-unsafeFunction :: ByteString -> x :--> y
+unsafeFunction :: ByteString -> x --> y
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
 function
-  :: (Has sch schemas schema, Has fun schema ('Function '[x] ('Returns y)))
+  :: (Has sch schemas schema, Has fun schema ('Function ('[x] :=> 'Returns y)))
   => QualifiedAlias sch fun
   -> FunctionDB schemas x y
 function = unsafeFunction . renderSQL
 
 -- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: literal 'a')
 -- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, E'a')
-unsafeFunctionN :: SListI xs => ByteString -> FunctionN xs y
+unsafeFunctionN :: SListI xs => ByteString -> xs ---> y
 unsafeFunctionN fun xs = UnsafeExpression $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
 functionN
   :: ( Has sch schemas schema
-     , Has fun schema ('Function xs ('Returns y))
+     , Has fun schema ('Function (xs :=> 'Returns y))
      , SListI xs )
   => QualifiedAlias sch fun
   -> FunctionNDB schemas xs y
