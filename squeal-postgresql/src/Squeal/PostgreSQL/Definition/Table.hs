@@ -35,7 +35,9 @@ module Squeal.PostgreSQL.Definition.Table
   , dropTable
   , dropTableIfExists
   , alterTable
+  , alterTableIfExists
   , alterTableRename
+  , alterTableIfExistsRename
   , AlterTable (..)
   , addConstraint
   , dropConstraint
@@ -202,12 +204,24 @@ dropTableIfExists tab = UnsafeDefinition $ "DROP TABLE IF EXISTS" <+> renderSQL 
 
 -- | `alterTable` changes the definition of a table from the schema.
 alterTable
-  :: (Has sch schemas schema, Has tab schema ('Table table0))
+  :: (Has sch schemas schema, KnownSymbol tab)
   => QualifiedAlias sch tab -- ^ table to alter
-  -> AlterTable sch tab schemas table1 -- ^ alteration to perform
-  -> Definition schemas (Alter sch (Alter tab ('Table table1) schema) schemas)
+  -> AlterTable sch tab schemas table -- ^ alteration to perform
+  -> Definition schemas (Alter sch (Alter tab ('Table table) schema) schemas)
 alterTable tab alteration = UnsafeDefinition $
   "ALTER TABLE"
+  <+> renderSQL tab
+  <+> renderAlterTable alteration
+  <> ";"
+
+-- | `alterTable` changes the definition of a table from the schema.
+alterTableIfExists
+  :: (Has sch schemas schema, KnownSymbol tab)
+  => QualifiedAlias sch tab -- ^ table to alter
+  -> AlterTable sch tab schemas table -- ^ alteration to perform
+  -> Definition schemas (Alter sch (AlterIfExists tab ('Table table) schema) schemas)
+alterTableIfExists tab alteration = UnsafeDefinition $
+  "ALTER TABLE IF EXISTS"
   <+> renderSQL tab
   <+> renderAlterTable alteration
   <> ";"
@@ -223,6 +237,15 @@ alterTableRename
   -> Definition schema (Rename tab0 tab1 schema)
 alterTableRename tab0 tab1 = UnsafeDefinition $
   "ALTER TABLE" <+> renderSQL tab0
+  <+> "RENAME TO" <+> renderSQL tab1 <> ";"
+
+alterTableIfExistsRename
+  :: (KnownSymbol tab0, KnownSymbol tab1)
+  => Alias tab0 -- ^ table to rename
+  -> Alias tab1 -- ^ what to rename it
+  -> Definition schema (RenameIfExists tab0 tab1 schema)
+alterTableIfExistsRename tab0 tab1 = UnsafeDefinition $
+  "ALTER TABLE IF EXISTS" <+> renderSQL tab0
   <+> "RENAME TO" <+> renderSQL tab1 <> ";"
 
 -- | An `AlterTable` describes the alteration to perform on the columns

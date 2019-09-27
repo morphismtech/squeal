@@ -69,7 +69,9 @@ module Squeal.PostgreSQL.Schema
   , DropIfExists
   , DropSchemumIfExists
   , Alter
+  , AlterIfExists
   , Rename
+  , RenameIfExists
   , ConstraintInvolves
   , DropIfConstraintsInvolve
   , IsNotElem
@@ -396,15 +398,33 @@ type family DropSchemumIfExists alias sch xs where
 -- with the type @x@ and is used in `Squeal.PostgreSQL.Definition.alterTable`
 -- and `Squeal.PostgreSQL.Definition.alterColumn`.
 type family Alter alias x xs where
+  Alter alias x '[] = TypeError
+    ('Text "Alter: alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text " does not exist" )
   Alter alias x1 (alias ::: x0 ': xs) = alias ::: x1 ': xs
   Alter alias x1 (x0 ': xs) = x0 ': Alter alias x1 xs
+
+type family AlterIfExists alias x xs where
+  AlterIfExists alias x '[] = '[]
+  AlterIfExists alias x1 (alias ::: x0 ': xs) = alias ::: x1 ': xs
+  AlterIfExists alias x1 (x0 ': xs) = x0 ': AlterIfExists alias x1 xs
 
 -- | @Rename alias0 alias1 xs@ replaces the alias @alias0@ by @alias1@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.alterTableRename` and
 -- `Squeal.PostgreSQL.Definition.renameColumn`.
 type family Rename alias0 alias1 xs where
+  Rename alias0 alias1 '[] = TypeError
+    ('Text "Rename: alias "
+    ':<>: 'ShowType alias0
+    ':<>: 'Text " does not exist" )
   Rename alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
   Rename alias0 alias1 (x ': xs) = x ': Rename alias0 alias1 xs
+
+type family RenameIfExists alias0 alias1 xs where
+  RenameIfExists alias x '[] = '[]
+  RenameIfExists alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
+  RenameIfExists alias0 alias1 (x ': xs) = x ': RenameIfExists alias0 alias1 xs
 
 -- | Check if a `TableConstraint` involves a column
 type family ConstraintInvolves column constraint where
