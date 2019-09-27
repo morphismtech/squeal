@@ -195,9 +195,9 @@ dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderSQL tab <> ";"
 
 dropTableIfExists
   :: ( Has sch schemas schema
-     , Has tab schema ('Table table))
+     , KnownSymbol tab)
   => QualifiedAlias sch tab -- ^ table to remove
-  -> Definition schemas (Alter sch (DropIfExists tab schema) schemas)
+  -> Definition schemas (Alter sch (DropSchemumIfExists tab 'Table schema) schemas)
 dropTableIfExists tab = UnsafeDefinition $ "DROP TABLE IF EXISTS" <+> renderSQL tab <> ";"
 
 -- | `alterTable` changes the definition of a table from the schema.
@@ -217,13 +217,13 @@ alterTable tab alteration = UnsafeDefinition $
 -- >>> printSQL $ alterTableRename #foo #bar
 -- ALTER TABLE "foo" RENAME TO "bar";
 alterTableRename
-  :: (KnownSymbol table0, KnownSymbol table1)
-  => Alias table0 -- ^ table to rename
-  -> Alias table1 -- ^ what to rename it
-  -> Definition schema (Rename table0 table1 schema)
-alterTableRename table0 table1 = UnsafeDefinition $
-  "ALTER TABLE" <+> renderSQL table0
-  <+> "RENAME TO" <+> renderSQL table1 <> ";"
+  :: (KnownSymbol tab0, KnownSymbol tab1)
+  => Alias tab0 -- ^ table to rename
+  -> Alias tab1 -- ^ what to rename it
+  -> Definition schema (Rename tab0 tab1 schema)
+alterTableRename tab0 tab1 = UnsafeDefinition $
+  "ALTER TABLE" <+> renderSQL tab0
+  <+> "RENAME TO" <+> renderSQL tab1 <> ";"
 
 -- | An `AlterTable` describes the alteration to perform on the columns
 -- of a table.
