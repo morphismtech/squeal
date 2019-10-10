@@ -145,6 +145,7 @@ module Squeal.PostgreSQL.Migration
   , pureMigration
   , pureMigrationIso
   , MigrationsTable
+  , mainMigrate
   , mainMigrateIso
   ) where
 
@@ -398,21 +399,19 @@ selectMigrations = select_
   (#name `as` #migrationName :* #executed_at `as` #migrationTime)
   (from (table #schema_migrations))
 
-data MigrateCommand
-  = MigrateStatus
-  | MigrateUp
-  | MigrateDown deriving (GHC.Generic, Show)
+data MigrateCommand = MigrateStatus | Migrate
+  deriving (GHC.Generic, Show)
 
-{- | `mainMigrateIso` creates a simple executable
-from a connection string and a list of `Migration`s. -}
-mainMigrateIso
+{- | `mainMigrate` creates a simple executable
+from a connection string and a `Path` of `Migration`s. -}
+mainMigrate
   :: Migratory p
   => ByteString
   -- ^ connection string
-  -> Path (Migration (Iso p)) db0 db1
+  -> Path (Migration p) db0 db1
   -- ^ migrations
   -> IO ()
-mainMigrateIso connectTo migrations = do
+mainMigrate connectTo migrations = do
   command <- readCommandFromArgs
   maybe (pure ()) performCommand command
 
@@ -422,10 +421,8 @@ mainMigrateIso connectTo migrations = do
     performCommand = \case
       MigrateStatus -> withConnection connectTo $
         suppressNotices >> migrateStatus
-      MigrateUp -> withConnection connectTo $
-        suppressNotices & pqThen (migrateUp migrations) & pqThen migrateStatus
-      MigrateDown -> withConnection connectTo $
-        suppressNotices & pqThen (migrateDown migrations) & pqThen migrateStatus
+      Migrate -> withConnection connectTo $
+        suppressNotices & pqThen (migrate migrations) & pqThen migrateStatus
 
     migrateStatus :: PQ schema schema IO ()
     migrateStatus = unsafePQ $ do
@@ -440,9 +437,83 @@ mainMigrateIso connectTo migrations = do
 
     readCommandFromArgs :: IO (Maybe MigrateCommand)
     readCommandFromArgs = getArgs >>= \case
-      ["migrate"] -> pure . Just $ MigrateUp
-      ["rollback"] -> pure . Just $ MigrateDown
+      ["migrate"] -> pure . Just $ Migrate
       ["status"] -> pure . Just $ MigrateStatus
+      args -> displayUsage args >> pure Nothing
+
+    displayUsage :: [String] -> IO ()
+    displayUsage args = do
+      putStrLn $ "Invalid command: \"" <> unwords args <> "\". Use:"
+      putStrLn "migrate    to run all available migrations"
+      putStrLn "rollback   to rollback all available migrations"
+
+    getRunMigrationNames :: (MonadIO m) => PQ db0 db0 m [Text]
+    getRunMigrationNames =
+      fmap migrationName <$>
+      (unsafePQ (define createMigrations
+      & pqThen (runQuery selectMigrations)) >>= getRows)
+
+    displayListOfNames :: [Text] -> IO ()
+    displayListOfNames [] = Text.putStrLn "  None"
+    displayListOfNames xs =
+      let singleName n = Text.putStrLn $ "  - " <> n
+      in traverse_ singleName xs
+
+    displayUnrunned :: [Text] -> IO ()
+    displayUnrunned unrunned =
+      Text.putStrLn "Migrations left to run:"
+      >> displayListOfNames unrunned
+
+    displayRunned :: [Text] -> IO ()
+    displayRunned runned =
+      Text.putStrLn "Migrations already run:"
+      >> displayListOfNames runned
+
+data MigrateIsoCommand
+  = MigrateIsoStatus
+  | MigrateIsoUp
+  | MigrateIsoDown deriving (GHC.Generic, Show)
+
+{- | `mainMigrateIso` creates a simple executable
+from a connection string and a `Path` of `Migration` `Iso`s. -}
+mainMigrateIso
+  :: Migratory p
+  => ByteString
+  -- ^ connection string
+  -> Path (Migration (Iso p)) db0 db1
+  -- ^ migrations
+  -> IO ()
+mainMigrateIso connectTo migrations = do
+  command <- readCommandFromArgs
+  maybe (pure ()) performCommand command
+
+  where
+
+    performCommand :: MigrateIsoCommand -> IO ()
+    performCommand = \case
+      MigrateIsoStatus -> withConnection connectTo $
+        suppressNotices >> migrateStatus
+      MigrateIsoUp -> withConnection connectTo $
+        suppressNotices & pqThen (migrateUp migrations) & pqThen migrateStatus
+      MigrateIsoDown -> withConnection connectTo $
+        suppressNotices & pqThen (migrateDown migrations) & pqThen migrateStatus
+
+    migrateStatus :: PQ schema schema IO ()
+    migrateStatus = unsafePQ $ do
+      runNames <- getRunMigrationNames
+      let names = ctoList name migrations
+          unrunNames = names \\ runNames
+      liftIO $ displayRunned runNames >> displayUnrunned unrunNames
+
+    suppressNotices :: PQ schema schema IO ()
+    suppressNotices = manipulate_ $
+      UnsafeManipulation "SET client_min_messages TO WARNING;"
+
+    readCommandFromArgs :: IO (Maybe MigrateIsoCommand)
+    readCommandFromArgs = getArgs >>= \case
+      ["migrate"] -> pure . Just $ MigrateIsoUp
+      ["rollback"] -> pure . Just $ MigrateIsoDown
+      ["status"] -> pure . Just $ MigrateIsoStatus
       args -> displayUsage args >> pure Nothing
 
     displayUsage :: [String] -> IO ()
@@ -454,7 +525,9 @@ mainMigrateIso connectTo migrations = do
 
     getRunMigrationNames :: (MonadIO m) => PQ db0 db0 m [Text]
     getRunMigrationNames =
-      fmap migrationName <$> (unsafePQ (define createMigrations & pqThen (runQuery selectMigrations)) >>= getRows)
+      fmap migrationName <$>
+        (unsafePQ (define createMigrations
+        & pqThen (runQuery selectMigrations)) >>= getRows)
 
     displayListOfNames :: [Text] -> IO ()
     displayListOfNames [] = Text.putStrLn "  None"
