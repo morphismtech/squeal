@@ -81,6 +81,7 @@ module Squeal.PostgreSQL.Query
   , HavingClause (..)
   ) where
 
+import Control.Category.Free (csingleton, ctoList)
 import Control.DeepSeq
 import Data.ByteString (ByteString)
 import Data.Kind (Type)

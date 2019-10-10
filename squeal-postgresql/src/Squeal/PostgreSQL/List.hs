@@ -34,9 +34,6 @@ module Squeal.PostgreSQL.List
   , disjoin
   , Additional (..)
   , Path (..)
-  , CFunctor (..)
-  , CFoldable (..)
-  , CFree (..)
   , Elem
   , In
   , Length

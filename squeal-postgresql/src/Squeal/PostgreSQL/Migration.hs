@@ -150,6 +150,7 @@ module Squeal.PostgreSQL.Migration
   ) where
 
 import Control.Category
+import Control.Category.Free
 import Control.Monad
 import Data.ByteString (ByteString)
 import Data.Foldable (traverse_)
@@ -190,6 +191,8 @@ data Migration p schemas0 schemas1 = Migration
     -- Each `name` in a `Migration` should be unique.
   , instruction :: p schemas0 schemas1 -- ^ The instruction of a `Migration`.
   } deriving (GHC.Generic)
+instance CFunctor Migration where
+  cmap f (Migration n i) = Migration n (f i)
 
 {- |
 A `Migratory` @p@ is a `Category` for which one can execute or rewind
@@ -236,11 +239,6 @@ to run one is for the side effects, in particular database and other IO effects.
 newtype Terminally trans monad x0 x1 = Terminally
   { runTerminally :: trans x0 x1 monad () }
   deriving GHC.Generic
-
-data Iso c x y = Iso
-  { up :: c x y
-  , down :: c y x
-  } deriving GHC.Generic
 
 instance
   ( IndexedMonadTransPQ trans
@@ -314,7 +312,7 @@ instance Migratory (Terminally PQ IO) where
         result <- runQueryParams selectMigration (Only (name step))
         ntuples result
 
-  migrateUp = migrate . cmap (\(Migration n iso) -> Migration n (up iso))
+  migrateUp = migrate . cmap (cmap up)
 
   migrateDown migrations = unsafePQ . transactionally_ $ do
     define createMigrations
