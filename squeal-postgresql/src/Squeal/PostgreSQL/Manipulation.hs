@@ -54,7 +54,6 @@ module Squeal.PostgreSQL.Manipulation
   , UsingClause (..)
   ) where
 
-import Control.Category.Free (ctoList)
 import Control.DeepSeq
 import Data.ByteString hiding (foldr)
 import Data.Kind (Type)
