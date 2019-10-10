@@ -38,10 +38,9 @@ Now we can define some `Migration`s to make our tables.
 
 >>> :{
 let
-  makeUsers :: Migration Definition (Public '[]) '["public" ::: '["users" ::: 'Table UsersTable]]
-  makeUsers = Migration
-    { name = "make users table"
-    , up = createTable #users
+  makeUsers :: Migration (Iso Definition) (Public '[]) '["public" ::: '["users" ::: 'Table UsersTable]]
+  makeUsers = Migration "make users table" Iso
+    { up = createTable #users
         ( serial `as` #id :*
           notNullable text `as` #name )
         ( primaryKey #id `as` #pk_users )
@@ -51,11 +50,10 @@ let
 
 >>> :{
 let
-  makeEmails :: Migration Definition '["public" ::: '["users" ::: 'Table UsersTable]]
+  makeEmails :: Migration (Iso Definition) '["public" ::: '["users" ::: 'Table UsersTable]]
     '["public" ::: '["users" ::: 'Table UsersTable, "emails" ::: 'Table EmailsTable]]
-  makeEmails = Migration
-    { name = "make emails table"
-    , up = createTable #emails
+  makeEmails = Migration "make emails table" Iso
+    { up = createTable #emails
           ( serial `as` #id :*
             notNullable int `as` #user_id :*
             nullable text `as` #email )
@@ -85,9 +83,9 @@ withConnection "host=localhost port=5432 dbname=exampledb" $
 Migrate
 Rollback
 
-We can also create a simple executable using `defaultMain`.
+We can also create a simple executable using `mainMigrateIso`.
 
->>> let main = defaultMain "host=localhost port=5432 dbname=exampledb" migrations
+>>> let main = mainMigrateIso "host=localhost port=5432 dbname=exampledb" migrations
 
 >>> withArgs [] main
 Invalid command: "". Use:
@@ -142,10 +140,12 @@ module Squeal.PostgreSQL.Migration
     Migration (..)
   , Migratory (..)
   , Terminally (..)
+  , Iso (..)
   , terminally
   , pureMigration
+  , pureMigrationIso
   , MigrationsTable
-  , defaultMain
+  , mainMigrateIso
   ) where
 
 import Control.Category
@@ -187,8 +187,7 @@ import Squeal.PostgreSQL.Transaction
 data Migration p schemas0 schemas1 = Migration
   { name :: Text -- ^ The `name` of a `Migration`.
     -- Each `name` in a `Migration` should be unique.
-  , up   :: p schemas0 schemas1 -- ^ The `up` instruction of a `Migration`.
-  , down :: p schemas1 schemas0 -- ^ The `down` instruction of a `Migration`.
+  , instruction :: p schemas0 schemas1 -- ^ The instruction of a `Migration`.
   } deriving (GHC.Generic)
 
 {- |
@@ -198,6 +197,10 @@ SQL `Definition`s and the category of impure `Terminally` `PQ` `IO` actions.
 -}
 class Category p => Migratory p where
 
+  migrate
+    :: Path (Migration p) schemas0 schemas1
+    -> PQ schemas0 schemas1 IO ()
+
   {- |
   Run a `Path` of `Migration`s.
   Create the `MigrationsTable` as @public.schema_migrations@ if it does not already exist.
@@ -205,7 +208,7 @@ class Category p => Migratory p where
   if not, `up` the `Migration` and insert its `name` in the `MigrationsTable`.
   -}
   migrateUp
-    :: Path (Migration p) schemas0 schemas1
+    :: Path (Migration (Iso p)) schemas0 schemas1
     -> PQ schemas0 schemas1 IO ()
 
   {- |
@@ -215,12 +218,13 @@ class Category p => Migratory p where
   if so, `down` the `Migration` and delete its `name` in the `MigrationsTable`.
   -}
   migrateDown
-    :: Path (Migration p) schemas0 schemas1
+    :: Path (Migration (Iso p)) schemas0 schemas1
     -> PQ schemas1 schemas0 IO ()
 
 instance Migratory Definition where
-  migrateUp = migrateUp . cmap pureMigration
-  migrateDown = migrateDown . cmap pureMigration
+  migrate = migrate . cmap pureMigration
+  migrateUp = migrateUp . cmap pureMigrationIso
+  migrateDown = migrateDown . cmap pureMigrationIso
 
 {- | `Terminally` turns an indexed monad transformer and the monad it transforms
 into a category by restricting the return type to @()@ and permuting the type variables.
@@ -231,6 +235,11 @@ to run one is for the side effects, in particular database and other IO effects.
 newtype Terminally trans monad x0 x1 = Terminally
   { runTerminally :: trans x0 x1 monad () }
   deriving GHC.Generic
+
+data Iso c x y = Iso
+  { up :: c x y
+  , down :: c y x
+  } deriving GHC.Generic
 
 instance
   ( IndexedMonadTransPQ trans
@@ -256,13 +265,26 @@ pureMigration
   -> Migration (Terminally PQ IO) schemas0 schemas1
 pureMigration migration = Migration
   { name = name migration
-  , up = terminally . define $ up migration
-  , down = terminally . define $ down migration
+  , instruction = terminally . define $ instruction migration
+  }
+
+-- | A `pureMigrationIso` turns a reversible `Migration`
+-- involving only pure SQL
+-- `Definition`s into a `Migration` that may be combined with arbitrary `IO`.
+pureMigrationIso
+  :: Migration (Iso Definition) schemas0 schemas1
+  -> Migration (Iso (Terminally PQ IO)) schemas0 schemas1
+pureMigrationIso migration = Migration
+  { name = name migration
+  , instruction = Iso
+    { up = terminally . define . up $ instruction migration
+    , down = terminally . define . down $ instruction migration
+    }
   }
 
 instance Migratory (Terminally PQ IO) where
 
-  migrateUp migration = unsafePQ . transactionally_ $ do
+  migrate migration = unsafePQ . transactionally_ $ do
     define createMigrations
     upMigrations migration
 
@@ -281,7 +303,7 @@ instance Migratory (Terminally PQ IO) where
       upMigration step = do
         executed <- queryExecuted step
         unless (executed == 1) $ do
-          unsafePQ . runTerminally $ up step
+          unsafePQ . runTerminally $ instruction step
           manipulateParams_ insertMigration (Only (name step))
 
       queryExecuted
@@ -291,6 +313,8 @@ instance Migratory (Terminally PQ IO) where
         result <- runQueryParams selectMigration (Only (name step))
         ntuples result
 
+  migrateUp = migrate . cmap (\(Migration n iso) -> Migration n (up iso))
+
   migrateDown migrations = unsafePQ . transactionally_ $ do
     define createMigrations
     downMigrations migrations
@@ -298,23 +322,23 @@ instance Migratory (Terminally PQ IO) where
     where
 
       downMigrations
-        :: Path (Migration (Terminally PQ IO)) schemas0 schemas1
+        :: Path (Migration (Iso (Terminally PQ IO))) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       downMigrations = \case
         Done -> return ()
         step :>> steps -> downMigrations steps >> downMigration step
 
       downMigration
-        :: Migration (Terminally PQ IO) schemas0 schemas1
+        :: Migration (Iso (Terminally PQ IO)) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       downMigration step = do
         executed <- queryExecuted step
         unless (executed == 0) $ do
-          unsafePQ . runTerminally $ down step
+          unsafePQ . runTerminally . down $ instruction step
           manipulateParams_ deleteMigration (Only (name step))
 
       queryExecuted
-        :: Migration (Terminally PQ IO) schemas0 schemas1
+        :: Migration (Iso (Terminally PQ IO)) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO Row
       queryExecuted step = do
         result <- runQueryParams selectMigration (Only (name step))
@@ -379,16 +403,16 @@ data MigrateCommand
   | MigrateUp
   | MigrateDown deriving (GHC.Generic, Show)
 
-{- | `defaultMain` creates a simple executable
+{- | `mainMigrateIso` creates a simple executable
 from a connection string and a list of `Migration`s. -}
-defaultMain
+mainMigrateIso
   :: Migratory p
   => ByteString
   -- ^ connection string
-  -> Path (Migration p) db0 db1
+  -> Path (Migration (Iso p)) db0 db1
   -- ^ migrations
   -> IO ()
-defaultMain connectTo migrations = do
+mainMigrateIso connectTo migrations = do
   command <- readCommandFromArgs
   maybe (pure ()) performCommand command
 
