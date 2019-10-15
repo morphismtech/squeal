@@ -75,6 +75,11 @@ module Squeal.PostgreSQL.Query
   , leftOuterJoin
   , rightOuterJoin
   , fullOuterJoin
+  , crossJoinLateral
+  , innerJoinLateral
+  , leftOuterJoinLateral
+  , rightOuterJoinLateral
+  , fullOuterJoinLateral
     -- * Grouping
   , By (..)
   , GroupByClause (..)
@@ -870,6 +875,15 @@ crossJoin
 crossJoin right left = UnsafeFromClause $
   renderSQL left <+> "CROSS JOIN" <+> renderSQL right
 
+crossJoinLateral
+  :: FromClause (Join left outer) commons schemas params right
+  -- ^ right
+  -> FromClause outer commons schemas params left
+  -- ^ left
+  -> FromClause outer commons schemas params (Join left right)
+crossJoinLateral right left = UnsafeFromClause $
+  renderSQL left <+> "CROSS JOIN LATERAL" <+> renderSQL right
+
 {- | @left & innerJoin right on@. The joined table is filtered by
 the @on@ condition.
 -}
@@ -883,6 +897,18 @@ innerJoin
   -> FromClause outer commons schemas params (Join left right)
 innerJoin right on left = UnsafeFromClause $
   renderSQL left <+> "INNER JOIN" <+> renderSQL right
+  <+> "ON" <+> renderSQL on
+
+innerJoinLateral
+  :: FromClause (Join left outer) commons schemas params right
+  -- ^ right
+  -> Condition outer commons 'Ungrouped schemas params (Join left right)
+  -- ^ @on@ condition
+  -> FromClause outer commons schemas params left
+  -- ^ left
+  -> FromClause outer commons schemas params (Join left right)
+innerJoinLateral right on left = UnsafeFromClause $
+  renderSQL left <+> "INNER JOIN LATERAL" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
 {- | @left & leftOuterJoin right on@. First, an inner join is performed.
@@ -900,6 +926,18 @@ leftOuterJoin
   -> FromClause outer commons schemas params (Join left (NullifyFrom right))
 leftOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "LEFT OUTER JOIN" <+> renderSQL right
+  <+> "ON" <+> renderSQL on
+
+leftOuterJoinLateral
+  :: FromClause (Join left outer) commons schemas params right
+  -- ^ right
+  -> Condition outer commons 'Ungrouped schemas params (Join left right)
+  -- ^ @on@ condition
+  -> FromClause outer commons schemas params left
+  -- ^ left
+  -> FromClause outer commons schemas params (Join left (NullifyFrom right))
+leftOuterJoinLateral right on left = UnsafeFromClause $
+  renderSQL left <+> "LEFT OUTER JOIN LATERAL" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
 {- | @left & rightOuterJoin right on@. First, an inner join is performed.
@@ -920,6 +958,18 @@ rightOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "RIGHT OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
+rightOuterJoinLateral
+  :: FromClause (Join left outer) commons schemas params right
+  -- ^ right
+  -> Condition outer commons 'Ungrouped schemas params (Join left right)
+  -- ^ @on@ condition
+  -> FromClause outer commons schemas params left
+  -- ^ left
+  -> FromClause outer commons schemas params (Join (NullifyFrom left) right)
+rightOuterJoinLateral right on left = UnsafeFromClause $
+  renderSQL left <+> "RIGHT OUTER JOIN LATERAL" <+> renderSQL right
+  <+> "ON" <+> renderSQL on
+
 {- | @left & fullOuterJoin right on@. First, an inner join is performed.
     Then, for each row in @left@ that does not satisfy the @on@ condition with
     any row in @right@, a joined row is added with null values in columns of @right@.
@@ -938,6 +988,19 @@ fullOuterJoin
       (Join (NullifyFrom left) (NullifyFrom right))
 fullOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "FULL OUTER JOIN" <+> renderSQL right
+  <+> "ON" <+> renderSQL on
+
+fullOuterJoinLateral
+  :: FromClause (Join left outer) commons schemas params right
+  -- ^ right
+  -> Condition outer commons 'Ungrouped schemas params (Join left right)
+  -- ^ @on@ condition
+  -> FromClause outer commons schemas params left
+  -- ^ left
+  -> FromClause outer commons schemas params
+      (Join (NullifyFrom left) (NullifyFrom right))
+fullOuterJoinLateral right on left = UnsafeFromClause $
+  renderSQL left <+> "FULL OUTER JOIN LATERAL" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
 {-----------------------------------------
