@@ -176,8 +176,8 @@ type HasUnique alias fields field = fields ~ '[alias ::: field]
 class KnownSymbol alias =>
   Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
   | alias fields -> field where
-instance {-# OVERLAPPING #-} KnownSymbol alias
-  => Has alias (alias ::: field ': fields) field
+instance {-# OVERLAPPING #-} (KnownSymbol alias, field0 ~ field1)
+  => Has alias (alias ::: field0 ': fields) field1
 instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
   => Has alias (field' ': fields) field
 
