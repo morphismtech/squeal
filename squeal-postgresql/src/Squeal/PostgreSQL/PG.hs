@@ -178,8 +178,16 @@ type family RowPG (hask :: Type) :: RowType where
 
 -- | `RowOf` applies `NullPG` to the fields of a list.
 type family RowOf (record :: [(Symbol, Type)]) :: RowType where
-  RowOf '[] = '[]
+  RowOf (col ::: ty ': col1 ::: ty1 ': col2 ::: ty2 ': col3 ::: ty3 ': col4 ::: ty4 ': record) =
+    col ::: NullPG ty ': col1 ::: NullPG ty1 ': col2 ::: NullPG ty2 ': col3 ::: NullPG ty3 ': col4 ::: NullPG ty4 ': RowOf record
+  RowOf (col ::: ty ': col1 ::: ty1 ': col2 ::: ty2 ': col3 ::: ty3 ': record) =
+    col ::: NullPG ty ': col1 ::: NullPG ty1 ': col2 ::: NullPG ty2 ': col3 ::: NullPG ty3 ': RowOf record
+  RowOf (col ::: ty ': col1 ::: ty1 ': col2 ::: ty2 ': record) =
+    col ::: NullPG ty ': col1 ::: NullPG ty1 ': col2 ::: NullPG ty2 ': RowOf record
+  RowOf (col ::: ty ': col1 ::: ty1 ': record) =
+    col ::: NullPG ty ': col1::: NullPG ty1 ': RowOf record
   RowOf (col ::: ty ': record) = col ::: NullPG ty ': RowOf record
+  RowOf '[] = '[]
 
 {- | `NullPG` turns a Haskell type into a `NullityType`.
 
@@ -206,8 +214,17 @@ type family TuplePG (hask :: Type) :: [NullityType] where
 
 -- | `TupleOf` turns a list of Haskell `Type`s into a list of `NullityType`s.
 type family TupleOf (tuple :: [Type]) :: [NullityType] where
-  TupleOf '[] = '[]
+  TupleOf (hask ': hask1 ': hask2 ': hask3 ': hask4 ': hask5 ': tuple) =
+    NullPG hask ': NullPG hask1 ': NullPG hask2 ': NullPG hask3 ': NullPG hask4 ': NullPG hask5 ': TupleOf tuple
+  TupleOf (hask ': hask1 ': hask2 ': hask3 ': hask4 ': tuple) =
+    NullPG hask ': NullPG hask1 ': NullPG hask2 ': NullPG hask3 ': NullPG hask4 ': TupleOf tuple
+  TupleOf (hask ': hask1 ': hask2 ': hask3 ': tuple) =
+    NullPG hask ': NullPG hask1 ': NullPG hask2 ': NullPG hask3 ': TupleOf tuple
+  TupleOf (hask ': hask1 ': hask2 ': tuple) =
+    NullPG hask ': NullPG hask1 ': NullPG hask2 ': TupleOf tuple
+  TupleOf (hask ': hask1 ': tuple) = NullPG hask ': NullPG hask1 ': TupleOf tuple
   TupleOf (hask ': tuple) = NullPG hask ': TupleOf tuple
+  TupleOf '[] = '[]
 
 -- | `TupleCodeOf` takes the `SOP.Code` of a haskell `Type`
 -- and if it's a simple product returns it, otherwise giving a `TypeError`.
