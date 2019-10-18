@@ -79,16 +79,23 @@ import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Function ((&))
 import Data.Kind
-import Data.Text (pack, Text)
+import Data.Maybe
+import Data.String
+import Data.Text (Text)
 import Data.Traversable
 import Generics.SOP
+import GHC.TypeLits
 import PostgreSQL.Binary.Encoding (encodingBytes)
 
 import qualified Control.Monad.Fail as Fail
+import qualified Data.ByteString as ByteString
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
 import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Definition
+import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
@@ -315,13 +322,13 @@ a default instance.
 -}
 class Monad pq => MonadPQ schemas pq | pq -> schemas where
   manipulateParams
-    :: ToParams x params
+    :: (ToParams x params, KnownNat (Length params))
     => Manipulation '[] schemas params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> x -> pq (K LibPQ.Result ys)
   default manipulateParams
     :: (MonadTrans t, MonadPQ schemas pq1, pq ~ t pq1)
-    => ToParams x params
+    => (ToParams x params, KnownNat (Length params))
     => Manipulation '[] schemas params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> x -> pq (K LibPQ.Result ys)
@@ -329,7 +336,7 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
     manipulateParams manipulation params
 
   manipulateParams_
-    :: ToParams x params
+    :: (ToParams x params, KnownNat (Length params))
     => Manipulation '[] schemas params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> x -> pq ()
@@ -342,7 +349,7 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
   manipulate_ = void . manipulate
 
   runQueryParams
-    :: ToParams x params
+    :: (ToParams x params, KnownNat (Length params))
     => Query '[] '[] schemas params ys
     -- ^ `select` and friends
     -> x -> pq (K LibPQ.Result ys)
@@ -355,19 +362,19 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
   runQuery q = runQueryParams q ()
 
   traversePrepared
-    :: (ToParams x params, Traversable list)
+    :: (ToParams x params, Traversable list, KnownNat (Length params))
     => Manipulation '[] schemas params ys
     -- ^ `insertInto`, `update`, or `deleteFrom`, and friends
     -> list x -> pq (list (K LibPQ.Result ys))
   default traversePrepared
     :: (MonadTrans t, MonadPQ schemas pq1, pq ~ t pq1)
-    => (ToParams x params, Traversable list)
+    => (ToParams x params, Traversable list, KnownNat (Length params))
     => Manipulation '[] schemas params ys -> list x -> pq (list (K LibPQ.Result ys))
   traversePrepared manipulation params = lift $
     traversePrepared manipulation params
 
   forPrepared
-    :: (ToParams x params, Traversable list)
+    :: (ToParams x params, Traversable list, KnownNat (Length params))
     => list x
     -> Manipulation '[] schemas params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
@@ -375,13 +382,13 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
   forPrepared = flip traversePrepared
 
   traversePrepared_
-    :: (ToParams x params, Foldable list)
+    :: (ToParams x params, Foldable list, KnownNat (Length params))
     => Manipulation '[] schemas params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> list x -> pq ()
   default traversePrepared_
     :: (MonadTrans t, MonadPQ schemas pq1, pq ~ t pq1)
-    => (ToParams x params, Foldable list)
+    => (ToParams x params, Foldable list, KnownNat (Length params))
     => Manipulation '[] schemas params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> list x -> pq ()
@@ -389,7 +396,7 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
     traversePrepared_ manipulation params
 
   forPrepared_
-    :: (ToParams x params, Foldable list)
+    :: (ToParams x params, Foldable list, KnownNat (Length params))
     => list x
     -> Manipulation '[] schemas params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
@@ -408,6 +415,7 @@ instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
   manipulateParams
     (UnsafeManipulation q :: Manipulation '[] schemas ps ys) (params :: x) =
       PQ $ \ (K conn) -> do
+        paramCheck (Proxy @ps) q
         let
           toParam' encoding =
             (LibPQ.invalidOid, encodingBytes encoding, LibPQ.Binary)
@@ -424,6 +432,7 @@ instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
   traversePrepared
     (UnsafeManipulation q :: Manipulation '[] schemas xs ys) (list :: list x) =
       PQ $ \ (K conn) -> liftIO $ do
+        paramCheck (Proxy @xs) q
         let temp = "temporary_statement"
         prepResultMaybe <- LibPQ.prepare conn temp q Nothing
         case prepResultMaybe of
@@ -451,6 +460,7 @@ instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
   traversePrepared_
     (UnsafeManipulation q :: Manipulation '[] schemas xs '[]) (list :: list x) =
       PQ $ \ (K conn) -> liftIO $ do
+        paramCheck (Proxy @xs) q
         let temp = "temporary_statement"
         prepResultMaybe <- LibPQ.prepare conn temp q Nothing
         case prepResultMaybe of
@@ -540,8 +550,9 @@ getRow
 getRow r (K result :: K LibPQ.Result columns) = liftIO $ do
   numRows <- LibPQ.ntuples result
   when (numRows < r) $ throw $ ResultException $
-    "getRow: expected at least " <> pack (show r) <> "rows but only saw "
-    <> pack (show numRows)
+    "getRow: expected at least " <> Text.pack (show r)
+    <> "rows but only saw "
+    <> Text.pack (show numRows)
   let len = fromIntegral (lengthSList (Proxy @columns))
   row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
   case fromList row' of
@@ -646,6 +657,7 @@ data SquealException
   = PQException PQState
   | ResultException Text
   | ParseException Text
+  | ParamException Text
   deriving (Eq, Show)
 instance Exception SquealException
 
@@ -686,3 +698,22 @@ trySqueal
   => io a
   -> io (Either SquealException a)
 trySqueal = try
+
+paramCheck
+  :: forall params proxy io
+   . (MonadIO io, KnownNat (Length params))
+  => proxy params
+  -> ByteString
+  -> io ()
+paramCheck _ q = do
+  let
+    notMissing i =
+      ("$" <> fromString (show i)) `ByteString.isInfixOf` q
+    missingParams = catMaybes
+      [ if notMissing i then Nothing else Just (fromString (show i))
+      | i <- [1 .. natVal (Proxy @ (Length params))]]
+    msg = "Squeal:"
+      <> "\n" <> Text.decodeUtf8 q
+      <> "\nmissing parameters $"
+      <> Text.intercalate ", $" missingParams
+  unless (null missingParams) (throw (ParamException msg))
