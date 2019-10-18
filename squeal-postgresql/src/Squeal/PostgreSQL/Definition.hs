@@ -97,8 +97,11 @@ instance PGTyped schemas ('NotNull ty) => PGNullityTyped schemas ('NotNull ty) w
   pgNullityType = notNullable (pgtype @_ @('NotNull ty))
 
 -- | Allow you to specify pg column types in relation to haskell types.
--- | >>> hask @(Maybe String) ~ nullable text
--- | >>> hask @String ~ notNullable text
+-- >>> printSQL $ hask @(Maybe String)
+-- text NULL
+--
+-- >>> printSQL $ hask @Double
+-- float8 NOT NULL
 hask
   :: forall h schemas. PGNullityTyped schemas (NullPG h)
   => ColumnTypeExpression schemas ('NoDef :=> NullPG h)
