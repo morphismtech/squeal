@@ -554,9 +554,9 @@ select_ = select . List
 -- be subject to the elimination of duplicate rows using `selectDistinct`.
 selectDistinct
   :: (SListI columns, columns ~ (col ': cols))
-  => Selection outer commons 'Ungrouped schemas params from columns
+  => Selection outer commons grp schemas params from columns
   -- ^ selection
-  -> TableExpression outer commons 'Ungrouped schemas params from
+  -> TableExpression outer commons grp schemas params from
   -- ^ intermediate virtual table
   -> Query outer commons schemas params columns
 selectDistinct selection tabexpr = UnsafeQuery $
@@ -568,9 +568,9 @@ selectDistinct selection tabexpr = UnsafeQuery $
 -- of a general `Selection`.
 selectDistinct_
   :: (SListI columns, columns ~ (col ': cols))
-  => NP (Aliased (Expression outer commons 'Ungrouped schemas params from)) columns
+  => NP (Aliased (Expression outer commons grp schemas params from)) columns
   -- ^ select list
-  -> TableExpression outer commons 'Ungrouped schemas params from
+  -> TableExpression outer commons grp schemas params from
   -- ^ intermediate virtual table
   -> Query outer commons schemas params columns
 selectDistinct_ = selectDistinct . List
@@ -580,14 +580,16 @@ selectDistinct_ = selectDistinct . List
 the given expressions evaluate to equal. The DISTINCT ON expressions are
 interpreted using the same rules as for ORDER BY. ORDER BY is used to
 ensure that the desired row appears first.
+
+The DISTINCT ON expressions will be pre-appended to the ORDER BY clause.
 -}
 selectDistinctOn
   :: (SListI columns, columns ~ (col ': cols))
-  => [SortExpression outer commons 'Ungrouped schemas params from]
+  => [SortExpression outer commons grp schemas params from]
   -- ^ distinct on and return the first row in ordering
-  -> Selection outer commons 'Ungrouped schemas params from columns
+  -> Selection outer commons grp schemas params from columns
   -- ^ selection
-  -> TableExpression outer commons 'Ungrouped schemas params from
+  -> TableExpression outer commons grp schemas params from
   -- ^ intermediate virtual table
   -> Query outer commons schemas params columns
 selectDistinctOn distincts selection tab = UnsafeQuery $
@@ -608,11 +610,11 @@ selectDistinctOn distincts selection tab = UnsafeQuery $
 -- of a general `Selection`.
 selectDistinctOn_
   :: (SListI columns, columns ~ (col ': cols))
-  => [SortExpression outer commons 'Ungrouped schemas params from]
+  => [SortExpression outer commons grp schemas params from]
   -- ^ distinct on and return the first row in ordering
-  -> NP (Aliased (Expression outer commons 'Ungrouped schemas params from)) columns
+  -> NP (Aliased (Expression outer commons grp schemas params from)) columns
   -- ^ selection
-  -> TableExpression outer commons 'Ungrouped schemas params from
+  -> TableExpression outer commons grp schemas params from
   -- ^ intermediate virtual table
   -> Query outer commons schemas params columns
 selectDistinctOn_ distincts = selectDistinctOn distincts . List
