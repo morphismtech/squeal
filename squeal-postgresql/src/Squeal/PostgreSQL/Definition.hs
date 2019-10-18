@@ -86,6 +86,7 @@ manipDefinition
   -> Definition schemas schemas
 manipDefinition = UnsafeDefinition . (<> ";") . renderSQL
 
+-- | Like @PGTyped@ but also accounts for nullity.
 class PGNullityTyped schemas (nullty :: NullityType) where
   pgNullityType :: ColumnTypeExpression schemas ('NoDef :=> nullty)
 
@@ -95,6 +96,9 @@ instance PGTyped schemas ('Null ty) => PGNullityTyped schemas ('Null ty) where
 instance PGTyped schemas ('NotNull ty) => PGNullityTyped schemas ('NotNull ty) where
   pgNullityType = notNullable (pgtype @_ @('NotNull ty))
 
+-- | Allow you to specify pg column types in relation to haskell types.
+-- | >>> hask @(Maybe String) ~ nullable text
+-- | >>> hask @String ~ notNullable text
 hask
   :: forall h schemas. PGNullityTyped schemas (NullPG h)
   => ColumnTypeExpression schemas ('NoDef :=> NullPG h)
