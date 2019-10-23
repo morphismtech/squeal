@@ -217,6 +217,7 @@ module Squeal.PostgreSQL.Binary
   , Only (..)
     -- * Oid
   , HasOid (..)
+  , HasOidParam (..)
   , HasAliasedOid (..)
   ) where
 
@@ -231,6 +232,7 @@ import Data.Time
 import Data.UUID.Types
 import Data.Vector (Vector)
 import Data.Word
+import Foreign.C.Types (CUInt(CUInt))
 import Generics.SOP
 import Generics.SOP.Record
 import GHC.TypeLits
@@ -244,6 +246,7 @@ import qualified Data.Text.Lazy as Lazy (Text)
 import qualified Data.Text as Strict (Text)
 import qualified Data.Text as Strict.Text
 import qualified Data.Vector as Vector
+import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified GHC.Generics as GHC
 import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
@@ -398,29 +401,113 @@ instance
 --
 -- >>> :set -XTypeApplications
 -- >>> oidOf @'PGbool
--- Oid {getOid = 16}
-class HasOid (ty :: PGType) where oidOf :: Oid
-instance HasOid 'PGbool where oidOf = Oid 16
-instance HasOid 'PGint2 where oidOf = Oid 21
-instance HasOid 'PGint4 where oidOf = Oid 23
-instance HasOid 'PGint8 where oidOf = Oid 20
-instance HasOid 'PGnumeric where oidOf = Oid 1700
-instance HasOid 'PGfloat4 where oidOf = Oid 700
-instance HasOid 'PGfloat8 where oidOf = Oid 701
-instance HasOid ('PGchar n) where oidOf = Oid 18
-instance HasOid ('PGvarchar n) where oidOf = Oid 1043
-instance HasOid 'PGtext where oidOf = Oid 25
-instance HasOid 'PGbytea where oidOf = Oid 17
-instance HasOid 'PGtimestamp where oidOf = Oid 1114
-instance HasOid 'PGtimestamptz where oidOf = Oid 1184
-instance HasOid 'PGdate where oidOf = Oid 1082
-instance HasOid 'PGtime where oidOf = Oid 1083
-instance HasOid 'PGtimetz where oidOf = Oid 1266
-instance HasOid 'PGinterval where oidOf = Oid 1186
-instance HasOid 'PGuuid where oidOf = Oid 2950
-instance HasOid 'PGinet where oidOf = Oid 869
-instance HasOid 'PGjson where oidOf = Oid 114
-instance HasOid 'PGjsonb where oidOf = Oid 3802
+-- Oid 16
+class HasOid (ty :: PGType) where oidOf :: LibPQ.Oid
+instance HasOid 'PGbool where oidOf = LibPQ.Oid 16
+instance HasOid ('PGfixarray ns (null 'PGbool)) where oidOf = LibPQ.Oid 1000
+instance HasOid ('PGvararray (null 'PGbool)) where oidOf = LibPQ.Oid 1000
+instance HasOid 'PGint2 where oidOf = LibPQ.Oid 21
+instance HasOid ('PGfixarray ns (null 'PGint2)) where oidOf = LibPQ.Oid 1005
+instance HasOid ('PGvararray (null 'PGint2)) where oidOf = LibPQ.Oid 1005
+instance HasOid 'PGint4 where oidOf = LibPQ.Oid 23
+instance HasOid ('PGfixarray ns (null 'PGint4)) where oidOf = LibPQ.Oid 1007
+instance HasOid ('PGvararray (null 'PGint4)) where oidOf = LibPQ.Oid 1007
+instance HasOid 'PGint8 where oidOf = LibPQ.Oid 20
+instance HasOid ('PGfixarray ns (null 'PGint8)) where oidOf = LibPQ.Oid 1016
+instance HasOid ('PGvararray (null 'PGint8)) where oidOf = LibPQ.Oid 1016
+instance HasOid 'PGnumeric where oidOf = LibPQ.Oid 1700
+instance HasOid ('PGfixarray ns (null 'PGnumeric)) where oidOf = LibPQ.Oid 1231
+instance HasOid ('PGvararray (null 'PGnumeric)) where oidOf = LibPQ.Oid 1231
+instance HasOid 'PGfloat4 where oidOf = LibPQ.Oid 700
+instance HasOid ('PGfixarray ns (null 'PGfloat4)) where oidOf = LibPQ.Oid 1021
+instance HasOid ('PGvararray (null 'PGfloat4)) where oidOf = LibPQ.Oid 1021
+instance HasOid 'PGfloat8 where oidOf = LibPQ.Oid 701
+instance HasOid ('PGfixarray ns (null 'PGfloat8)) where oidOf = LibPQ.Oid 1022
+instance HasOid ('PGvararray (null 'PGfloat8)) where oidOf = LibPQ.Oid 1022
+instance HasOid 'PGmoney where oidOf = LibPQ.Oid 790
+instance HasOid ('PGfixarray ns (null 'PGmoney)) where oidOf = LibPQ.Oid 791
+instance HasOid ('PGvararray (null 'PGmoney)) where oidOf = LibPQ.Oid 791
+instance HasOid ('PGchar n) where oidOf = LibPQ.Oid 18
+instance HasOid ('PGfixarray ns (null ('PGchar n))) where oidOf = LibPQ.Oid 1002
+instance HasOid ('PGvararray (null ('PGchar n))) where oidOf = LibPQ.Oid 1002
+instance HasOid ('PGvarchar n) where oidOf = LibPQ.Oid 1043
+instance HasOid ('PGfixarray ns (null ('PGvarchar n))) where oidOf = LibPQ.Oid 1015
+instance HasOid ('PGvararray (null ('PGvarchar n))) where oidOf = LibPQ.Oid 1015
+instance HasOid 'PGtext where oidOf = LibPQ.Oid 25
+instance HasOid ('PGfixarray ns (null 'PGtext)) where oidOf = LibPQ.Oid 1009
+instance HasOid ('PGvararray (null 'PGtext)) where oidOf = LibPQ.Oid 1009
+instance HasOid 'PGbytea where oidOf = LibPQ.Oid 17
+instance HasOid ('PGfixarray ns (null 'PGbytea)) where oidOf = LibPQ.Oid 1001
+instance HasOid ('PGvararray (null 'PGbytea)) where oidOf = LibPQ.Oid 1001
+instance HasOid 'PGtimestamp where oidOf = LibPQ.Oid 1114
+instance HasOid ('PGfixarray ns (null 'PGtimestamp)) where oidOf = LibPQ.Oid 1115
+instance HasOid ('PGvararray (null 'PGtimestamp)) where oidOf = LibPQ.Oid 1115
+instance HasOid 'PGtimestamptz where oidOf = LibPQ.Oid 1184
+instance HasOid ('PGfixarray ns (null 'PGtimestamptz)) where oidOf = LibPQ.Oid 1185
+instance HasOid ('PGvararray (null 'PGtimestamptz)) where oidOf = LibPQ.Oid 1185
+instance HasOid 'PGdate where oidOf = LibPQ.Oid 1082
+instance HasOid ('PGfixarray ns (null 'PGdate)) where oidOf = LibPQ.Oid 1182
+instance HasOid ('PGvararray (null 'PGdate)) where oidOf = LibPQ.Oid 1182
+instance HasOid 'PGtime where oidOf = LibPQ.Oid 1083
+instance HasOid ('PGfixarray ns (null 'PGtime)) where oidOf = LibPQ.Oid 1183
+instance HasOid ('PGvararray (null 'PGtime)) where oidOf = LibPQ.Oid 1183
+instance HasOid 'PGtimetz where oidOf = LibPQ.Oid 1266
+instance HasOid ('PGfixarray ns (null 'PGtimetz)) where oidOf = LibPQ.Oid 1270
+instance HasOid ('PGvararray (null 'PGtimetz)) where oidOf = LibPQ.Oid 1270
+instance HasOid 'PGinterval where oidOf = LibPQ.Oid 1186
+instance HasOid ('PGfixarray ns (null 'PGinterval)) where oidOf = LibPQ.Oid 1187
+instance HasOid ('PGvararray (null 'PGinterval)) where oidOf = LibPQ.Oid 1187
+instance HasOid 'PGuuid where oidOf = LibPQ.Oid 2950
+instance HasOid ('PGfixarray ns (null 'PGuuid)) where oidOf = LibPQ.Oid 2951
+instance HasOid ('PGvararray (null 'PGuuid)) where oidOf = LibPQ.Oid 2951
+instance HasOid 'PGinet where oidOf = LibPQ.Oid 869
+instance HasOid ('PGfixarray ns (null 'PGinet)) where oidOf = LibPQ.Oid 1041
+instance HasOid ('PGvararray (null 'PGinet)) where oidOf = LibPQ.Oid 1041
+instance HasOid 'PGjson where oidOf = LibPQ.Oid 114
+instance HasOid ('PGfixarray ns (null 'PGjson)) where oidOf = LibPQ.Oid 199
+instance HasOid ('PGvararray (null 'PGjson)) where oidOf = LibPQ.Oid 199
+instance HasOid 'PGjsonb where oidOf = LibPQ.Oid 3802
+instance HasOid ('PGfixarray ns (null 'PGjsonb)) where oidOf = LibPQ.Oid 3807
+instance HasOid ('PGvararray (null 'PGjsonb)) where oidOf = LibPQ.Oid 3807
+instance HasOid 'PGtsvector where oidOf = LibPQ.Oid 3614
+instance HasOid ('PGfixarray ns (null 'PGtsvector)) where oidOf = LibPQ.Oid 3643
+instance HasOid ('PGvararray (null 'PGtsvector)) where oidOf = LibPQ.Oid 3643
+instance HasOid 'PGtsquery where oidOf = LibPQ.Oid 3615
+instance HasOid ('PGfixarray ns (null 'PGtsquery)) where oidOf = LibPQ.Oid 3645
+instance HasOid ('PGvararray (null 'PGtsquery)) where oidOf = LibPQ.Oid 3645
+instance HasOid 'PGoid where oidOf = LibPQ.Oid 26
+instance HasOid ('PGfixarray ns (null 'PGoid)) where oidOf = LibPQ.Oid 1028
+instance HasOid ('PGvararray (null 'PGoid)) where oidOf = LibPQ.Oid 1028
+instance HasOid ('PGrange 'PGint4) where oidOf = LibPQ.Oid 3904
+instance HasOid ('PGfixarray ns (null ('PGrange 'PGint4))) where oidOf = LibPQ.Oid 3905
+instance HasOid ('PGvararray (null ('PGrange 'PGint4))) where oidOf = LibPQ.Oid 3905
+instance HasOid ('PGrange 'PGint8) where oidOf = LibPQ.Oid 3926
+instance HasOid ('PGfixarray ns (null ('PGrange 'PGint8))) where oidOf = LibPQ.Oid 3927
+instance HasOid ('PGvararray (null ('PGrange 'PGint8))) where oidOf = LibPQ.Oid 3927
+instance HasOid ('PGrange 'PGnumeric) where oidOf = LibPQ.Oid 3906
+instance HasOid ('PGfixarray ns (null ('PGrange 'PGnumeric))) where oidOf = LibPQ.Oid 3907
+instance HasOid ('PGvararray (null ('PGrange 'PGnumeric))) where oidOf = LibPQ.Oid 3907
+instance HasOid ('PGrange 'PGtimestamp) where oidOf = LibPQ.Oid 3908
+instance HasOid ('PGfixarray ns (null ('PGrange 'PGtimestamp))) where oidOf = LibPQ.Oid 3909
+instance HasOid ('PGvararray (null ('PGrange 'PGtimestamp))) where oidOf = LibPQ.Oid 3909
+instance HasOid ('PGrange 'PGtimestamptz) where oidOf = LibPQ.Oid 3910
+instance HasOid ('PGfixarray ns (null ('PGrange 'PGtimestamptz))) where oidOf = LibPQ.Oid 3911
+instance HasOid ('PGvararray (null ('PGrange 'PGtimestamptz))) where oidOf = LibPQ.Oid 3911
+instance HasOid ('PGrange 'PGdate) where oidOf = LibPQ.Oid 3912
+instance HasOid ('PGfixarray ns (null ('PGrange 'PGdate))) where oidOf = LibPQ.Oid 3913
+instance HasOid ('PGvararray (null ('PGrange 'PGdate))) where oidOf = LibPQ.Oid 3913
+instance {-# OVERLAPPABLE #-} HasOid ('PGrange ty) where oidOf = LibPQ.invalidOid
+instance {-# OVERLAPPABLE #-} HasOid ('PGfixarray ns (null ('PGrange ty))) where oidOf = LibPQ.invalidOid
+instance {-# OVERLAPPABLE #-} HasOid ('PGvararray (null ('PGrange ty))) where oidOf = LibPQ.invalidOid
+instance {-# OVERLAPPABLE #-} HasOid ('PGcomposite row) where oidOf = LibPQ.invalidOid
+instance {-# OVERLAPPABLE #-} HasOid ('PGfixarray ns (null ('PGcomposite row))) where oidOf = LibPQ.invalidOid
+instance {-# OVERLAPPABLE #-} HasOid ('PGvararray (null ('PGcomposite row))) where oidOf = LibPQ.invalidOid
+instance {-# OVERLAPPABLE #-} HasOid ('PGenum labels) where oidOf = LibPQ.invalidOid
+instance {-# OVERLAPPABLE #-} HasOid ('PGfixarray ns (null ('PGenum labels))) where oidOf = LibPQ.invalidOid
+instance {-# OVERLAPPABLE #-} HasOid ('PGvararray (null ('PGenum labels))) where oidOf = LibPQ.invalidOid
+
+class HasOidParam (ty :: NullityType) where oidOfParam :: Oid
+instance HasOid ty => HasOidParam (null ty) where oidOfParam = oidOf @ty
 
 -- | Lifts a `HasOid` constraint to a field.
 class HasAliasedOid (field :: (Symbol, NullityType)) where
@@ -756,3 +843,6 @@ replicateMN
   => m x -> m (NP I xs)
 replicateMN mx = hsequence' $
   hcpure (Proxy :: Proxy ((~) x)) (Comp (I <$> mx))
+
+getOid :: LibPQ.Oid -> Word32
+getOid (LibPQ.Oid (CUInt oid)) = oid

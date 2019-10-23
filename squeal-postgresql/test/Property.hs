@@ -92,14 +92,14 @@ roundtrips = Group "roundtrips"
     -- genTimeWithZone = (,) <$> genTimeOfDay <*> genTimeZone
 
 roundtrip
-  :: (ToParam x ty, FromValue ty x, Show x, Eq x)
+  :: (HasOid ty, ToParam x ty, FromValue ty x, Show x, Eq x)
   => TypeExpression schemas ('NotNull ty)
   -> Gen x
   -> (PropertyName, Property)
 roundtrip = roundtripOn id
 
 roundtripOn
-  :: (ToParam x ty, FromValue ty x, Show x, Eq x)
+  :: (HasOid ty, ToParam x ty, FromValue ty x, Show x, Eq x)
   => (x -> x)
   -> TypeExpression schemas ('NotNull ty)
   -> Gen x

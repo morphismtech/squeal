@@ -47,7 +47,7 @@ module Squeal.PostgreSQL.PG
   , Enumerated (..)
   , VarArray (..)
   , FixArray (..)
-  , Oid (..)
+  , LibPQ.Oid (..)
     -- * Type families
   , LabelsPG
   , DimPG
@@ -66,7 +66,6 @@ import Data.Int (Int16, Int32, Int64)
 import Data.Scientific (Scientific)
 import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime)
 import Data.Vector (Vector)
-import Data.Word (Word32)
 import Data.UUID.Types (UUID)
 import GHC.TypeLits
 import Network.IP.Addr (NetAddr, IP)
@@ -75,6 +74,7 @@ import qualified Data.ByteString.Lazy as Lazy (ByteString)
 import qualified Data.ByteString as Strict (ByteString)
 import qualified Data.Text.Lazy as Lazy (Text)
 import qualified Data.Text as Strict (Text)
+import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
@@ -108,7 +108,7 @@ type instance PG Int32 = 'PGint4
 -- | `PGint8`
 type instance PG Int64 = 'PGint8
 -- | `PGint2`
-type instance PG Oid = 'PGoid
+type instance PG LibPQ.Oid = 'PGoid
 -- | `PGnumeric`
 type instance PG Scientific = 'PGnumeric
 -- | `PGfloat4`
@@ -386,10 +386,3 @@ newtype FixArray arr = FixArray {getFixArray :: arr}
   deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 -- | `PGfixarray` @(@`DimPG` @hask) (@`FixPG` @hask)@
 type instance PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
-
-{- | Object identifiers (`Oid`s) are used internally by PostgreSQL
-as primary keys for various system tables.
--}
-newtype Oid = Oid { getOid :: Word32 }
-  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
-  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)

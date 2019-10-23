@@ -123,3 +123,14 @@ spec = before_ setupDB . after_ dropDB $ do
         getRows =<< runQuery query
       (fromOnly <$> rangesOut :: [Range Int32]) `shouldBe`
         [ atLeast 3, 3 <=..< 5, Empty, whole ]
+
+  describe "Parameters" $ do
+
+    it "should run queries that don't reference all their parameters" $ do
+
+      out <- withConnection connectionString $ do
+        let
+          query :: Query_ (Public '[]) (Char,Int32) (Only Int32)
+          query = values_ (param @2 `as` #fromOnly)
+        firstRow =<< runQueryParams query ('a', 3 :: Int32)
+      (fromOnly <$> out :: Maybe Int32) `shouldBe` Just 3
