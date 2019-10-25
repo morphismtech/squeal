@@ -585,7 +585,7 @@ The DISTINCT ON expression(s) must match the leftmost ORDER BY expression(s).
 The ORDER BY clause will normally contain additional expression(s) that
 determine the desired precedence of rows within each DISTINCT ON group.
 
-In order to guarantee they match, this function
+In order to guarantee they match and reduce redundancy, this function
 will prepend the The DISTINCT ON expressions to the ORDER BY clause.
 -}
 selectDistinctOn
