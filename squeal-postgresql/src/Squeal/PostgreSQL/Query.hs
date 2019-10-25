@@ -750,7 +750,7 @@ instance RenderSQL (TableExpression outer commons grp schemas params from) where
 from
   :: FromClause outer commons schemas params from -- ^ table reference
   -> TableExpression outer commons 'Ungrouped schemas params from
-from tab = TableExpression tab [] NoGroups NoHaving [] [] []
+from tab = TableExpression tab [] noGroups NoHaving [] [] []
 
 -- | A `where_` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `whereClause`.
@@ -771,7 +771,7 @@ groupBy
 groupBy bys rels = TableExpression
   { fromClause = fromClause rels
   , whereClause = whereClause rels
-  , groupByClause = Group bys
+  , groupByClause = group bys
   , havingClause = Having []
   , orderByClause = []
   , limitClause = limitClause rels
@@ -985,19 +985,20 @@ instance (Has rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
 -- done on @NoGroups@ while all output `Expression`s must be aggregated
 -- in @Group Nil@. In general, all output `Expression`s in the
 -- complement of @bys@ must be aggregated in @Group bys@.
-data GroupByClause grp from where
-  NoGroups :: GroupByClause 'Ungrouped from
-  Group
-    :: SListI bys
-    => NP (By from) bys
-    -> GroupByClause ('Grouped bys) from
-
--- | Renders a `GroupByClause`.
+newtype GroupByClause grp from = UnsafeGroupByClause
+  { renderGroupByClause :: ByteString }
+  deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance RenderSQL (GroupByClause grp from) where
-  renderSQL = \case
-    NoGroups -> ""
-    Group Nil -> ""
-    Group bys -> " GROUP BY" <+> renderCommaSeparated renderSQL bys
+  renderSQL = renderGroupByClause
+noGroups :: GroupByClause 'Ungrouped from
+noGroups = UnsafeGroupByClause ""
+group
+  :: SListI bys
+  => NP (By from) bys
+  -> GroupByClause ('Grouped bys) from
+group bys = UnsafeGroupByClause $ case bys of
+  Nil -> ""
+  bys' -> " GROUP BY" <+> renderCommaSeparated renderSQL bys'
 
 -- | A `HavingClause` is used to eliminate groups that are not of interest.
 -- An `Ungrouped` `TableExpression` may only use `NoHaving` while a `Grouped`
