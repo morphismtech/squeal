@@ -27,6 +27,7 @@ Squeal data definition language.
   , TypeInType
   , TypeOperators
   , UndecidableSuperClasses
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Definition
@@ -34,6 +35,8 @@ module Squeal.PostgreSQL.Definition
     Definition (..)
   , (>>>)
   , manipDefinition
+  , PGNullityTyped (..)
+  , hask
   ) where
 
 import Control.Category
@@ -44,7 +47,10 @@ import Prelude hiding ((.), id)
 
 import qualified GHC.Generics as GHC
 
+import Squeal.PostgreSQL.Definition.Table.Column
+import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.Manipulation
+import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
@@ -79,3 +85,24 @@ manipDefinition
   -- ^ no input or output
   -> Definition schemas schemas
 manipDefinition = UnsafeDefinition . (<> ";") . renderSQL
+
+-- | Like @PGTyped@ but also accounts for nullity.
+class PGNullityTyped schemas (nullty :: NullityType) where
+  pgNullityType :: ColumnTypeExpression schemas ('NoDef :=> nullty)
+
+instance PGTyped schemas ('Null ty) => PGNullityTyped schemas ('Null ty) where
+  pgNullityType = nullable (pgtype @_ @('Null ty))
+
+instance PGTyped schemas ('NotNull ty) => PGNullityTyped schemas ('NotNull ty) where
+  pgNullityType = notNullable (pgtype @_ @('NotNull ty))
+
+-- | Allow you to specify pg column types in relation to haskell types.
+-- >>> printSQL $ hask @(Maybe String)
+-- text NULL
+--
+-- >>> printSQL $ hask @Double
+-- float8 NOT NULL
+hask
+  :: forall h schemas. PGNullityTyped schemas (NullPG h)
+  => ColumnTypeExpression schemas ('NoDef :=> NullPG h)
+hask = pgNullityType
