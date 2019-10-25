@@ -581,12 +581,17 @@ the given expressions evaluate to equal. The DISTINCT ON expressions are
 interpreted using the same rules as for ORDER BY. ORDER BY is used to
 ensure that the desired row appears first.
 
-The DISTINCT ON expressions will be pre-appended to the ORDER BY clause.
+The DISTINCT ON expression(s) must match the leftmost ORDER BY expression(s).
+The ORDER BY clause will normally contain additional expression(s) that
+determine the desired precedence of rows within each DISTINCT ON group.
+
+In order to guarantee they match, this function
+will prepend the The DISTINCT ON expressions to the ORDER BY clause.
 -}
 selectDistinctOn
   :: (SListI columns, columns ~ (col ': cols))
   => [SortExpression outer commons grp schemas params from]
-  -- ^ distinct on and return the first row in ordering
+  -- ^ DISTINCT ON expression(s) and prepended to ORDER BY clause
   -> Selection outer commons grp schemas params from columns
   -- ^ selection
   -> TableExpression outer commons grp schemas params from
