@@ -340,6 +340,12 @@ instance (SOP.All KnownNat dims, PGTyped schemas ty)
 instance PGTyped schemas (null 'PGtsvector) where pgtype = tsvector
 instance PGTyped schemas (null 'PGtsquery) where pgtype = tsquery
 instance PGTyped schemas (null 'PGoid) where pgtype = oid
+instance PGTyped schemas (null ('PGrange 'PGint4)) where pgtype = int4range
+instance PGTyped schemas (null ('PGrange 'PGint8)) where pgtype = int8range
+instance PGTyped schemas (null ('PGrange 'PGnumeric)) where pgtype = numrange
+instance PGTyped schemas (null ('PGrange 'PGtimestamp)) where pgtype = tsrange
+instance PGTyped schemas (null ('PGrange 'PGtimestamptz)) where pgtype = tstzrange
+instance PGTyped schemas (null ('PGrange 'PGdate)) where pgtype = daterange
 
 -- | Lift `PGTyped` to a field
 class FieldTyped schemas ty where
