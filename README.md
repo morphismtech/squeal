@@ -180,8 +180,8 @@ DROP TABLE "emails";
 DROP TABLE "users";
 ```
 
-We'll need a Haskell type for @User@s. We give the type `Generics.SOP.Generic` and
-`Generics.SOP.HasDatatypeInfo` instances so that we can encode and decode @User@s.
+We'll need a Haskell type for `User`s. We give the type `SOP.Generic` and
+`SOP.HasDatatypeInfo` instances so that we can encode and decode `User`s.
 
 ```Haskell
 >>> data User = User { userName :: Text, userEmail :: Maybe Text } deriving (Show, GHC.Generic)
@@ -189,12 +189,12 @@ We'll need a Haskell type for @User@s. We give the type `Generics.SOP.Generic` a
 >>> instance SOP.HasDatatypeInfo User
 ```
 
-Next, we'll write `Manipulation_`s to insert @User@s into our two tables.
+Next, we'll write `Manipulation_`s to insert `User`s into our two tables.
 A `Manipulation_` like `insertInto`, `update` or `deleteFrom`
 has three type parameters, the schemas it refers to, input parameters
 and an output row. When
-we insert into the users table, we will need a parameter for the @name@
-field but not for the @id@ field. Since it's serial, we can use a default
+we insert into the users table, we will need a parameter for the `name`
+field but not for the `id` field. Since it's serial, we can use a default
 value. However, since the emails table refers to the users table, we will
 need to retrieve the user id that the insert generates and insert it into
 the emails table. We can do this in a single `Manipulation_` by using a
