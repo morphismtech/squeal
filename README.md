@@ -121,7 +121,7 @@ type Schemas = Public Schema
 
 Notice the use of type operators.
 
-`:::` is used to pair an alias `GHC.TypeLits.Symbol` with a `SchemumType`,
+`:::` is used to pair an alias `Symbol` with a `SchemumType`,
 a `TableConstraint` or a `ColumnType`. It is intended to connote Haskell's `::`
 operator.
 
