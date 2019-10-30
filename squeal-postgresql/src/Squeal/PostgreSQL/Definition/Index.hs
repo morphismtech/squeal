@@ -56,6 +56,7 @@ import Squeal.PostgreSQL.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL
+-- >>> :set -XPolyKinds
 
 {- |
 >>> :{
