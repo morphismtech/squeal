@@ -9,13 +9,14 @@ Literal expressions
 -}
 
 {-# LANGUAGE
-    FlexibleContexts
+    DataKinds
   , FlexibleInstances
   , LambdaCase
   , OverloadedStrings
   , RankNTypes
   , ScopedTypeVariables
   , TypeApplications
+  , TypeFamilies
   , TypeSynonymInstances
   , UndecidableInstances
 #-}
@@ -36,8 +37,10 @@ import qualified Data.Text.Lazy as Lazy.Text
 import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Logic
+import Squeal.PostgreSQL.Expression.Null
 import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
+import Squeal.PostgreSQL.Schema
 
 {- |
 The `Literal` class allows embedding a Haskell value directly
@@ -55,7 +58,10 @@ E'a'
 >>> printSQL (literal (Enumerated GT))
 'GT'
 -}
-class Literal hask where literal :: hask -> Expr (null (PG hask))
+class Literal hask where literal :: hask -> Expr (NullPG hask)
+instance (Literal hask, NullPG hask ~ 'NotNull (PG hask))
+  => Literal (Maybe hask) where
+  literal = maybe null_ (notNull . literal)
 instance Literal Bool where
   literal = \case
     True -> true

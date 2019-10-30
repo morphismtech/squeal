@@ -46,6 +46,9 @@ module Squeal.PostgreSQL.Manipulation
   , Optional (..)
   , QueryClause (..)
   , pattern Values_
+  , InlineColumn (..)
+  , inline
+  , inlineMany
   , ReturningClause (..)
   , pattern Returning_
   , ConflictClause (..)
@@ -57,12 +60,15 @@ module Squeal.PostgreSQL.Manipulation
 import Control.DeepSeq
 import Data.ByteString hiding (foldr)
 import Data.Kind (Type)
+import GHC.TypeLits
 
 import qualified Generics.SOP as SOP
+import qualified Generics.SOP.Record as SOP
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
+import Squeal.PostgreSQL.Expression.Literal
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
@@ -374,6 +380,36 @@ instance (forall x. RenderSQL (expr x)) => RenderSQL (Optional expr ty) where
   renderSQL = \case
     Default -> "DEFAULT"
     Set expr -> renderSQL expr
+
+class InlineColumn field column where
+  inlineColumn
+    :: SOP.P field
+    -> Aliased ( Optional
+      ( Expression outer commons grp schemas params from
+      ) ) column
+instance (Literal hask, column ~ (def :=> NullPG hask), KnownSymbol alias)
+  => InlineColumn (alias ::: hask) (alias ::: column) where
+    inlineColumn (SOP.P hask) = Set (literal hask) `as` (Alias @alias)
+
+inline
+  :: ( SOP.IsRecord hask xs
+     , SOP.AllZip InlineColumn xs columns )
+  => hask
+  -> QueryClause commons schemas params columns
+inline
+  = Values_
+  . SOP.htrans (SOP.Proxy @InlineColumn) inlineColumn
+  . SOP.toRecord
+
+inlineMany
+  :: ( SOP.IsRecord hask xs
+     , SOP.AllZip InlineColumn xs columns )
+  => hask
+  -> [hask]
+  -> QueryClause commons schemas params columns
+inlineMany hask hasks = Values (lits hask) (lits <$> hasks)
+  where
+    lits = SOP.htrans (SOP.Proxy @InlineColumn) inlineColumn . SOP.toRecord
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
