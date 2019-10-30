@@ -390,6 +390,9 @@ class InlineColumn field column where
 instance (Literal hask, column ~ (def :=> NullPG hask), KnownSymbol alias)
   => InlineColumn (alias ::: hask) (alias ::: column) where
     inlineColumn (SOP.P hask) = Set (literal hask) `as` (Alias @alias)
+instance (KnownSymbol alias, column ~ ('Def :=> ty))
+  => InlineColumn (alias ::: ()) (alias ::: column) where
+    inlineColumn _ = Default `as` (Alias @alias)
 
 inline
   :: ( SOP.IsRecord hask xs
