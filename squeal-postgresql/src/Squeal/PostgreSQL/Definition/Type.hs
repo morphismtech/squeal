@@ -66,12 +66,12 @@ import Squeal.PostgreSQL.Schema
 -- >>> printSQL $ (createTypeEnum #mood (label @"sad" :* label @"ok" :* label @"happy") :: Definition (Public '[]) '["public" ::: '["mood" ::: 'Typedef ('PGenum '["sad","ok","happy"])]])
 -- CREATE TYPE "mood" AS ENUM ('sad', 'ok', 'happy');
 createTypeEnum
-  :: (KnownSymbol enum, Has sch schemas schema, SOP.All KnownSymbol labels)
+  :: (KnownSymbol enum, Has sch db schema, SOP.All KnownSymbol labels)
   => QualifiedAlias sch enum
   -- ^ name of the user defined enumerated type
   -> NP PGlabel labels
   -- ^ labels of the enumerated type
-  -> Definition schemas (Alter sch (Create enum ('Typedef ('PGenum labels)) schema) schemas)
+  -> Definition db (Alter sch (Create enum ('Typedef ('PGenum labels)) schema) db)
 createTypeEnum enum labels = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderSQL enum <+> "AS" <+> "ENUM" <+>
   parenthesized (renderSQL labels) <> ";"
@@ -90,14 +90,14 @@ createTypeEnum enum labels = UnsafeDefinition $
 -- :}
 -- CREATE TYPE "schwarma" AS ENUM ('Beef', 'Lamb', 'Chicken');
 createTypeEnumFrom
-  :: forall hask sch enum schemas schema.
+  :: forall hask sch enum db schema.
   ( SOP.Generic hask
   , SOP.All KnownSymbol (LabelsPG hask)
   , KnownSymbol enum
-  , Has sch schemas schema )
+  , Has sch db schema )
   => QualifiedAlias sch enum
   -- ^ name of the user defined enumerated type
-  -> Definition schemas (Alter sch (Create enum ('Typedef (PG (Enumerated hask))) schema) schemas)
+  -> Definition db (Alter sch (Create enum ('Typedef (PG (Enumerated hask))) schema) db)
 createTypeEnumFrom enum = createTypeEnum enum
   (SOP.hpure label :: NP PGlabel (LabelsPG hask))
 
@@ -120,17 +120,17 @@ in printSQL setup
 CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 -}
 createTypeComposite
-  :: (KnownSymbol ty, Has sch schemas schema, SOP.SListI fields)
+  :: (KnownSymbol ty, Has sch db schema, SOP.SListI fields)
   => QualifiedAlias sch ty
   -- ^ name of the user defined composite type
-  -> NP (Aliased (TypeExpression schemas)) fields
+  -> NP (Aliased (TypeExpression db)) fields
   -- ^ list of attribute names and data types
-  -> Definition schemas (Alter sch (Create ty ('Typedef ('PGcomposite fields)) schema) schemas)
+  -> Definition db (Alter sch (Create ty ('Typedef ('PGcomposite fields)) schema) db)
 createTypeComposite ty fields = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderSQL ty <+> "AS" <+> parenthesized
   (renderCommaSeparated renderField fields) <> ";"
   where
-    renderField :: Aliased (TypeExpression schemas) x -> ByteString
+    renderField :: Aliased (TypeExpression db) x -> ByteString
     renderField (typ `As` alias) =
       renderSQL alias <+> renderSQL typ
 
@@ -149,16 +149,16 @@ createTypeComposite ty fields = UnsafeDefinition $
 -- :}
 -- CREATE TYPE "complex" AS ("real" float8, "imaginary" float8);
 createTypeCompositeFrom
-  :: forall hask sch ty schemas schema.
-  ( SOP.All (FieldTyped schemas) (RowPG hask)
+  :: forall hask sch ty db schema.
+  ( SOP.All (FieldTyped db) (RowPG hask)
   , KnownSymbol ty
-  , Has sch schemas schema )
+  , Has sch db schema )
   => QualifiedAlias sch ty
   -- ^ name of the user defined composite type
-  -> Definition schemas (Alter sch (Create ty ( 'Typedef (PG (Composite hask))) schema) schemas)
+  -> Definition db (Alter sch (Create ty ( 'Typedef (PG (Composite hask))) schema) db)
 createTypeCompositeFrom ty = createTypeComposite ty
-  (SOP.hcpure (SOP.Proxy :: SOP.Proxy (FieldTyped schemas)) fieldtype
-    :: NP (Aliased (TypeExpression schemas)) (RowPG hask))
+  (SOP.hcpure (SOP.Proxy :: SOP.Proxy (FieldTyped db)) fieldtype
+    :: NP (Aliased (TypeExpression db)) (RowPG hask))
 
 {-|
 `createDomain` creates a new domain. A domain is essentially a data type
@@ -179,11 +179,11 @@ in printSQL createPositive
 CREATE DOMAIN "positive" AS real CHECK ((("value" > 0) AND "value" IS NOT NULL));
 -}
 createDomain
-  :: (Has sch schemas schema, KnownSymbol dom)
+  :: (Has sch db schema, KnownSymbol dom)
   => QualifiedAlias sch dom
-  -> (forall null. TypeExpression schemas (null ty))
-  -> (forall tab. Condition '[] '[] 'Ungrouped schemas '[] '[tab ::: '["value" ::: 'Null ty]])
-  -> Definition schemas (Alter sch (Create dom ('Typedef ty) schema) schemas)
+  -> (forall null. TypeExpression db (null ty))
+  -> (forall tab. Condition '[] '[] 'Ungrouped db '[] '[tab ::: '["value" ::: 'Null ty]])
+  -> Definition db (Alter sch (Create dom ('Typedef ty) schema) db)
 createDomain dom ty condition =
   UnsafeDefinition $ "CREATE DOMAIN" <+> renderSQL dom
     <+> "AS" <+> renderTypeExpression ty
@@ -199,10 +199,10 @@ in printSQL createSmallIntRange
 CREATE TYPE "int2range" AS RANGE (subtype = int2);
 -}
 createTypeRange
-  :: (Has sch schemas schema, KnownSymbol range)
+  :: (Has sch db schema, KnownSymbol range)
   => QualifiedAlias sch range
-  -> (forall null. TypeExpression schemas (null ty))
-  -> Definition schemas (Alter sch (Create range ('Typedef ('PGrange ty)) schema) schemas)
+  -> (forall null. TypeExpression db (null ty))
+  -> Definition db (Alter sch (Create range ('Typedef ('PGrange ty)) schema) db)
 createTypeRange range ty = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderSQL range <+> "AS" <+> "RANGE" <+>
   parenthesized ("subtype" <+> "=" <+> renderTypeExpression ty) <> ";"
@@ -215,15 +215,15 @@ createTypeRange range ty = UnsafeDefinition $
 -- >>> printSQL (dropType #schwarma :: Definition '["public" ::: '["schwarma" ::: 'Typedef (PG (Enumerated Schwarma))]] (Public '[]))
 -- DROP TYPE "schwarma";
 dropType
-  :: (Has sch schemas schema, KnownSymbol td)
+  :: (Has sch db schema, KnownSymbol td)
   => QualifiedAlias sch td
   -- ^ name of the user defined type
-  -> Definition schemas (Alter sch (DropSchemum td 'Typedef schema) schemas)
+  -> Definition db (Alter sch (DropSchemum td 'Typedef schema) db)
 dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderSQL tydef <> ";"
 
 dropTypeIfExists
-  :: (Has sch schemas schema, KnownSymbol td)
+  :: (Has sch db schema, KnownSymbol td)
   => QualifiedAlias sch td
   -- ^ name of the user defined type
-  -> Definition schemas (Alter sch (DropSchemumIfExists td 'Typedef schema) schemas)
+  -> Definition db (Alter sch (DropSchemumIfExists td 'Typedef schema) db)
 dropTypeIfExists tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderSQL tydef <> ";"

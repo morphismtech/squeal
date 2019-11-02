@@ -11,7 +11,7 @@ a `Definition` and `MonadPQ` for executing a `Manipulation` or `Query`,
 and a `PQ` type with instances for them.
 
 Using Squeal in your application will come down to defining
-the @schemas@ of your database and including @PQ schemas schemas@ in your
+the @db@ of your database and including @PQ db db@ in your
 application's monad transformer stack, giving it an instance of `MonadPQ`.
 
 This module also provides functions for retrieving rows from the `LibPQ.Result`
@@ -141,22 +141,22 @@ Note that, for now, squeal doesn't offer any protection from connecting
 with the wrong schema!
 -}
 connectdb
-  :: forall schemas io
+  :: forall db io
    . MonadIO io
   => ByteString -- ^ conninfo
-  -> io (K LibPQ.Connection schemas)
+  -> io (K LibPQ.Connection db)
 connectdb = fmap K . liftIO . LibPQ.connectdb
 
 -- | Closes the connection to the server.
-finish :: MonadIO io => K LibPQ.Connection schemas -> io ()
+finish :: MonadIO io => K LibPQ.Connection db -> io ()
 finish = liftIO . LibPQ.finish . unK
 
 -- | Do `connectdb` and `finish` before and after a computation.
 withConnection
-  :: forall schemas0 schemas1 io x
+  :: forall db0 db1 io x
    . MonadUnliftIO io
   => ByteString
-  -> PQ schemas0 schemas1 io x
+  -> PQ db0 db1 io x
   -> io x
 withConnection connString action = do
   K x <- bracket (connectdb connString) finish (unPQ action)
@@ -164,20 +164,20 @@ withConnection connString action = do
 
 -- | Safely `lowerConnection` to a smaller schema.
 lowerConnection
-  :: K LibPQ.Connection (schema ': schemas)
-  -> K LibPQ.Connection schemas
+  :: K LibPQ.Connection (schema ': db)
+  -> K LibPQ.Connection db
 lowerConnection (K conn) = K conn
 
 -- | We keep track of the schema via an Atkey indexed state monad transformer,
 -- `PQ`.
 newtype PQ
-  (schemas0 :: SchemasType)
-  (schemas1 :: SchemasType)
+  (db0 :: SchemasType)
+  (db1 :: SchemasType)
   (m :: Type -> Type)
   (x :: Type) =
-    PQ { unPQ :: K LibPQ.Connection schemas0 -> m (K x schemas1) }
+    PQ { unPQ :: K LibPQ.Connection db0 -> m (K x db1) }
 
-instance Monad m => Functor (PQ schemas0 schemas1 m) where
+instance Monad m => Functor (PQ db0 db1 m) where
   fmap f (PQ pq) = PQ $ \ conn -> do
     K x <- pq conn
     return $ K (f x)
@@ -185,9 +185,9 @@ instance Monad m => Functor (PQ schemas0 schemas1 m) where
 -- | Run a `PQ` and keep the result and the `LibPQ.Connection`.
 runPQ
   :: Functor m
-  => PQ schemas0 schemas1 m x
-  -> K LibPQ.Connection schemas0
-  -> m (x, K LibPQ.Connection schemas1)
+  => PQ db0 db1 m x
+  -> K LibPQ.Connection db0
+  -> m (x, K LibPQ.Connection db1)
 runPQ (PQ pq) conn = (\ x -> (unK x, K (unK conn))) <$> pq conn
   -- K x <- pq conn
   -- return (x, K (unK conn))
@@ -195,16 +195,16 @@ runPQ (PQ pq) conn = (\ x -> (unK x, K (unK conn))) <$> pq conn
 -- | Execute a `PQ` and discard the result but keep the `LibPQ.Connection`.
 execPQ
   :: Functor m
-  => PQ schemas0 schemas1 m x
-  -> K LibPQ.Connection schemas0
-  -> m (K LibPQ.Connection schemas1)
+  => PQ db0 db1 m x
+  -> K LibPQ.Connection db0
+  -> m (K LibPQ.Connection db1)
 execPQ (PQ pq) conn = mapKK (\ _ -> unK conn) <$> pq conn
 
 -- | Evaluate a `PQ` and discard the `LibPQ.Connection` but keep the result.
 evalPQ
   :: Functor m
-  => PQ schemas0 schemas1 m x
-  -> K LibPQ.Connection schemas0
+  => PQ db0 db1 m x
+  -> K LibPQ.Connection db0
   -> m x
 evalPQ (PQ pq) conn = unK <$> pq conn
 
@@ -326,16 +326,16 @@ To define an instance, you can minimally define only `manipulateParams`,
 a default instance.
 
 -}
-class Monad pq => MonadPQ schemas pq | pq -> schemas where
+class Monad pq => MonadPQ db pq | pq -> db where
   manipulateParams
     :: ToParams x params
-    => Manipulation '[] schemas params ys
+    => Manipulation '[] db params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> x -> pq (K LibPQ.Result ys)
   default manipulateParams
-    :: (MonadTrans t, MonadPQ schemas pq1, pq ~ t pq1)
+    :: (MonadTrans t, MonadPQ db pq1, pq ~ t pq1)
     => ToParams x params
-    => Manipulation '[] schemas params ys
+    => Manipulation '[] db params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> x -> pq (K LibPQ.Result ys)
   manipulateParams manipulation params = lift $
@@ -343,59 +343,59 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
 
   manipulateParams_
     :: ToParams x params
-    => Manipulation '[] schemas params '[]
+    => Manipulation '[] db params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> x -> pq ()
   manipulateParams_ q x = void $ manipulateParams q x
 
-  manipulate :: Manipulation '[] schemas '[] ys -> pq (K LibPQ.Result ys)
+  manipulate :: Manipulation '[] db '[] ys -> pq (K LibPQ.Result ys)
   manipulate statement = manipulateParams statement ()
 
-  manipulate_ :: Manipulation '[] schemas '[] '[] -> pq ()
+  manipulate_ :: Manipulation '[] db '[] '[] -> pq ()
   manipulate_ = void . manipulate
 
   runQueryParams
     :: ToParams x params
-    => Query '[] '[] schemas params ys
+    => Query '[] '[] db params ys
     -- ^ `select` and friends
     -> x -> pq (K LibPQ.Result ys)
   runQueryParams = manipulateParams . queryStatement
 
   runQuery
-    :: Query '[] '[] schemas '[] ys
+    :: Query '[] '[] db '[] ys
     -- ^ `select` and friends
     -> pq (K LibPQ.Result ys)
   runQuery q = runQueryParams q ()
 
   traversePrepared
     :: (ToParams x params, Traversable list)
-    => Manipulation '[] schemas params ys
+    => Manipulation '[] db params ys
     -- ^ `insertInto`, `update`, or `deleteFrom`, and friends
     -> list x -> pq (list (K LibPQ.Result ys))
   default traversePrepared
-    :: (MonadTrans t, MonadPQ schemas pq1, pq ~ t pq1)
+    :: (MonadTrans t, MonadPQ db pq1, pq ~ t pq1)
     => (ToParams x params, Traversable list)
-    => Manipulation '[] schemas params ys -> list x -> pq (list (K LibPQ.Result ys))
+    => Manipulation '[] db params ys -> list x -> pq (list (K LibPQ.Result ys))
   traversePrepared manipulation params = lift $
     traversePrepared manipulation params
 
   forPrepared
     :: (ToParams x params, Traversable list)
     => list x
-    -> Manipulation '[] schemas params ys
+    -> Manipulation '[] db params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> pq (list (K LibPQ.Result ys))
   forPrepared = flip traversePrepared
 
   traversePrepared_
     :: (ToParams x params, Foldable list)
-    => Manipulation '[] schemas params '[]
+    => Manipulation '[] db params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> list x -> pq ()
   default traversePrepared_
-    :: (MonadTrans t, MonadPQ schemas pq1, pq ~ t pq1)
+    :: (MonadTrans t, MonadPQ db pq1, pq ~ t pq1)
     => (ToParams x params, Foldable list)
-    => Manipulation '[] schemas params '[]
+    => Manipulation '[] db params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> list x -> pq ()
   traversePrepared_ manipulation params = lift $
@@ -404,22 +404,22 @@ class Monad pq => MonadPQ schemas pq | pq -> schemas where
   forPrepared_
     :: (ToParams x params, Foldable list)
     => list x
-    -> Manipulation '[] schemas params '[]
+    -> Manipulation '[] db params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> pq ()
   forPrepared_ = flip traversePrepared_
 
   liftPQ :: (LibPQ.Connection -> IO a) -> pq a
   default liftPQ
-    :: (MonadTrans t, MonadPQ schemas pq1, pq ~ t pq1)
+    :: (MonadTrans t, MonadPQ db pq1, pq ~ t pq1)
     => (LibPQ.Connection -> IO a) -> pq a
   liftPQ = lift . liftPQ
 
-instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
-  => MonadPQ schemas (PQ schemas0 schemas1 io) where
+instance (MonadIO io, db0 ~ db, db1 ~ db)
+  => MonadPQ db (PQ db0 db1 io) where
 
   manipulateParams
-    (UnsafeManipulation q :: Manipulation '[] schemas ps ys) (params :: x) =
+    (UnsafeManipulation q :: Manipulation '[] db ps ys) (params :: x) =
       PQ $ \ (K conn) -> do
         let
           toParam' encoding =
@@ -435,7 +435,7 @@ instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
             return $ K (K result)
 
   traversePrepared
-    (UnsafeManipulation q :: Manipulation '[] schemas xs ys) (list :: list x) =
+    (UnsafeManipulation q :: Manipulation '[] db xs ys) (list :: list x) =
       PQ $ \ (K conn) -> liftIO $ do
         let temp = "temporary_statement"
         prepResultMaybe <- LibPQ.prepare conn temp q Nothing
@@ -462,7 +462,7 @@ instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
         return (K results)
 
   traversePrepared_
-    (UnsafeManipulation q :: Manipulation '[] schemas xs '[]) (list :: list x) =
+    (UnsafeManipulation q :: Manipulation '[] db xs '[]) (list :: list x) =
       PQ $ \ (K conn) -> liftIO $ do
         let temp = "temporary_statement"
         prepResultMaybe <- LibPQ.prepare conn temp q Nothing
@@ -490,41 +490,41 @@ instance (MonadIO io, schemas0 ~ schemas, schemas1 ~ schemas)
     y <- liftIO $ pq conn
     return (K y)
 
-instance MonadPQ schemas m => MonadPQ schemas (IdentityT m)
-instance MonadPQ schemas m => MonadPQ schemas (ReaderT r m)
-instance MonadPQ schemas m => MonadPQ schemas (Strict.StateT s m)
-instance MonadPQ schemas m => MonadPQ schemas (Lazy.StateT s m)
-instance (Monoid w, MonadPQ schemas m) => MonadPQ schemas (Strict.WriterT w m)
-instance (Monoid w, MonadPQ schemas m) => MonadPQ schemas (Lazy.WriterT w m)
-instance MonadPQ schemas m => MonadPQ schemas (MaybeT m)
-instance MonadPQ schemas m => MonadPQ schemas (ExceptT e m)
-instance (Monoid w, MonadPQ schemas m) => MonadPQ schemas (Strict.RWST r w s m)
-instance (Monoid w, MonadPQ schemas m) => MonadPQ schemas (Lazy.RWST r w s m)
-instance MonadPQ schemas m => MonadPQ schemas (ContT r m)
+instance MonadPQ db m => MonadPQ db (IdentityT m)
+instance MonadPQ db m => MonadPQ db (ReaderT r m)
+instance MonadPQ db m => MonadPQ db (Strict.StateT s m)
+instance MonadPQ db m => MonadPQ db (Lazy.StateT s m)
+instance (Monoid w, MonadPQ db m) => MonadPQ db (Strict.WriterT w m)
+instance (Monoid w, MonadPQ db m) => MonadPQ db (Lazy.WriterT w m)
+instance MonadPQ db m => MonadPQ db (MaybeT m)
+instance MonadPQ db m => MonadPQ db (ExceptT e m)
+instance (Monoid w, MonadPQ db m) => MonadPQ db (Strict.RWST r w s m)
+instance (Monoid w, MonadPQ db m) => MonadPQ db (Lazy.RWST r w s m)
+instance MonadPQ db m => MonadPQ db (ContT r m)
 
-instance (Monad m, schemas0 ~ schemas1)
-  => Applicative (PQ schemas0 schemas1 m) where
+instance (Monad m, db0 ~ db1)
+  => Applicative (PQ db0 db1 m) where
   pure x = PQ $ \ _conn -> pure (K x)
   (<*>) = pqAp
 
-instance (Monad m, schemas0 ~ schemas1)
-  => Monad (PQ schemas0 schemas1 m) where
+instance (Monad m, db0 ~ db1)
+  => Monad (PQ db0 db1 m) where
   return = pure
   (>>=) = flip pqBind
 
-instance (Monad m, schemas0 ~ schemas1)
-  => Fail.MonadFail (PQ schemas0 schemas1 m) where
+instance (Monad m, db0 ~ db1)
+  => Fail.MonadFail (PQ db0 db1 m) where
   fail = Fail.fail
 
-instance schemas0 ~ schemas1 => MFunctor (PQ schemas0 schemas1) where
+instance db0 ~ db1 => MFunctor (PQ db0 db1) where
   hoist f (PQ pq) = PQ (f . pq)
 
-instance schemas0 ~ schemas1 => MonadTrans (PQ schemas0 schemas1) where
+instance db0 ~ db1 => MonadTrans (PQ db0 db1) where
   lift m = PQ $ \ _conn -> do
     x <- m
     return (K x)
 
-instance schemas0 ~ schemas1 => MMonad (PQ schemas0 schemas1) where
+instance db0 ~ db1 => MMonad (PQ db0 db1) where
   embed f (PQ pq) = PQ $ \ conn -> do
     evalPQ (f (pq conn)) conn
 
@@ -532,11 +532,11 @@ instance (MonadIO m, schema0 ~ schema1)
   => MonadIO (PQ schema0 schema1 m) where
   liftIO = lift . liftIO
 
-instance (MonadUnliftIO m, schemas0 ~ schemas1)
-  => MonadUnliftIO (PQ schemas0 schemas1 m) where
+instance (MonadUnliftIO m, db0 ~ db1)
+  => MonadUnliftIO (PQ db0 db1 m) where
   withRunInIO
-      :: ((forall a . PQ schemas0 schema1 m a -> IO a) -> IO b)
-      -> PQ schemas0 schema1 m b
+      :: ((forall a . PQ db0 schema1 m a -> IO a) -> IO b)
+      -> PQ db0 schema1 m b
   withRunInIO inner = PQ $ \conn ->
     withRunInIO $ \(run :: (forall x . m x -> IO x)) ->
       K <$> inner (\pq -> run $ unK <$> unPQ pq conn)

@@ -186,10 +186,10 @@ import Squeal.PostgreSQL.Transaction
 -- | A `Migration` is a named "isomorphism" over a given category.
 -- It should contain an inverse pair of `up` and `down`
 -- instructions and a unique `name`.
-data Migration p schemas0 schemas1 = Migration
+data Migration p db0 db1 = Migration
   { name :: Text -- ^ The `name` of a `Migration`.
     -- Each `name` in a `Migration` should be unique.
-  , instruction :: p schemas0 schemas1 -- ^ The instruction of a `Migration`.
+  , instruction :: p db0 db1 -- ^ The instruction of a `Migration`.
   } deriving (GHC.Generic)
 instance CFunctor Migration where
   cmap f (Migration n i) = Migration n (f i)
@@ -202,8 +202,8 @@ SQL `Definition`s and the category of impure `Indexed` `PQ` `IO` actions.
 class Category p => Migratory p where
 
   migrate
-    :: Path (Migration p) schemas0 schemas1
-    -> PQ schemas0 schemas1 IO ()
+    :: Path (Migration p) db0 db1
+    -> PQ db0 db1 IO ()
 
   {- |
   Run a `Path` of `Migration`s.
@@ -212,8 +212,8 @@ class Category p => Migratory p where
   if not, `up` the `Migration` and insert its `name` in the `MigrationsTable`.
   -}
   migrateUp
-    :: Path (Migration (IsoQ p)) schemas0 schemas1
-    -> PQ schemas0 schemas1 IO ()
+    :: Path (Migration (IsoQ p)) db0 db1
+    -> PQ db0 db1 IO ()
 
   {- |
   Rewind a `Path` of `Migration`s.
@@ -222,8 +222,8 @@ class Category p => Migratory p where
   if so, `down` the `Migration` and delete its `name` in the `MigrationsTable`.
   -}
   migrateDown
-    :: Path (Migration (IsoQ p)) schemas0 schemas1
-    -> PQ schemas1 schemas0 IO ()
+    :: Path (Migration (IsoQ p)) db0 db1
+    -> PQ db1 db0 IO ()
 
 instance Migratory Definition where
   migrate = migrate . cmap pureMigration
@@ -233,16 +233,16 @@ instance Migratory Definition where
 -- | A `pureMigration` turns a `Migration` involving only pure SQL
 -- `Definition`s into a `Migration` that may be combined with arbitrary `IO`.
 pureMigration
-  :: Migration Definition schemas0 schemas1
-  -> Migration (Indexed PQ IO ()) schemas0 schemas1
+  :: Migration Definition db0 db1
+  -> Migration (Indexed PQ IO ()) db0 db1
 pureMigration = cmap (Indexed . define)
 
 -- | A `pureMigrationIso` turns a reversible `Migration`
 -- involving only pure SQL
 -- `Definition`s into a `Migration` that may be combined with arbitrary `IO`.
 pureMigrationIso
-  :: Migration (IsoQ Definition) schemas0 schemas1
-  -> Migration (IsoQ (Indexed PQ IO ())) schemas0 schemas1
+  :: Migration (IsoQ Definition) db0 db1
+  -> Migration (IsoQ (Indexed PQ IO ())) db0 db1
 pureMigrationIso = cmap (cmap (Indexed . define))
 
 instance Migratory (Indexed PQ IO ()) where
@@ -254,14 +254,14 @@ instance Migratory (Indexed PQ IO ()) where
     where
 
       upMigrations
-        :: Path (Migration (Indexed PQ IO ())) schemas0 schemas1
+        :: Path (Migration (Indexed PQ IO ())) db0 db1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       upMigrations = \case
         Done -> return ()
         step :>> steps -> upMigration step >> upMigrations steps
 
       upMigration
-        :: Migration (Indexed PQ IO ()) schemas0 schemas1
+        :: Migration (Indexed PQ IO ()) db0 db1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       upMigration step = do
         executed <- queryExecuted step
@@ -270,7 +270,7 @@ instance Migratory (Indexed PQ IO ()) where
           manipulateParams_ insertMigration (Only (name step))
 
       queryExecuted
-        :: Migration (Indexed PQ IO ()) schemas0 schemas1
+        :: Migration (Indexed PQ IO ()) db0 db1
         -> PQ MigrationsSchemas MigrationsSchemas IO Row
       queryExecuted step = do
         result <- runQueryParams selectMigration (Only (name step))
@@ -285,14 +285,14 @@ instance Migratory (Indexed PQ IO ()) where
     where
 
       downMigrations
-        :: Path (Migration (IsoQ (Indexed PQ IO ()))) schemas0 schemas1
+        :: Path (Migration (IsoQ (Indexed PQ IO ()))) db0 db1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       downMigrations = \case
         Done -> return ()
         step :>> steps -> downMigrations steps >> downMigration step
 
       downMigration
-        :: Migration (IsoQ (Indexed PQ IO ())) schemas0 schemas1
+        :: Migration (IsoQ (Indexed PQ IO ())) db0 db1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       downMigration step = do
         executed <- queryExecuted step
@@ -301,7 +301,7 @@ instance Migratory (Indexed PQ IO ()) where
           manipulateParams_ deleteMigration (Only (name step))
 
       queryExecuted
-        :: Migration (IsoQ (Indexed PQ IO ())) schemas0 schemas1
+        :: Migration (IsoQ (Indexed PQ IO ())) db0 db1
         -> PQ MigrationsSchemas MigrationsSchemas IO Row
       queryExecuted step = do
         result <- runQueryParams selectMigration (Only (name step))

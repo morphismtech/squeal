@@ -57,49 +57,49 @@ import Squeal.PostgreSQL.Schema
 -- >>> import Squeal.PostgreSQL
 
 -- | `ColumnTypeExpression`s are used in `createTable` commands.
-newtype ColumnTypeExpression (schemas :: SchemasType) (ty :: ColumnType)
+newtype ColumnTypeExpression (db :: SchemasType) (ty :: ColumnType)
   = UnsafeColumnTypeExpression { renderColumnTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance RenderSQL (ColumnTypeExpression schemas ty) where
+instance RenderSQL (ColumnTypeExpression db ty) where
   renderSQL = renderColumnTypeExpression
 
 -- | used in `createTable` commands as a column constraint to note that
 -- @NULL@ may be present in a column
 nullable
-  :: TypeExpression schemas (nullity ty)
-  -> ColumnTypeExpression schemas ('NoDef :=> 'Null ty)
+  :: TypeExpression db (nullity ty)
+  -> ColumnTypeExpression db ('NoDef :=> 'Null ty)
 nullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NULL"
 
 -- | used in `createTable` commands as a column constraint to ensure
 -- @NULL@ is not present in a column
 notNullable
-  :: TypeExpression schemas (nullity ty)
-  -> ColumnTypeExpression schemas ('NoDef :=> 'NotNull ty)
+  :: TypeExpression db (nullity ty)
+  -> ColumnTypeExpression db ('NoDef :=> 'NotNull ty)
 notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
 
 -- | used in `createTable` commands as a column constraint to give a default
 default_
-  :: Expression '[] '[] 'Ungrouped schemas '[] '[] ty
-  -> ColumnTypeExpression schemas ('NoDef :=> ty)
-  -> ColumnTypeExpression schemas ('Def :=> ty)
+  :: Expression '[] '[] 'Ungrouped db '[] '[] ty
+  -> ColumnTypeExpression db ('NoDef :=> ty)
+  -> ColumnTypeExpression db ('Def :=> ty)
 default_ x ty = UnsafeColumnTypeExpression $
   renderSQL ty <+> "DEFAULT" <+> renderExpression x
 
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `PGint2`
 serial2, smallserial
-  :: ColumnTypeExpression schemas ('Def :=> 'NotNull 'PGint2)
+  :: ColumnTypeExpression db ('Def :=> 'NotNull 'PGint2)
 serial2 = UnsafeColumnTypeExpression "serial2"
 smallserial = UnsafeColumnTypeExpression "smallserial"
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `PGint4`
 serial4, serial
-  :: ColumnTypeExpression schemas ('Def :=> 'NotNull 'PGint4)
+  :: ColumnTypeExpression db ('Def :=> 'NotNull 'PGint4)
 serial4 = UnsafeColumnTypeExpression "serial4"
 serial = UnsafeColumnTypeExpression "serial"
 -- | not a true type, but merely a notational convenience for creating
 -- unique identifier columns with type `PGint8`
 serial8, bigserial
-  :: ColumnTypeExpression schemas ('Def :=> 'NotNull 'PGint8)
+  :: ColumnTypeExpression db ('Def :=> 'NotNull 'PGint8)
 serial8 = UnsafeColumnTypeExpression "serial8"
 bigserial = UnsafeColumnTypeExpression "bigserial"

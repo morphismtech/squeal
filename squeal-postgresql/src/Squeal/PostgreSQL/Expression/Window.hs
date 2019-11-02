@@ -61,9 +61,9 @@ import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
 instance Aggregate
-  (Expression outer commons grp schemas params from)
-  (NP (Expression outer commons grp schemas params from))
-  (WindowFunction outer commons grp schemas params from) where
+  (Expression outer commons grp db params from)
+  (NP (Expression outer commons grp db params from))
+  (WindowFunction outer commons grp db params from) where
     countStar = UnsafeWindowFunction "count(*)"
     count = unsafeWindowFunction1 "count"
     sum_ = unsafeWindowFunction1 "sum"
@@ -99,20 +99,20 @@ instance Aggregate
 
 -- | A `WindowDefinition` is a set of table rows that are somehow related
 -- to the current row
-data WindowDefinition outer commons grp schemas params from where
+data WindowDefinition outer commons grp db params from where
   WindowDefinition
     :: SOP.SListI bys
-    => NP (Expression outer commons grp schemas params from) bys
+    => NP (Expression outer commons grp db params from) bys
        -- ^ `partitionBy` clause
-    -> [SortExpression outer commons grp schemas params from]
+    -> [SortExpression outer commons grp db params from]
        -- ^ `Squeal.PostgreSQL.Expression.Sort.orderBy` clause
-    -> WindowDefinition outer commons grp schemas params from
+    -> WindowDefinition outer commons grp db params from
 
 instance OrderBy WindowDefinition where
   orderBy sortsR (WindowDefinition parts sortsL)
     = WindowDefinition parts (sortsL ++ sortsR)
 
-instance RenderSQL (WindowDefinition outer commons schemas from grp params) where
+instance RenderSQL (WindowDefinition outer commons db from grp params) where
   renderSQL (WindowDefinition part ord) =
     renderPartitionByClause part <> renderOrderByClause ord
     where
@@ -132,8 +132,8 @@ the same partition as the current row.
 -}
 partitionBy
   :: SOP.SListI bys
-  => NP (Expression outer commons grp schemas params from) bys -- ^ partitions
-  -> WindowDefinition outer commons grp schemas params from
+  => NP (Expression outer commons grp db params from) bys -- ^ partitions
+  -> WindowDefinition outer commons grp db params from
 partitionBy bys = WindowDefinition bys []
 
 {- |
@@ -150,32 +150,32 @@ newtype WindowFunction
   (outer :: FromType)
   (commons :: FromType)
   (grp :: Grouping)
-  (schemas :: SchemasType)
+  (db :: SchemasType)
   (params :: [NullityType])
   (from :: FromType)
   (ty :: NullityType)
     = UnsafeWindowFunction { renderWindowFunction :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
-instance RenderSQL (WindowFunction outer commons grp schemas params from ty) where
+instance RenderSQL (WindowFunction outer commons grp db params from ty) where
   renderSQL = renderWindowFunction
 
 {- |
 A @RankNType@ for window functions with no arguments.
 -}
 type WinFun0 x
-  = forall outer commons grp schemas params from
-  . WindowFunction outer commons grp schemas params from x
+  = forall outer commons grp db params from
+  . WindowFunction outer commons grp db params from x
     -- ^ cannot reference aliases
 
 {- |
 A @RankNType@ for window functions with 1 argument.
 -}
 type WinFun1 x y
-  =  forall outer commons grp schemas params from
-  .  Expression outer commons grp schemas params from x
+  =  forall outer commons grp db params from
+  .  Expression outer commons grp db params from x
      -- ^ input
-  -> WindowFunction outer commons grp schemas params from y
+  -> WindowFunction outer commons grp db params from y
      -- ^ output
 
 {- | A @RankNType@ for window functions with a fixed-length
@@ -183,10 +183,10 @@ list of heterogeneous arguments.
 Use the `*:` operator to end your argument lists.
 -}
 type WinFunN xs y
-  =  forall outer commons grp schemas params from
-  .  NP (Expression outer commons grp schemas params from) xs
+  =  forall outer commons grp db params from
+  .  NP (Expression outer commons grp db params from) xs
      -- ^ inputs
-  -> WindowFunction outer commons grp schemas params from y
+  -> WindowFunction outer commons grp db params from y
      -- ^ output
 
 -- | escape hatch for defining window functions

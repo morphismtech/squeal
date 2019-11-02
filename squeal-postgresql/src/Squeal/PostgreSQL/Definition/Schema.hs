@@ -60,15 +60,15 @@ name as a prefix.
 createSchema
   :: KnownSymbol sch
   => Alias sch
-  -> Definition schemas (Create sch '[] schemas)
+  -> Definition db (Create sch '[] db)
 createSchema sch = UnsafeDefinition $
   "CREATE" <+> "SCHEMA" <+> renderSQL sch <> ";"
 
 {- | Idempotent version of `createSchema`. -}
 createSchemaIfNotExists
-  :: (KnownSymbol sch, Has sch schemas schema)
+  :: (KnownSymbol sch, Has sch db schema)
   => Alias sch
-  -> Definition schemas (CreateIfNotExists sch '[] schemas)
+  -> Definition db (CreateIfNotExists sch '[] db)
 createSchemaIfNotExists sch = UnsafeDefinition $
   "CREATE" <+> "SCHEMA" <+> "IF" <+> "NOT" <+> "EXISTS"
   <+> renderSQL sch <> ";"
@@ -85,12 +85,12 @@ dropSchema
   :: KnownSymbol sch
   => Alias sch
   -- ^ user defined schema
-  -> Definition schemas (Drop sch schemas)
+  -> Definition db (Drop sch db)
 dropSchema sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch <> ";"
 
 dropSchemaIfExists
   :: KnownSymbol sch
   => Alias sch
   -- ^ user defined schema
-  -> Definition schemas (DropIfExists sch schemas)
+  -> Definition db (DropIfExists sch db)
 dropSchemaIfExists sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch <> ";"

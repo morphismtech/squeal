@@ -104,11 +104,11 @@ import Squeal.PostgreSQL.Schema
 -- | >>> printSQL $ true & cast int4
 -- (TRUE :: int4)
 cast
-  :: TypeExpression schemas ty1
+  :: TypeExpression db ty1
   -- ^ type to cast as
-  -> Expression outer commons grp schemas params from ty0
+  -> Expression outer commons grp db params from ty0
   -- ^ value to convert
-  -> Expression outer commons grp schemas params from ty1
+  -> Expression outer commons grp db params from ty1
 cast ty x = UnsafeExpression $ parenthesized $
   renderSQL x <+> "::" <+> renderSQL ty
 
@@ -117,11 +117,11 @@ cast ty x = UnsafeExpression $ parenthesized $
 -- >>> printSQL (1 & astype int)
 -- (1 :: int)
 astype
-  :: TypeExpression schemas ty
+  :: TypeExpression db ty
   -- ^ type to specify as
-  -> Expression outer commons grp schemas params from ty
+  -> Expression outer commons grp db params from ty
   -- ^ value
-  -> Expression outer commons grp schemas params from ty
+  -> Expression outer commons grp db params from ty
 astype = cast
 
 -- | `inferredtype` will add a type annotation to an `Expression`
@@ -130,9 +130,9 @@ astype = cast
 -- >>> printSQL (inferredtype true)
 -- (TRUE :: bool)
 inferredtype
-  :: PGTyped schemas ty
-  => Expression outer common grp schemas params from ty
-  -> Expression outer common grp schemas params from ty
+  :: PGTyped db ty
+  => Expression outer common grp db params from ty
+  -> Expression outer common grp db params from ty
 inferredtype = astype pgtype
 
 {-----------------------------------------
@@ -141,129 +141,129 @@ type expressions
 
 -- | `TypeExpression`s are used in `cast`s and
 -- `Squeal.PostgreSQL.Definition.createTable` commands.
-newtype TypeExpression (schemas :: SchemasType) (ty :: NullityType)
+newtype TypeExpression (db :: SchemasType) (ty :: NullityType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance RenderSQL (TypeExpression schemas ty) where
+instance RenderSQL (TypeExpression db ty) where
   renderSQL = renderTypeExpression
 
 -- | The enum or composite type in a `Typedef` can be expressed by its alias.
 typedef
-  :: (Has sch schemas schema, Has td schema ('Typedef ty))
+  :: (Has sch db schema, Has td schema ('Typedef ty))
   => QualifiedAlias sch td
-  -> TypeExpression schemas (null ty)
+  -> TypeExpression db (null ty)
 typedef = UnsafeTypeExpression . renderSQL
 
 -- | The composite type corresponding to a `Table` definition can be expressed
 -- by its alias.
 typetable
-  :: (Has sch schemas schema, Has tab schema ('Table table))
+  :: (Has sch db schema, Has tab schema ('Table table))
   => QualifiedAlias sch tab
-  -> TypeExpression schemas (null ('PGcomposite (TableToRow table)))
+  -> TypeExpression db (null ('PGcomposite (TableToRow table)))
 typetable = UnsafeTypeExpression . renderSQL
 
 -- | The composite type corresponding to a `View` definition can be expressed
 -- by its alias.
 typeview
-  :: (Has sch schemas schema, Has vw schema ('View view))
+  :: (Has sch db schema, Has vw schema ('View view))
   => QualifiedAlias sch vw
-  -> TypeExpression schemas (null ('PGcomposite view))
+  -> TypeExpression db (null ('PGcomposite view))
 typeview = UnsafeTypeExpression . renderSQL
 
 -- | logical Boolean (true/false)
-bool :: TypeExpression schemas (null 'PGbool)
+bool :: TypeExpression db (null 'PGbool)
 bool = UnsafeTypeExpression "bool"
 -- | signed two-byte integer
-int2, smallint :: TypeExpression schemas (null 'PGint2)
+int2, smallint :: TypeExpression db (null 'PGint2)
 int2 = UnsafeTypeExpression "int2"
 smallint = UnsafeTypeExpression "smallint"
 -- | signed four-byte integer
-int4, int, integer :: TypeExpression schemas (null 'PGint4)
+int4, int, integer :: TypeExpression db (null 'PGint4)
 int4 = UnsafeTypeExpression "int4"
 int = UnsafeTypeExpression "int"
 integer = UnsafeTypeExpression "integer"
 -- | signed eight-byte integer
-int8, bigint :: TypeExpression schemas (null 'PGint8)
+int8, bigint :: TypeExpression db (null 'PGint8)
 int8 = UnsafeTypeExpression "int8"
 bigint = UnsafeTypeExpression "bigint"
 -- | arbitrary precision numeric type
-numeric :: TypeExpression schemas (null 'PGnumeric)
+numeric :: TypeExpression db (null 'PGnumeric)
 numeric = UnsafeTypeExpression "numeric"
 -- | single precision floating-point number (4 bytes)
-float4, real :: TypeExpression schemas (null 'PGfloat4)
+float4, real :: TypeExpression db (null 'PGfloat4)
 float4 = UnsafeTypeExpression "float4"
 real = UnsafeTypeExpression "real"
 -- | double precision floating-point number (8 bytes)
-float8, doublePrecision :: TypeExpression schemas (null 'PGfloat8)
+float8, doublePrecision :: TypeExpression db (null 'PGfloat8)
 float8 = UnsafeTypeExpression "float8"
 doublePrecision = UnsafeTypeExpression "double precision"
 -- | currency amount
 money :: TypeExpression schema (null 'PGmoney)
 money = UnsafeTypeExpression "money"
 -- | variable-length character string
-text :: TypeExpression schemas (null 'PGtext)
+text :: TypeExpression db (null 'PGtext)
 text = UnsafeTypeExpression "text"
 -- | fixed-length character string
 char, character
-  :: forall n schemas null. (KnownNat n, 1 <= n)
-  => TypeExpression schemas (null ('PGchar n))
+  :: forall n db null. (KnownNat n, 1 <= n)
+  => TypeExpression db (null ('PGchar n))
 char = UnsafeTypeExpression $ "char(" <> renderNat @n <> ")"
 character = UnsafeTypeExpression $  "character(" <> renderNat @n <> ")"
 -- | variable-length character string
 varchar, characterVarying
-  :: forall n schemas null. (KnownNat n, 1 <= n)
-  => TypeExpression schemas (null ('PGvarchar n))
+  :: forall n db null. (KnownNat n, 1 <= n)
+  => TypeExpression db (null ('PGvarchar n))
 varchar = UnsafeTypeExpression $ "varchar(" <> renderNat @n <> ")"
 characterVarying = UnsafeTypeExpression $
   "character varying(" <> renderNat @n <> ")"
 -- | binary data ("byte array")
-bytea :: TypeExpression schemas (null 'PGbytea)
+bytea :: TypeExpression db (null 'PGbytea)
 bytea = UnsafeTypeExpression "bytea"
 -- | date and time (no time zone)
-timestamp :: TypeExpression schemas (null 'PGtimestamp)
+timestamp :: TypeExpression db (null 'PGtimestamp)
 timestamp = UnsafeTypeExpression "timestamp"
 -- | date and time, including time zone
-timestampWithTimeZone, timestamptz :: TypeExpression schemas (null 'PGtimestamptz)
+timestampWithTimeZone, timestamptz :: TypeExpression db (null 'PGtimestamptz)
 timestampWithTimeZone = UnsafeTypeExpression "timestamp with time zone"
 timestamptz = UnsafeTypeExpression "timestamptz"
 -- | calendar date (year, month, day)
-date :: TypeExpression schemas (null 'PGdate)
+date :: TypeExpression db (null 'PGdate)
 date = UnsafeTypeExpression "date"
 -- | time of day (no time zone)
-time :: TypeExpression schemas (null 'PGtime)
+time :: TypeExpression db (null 'PGtime)
 time = UnsafeTypeExpression "time"
 -- | time of day, including time zone
-timeWithTimeZone, timetz :: TypeExpression schemas (null 'PGtimetz)
+timeWithTimeZone, timetz :: TypeExpression db (null 'PGtimetz)
 timeWithTimeZone = UnsafeTypeExpression "time with time zone"
 timetz = UnsafeTypeExpression "timetz"
 -- | time span
-interval :: TypeExpression schemas (null 'PGinterval)
+interval :: TypeExpression db (null 'PGinterval)
 interval = UnsafeTypeExpression "interval"
 -- | universally unique identifier
-uuid :: TypeExpression schemas (null 'PGuuid)
+uuid :: TypeExpression db (null 'PGuuid)
 uuid = UnsafeTypeExpression "uuid"
 -- | IPv4 or IPv6 host address
-inet :: TypeExpression schemas (null 'PGinet)
+inet :: TypeExpression db (null 'PGinet)
 inet = UnsafeTypeExpression "inet"
 -- | textual JSON data
-json :: TypeExpression schemas (null 'PGjson)
+json :: TypeExpression db (null 'PGjson)
 json = UnsafeTypeExpression "json"
 -- | binary JSON data, decomposed
-jsonb :: TypeExpression schemas (null 'PGjsonb)
+jsonb :: TypeExpression db (null 'PGjsonb)
 jsonb = UnsafeTypeExpression "jsonb"
 -- | variable length array
 vararray
-  :: TypeExpression schemas pg
-  -> TypeExpression schemas (null ('PGvararray pg))
+  :: TypeExpression db pg
+  -> TypeExpression db (null ('PGvararray pg))
 vararray ty = UnsafeTypeExpression $ renderSQL ty <> "[]"
 -- | fixed length array
 --
 -- >>> renderSQL (fixarray @'[2] json)
 -- "json[2]"
 fixarray
-  :: forall dims schemas null pg. SOP.All KnownNat dims
-  => TypeExpression schemas pg
-  -> TypeExpression schemas (null ('PGfixarray dims pg))
+  :: forall dims db null pg. SOP.All KnownNat dims
+  => TypeExpression db pg
+  -> TypeExpression db (null ('PGfixarray dims pg))
 fixarray ty = UnsafeTypeExpression $
   renderSQL ty <> renderDims @dims
   where
@@ -277,73 +277,73 @@ fixarray ty = UnsafeTypeExpression $
         (K . fromString . show . natVal)
         (SOP.hpure SOP.Proxy :: SOP.NP SOP.Proxy ns)
 -- | text search query
-tsvector :: TypeExpression schemas (null 'PGtsvector)
+tsvector :: TypeExpression db (null 'PGtsvector)
 tsvector = UnsafeTypeExpression "tsvector"
 -- | text search document
-tsquery :: TypeExpression schemas (null 'PGtsquery)
+tsquery :: TypeExpression db (null 'PGtsquery)
 tsquery = UnsafeTypeExpression "tsquery"
 -- | Object identifiers (OIDs) are used internally by PostgreSQL
 -- as primary keys for various system tables.
-oid :: TypeExpression schemas (null 'PGoid)
+oid :: TypeExpression db (null 'PGoid)
 oid = UnsafeTypeExpression "oid"
 -- | Range of integer
-int4range :: TypeExpression schemas (null ('PGrange 'PGint4))
+int4range :: TypeExpression db (null ('PGrange 'PGint4))
 int4range = UnsafeTypeExpression "int4range"
 -- | Range of bigint
-int8range :: TypeExpression schemas (null ('PGrange 'PGint8))
+int8range :: TypeExpression db (null ('PGrange 'PGint8))
 int8range = UnsafeTypeExpression "int8range"
 -- | Range of numeric
-numrange :: TypeExpression schemas (null ('PGrange 'PGnumeric))
+numrange :: TypeExpression db (null ('PGrange 'PGnumeric))
 numrange = UnsafeTypeExpression "numrange"
 -- | Range of timestamp without time zone
-tsrange  :: TypeExpression schemas (null ('PGrange 'PGtimestamp))
+tsrange  :: TypeExpression db (null ('PGrange 'PGtimestamp))
 tsrange = UnsafeTypeExpression "tsrange"
 -- | Range of timestamp with time zone
-tstzrange :: TypeExpression schemas (null ('PGrange 'PGtimestamptz))
+tstzrange :: TypeExpression db (null ('PGrange 'PGtimestamptz))
 tstzrange = UnsafeTypeExpression "tstzrange"
 -- | Range of date
-daterange :: TypeExpression schemas (null ('PGrange 'PGdate))
+daterange :: TypeExpression db (null ('PGrange 'PGdate))
 daterange = UnsafeTypeExpression "daterange"
 
 -- | `pgtype` is a demoted version of a `PGType`
-class PGTyped schemas (ty :: NullityType) where
-  pgtype :: TypeExpression schemas ty
-instance PGTyped schemas (null 'PGbool) where pgtype = bool
-instance PGTyped schemas (null 'PGint2) where pgtype = int2
-instance PGTyped schemas (null 'PGint4) where pgtype = int4
-instance PGTyped schemas (null 'PGint8) where pgtype = int8
-instance PGTyped schemas (null 'PGnumeric) where pgtype = numeric
-instance PGTyped schemas (null 'PGfloat4) where pgtype = float4
-instance PGTyped schemas (null 'PGfloat8) where pgtype = float8
-instance PGTyped schemas (null 'PGmoney) where pgtype = money
-instance PGTyped schemas (null 'PGtext) where pgtype = text
+class PGTyped db (ty :: NullityType) where
+  pgtype :: TypeExpression db ty
+instance PGTyped db (null 'PGbool) where pgtype = bool
+instance PGTyped db (null 'PGint2) where pgtype = int2
+instance PGTyped db (null 'PGint4) where pgtype = int4
+instance PGTyped db (null 'PGint8) where pgtype = int8
+instance PGTyped db (null 'PGnumeric) where pgtype = numeric
+instance PGTyped db (null 'PGfloat4) where pgtype = float4
+instance PGTyped db (null 'PGfloat8) where pgtype = float8
+instance PGTyped db (null 'PGmoney) where pgtype = money
+instance PGTyped db (null 'PGtext) where pgtype = text
 instance (KnownNat n, 1 <= n)
-  => PGTyped schemas (null ('PGchar n)) where pgtype = char @n
+  => PGTyped db (null ('PGchar n)) where pgtype = char @n
 instance (KnownNat n, 1 <= n)
-  => PGTyped schemas (null ('PGvarchar n)) where pgtype = varchar @n
-instance PGTyped schemas (null 'PGbytea) where pgtype = bytea
-instance PGTyped schemas (null 'PGtimestamp) where pgtype = timestamp
-instance PGTyped schemas (null 'PGtimestamptz) where pgtype = timestampWithTimeZone
-instance PGTyped schemas (null 'PGdate) where pgtype = date
-instance PGTyped schemas (null 'PGtime) where pgtype = time
-instance PGTyped schemas (null 'PGtimetz) where pgtype = timeWithTimeZone
-instance PGTyped schemas (null 'PGinterval) where pgtype = interval
-instance PGTyped schemas (null 'PGuuid) where pgtype = uuid
-instance PGTyped schemas (null 'PGjson) where pgtype = json
-instance PGTyped schemas (null 'PGjsonb) where pgtype = jsonb
-instance PGTyped schemas ty
-  => PGTyped schemas (null ('PGvararray ty)) where
-    pgtype = vararray (pgtype @schemas @ty)
-instance (SOP.All KnownNat dims, PGTyped schemas ty)
-  => PGTyped schemas (null ('PGfixarray dims ty)) where
-    pgtype = fixarray @dims (pgtype @schemas @ty)
-instance PGTyped schemas (null 'PGtsvector) where pgtype = tsvector
-instance PGTyped schemas (null 'PGtsquery) where pgtype = tsquery
-instance PGTyped schemas (null 'PGoid) where pgtype = oid
+  => PGTyped db (null ('PGvarchar n)) where pgtype = varchar @n
+instance PGTyped db (null 'PGbytea) where pgtype = bytea
+instance PGTyped db (null 'PGtimestamp) where pgtype = timestamp
+instance PGTyped db (null 'PGtimestamptz) where pgtype = timestampWithTimeZone
+instance PGTyped db (null 'PGdate) where pgtype = date
+instance PGTyped db (null 'PGtime) where pgtype = time
+instance PGTyped db (null 'PGtimetz) where pgtype = timeWithTimeZone
+instance PGTyped db (null 'PGinterval) where pgtype = interval
+instance PGTyped db (null 'PGuuid) where pgtype = uuid
+instance PGTyped db (null 'PGjson) where pgtype = json
+instance PGTyped db (null 'PGjsonb) where pgtype = jsonb
+instance PGTyped db ty
+  => PGTyped db (null ('PGvararray ty)) where
+    pgtype = vararray (pgtype @db @ty)
+instance (SOP.All KnownNat dims, PGTyped db ty)
+  => PGTyped db (null ('PGfixarray dims ty)) where
+    pgtype = fixarray @dims (pgtype @db @ty)
+instance PGTyped db (null 'PGtsvector) where pgtype = tsvector
+instance PGTyped db (null 'PGtsquery) where pgtype = tsquery
+instance PGTyped db (null 'PGoid) where pgtype = oid
 
 -- | Lift `PGTyped` to a field
-class FieldTyped schemas ty where
-  fieldtype :: Aliased (TypeExpression schemas) ty
-instance (KnownSymbol alias, PGTyped schemas ty)
-  => FieldTyped schemas (alias ::: ty) where
+class FieldTyped db ty where
+  fieldtype :: Aliased (TypeExpression db) ty
+instance (KnownSymbol alias, PGTyped db ty)
+  => FieldTyped db (alias ::: ty) where
     fieldtype = pgtype `As` Alias
