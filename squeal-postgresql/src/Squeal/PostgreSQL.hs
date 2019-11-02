@@ -199,7 +199,6 @@ import Squeal.PostgreSQL.Definition.Function as X
 import Squeal.PostgreSQL.Definition.Index as X
 import Squeal.PostgreSQL.Definition.Schema as X
 import Squeal.PostgreSQL.Definition.Table as X
-import Squeal.PostgreSQL.Definition.Table.Column as X
 import Squeal.PostgreSQL.Definition.Table.Constraint as X
 import Squeal.PostgreSQL.Definition.Type as X
 import Squeal.PostgreSQL.Definition.View as X

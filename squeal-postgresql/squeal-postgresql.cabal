@@ -28,7 +28,6 @@ library
     Squeal.PostgreSQL.Definition.Function
     Squeal.PostgreSQL.Definition.Index
     Squeal.PostgreSQL.Definition.Table
-    Squeal.PostgreSQL.Definition.Table.Column
     Squeal.PostgreSQL.Definition.Table.Constraint
     Squeal.PostgreSQL.Definition.Type
     Squeal.PostgreSQL.Definition.Schema
