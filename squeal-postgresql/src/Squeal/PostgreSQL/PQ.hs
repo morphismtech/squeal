@@ -26,6 +26,8 @@ of executing Squeal commands.
   , FlexibleInstances
   , InstanceSigs
   , OverloadedStrings
+  , PolyKinds
+  , QuantifiedConstraints
   , RankNTypes
   , ScopedTypeVariables
   , TypeApplications
@@ -47,7 +49,9 @@ module Squeal.PostgreSQL.PQ
   , runPQ
   , execPQ
   , evalPQ
+  , IndexedMonadTrans (..)
   , IndexedMonadTransPQ (..)
+  , Indexed (..)
   , MonadPQ (..)
     -- * Results
   , LibPQ.Result
@@ -71,6 +75,7 @@ module Squeal.PostgreSQL.PQ
   , trySqueal
   ) where
 
+import Control.Category
 import Control.Exception (Exception, throw)
 import Control.Monad.Except
 import Control.Monad.Morph
@@ -83,6 +88,7 @@ import Data.Text (pack, Text)
 import Data.Traversable
 import Generics.SOP
 import PostgreSQL.Binary.Encoding (encodingBytes)
+import Prelude hiding (id, (.))
 
 import qualified Control.Monad.Fail as Fail
 import qualified Database.PostgreSQL.LibPQ as LibPQ
@@ -205,59 +211,64 @@ evalPQ (PQ pq) conn = unK <$> pq conn
 -- | An [Atkey indexed monad](https://bentnib.org/paramnotions-jfp.pdf) is a `Functor`
 -- [enriched category](https://ncatlab.org/nlab/show/enriched+category).
 -- An indexed monad transformer transforms a `Monad` into an indexed monad.
--- And, `IndexedMonadTransPQ` is a class for indexed monad transformers that
--- support running `Definition`s using `define`.
-class IndexedMonadTransPQ pq where
+class
+  ( forall i j m. Monad m => Functor (t i j m)
+  , forall i j m. (i ~ j, Monad m) => Monad (t i j m)
+  , forall i j. i ~ j => MonadTrans (t i j)
+  ) => IndexedMonadTrans t where
 
   -- | indexed analog of `<*>`
   pqAp
     :: Monad m
-    => pq schemas0 schemas1 m (x -> y)
-    -> pq schemas1 schemas2 m x
-    -> pq schemas0 schemas2 m y
+    => t i j m (x -> y)
+    -> t j k m x
+    -> t i k m y
 
   -- | indexed analog of `join`
   pqJoin
     :: Monad m
-    => pq schemas0 schemas1 m (pq schemas1 schemas2 m y)
-    -> pq schemas0 schemas2 m y
-  pqJoin pq = pq & pqBind id
+    => t i j m (t j k m y)
+    -> t i k m y
+  pqJoin t = t & pqBind id
 
   -- | indexed analog of `=<<`
   pqBind
     :: Monad m
-    => (x -> pq schemas1 schemas2 m y)
-    -> pq schemas0 schemas1 m x
-    -> pq schemas0 schemas2 m y
+    => (x -> t j k m y)
+    -> t i j m x
+    -> t i k m y
 
   -- | indexed analog of flipped `>>`
   pqThen
     :: Monad m
-    => pq schemas1 schemas2 m y
-    -> pq schemas0 schemas1 m x
-    -> pq schemas0 schemas2 m y
+    => t j k m y
+    -> t i j m x
+    -> t i k m y
   pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
 
   -- | indexed analog of `<=<`
   pqAndThen
     :: Monad m
-    => (y -> pq schemas1 schemas2 m z)
-    -> (x -> pq schemas0 schemas1 m y)
-    -> x -> pq schemas0 schemas2 m z
+    => (y -> t j k m z)
+    -> (x -> t i j m y)
+    -> x -> t i k m z
   pqAndThen g f x = pqBind g (f x)
 
-  -- | Run a `Definition` with `LibPQ.exec`.
-  --
-  -- It should be functorial in effect.
-  --
-  -- @define id = return ()@
-  -- @define (statement1 >>> statement2) = define statement1 & pqThen (define statement2)@
-  define
-    :: MonadIO io
-    => Definition schemas0 schemas1
-    -> pq schemas0 schemas1 io ()
+newtype Indexed t m r i j = Indexed {runIndexed :: t i j m r}
+instance
+  ( IndexedMonadTrans t
+  , Monad m
+  , Monoid r
+  ) => Category (Indexed t m r) where
+    id = Indexed (pure mempty)
+    Indexed g . Indexed f = Indexed $ pqAp (fmap (<>) f) g
 
-instance IndexedMonadTransPQ PQ where
+-- | `IndexedMonadTransPQ` is a class for indexed monad transformers that
+-- support running `Definition`s using `define`.
+class IndexedMonadTrans pq => IndexedMonadTransPQ pq where
+  define :: MonadIO io => Definition db0 db1 -> pq db0 db1 io ()
+
+instance IndexedMonadTrans PQ where
 
   pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
     K f' <- f conn
@@ -267,6 +278,8 @@ instance IndexedMonadTransPQ PQ where
   pqBind f (PQ x) = PQ $ \ conn -> do
     K x' <- x conn
     unPQ (f x') (K (unK conn))
+
+instance IndexedMonadTransPQ PQ where
 
   define (UnsafeDefinition q) = PQ $ \ (K conn) -> do
     resultMaybe <- liftIO $ LibPQ.exec conn q

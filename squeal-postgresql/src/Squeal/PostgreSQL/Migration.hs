@@ -116,7 +116,7 @@ Migrations left to run:
 
 In addition to enabling `Migration`s using pure SQL `Definition`s for
 the `up` and `down` instructions, you can also perform impure `IO` actions
-by using a `Migration`s over the `Terminally` `PQ` `IO` category.
+by using a `Migration`s over the `Indexed` `PQ` `IO` category.
 -}
 
 {-# LANGUAGE
@@ -139,9 +139,7 @@ module Squeal.PostgreSQL.Migration
   ( -- * Migration
     Migration (..)
   , Migratory (..)
-  , Terminally (..)
   , IsoQ (..)
-  , terminally
   , pureMigration
   , pureMigrationIso
   , MigrationsTable
@@ -199,7 +197,7 @@ instance CFunctor Migration where
 {- |
 A `Migratory` @p@ is a `Category` for which one can execute or rewind
 a `Path` of `Migration`s over @p@. This includes the category of pure
-SQL `Definition`s and the category of impure `Terminally` `PQ` `IO` actions.
+SQL `Definition`s and the category of impure `Indexed` `PQ` `IO` actions.
 -}
 class Category p => Migratory p where
 
@@ -232,49 +230,22 @@ instance Migratory Definition where
   migrateUp = migrateUp . cmap pureMigrationIso
   migrateDown = migrateDown . cmap pureMigrationIso
 
-{- | `Terminally` turns an indexed monad transformer and the monad it transforms
-into a category by restricting the return type to @()@ and permuting the type variables.
-This is similar to how applying a monad to @()@ yields a monoid.
-Since a `Terminally` action has a trivial return value, the only reason
-to run one is for the side effects, in particular database and other IO effects.
--}
-newtype Terminally trans monad x0 x1 = Terminally
-  { runTerminally :: trans x0 x1 monad () }
-  deriving GHC.Generic
-
-instance
-  ( IndexedMonadTransPQ trans
-  , Monad monad
-  , forall x0 x1. x0 ~ x1 => Monad (trans x0 x1 monad) )
-  => Category (Terminally trans monad) where
-    id = Terminally (return ())
-    Terminally g . Terminally f = Terminally $ pqThen g f
-
--- | `terminally` ignores the output of a computation, returning @()@ and
--- wrapping it up into a `Terminally`. You can lift an action in the base monad
--- by using @terminally . lift@.
-terminally
-  :: Functor (trans x0 x1 monad)
-  => trans x0 x1 monad ignore
-  -> Terminally trans monad x0 x1
-terminally = Terminally . void
-
 -- | A `pureMigration` turns a `Migration` involving only pure SQL
 -- `Definition`s into a `Migration` that may be combined with arbitrary `IO`.
 pureMigration
   :: Migration Definition schemas0 schemas1
-  -> Migration (Terminally PQ IO) schemas0 schemas1
-pureMigration = cmap (terminally . define)
+  -> Migration (Indexed PQ IO ()) schemas0 schemas1
+pureMigration = cmap (Indexed . define)
 
 -- | A `pureMigrationIso` turns a reversible `Migration`
 -- involving only pure SQL
 -- `Definition`s into a `Migration` that may be combined with arbitrary `IO`.
 pureMigrationIso
   :: Migration (IsoQ Definition) schemas0 schemas1
-  -> Migration (IsoQ (Terminally PQ IO)) schemas0 schemas1
-pureMigrationIso = cmap (cmap (terminally . define))
+  -> Migration (IsoQ (Indexed PQ IO ())) schemas0 schemas1
+pureMigrationIso = cmap (cmap (Indexed . define))
 
-instance Migratory (Terminally PQ IO) where
+instance Migratory (Indexed PQ IO ()) where
 
   migrate migration = unsafePQ . transactionally_ $ do
     define createMigrations
@@ -283,23 +254,23 @@ instance Migratory (Terminally PQ IO) where
     where
 
       upMigrations
-        :: Path (Migration (Terminally PQ IO)) schemas0 schemas1
+        :: Path (Migration (Indexed PQ IO ())) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       upMigrations = \case
         Done -> return ()
         step :>> steps -> upMigration step >> upMigrations steps
 
       upMigration
-        :: Migration (Terminally PQ IO) schemas0 schemas1
+        :: Migration (Indexed PQ IO ()) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       upMigration step = do
         executed <- queryExecuted step
         unless (executed == 1) $ do
-          unsafePQ . runTerminally $ instruction step
+          unsafePQ . runIndexed $ instruction step
           manipulateParams_ insertMigration (Only (name step))
 
       queryExecuted
-        :: Migration (Terminally PQ IO) schemas0 schemas1
+        :: Migration (Indexed PQ IO ()) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO Row
       queryExecuted step = do
         result <- runQueryParams selectMigration (Only (name step))
@@ -314,23 +285,23 @@ instance Migratory (Terminally PQ IO) where
     where
 
       downMigrations
-        :: Path (Migration (IsoQ (Terminally PQ IO))) schemas0 schemas1
+        :: Path (Migration (IsoQ (Indexed PQ IO ()))) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       downMigrations = \case
         Done -> return ()
         step :>> steps -> downMigrations steps >> downMigration step
 
       downMigration
-        :: Migration (IsoQ (Terminally PQ IO)) schemas0 schemas1
+        :: Migration (IsoQ (Indexed PQ IO ())) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       downMigration step = do
         executed <- queryExecuted step
         unless (executed == 0) $ do
-          unsafePQ . runTerminally . down $ instruction step
+          unsafePQ . runIndexed . down $ instruction step
           manipulateParams_ deleteMigration (Only (name step))
 
       queryExecuted
-        :: Migration (IsoQ (Terminally PQ IO)) schemas0 schemas1
+        :: Migration (IsoQ (Indexed PQ IO ())) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO Row
       queryExecuted step = do
         result <- runQueryParams selectMigration (Only (name step))
