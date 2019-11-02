@@ -541,6 +541,12 @@ instance (MonadUnliftIO m, db0 ~ db1)
     withRunInIO $ \(run :: (forall x . m x -> IO x)) ->
       K <$> inner (\pq -> run $ unK <$> unPQ pq conn)
 
+instance (Monad m, Semigroup r, db0 ~ db1) => Semigroup (PQ db0 db1 m r) where
+  f <> g = pqAp (fmap (<>) f) g
+
+instance (Monad m, Monoid r, db0 ~ db1) => Monoid (PQ db0 db1 m r) where
+  mempty = pure mempty
+
 -- | Get a row corresponding to a given row number from a `LibPQ.Result`,
 -- throwing an exception if the row number is out of bounds.
 getRow

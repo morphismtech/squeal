@@ -76,9 +76,9 @@ withConnection "host=localhost port=5432 dbname=exampledb" $
   manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
     -- suppress notices
   & pqThen (liftIO (putStrLn "Migrate"))
-  & pqThen (migrateUp migrations)
+  & pqThen (runIndexed (up (migrate migrations)))
   & pqThen (liftIO (putStrLn "Rollback"))
-  & pqThen (migrateDown migrations)
+  & pqThen (runIndexed (down (migrate migrations)))
 :}
 Migrate
 Rollback
@@ -115,7 +115,7 @@ Migrations left to run:
   - make emails table
 
 In addition to enabling `Migration`s using pure SQL `Definition`s for
-the `up` and `down` instructions, you can also perform impure `IO` actions
+the `up` and `down` migrations, you can also perform impure `IO` actions
 by using a `Migration`s over the `Indexed` `PQ` `IO` category.
 -}
 
@@ -124,8 +124,10 @@ by using a `Migration`s over the `Indexed` `PQ` `IO` category.
   , DeriveGeneric
   , FlexibleContexts
   , FlexibleInstances
+  , FunctionalDependencies
   , GADTs
   , LambdaCase
+  , MultiParamTypeClasses
   , OverloadedLabels
   , OverloadedStrings
   , PolyKinds
@@ -140,8 +142,6 @@ module Squeal.PostgreSQL.Migration
     Migration (..)
   , Migratory (..)
   , IsoQ (..)
-  , pureMigration
-  , pureMigrationIso
   , MigrationsTable
   , mainMigrate
   , mainMigrateIso
@@ -184,128 +184,61 @@ import Squeal.PostgreSQL.Schema
 import Squeal.PostgreSQL.Transaction
 
 -- | A `Migration` is a named "isomorphism" over a given category.
--- It should contain an inverse pair of `up` and `down`
--- instructions and a unique `name`.
+-- It should contain a migration and a unique `name`.
 data Migration p db0 db1 = Migration
   { name :: Text -- ^ The `name` of a `Migration`.
     -- Each `name` in a `Migration` should be unique.
-  , instruction :: p db0 db1 -- ^ The instruction of a `Migration`.
+  , migration :: p db0 db1 -- ^ The migration of a `Migration`.
   } deriving (GHC.Generic)
 instance CFunctor Migration where
   cmap f (Migration n i) = Migration n (f i)
 
 {- |
-A `Migratory` @p@ is a `Category` for which one can execute or rewind
-a `Path` of `Migration`s over @p@. This includes the category of pure
-SQL `Definition`s and the category of impure `Indexed` `PQ` `IO` actions.
+A `Migratory` @p@ is a `Category` for which one can execute or
+possibly rewind a `Path` of `Migration`s over @p@.
+This includes the categories of pure SQL `Definition`s,
+impure `Indexed` `PQ` `IO` @()@ actions,
+and reversible `IsoQ` `Definition`s.
 -}
-class Category p => Migratory p where
-
-  migrate
-    :: Path (Migration p) db0 db1
-    -> PQ db0 db1 IO ()
-
-  {- |
-  Run a `Path` of `Migration`s.
-  Create the `MigrationsTable` as @public.schema_migrations@ if it does not already exist.
-  In one transaction, for each each `Migration` query to see if the `Migration` has been executed;
-  if not, `up` the `Migration` and insert its `name` in the `MigrationsTable`.
-  -}
-  migrateUp
-    :: Path (Migration (IsoQ p)) db0 db1
-    -> PQ db0 db1 IO ()
-
-  {- |
-  Rewind a `Path` of `Migration`s.
-  Create the `MigrationsTable` as @public.schema_migrations@ if it does not already exist.
-  In one transaction, for each each `Migration` query to see if the `Migration` has been executed;
-  if so, `down` the `Migration` and delete its `name` in the `MigrationsTable`.
-  -}
-  migrateDown
-    :: Path (Migration (IsoQ p)) db0 db1
-    -> PQ db1 db0 IO ()
-
-instance Migratory Definition where
-  migrate = migrate . cmap pureMigration
-  migrateUp = migrateUp . cmap pureMigrationIso
-  migrateDown = migrateDown . cmap pureMigrationIso
-
--- | A `pureMigration` turns a `Migration` involving only pure SQL
--- `Definition`s into a `Migration` that may be combined with arbitrary `IO`.
-pureMigration
-  :: Migration Definition db0 db1
-  -> Migration (Indexed PQ IO ()) db0 db1
-pureMigration = cmap (Indexed . define)
-
--- | A `pureMigrationIso` turns a reversible `Migration`
--- involving only pure SQL
--- `Definition`s into a `Migration` that may be combined with arbitrary `IO`.
-pureMigrationIso
-  :: Migration (IsoQ Definition) db0 db1
-  -> Migration (IsoQ (Indexed PQ IO ())) db0 db1
-pureMigrationIso = cmap (cmap (Indexed . define))
-
-instance Migratory (Indexed PQ IO ()) where
-
-  migrate migration = unsafePQ . transactionally_ $ do
+class (Category def, Category run) => Migratory def run | def -> run where
+  {- | Run a `Path` of `Migration`s.-}
+  migrate :: Path (Migration def) db0 db1 -> run db0 db1
+instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
+  migrate path = Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
-    upMigrations migration
-
+    ctoMonoid upMigration path
     where
-
-      upMigrations
-        :: Path (Migration (Indexed PQ IO ())) db0 db1
-        -> PQ MigrationsSchemas MigrationsSchemas IO ()
-      upMigrations = \case
-        Done -> return ()
-        step :>> steps -> upMigration step >> upMigrations steps
-
-      upMigration
-        :: Migration (Indexed PQ IO ()) db0 db1
-        -> PQ MigrationsSchemas MigrationsSchemas IO ()
       upMigration step = do
-        executed <- queryExecuted step
+        executed <- do
+          result <- runQueryParams selectMigration (Only (name step))
+          ntuples result
         unless (executed == 1) $ do
-          unsafePQ . runIndexed $ instruction step
+          _ <- unsafePQ . runIndexed $ migration step
           manipulateParams_ insertMigration (Only (name step))
-
-      queryExecuted
-        :: Migration (Indexed PQ IO ()) db0 db1
-        -> PQ MigrationsSchemas MigrationsSchemas IO Row
-      queryExecuted step = do
-        result <- runQueryParams selectMigration (Only (name step))
-        ntuples result
-
-  migrateUp = migrate . cmap (cmap up)
-
-  migrateDown migrations = unsafePQ . transactionally_ $ do
+instance Migratory Definition (Indexed PQ IO ()) where
+  migrate = migrate . cmap (cmap (Indexed @PQ @IO . define))
+instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
+  migrate path = OpQ . Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
-    downMigrations migrations
-
+    ctoMonoid downMigration path
     where
-
-      downMigrations
-        :: Path (Migration (IsoQ (Indexed PQ IO ()))) db0 db1
-        -> PQ MigrationsSchemas MigrationsSchemas IO ()
-      downMigrations = \case
-        Done -> return ()
-        step :>> steps -> downMigrations steps >> downMigration step
-
-      downMigration
-        :: Migration (IsoQ (Indexed PQ IO ())) db0 db1
-        -> PQ MigrationsSchemas MigrationsSchemas IO ()
       downMigration step = do
-        executed <- queryExecuted step
+        executed <- do
+          result <- runQueryParams selectMigration (Only (name step))
+          ntuples result
         unless (executed == 0) $ do
-          unsafePQ . runIndexed . down $ instruction step
+          _ <- unsafePQ . runIndexed . getOpQ $ migration step
           manipulateParams_ deleteMigration (Only (name step))
-
-      queryExecuted
-        :: Migration (IsoQ (Indexed PQ IO ())) db0 db1
-        -> PQ MigrationsSchemas MigrationsSchemas IO Row
-      queryExecuted step = do
-        result <- runQueryParams selectMigration (Only (name step))
-        ntuples result
+instance Migratory (OpQ Definition) (OpQ (Indexed PQ IO ())) where
+  migrate = migrate . cmap (cmap (cmap (Indexed @PQ @IO . define)))
+instance Migratory
+  (IsoQ (Indexed PQ IO ()))
+  (IsoQ (Indexed PQ IO ())) where
+    migrate path = IsoQ
+      (migrate (cmap (cmap up) path))
+      (getOpQ (migrate (cmap (cmap (OpQ . down)) path)))
+instance Migratory (IsoQ Definition) (IsoQ (Indexed PQ IO ())) where
+  migrate = migrate . cmap (cmap (cmap (Indexed @PQ @IO . define)))
 
 unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
 unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
@@ -367,7 +300,7 @@ data MigrateCommand = MigrateStatus | Migrate
 {- | `mainMigrate` creates a simple executable
 from a connection string and a `Path` of `Migration`s. -}
 mainMigrate
-  :: Migratory p
+  :: Migratory p (Indexed PQ IO ())
   => ByteString
   -- ^ connection string
   -> Path (Migration p) db0 db1
@@ -384,7 +317,9 @@ mainMigrate connectTo migrations = do
       MigrateStatus -> withConnection connectTo $
         suppressNotices >> migrateStatus
       Migrate -> withConnection connectTo $
-        suppressNotices & pqThen (migrate migrations) & pqThen migrateStatus
+        suppressNotices
+        & pqThen (runIndexed (migrate migrations))
+        & pqThen migrateStatus
 
     migrateStatus :: PQ schema schema IO ()
     migrateStatus = unsafePQ $ do
@@ -439,10 +374,10 @@ data MigrateIsoCommand
 {- | `mainMigrateIso` creates a simple executable
 from a connection string and a `Path` of `Migration` `Iso`s. -}
 mainMigrateIso
-  :: Migratory p
+  :: Migratory (IsoQ def) (IsoQ (Indexed PQ IO ()))
   => ByteString
   -- ^ connection string
-  -> Path (Migration (IsoQ p)) db0 db1
+  -> Path (Migration (IsoQ def)) db0 db1
   -- ^ migrations
   -> IO ()
 mainMigrateIso connectTo migrations = do
@@ -456,9 +391,13 @@ mainMigrateIso connectTo migrations = do
       MigrateIsoStatus -> withConnection connectTo $
         suppressNotices >> migrateStatus
       MigrateIsoUp -> withConnection connectTo $
-        suppressNotices & pqThen (migrateUp migrations) & pqThen migrateStatus
+        suppressNotices
+        & pqThen (runIndexed (up (migrate migrations)))
+        & pqThen migrateStatus
       MigrateIsoDown -> withConnection connectTo $
-        suppressNotices & pqThen (migrateDown migrations) & pqThen migrateStatus
+        suppressNotices
+        & pqThen (runIndexed (down (migrate migrations)))
+        & pqThen migrateStatus
 
     migrateStatus :: PQ schema schema IO ()
     migrateStatus = unsafePQ $ do
