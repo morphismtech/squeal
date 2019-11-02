@@ -84,6 +84,7 @@ module Squeal.PostgreSQL.Query
 import Control.DeepSeq
 import Data.ByteString (ByteString)
 import Data.Kind (Type)
+import Data.Quiver.Functor
 import Data.String
 import Data.Word
 import Generics.SOP hiding (from)

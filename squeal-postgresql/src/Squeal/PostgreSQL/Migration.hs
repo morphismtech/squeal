@@ -38,8 +38,8 @@ Now we can define some `Migration`s to make our tables.
 
 >>> :{
 let
-  makeUsers :: Migration (Iso Definition) (Public '[]) '["public" ::: '["users" ::: 'Table UsersTable]]
-  makeUsers = Migration "make users table" Iso
+  makeUsers :: Migration (IsoQ Definition) (Public '[]) '["public" ::: '["users" ::: 'Table UsersTable]]
+  makeUsers = Migration "make users table" IsoQ
     { up = createTable #users
         ( serial `as` #id :*
           notNullable text `as` #name )
@@ -50,9 +50,9 @@ let
 
 >>> :{
 let
-  makeEmails :: Migration (Iso Definition) '["public" ::: '["users" ::: 'Table UsersTable]]
+  makeEmails :: Migration (IsoQ Definition) '["public" ::: '["users" ::: 'Table UsersTable]]
     '["public" ::: '["users" ::: 'Table UsersTable, "emails" ::: 'Table EmailsTable]]
-  makeEmails = Migration "make emails table" Iso
+  makeEmails = Migration "make emails table" IsoQ
     { up = createTable #emails
           ( serial `as` #id :*
             notNullable int `as` #user_id :*
@@ -140,7 +140,7 @@ module Squeal.PostgreSQL.Migration
     Migration (..)
   , Migratory (..)
   , Terminally (..)
-  , Iso (..)
+  , IsoQ (..)
   , terminally
   , pureMigration
   , pureMigrationIso
@@ -156,6 +156,8 @@ import Data.ByteString (ByteString)
 import Data.Foldable (traverse_)
 import Data.Function ((&))
 import Data.List ((\\))
+import Data.Quiver
+import Data.Quiver.Functor
 import Data.Text (Text)
 import Data.Time (UTCTime)
 import Prelude hiding ((.), id)
@@ -212,7 +214,7 @@ class Category p => Migratory p where
   if not, `up` the `Migration` and insert its `name` in the `MigrationsTable`.
   -}
   migrateUp
-    :: Path (Migration (Iso p)) schemas0 schemas1
+    :: Path (Migration (IsoQ p)) schemas0 schemas1
     -> PQ schemas0 schemas1 IO ()
 
   {- |
@@ -222,7 +224,7 @@ class Category p => Migratory p where
   if so, `down` the `Migration` and delete its `name` in the `MigrationsTable`.
   -}
   migrateDown
-    :: Path (Migration (Iso p)) schemas0 schemas1
+    :: Path (Migration (IsoQ p)) schemas0 schemas1
     -> PQ schemas1 schemas0 IO ()
 
 instance Migratory Definition where
@@ -271,11 +273,11 @@ pureMigration migration = Migration
 -- involving only pure SQL
 -- `Definition`s into a `Migration` that may be combined with arbitrary `IO`.
 pureMigrationIso
-  :: Migration (Iso Definition) schemas0 schemas1
-  -> Migration (Iso (Terminally PQ IO)) schemas0 schemas1
+  :: Migration (IsoQ Definition) schemas0 schemas1
+  -> Migration (IsoQ (Terminally PQ IO)) schemas0 schemas1
 pureMigrationIso migration = Migration
   { name = name migration
-  , instruction = Iso
+  , instruction = IsoQ
     { up = terminally . define . up $ instruction migration
     , down = terminally . define . down $ instruction migration
     }
@@ -321,14 +323,14 @@ instance Migratory (Terminally PQ IO) where
     where
 
       downMigrations
-        :: Path (Migration (Iso (Terminally PQ IO))) schemas0 schemas1
+        :: Path (Migration (IsoQ (Terminally PQ IO))) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       downMigrations = \case
         Done -> return ()
         step :>> steps -> downMigrations steps >> downMigration step
 
       downMigration
-        :: Migration (Iso (Terminally PQ IO)) schemas0 schemas1
+        :: Migration (IsoQ (Terminally PQ IO)) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO ()
       downMigration step = do
         executed <- queryExecuted step
@@ -337,7 +339,7 @@ instance Migratory (Terminally PQ IO) where
           manipulateParams_ deleteMigration (Only (name step))
 
       queryExecuted
-        :: Migration (Iso (Terminally PQ IO)) schemas0 schemas1
+        :: Migration (IsoQ (Terminally PQ IO)) schemas0 schemas1
         -> PQ MigrationsSchemas MigrationsSchemas IO Row
       queryExecuted step = do
         result <- runQueryParams selectMigration (Only (name step))
@@ -478,7 +480,7 @@ mainMigrateIso
   :: Migratory p
   => ByteString
   -- ^ connection string
-  -> Path (Migration (Iso p)) db0 db1
+  -> Path (Migration (IsoQ p)) db0 db1
   -- ^ migrations
   -> IO ()
 mainMigrateIso connectTo migrations = do
