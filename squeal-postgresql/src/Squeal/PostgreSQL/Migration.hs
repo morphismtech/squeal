@@ -264,10 +264,7 @@ terminally = Terminally . void
 pureMigration
   :: Migration Definition schemas0 schemas1
   -> Migration (Terminally PQ IO) schemas0 schemas1
-pureMigration migration = Migration
-  { name = name migration
-  , instruction = terminally . define $ instruction migration
-  }
+pureMigration = cmap (terminally . define)
 
 -- | A `pureMigrationIso` turns a reversible `Migration`
 -- involving only pure SQL
@@ -275,13 +272,7 @@ pureMigration migration = Migration
 pureMigrationIso
   :: Migration (IsoQ Definition) schemas0 schemas1
   -> Migration (IsoQ (Terminally PQ IO)) schemas0 schemas1
-pureMigrationIso migration = Migration
-  { name = name migration
-  , instruction = IsoQ
-    { up = terminally . define . up $ instruction migration
-    , down = terminally . define . down $ instruction migration
-    }
-  }
+pureMigrationIso = cmap (cmap (terminally . define))
 
 instance Migratory (Terminally PQ IO) where
 
