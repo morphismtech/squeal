@@ -27,6 +27,7 @@ Squeal data definition language.
   , TypeInType
   , TypeOperators
   , UndecidableSuperClasses
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Definition

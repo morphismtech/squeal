@@ -260,9 +260,19 @@ type FromType = [(Symbol,RowType)]
 
 -- | `ColumnsToRow` removes column constraints.
 type family ColumnsToRow (columns :: ColumnsType) :: RowType where
-  ColumnsToRow '[] = '[]
-  ColumnsToRow (column ::: constraint :=> ty ': columns) =
+  ColumnsToRow (column ::: _ :=> ty ': column1 ::: _ :=> ty1 ': column2 ::: _ :=> ty2 ': column3 ::: _ :=> ty3 ': column4 ::: _ :=> ty4 ': column5 ::: _ :=> ty5 ': columns) =
+    column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': column3 ::: ty3 ': column4 ::: ty4 ': column5 ::: ty5 ': ColumnsToRow columns
+  ColumnsToRow (column ::: _ :=> ty ': column1 ::: _ :=> ty1 ': column2 ::: _ :=> ty2 ': column3 ::: _ :=> ty3 ': column4 ::: _ :=> ty4 ': columns) =
+    column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': column3 ::: ty3 ': column4 ::: ty4 ': ColumnsToRow columns
+  ColumnsToRow (column ::: _ :=> ty ': column1 ::: _ :=> ty1 ': column2 ::: _ :=> ty2 ': column3 ::: _ :=> ty3 ': columns) =
+    column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': column3 ::: ty3 ': ColumnsToRow columns
+  ColumnsToRow (column ::: _ :=> ty ': column1 ::: _ :=> ty1 ': column2 ::: _ :=> ty2 ': columns) =
+    column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': ColumnsToRow columns
+  ColumnsToRow (column ::: _ :=> ty ': column1 ::: _ :=> ty1 ': columns) =
+    column ::: ty ': column1 ::: ty1 ': ColumnsToRow columns
+  ColumnsToRow (column ::: _ :=> ty ': columns) =
     column ::: ty ': ColumnsToRow columns
+  ColumnsToRow '[] = '[]
 
 -- | `TableToColumns` removes table constraints.
 type family TableToColumns (table :: TableType) :: ColumnsType where
@@ -295,14 +305,24 @@ instance ty0 ~ ty1 => SamePGType
 
 -- | `AllNotNull` is a constraint that proves a `ColumnsType` has no @NULL@s.
 type family AllNotNull (columns :: ColumnsType) :: Constraint where
+  AllNotNull (_ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
+  AllNotNull (_ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
+  AllNotNull (_ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
+  AllNotNull (_ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
+  AllNotNull (_ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
+  AllNotNull (_ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
   AllNotNull '[] = ()
-  AllNotNull (column ::: def :=> 'NotNull ty ': columns) = AllNotNull columns
 
 -- | `NotAllNull` is a constraint that proves a `ColumnsType` has some
 -- @NOT NULL@.
 type family NotAllNull (columns :: ColumnsType) :: Constraint where
-  NotAllNull (column ::: def :=> 'NotNull ty ': columns) = ()
-  NotAllNull (column ::: def :=> 'Null ty ': columns) = NotAllNull columns
+  NotAllNull (_ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> 'NotNull _ ': _) = ()
+  NotAllNull (_ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> 'NotNull _ ': _) = ()
+  NotAllNull (_ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> 'NotNull _ ': _) = ()
+  NotAllNull (_ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> 'NotNull _ ': _) = ()
+  NotAllNull (_ ::: _ :=> _ _ ': _ ::: _ :=> 'NotNull _ ': _) = ()
+  NotAllNull (_ ::: _ :=> 'NotNull _ ': _) = ()
+  NotAllNull (_ ::: _ :=> 'Null _ ': columns) = NotAllNull columns
 
 -- | `NullifyType` is an idempotent that nullifies a `NullityType`.
 type family NullifyType (ty :: NullityType) :: NullityType where
@@ -311,17 +331,37 @@ type family NullifyType (ty :: NullityType) :: NullityType where
 
 -- | `NullifyRow` is an idempotent that nullifies a `RowType`.
 type family NullifyRow (columns :: RowType) :: RowType where
-  NullifyRow '[] = '[]
+  NullifyRow (column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': column3 ::: ty3 ': column4 ::: ty4 ': column5 ::: ty5 ': columns) =
+    column ::: NullifyType ty ': column1 ::: NullifyType ty1 ': column2 ::: NullifyType ty2 ': column3 ::: NullifyType ty3 ': column4 ::: NullifyType ty4 ': column5 ::: NullifyType ty5 ': NullifyRow columns
+  NullifyRow (column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': column3 ::: ty3 ': column4 ::: ty4 ': columns) =
+    column ::: NullifyType ty ': column1 ::: NullifyType ty1 ': column2 ::: NullifyType ty2 ': column3 ::: NullifyType ty3 ': column4 ::: NullifyType ty4 ': NullifyRow columns
+  NullifyRow (column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': column3 ::: ty3 ': columns) =
+    column ::: NullifyType ty ': column1 ::: NullifyType ty1 ': column2 ::: NullifyType ty2 ': column3 ::: NullifyType ty3 ': NullifyRow columns
+  NullifyRow (column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': columns) =
+    column ::: NullifyType ty ': column1 ::: NullifyType ty1 ': column2 ::: NullifyType ty2 ': NullifyRow columns
+  NullifyRow (column ::: ty ': column1 ::: ty1 ': columns) =
+    column ::: NullifyType ty ': column1 ::: NullifyType ty1 ': NullifyRow columns
   NullifyRow (column ::: ty ': columns) =
     column ::: NullifyType ty ': NullifyRow columns
+  NullifyRow '[] = '[]
 
 -- | `NullifyFrom` is an idempotent that nullifies a `FromType`
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
 type family NullifyFrom (tables :: FromType) :: FromType where
-  NullifyFrom '[] = '[]
+  NullifyFrom (table ::: columns ': table1 ::: columns1 ': table2 ::: columns2 ': table3 ::: columns3 ': table4 ::: columns4 ': table5 ::: columns5 ': tables) =
+    table ::: NullifyRow columns ': table1 ::: NullifyRow columns1 ': table2 ::: NullifyRow columns2 ': table3 ::: NullifyRow columns3 ': table4 ::: NullifyRow columns5 ': table5 ::: NullifyRow columns4 ': NullifyFrom tables
+  NullifyFrom (table ::: columns ': table1 ::: columns1 ': table2 ::: columns2 ': table3 ::: columns3 ': table4 ::: columns4 ': tables) =
+    table ::: NullifyRow columns ': table1 ::: NullifyRow columns1 ': table2 ::: NullifyRow columns2 ': table3 ::: NullifyRow columns3 ': table4 ::: NullifyRow columns4 ': NullifyFrom tables
+  NullifyFrom (table ::: columns ': table1 ::: columns1 ': table2 ::: columns2 ': table3 ::: columns3 ': tables) =
+    table ::: NullifyRow columns ': table1 ::: NullifyRow columns1 ': table2 ::: NullifyRow columns2 ': table3 ::: NullifyRow columns3 ': NullifyFrom tables
+  NullifyFrom (table ::: columns ': table1 ::: columns1 ': table2 ::: columns2 ': tables) =
+    table ::: NullifyRow columns ': table1 ::: NullifyRow columns1 ': table2 ::: NullifyRow columns2 ': NullifyFrom tables
+  NullifyFrom (table ::: columns ': table1 ::: columns1 ': tables) =
+    table ::: NullifyRow columns ': table1 ::: NullifyRow columns1 ': NullifyFrom tables
   NullifyFrom (table ::: columns ': tables) =
     table ::: NullifyRow columns ': NullifyFrom tables
+  NullifyFrom '[] = '[]
 
 -- | @Create alias x xs@ adds @alias ::: x@ to the end of @xs@ and is used in
 -- `Squeal.PostgreSQL.Definition.createTable` statements and in @ALTER TABLE@

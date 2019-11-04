@@ -47,7 +47,7 @@ module Squeal.PostgreSQL.PG
   , Enumerated (..)
   , VarArray (..)
   , FixArray (..)
-  , Oid (..)
+  , LibPQ.Oid (..)
     -- * Type families
   , LabelsPG
   , DimPG
@@ -66,7 +66,6 @@ import Data.Int (Int16, Int32, Int64)
 import Data.Scientific (Scientific)
 import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime)
 import Data.Vector (Vector)
-import Data.Word (Word32)
 import Data.UUID.Types (UUID)
 import GHC.TypeLits
 import Network.IP.Addr (NetAddr, IP)
@@ -75,6 +74,7 @@ import qualified Data.ByteString.Lazy as Lazy (ByteString)
 import qualified Data.ByteString as Strict (ByteString)
 import qualified Data.Text.Lazy as Lazy (Text)
 import qualified Data.Text as Strict (Text)
+import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
@@ -108,7 +108,7 @@ type instance PG Int32 = 'PGint4
 -- | `PGint8`
 type instance PG Int64 = 'PGint8
 -- | `PGint2`
-type instance PG Oid = 'PGoid
+type instance PG LibPQ.Oid = 'PGoid
 -- | `PGnumeric`
 type instance PG Scientific = 'PGnumeric
 -- | `PGfloat4`
@@ -178,8 +178,16 @@ type family RowPG (hask :: Type) :: RowType where
 
 -- | `RowOf` applies `NullPG` to the fields of a list.
 type family RowOf (record :: [(Symbol, Type)]) :: RowType where
-  RowOf '[] = '[]
+  RowOf (col ::: ty ': col1 ::: ty1 ': col2 ::: ty2 ': col3 ::: ty3 ': col4 ::: ty4 ': record) =
+    col ::: NullPG ty ': col1 ::: NullPG ty1 ': col2 ::: NullPG ty2 ': col3 ::: NullPG ty3 ': col4 ::: NullPG ty4 ': RowOf record
+  RowOf (col ::: ty ': col1 ::: ty1 ': col2 ::: ty2 ': col3 ::: ty3 ': record) =
+    col ::: NullPG ty ': col1 ::: NullPG ty1 ': col2 ::: NullPG ty2 ': col3 ::: NullPG ty3 ': RowOf record
+  RowOf (col ::: ty ': col1 ::: ty1 ': col2 ::: ty2 ': record) =
+    col ::: NullPG ty ': col1 ::: NullPG ty1 ': col2 ::: NullPG ty2 ': RowOf record
+  RowOf (col ::: ty ': col1 ::: ty1 ': record) =
+    col ::: NullPG ty ': col1::: NullPG ty1 ': RowOf record
   RowOf (col ::: ty ': record) = col ::: NullPG ty ': RowOf record
+  RowOf '[] = '[]
 
 {- | `NullPG` turns a Haskell type into a `NullityType`.
 
@@ -206,8 +214,17 @@ type family TuplePG (hask :: Type) :: [NullityType] where
 
 -- | `TupleOf` turns a list of Haskell `Type`s into a list of `NullityType`s.
 type family TupleOf (tuple :: [Type]) :: [NullityType] where
-  TupleOf '[] = '[]
+  TupleOf (hask ': hask1 ': hask2 ': hask3 ': hask4 ': hask5 ': tuple) =
+    NullPG hask ': NullPG hask1 ': NullPG hask2 ': NullPG hask3 ': NullPG hask4 ': NullPG hask5 ': TupleOf tuple
+  TupleOf (hask ': hask1 ': hask2 ': hask3 ': hask4 ': tuple) =
+    NullPG hask ': NullPG hask1 ': NullPG hask2 ': NullPG hask3 ': NullPG hask4 ': TupleOf tuple
+  TupleOf (hask ': hask1 ': hask2 ': hask3 ': tuple) =
+    NullPG hask ': NullPG hask1 ': NullPG hask2 ': NullPG hask3 ': TupleOf tuple
+  TupleOf (hask ': hask1 ': hask2 ': tuple) =
+    NullPG hask ': NullPG hask1 ': NullPG hask2 ': TupleOf tuple
+  TupleOf (hask ': hask1 ': tuple) = NullPG hask ': NullPG hask1 ': TupleOf tuple
   TupleOf (hask ': tuple) = NullPG hask ': TupleOf tuple
+  TupleOf '[] = '[]
 
 -- | `TupleCodeOf` takes the `SOP.Code` of a haskell `Type`
 -- and if it's a simple product returns it, otherwise giving a `TypeError`.
@@ -369,10 +386,3 @@ newtype FixArray arr = FixArray {getFixArray :: arr}
   deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 -- | `PGfixarray` @(@`DimPG` @hask) (@`FixPG` @hask)@
 type instance PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
-
-{- | Object identifiers (`Oid`s) are used internally by PostgreSQL
-as primary keys for various system tables.
--}
-newtype Oid = Oid { getOid :: Word32 }
-  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
-  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)

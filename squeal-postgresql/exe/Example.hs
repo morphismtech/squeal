@@ -53,8 +53,8 @@ setup =
   >>>
   createTable #emails
     ( serial `as` #id :*
-      (int & notNullable) `as` #user_id :*
-      (text & nullable) `as` #email )
+      hask @Int32 `as` #user_id :*
+      hask @(Maybe Text) `as` #email )
     ( primaryKey #id `as` #pk_emails :*
       foreignKey #user_id #users #id
         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
