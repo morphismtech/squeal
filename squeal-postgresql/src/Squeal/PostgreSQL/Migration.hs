@@ -78,7 +78,7 @@ withConnection "host=localhost port=5432 dbname=exampledb" $
   & pqThen (liftIO (putStrLn "Migrate"))
   & pqThen (migrateUp migrations)
   & pqThen (liftIO (putStrLn "Rollback"))
-  & pqThen (migrateUp migrations)
+  & pqThen (migrateDown migrations)
 :}
 Migrate
 Rollback
@@ -315,9 +315,6 @@ selectMigrations = select_
   (#name `as` #migrationName :* #executed_at `as` #migrationTime)
   (from (table #schema_migrations))
 
-data MigrateCommand = MigrateStatus | Migrate
-  deriving (GHC.Generic, Show)
-
 {- | `mainMigrate` creates a simple executable
 from a connection string and a `Path` of `Migration`s. -}
 mainMigrate
@@ -328,19 +325,20 @@ mainMigrate
   -- ^ migrations
   -> IO ()
 mainMigrate connectTo migrations = do
-  command <- readCommandFromArgs
-  maybe (pure ()) performCommand command
+  command <- getArgs
+  performCommand command
 
   where
 
-    performCommand :: MigrateCommand -> IO ()
+    performCommand :: [String] -> IO ()
     performCommand = \case
-      MigrateStatus -> withConnection connectTo $
+      ["status"] -> withConnection connectTo $
         suppressNotices >> migrateStatus
-      Migrate -> withConnection connectTo $
+      ["migrate"] -> withConnection connectTo $
         suppressNotices
         & pqThen (runIndexed (runMigrations migrations))
         & pqThen migrateStatus
+      args -> displayUsage args
 
     migrateStatus :: PQ schema schema IO ()
     migrateStatus = unsafePQ $ do
@@ -353,44 +351,11 @@ mainMigrate connectTo migrations = do
     suppressNotices = manipulate_ $
       UnsafeManipulation "SET client_min_messages TO WARNING;"
 
-    readCommandFromArgs :: IO (Maybe MigrateCommand)
-    readCommandFromArgs = getArgs >>= \case
-      ["migrate"] -> pure . Just $ Migrate
-      ["status"] -> pure . Just $ MigrateStatus
-      args -> displayUsage args >> pure Nothing
-
     displayUsage :: [String] -> IO ()
     displayUsage args = do
       putStrLn $ "Invalid command: \"" <> unwords args <> "\". Use:"
       putStrLn "migrate    to run all available migrations"
       putStrLn "rollback   to rollback all available migrations"
-
-    getRunMigrationNames :: (MonadIO m) => PQ schemas0 schemas0 m [Text]
-    getRunMigrationNames =
-      fmap migrationName <$>
-      (unsafePQ (define createMigrations
-      & pqThen (runQuery selectMigrations)) >>= getRows)
-
-    displayListOfNames :: [Text] -> IO ()
-    displayListOfNames [] = Text.putStrLn "  None"
-    displayListOfNames xs =
-      let singleName n = Text.putStrLn $ "  - " <> n
-      in traverse_ singleName xs
-
-    displayUnrunned :: [Text] -> IO ()
-    displayUnrunned unrunned =
-      Text.putStrLn "Migrations left to run:"
-      >> displayListOfNames unrunned
-
-    displayRunned :: [Text] -> IO ()
-    displayRunned runned =
-      Text.putStrLn "Migrations already run:"
-      >> displayListOfNames runned
-
-data MigrateIsoCommand
-  = MigrateIsoStatus
-  | MigrateIsoUp
-  | MigrateIsoDown deriving (GHC.Generic, Show)
 
 {- | `mainMigrateIso` creates a simple executable
 from a connection string and a `Path` of `Migration` `Iso`s. -}
@@ -401,24 +366,23 @@ mainMigrateIso
   -> Path (Migration (IsoQ def)) schemas0 schemas1
   -- ^ migrations
   -> IO ()
-mainMigrateIso connectTo migrations = do
-  command <- readCommandFromArgs
-  maybe (pure ()) performCommand command
+mainMigrateIso connectTo migrations = performCommand =<< getArgs
 
   where
 
-    performCommand :: MigrateIsoCommand -> IO ()
+    performCommand :: [String] -> IO ()
     performCommand = \case
-      MigrateIsoStatus -> withConnection connectTo $
+      ["status"] -> withConnection connectTo $
         suppressNotices >> migrateStatus
-      MigrateIsoUp -> withConnection connectTo $
+      ["migrate"] -> withConnection connectTo $
         suppressNotices
         & pqThen (migrateUp migrations)
         & pqThen migrateStatus
-      MigrateIsoDown -> withConnection connectTo $
+      ["rollback"] -> withConnection connectTo $
         suppressNotices
         & pqThen (migrateDown migrations)
         & pqThen migrateStatus
+      args -> displayUsage args
 
     migrateStatus :: PQ schema schema IO ()
     migrateStatus = unsafePQ $ do
@@ -431,13 +395,6 @@ mainMigrateIso connectTo migrations = do
     suppressNotices = manipulate_ $
       UnsafeManipulation "SET client_min_messages TO WARNING;"
 
-    readCommandFromArgs :: IO (Maybe MigrateIsoCommand)
-    readCommandFromArgs = getArgs >>= \case
-      ["migrate"] -> pure . Just $ MigrateIsoUp
-      ["rollback"] -> pure . Just $ MigrateIsoDown
-      ["status"] -> pure . Just $ MigrateIsoStatus
-      args -> displayUsage args >> pure Nothing
-
     displayUsage :: [String] -> IO ()
     displayUsage args = do
       putStrLn $ "Invalid command: \"" <> unwords args <> "\". Use:"
@@ -445,24 +402,24 @@ mainMigrateIso connectTo migrations = do
       putStrLn "rollback   to rollback all available migrations"
       putStrLn "status     to display migrations run and migrations left to run"
 
-    getRunMigrationNames :: (MonadIO m) => PQ schemas0 schemas0 m [Text]
-    getRunMigrationNames =
-      fmap migrationName <$>
-        (unsafePQ (define createMigrations
-        & pqThen (runQuery selectMigrations)) >>= getRows)
+getRunMigrationNames :: PQ schemas0 schemas0 IO [Text]
+getRunMigrationNames =
+  fmap migrationName <$>
+    (unsafePQ (define createMigrations
+    & pqThen (runQuery selectMigrations)) >>= getRows)
 
-    displayListOfNames :: [Text] -> IO ()
-    displayListOfNames [] = Text.putStrLn "  None"
-    displayListOfNames xs =
-      let singleName n = Text.putStrLn $ "  - " <> n
-      in traverse_ singleName xs
+displayListOfNames :: [Text] -> IO ()
+displayListOfNames [] = Text.putStrLn "  None"
+displayListOfNames xs =
+  let singleName n = Text.putStrLn $ "  - " <> n
+  in traverse_ singleName xs
 
-    displayUnrunned :: [Text] -> IO ()
-    displayUnrunned unrunned =
-      Text.putStrLn "Migrations left to run:"
-      >> displayListOfNames unrunned
+displayUnrunned :: [Text] -> IO ()
+displayUnrunned unrunned =
+  Text.putStrLn "Migrations left to run:"
+  >> displayListOfNames unrunned
 
-    displayRunned :: [Text] -> IO ()
-    displayRunned runned =
-      Text.putStrLn "Migrations already run:"
-      >> displayListOfNames runned
+displayRunned :: [Text] -> IO ()
+displayRunned runned =
+  Text.putStrLn "Migrations already run:"
+  >> displayListOfNames runned
