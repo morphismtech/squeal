@@ -105,7 +105,7 @@ The type parameters of `Expression` are
   that are in scope for the `Expression`;
 * @grp :: @ `Grouping`, the `Grouping` of the @from@ clause which may limit
   which columns may be referenced by alias;
-* @db :: @ `SchemasType`, the db of your database that are in
+* @schemas :: @ `SchemasType`, the schemas of your database that are in
   scope for the `Expression`;
 * @from :: @ `FromType`, the @from@ clause which the `Expression` may use
   to reference columns by alias;
@@ -115,13 +115,13 @@ newtype Expression
   (outer :: FromType)
   (commons :: FromType)
   (grp :: Grouping)
-  (db :: SchemasType)
+  (schemas :: SchemasType)
   (params :: [NullityType])
   (from :: FromType)
   (ty :: NullityType)
     = UnsafeExpression { renderExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance RenderSQL (Expression outer commons grp db params from ty) where
+instance RenderSQL (Expression outer commons grp schemas params from ty) where
   renderSQL = renderExpression
 
 -- | An `Expr` is a closed `Expression`.
@@ -131,27 +131,27 @@ instance RenderSQL (Expression outer commons grp db params from ty) where
 -- or alias references. It can be used as
 -- a simple piece of more complex `Expression`s.
 type Expr x
-  = forall outer commons grp db params from
-  . Expression outer commons grp db params from x
+  = forall outer commons grp schemas params from
+  . Expression outer commons grp schemas params from x
     -- ^ cannot reference aliases
 
 -- | A @RankNType@ for binary operators.
 type Operator x1 x2 y
-  =  forall outer commons grp db params from
-  .  Expression outer commons grp db params from x1
+  =  forall outer commons grp schemas params from
+  .  Expression outer commons grp schemas params from x1
      -- ^ left input
-  -> Expression outer commons grp db params from x2
+  -> Expression outer commons grp schemas params from x2
      -- ^ right input
-  -> Expression outer commons grp db params from y
+  -> Expression outer commons grp schemas params from y
      -- ^ output
 
-type OperatorDB db x1 x2 y
+type OperatorDB schemas x1 x2 y
   =  forall outer commons grp params from
-  .  Expression outer commons grp db params from x1
+  .  Expression outer commons grp schemas params from x1
      -- ^ left input
-  -> Expression outer commons grp db params from x2
+  -> Expression outer commons grp schemas params from x2
      -- ^ right input
-  -> Expression outer commons grp db params from y
+  -> Expression outer commons grp schemas params from y
      -- ^ output
 
 -- | A @RankNType@ for functions with a single argument.
@@ -160,17 +160,17 @@ type OperatorDB db x1 x2 y
 -- indeed a subcategory as it is closed under the usual
 -- `Prelude..` and `Prelude.id`.
 type (-->) x y
-  =  forall outer commons grp db params from
-  .  Expression outer commons grp db params from x
+  =  forall outer commons grp schemas params from
+  .  Expression outer commons grp schemas params from x
      -- ^ input
-  -> Expression outer commons grp db params from y
+  -> Expression outer commons grp schemas params from y
      -- ^ output
 
-type FunctionDB db x y
+type FunctionDB schemas x y
   =  forall outer commons grp params from
-  .  Expression outer commons grp db params from x
+  .  Expression outer commons grp schemas params from x
      -- ^ input
-  -> Expression outer commons grp db params from y
+  -> Expression outer commons grp schemas params from y
      -- ^ output
 
 {- | A @RankNType@ for functions with a fixed-length list of heterogeneous arguments.
@@ -180,29 +180,29 @@ Use the `*:` operator to end your argument lists, like so.
 fun(TRUE, FALSE, LOCALTIME, TRUE)
 -}
 type (--->) xs y
-  =  forall outer commons grp db params from
-  .  NP (Expression outer commons grp db params from) xs
+  =  forall outer commons grp schemas params from
+  .  NP (Expression outer commons grp schemas params from) xs
      -- ^ inputs
-  -> Expression outer commons grp db params from y
+  -> Expression outer commons grp schemas params from y
      -- ^ output
 
-type FunctionNDB db xs y
+type FunctionNDB schemas xs y
   =  forall outer commons grp params from
-  .  NP (Expression outer commons grp db params from) xs
+  .  NP (Expression outer commons grp schemas params from) xs
      -- ^ inputs
-  -> Expression outer commons grp db params from y
+  -> Expression outer commons grp schemas params from y
      -- ^ output
 
 {- | A @RankNType@ for functions with a variable-length list of
 homogeneous arguments and at least 1 more argument.
 -}
 type FunctionVar x0 x1 y
-  =  forall outer commons grp db params from
-  .  [Expression outer commons grp db params from x0]
+  =  forall outer commons grp schemas params from
+  .  [Expression outer commons grp schemas params from x0]
      -- ^ inputs
-  -> Expression outer commons grp db params from x1
+  -> Expression outer commons grp schemas params from x1
      -- ^ must have at least 1 input
-  -> Expression outer commons grp db params from y
+  -> Expression outer commons grp schemas params from y
      -- ^ output
 
 {- | >>> printSQL (unsafeFunctionVar "greatest" [true, null_] false)
@@ -213,34 +213,34 @@ unsafeFunctionVar fun xs x = UnsafeExpression $ fun <> parenthesized
   (commaSeparated (renderSQL <$> xs) <> ", " <> renderSQL x)
 
 instance (HasUnique tab (Join outer from) row, Has col row ty)
-  => IsLabel col (Expression outer commons 'Ungrouped db params from ty) where
+  => IsLabel col (Expression outer commons 'Ungrouped schemas params from ty) where
     fromLabel = UnsafeExpression $ renderSQL (Alias @col)
 instance (HasUnique tab (Join outer from) row, Has col row ty, tys ~ '[ty])
-  => IsLabel col (NP (Expression outer commons 'Ungrouped db params from) tys) where
+  => IsLabel col (NP (Expression outer commons 'Ungrouped schemas params from) tys) where
     fromLabel = fromLabel @col :* Nil
 instance (HasUnique tab (Join outer from) row, Has col row ty, column ~ (col ::: ty))
   => IsLabel col
-    (Aliased (Expression outer commons 'Ungrouped db params from) column) where
+    (Aliased (Expression outer commons 'Ungrouped schemas params from) column) where
     fromLabel = fromLabel @col `As` Alias
 instance (HasUnique tab (Join outer from) row, Has col row ty, columns ~ '[col ::: ty])
   => IsLabel col
-    (NP (Aliased (Expression outer commons 'Ungrouped db params from)) columns) where
+    (NP (Aliased (Expression outer commons 'Ungrouped schemas params from)) columns) where
     fromLabel = fromLabel @col :* Nil
 
 instance (Has tab (Join outer from) row, Has col row ty)
-  => IsQualified tab col (Expression outer commons 'Ungrouped db params from ty) where
+  => IsQualified tab col (Expression outer commons 'Ungrouped schemas params from ty) where
     tab ! col = UnsafeExpression $
       renderSQL tab <> "." <> renderSQL col
 instance (Has tab (Join outer from) row, Has col row ty, tys ~ '[ty])
-  => IsQualified tab col (NP (Expression outer commons 'Ungrouped db params from) tys) where
+  => IsQualified tab col (NP (Expression outer commons 'Ungrouped schemas params from) tys) where
     tab ! col = tab ! col :* Nil
 instance (Has tab (Join outer from) row, Has col row ty, column ~ (col ::: ty))
   => IsQualified tab col
-    (Aliased (Expression outer commons 'Ungrouped db params from) column) where
+    (Aliased (Expression outer commons 'Ungrouped schemas params from) column) where
     tab ! col = tab ! col `As` col
 instance (Has tab (Join outer from) row, Has col row ty, columns ~ '[col ::: ty])
   => IsQualified tab col
-    (NP (Aliased (Expression outer commons 'Ungrouped db params from)) columns) where
+    (NP (Aliased (Expression outer commons 'Ungrouped schemas params from)) columns) where
     tab ! col = tab ! col :* Nil
 
 instance
@@ -248,7 +248,7 @@ instance
   , Has col row ty
   , GroupedBy tab col bys
   ) => IsLabel col
-    (Expression outer commons ('Grouped bys) db params from ty) where
+    (Expression outer commons ('Grouped bys) schemas params from ty) where
       fromLabel = UnsafeExpression $ renderSQL (Alias @col)
 instance
   ( HasUnique tab (Join outer from) row
@@ -256,7 +256,7 @@ instance
   , GroupedBy tab col bys
   , tys ~ '[ty]
   ) => IsLabel col
-    (NP (Expression outer commons ('Grouped bys) db params from) tys) where
+    (NP (Expression outer commons ('Grouped bys) schemas params from) tys) where
       fromLabel = fromLabel @col :* Nil
 instance
   ( HasUnique tab (Join outer from) row
@@ -264,7 +264,7 @@ instance
   , GroupedBy tab col bys
   , column ~ (col ::: ty)
   ) => IsLabel col
-    (Aliased (Expression outer commons ('Grouped bys) db params from) column) where
+    (Aliased (Expression outer commons ('Grouped bys) schemas params from) column) where
       fromLabel = fromLabel @col `As` Alias
 instance
   ( HasUnique tab (Join outer from) row
@@ -272,7 +272,7 @@ instance
   , GroupedBy tab col bys
   , columns ~ '[col ::: ty]
   ) => IsLabel col
-    (NP (Aliased (Expression outer commons ('Grouped bys) db params from)) columns) where
+    (NP (Aliased (Expression outer commons ('Grouped bys) schemas params from)) columns) where
       fromLabel = fromLabel @col :* Nil
 
 instance
@@ -280,7 +280,7 @@ instance
   , Has col row ty
   , GroupedBy tab col bys
   ) => IsQualified tab col
-    (Expression outer commons ('Grouped bys) db params from ty) where
+    (Expression outer commons ('Grouped bys) schemas params from ty) where
       tab ! col = UnsafeExpression $
         renderSQL tab <> "." <> renderSQL col
 instance
@@ -289,7 +289,7 @@ instance
   , GroupedBy tab col bys
   , tys ~ '[ty]
   ) => IsQualified tab col
-    (NP (Expression outer commons ('Grouped bys) db params from) tys) where
+    (NP (Expression outer commons ('Grouped bys) schemas params from) tys) where
       tab ! col = tab ! col :* Nil
 instance
   ( Has tab (Join outer from) row
@@ -297,7 +297,7 @@ instance
   , GroupedBy tab col bys
   , column ~ (col ::: ty)
   ) => IsQualified tab col
-    (Aliased (Expression outer commons ('Grouped bys) db params from) column) where
+    (Aliased (Expression outer commons ('Grouped bys) schemas params from) column) where
       tab ! col = tab ! col `As` col
 instance
   ( Has tab (Join outer from) row
@@ -305,11 +305,11 @@ instance
   , GroupedBy tab col bys
   , columns ~ '[col ::: ty]
   ) => IsQualified tab col
-    (NP (Aliased (Expression outer commons ('Grouped bys) db params from)) columns) where
+    (NP (Aliased (Expression outer commons ('Grouped bys) schemas params from)) columns) where
       tab ! col = tab ! col :* Nil
 
 instance (KnownSymbol label, label `In` labels) => IsPGlabel label
-  (Expression outer commons grp db params from (null ('PGenum labels))) where
+  (Expression outer commons grp schemas params from (null ('PGenum labels))) where
   label = UnsafeExpression $ renderSQL (PGlabel @label)
 
 -- | >>> printSQL $ unsafeBinaryOp "OR" true false
@@ -319,10 +319,10 @@ unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderSQL x <+> op <+> renderSQL y
 
 binaryOp
-  :: forall op sch db schema x y z.
-    ( Has sch db schema
+  :: forall op sch schemas schema x y z.
+    ( Has sch schemas schema
     , Has op schema ('Operator ('BinaryOp x y z)) )
-  => OperatorDB db x y z
+  => OperatorDB schemas x y z
 binaryOp = unsafeBinaryOp $ renderSymbol @op
 
 -- | >>> printSQL $ unsafeLeftOp "NOT" true
@@ -331,10 +331,10 @@ unsafeLeftOp :: ByteString -> x --> y
 unsafeLeftOp op x = UnsafeExpression $ parenthesized $ op <+> renderSQL x
 
 leftOp
-  :: forall op sch db schema x y.
-    ( Has sch db schema
+  :: forall op sch schemas schema x y.
+    ( Has sch schemas schema
     , Has op schema ('Operator ('LeftOp x y)) )
-  => FunctionDB db x y
+  => FunctionDB schemas x y
 leftOp = unsafeLeftOp $ renderSymbol @op
 
 -- | >>> printSQL $ true & unsafeRightOp "IS NOT TRUE"
@@ -343,10 +343,10 @@ unsafeRightOp :: ByteString -> x --> y
 unsafeRightOp op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
 
 rightOp
-  :: forall op sch db schema x y.
-    ( Has sch db schema
+  :: forall op sch schemas schema x y.
+    ( Has sch schemas schema
     , Has op schema ('Operator ('RightOp x y)) )
-  => FunctionDB db x y
+  => FunctionDB schemas x y
 rightOp = unsafeRightOp $ renderSymbol @op
 
 -- | >>> printSQL $ unsafeFunction "f" true
@@ -356,9 +356,9 @@ unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
 function
-  :: (Has sch db schema, Has fun schema ('Function ('[x] :=> 'Returns y)))
+  :: (Has sch schemas schema, Has fun schema ('Function ('[x] :=> 'Returns y)))
   => QualifiedAlias sch fun
-  -> FunctionDB db x y
+  -> FunctionDB schemas x y
 function = unsafeFunction . renderSQL
 
 -- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: literal 'a')
@@ -368,15 +368,15 @@ unsafeFunctionN fun xs = UnsafeExpression $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
 functionN
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , Has fun schema ('Function (xs :=> 'Returns y))
      , SListI xs )
   => QualifiedAlias sch fun
-  -> FunctionNDB db xs y
+  -> FunctionNDB schemas xs y
 functionN = unsafeFunctionN . renderSQL
 
 instance ty `In` PGNum
-  => Num (Expression outer commons grp db params from (null ty)) where
+  => Num (Expression outer commons grp schemas params from (null ty)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
     (*) = unsafeBinaryOp "*"
@@ -388,7 +388,7 @@ instance ty `In` PGNum
       . show
 
 instance (ty `In` PGNum, ty `In` PGFloating) => Fractional
-  (Expression outer commons grp db params from (null ty)) where
+  (Expression outer commons grp schemas params from (null ty)) where
     (/) = unsafeBinaryOp "/"
     fromRational
       = UnsafeExpression
@@ -398,7 +398,7 @@ instance (ty `In` PGNum, ty `In` PGFloating) => Fractional
       . fromRat @Double
 
 instance (ty `In` PGNum, ty `In` PGFloating) => Floating
-  (Expression outer commons grp db params from (null ty)) where
+  (Expression outer commons grp schemas params from (null ty)) where
     pi = UnsafeExpression "pi()"
     exp = unsafeFunction "exp"
     log = unsafeFunction "ln"
@@ -437,36 +437,36 @@ instance PGIntersect ('PGvararray ty)
 instance PGIntersect ('PGrange ty)
 
 instance IsString
-  (Expression outer commons grp db params from (null 'PGtext)) where
+  (Expression outer commons grp schemas params from (null 'PGtext)) where
     fromString str = UnsafeExpression $
       "E\'" <> fromString (escape =<< str) <> "\'"
 instance IsString
-  (Expression outer commons grp db params from (null 'PGtsvector)) where
+  (Expression outer commons grp schemas params from (null 'PGtsvector)) where
     fromString str = UnsafeExpression . parenthesized . (<> " :: tsvector") $
       "E\'" <> fromString (escape =<< str) <> "\'"
 instance IsString
-  (Expression outer commons grp db params from (null 'PGtsquery)) where
+  (Expression outer commons grp schemas params from (null 'PGtsquery)) where
     fromString str = UnsafeExpression . parenthesized . (<> " :: tsquery") $
       "E\'" <> fromString (escape =<< str) <> "\'"
 
 instance Semigroup
-  (Expression outer commons grp db params from (null ('PGvararray ty))) where
+  (Expression outer commons grp schemas params from (null ('PGvararray ty))) where
     (<>) = unsafeBinaryOp "||"
 instance Semigroup
-  (Expression outer commons grp db params from (null 'PGjsonb)) where
+  (Expression outer commons grp schemas params from (null 'PGjsonb)) where
     (<>) = unsafeBinaryOp "||"
 instance Semigroup
-  (Expression outer commons grp db params from (null 'PGtext)) where
+  (Expression outer commons grp schemas params from (null 'PGtext)) where
     (<>) = unsafeBinaryOp "||"
 instance Semigroup
-  (Expression outer commons grp db params from (null 'PGtsvector)) where
+  (Expression outer commons grp schemas params from (null 'PGtsvector)) where
     (<>) = unsafeBinaryOp "||"
 
 instance Monoid
-  (Expression outer commons grp db params from (null 'PGtext)) where
+  (Expression outer commons grp schemas params from (null 'PGtext)) where
     mempty = fromString ""
     mappend = (<>)
 instance Monoid
-  (Expression outer commons grp db params from (null 'PGtsvector)) where
+  (Expression outer commons grp schemas params from (null 'PGtsvector)) where
     mempty = fromString ""
     mappend = (<>)

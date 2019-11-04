@@ -48,7 +48,7 @@ then run the computation,
 otherwise `commit` and `return` the result.
 -}
 transactionally
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadUnliftIO tx, MonadPQ schemas tx)
   => TransactionMode
   -> tx x -- ^ run inside a transaction
   -> tx x
@@ -60,7 +60,7 @@ transactionally mode tx = mask $ \restore -> do
 
 -- | Run a computation `transactionally_`, in `defaultMode`.
 transactionally_
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadUnliftIO tx, MonadPQ schemas tx)
   => tx x -- ^ run inside a transaction
   -> tx x
 transactionally_ = transactionally defaultMode
@@ -75,7 +75,7 @@ transactionally_ = transactionally defaultMode
   - otherwise `commit` and `return` the result.
 -}
 transactionallyRetry
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadUnliftIO tx, MonadPQ schemas tx)
   => TransactionMode
   -> tx x -- ^ run inside a transaction
   -> tx x
@@ -100,7 +100,7 @@ transactionallyRetry mode tx = mask $ \restore ->
 Like `transactionally` but always `rollback`, useful in testing.
 -}
 ephemerally
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadUnliftIO tx, MonadPQ schemas tx)
   => TransactionMode
   -> tx x -- ^ run inside an ephemeral transaction
   -> tx x
@@ -112,21 +112,21 @@ ephemerally mode tx = mask $ \restore -> do
 
 {- | Run a computation `ephemerally` in `defaultMode`. -}
 ephemerally_
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadUnliftIO tx, MonadPQ schemas tx)
   => tx x -- ^ run inside an ephemeral transaction
   -> tx x
 ephemerally_ = ephemerally defaultMode
 
 -- | @BEGIN@ a transaction.
-begin :: TransactionMode -> Manipulation_ db () ()
+begin :: TransactionMode -> Manipulation_ schemas () ()
 begin mode = UnsafeManipulation $ "BEGIN" <+> renderSQL mode
 
 -- | @COMMIT@ a transaction.
-commit :: Manipulation_ db () ()
+commit :: Manipulation_ schemas () ()
 commit = UnsafeManipulation "COMMIT"
 
 -- | @ROLLBACK@ a transaction.
-rollback :: Manipulation_ db () ()
+rollback :: Manipulation_ schemas () ()
 rollback = UnsafeManipulation "ROLLBACK"
 
 -- | The available transaction characteristics are the transaction `IsolationLevel`,

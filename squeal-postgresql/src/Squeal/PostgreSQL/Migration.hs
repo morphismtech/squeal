@@ -185,10 +185,10 @@ import Squeal.PostgreSQL.Transaction
 
 -- | A `Migration` is a named "isomorphism" over a given category.
 -- It should contain a migration and a unique `name`.
-data Migration p db0 db1 = Migration
+data Migration p schemas0 schemas1 = Migration
   { name :: Text -- ^ The `name` of a `Migration`.
     -- Each `name` in a `Migration` should be unique.
-  , migration :: p db0 db1 -- ^ The migration of a `Migration`.
+  , migration :: p schemas0 schemas1 -- ^ The migration of a `Migration`.
   } deriving (GHC.Generic)
 instance CFunctor Migration where
   cmap f (Migration n i) = Migration n (f i)
@@ -202,7 +202,7 @@ and reversible `IsoQ` `Definition`s.
 -}
 class (Category def, Category run) => Migratory def run | def -> run where
   {- | Run a `Path` of `Migration`s.-}
-  migrate :: Path (Migration def) db0 db1 -> run db0 db1
+  migrate :: Path (Migration def) schemas0 schemas1 -> run schemas0 schemas1
 instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
   migrate path = Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
@@ -240,7 +240,7 @@ instance Migratory
 instance Migratory (IsoQ Definition) (IsoQ (Indexed PQ IO ())) where
   migrate = migrate . cmap (cmap (cmap (Indexed @PQ @IO . define)))
 
-unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
+unsafePQ :: (Functor m) => PQ schemas0 schemas1 m x -> PQ schemas0' schemas1' m x
 unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
 
 -- | The `TableType` for a Squeal migration.
@@ -303,7 +303,7 @@ mainMigrate
   :: Migratory p (Indexed PQ IO ())
   => ByteString
   -- ^ connection string
-  -> Path (Migration p) db0 db1
+  -> Path (Migration p) schemas0 schemas1
   -- ^ migrations
   -> IO ()
 mainMigrate connectTo migrations = do
@@ -344,7 +344,7 @@ mainMigrate connectTo migrations = do
       putStrLn "migrate    to run all available migrations"
       putStrLn "rollback   to rollback all available migrations"
 
-    getRunMigrationNames :: (MonadIO m) => PQ db0 db0 m [Text]
+    getRunMigrationNames :: (MonadIO m) => PQ schemas0 schemas0 m [Text]
     getRunMigrationNames =
       fmap migrationName <$>
       (unsafePQ (define createMigrations
@@ -377,7 +377,7 @@ mainMigrateIso
   :: Migratory (IsoQ def) (IsoQ (Indexed PQ IO ()))
   => ByteString
   -- ^ connection string
-  -> Path (Migration (IsoQ def)) db0 db1
+  -> Path (Migration (IsoQ def)) schemas0 schemas1
   -- ^ migrations
   -> IO ()
 mainMigrateIso connectTo migrations = do
@@ -424,7 +424,7 @@ mainMigrateIso connectTo migrations = do
       putStrLn "rollback   to rollback all available migrations"
       putStrLn "status     to display migrations run and migrations left to run"
 
-    getRunMigrationNames :: (MonadIO m) => PQ db0 db0 m [Text]
+    getRunMigrationNames :: (MonadIO m) => PQ schemas0 schemas0 m [Text]
     getRunMigrationNames =
       fmap migrationName <$>
         (unsafePQ (define createMigrations

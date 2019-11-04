@@ -78,7 +78,7 @@ createConnectionPool
   -> Int
   -- ^ Maximum number of connections to keep open per stripe. The smallest acceptable value is 1.
   -- Requests for connections will block if this limit is reached on a single stripe, even if other stripes have idle connections available.
-  -> io (Pool (K Connection db))
+  -> io (Pool (K Connection schemas))
 createConnectionPool conninfo stripes idle maxResrc =
   createPool (connectdb conninfo) finish stripes idle maxResrc
 
@@ -94,8 +94,8 @@ until a connection becomes available.
 -}
 usingConnectionPool
   :: MonadUnliftIO io
-  => Pool (K Connection db) -- ^ pool
-  -> PQ db db io x -- ^ session
+  => Pool (K Connection schemas) -- ^ pool
+  -> PQ schemas schemas io x -- ^ session
   -> io x
 usingConnectionPool pool (PQ session) = unK <$> withResource pool session
 
@@ -117,6 +117,6 @@ thus freeing up those connections sooner.
 -}
 destroyConnectionPool
   :: MonadUnliftIO io
-  => Pool (K Connection db) -- ^ pool
+  => Pool (K Connection schemas) -- ^ pool
   -> io ()
 destroyConnectionPool = destroyAllResources

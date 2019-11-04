@@ -61,10 +61,10 @@ coalesce nullxs notNullx = UnsafeExpression $
 -- >>> printSQL $ fromNull true null_
 -- COALESCE(NULL, TRUE)
 fromNull
-  :: Expression outer commons grp db params from ('NotNull ty)
+  :: Expression outer commons grp schemas params from ('NotNull ty)
   -- ^ what to convert @NULL@ to
-  -> Expression outer commons grp db params from ('Null ty)
-  -> Expression outer commons grp db params from ('NotNull ty)
+  -> Expression outer commons grp schemas params from ('Null ty)
+  -> Expression outer commons grp schemas params from ('NotNull ty)
 fromNull notNullx nullx = coalesce [nullx] notNullx
 
 -- | >>> printSQL $ null_ & isNull
@@ -82,13 +82,13 @@ isNotNull x = UnsafeExpression $ renderSQL x <+> "IS NOT NULL"
 -- >>> printSQL $ matchNull true not_ null_
 -- CASE WHEN NULL IS NULL THEN TRUE ELSE (NOT NULL) END
 matchNull
-  :: Expression outer commons grp db params from (nullty)
+  :: Expression outer commons grp schemas params from (nullty)
   -- ^ what to convert @NULL@ to
-  -> ( Expression outer commons grp db params from ('NotNull ty)
-       -> Expression outer commons grp db params from (nullty) )
+  -> ( Expression outer commons grp schemas params from ('NotNull ty)
+       -> Expression outer commons grp schemas params from (nullty) )
   -- ^ function to perform when @NULL@ is absent
-  -> Expression outer commons grp db params from ('Null ty)
-  -> Expression outer commons grp db params from (nullty)
+  -> Expression outer commons grp schemas params from ('Null ty)
+  -> Expression outer commons grp schemas params from (nullty)
 matchNull y f x = ifThenElse (isNull x) y
   (f (UnsafeExpression (renderSQL x)))
 
@@ -96,7 +96,7 @@ matchNull y f x = ifThenElse (isNull x) y
 `nullIf` gives @NULL@.
 
 >>> :set -XTypeApplications -XDataKinds
->>> let expr = nullIf (false *: param @1) :: Expression outer commons grp db '[ 'NotNull 'PGbool] from ('Null 'PGbool)
+>>> let expr = nullIf (false *: param @1) :: Expression outer commons grp schemas '[ 'NotNull 'PGbool] from ('Null 'PGbool)
 >>> printSQL expr
 NULLIF(FALSE, ($1 :: bool))
 -}

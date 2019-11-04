@@ -32,8 +32,8 @@ import Squeal.PostgreSQL.Schema
 -- | A `Condition` is an `Expression`, which can evaluate
 -- to `true`, `false` or `Squeal.PostgreSQL.Null.null_`. This is because SQL uses
 -- a three valued logic.
-type Condition outer commons grp db params from =
-  Expression outer commons grp db params from ('Null 'PGbool)
+type Condition outer commons grp schemas params from =
+  Expression outer commons grp schemas params from ('Null 'PGbool)
 
 -- | >>> printSQL true
 -- TRUE
@@ -64,19 +64,19 @@ infixr 2 .||
 
 -- | >>> :{
 -- let
---   expression :: Expression outer commons grp db params from (null 'PGint2)
+--   expression :: Expression outer commons grp schemas params from (null 'PGint2)
 --   expression = caseWhenThenElse [(true, 1), (false, 2)] 3
 -- in printSQL expression
 -- :}
 -- CASE WHEN TRUE THEN 1 WHEN FALSE THEN 2 ELSE 3 END
 caseWhenThenElse
-  :: [ ( Condition outer commons grp db params from
-       , Expression outer commons grp db params from ty
+  :: [ ( Condition outer commons grp schemas params from
+       , Expression outer commons grp schemas params from ty
      ) ]
   -- ^ whens and thens
-  -> Expression outer commons grp db params from ty
+  -> Expression outer commons grp schemas params from ty
   -- ^ else
-  -> Expression outer commons grp db params from ty
+  -> Expression outer commons grp schemas params from ty
 caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   [ "CASE"
   , mconcat
@@ -92,14 +92,14 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
 
 -- | >>> :{
 -- let
---   expression :: Expression outer commons grp db params from (null 'PGint2)
+--   expression :: Expression outer commons grp schemas params from (null 'PGint2)
 --   expression = ifThenElse true 1 0
 -- in printSQL expression
 -- :}
 -- CASE WHEN TRUE THEN 1 ELSE 0 END
 ifThenElse
-  :: Condition outer commons grp db params from
-  -> Expression outer commons grp db params from ty -- ^ then
-  -> Expression outer commons grp db params from ty -- ^ else
-  -> Expression outer commons grp db params from ty
+  :: Condition outer commons grp schemas params from
+  -> Expression outer commons grp schemas params from ty -- ^ then
+  -> Expression outer commons grp schemas params from ty -- ^ else
+  -> Expression outer commons grp schemas params from ty
 ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_

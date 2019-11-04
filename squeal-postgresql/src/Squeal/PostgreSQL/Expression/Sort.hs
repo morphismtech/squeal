@@ -36,27 +36,27 @@ import Squeal.PostgreSQL.Schema
 -- `AscNullsLast`, `DescNullsFirst` and `DescNullsLast` options are used to
 -- determine whether nulls appear before or after non-null values in the sort
 -- ordering of a `Null` result column.
-data SortExpression outer commons grp db params from where
+data SortExpression outer commons grp schemas params from where
   Asc
-    :: Expression outer commons grp db params from ('NotNull ty)
-    -> SortExpression outer commons grp db params from
+    :: Expression outer commons grp schemas params from ('NotNull ty)
+    -> SortExpression outer commons grp schemas params from
   Desc
-    :: Expression outer commons grp db params from ('NotNull ty)
-    -> SortExpression outer commons grp db params from
+    :: Expression outer commons grp schemas params from ('NotNull ty)
+    -> SortExpression outer commons grp schemas params from
   AscNullsFirst
-    :: Expression outer commons grp db params from  ('Null ty)
-    -> SortExpression outer commons grp db params from
+    :: Expression outer commons grp schemas params from  ('Null ty)
+    -> SortExpression outer commons grp schemas params from
   AscNullsLast
-    :: Expression outer commons grp db params from  ('Null ty)
-    -> SortExpression outer commons grp db params from
+    :: Expression outer commons grp schemas params from  ('Null ty)
+    -> SortExpression outer commons grp schemas params from
   DescNullsFirst
-    :: Expression outer commons grp db params from  ('Null ty)
-    -> SortExpression outer commons grp db params from
+    :: Expression outer commons grp schemas params from  ('Null ty)
+    -> SortExpression outer commons grp schemas params from
   DescNullsLast
-    :: Expression outer commons grp db params from  ('Null ty)
-    -> SortExpression outer commons grp db params from
-deriving instance Show (SortExpression outer commons grp db params from)
-instance RenderSQL (SortExpression outer commons grp db params from) where
+    :: Expression outer commons grp schemas params from  ('Null ty)
+    -> SortExpression outer commons grp schemas params from
+deriving instance Show (SortExpression outer commons grp schemas params from)
+instance RenderSQL (SortExpression outer commons grp schemas params from) where
   renderSQL = \case
     Asc expression -> renderSQL expression <+> "ASC"
     Desc expression -> renderSQL expression <+> "DESC"
@@ -80,6 +80,6 @@ using `orderBy` within `Squeal.PostgreSQL.Query.Over`.
 -}
 class OrderBy expr where
   orderBy
-    :: [SortExpression outer commons grp db params from]
-    -> expr outer commons grp db params from
-    -> expr outer commons grp db params from
+    :: [SortExpression outer commons grp schemas params from]
+    -> expr outer commons grp schemas params from
+    -> expr outer commons grp schemas params from

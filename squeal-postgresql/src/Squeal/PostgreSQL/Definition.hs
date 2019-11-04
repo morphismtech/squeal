@@ -59,12 +59,12 @@ statements
 -- database, like a `createTable`, `dropTable`, or `alterTable` command.
 -- `Definition`s may be composed using the `>>>` operator.
 newtype Definition
-  (db0 :: SchemasType)
-  (db1 :: SchemasType)
+  (schemas0 :: SchemasType)
+  (schemas1 :: SchemasType)
   = UnsafeDefinition { renderDefinition :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
-instance RenderSQL (Definition db0 db1) where
+instance RenderSQL (Definition schemas0 schemas1) where
   renderSQL = renderDefinition
 
 instance Category Definition where
@@ -75,7 +75,7 @@ instance Category Definition where
 -- | A `Manipulation` without input or output can be run as a statement
 -- along with other `Definition`s, by embedding it using `manipDefinition`.
 manipDefinition
-  :: Manipulation '[] db '[] '[]
+  :: Manipulation '[] schemas '[] '[]
   -- ^ no input or output
-  -> Definition db db
+  -> Definition schemas schemas
 manipDefinition = UnsafeDefinition . (<> ";") . renderSQL

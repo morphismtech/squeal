@@ -66,56 +66,56 @@ import Squeal.PostgreSQL.Schema
 -- >>> import Squeal.PostgreSQL
 
 createFunction
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , KnownSymbol fun
      , SOP.SListI args )
   => QualifiedAlias sch fun
-  -> NP (TypeExpression db) args
-  -> TypeExpression db ret
-  -> FunctionDefinition db args ('Returns ret)
-  -> Definition db (Alter sch (Create fun ('Function (args :=> 'Returns ret)) schema) db)
+  -> NP (TypeExpression schemas) args
+  -> TypeExpression schemas ret
+  -> FunctionDefinition schemas args ('Returns ret)
+  -> Definition schemas (Alter sch (Create fun ('Function (args :=> 'Returns ret)) schema) schemas)
 createFunction fun args ret fundef = UnsafeDefinition $
   "CREATE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
     <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
 
 createOrReplaceFunction
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , KnownSymbol fun
      , SOP.SListI args )
   => QualifiedAlias sch fun
-  -> NP (TypeExpression db) args
-  -> TypeExpression db ret
-  -> FunctionDefinition db args ('Returns ret)
-  -> Definition db (Alter sch (CreateOrReplace fun ('Function (args :=> 'Returns ret)) schema) db)
+  -> NP (TypeExpression schemas) args
+  -> TypeExpression schemas ret
+  -> FunctionDefinition schemas args ('Returns ret)
+  -> Definition schemas (Alter sch (CreateOrReplace fun ('Function (args :=> 'Returns ret)) schema) schemas)
 createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
   "CREATE" <+> "OR" <+> "REPLACE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
     <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
 
 languageSqlExpr
-  :: Expression '[] '[] 'Ungrouped db args '[] ret
-  -> FunctionDefinition db args ('Returns ret)
+  :: Expression '[] '[] 'Ungrouped schemas args '[] ret
+  -> FunctionDefinition schemas args ('Returns ret)
 languageSqlExpr expr = UnsafeFunctionDefinition $
   "language sql as"
     <+> "$$" <+> renderSQL (values_ (expr `as` #ret)) <+> "$$"
 
 languageSqlQuery
-  :: Query '[] '[] db args rets
-  -> FunctionDefinition db args ('ReturnsTable rets)
+  :: Query '[] '[] schemas args rets
+  -> FunctionDefinition schemas args ('ReturnsTable rets)
 languageSqlQuery qry = UnsafeFunctionDefinition $
   "language sql as" <+> "$$" <+> renderSQL qry <+> "$$"
 
 createSetFunction
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , KnownSymbol fun
      , SOP.SListI args
      , SOP.SListI rets )
   => QualifiedAlias sch fun
-  -> NP (TypeExpression db) args
-  -> NP (Aliased (TypeExpression db)) rets
-  -> FunctionDefinition db args ('ReturnsTable rets)
-  -> Definition db (Alter sch (Create fun ('Function (args :=> 'ReturnsTable rets)) schema) db)
+  -> NP (TypeExpression schemas) args
+  -> NP (Aliased (TypeExpression schemas)) rets
+  -> FunctionDefinition schemas args ('ReturnsTable rets)
+  -> Definition schemas (Alter sch (Create fun ('Function (args :=> 'ReturnsTable rets)) schema) schemas)
 createSetFunction fun args rets fundef = UnsafeDefinition $
   "CREATE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
@@ -127,15 +127,15 @@ createSetFunction fun args rets fundef = UnsafeDefinition $
     renderRet (ty `As` col) = renderSQL col <+> renderSQL ty
 
 createOrReplaceSetFunction
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , KnownSymbol fun
      , SOP.SListI args
      , SOP.SListI rets )
   => QualifiedAlias sch fun
-  -> NP (TypeExpression db) args
-  -> NP (Aliased (TypeExpression db)) rets
-  -> FunctionDefinition db args ('ReturnsTable rets)
-  -> Definition db (Alter sch (CreateOrReplace fun ('Function (args :=> 'ReturnsTable rets)) schema) db)
+  -> NP (TypeExpression schemas) args
+  -> NP (Aliased (TypeExpression schemas)) rets
+  -> FunctionDefinition schemas args ('ReturnsTable rets)
+  -> Definition schemas (Alter sch (CreateOrReplace fun ('Function (args :=> 'ReturnsTable rets)) schema) schemas)
 createOrReplaceSetFunction fun args rets fundef = UnsafeDefinition $
   "CREATE" <+> "OR" <+> "REPLACE" <+> "FUNCTION" <+> renderSQL fun
     <+> parenthesized (renderCommaSeparated renderSQL args)
@@ -147,15 +147,15 @@ createOrReplaceSetFunction fun args rets fundef = UnsafeDefinition $
     renderRet (ty `As` col) = renderSQL col <+> renderSQL ty
 
 createBinaryOp
-  :: forall op fun sch db schema x y z.
-     ( Has sch db schema
+  :: forall op fun sch schemas schema x y z.
+     ( Has sch schemas schema
      , Has fun schema ('Function ('[x,y] :=> 'Returns z))
      , KnownSymbol op )
   => QualifiedAlias sch fun
-  -> TypeExpression db x
-  -> TypeExpression db y
-  -> Definition db
-      (Alter sch (Create op ('Operator ('BinaryOp x y z)) schema) db)
+  -> TypeExpression schemas x
+  -> TypeExpression schemas y
+  -> Definition schemas
+      (Alter sch (Create op ('Operator ('BinaryOp x y z)) schema) schemas)
 createBinaryOp fun x y = UnsafeDefinition $
   "CREATE" <+> "OPERATOR" <+> renderSymbol @op
     <+> parenthesized (commaSeparated opdef)
@@ -166,14 +166,14 @@ createBinaryOp fun x y = UnsafeDefinition $
         , "RIGHTARG" <+> "=" <+> renderSQL y ]
 
 createLeftOp
-  :: forall op fun sch db schema x y.
-     ( Has sch db schema
+  :: forall op fun sch schemas schema x y.
+     ( Has sch schemas schema
      , Has fun schema ('Function ('[x] :=> 'Returns y))
      , KnownSymbol op )
   => QualifiedAlias sch fun
-  -> TypeExpression db x
-  -> Definition db
-      (Alter sch (Create op ('Operator ('LeftOp x y)) schema) db)
+  -> TypeExpression schemas x
+  -> Definition schemas
+      (Alter sch (Create op ('Operator ('LeftOp x y)) schema) schemas)
 createLeftOp fun x = UnsafeDefinition $
   "CREATE" <+> "OPERATOR" <+> renderSymbol @op
     <+> parenthesized (commaSeparated opdef)
@@ -183,14 +183,14 @@ createLeftOp fun x = UnsafeDefinition $
         , "RIGHTARG" <+> "=" <+> renderSQL x ]
 
 createRightOp
-  :: forall op fun sch db schema x y.
-     ( Has sch db schema
+  :: forall op fun sch schemas schema x y.
+     ( Has sch schemas schema
      , Has fun schema ('Function ('[x] :=> 'Returns y))
      , KnownSymbol op )
   => QualifiedAlias sch fun
-  -> TypeExpression db x
-  -> Definition db
-      (Alter sch (Create op ('Operator ('RightOp x y)) schema) db)
+  -> TypeExpression schemas x
+  -> Definition schemas
+      (Alter sch (Create op ('Operator ('RightOp x y)) schema) schemas)
 createRightOp fun x = UnsafeDefinition $
   "CREATE" <+> "OPERATOR" <+> renderSymbol @op
     <+> parenthesized (commaSeparated opdef)
@@ -200,39 +200,39 @@ createRightOp fun x = UnsafeDefinition $
         , "LEFTARG" <+> "=" <+> renderSQL x ]
 
 dropFunction
-  :: (Has sch db schema, KnownSymbol fun)
+  :: (Has sch schemas schema, KnownSymbol fun)
   => QualifiedAlias sch fun
   -- ^ name of the user defined function
-  -> Definition db (Alter sch (DropSchemum fun 'Function schema) db)
+  -> Definition schemas (Alter sch (DropSchemum fun 'Function schema) schemas)
 dropFunction fun = UnsafeDefinition $
   "DROP" <+> "FUNCTION" <+> renderSQL fun <> ";"
 
 dropFunctionIfExists
-  :: (Has sch db schema, KnownSymbol fun)
+  :: (Has sch schemas schema, KnownSymbol fun)
   => QualifiedAlias sch fun
   -- ^ name of the user defined function
-  -> Definition db (Alter sch (DropSchemumIfExists fun 'Function schema) db)
+  -> Definition schemas (Alter sch (DropSchemumIfExists fun 'Function schema) schemas)
 dropFunctionIfExists fun = UnsafeDefinition $
   "DROP FUNCTION IF EXISTS" <+> renderSQL fun <> ";"
 
 dropOperator
-  :: (Has sch db schema, KnownSymbol op)
+  :: (Has sch schemas schema, KnownSymbol op)
   => QualifiedAlias sch op
   -- ^ name of the user defined operator
-  -> Definition db (Alter sch (DropSchemum op 'Operator schema) db)
+  -> Definition schemas (Alter sch (DropSchemum op 'Operator schema) schemas)
 dropOperator op = UnsafeDefinition $
   "DROP" <+> "OPERATOR" <+> renderSQL op <> ";"
 
 dropOperatorIfExists
-  :: (Has sch db schema, KnownSymbol op)
+  :: (Has sch schemas schema, KnownSymbol op)
   => QualifiedAlias sch op
   -- ^ name of the user defined operator
-  -> Definition db (Alter sch (DropSchemumIfExists op 'Operator schema) db)
+  -> Definition schemas (Alter sch (DropSchemumIfExists op 'Operator schema) schemas)
 dropOperatorIfExists op = UnsafeDefinition $
   "DROP OPERATOR IF EXISTS" <+> renderSQL op <> ";"
 
-newtype FunctionDefinition db args ret = UnsafeFunctionDefinition
+newtype FunctionDefinition schemas args ret = UnsafeFunctionDefinition
   { renderFunctionDefinition :: ByteString }
   deriving (Eq,Show,GHC.Generic,NFData)
-instance RenderSQL (FunctionDefinition db args ret) where
+instance RenderSQL (FunctionDefinition schemas args ret) where
   renderSQL = renderFunctionDefinition

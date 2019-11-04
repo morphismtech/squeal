@@ -71,13 +71,13 @@ import Squeal.PostgreSQL.Schema
 newtype TableConstraintExpression
   (sch :: Symbol)
   (tab :: Symbol)
-  (db :: SchemasType)
+  (schemas :: SchemasType)
   (constraint :: TableConstraint)
     = UnsafeTableConstraintExpression
     { renderTableConstraintExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance RenderSQL
-  (TableConstraintExpression sch tab db constraint) where
+  (TableConstraintExpression sch tab schemas constraint) where
     renderSQL = renderTableConstraintExpression
 
 {-| A `check` constraint is the most generic `TableConstraint` type.
@@ -105,14 +105,14 @@ let
 CREATE TABLE "tab" ("a" int NOT NULL, "b" int NOT NULL, CONSTRAINT "inequality" CHECK (("a" > "b")));
 -}
 check
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , Has tab schema ('Table table)
      , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify the subcolumns which are getting checked
-  -> (forall t. Condition '[] '[] 'Ungrouped db '[] '[t ::: subcolumns])
+  -> (forall t. Condition '[] '[] 'Ungrouped schemas '[] '[t ::: subcolumns])
   -- ^ a closed `Condition` on those subcolumns
-  -> TableConstraintExpression sch tab db ('Check aliases)
+  -> TableConstraintExpression sch tab schemas ('Check aliases)
 check _cols condition = UnsafeTableConstraintExpression $
   "CHECK" <+> parenthesized (renderSQL condition)
 
@@ -140,12 +140,12 @@ let
 CREATE TABLE "tab" ("a" int NULL, "b" int NULL, CONSTRAINT "uq_a_b" UNIQUE ("a", "b"));
 -}
 unique
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , Has tab schema('Table table)
      , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify subcolumns which together are unique for each row
-  -> TableConstraintExpression sch tab db ('Unique aliases)
+  -> TableConstraintExpression sch tab schemas ('Unique aliases)
 unique columns = UnsafeTableConstraintExpression $
   "UNIQUE" <+> parenthesized (renderSQL columns)
 
@@ -174,13 +174,13 @@ let
 CREATE TABLE "tab" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_id" PRIMARY KEY ("id"));
 -}
 primaryKey
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , Has tab schema ('Table table)
      , HasAll aliases (TableToColumns table) subcolumns
      , AllNotNull subcolumns )
   => NP Alias aliases
   -- ^ specify the subcolumns which together form a primary key.
-  -> TableConstraintExpression sch tab db ('PrimaryKey aliases)
+  -> TableConstraintExpression sch tab schemas ('PrimaryKey aliases)
 primaryKey columns = UnsafeTableConstraintExpression $
   "PRIMARY KEY" <+> parenthesized (renderSQL columns)
 
@@ -258,7 +258,7 @@ in printSQL setup
 CREATE TABLE "employees" ("id" serial, "name" text NOT NULL, "employer_id" integer NULL, CONSTRAINT "employees_pk" PRIMARY KEY ("id"), CONSTRAINT "employees_employer_fk" FOREIGN KEY ("employer_id") REFERENCES "employees" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 -}
 foreignKey
-  :: (ForeignKeyed db sch schema child parent
+  :: (ForeignKeyed schemas sch schema child parent
         table reftable
         columns refcolumns
         constraints cols
@@ -273,7 +273,7 @@ foreignKey
   -- ^ what to do when reference is deleted
   -> OnUpdateClause
   -- ^ what to do when reference is updated
-  -> TableConstraintExpression sch child db
+  -> TableConstraintExpression sch child schemas
       ('ForeignKey columns parent refcolumns)
 foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
   "FOREIGN KEY" <+> parenthesized (renderSQL keys)
@@ -283,7 +283,7 @@ foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
   <+> renderSQL onupd
 
 -- | A constraint synonym between types involved in a foreign key constraint.
-type ForeignKeyed db
+type ForeignKeyed schemas
   sch
   schema
   child parent
@@ -291,7 +291,7 @@ type ForeignKeyed db
   columns refcolumns
   constraints cols
   reftys tys =
-    ( Has sch db schema
+    ( Has sch schemas schema
     , Has child schema ('Table table)
     , Has parent schema ('Table reftable)
     , HasAll columns (TableToColumns table) tys

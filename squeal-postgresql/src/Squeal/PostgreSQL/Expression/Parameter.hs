@@ -54,12 +54,12 @@ class KnownNat n => HasParameter
   | n params -> ty where
     -- | `parameter` takes a `Nat` using type application and a `TypeExpression`.
     --
-    -- >>> let expr = parameter @1 int4 :: Expression outer '[] grp db '[ 'Null 'PGint4] from ('Null 'PGint4)
+    -- >>> let expr = parameter @1 int4 :: Expression outer '[] grp schemas '[ 'Null 'PGint4] from ('Null 'PGint4)
     -- >>> printSQL expr
     -- ($1 :: int4)
     parameter
-      :: TypeExpression db ty
-      -> Expression outer commons grp db params from ty
+      :: TypeExpression schemas ty
+      -> Expression outer commons grp schemas params from ty
     parameter ty = UnsafeExpression $ parenthesized $
       "$" <> renderNat @n <+> "::"
         <+> renderSQL ty
@@ -70,11 +70,11 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
 -- | `param` takes a `Nat` using type application and for basic types,
 -- infers a `TypeExpression`.
 --
--- >>> let expr = param @1 :: Expression outer commons grp db '[ 'Null 'PGint4] from ('Null 'PGint4)
+-- >>> let expr = param @1 :: Expression outer commons grp schemas '[ 'Null 'PGint4] from ('Null 'PGint4)
 -- >>> printSQL expr
 -- ($1 :: int4)
 param
-  :: forall n outer commons db params from grp ty
-   . (PGTyped db ty, HasParameter n params ty)
-  => Expression outer commons grp db params from ty -- ^ param
-param = parameter @n (pgtype @db)
+  :: forall n outer commons schemas params from grp ty
+   . (PGTyped schemas ty, HasParameter n params ty)
+  => Expression outer commons grp schemas params from ty -- ^ param
+param = parameter @n (pgtype @schemas)

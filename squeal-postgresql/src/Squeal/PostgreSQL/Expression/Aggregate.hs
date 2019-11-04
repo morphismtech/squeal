@@ -59,7 +59,7 @@ class Aggregate expr1 exprN aggr
   --
   -- >>> :{
   -- let
-  --   expression :: Expression '[] commons ('Grouped bys) db params from ('NotNull 'PGint8)
+  --   expression :: Expression '[] commons ('Grouped bys) schemas params from ('NotNull 'PGint8)
   --   expression = countStar
   -- in printSQL expression
   -- :}
@@ -68,7 +68,7 @@ class Aggregate expr1 exprN aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression '[] commons ('Grouped bys) db params '[tab ::: '["col" ::: null ty]] ('NotNull 'PGint8)
+  --   expression :: Expression '[] commons ('Grouped bys) schemas params '[tab ::: '["col" ::: null ty]] ('NotNull 'PGint8)
   --   expression = count (All #col)
   -- in printSQL expression
   -- :}
@@ -80,7 +80,7 @@ class Aggregate expr1 exprN aggr
 
   -- | >>> :{
   -- let
-  --   expression :: Expression '[] commons ('Grouped bys) db params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null 'PGnumeric)
+  --   expression :: Expression '[] commons ('Grouped bys) schemas params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null 'PGnumeric)
   --   expression = sum_ (Distinct #col)
   -- in printSQL expression
   -- :}
@@ -109,7 +109,7 @@ class Aggregate expr1 exprN aggr
 
   >>> :{
   let
-    expression :: Expression '[] commons ('Grouped bys) db params '[tab ::: '["col" ::: null 'PGint4]] ('Null 'PGint4)
+    expression :: Expression '[] commons ('Grouped bys) schemas params '[tab ::: '["col" ::: null 'PGint4]] ('Null 'PGint4)
     expression = bitAnd (Distinct #col)
   in printSQL expression
   :}
@@ -126,7 +126,7 @@ class Aggregate expr1 exprN aggr
 
   >>> :{
   let
-    expression :: Expression '[] commons ('Grouped bys) db params '[tab ::: '["col" ::: null 'PGint4]] ('Null 'PGint4)
+    expression :: Expression '[] commons ('Grouped bys) schemas params '[tab ::: '["col" ::: null 'PGint4]] ('Null 'PGint4)
     expression = bitOr (All #col)
   in printSQL expression
   :}
@@ -143,7 +143,7 @@ class Aggregate expr1 exprN aggr
 
   >>> :{
   let
-    winFun :: WindowFunction '[] commons 'Ungrouped db params '[tab ::: '["col" ::: null 'PGbool]] ('Null 'PGbool)
+    winFun :: WindowFunction '[] commons 'Ungrouped schemas params '[tab ::: '["col" ::: null 'PGbool]] ('Null 'PGbool)
     winFun = boolAnd #col
   in printSQL winFun
   :}
@@ -159,7 +159,7 @@ class Aggregate expr1 exprN aggr
 
   >>> :{
   let
-    expression :: Expression '[] commons ('Grouped bys) db params '[tab ::: '["col" ::: null 'PGbool]] ('Null 'PGbool)
+    expression :: Expression '[] commons ('Grouped bys) schemas params '[tab ::: '["col" ::: null 'PGbool]] ('Null 'PGbool)
     expression = boolOr (All #col)
   in printSQL expression
   :}
@@ -175,7 +175,7 @@ class Aggregate expr1 exprN aggr
 
   >>> :{
   let
-    expression :: Expression '[] commons ('Grouped bys) db params '[tab ::: '["col" ::: null 'PGbool]] ('Null 'PGbool)
+    expression :: Expression '[] commons ('Grouped bys) schemas params '[tab ::: '["col" ::: null 'PGbool]] ('Null 'PGbool)
     expression = every (Distinct #col)
   in printSQL expression
   :}
@@ -372,21 +372,21 @@ data Distinction (expr :: kind -> Type) (ty :: kind)
   = All (expr ty)
   | Distinct (expr ty)
   deriving (GHC.Generic,Show,Eq,Ord)
-instance NFData (Distinction (Expression outer commons grp db params from) ty)
-instance RenderSQL (Distinction (Expression outer commons grp db params from) ty) where
+instance NFData (Distinction (Expression outer commons grp schemas params from) ty)
+instance RenderSQL (Distinction (Expression outer commons grp schemas params from) ty) where
   renderSQL = \case
     All x -> "ALL" <+> renderSQL x
     Distinct x -> "DISTINCT" <+> renderSQL x
 instance SOP.SListI tys => RenderSQL
-  (Distinction (NP (Expression outer commons grp db params from)) tys) where
+  (Distinction (NP (Expression outer commons grp schemas params from)) tys) where
     renderSQL = \case
       All xs -> "ALL" <+> renderCommaSeparated renderSQL xs
       Distinct xs -> "DISTINCT" <+> renderCommaSeparated renderSQL xs
 
 instance Aggregate
-  (Distinction (Expression outer commons 'Ungrouped db params from))
-  (Distinction (NP (Expression outer commons 'Ungrouped db params from)))
-  (Expression outer commons ('Grouped bys) db params from) where
+  (Distinction (Expression outer commons 'Ungrouped schemas params from))
+  (Distinction (NP (Expression outer commons 'Ungrouped schemas params from)))
+  (Expression outer commons ('Grouped bys) schemas params from) where
     countStar = UnsafeExpression "count(*)"
     count = unsafeAggregate1 "count"
     sum_ = unsafeAggregate1 "sum"
@@ -423,15 +423,15 @@ instance Aggregate
 -- | escape hatch to define aggregate functions
 unsafeAggregate1
   :: ByteString -- ^ aggregate function
-  -> Distinction (Expression outer commons 'Ungrouped db params from) x
-  -> Expression outer commons ('Grouped bys) db params from y
+  -> Distinction (Expression outer commons 'Ungrouped schemas params from) x
+  -> Expression outer commons ('Grouped bys) schemas params from y
 unsafeAggregate1 fun x = UnsafeExpression $ fun <> parenthesized (renderSQL x)
 
 unsafeAggregateN
   :: SOP.SListI xs
   => ByteString -- ^ function
-  -> Distinction (NP (Expression outer commons 'Ungrouped db params from)) xs
-  -> Expression outer commons ('Grouped bys) db params from y
+  -> Distinction (NP (Expression outer commons 'Ungrouped schemas params from)) xs
+  -> Expression outer commons ('Grouped bys) schemas params from y
 unsafeAggregateN fun xs = UnsafeExpression $ fun <> parenthesized (renderSQL xs)
 
 -- | A type family that calculates `PGSum``PGType` of

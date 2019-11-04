@@ -76,12 +76,12 @@ CREATE TABLE "tab" ("a" int NULL, "b" real NULL);
 CREATE INDEX "ix" ON "tab" USING btree (("a") ASC NULLS FIRST, ("b") ASC NULLS LAST);
 -}
 createIndex
-  :: (Has sch db schema, Has tab schema ('Table table), KnownSymbol ix)
+  :: (Has sch schemas schema, Has tab schema ('Table table), KnownSymbol ix)
   => Alias ix
   -> QualifiedAlias sch tab
   -> IndexMethod method
-  -> [SortExpression '[] '[] 'Ungrouped db '[] '[tab ::: TableToRow table]]
-  -> Definition db (Alter sch (Create ix ('Index method) schema) db)
+  -> [SortExpression '[] '[] 'Ungrouped schemas '[] '[tab ::: TableToRow table]]
+  -> Definition schemas (Alter sch (Create ix ('Index method) schema) schemas)
 createIndex ix tab method cols = UnsafeDefinition $
   "CREATE" <+> "INDEX" <+> renderSQL ix <+> "ON" <+> renderSQL tab
     <+> "USING" <+> renderSQL method
@@ -101,12 +101,12 @@ createIndex ix tab method cols = UnsafeDefinition $
         <+> "DESC NULLS LAST"
 
 createIndexIfNotExists
-  :: (Has sch db schema, Has tab schema ('Table table), KnownSymbol ix)
+  :: (Has sch schemas schema, Has tab schema ('Table table), KnownSymbol ix)
   => Alias ix
   -> QualifiedAlias sch tab
   -> IndexMethod method
-  -> [SortExpression '[] '[] 'Ungrouped db '[] '[tab ::: TableToRow table]]
-  -> Definition db (Alter sch (CreateIfNotExists ix ('Index method) schema) db)
+  -> [SortExpression '[] '[] 'Ungrouped schemas '[] '[tab ::: TableToRow table]]
+  -> Definition schemas (Alter sch (CreateIfNotExists ix ('Index method) schema) schemas)
 createIndexIfNotExists ix tab method cols = UnsafeDefinition $
   "CREATE INDEX IF NOT EXISTS" <+> renderSQL ix <+> "ON" <+> renderSQL tab
     <+> "USING" <+> renderSQL method
@@ -145,15 +145,15 @@ brin = UnsafeIndexMethod "brin"
 -- >>> printSQL (dropIndex #ix :: Definition (Public '["ix" ::: 'Index 'Btree]) (Public '[]))
 -- DROP INDEX "ix";
 dropIndex
-  :: (Has sch db schema, KnownSymbol ix)
+  :: (Has sch schemas schema, KnownSymbol ix)
   => QualifiedAlias sch ix
   -- ^ name of the user defined index
-  -> Definition db (Alter sch (DropSchemum ix 'Index schema) db)
+  -> Definition schemas (Alter sch (DropSchemum ix 'Index schema) schemas)
 dropIndex ix = UnsafeDefinition $ "DROP" <+> "INDEX" <+> renderSQL ix <> ";"
 
 dropIndexIfExists
-  :: (Has sch db schema, KnownSymbol ix)
+  :: (Has sch schemas schema, KnownSymbol ix)
   => QualifiedAlias sch ix
   -- ^ name of the user defined index
-  -> Definition db (Alter sch (DropSchemumIfExists ix 'Index schema) db)
+  -> Definition schemas (Alter sch (DropSchemumIfExists ix 'Index schema) schemas)
 dropIndexIfExists ix = UnsafeDefinition $ "DROP INDEX IF EXISTS" <+> renderSQL ix <> ";"

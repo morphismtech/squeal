@@ -45,7 +45,7 @@ atan2_ = unsafeFunctionN "atan2"
 --
 -- >>> :{
 -- let
---   expression :: Expression outer commons grp db params from (null 'PGint2)
+--   expression :: Expression outer commons grp schemas params from (null 'PGint2)
 --   expression = 5 `quot_` 2
 -- in printSQL expression
 -- :}
@@ -59,7 +59,7 @@ quot_ = unsafeBinaryOp "/"
 --
 -- >>> :{
 -- let
---   expression :: Expression outer commons grp db params from (null 'PGint2)
+--   expression :: Expression outer commons grp schemas params from (null 'PGint2)
 --   expression = 5 `rem_` 2
 -- in printSQL expression
 -- :}
@@ -71,7 +71,7 @@ rem_ = unsafeBinaryOp "%"
 
 -- | >>> :{
 -- let
---   expression :: Expression outer commons grp db params from (null 'PGfloat4)
+--   expression :: Expression outer commons grp schemas params from (null 'PGfloat4)
 --   expression = trunc pi
 -- in printSQL expression
 -- :}
@@ -81,7 +81,7 @@ trunc = unsafeFunction "trunc"
 
 -- | >>> :{
 -- let
---   expression :: Expression outer commons grp db params from (null 'PGfloat4)
+--   expression :: Expression outer commons grp schemas params from (null 'PGfloat4)
 --   expression = round_ pi
 -- in printSQL expression
 -- :}
@@ -91,7 +91,7 @@ round_ = unsafeFunction "round"
 
 -- | >>> :{
 -- let
---   expression :: Expression outer commons grp db params from (null 'PGfloat4)
+--   expression :: Expression outer commons grp schemas params from (null 'PGfloat4)
 --   expression = ceiling_ pi
 -- in printSQL expression
 -- :}

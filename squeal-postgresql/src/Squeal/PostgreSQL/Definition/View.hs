@@ -62,19 +62,19 @@ in printSQL definition
 CREATE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
 -}
 createView
-  :: (Has sch db schema, KnownSymbol vw)
+  :: (Has sch schemas schema, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ the name of the view to add
-  -> Query '[] '[] db '[] view -- ^ query
-  -> Definition db (Alter sch (Create vw ('View view) schema) db)
+  -> Query '[] '[] schemas '[] view -- ^ query
+  -> Definition schemas (Alter sch (Create vw ('View view) schema) schemas)
 createView alias query = UnsafeDefinition $
   "CREATE" <+> "VIEW" <+> renderSQL alias <+> "AS"
   <+> renderQuery query <> ";"
 
 createOrReplaceView
-  :: (Has sch db schema, KnownSymbol vw)
+  :: (Has sch schemas schema, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ the name of the view to add
-  -> Query '[] '[] db '[] view -- ^ query
-  -> Definition db (Alter sch (CreateOrReplace vw ('View view) schema) db)
+  -> Query '[] '[] schemas '[] view -- ^ query
+  -> Definition schemas (Alter sch (CreateOrReplace vw ('View view) schema) schemas)
 createOrReplaceView alias query = UnsafeDefinition $
   "CREATE OR REPLACE VIEW" <+> renderSQL alias <+> "AS"
   <+> renderQuery query <> ";"
@@ -92,13 +92,13 @@ createOrReplaceView alias query = UnsafeDefinition $
 -- :}
 -- DROP VIEW "bc";
 dropView
-  :: (Has sch db schema, KnownSymbol vw)
+  :: (Has sch schemas schema, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ view to remove
-  -> Definition db (Alter sch (DropSchemum vw 'View schema) db)
+  -> Definition schemas (Alter sch (DropSchemum vw 'View schema) schemas)
 dropView vw = UnsafeDefinition $ "DROP VIEW" <+> renderSQL vw <> ";"
 
 dropViewIfExists
-  :: (Has sch db schema, KnownSymbol vw)
+  :: (Has sch schemas schema, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ view to remove
-  -> Definition db (Alter sch (DropIfExists vw schema) db)
+  -> Definition schemas (Alter sch (DropIfExists vw schema) schemas)
 dropViewIfExists vw = UnsafeDefinition $ "DROP VIEW IF EXISTS" <+> renderSQL vw <> ";"

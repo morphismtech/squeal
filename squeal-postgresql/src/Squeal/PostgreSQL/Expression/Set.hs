@@ -49,17 +49,17 @@ import Squeal.PostgreSQL.Schema
 A @RankNType@ for set returning functions with 1 argument.
 -}
 type SetFunction fun ty row
-  =  forall outer commons db params
-  .  Expression outer commons 'Ungrouped db params '[] ty
+  =  forall outer commons schemas params
+  .  Expression outer commons 'Ungrouped schemas params '[] ty
      -- ^ input
-  -> FromClause outer commons db params '[fun ::: row]
+  -> FromClause outer commons schemas params '[fun ::: row]
      -- ^ output
 
-type SetFunctionDB fun db ty row
+type SetFunctionDB fun schemas ty row
   =  forall outer commons params
-  .  Expression outer commons 'Ungrouped db params '[] ty
+  .  Expression outer commons 'Ungrouped schemas params '[] ty
      -- ^ input
-  -> FromClause outer commons db params '[fun ::: row]
+  -> FromClause outer commons schemas params '[fun ::: row]
      -- ^ output
 
 -- | Escape hatch for a set returning function with 1 argument.
@@ -70,20 +70,20 @@ unsafeSetFunction x = UnsafeFromClause $
   renderSymbol @fun <> parenthesized (renderSQL x)
 
 setFunction
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , Has fun schema ('Function ('[ty] :=> 'ReturnsTable row)) )
   => QualifiedAlias sch fun
-  -> SetFunctionDB fun db ty row
+  -> SetFunctionDB fun schemas ty row
 setFunction _ = unsafeSetFunction
 
 {- |
 A @RankNType@ for set returning functions with multiple argument.
 -}
 type SetFunctionN fun tys row
-  =  forall outer commons db params
-  .  NP (Expression outer commons 'Ungrouped db params '[]) tys
+  =  forall outer commons schemas params
+  .  NP (Expression outer commons 'Ungrouped schemas params '[]) tys
      -- ^ inputs
-  -> FromClause outer commons db params '[fun ::: row]
+  -> FromClause outer commons schemas params '[fun ::: row]
      -- ^ output
 
 -- | Escape hatch for a set returning function with multiple argument.
@@ -93,19 +93,19 @@ unsafeSetFunctionN
 unsafeSetFunctionN xs = UnsafeFromClause $
   renderSymbol @fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
-type SetFunctionNDB fun db tys row
+type SetFunctionNDB fun schemas tys row
   =  forall outer commons params
-  .  NP (Expression outer commons 'Ungrouped db params '[]) tys
+  .  NP (Expression outer commons 'Ungrouped schemas params '[]) tys
      -- ^ inputs
-  -> FromClause outer commons db params '[fun ::: row]
+  -> FromClause outer commons schemas params '[fun ::: row]
      -- ^ output
 
 setFunctionN
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , Has fun schema ('Function (tys :=> 'ReturnsTable row))
      , SOP.SListI tys )
   => QualifiedAlias sch fun
-  -> SetFunctionNDB fun db tys row
+  -> SetFunctionNDB fun schemas tys row
 setFunctionN _ = unsafeSetFunctionN
 
 {- | @generateSeries (start *: stop)@

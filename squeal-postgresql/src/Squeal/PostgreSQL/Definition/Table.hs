@@ -96,14 +96,14 @@ createTable
      , columns ~ (col ': cols)
      , SOP.SListI columns
      , SOP.SListI constraints
-     , Has sch db0 schema0
-     , db1 ~ Alter sch (Create tab ('Table (constraints :=> columns)) schema0) db0 )
+     , Has sch schemas0 schema0
+     , schemas1 ~ Alter sch (Create tab ('Table (constraints :=> columns)) schema0) schemas0 )
   => QualifiedAlias sch tab -- ^ the name of the table to add
-  -> NP (Aliased (ColumnTypeExpression db0)) columns
+  -> NP (Aliased (ColumnTypeExpression schemas0)) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression sch tab db1)) constraints
+  -> NP (Aliased (TableConstraintExpression sch tab schemas1)) constraints
     -- ^ constraints that must hold for the table
-  -> Definition db0 db1
+  -> Definition schemas0 schemas1
 createTable tab columns constraints = UnsafeDefinition $
   "CREATE TABLE" <+> renderCreation tab columns constraints
 
@@ -136,14 +136,14 @@ createTableIfNotExists
      , columns ~ (col ': cols)
      , SOP.SListI columns
      , SOP.SListI constraints
-     , Has sch db0 schema0
-     , db1 ~ Alter sch (CreateIfNotExists tab ('Table (constraints :=> columns)) schema0) db0 )
+     , Has sch schemas0 schema0
+     , schemas1 ~ Alter sch (CreateIfNotExists tab ('Table (constraints :=> columns)) schema0) schemas0 )
   => QualifiedAlias sch tab -- ^ the name of the table to add
-  -> NP (Aliased (ColumnTypeExpression db0)) columns
+  -> NP (Aliased (ColumnTypeExpression schemas0)) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression sch tab db1)) constraints
+  -> NP (Aliased (TableConstraintExpression sch tab schemas1)) constraints
     -- ^ constraints that must hold for the table
-  -> Definition db0 db1
+  -> Definition schemas0 schemas1
 createTableIfNotExists tab columns constraints = UnsafeDefinition $
   "CREATE TABLE IF NOT EXISTS"
   <+> renderCreation tab columns constraints
@@ -155,9 +155,9 @@ renderCreation
      , SOP.SListI columns
      , SOP.SListI constraints )
   => QualifiedAlias sch tab -- ^ the name of the table to add
-  -> NP (Aliased (ColumnTypeExpression db0)) columns
+  -> NP (Aliased (ColumnTypeExpression schemas0)) columns
     -- ^ the names and datatype of each column
-  -> NP (Aliased (TableConstraintExpression sch tab db1)) constraints
+  -> NP (Aliased (TableConstraintExpression sch tab schemas1)) constraints
     -- ^ constraints that must hold for the table
   -> ByteString
 renderCreation tab columns constraints = renderSQL tab
@@ -169,11 +169,11 @@ renderCreation tab columns constraints = renderSQL tab
                renderCommaSeparated renderConstraint constraints ) )
   <> ";"
   where
-    renderColumnDef :: Aliased (ColumnTypeExpression db) x -> ByteString
+    renderColumnDef :: Aliased (ColumnTypeExpression schemas) x -> ByteString
     renderColumnDef (ty `As` column) =
       renderSQL column <+> renderColumnTypeExpression ty
     renderConstraint
-      :: Aliased (TableConstraintExpression sch tab db) constraint
+      :: Aliased (TableConstraintExpression sch tab schemas) constraint
       -> ByteString
     renderConstraint (constraint `As` alias) =
       "CONSTRAINT" <+> renderSQL alias <+> renderSQL constraint
@@ -189,25 +189,25 @@ renderCreation tab columns constraints = renderSQL tab
 -- >>> printSQL definition
 -- DROP TABLE "muh_table";
 dropTable
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , KnownSymbol tab )
   => QualifiedAlias sch tab -- ^ table to remove
-  -> Definition db (Alter sch (DropSchemum tab 'Table schema) db)
+  -> Definition schemas (Alter sch (DropSchemum tab 'Table schema) schemas)
 dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderSQL tab <> ";"
 
 dropTableIfExists
-  :: ( Has sch db schema
+  :: ( Has sch schemas schema
      , KnownSymbol tab)
   => QualifiedAlias sch tab -- ^ table to remove
-  -> Definition db (Alter sch (DropSchemumIfExists tab 'Table schema) db)
+  -> Definition schemas (Alter sch (DropSchemumIfExists tab 'Table schema) schemas)
 dropTableIfExists tab = UnsafeDefinition $ "DROP TABLE IF EXISTS" <+> renderSQL tab <> ";"
 
 -- | `alterTable` changes the definition of a table from the schema.
 alterTable
-  :: (Has sch db schema, KnownSymbol tab)
+  :: (Has sch schemas schema, KnownSymbol tab)
   => QualifiedAlias sch tab -- ^ table to alter
-  -> AlterTable sch tab db table -- ^ alteration to perform
-  -> Definition db (Alter sch (Alter tab ('Table table) schema) db)
+  -> AlterTable sch tab schemas table -- ^ alteration to perform
+  -> Definition schemas (Alter sch (Alter tab ('Table table) schema) schemas)
 alterTable tab alteration = UnsafeDefinition $
   "ALTER TABLE"
   <+> renderSQL tab
@@ -216,10 +216,10 @@ alterTable tab alteration = UnsafeDefinition $
 
 -- | `alterTable` changes the definition of a table from the schema.
 alterTableIfExists
-  :: (Has sch db schema, KnownSymbol tab)
+  :: (Has sch schemas schema, KnownSymbol tab)
   => QualifiedAlias sch tab -- ^ table to alter
-  -> AlterTable sch tab db table -- ^ alteration to perform
-  -> Definition db (Alter sch (AlterIfExists tab ('Table table) schema) db)
+  -> AlterTable sch tab schemas table -- ^ alteration to perform
+  -> Definition schemas (Alter sch (AlterIfExists tab ('Table table) schema) schemas)
 alterTableIfExists tab alteration = UnsafeDefinition $
   "ALTER TABLE IF EXISTS"
   <+> renderSQL tab
@@ -253,7 +253,7 @@ alterTableIfExistsRename tab0 tab1 = UnsafeDefinition $
 newtype AlterTable
   (sch :: Symbol)
   (tab :: Symbol)
-  (db :: SchemasType)
+  (schemas :: SchemasType)
   (table :: TableType) =
     UnsafeAlterTable {renderAlterTable :: ByteString}
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
@@ -271,14 +271,14 @@ newtype AlterTable
 -- ALTER TABLE "tab" ADD CONSTRAINT "positive" CHECK (("col" > 0));
 addConstraint
   :: ( KnownSymbol alias
-     , Has sch db schema
+     , Has sch schemas schema
      , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (Create alias constraint constraints :=> columns) )
   => Alias alias
-  -> TableConstraintExpression sch tab db constraint
+  -> TableConstraintExpression sch tab schemas constraint
   -- ^ constraint to add
-  -> AlterTable sch tab db table1
+  -> AlterTable sch tab schemas table1
 addConstraint alias constraint = UnsafeAlterTable $
   "ADD" <+> "CONSTRAINT" <+> renderSQL alias
     <+> renderSQL constraint
@@ -296,13 +296,13 @@ addConstraint alias constraint = UnsafeAlterTable $
 -- ALTER TABLE "tab" DROP CONSTRAINT "positive";
 dropConstraint
   :: ( KnownSymbol constraint
-     , Has sch db schema
+     , Has sch schemas schema
      , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (Drop constraint constraints :=> columns) )
   => Alias constraint
   -- ^ constraint to drop
-  -> AlterTable sch tab db table1
+  -> AlterTable sch tab schemas table1
 dropConstraint constraint = UnsafeAlterTable $
   "DROP" <+> "CONSTRAINT" <+> renderSQL constraint
 
@@ -336,12 +336,12 @@ class AddColumn ty where
   -- ALTER TABLE "tab" ADD COLUMN "col2" text NULL;
   addColumn
     :: ( KnownSymbol column
-       , Has sch db schema
+       , Has sch schemas schema
        , Has tab schema ('Table table0)
        , table0 ~ (constraints :=> columns) )
     => Alias column -- ^ column to add
-    -> ColumnTypeExpression db ty -- ^ type of the new column
-    -> AlterTable sch tab db (constraints :=> Create column ty columns)
+    -> ColumnTypeExpression schemas ty -- ^ type of the new column
+    -> AlterTable sch tab schemas (constraints :=> Create column ty columns)
   addColumn column ty = UnsafeAlterTable $
     "ADD COLUMN" <+> renderSQL column <+> renderColumnTypeExpression ty
 instance {-# OVERLAPPING #-} AddColumn ('Def :=> ty)
@@ -365,12 +365,12 @@ instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 -- ALTER TABLE "tab" DROP COLUMN "col2";
 dropColumn
   :: ( KnownSymbol column
-     , Has sch db schema
+     , Has sch schemas schema
      , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (constraints :=> Drop column columns) )
   => Alias column -- ^ column to remove
-  -> AlterTable sch tab db table1
+  -> AlterTable sch tab schemas table1
 dropColumn column = UnsafeAlterTable $
   "DROP COLUMN" <+> renderSQL column
 
@@ -388,32 +388,32 @@ dropColumn column = UnsafeAlterTable $
 renameColumn
   :: ( KnownSymbol column0
      , KnownSymbol column1
-     , Has sch db schema
+     , Has sch schemas schema
      , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , table1 ~ (constraints :=> Rename column0 column1 columns) )
   => Alias column0 -- ^ column to rename
   -> Alias column1 -- ^ what to rename the column
-  -> AlterTable sch tab db table1
+  -> AlterTable sch tab schemas table1
 renameColumn column0 column1 = UnsafeAlterTable $
   "RENAME COLUMN" <+> renderSQL column0  <+> "TO" <+> renderSQL column1
 
 -- | An `alterColumn` alters a single column.
 alterColumn
   :: ( KnownSymbol column
-     , Has sch db schema
+     , Has sch schemas schema
      , Has tab schema ('Table table0)
      , table0 ~ (constraints :=> columns)
      , Has column columns ty0
      , table1 ~ (constraints :=> Alter column ty1 columns))
   => Alias column -- ^ column to alter
-  -> AlterColumn db ty0 ty1 -- ^ alteration to perform
-  -> AlterTable sch tab db table1
+  -> AlterColumn schemas ty0 ty1 -- ^ alteration to perform
+  -> AlterTable sch tab schemas table1
 alterColumn column alteration = UnsafeAlterTable $
   "ALTER COLUMN" <+> renderSQL column <+> renderAlterColumn alteration
 
 -- | An `AlterColumn` describes the alteration to perform on a single column.
-newtype AlterColumn (db :: SchemasType) (ty0 :: ColumnType) (ty1 :: ColumnType) =
+newtype AlterColumn (schemas :: SchemasType) (ty0 :: ColumnType) (ty1 :: ColumnType) =
   UnsafeAlterColumn {renderAlterColumn :: ByteString}
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 
@@ -431,8 +431,8 @@ newtype AlterColumn (db :: SchemasType) (ty0 :: ColumnType) (ty1 :: ColumnType) 
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" SET DEFAULT 5;
 setDefault
-  :: Expression '[] '[] 'Ungrouped db '[] '[] ty -- ^ default value to set
-  -> AlterColumn db (constraint :=> ty) ('Def :=> ty)
+  :: Expression '[] '[] 'Ungrouped schemas '[] '[] ty -- ^ default value to set
+  -> AlterColumn schemas (constraint :=> ty) ('Def :=> ty)
 setDefault expression = UnsafeAlterColumn $
   "SET DEFAULT" <+> renderExpression expression
 
@@ -447,7 +447,7 @@ setDefault expression = UnsafeAlterColumn $
 -- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" DROP DEFAULT;
-dropDefault :: AlterColumn db ('Def :=> ty) ('NoDef :=> ty)
+dropDefault :: AlterColumn schemas ('Def :=> ty) ('NoDef :=> ty)
 dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 
 -- | A `setNotNull` adds a @NOT NULL@ constraint to a column.
@@ -464,7 +464,7 @@ dropDefault = UnsafeAlterColumn $ "DROP DEFAULT"
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" SET NOT NULL;
 setNotNull
-  :: AlterColumn db (constraint :=> 'Null ty) (constraint :=> 'NotNull ty)
+  :: AlterColumn schemas (constraint :=> 'Null ty) (constraint :=> 'NotNull ty)
 setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 
 -- | A `dropNotNull` drops a @NOT NULL@ constraint from a column.
@@ -479,7 +479,7 @@ setNotNull = UnsafeAlterColumn $ "SET NOT NULL"
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" DROP NOT NULL;
 dropNotNull
-  :: AlterColumn db (constraint :=> 'NotNull ty) (constraint :=> 'Null ty)
+  :: AlterColumn schemas (constraint :=> 'NotNull ty) (constraint :=> 'Null ty)
 dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 
 -- | An `alterType` converts a column to a different data type.
@@ -496,5 +496,5 @@ dropNotNull = UnsafeAlterColumn $ "DROP NOT NULL"
 -- in printSQL definition
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" TYPE numeric NOT NULL;
-alterType :: ColumnTypeExpression db ty -> AlterColumn db ty0 ty
+alterType :: ColumnTypeExpression schemas ty -> AlterColumn schemas ty0 ty
 alterType ty = UnsafeAlterColumn $ "TYPE" <+> renderColumnTypeExpression ty
