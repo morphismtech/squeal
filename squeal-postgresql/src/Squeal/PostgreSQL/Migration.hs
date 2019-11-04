@@ -220,9 +220,9 @@ instance Migratory Definition (Indexed PQ IO ()) where
 instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
   migrate path = OpQ . Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
-    ctoMonoid downMigration path
+    ctoMonoid @Path downMigration (creverse path)
     where
-      downMigration step = do
+      downMigration (OpQ step) = do
         executed <- do
           result <- runQueryParams selectMigration (Only (name step))
           ntuples result
