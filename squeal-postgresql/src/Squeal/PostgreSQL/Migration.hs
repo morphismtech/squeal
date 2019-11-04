@@ -76,9 +76,9 @@ withConnection "host=localhost port=5432 dbname=exampledb" $
   manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
     -- suppress notices
   & pqThen (liftIO (putStrLn "Migrate"))
-  & pqThen (runIndexed (up (migrate migrations)))
+  & pqThen (migrateUp migrations)
   & pqThen (liftIO (putStrLn "Rollback"))
-  & pqThen (runIndexed (down (migrate migrations)))
+  & pqThen (migrateUp migrations)
 :}
 Migrate
 Rollback
@@ -141,6 +141,9 @@ module Squeal.PostgreSQL.Migration
   ( -- * Migration
     Migration (..)
   , Migratory (..)
+  , migrate
+  , migrateUp
+  , migrateDown
   , IsoQ (..)
   , MigrationsTable
   , mainMigrate
@@ -202,9 +205,9 @@ and reversible `IsoQ` `Definition`s.
 -}
 class (Category def, Category run) => Migratory def run | def -> run where
   {- | Run a `Path` of `Migration`s.-}
-  migrate :: Path (Migration def) schemas0 schemas1 -> run schemas0 schemas1
+  runMigrations :: Path (Migration def) schemas0 schemas1 -> run schemas0 schemas1
 instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
-  migrate path = Indexed . unsafePQ . transactionally_ $ do
+  runMigrations path = Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
     ctoMonoid upMigration path
     where
@@ -216,9 +219,9 @@ instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
           _ <- unsafePQ . runIndexed $ migration step
           manipulateParams_ insertMigration (Only (name step))
 instance Migratory Definition (Indexed PQ IO ()) where
-  migrate = migrate . cmap (cmap (Indexed @PQ @IO . define))
+  runMigrations = runMigrations . cmap (cmap (Indexed @PQ @IO . define))
 instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
-  migrate path = OpQ . Indexed . unsafePQ . transactionally_ $ do
+  runMigrations path = OpQ . Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
     ctoMonoid @Path downMigration (creverse path)
     where
@@ -230,18 +233,36 @@ instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
           _ <- unsafePQ . runIndexed . getOpQ $ migration step
           manipulateParams_ deleteMigration (Only (name step))
 instance Migratory (OpQ Definition) (OpQ (Indexed PQ IO ())) where
-  migrate = migrate . cmap (cmap (cmap (Indexed @PQ @IO . define)))
+  runMigrations = runMigrations . cmap (cmap (cmap (Indexed @PQ @IO . define)))
 instance Migratory
   (IsoQ (Indexed PQ IO ()))
   (IsoQ (Indexed PQ IO ())) where
-    migrate path = IsoQ
-      (migrate (cmap (cmap up) path))
-      (getOpQ (migrate (cmap (cmap (OpQ . down)) path)))
+    runMigrations path = IsoQ
+      (runMigrations (cmap (cmap up) path))
+      (getOpQ (runMigrations (cmap (cmap (OpQ . down)) path)))
 instance Migratory (IsoQ Definition) (IsoQ (Indexed PQ IO ())) where
-  migrate = migrate . cmap (cmap (cmap (Indexed @PQ @IO . define)))
+  runMigrations = runMigrations . cmap (cmap (cmap (Indexed @PQ @IO . define)))
 
 unsafePQ :: (Functor m) => PQ schemas0 schemas1 m x -> PQ schemas0' schemas1' m x
 unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
+
+migrate
+  :: Migratory def (Indexed PQ IO ())
+  => Path (Migration def) schemas0 schemas1
+  -> PQ schemas0 schemas1 IO ()
+migrate = runIndexed . runMigrations
+
+migrateUp
+  :: Migratory def (IsoQ (Indexed PQ IO ()))
+  => Path (Migration def) schemas0 schemas1
+  -> PQ schemas0 schemas1 IO ()
+migrateUp = runIndexed . up . runMigrations
+
+migrateDown
+  :: Migratory def (IsoQ (Indexed PQ IO ()))
+  => Path (Migration def) schemas0 schemas1
+  -> PQ schemas1 schemas0 IO ()
+migrateDown = runIndexed . down . runMigrations
 
 -- | The `TableType` for a Squeal migration.
 type MigrationsTable =
@@ -318,7 +339,7 @@ mainMigrate connectTo migrations = do
         suppressNotices >> migrateStatus
       Migrate -> withConnection connectTo $
         suppressNotices
-        & pqThen (runIndexed (migrate migrations))
+        & pqThen (runIndexed (runMigrations migrations))
         & pqThen migrateStatus
 
     migrateStatus :: PQ schema schema IO ()
@@ -392,11 +413,11 @@ mainMigrateIso connectTo migrations = do
         suppressNotices >> migrateStatus
       MigrateIsoUp -> withConnection connectTo $
         suppressNotices
-        & pqThen (runIndexed (up (migrate migrations)))
+        & pqThen (migrateUp migrations)
         & pqThen migrateStatus
       MigrateIsoDown -> withConnection connectTo $
         suppressNotices
-        & pqThen (runIndexed (down (migrate migrations)))
+        & pqThen (migrateDown migrations)
         & pqThen migrateStatus
 
     migrateStatus :: PQ schema schema IO ()
