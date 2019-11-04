@@ -224,12 +224,15 @@ class
   , forall i j. i ~ j => MonadTrans (t i j)
   ) => IndexedMonadTrans t where
 
+  {-# MINIMAL pqJoin | pqBind #-}
+
   -- | indexed analog of `<*>`
   pqAp
     :: Monad m
     => t i j m (x -> y)
     -> t j k m x
     -> t i k m y
+  pqAp tf tx = pqBind (<$> tx) tf
 
   -- | indexed analog of `join`
   pqJoin
@@ -244,6 +247,7 @@ class
     => (x -> t j k m y)
     -> t i j m x
     -> t i k m y
+  pqBind f t = pqJoin (f <$> t)
 
   -- | indexed analog of flipped `>>`
   pqThen
