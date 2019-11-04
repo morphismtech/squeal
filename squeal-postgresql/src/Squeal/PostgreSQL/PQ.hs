@@ -208,9 +208,14 @@ evalPQ
   -> m x
 evalPQ (PQ pq) conn = unK <$> pq conn
 
--- | An [Atkey indexed monad](https://bentnib.org/paramnotions-jfp.pdf) is a `Functor`
--- [enriched category](https://ncatlab.org/nlab/show/enriched+category).
--- An indexed monad transformer transforms a `Monad` into an indexed monad.
+{- | An [Atkey indexed monad]
+(https://bentnib.org/paramnotions-jfp.pdf)
+is a `Functor` [enriched category]
+(https://ncatlab.org/nlab/show/enriched+category).
+An indexed monad transformer transforms a `Monad` into an indexed monad,
+and _is_ a monad transformer when its source and target are the same,
+enabling use of standard @do@ notation for endo-index operations.
+-}
 class
   ( forall i j m. Monad m => Functor (t i j m)
   , forall i j m. (i ~ j, Monad m) => Monad (t i j m)
@@ -254,6 +259,8 @@ class
     -> x -> t i k m z
   pqAndThen g f x = pqBind g (f x)
 
+{- | `Indexed` reshuffles the arguments of an `IndexedMonadTrans`,
+exposing its `Category` instance.-}
 newtype Indexed t m r i j = Indexed {runIndexed :: t i j m r}
 instance
   ( IndexedMonadTrans t
@@ -263,8 +270,12 @@ instance
     id = Indexed (pure mempty)
     Indexed g . Indexed f = Indexed $ pqAp (fmap (<>) f) g
 
--- | `IndexedMonadTransPQ` is a class for indexed monad transformers that
--- support running `Definition`s using `define`.
+{- | `IndexedMonadTransPQ` is a class for indexed monad transformers
+that support running `Definition`s using `define` which acts functorially.
+
+* @define id = return ()@
+* @define (statement1 >> statement2) = define statement1 & pqThen (define statement2)@
+-}
 class IndexedMonadTrans pq => IndexedMonadTransPQ pq where
   define :: MonadIO io => Definition schemas0 schemas1 -> pq schemas0 schemas1 io ()
 
