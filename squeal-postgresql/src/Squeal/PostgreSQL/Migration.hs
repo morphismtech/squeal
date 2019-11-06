@@ -38,10 +38,9 @@ Now we can define some `Migration`s to make our tables.
 
 >>> :{
 let
-  makeUsers :: Migration Definition (Public '[]) '["public" ::: '["users" ::: 'Table UsersTable]]
-  makeUsers = Migration
-    { name = "make users table"
-    , up = createTable #users
+  makeUsers :: Migration (IsoQ Definition) (Public '[]) '["public" ::: '["users" ::: 'Table UsersTable]]
+  makeUsers = Migration "make users table" IsoQ
+    { up = createTable #users
         ( serial `as` #id :*
           notNullable text `as` #name )
         ( primaryKey #id `as` #pk_users )
@@ -51,11 +50,10 @@ let
 
 >>> :{
 let
-  makeEmails :: Migration Definition '["public" ::: '["users" ::: 'Table UsersTable]]
+  makeEmails :: Migration (IsoQ Definition) '["public" ::: '["users" ::: 'Table UsersTable]]
     '["public" ::: '["users" ::: 'Table UsersTable, "emails" ::: 'Table EmailsTable]]
-  makeEmails = Migration
-    { name = "make emails table"
-    , up = createTable #emails
+  makeEmails = Migration "make emails table" IsoQ
+    { up = createTable #emails
           ( serial `as` #id :*
             notNullable int `as` #user_id :*
             nullable text `as` #email )
@@ -85,9 +83,9 @@ withConnection "host=localhost port=5432 dbname=exampledb" $
 Migrate
 Rollback
 
-We can also create a simple executable using `defaultMain`.
+We can also create a simple executable using `mainMigrateIso`.
 
->>> let main = defaultMain "host=localhost port=5432 dbname=exampledb" migrations
+>>> let main = mainMigrateIso "host=localhost port=5432 dbname=exampledb" migrations
 
 >>> withArgs [] main
 Invalid command: "". Use:
@@ -117,8 +115,8 @@ Migrations left to run:
   - make emails table
 
 In addition to enabling `Migration`s using pure SQL `Definition`s for
-the `up` and `down` instructions, you can also perform impure `IO` actions
-by using a `Migration`s over the `Terminally` `PQ` `IO` category.
+the `up` and `down` migrations, you can also perform impure `IO` actions
+by using a `Migration`s over the `Indexed` `PQ` `IO` category.
 -}
 
 {-# LANGUAGE
@@ -126,8 +124,10 @@ by using a `Migration`s over the `Terminally` `PQ` `IO` category.
   , DeriveGeneric
   , FlexibleContexts
   , FlexibleInstances
+  , FunctionalDependencies
   , GADTs
   , LambdaCase
+  , MultiParamTypeClasses
   , OverloadedLabels
   , OverloadedStrings
   , PolyKinds
@@ -141,19 +141,24 @@ module Squeal.PostgreSQL.Migration
   ( -- * Migration
     Migration (..)
   , Migratory (..)
-  , Terminally (..)
-  , terminally
-  , pureMigration
+  , migrate
+  , migrateUp
+  , migrateDown
+  , IsoQ (..)
   , MigrationsTable
-  , defaultMain
+  , mainMigrate
+  , mainMigrateIso
   ) where
 
 import Control.Category
+import Control.Category.Free
 import Control.Monad
 import Data.ByteString (ByteString)
 import Data.Foldable (traverse_)
 import Data.Function ((&))
 import Data.List ((\\))
+import Data.Quiver
+import Data.Quiver.Functor
 import Data.Text (Text)
 import Data.Time (UTCTime)
 import Prelude hiding ((.), id)
@@ -181,146 +186,82 @@ import Squeal.PostgreSQL.Schema
 import Squeal.PostgreSQL.Transaction
 
 -- | A `Migration` is a named "isomorphism" over a given category.
--- It should contain an inverse pair of `up` and `down`
--- instructions and a unique `name`.
+-- It should contain a migration and a unique `name`.
 data Migration p schemas0 schemas1 = Migration
   { name :: Text -- ^ The `name` of a `Migration`.
     -- Each `name` in a `Migration` should be unique.
-  , up   :: p schemas0 schemas1 -- ^ The `up` instruction of a `Migration`.
-  , down :: p schemas1 schemas0 -- ^ The `down` instruction of a `Migration`.
+  , migration :: p schemas0 schemas1 -- ^ The migration of a `Migration`.
   } deriving (GHC.Generic)
+instance CFunctor Migration where
+  cmap f (Migration n i) = Migration n (f i)
 
 {- |
-A `Migratory` @p@ is a `Category` for which one can execute or rewind
-a `Path` of `Migration`s over @p@. This includes the category of pure
-SQL `Definition`s and the category of impure `Terminally` `PQ` `IO` actions.
+A `Migratory` @p@ is a `Category` for which one can execute or
+possibly rewind a `Path` of `Migration`s over @p@.
+This includes the categories of pure SQL `Definition`s,
+impure `Indexed` `PQ` `IO` @()@ actions,
+and reversible `IsoQ` `Definition`s.
 -}
-class Category p => Migratory p where
-
-  {- |
-  Run a `Path` of `Migration`s.
-  Create the `MigrationsTable` as @public.schema_migrations@ if it does not already exist.
-  In one transaction, for each each `Migration` query to see if the `Migration` has been executed;
-  if not, `up` the `Migration` and insert its `name` in the `MigrationsTable`.
-  -}
-  migrateUp
-    :: Path (Migration p) schemas0 schemas1
-    -> PQ schemas0 schemas1 IO ()
-
-  {- |
-  Rewind a `Path` of `Migration`s.
-  Create the `MigrationsTable` as @public.schema_migrations@ if it does not already exist.
-  In one transaction, for each each `Migration` query to see if the `Migration` has been executed;
-  if so, `down` the `Migration` and delete its `name` in the `MigrationsTable`.
-  -}
-  migrateDown
-    :: Path (Migration p) schemas0 schemas1
-    -> PQ schemas1 schemas0 IO ()
-
-instance Migratory Definition where
-  migrateUp = migrateUp . cmap pureMigration
-  migrateDown = migrateDown . cmap pureMigration
-
-{- | `Terminally` turns an indexed monad transformer and the monad it transforms
-into a category by restricting the return type to @()@ and permuting the type variables.
-This is similar to how applying a monad to @()@ yields a monoid.
-Since a `Terminally` action has a trivial return value, the only reason
-to run one is for the side effects, in particular database and other IO effects.
--}
-newtype Terminally trans monad x0 x1 = Terminally
-  { runTerminally :: trans x0 x1 monad () }
-  deriving GHC.Generic
-
-instance
-  ( IndexedMonadTransPQ trans
-  , Monad monad
-  , forall x0 x1. x0 ~ x1 => Monad (trans x0 x1 monad) )
-  => Category (Terminally trans monad) where
-    id = Terminally (return ())
-    Terminally g . Terminally f = Terminally $ pqThen g f
-
--- | `terminally` ignores the output of a computation, returning @()@ and
--- wrapping it up into a `Terminally`. You can lift an action in the base monad
--- by using @terminally . lift@.
-terminally
-  :: Functor (trans x0 x1 monad)
-  => trans x0 x1 monad ignore
-  -> Terminally trans monad x0 x1
-terminally = Terminally . void
-
--- | A `pureMigration` turns a `Migration` involving only pure SQL
--- `Definition`s into a `Migration` that may be combined with arbitrary `IO`.
-pureMigration
-  :: Migration Definition schemas0 schemas1
-  -> Migration (Terminally PQ IO) schemas0 schemas1
-pureMigration migration = Migration
-  { name = name migration
-  , up = terminally . define $ up migration
-  , down = terminally . define $ down migration
-  }
-
-instance Migratory (Terminally PQ IO) where
-
-  migrateUp migration = unsafePQ . transactionally_ $ do
+class (Category def, Category run) => Migratory def run | def -> run where
+  {- | Run a `Path` of `Migration`s.-}
+  runMigrations :: Path (Migration def) schemas0 schemas1 -> run schemas0 schemas1
+instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
+  runMigrations path = Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
-    upMigrations migration
-
+    ctoMonoid upMigration path
     where
-
-      upMigrations
-        :: Path (Migration (Terminally PQ IO)) schemas0 schemas1
-        -> PQ MigrationsSchemas MigrationsSchemas IO ()
-      upMigrations = \case
-        Done -> return ()
-        step :>> steps -> upMigration step >> upMigrations steps
-
-      upMigration
-        :: Migration (Terminally PQ IO) schemas0 schemas1
-        -> PQ MigrationsSchemas MigrationsSchemas IO ()
       upMigration step = do
-        executed <- queryExecuted step
+        executed <- do
+          result <- runQueryParams selectMigration (Only (name step))
+          ntuples result
         unless (executed == 1) $ do
-          unsafePQ . runTerminally $ up step
+          _ <- unsafePQ . runIndexed $ migration step
           manipulateParams_ insertMigration (Only (name step))
-
-      queryExecuted
-        :: Migration (Terminally PQ IO) schemas0 schemas1
-        -> PQ MigrationsSchemas MigrationsSchemas IO Row
-      queryExecuted step = do
-        result <- runQueryParams selectMigration (Only (name step))
-        ntuples result
-
-  migrateDown migrations = unsafePQ . transactionally_ $ do
+instance Migratory Definition (Indexed PQ IO ()) where
+  runMigrations = runMigrations . cmap (cmap (Indexed @PQ @IO . define))
+instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
+  runMigrations path = OpQ . Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
-    downMigrations migrations
-
+    ctoMonoid @Path downMigration (creverse path)
     where
-
-      downMigrations
-        :: Path (Migration (Terminally PQ IO)) schemas0 schemas1
-        -> PQ MigrationsSchemas MigrationsSchemas IO ()
-      downMigrations = \case
-        Done -> return ()
-        step :>> steps -> downMigrations steps >> downMigration step
-
-      downMigration
-        :: Migration (Terminally PQ IO) schemas0 schemas1
-        -> PQ MigrationsSchemas MigrationsSchemas IO ()
-      downMigration step = do
-        executed <- queryExecuted step
+      downMigration (OpQ step) = do
+        executed <- do
+          result <- runQueryParams selectMigration (Only (name step))
+          ntuples result
         unless (executed == 0) $ do
-          unsafePQ . runTerminally $ down step
+          _ <- unsafePQ . runIndexed . getOpQ $ migration step
           manipulateParams_ deleteMigration (Only (name step))
+instance Migratory (OpQ Definition) (OpQ (Indexed PQ IO ())) where
+  runMigrations = runMigrations . cmap (cmap (cmap (Indexed @PQ @IO . define)))
+instance Migratory
+  (IsoQ (Indexed PQ IO ()))
+  (IsoQ (Indexed PQ IO ())) where
+    runMigrations path = IsoQ
+      (runMigrations (cmap (cmap up) path))
+      (getOpQ (runMigrations (cmap (cmap (OpQ . down)) path)))
+instance Migratory (IsoQ Definition) (IsoQ (Indexed PQ IO ())) where
+  runMigrations = runMigrations . cmap (cmap (cmap (Indexed @PQ @IO . define)))
 
-      queryExecuted
-        :: Migration (Terminally PQ IO) schemas0 schemas1
-        -> PQ MigrationsSchemas MigrationsSchemas IO Row
-      queryExecuted step = do
-        result <- runQueryParams selectMigration (Only (name step))
-        ntuples result
-
-unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
+unsafePQ :: (Functor m) => PQ schemas0 schemas1 m x -> PQ schemas0' schemas1' m x
 unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
+
+migrate
+  :: Migratory def (Indexed PQ IO ())
+  => Path (Migration def) schemas0 schemas1
+  -> PQ schemas0 schemas1 IO ()
+migrate = runIndexed . runMigrations
+
+migrateUp
+  :: Migratory def (IsoQ (Indexed PQ IO ()))
+  => Path (Migration def) schemas0 schemas1
+  -> PQ schemas0 schemas1 IO ()
+migrateUp = runIndexed . up . runMigrations
+
+migrateDown
+  :: Migratory def (IsoQ (Indexed PQ IO ()))
+  => Path (Migration def) schemas0 schemas1
+  -> PQ schemas1 schemas0 IO ()
+migrateDown = runIndexed . down . runMigrations
 
 -- | The `TableType` for a Squeal migration.
 type MigrationsTable =
@@ -373,34 +314,30 @@ selectMigrations = select_
   (#name `as` #migrationName :* #executed_at `as` #migrationTime)
   (from (table #schema_migrations))
 
-data MigrateCommand
-  = MigrateStatus
-  | MigrateUp
-  | MigrateDown deriving (GHC.Generic, Show)
-
-{- | `defaultMain` creates a simple executable
-from a connection string and a list of `Migration`s. -}
-defaultMain
-  :: Migratory p
+{- | `mainMigrate` creates a simple executable
+from a connection string and a `Path` of `Migration`s. -}
+mainMigrate
+  :: Migratory p (Indexed PQ IO ())
   => ByteString
   -- ^ connection string
-  -> Path (Migration p) db0 db1
+  -> Path (Migration p) schemas0 schemas1
   -- ^ migrations
   -> IO ()
-defaultMain connectTo migrations = do
-  command <- readCommandFromArgs
-  maybe (pure ()) performCommand command
+mainMigrate connectTo migrations = do
+  command <- getArgs
+  performCommand command
 
   where
 
-    performCommand :: MigrateCommand -> IO ()
+    performCommand :: [String] -> IO ()
     performCommand = \case
-      MigrateStatus -> withConnection connectTo $
+      ["status"] -> withConnection connectTo $
         suppressNotices >> migrateStatus
-      MigrateUp -> withConnection connectTo $
-        suppressNotices & pqThen (migrateUp migrations) & pqThen migrateStatus
-      MigrateDown -> withConnection connectTo $
-        suppressNotices & pqThen (migrateDown migrations) & pqThen migrateStatus
+      ["migrate"] -> withConnection connectTo $
+        suppressNotices
+        & pqThen (runIndexed (runMigrations migrations))
+        & pqThen migrateStatus
+      args -> displayUsage args
 
     migrateStatus :: PQ schema schema IO ()
     migrateStatus = unsafePQ $ do
@@ -413,12 +350,49 @@ defaultMain connectTo migrations = do
     suppressNotices = manipulate_ $
       UnsafeManipulation "SET client_min_messages TO WARNING;"
 
-    readCommandFromArgs :: IO (Maybe MigrateCommand)
-    readCommandFromArgs = getArgs >>= \case
-      ["migrate"] -> pure . Just $ MigrateUp
-      ["rollback"] -> pure . Just $ MigrateDown
-      ["status"] -> pure . Just $ MigrateStatus
-      args -> displayUsage args >> pure Nothing
+    displayUsage :: [String] -> IO ()
+    displayUsage args = do
+      putStrLn $ "Invalid command: \"" <> unwords args <> "\". Use:"
+      putStrLn "migrate    to run all available migrations"
+      putStrLn "rollback   to rollback all available migrations"
+
+{- | `mainMigrateIso` creates a simple executable
+from a connection string and a `Path` of `Migration` `Iso`s. -}
+mainMigrateIso
+  :: Migratory (IsoQ def) (IsoQ (Indexed PQ IO ()))
+  => ByteString
+  -- ^ connection string
+  -> Path (Migration (IsoQ def)) schemas0 schemas1
+  -- ^ migrations
+  -> IO ()
+mainMigrateIso connectTo migrations = performCommand =<< getArgs
+
+  where
+
+    performCommand :: [String] -> IO ()
+    performCommand = \case
+      ["status"] -> withConnection connectTo $
+        suppressNotices >> migrateStatus
+      ["migrate"] -> withConnection connectTo $
+        suppressNotices
+        & pqThen (migrateUp migrations)
+        & pqThen migrateStatus
+      ["rollback"] -> withConnection connectTo $
+        suppressNotices
+        & pqThen (migrateDown migrations)
+        & pqThen migrateStatus
+      args -> displayUsage args
+
+    migrateStatus :: PQ schema schema IO ()
+    migrateStatus = unsafePQ $ do
+      runNames <- getRunMigrationNames
+      let names = ctoList name migrations
+          unrunNames = names \\ runNames
+      liftIO $ displayRunned runNames >> displayUnrunned unrunNames
+
+    suppressNotices :: PQ schema schema IO ()
+    suppressNotices = manipulate_ $
+      UnsafeManipulation "SET client_min_messages TO WARNING;"
 
     displayUsage :: [String] -> IO ()
     displayUsage args = do
@@ -427,22 +401,24 @@ defaultMain connectTo migrations = do
       putStrLn "rollback   to rollback all available migrations"
       putStrLn "status     to display migrations run and migrations left to run"
 
-    getRunMigrationNames :: (MonadIO m) => PQ db0 db0 m [Text]
-    getRunMigrationNames =
-      fmap migrationName <$> (unsafePQ (define createMigrations & pqThen (runQuery selectMigrations)) >>= getRows)
+getRunMigrationNames :: PQ schemas0 schemas0 IO [Text]
+getRunMigrationNames =
+  fmap migrationName <$>
+    (unsafePQ (define createMigrations
+    & pqThen (runQuery selectMigrations)) >>= getRows)
 
-    displayListOfNames :: [Text] -> IO ()
-    displayListOfNames [] = Text.putStrLn "  None"
-    displayListOfNames xs =
-      let singleName n = Text.putStrLn $ "  - " <> n
-      in traverse_ singleName xs
+displayListOfNames :: [Text] -> IO ()
+displayListOfNames [] = Text.putStrLn "  None"
+displayListOfNames xs =
+  let singleName n = Text.putStrLn $ "  - " <> n
+  in traverse_ singleName xs
 
-    displayUnrunned :: [Text] -> IO ()
-    displayUnrunned unrunned =
-      Text.putStrLn "Migrations left to run:"
-      >> displayListOfNames unrunned
+displayUnrunned :: [Text] -> IO ()
+displayUnrunned unrunned =
+  Text.putStrLn "Migrations left to run:"
+  >> displayListOfNames unrunned
 
-    displayRunned :: [Text] -> IO ()
-    displayRunned runned =
-      Text.putStrLn "Migrations already run:"
-      >> displayListOfNames runned
+displayRunned :: [Text] -> IO ()
+displayRunned runned =
+  Text.putStrLn "Migrations already run:"
+  >> displayListOfNames runned
