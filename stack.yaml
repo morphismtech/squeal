@@ -1,8 +1,7 @@
-resolver: nightly-2019-07-14
+resolver: lts-14.12
 packages:
 - squeal-postgresql
 
 extra-deps:
-- unliftio-pool-0.2.1.0
 - github: morphismtech/free-categories
-  commit: c0e555fbefb5c21619e532264c4dfeac556d0630
+  commit: a8e9fb29463ea3e116f2797c2b43fb38d43283ea

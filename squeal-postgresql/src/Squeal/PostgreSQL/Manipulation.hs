@@ -60,6 +60,7 @@ module Squeal.PostgreSQL.Manipulation
 import Control.DeepSeq
 import Data.ByteString hiding (foldr)
 import Data.Kind (Type)
+import Data.Quiver.Functor
 import GHC.TypeLits
 
 import qualified Generics.SOP as SOP

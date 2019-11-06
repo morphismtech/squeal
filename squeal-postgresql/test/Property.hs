@@ -17,7 +17,7 @@ import Data.Scientific (fromFloatDigits)
 import Data.Fixed (Fixed(MkFixed), Micro, Pico)
 import Data.String (IsString(fromString))
 import Data.Time
-import Squeal.PostgreSQL hiding (check, defaultMain)
+import Squeal.PostgreSQL hiding (check)
 import Hedgehog hiding (Range)
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Main as Main

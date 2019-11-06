@@ -23,15 +23,16 @@ Type expressions.
   , ScopedTypeVariables
   , TypeApplications
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Expression.Type
-  ( TypeExpression (..)
-  , cast
+  ( -- * type casting
+    cast
   , astype
   , inferredtype
-  , PGTyped (..)
-  , FieldTyped (..)
+    -- * type expressions
+  , TypeExpression (..)
   , typedef
   , typetable
   , typeview
@@ -78,6 +79,22 @@ module Squeal.PostgreSQL.Expression.Type
   , tsrange
   , tstzrange
   , daterange
+    -- * column type definitions
+  , ColumnTypeExpression (..)
+  , nullable
+  , notNullable
+  , default_
+  , serial2
+  , smallserial
+  , serial4
+  , serial
+  , serial8
+  , bigserial
+  , hask
+    -- * type inference
+  , PGTyped (..)
+  , PGNullityTyped (..)
+  , FieldTyped (..)
   ) where
 
 import Control.DeepSeq
@@ -91,6 +108,7 @@ import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
+import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
@@ -132,6 +150,7 @@ astype = cast
 inferredtype
   :: PGTyped schemas ty
   => Expression outer common grp schemas params from ty
+  -- ^ value
   -> Expression outer common grp schemas params from ty
 inferredtype = astype pgtype
 
@@ -151,6 +170,7 @@ instance RenderSQL (TypeExpression schemas ty) where
 typedef
   :: (Has sch schemas schema, Has td schema ('Typedef ty))
   => QualifiedAlias sch td
+  -- ^ type alias
   -> TypeExpression schemas (null ty)
 typedef = UnsafeTypeExpression . renderSQL
 
@@ -159,6 +179,7 @@ typedef = UnsafeTypeExpression . renderSQL
 typetable
   :: (Has sch schemas schema, Has tab schema ('Table table))
   => QualifiedAlias sch tab
+  -- ^ table alias
   -> TypeExpression schemas (null ('PGcomposite (TableToRow table)))
 typetable = UnsafeTypeExpression . renderSQL
 
@@ -167,6 +188,7 @@ typetable = UnsafeTypeExpression . renderSQL
 typeview
   :: (Has sch schemas schema, Has vw schema ('View view))
   => QualifiedAlias sch vw
+  -- ^ view alias
   -> TypeExpression schemas (null ('PGcomposite view))
 typeview = UnsafeTypeExpression . renderSQL
 
@@ -353,3 +375,72 @@ class FieldTyped schemas ty where
 instance (KnownSymbol alias, PGTyped schemas ty)
   => FieldTyped schemas (alias ::: ty) where
     fieldtype = pgtype `As` Alias
+
+-- | `ColumnTypeExpression`s are used in `createTable` commands.
+newtype ColumnTypeExpression (schemas :: SchemasType) (ty :: ColumnType)
+  = UnsafeColumnTypeExpression { renderColumnTypeExpression :: ByteString }
+  deriving (GHC.Generic,Show,Eq,Ord,NFData)
+instance RenderSQL (ColumnTypeExpression schemas ty) where
+  renderSQL = renderColumnTypeExpression
+
+-- | used in `createTable` commands as a column constraint to note that
+-- @NULL@ may be present in a column
+nullable
+  :: TypeExpression schemas (nullity ty)
+  -> ColumnTypeExpression schemas ('NoDef :=> 'Null ty)
+nullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NULL"
+
+-- | used in `createTable` commands as a column constraint to ensure
+-- @NULL@ is not present in a column
+notNullable
+  :: TypeExpression schemas (nullity ty)
+  -> ColumnTypeExpression schemas ('NoDef :=> 'NotNull ty)
+notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
+
+-- | used in `createTable` commands as a column constraint to give a default
+default_
+  :: Expression '[] '[] 'Ungrouped schemas '[] '[] ty
+  -> ColumnTypeExpression schemas ('NoDef :=> ty)
+  -> ColumnTypeExpression schemas ('Def :=> ty)
+default_ x ty = UnsafeColumnTypeExpression $
+  renderSQL ty <+> "DEFAULT" <+> renderExpression x
+
+-- | not a true type, but merely a notational convenience for creating
+-- unique identifier columns with type `PGint2`
+serial2, smallserial
+  :: ColumnTypeExpression schemas ('Def :=> 'NotNull 'PGint2)
+serial2 = UnsafeColumnTypeExpression "serial2"
+smallserial = UnsafeColumnTypeExpression "smallserial"
+-- | not a true type, but merely a notational convenience for creating
+-- unique identifier columns with type `PGint4`
+serial4, serial
+  :: ColumnTypeExpression schemas ('Def :=> 'NotNull 'PGint4)
+serial4 = UnsafeColumnTypeExpression "serial4"
+serial = UnsafeColumnTypeExpression "serial"
+-- | not a true type, but merely a notational convenience for creating
+-- unique identifier columns with type `PGint8`
+serial8, bigserial
+  :: ColumnTypeExpression schemas ('Def :=> 'NotNull 'PGint8)
+serial8 = UnsafeColumnTypeExpression "serial8"
+bigserial = UnsafeColumnTypeExpression "bigserial"
+
+-- | Like @PGTyped@ but also accounts for nullity.
+class PGNullityTyped schemas (nullty :: NullityType) where
+  pgNullityType :: ColumnTypeExpression schemas ('NoDef :=> nullty)
+
+instance PGTyped schemas ('Null ty) => PGNullityTyped schemas ('Null ty) where
+  pgNullityType = nullable (pgtype @_ @('Null ty))
+
+instance PGTyped schemas ('NotNull ty) => PGNullityTyped schemas ('NotNull ty) where
+  pgNullityType = notNullable (pgtype @_ @('NotNull ty))
+
+-- | Allow you to specify pg column types in relation to haskell types.
+-- >>> printSQL $ hask @(Maybe String)
+-- text NULL
+--
+-- >>> printSQL $ hask @Double
+-- float8 NOT NULL
+hask
+  :: forall hask schemas. PGNullityTyped schemas (NullPG hask)
+  => ColumnTypeExpression schemas ('NoDef :=> NullPG hask)
+hask = pgNullityType
