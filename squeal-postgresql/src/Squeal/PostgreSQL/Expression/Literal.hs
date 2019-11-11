@@ -27,10 +27,13 @@ import ByteString.StrictBuilder (builderBytes)
 import Data.Binary.Builder (toLazyByteString)
 import Data.ByteString.Lazy (toStrict)
 import Data.ByteString.Builder.Scientific (scientificBuilder)
-import Data.Int
-import Data.Scientific
+import Data.Int (Int16, Int32, Int64)
+import Data.Scientific (Scientific)
 import Data.String
 import Data.Text (Text)
+import Data.Time.Clock (DiffTime, diffTimeToPicoseconds, UTCTime(UTCTime))
+import Data.Time.Calendar (Day, toGregorian)
+import Data.Time.LocalTime (LocalTime(LocalTime), TimeOfDay(TimeOfDay))
 
 import qualified Data.Aeson as JSON
 import qualified Data.Text as Text
@@ -42,7 +45,9 @@ import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Null
 import Squeal.PostgreSQL.Expression.Range
+import Squeal.PostgreSQL.Expression.Time
 import Squeal.PostgreSQL.Expression.Type
+import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
@@ -94,6 +99,31 @@ instance Literal Scientific where
     . scientificBuilder
 instance Literal Text where literal = fromString . Text.unpack
 instance Literal Lazy.Text where literal = fromString . Lazy.Text.unpack
+instance Literal DiffTime where
+  literal dt =
+    let musecs = fromIntegral (diffTimeToPicoseconds dt) / 1000
+    in interval_ musecs Microseconds
+instance Literal Day where
+  literal day =
+    let (y,m,d) = toGregorian day
+    in makeDate (fromInteger y :* fromIntegral m *: fromIntegral d)
+instance Literal UTCTime where
+  literal (UTCTime day t) =
+    let (y,m,d) = toGregorian day
+    in makeTimestamptz
+      ( fromInteger y :* fromIntegral m :* fromIntegral d
+        :* 0 :* 0 *: 0 ) !+ literal t
+instance Literal TimeOfDay where
+  literal (TimeOfDay hr mn sc) = makeTime
+    (fromIntegral hr :* fromIntegral mn *: fromRational (toRational sc))
+instance Literal LocalTime where
+  literal (LocalTime day t) =
+    let
+      (y,m,d) = toGregorian day
+      TimeOfDay hr mn sc = t
+    in makeTimestamp
+      ( fromInteger y :* fromIntegral m :* fromIntegral d
+        :* fromIntegral hr :* fromIntegral mn *: fromRational (toRational sc) )
 instance ToParam (Enumerated enum) (PG (Enumerated enum))
   => Literal (Enumerated enum) where
     literal
@@ -103,8 +133,14 @@ instance ToParam (Enumerated enum) (PG (Enumerated enum))
       . unK
       . toParam @(Enumerated enum) @(PG (Enumerated enum))
 instance Literal (Range Int32) where
-  literal r = range int4range (literal <$> r)
+  literal = range int4range . fmap literal
 instance Literal (Range Int64) where
-  literal r = range int8range (literal <$> r)
+  literal = range int8range . fmap literal
 instance Literal (Range Scientific) where
-  literal r = range numrange (literal <$> r)
+  literal = range numrange . fmap literal
+instance Literal (Range LocalTime) where
+  literal = range tsrange . fmap literal
+instance Literal (Range UTCTime) where
+  literal = range tstzrange . fmap literal
+instance Literal (Range Day) where
+  literal = range daterange . fmap literal
