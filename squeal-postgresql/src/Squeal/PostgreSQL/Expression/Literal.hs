@@ -24,8 +24,11 @@ Literal expressions
 module Squeal.PostgreSQL.Expression.Literal (Literal (..)) where
 
 import ByteString.StrictBuilder (builderBytes)
+import Data.Binary.Builder (toLazyByteString)
 import Data.ByteString.Lazy (toStrict)
+import Data.ByteString.Builder.Scientific (scientificBuilder)
 import Data.Int
+import Data.Scientific
 import Data.String
 import Data.Text (Text)
 
@@ -38,6 +41,8 @@ import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Null
+import Squeal.PostgreSQL.Expression.Range
+import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
@@ -81,6 +86,12 @@ instance Literal Int32 where literal = fromIntegral
 instance Literal Int64 where literal = fromIntegral
 instance Literal Float where literal = fromRational . toRational
 instance Literal Double where literal = fromRational . toRational
+instance Literal Scientific where
+  literal
+    = UnsafeExpression
+    . toStrict
+    . toLazyByteString
+    . scientificBuilder
 instance Literal Text where literal = fromString . Text.unpack
 instance Literal Lazy.Text where literal = fromString . Lazy.Text.unpack
 instance ToParam (Enumerated enum) (PG (Enumerated enum))
@@ -91,3 +102,9 @@ instance ToParam (Enumerated enum) (PG (Enumerated enum))
       . builderBytes
       . unK
       . toParam @(Enumerated enum) @(PG (Enumerated enum))
+instance Literal (Range Int32) where
+  literal r = range int4range (literal <$> r)
+instance Literal (Range Int64) where
+  literal r = range int8range (literal <$> r)
+instance Literal (Range Scientific) where
+  literal r = range numrange (literal <$> r)
