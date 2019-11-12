@@ -34,8 +34,9 @@ library
     Squeal.PostgreSQL.Definition.View
     Squeal.PostgreSQL.Expression
     Squeal.PostgreSQL.Expression.Aggregate
-    Squeal.PostgreSQL.Expression.Collection
+    Squeal.PostgreSQL.Expression.Array
     Squeal.PostgreSQL.Expression.Comparison
+    Squeal.PostgreSQL.Expression.Composite
     Squeal.PostgreSQL.Expression.Json
     Squeal.PostgreSQL.Expression.Literal
     Squeal.PostgreSQL.Expression.Logic
