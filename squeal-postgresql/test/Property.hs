@@ -93,7 +93,7 @@ roundtrips = Group "roundtrips"
 
 roundtrip
   :: (OidOf ty, ToParam x ty, FromValue ty x, Show x, Eq x)
-  => TypeExpression schemas ('NotNull ty)
+  => TypeExpression db ('NotNull ty)
   -> Gen x
   -> (PropertyName, Property)
 roundtrip = roundtripOn id
@@ -101,7 +101,7 @@ roundtrip = roundtripOn id
 roundtripOn
   :: (OidOf ty, ToParam x ty, FromValue ty x, Show x, Eq x)
   => (x -> x)
-  -> TypeExpression schemas ('NotNull ty)
+  -> TypeExpression db ('NotNull ty)
   -> Gen x
   -> (PropertyName, Property)
 roundtripOn norm ty gen = propertyWithName $ do

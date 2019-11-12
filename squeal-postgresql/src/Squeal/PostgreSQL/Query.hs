@@ -122,22 +122,22 @@ The general `Query` type is parameterized by
 
 * @outer :: FromType@ - outer scope for a correlated subquery,
 * @commons :: FromType@ - scope for all `common` table expressions,
-* @schemas :: SchemasType@ - scope for all `table`s and `view`s,
+* @db :: SchemasType@ - scope for all `table`s and `view`s,
 * @params :: [NullityType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
 * @row :: RowType@ - return type of the `Query`.
 -}
 newtype Query
   (outer :: FromType)
   (commons :: FromType)
-  (schemas :: SchemasType)
+  (db :: SchemasType)
   (params :: [NullityType])
   (row :: RowType)
     = UnsafeQuery { renderQuery :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance RenderSQL (Query outer commons schemas params row) where renderSQL = renderQuery
+instance RenderSQL (Query outer commons db params row) where renderSQL = renderQuery
 
 {- |
-The top level `Query_` type is parameterized by a @schemas@ `SchemasType`,
+The top level `Query_` type is parameterized by a @db@ `SchemasType`,
 against which the query is type-checked, an input @parameters@ Haskell `Type`,
 and an ouput row Haskell `Type`.
 
@@ -308,7 +308,7 @@ value queries:
 
 >>> :{
 let
-  query :: Query_ schemas () (Row String Bool)
+  query :: Query_ db () (Row String Bool)
   query = values
     ("true" `as` #col1 :* true `as` #col2)
     ["false" `as` #col1 :* false `as` #col2]
@@ -367,18 +367,18 @@ SELECT "col1" AS "fromOnly" FROM "tab" AS "t1" WHERE EXISTS (SELECT * FROM "tab"
 
 -}
 type family Query_
-  (schemas :: SchemasType)
+  (db :: SchemasType)
   (parameters :: Type)
   (row :: Type) where
-    Query_ schemas params row =
-      Query '[] '[] schemas (TuplePG params) (RowPG row)
+    Query_ db params row =
+      Query '[] '[] db (TuplePG params) (RowPG row)
 
 -- | The results of two queries can be combined using the set operation
 -- `union`. Duplicate rows are eliminated.
 union
-  :: Query outer commons schemas params columns
-  -> Query outer commons schemas params columns
-  -> Query outer commons schemas params columns
+  :: Query outer commons db params columns
+  -> Query outer commons db params columns
+  -> Query outer commons db params columns
 q1 `union` q2 = UnsafeQuery $
   parenthesized (renderSQL q1)
   <+> "UNION"
@@ -387,9 +387,9 @@ q1 `union` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `unionAll`, the disjoint union. Duplicate rows are retained.
 unionAll
-  :: Query outer commons schemas params columns
-  -> Query outer commons schemas params columns
-  -> Query outer commons schemas params columns
+  :: Query outer commons db params columns
+  -> Query outer commons db params columns
+  -> Query outer commons db params columns
 q1 `unionAll` q2 = UnsafeQuery $
   parenthesized (renderSQL q1)
   <+> "UNION" <+> "ALL"
@@ -398,9 +398,9 @@ q1 `unionAll` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `intersect`, the intersection. Duplicate rows are eliminated.
 intersect
-  :: Query outer commons schemas params columns
-  -> Query outer commons schemas params columns
-  -> Query outer commons schemas params columns
+  :: Query outer commons db params columns
+  -> Query outer commons db params columns
+  -> Query outer commons db params columns
 q1 `intersect` q2 = UnsafeQuery $
   parenthesized (renderSQL q1)
   <+> "INTERSECT"
@@ -409,9 +409,9 @@ q1 `intersect` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `intersectAll`, the intersection. Duplicate rows are retained.
 intersectAll
-  :: Query outer commons schemas params columns
-  -> Query outer commons schemas params columns
-  -> Query outer commons schemas params columns
+  :: Query outer commons db params columns
+  -> Query outer commons db params columns
+  -> Query outer commons db params columns
 q1 `intersectAll` q2 = UnsafeQuery $
   parenthesized (renderSQL q1)
   <+> "INTERSECT" <+> "ALL"
@@ -420,9 +420,9 @@ q1 `intersectAll` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `except`, the set difference. Duplicate rows are eliminated.
 except
-  :: Query outer commons schemas params columns
-  -> Query outer commons schemas params columns
-  -> Query outer commons schemas params columns
+  :: Query outer commons db params columns
+  -> Query outer commons db params columns
+  -> Query outer commons db params columns
 q1 `except` q2 = UnsafeQuery $
   parenthesized (renderSQL q1)
   <+> "EXCEPT"
@@ -431,9 +431,9 @@ q1 `except` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `exceptAll`, the set difference. Duplicate rows are retained.
 exceptAll
-  :: Query outer commons schemas params columns
-  -> Query outer commons schemas params columns
-  -> Query outer commons schemas params columns
+  :: Query outer commons db params columns
+  -> Query outer commons db params columns
+  -> Query outer commons db params columns
 q1 `exceptAll` q2 = UnsafeQuery $
   parenthesized (renderSQL q1)
   <+> "EXCEPT" <+> "ALL"
@@ -449,42 +449,42 @@ is a list of `Expression`s. A `Selection` could be a list of
 `WindowFunction`s `Over` `WindowDefinition`. `Additional` `Selection`s can
 be selected with `Also`.
 -}
-data Selection outer commons grp schemas params from row where
+data Selection outer commons grp db params from row where
   Star
     :: HasUnique tab from row
-    => Selection outer commons 'Ungrouped schemas params from row
+    => Selection outer commons 'Ungrouped db params from row
     -- ^ `HasUnique` table in the `FromClause`
   DotStar
     :: Has tab from row
     => Alias tab
        -- ^ `Has` table with `Alias`
-    -> Selection outer commons 'Ungrouped schemas params from row
+    -> Selection outer commons 'Ungrouped db params from row
   List
     :: SListI row
-    => NP (Aliased (Expression outer commons grp schemas params from)) row
+    => NP (Aliased (Expression outer commons grp db params from)) row
        -- ^ `NP` list of `Aliased` `Expression`s
-    -> Selection outer commons grp schemas params from row
+    -> Selection outer commons grp db params from row
   Over
     :: SListI row
-    => NP (Aliased (WindowFunction outer commons grp schemas params from)) row
+    => NP (Aliased (WindowFunction outer commons grp db params from)) row
        -- ^ `NP` list of `Aliased` `WindowFunction`s
-    -> WindowDefinition outer commons grp schemas params from
-    -> Selection outer commons grp schemas params from row
+    -> WindowDefinition outer commons grp db params from
+    -> Selection outer commons grp db params from row
   Also
-    :: Selection outer commons grp schemas params from right
+    :: Selection outer commons grp db params from right
        -- ^ `Additional` `Selection`
-    -> Selection outer commons grp schemas params from left
-    -> Selection outer commons grp schemas params from (Join left right)
-instance Additional (Selection outer commons grp schemas params from) where
+    -> Selection outer commons grp db params from left
+    -> Selection outer commons grp db params from (Join left right)
+instance Additional (Selection outer commons grp db params from) where
   also = Also
 instance (KnownSymbol col, row ~ '[col ::: ty])
   => Aliasable col
-    (Expression outer commons grp schemas params from ty)
-    (Selection outer commons grp schemas params from row) where
+    (Expression outer commons grp db params from ty)
+    (Selection outer commons grp db params from row) where
       expr `as` col = List (expr `as` col)
 instance (Has tab (Join outer from) row0, Has col row0 ty, row1 ~ '[col ::: ty])
   => IsQualified tab col
-    (Selection outer commons 'Ungrouped schemas params from row1) where
+    (Selection outer commons 'Ungrouped db params from row1) where
       tab ! col = tab ! col `as` col
 instance
   ( Has tab (Join outer from) row0
@@ -492,11 +492,11 @@ instance
   , row1 ~ '[col ::: ty]
   , GroupedBy tab col bys )
   => IsQualified tab col
-    (Selection outer commons ('Grouped bys) schemas params from row1) where
+    (Selection outer commons ('Grouped bys) db params from row1) where
       tab ! col = tab ! col `as` col
 instance (HasUnique tab (Join outer from) row0, Has col row0 ty, row1 ~ '[col ::: ty])
   => IsLabel col
-    (Selection outer commons 'Ungrouped schemas params from row1) where
+    (Selection outer commons 'Ungrouped db params from row1) where
       fromLabel = fromLabel @col `as` Alias
 instance
   ( HasUnique tab (Join outer from) row0
@@ -504,10 +504,10 @@ instance
   , row1 ~ '[col ::: ty]
   , GroupedBy tab col bys )
   => IsLabel col
-    (Selection outer commons ('Grouped bys) schemas params from row1) where
+    (Selection outer commons ('Grouped bys) db params from row1) where
       fromLabel = fromLabel @col `as` Alias
 
-instance RenderSQL (Selection outer commons grp schemas params from row) where
+instance RenderSQL (Selection outer commons grp db params from row) where
   renderSQL = \case
     List list -> renderCommaSeparated (renderAliased renderSQL) list
     Star -> "*"
@@ -516,7 +516,7 @@ instance RenderSQL (Selection outer commons grp schemas params from row) where
     Over winFns winDef ->
       let
         renderOver
-          :: Aliased (WindowFunction outer commons grp schemas params from) field
+          :: Aliased (WindowFunction outer commons grp db params from) field
           -> ByteString
         renderOver (winFn `As` col) = renderSQL winFn
           <+> "OVER" <+> parenthesized (renderSQL winDef)
@@ -525,7 +525,7 @@ instance RenderSQL (Selection outer commons grp schemas params from row) where
         renderCommaSeparated renderOver winFns
 
 instance IsString
-  (Selection outer commons grp schemas params from '["fromOnly" ::: 'NotNull 'PGtext]) where
+  (Selection outer commons grp db params from '["fromOnly" ::: 'NotNull 'PGtext]) where
     fromString str = fromString str `as` Alias
 
 -- | the `TableExpression` in the `select` command constructs an intermediate
@@ -535,11 +535,11 @@ instance IsString
 -- the intermediate table are actually output.
 select
   :: (SListI row, row ~ (x ': xs))
-  => Selection outer commons grp schemas params from row
+  => Selection outer commons grp db params from row
   -- ^ selection
-  -> TableExpression outer commons grp schemas params from
+  -> TableExpression outer commons grp db params from
   -- ^ intermediate virtual table
-  -> Query outer commons schemas params row
+  -> Query outer commons db params row
 select selection tabexpr = UnsafeQuery $
   "SELECT"
   <+> renderSQL selection
@@ -549,22 +549,22 @@ select selection tabexpr = UnsafeQuery $
 -- of a general `Selection`.
 select_
   :: (SListI row, row ~ (x ': xs))
-  => NP (Aliased (Expression outer commons grp schemas params from)) row
+  => NP (Aliased (Expression outer commons grp db params from)) row
   -- ^ select list
-  -> TableExpression outer commons grp schemas params from
+  -> TableExpression outer commons grp db params from
   -- ^ intermediate virtual table
-  -> Query outer commons schemas params row
+  -> Query outer commons db params row
 select_ = select . List
 
 -- | After the select list has been processed, the result table can
 -- be subject to the elimination of duplicate rows using `selectDistinct`.
 selectDistinct
   :: (SListI columns, columns ~ (col ': cols))
-  => Selection outer commons grp schemas params from columns
+  => Selection outer commons grp db params from columns
   -- ^ selection
-  -> TableExpression outer commons grp schemas params from
+  -> TableExpression outer commons grp db params from
   -- ^ intermediate virtual table
-  -> Query outer commons schemas params columns
+  -> Query outer commons db params columns
 selectDistinct selection tabexpr = UnsafeQuery $
   "SELECT DISTINCT"
   <+> renderSQL selection
@@ -574,11 +574,11 @@ selectDistinct selection tabexpr = UnsafeQuery $
 -- of a general `Selection`.
 selectDistinct_
   :: (SListI columns, columns ~ (col ': cols))
-  => NP (Aliased (Expression outer commons grp schemas params from)) columns
+  => NP (Aliased (Expression outer commons grp db params from)) columns
   -- ^ select list
-  -> TableExpression outer commons grp schemas params from
+  -> TableExpression outer commons grp db params from
   -- ^ intermediate virtual table
-  -> Query outer commons schemas params columns
+  -> Query outer commons db params columns
 selectDistinct_ = selectDistinct . List
 
 {-|
@@ -596,13 +596,13 @@ will prepend the The DISTINCT ON expressions to the ORDER BY clause.
 -}
 selectDistinctOn
   :: (SListI columns, columns ~ (col ': cols))
-  => [SortExpression outer commons grp schemas params from]
+  => [SortExpression outer commons grp db params from]
   -- ^ DISTINCT ON expression(s) and prepended to ORDER BY clause
-  -> Selection outer commons grp schemas params from columns
+  -> Selection outer commons grp db params from columns
   -- ^ selection
-  -> TableExpression outer commons grp schemas params from
+  -> TableExpression outer commons grp db params from
   -- ^ intermediate virtual table
-  -> Query outer commons schemas params columns
+  -> Query outer commons db params columns
 selectDistinctOn distincts selection tab = UnsafeQuery $
   "SELECT DISTINCT ON"
   <+> parenthesized (commaSeparated (renderDistinctOn <$> distincts))
@@ -621,13 +621,13 @@ selectDistinctOn distincts selection tab = UnsafeQuery $
 -- of a general `Selection`.
 selectDistinctOn_
   :: (SListI columns, columns ~ (col ': cols))
-  => [SortExpression outer commons grp schemas params from]
+  => [SortExpression outer commons grp db params from]
   -- ^ distinct on and return the first row in ordering
-  -> NP (Aliased (Expression outer commons grp schemas params from)) columns
+  -> NP (Aliased (Expression outer commons grp db params from)) columns
   -- ^ selection
-  -> TableExpression outer commons grp schemas params from
+  -> TableExpression outer commons grp db params from
   -- ^ intermediate virtual table
-  -> Query outer commons schemas params columns
+  -> Query outer commons db params columns
 selectDistinctOn_ distincts = selectDistinctOn distincts . List
 
 -- | `values` computes a row value or set of row values
@@ -636,16 +636,16 @@ selectDistinctOn_ distincts = selectDistinctOn distincts . List
 -- but it can be used on its own.
 --
 -- >>> type Row = '["a" ::: 'NotNull 'PGint4, "b" ::: 'NotNull 'PGtext]
--- >>> let query = values (1 `as` #a :* "one" `as` #b) [] :: Query outer commons schemas '[] Row
+-- >>> let query = values (1 `as` #a :* "one" `as` #b) [] :: Query outer commons db '[] Row
 -- >>> printSQL query
 -- SELECT * FROM (VALUES (1, E'one')) AS t ("a", "b")
 values
   :: SListI cols
-  => NP (Aliased (Expression outer commons 'Ungrouped schemas params '[] )) cols
-  -> [NP (Aliased (Expression outer commons 'Ungrouped schemas params '[] )) cols]
+  => NP (Aliased (Expression outer commons 'Ungrouped db params '[] )) cols
+  -> [NP (Aliased (Expression outer commons 'Ungrouped db params '[] )) cols]
   -- ^ When more than one row is specified, all the rows must
   -- must have the same number of elements
-  -> Query outer commons schemas params cols
+  -> Query outer commons db params cols
 values rw rws = UnsafeQuery $ "SELECT * FROM"
   <+> parenthesized (
     "VALUES"
@@ -656,7 +656,7 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
   <+> parenthesized (renderCommaSeparated renderAliasPart rw)
   where
     renderAliasPart, renderValuePart
-      :: Aliased (Expression outer commons 'Ungrouped schemas params '[] ) ty -> ByteString
+      :: Aliased (Expression outer commons 'Ungrouped db params '[] ) ty -> ByteString
     renderAliasPart (_ `As` name) = renderSQL name
     renderValuePart (value `As` _) = renderSQL value
 
@@ -664,9 +664,9 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
 -- specified by value expressions.
 values_
   :: SListI cols
-  => NP (Aliased (Expression outer commons 'Ungrouped schemas params '[] )) cols
+  => NP (Aliased (Expression outer commons 'Ungrouped db params '[] )) cols
   -- ^ one row of values
-  -> Query outer commons schemas params cols
+  -> Query outer commons db params cols
 values_ rw = values rw []
 
 {-----------------------------------------
@@ -683,14 +683,14 @@ data TableExpression
   (outer :: FromType)
   (commons :: FromType)
   (grp :: Grouping)
-  (schemas :: SchemasType)
+  (db :: SchemasType)
   (params :: [NullityType])
   (from :: FromType)
     = TableExpression
-    { fromClause :: FromClause outer commons schemas params from
+    { fromClause :: FromClause outer commons db params from
     -- ^ A table reference that can be a table name, or a derived table such
     -- as a subquery, a @JOIN@ construct, or complex combinations of these.
-    , whereClause :: [Condition outer commons 'Ungrouped schemas params from]
+    , whereClause :: [Condition outer commons 'Ungrouped db params from]
     -- ^ optional search coditions, combined with `.&&`. After the processing
     -- of the `fromClause` is done, each row of the derived virtual table
     -- is checked against the search condition. If the result of the
@@ -706,13 +706,13 @@ data TableExpression
     -- set of rows having common values into one group row that represents all
     -- rows in the group. This is done to eliminate redundancy in the output
     -- and/or compute aggregates that apply to these groups.
-    , havingClause :: HavingClause outer commons grp schemas params from
+    , havingClause :: HavingClause outer commons grp db params from
     -- ^ If a table has been grouped using `groupBy`, but only certain groups
     -- are of interest, the `havingClause` can be used, much like a
     -- `whereClause`, to eliminate groups from the result. Expressions in the
     -- `havingClause` can refer both to grouped expressions and to ungrouped
     -- expressions (which necessarily involve an aggregate function).
-    , orderByClause :: [SortExpression outer commons grp schemas params from]
+    , orderByClause :: [SortExpression outer commons grp db params from]
     -- ^ The `orderByClause` is for optional sorting. When more than one
     -- `SortExpression` is specified, the later (right) values are used to sort
     -- rows that are equal according to the earlier (left) values.
@@ -729,7 +729,7 @@ data TableExpression
     } deriving (GHC.Generic)
 
 -- | Render a `TableExpression`
-instance RenderSQL (TableExpression outer commons grp schemas params from) where
+instance RenderSQL (TableExpression outer commons grp db params from) where
   renderSQL
     (TableExpression frm' whs' grps' hvs' srts' lims' offs') = mconcat
       [ "FROM ", renderSQL frm'
@@ -761,16 +761,16 @@ instance RenderSQL (TableExpression outer commons grp schemas params from) where
 -- `groupBy`, `having`, `orderBy`, `limit` and `offset`, using the `&` operator
 -- to match the left-to-right sequencing of their placement in SQL.
 from
-  :: FromClause outer commons schemas params from -- ^ table reference
-  -> TableExpression outer commons 'Ungrouped schemas params from
+  :: FromClause outer commons db params from -- ^ table reference
+  -> TableExpression outer commons 'Ungrouped db params from
 from tab = TableExpression tab [] noGroups NoHaving [] [] []
 
 -- | A `where_` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `whereClause`.
 where_
-  :: Condition outer commons 'Ungrouped schemas params from -- ^ filtering condition
-  -> TableExpression outer commons grp schemas params from
-  -> TableExpression outer commons grp schemas params from
+  :: Condition outer commons 'Ungrouped db params from -- ^ filtering condition
+  -> TableExpression outer commons grp db params from
+  -> TableExpression outer commons grp db params from
 where_ wh rels = rels {whereClause = wh : whereClause rels}
 
 -- | A `groupBy` is a transformation of `TableExpression`s which switches
@@ -779,8 +779,8 @@ where_ wh rels = rels {whereClause = wh : whereClause rels}
 groupBy
   :: SListI bys
   => NP (By from) bys -- ^ grouped columns
-  -> TableExpression outer commons 'Ungrouped schemas params from
-  -> TableExpression outer commons ('Grouped bys) schemas params from
+  -> TableExpression outer commons 'Ungrouped db params from
+  -> TableExpression outer commons ('Grouped bys) db params from
 groupBy bys rels = TableExpression
   { fromClause = fromClause rels
   , whereClause = whereClause rels
@@ -794,9 +794,9 @@ groupBy bys rels = TableExpression
 -- | A `having` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `havingClause`.
 having
-  :: Condition outer commons ('Grouped bys) schemas params from -- ^ having condition
-  -> TableExpression outer commons ('Grouped bys) schemas params from
-  -> TableExpression outer commons ('Grouped bys) schemas params from
+  :: Condition outer commons ('Grouped bys) db params from -- ^ having condition
+  -> TableExpression outer commons ('Grouped bys) db params from
+  -> TableExpression outer commons ('Grouped bys) db params from
 having hv rels = rels
   { havingClause = case havingClause rels of Having hvs -> Having (hv:hvs) }
 
@@ -807,16 +807,16 @@ instance OrderBy TableExpression where
 -- `limitClause`.
 limit
   :: Word64 -- ^ limit parameter
-  -> TableExpression outer commons grp schemas params from
-  -> TableExpression outer commons grp schemas params from
+  -> TableExpression outer commons grp db params from
+  -> TableExpression outer commons grp db params from
 limit lim rels = rels {limitClause = lim : limitClause rels}
 
 -- | An `offset` is an endomorphism of `TableExpression`s which adds to the
 -- `offsetClause`.
 offset
   :: Word64 -- ^ offset parameter
-  -> TableExpression outer commons grp schemas params from
-  -> TableExpression outer commons grp schemas params from
+  -> TableExpression outer commons grp db params from
+  -> TableExpression outer commons grp db params from
 offset off rels = rels {offsetClause = off : offsetClause rels}
 
 {-----------------------------------------
@@ -827,31 +827,31 @@ FROM clauses
 A `FromClause` can be a table name, or a derived table such
 as a subquery, a @JOIN@ construct, or complex combinations of these.
 -}
-newtype FromClause outer commons schemas params from
+newtype FromClause outer commons db params from
   = UnsafeFromClause { renderFromClause :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance RenderSQL (FromClause outer commons schemas params from) where
+instance RenderSQL (FromClause outer commons db params from) where
   renderSQL = renderFromClause
 
 -- | A real `table` is a table from the database.
 table
-  :: (Has sch schemas schema, Has tab schema ('Table table))
+  :: (Has sch db schema, Has tab schema ('Table table))
   => Aliased (QualifiedAlias sch) (alias ::: tab)
-  -> FromClause outer commons schemas params '[alias ::: TableToRow table]
+  -> FromClause outer commons db params '[alias ::: TableToRow table]
 table (tab `As` alias) = UnsafeFromClause $
   renderSQL tab <+> "AS" <+> renderSQL alias
 
 -- | `subquery` derives a table from a `Query`.
 subquery
-  :: Aliased (Query outer commons schemas params) query
-  -> FromClause outer commons schemas params '[query]
+  :: Aliased (Query outer commons db params) query
+  -> FromClause outer commons db params '[query]
 subquery = UnsafeFromClause . renderAliased (parenthesized . renderSQL)
 
 -- | `view` derives a table from a `View`.
 view
-  :: (Has sch schemas schema, Has vw schema ('View view))
+  :: (Has sch db schema, Has vw schema ('View view))
   => Aliased (QualifiedAlias sch) (alias ::: vw)
-  -> FromClause outer commons schemas params '[alias ::: view]
+  -> FromClause outer commons db params '[alias ::: view]
 view (vw `As` alias) = UnsafeFromClause $
   renderSQL vw <+> "AS" <+> renderSQL alias
 
@@ -859,11 +859,11 @@ view (vw `As` alias) = UnsafeFromClause $
 common
   :: Has cte commons common
   => Aliased Alias (alias ::: cte)
-  -> FromClause outer commons schemas params '[alias ::: common]
+  -> FromClause outer commons db params '[alias ::: common]
 common (cte `As` alias) = UnsafeFromClause $
   renderSQL cte <+> "AS" <+> renderSQL alias
 
-instance Additional (FromClause outer commons schemas params) where
+instance Additional (FromClause outer commons db params) where
   also right left = UnsafeFromClause $
     renderSQL left <> ", " <> renderSQL right
 
@@ -875,20 +875,20 @@ If the tables have @n@ and @m@ rows respectively, the joined table will
 have @n * m@ rows.
 -}
 crossJoin
-  :: FromClause outer commons schemas params right
+  :: FromClause outer commons db params right
   -- ^ right
-  -> FromClause outer commons schemas params left
+  -> FromClause outer commons db params left
   -- ^ left
-  -> FromClause outer commons schemas params (Join left right)
+  -> FromClause outer commons db params (Join left right)
 crossJoin right left = UnsafeFromClause $
   renderSQL left <+> "CROSS JOIN" <+> renderSQL right
 
 crossJoinLateral
-  :: FromClause (Join left outer) commons schemas params right
+  :: FromClause (Join left outer) commons db params right
   -- ^ right
-  -> FromClause outer commons schemas params left
+  -> FromClause outer commons db params left
   -- ^ left
-  -> FromClause outer commons schemas params (Join left right)
+  -> FromClause outer commons db params (Join left right)
 crossJoinLateral right left = UnsafeFromClause $
   renderSQL left <+> "CROSS JOIN LATERAL" <+> renderSQL right
 
@@ -896,25 +896,25 @@ crossJoinLateral right left = UnsafeFromClause $
 the @on@ condition.
 -}
 innerJoin
-  :: FromClause outer commons schemas params right
+  :: FromClause outer commons db params right
   -- ^ right
-  -> Condition outer commons 'Ungrouped schemas params (Join left right)
+  -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons schemas params left
+  -> FromClause outer commons db params left
   -- ^ left
-  -> FromClause outer commons schemas params (Join left right)
+  -> FromClause outer commons db params (Join left right)
 innerJoin right on left = UnsafeFromClause $
   renderSQL left <+> "INNER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
 innerJoinLateral
-  :: FromClause (Join left outer) commons schemas params right
+  :: FromClause (Join left outer) commons db params right
   -- ^ right
-  -> Condition outer commons 'Ungrouped schemas params (Join left right)
+  -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons schemas params left
+  -> FromClause outer commons db params left
   -- ^ left
-  -> FromClause outer commons schemas params (Join left right)
+  -> FromClause outer commons db params (Join left right)
 innerJoinLateral right on left = UnsafeFromClause $
   renderSQL left <+> "INNER JOIN LATERAL" <+> renderSQL right
   <+> "ON" <+> renderSQL on
@@ -925,25 +925,25 @@ innerJoinLateral right on left = UnsafeFromClause $
     Thus, the joined table always has at least one row for each row in @left@.
 -}
 leftOuterJoin
-  :: FromClause outer commons schemas params right
+  :: FromClause outer commons db params right
   -- ^ right
-  -> Condition outer commons 'Ungrouped schemas params (Join left right)
+  -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons schemas params left
+  -> FromClause outer commons db params left
   -- ^ left
-  -> FromClause outer commons schemas params (Join left (NullifyFrom right))
+  -> FromClause outer commons db params (Join left (NullifyFrom right))
 leftOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "LEFT OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
 leftOuterJoinLateral
-  :: FromClause (Join left outer) commons schemas params right
+  :: FromClause (Join left outer) commons db params right
   -- ^ right
-  -> Condition outer commons 'Ungrouped schemas params (Join left right)
+  -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons schemas params left
+  -> FromClause outer commons db params left
   -- ^ left
-  -> FromClause outer commons schemas params (Join left (NullifyFrom right))
+  -> FromClause outer commons db params (Join left (NullifyFrom right))
 leftOuterJoinLateral right on left = UnsafeFromClause $
   renderSQL left <+> "LEFT OUTER JOIN LATERAL" <+> renderSQL right
   <+> "ON" <+> renderSQL on
@@ -955,25 +955,25 @@ leftOuterJoinLateral right on left = UnsafeFromClause $
     have a row for each row in @right@.
 -}
 rightOuterJoin
-  :: FromClause outer commons schemas params right
+  :: FromClause outer commons db params right
   -- ^ right
-  -> Condition outer commons 'Ungrouped schemas params (Join left right)
+  -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons schemas params left
+  -> FromClause outer commons db params left
   -- ^ left
-  -> FromClause outer commons schemas params (Join (NullifyFrom left) right)
+  -> FromClause outer commons db params (Join (NullifyFrom left) right)
 rightOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "RIGHT OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
 rightOuterJoinLateral
-  :: FromClause (Join left outer) commons schemas params right
+  :: FromClause (Join left outer) commons db params right
   -- ^ right
-  -> Condition outer commons 'Ungrouped schemas params (Join left right)
+  -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons schemas params left
+  -> FromClause outer commons db params left
   -- ^ left
-  -> FromClause outer commons schemas params (Join (NullifyFrom left) right)
+  -> FromClause outer commons db params (Join (NullifyFrom left) right)
 rightOuterJoinLateral right on left = UnsafeFromClause $
   renderSQL left <+> "RIGHT OUTER JOIN LATERAL" <+> renderSQL right
   <+> "ON" <+> renderSQL on
@@ -986,26 +986,26 @@ rightOuterJoinLateral right on left = UnsafeFromClause $
     is added.
 -}
 fullOuterJoin
-  :: FromClause outer commons schemas params right
+  :: FromClause outer commons db params right
   -- ^ right
-  -> Condition outer commons 'Ungrouped schemas params (Join left right)
+  -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons schemas params left
+  -> FromClause outer commons db params left
   -- ^ left
-  -> FromClause outer commons schemas params
+  -> FromClause outer commons db params
       (Join (NullifyFrom left) (NullifyFrom right))
 fullOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "FULL OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
 fullOuterJoinLateral
-  :: FromClause (Join left outer) commons schemas params right
+  :: FromClause (Join left outer) commons db params right
   -- ^ right
-  -> Condition outer commons 'Ungrouped schemas params (Join left right)
+  -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons schemas params left
+  -> FromClause outer commons db params left
   -- ^ left
-  -> FromClause outer commons schemas params
+  -> FromClause outer commons db params
       (Join (NullifyFrom left) (NullifyFrom right))
 fullOuterJoinLateral right on left = UnsafeFromClause $
   renderSQL left <+> "FULL OUTER JOIN LATERAL" <+> renderSQL right
@@ -1075,17 +1075,17 @@ group bys = UnsafeGroupByClause $ case bys of
 -- An `Ungrouped` `TableExpression` may only use `NoHaving` while a `Grouped`
 -- `TableExpression` must use `Having` whose conditions are combined with
 -- `.&&`.
-data HavingClause outer commons grp schemas params from where
-  NoHaving :: HavingClause outer commons 'Ungrouped schemas params from
+data HavingClause outer commons grp db params from where
+  NoHaving :: HavingClause outer commons 'Ungrouped db params from
   Having
-    :: [Condition outer commons ('Grouped bys) schemas params from]
-    -> HavingClause outer commons ('Grouped bys) schemas params from
-deriving instance Show (HavingClause outer commons grp schemas params from)
-deriving instance Eq (HavingClause outer commons grp schemas params from)
-deriving instance Ord (HavingClause outer commons grp schemas params from)
+    :: [Condition outer commons ('Grouped bys) db params from]
+    -> HavingClause outer commons ('Grouped bys) db params from
+deriving instance Show (HavingClause outer commons grp db params from)
+deriving instance Eq (HavingClause outer commons grp db params from)
+deriving instance Ord (HavingClause outer commons grp db params from)
 
 -- | Render a `HavingClause`.
-instance RenderSQL (HavingClause outer commons grp schemas params from) where
+instance RenderSQL (HavingClause outer commons grp db params from) where
   renderSQL = \case
     NoHaving -> ""
     Having [] -> ""
@@ -1094,30 +1094,30 @@ instance RenderSQL (HavingClause outer commons grp schemas params from) where
 
 -- | A `CommonTableExpression` is an auxiliary statement in a `with` clause.
 data CommonTableExpression statement
-  (schemas :: SchemasType)
+  (db :: SchemasType)
   (params :: [NullityType])
   (commons0 :: FromType)
   (commons1 :: FromType) where
   CommonTableExpression
-    :: Aliased (statement commons schemas params) (cte ::: common)
-    -> CommonTableExpression statement schemas params commons (cte ::: common ': commons)
+    :: Aliased (statement commons db params) (cte ::: common)
+    -> CommonTableExpression statement db params commons (cte ::: common ': commons)
 instance
   ( KnownSymbol cte
   , commons1 ~ (cte ::: common ': commons)
   ) => Aliasable cte
-    (statement commons schemas params common)
-    (CommonTableExpression statement schemas params commons commons1) where
+    (statement commons db params common)
+    (CommonTableExpression statement db params commons commons1) where
       statement `as` cte = CommonTableExpression (statement `as` cte)
 instance
   ( KnownSymbol cte
   , commons1 ~ (cte ::: common ': commons)
   ) => Aliasable cte
-    (statement commons schemas params common)
-    (Path (CommonTableExpression statement schemas params) commons commons1) where
+    (statement commons db params common)
+    (Path (CommonTableExpression statement db params) commons commons1) where
       statement `as` cte = csingleton (statement `as` cte)
 
 instance (forall c s p r. RenderSQL (statement c s p r)) => RenderSQL
-  (CommonTableExpression statement schemas params commons0 commons1) where
+  (CommonTableExpression statement db params commons0 commons1) where
     renderSQL (CommonTableExpression (statement `As` cte)) =
       renderSQL cte <+> "AS" <+> parenthesized (renderSQL statement)
 
@@ -1126,11 +1126,11 @@ instance (forall c s p r. RenderSQL (statement c s p r)) => RenderSQL
 -- defining temporary tables that exist just for one query.
 class With statement where
   with
-    :: Path (CommonTableExpression statement schemas params) commons0 commons1
+    :: Path (CommonTableExpression statement db params) commons0 commons1
     -- ^ common table expressions
-    -> statement commons1 schemas params row
+    -> statement commons1 db params row
     -- ^ larger query
-    -> statement commons0 schemas params row
+    -> statement commons0 db params row
 instance With (Query outer) where
   with Done query = query
   with ctes query = UnsafeQuery $
@@ -1153,9 +1153,9 @@ instance With (Query outer) where
 WITH RECURSIVE "t" AS ((SELECT * FROM (VALUES ((1 :: int))) AS t ("n")) UNION ALL (SELECT ("n" + 1) AS "n" FROM "t" AS "t" WHERE ("n" < 100))) SELECT COALESCE(sum(ALL "n"), 0) AS "getSum" FROM "t" AS "t"
 -}
 withRecursive
-  :: Aliased (Query outer (recursive ': commons) schemas params) recursive
-  -> Query outer (recursive ': commons) schemas params row
-  -> Query outer commons schemas params row
+  :: Aliased (Query outer (recursive ': commons) db params) recursive
+  -> Query outer (recursive ': commons) db params row
+  -> Query outer commons db params row
 withRecursive (recursive `As` cte) query = UnsafeQuery $
   "WITH RECURSIVE" <+> renderSQL cte
     <+> "AS" <+> parenthesized (renderSQL recursive)
