@@ -66,6 +66,7 @@ library
   build-depends:
       aeson >= 1.2.4.0
     , base >= 4.11.1.0 && < 5.0
+    , binary >= 0.8.6.0
     , binary-parser >= 0.5.5
     , bytestring >= 0.10.8.2
     , bytestring-strict-builder >= 0.4.5
