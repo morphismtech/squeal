@@ -1,11 +1,11 @@
 {-|
-Module: Squeal.PostgreSQL.Expression.Collection
-Description: Array and composite functions
+Module: Squeal.PostgreSQL.Expression.Array
+Description: Array functions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Array and composite functions
+Array functions
 -}
 
 {-# LANGUAGE
@@ -24,15 +24,13 @@ Array and composite functions
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.Expression.Collection
+module Squeal.PostgreSQL.Expression.Array
   ( array
   , array1
   , array2
   , cardinality
   , index
   , unnest
-  , row
-  , field
   ) where
 
 import Data.String
@@ -125,45 +123,3 @@ index n expr = UnsafeExpression $
 -- | Expand an array to a set of rows
 unnest :: SetFunction "unnest" (null ('PGvararray ty)) '["unnest" ::: ty]
 unnest = unsafeSetFunction
-
--- | A row constructor is an expression that builds a row value
--- (also called a composite value) using values for its member fields.
---
--- >>> :{
--- type Complex = 'PGcomposite
---   '[ "real"      ::: 'NotNull 'PGfloat8
---    , "imaginary" ::: 'NotNull 'PGfloat8 ]
--- :}
---
--- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression outer commons grp schemas params from ('NotNull Complex)
--- >>> printSQL i
--- ROW(0, 1)
-row
-  :: SOP.SListI row
-  => NP (Aliased (Expression outer commons grp schemas params from)) row
-  -- ^ zero or more expressions for the row field values
-  -> Expression outer commons grp schemas params from (null ('PGcomposite row))
-row exprs = UnsafeExpression $ "ROW" <> parenthesized
-  (renderCommaSeparated (\ (expr `As` _) -> renderSQL expr) exprs)
-
--- | >>> :{
--- type Complex = 'PGcomposite
---   '[ "real"      ::: 'NotNull 'PGfloat8
---    , "imaginary" ::: 'NotNull 'PGfloat8 ]
--- type Schema = '["complex" ::: 'Typedef Complex]
--- :}
---
--- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression outer '[] grp (Public Schema) from params ('NotNull Complex)
--- >>> printSQL $ i & field #complex #imaginary
--- (ROW(0, 1)::"complex")."imaginary"
-field
-  :: ( Has sch schemas schema
-     , Has tydef schema ('Typedef ('PGcomposite row))
-     , Has field row ty)
-  => QualifiedAlias sch tydef -- ^ row type
-  -> Alias field -- ^ field name
-  -> Expression outer commons grp schemas params from ('NotNull ('PGcomposite row))
-  -> Expression outer commons grp schemas params from ty
-field td fld expr = UnsafeExpression $
-  parenthesized (renderSQL expr <> "::" <> renderSQL td)
-    <> "." <> renderSQL fld

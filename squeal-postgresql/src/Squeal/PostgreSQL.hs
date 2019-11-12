@@ -204,8 +204,9 @@ import Squeal.PostgreSQL.Definition.Type as X
 import Squeal.PostgreSQL.Definition.View as X
 import Squeal.PostgreSQL.Expression as X
 import Squeal.PostgreSQL.Expression.Aggregate as X
-import Squeal.PostgreSQL.Expression.Collection as X
+import Squeal.PostgreSQL.Expression.Array as X
 import Squeal.PostgreSQL.Expression.Comparison as X
+import Squeal.PostgreSQL.Expression.Composite as X
 import Squeal.PostgreSQL.Expression.Json as X
 import Squeal.PostgreSQL.Expression.Literal as X
 import Squeal.PostgreSQL.Expression.Logic as X
