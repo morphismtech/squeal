@@ -47,6 +47,7 @@ module Squeal.PostgreSQL.Manipulation
   , QueryClause (..)
   , pattern Values_
   , InlineColumn (..)
+  , inlineColumns
   , inline
   , inlineMany
   , ReturningClause (..)
@@ -395,15 +396,23 @@ instance (KnownSymbol alias, column ~ ('Def :=> ty))
   => InlineColumn (alias ::: ()) (alias ::: column) where
     inlineColumn _ = Default `as` (Alias @alias)
 
+inlineColumns
+  :: ( SOP.IsRecord hask xs
+     , SOP.AllZip InlineColumn xs columns )
+  => hask
+  -> NP (Aliased (Optional (
+      Expression '[] commons 'Ungrouped schemas params '[]
+      ) ) ) columns
+inlineColumns
+  = SOP.htrans (SOP.Proxy @InlineColumn) inlineColumn
+  . SOP.toRecord
+
 inline
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip InlineColumn xs columns )
   => hask
   -> QueryClause commons schemas params columns
-inline
-  = Values_
-  . SOP.htrans (SOP.Proxy @InlineColumn) inlineColumn
-  . SOP.toRecord
+inline = Values_ . inlineColumns
 
 inlineMany
   :: ( SOP.IsRecord hask xs
@@ -411,9 +420,7 @@ inlineMany
   => hask
   -> [hask]
   -> QueryClause commons schemas params columns
-inlineMany hask hasks = Values (lits hask) (lits <$> hasks)
-  where
-    lits = SOP.htrans (SOP.Proxy @InlineColumn) inlineColumn . SOP.toRecord
+inlineMany hask hasks = Values (inlineColumns hask) (inlineColumns <$> hasks)
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
