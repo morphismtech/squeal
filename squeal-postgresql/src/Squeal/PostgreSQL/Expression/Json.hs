@@ -393,12 +393,12 @@ jsonbObjectKeys = unsafeSetFunction
 
 -- | Build rows from Json types.
 type JsonPopulateFunction fun json
-  =  forall schemas row outer commons params
+  =  forall db row outer commons params
   .  json `In` PGJsonType
-  => TypeExpression schemas ('NotNull ('PGcomposite row)) -- ^ row type
-  -> Expression outer commons 'Ungrouped schemas params '[] ('NotNull json)
+  => TypeExpression db ('NotNull ('PGcomposite row)) -- ^ row type
+  -> Expression outer commons 'Ungrouped db params '[] ('NotNull json)
       -- ^ json type
-  -> FromClause outer commons schemas params '[fun ::: row]
+  -> FromClause outer commons db params '[fun ::: row]
 
 unsafePopulateFunction
   :: forall fun ty
@@ -429,20 +429,20 @@ jsonbPopulateRecordSet = unsafePopulateFunction #jsonb_populate_record_set
 
 -- | Build rows from Json types.
 type JsonToRecordFunction json
-  =  forall outer commons schemas params tab row
+  =  forall outer commons db params tab row
   .  (SOP.SListI row, json `In` PGJsonType)
-  => Expression outer commons 'Ungrouped schemas params '[] ('NotNull json)
+  => Expression outer commons 'Ungrouped db params '[] ('NotNull json)
       -- ^ json type
-  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: row)
+  -> Aliased (NP (Aliased (TypeExpression db))) (tab ::: row)
       -- ^ row type
-  -> FromClause outer commons schemas params '[tab ::: row]
+  -> FromClause outer commons db params '[tab ::: row]
 
 unsafeRecordFunction :: ByteString -> JsonToRecordFunction json
 unsafeRecordFunction fun expr (types `As` tab) = UnsafeFromClause $
   fun <> parenthesized (renderSQL expr) <+> "AS" <+> renderSQL tab
     <> parenthesized (renderCommaSeparated renderTy types)
     where
-      renderTy :: Aliased (TypeExpression schemas) ty -> ByteString
+      renderTy :: Aliased (TypeExpression db) ty -> ByteString
       renderTy (ty `As` alias) = renderSQL alias <+> renderSQL ty
 
 -- | Builds an arbitrary record from a JSON object.

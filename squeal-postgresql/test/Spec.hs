@@ -58,7 +58,7 @@ setup =
 teardown :: Definition Schemas (Public '[])
 teardown = dropTable #users
 
-silence :: MonadPQ schemas pq => pq ()
+silence :: MonadPQ db pq => pq ()
 silence = manipulate_ $
   UnsafeManipulation "SET client_min_messages TO WARNING;"
 

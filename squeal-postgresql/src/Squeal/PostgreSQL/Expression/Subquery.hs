@@ -47,8 +47,8 @@ The subquery will generally only be executed long enough to determine whether
 at least one row is returned, not all the way to completion.
 -}
 exists
-  :: Query (Join outer from) commons schemas params row
-  -> Condition outer commons grp schemas params from
+  :: Query (Join outer from) commons db params row
+  -> Condition outer commons grp db params from
 exists query = UnsafeExpression $ "EXISTS" <+> parenthesized (renderSQL query)
 
 {- |
@@ -66,10 +66,10 @@ and at least one comparison returns `Squeal.PostgreSQL.Expression.Null.null_`.
 (TRUE = ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo")))
 -}
 subAll
-  :: Expression outer commons grp schemas params from ty1 -- ^ expression
+  :: Expression outer commons grp db params from ty1 -- ^ expression
   -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
-  -> Query (Join outer from) commons schemas params '[col ::: ty2] -- ^ subquery
-  -> Condition outer commons grp schemas params from
+  -> Query (Join outer from) commons db params '[col ::: ty2] -- ^ subquery
+  -> Condition outer commons grp db params from
 subAll expr (?) qry = expr ?
   (UnsafeExpression $ "ALL" <+> parenthesized (renderSQL qry))
 
@@ -84,10 +84,10 @@ if any `true` result is obtained. The result is `false` if no true result is fou
 (E'foo' LIKE ANY (SELECT * FROM (VALUES (E'foobar')) AS t ("foo")))
 -}
 subAny
-  :: Expression outer commons grp schemas params from ty1 -- ^ expression
+  :: Expression outer commons grp db params from ty1 -- ^ expression
   -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
-  -> Query (Join outer from) commons schemas params '[col ::: ty2] -- ^ subquery
-  -> Condition outer commons grp schemas params from
+  -> Query (Join outer from) commons db params '[col ::: ty2] -- ^ subquery
+  -> Condition outer commons grp db params from
 subAny expr (?) qry = expr ?
   (UnsafeExpression $ "ANY" <+> parenthesized (renderSQL qry))
 
@@ -99,9 +99,9 @@ to any of the right-hand expressions.
 TRUE IN (TRUE, FALSE, NULL)
 -}
 in_
-  :: Expression outer commons grp schemas params from ty -- ^ expression
-  -> [Expression outer commons grp schemas params from ty]
-  -> Condition outer commons grp schemas params from
+  :: Expression outer commons grp db params from ty -- ^ expression
+  -> [Expression outer commons grp db params from ty]
+  -> Condition outer commons grp db params from
 expr `in_` exprs = UnsafeExpression $ renderSQL expr <+> "IN"
   <+> parenthesized (commaSeparated (renderSQL <$> exprs))
 
@@ -113,8 +113,8 @@ to any of the right-hand expressions.
 TRUE NOT IN (FALSE, NULL)
 -}
 notIn
-  :: Expression outer commons grp schemas params from ty -- ^ expression
-  -> [Expression outer commons grp schemas params from ty]
-  -> Condition outer commons grp schemas params from
+  :: Expression outer commons grp db params from ty -- ^ expression
+  -> [Expression outer commons grp db params from ty]
+  -> Condition outer commons grp db params from
 expr `notIn` exprs = UnsafeExpression $ renderSQL expr <+> "NOT IN"
   <+> parenthesized (commaSeparated (renderSQL <$> exprs))

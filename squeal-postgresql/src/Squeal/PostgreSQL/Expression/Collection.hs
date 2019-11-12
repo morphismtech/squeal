@@ -53,9 +53,9 @@ import Squeal.PostgreSQL.Schema
 -- | >>> printSQL $ array [null_, false, true]
 -- ARRAY[NULL, FALSE, TRUE]
 array
-  :: [Expression outer commons grp schemas params from ty]
+  :: [Expression outer commons grp db params from ty]
   -- ^ array elements
-  -> Expression outer commons grp schemas params from (null ('PGvararray ty))
+  -> Expression outer commons grp db params from (null ('PGvararray ty))
 array xs = UnsafeExpression $ "ARRAY" <>
   bracketed (commaSeparated (renderSQL <$> xs))
 
@@ -70,15 +70,15 @@ array1 (null_ :* false *: true)
        outer
        commons
        grp
-       schemas
+       db
        params
        from
        (null ('PGfixarray '[3] ('Null 'PGbool)))
 -}
 array1
   :: (n ~ Length tys, SOP.All ((~) ty) tys)
-  => NP (Expression outer commons grp schemas params from) tys
-  -> Expression outer commons grp schemas params from (null ('PGfixarray '[n] ty))
+  => NP (Expression outer commons grp db params from) tys
+  -> Expression outer commons grp db params from (null ('PGfixarray '[n] ty))
 array1 xs = UnsafeExpression $ "ARRAY" <>
   bracketed (renderCommaSeparated renderSQL xs)
 
@@ -93,7 +93,7 @@ array2 ((null_ :* false *: true) *: (false :* null_ *: true))
        outer
        commons
        grp
-       schemas
+       db
        params
        from
        (null ('PGfixarray '[2, 3] ('Null 'PGbool)))
@@ -104,8 +104,8 @@ array2
       , Length tyss ~ n1
       , SOP.All ((~) ty) tys
       , Length tys ~ n2 )
-  => NP (NP (Expression outer commons grp schemas params from)) tyss
-  -> Expression outer commons grp schemas params from (null ('PGfixarray '[n1,n2] ty))
+  => NP (NP (Expression outer commons grp db params from)) tyss
+  -> Expression outer commons grp db params from (null ('PGfixarray '[n1,n2] ty))
 array2 xss = UnsafeExpression $ "ARRAY" <>
   bracketed (renderCommaSeparatedConstraint @SOP.SListI (bracketed . renderCommaSeparated renderSQL) xss)
 
@@ -135,14 +135,14 @@ unnest = unsafeSetFunction
 --    , "imaginary" ::: 'NotNull 'PGfloat8 ]
 -- :}
 --
--- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression outer commons grp schemas params from ('NotNull Complex)
+-- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression outer commons grp db params from ('NotNull Complex)
 -- >>> printSQL i
 -- ROW(0, 1)
 row
   :: SOP.SListI row
-  => NP (Aliased (Expression outer commons grp schemas params from)) row
+  => NP (Aliased (Expression outer commons grp db params from)) row
   -- ^ zero or more expressions for the row field values
-  -> Expression outer commons grp schemas params from (null ('PGcomposite row))
+  -> Expression outer commons grp db params from (null ('PGcomposite row))
 row exprs = UnsafeExpression $ "ROW" <> parenthesized
   (renderCommaSeparated (\ (expr `As` _) -> renderSQL expr) exprs)
 
@@ -157,13 +157,13 @@ row exprs = UnsafeExpression $ "ROW" <> parenthesized
 -- >>> printSQL $ i & field #complex #imaginary
 -- (ROW(0, 1)::"complex")."imaginary"
 field
-  :: ( Has sch schemas schema
+  :: ( Has sch db schema
      , Has tydef schema ('Typedef ('PGcomposite row))
      , Has field row ty)
   => QualifiedAlias sch tydef -- ^ row type
   -> Alias field -- ^ field name
-  -> Expression outer commons grp schemas params from ('NotNull ('PGcomposite row))
-  -> Expression outer commons grp schemas params from ty
+  -> Expression outer commons grp db params from ('NotNull ('PGcomposite row))
+  -> Expression outer commons grp db params from ty
 field td fld expr = UnsafeExpression $
   parenthesized (renderSQL expr <> "::" <> renderSQL td)
     <> "." <> renderSQL fld
