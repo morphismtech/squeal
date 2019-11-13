@@ -1114,7 +1114,7 @@ instance
   ) => Aliasable cte
     (statement commons db params common)
     (Path (CommonTableExpression statement db params) commons commons1) where
-      statement `as` cte = csingleton (statement `as` cte)
+      statement `as` cte = qsingle (statement `as` cte)
 
 instance (forall c s p r. RenderSQL (statement c s p r)) => RenderSQL
   (CommonTableExpression statement db params commons0 commons1) where
@@ -1134,7 +1134,7 @@ class With statement where
 instance With (Query outer) where
   with Done query = query
   with ctes query = UnsafeQuery $
-    "WITH" <+> commaSeparated (ctoList renderSQL ctes) <+> renderSQL query
+    "WITH" <+> commaSeparated (qtoList renderSQL ctes) <+> renderSQL query
 
 {- |
 >>> import Data.Monoid (Sum (..))

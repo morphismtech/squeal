@@ -4,4 +4,4 @@ packages:
 
 extra-deps:
 - github: morphismtech/free-categories
-  commit: a8e9fb29463ea3e116f2797c2b43fb38d43283ea
+  commit: 80c636e3dfd2bb33098483f4998d9ba5b1bd0df9

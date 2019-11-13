@@ -193,8 +193,8 @@ data Migration p db0 db1 = Migration
     -- Each `name` in a `Migration` should be unique.
   , migration :: p db0 db1 -- ^ The migration of a `Migration`.
   } deriving (GHC.Generic)
-instance CFunctor Migration where
-  cmap f (Migration n i) = Migration n (f i)
+instance QFunctor Migration where
+  qmap f (Migration n i) = Migration n (f i)
 
 {- |
 A `Migratory` `Category` can run or
@@ -206,7 +206,7 @@ class (Category def, Category run) => Migratory def run | def -> run where
 instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
   runMigrations path = Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
-    ctoMonoid upMigration path
+    qtoMonoid upMigration path
     where
       upMigration step = do
         executed <- do
@@ -216,11 +216,11 @@ instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
           _ <- unsafePQ . runIndexed $ migration step
           manipulateParams_ insertMigration (Only (name step))
 instance Migratory Definition (Indexed PQ IO ()) where
-  runMigrations = runMigrations . cmap (cmap indexedDefine)
+  runMigrations = runMigrations . qmap (qmap indexedDefine)
 instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
   runMigrations path = OpQ . Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
-    ctoMonoid @FoldPath downMigration (creverse path)
+    qtoMonoid @FoldPath downMigration (reversePath path)
     where
       downMigration (OpQ step) = do
         executed <- do
@@ -230,15 +230,15 @@ instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
           _ <- unsafePQ . runIndexed . getOpQ $ migration step
           manipulateParams_ deleteMigration (Only (name step))
 instance Migratory (OpQ Definition) (OpQ (Indexed PQ IO ())) where
-  runMigrations = runMigrations . cmap (cmap (cmap indexedDefine))
+  runMigrations = runMigrations . qmap (qmap (qmap indexedDefine))
 instance Migratory
   (IsoQ (Indexed PQ IO ()))
   (IsoQ (Indexed PQ IO ())) where
     runMigrations path = IsoQ
-      (runMigrations (cmap (cmap up) path))
-      (getOpQ (runMigrations (cmap (cmap (OpQ . down)) path)))
+      (runMigrations (qmap (qmap up) path))
+      (getOpQ (runMigrations (qmap (qmap (OpQ . down)) path)))
 instance Migratory (IsoQ Definition) (IsoQ (Indexed PQ IO ())) where
-  runMigrations = runMigrations . cmap (cmap (cmap indexedDefine))
+  runMigrations = runMigrations . qmap (qmap (qmap indexedDefine))
 
 unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
 unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
@@ -343,7 +343,7 @@ mainMigrate connectTo migrations = do
     migrateStatus :: PQ schema schema IO ()
     migrateStatus = unsafePQ $ do
       runNames <- getRunMigrationNames
-      let names = ctoList name migrations
+      let names = qtoList name migrations
           unrunNames = names \\ runNames
       liftIO $ displayRunned runNames >> displayUnrunned unrunNames
 
@@ -387,7 +387,7 @@ mainMigrateIso connectTo migrations = performCommand =<< getArgs
     migrateStatus :: PQ schema schema IO ()
     migrateStatus = unsafePQ $ do
       runNames <- getRunMigrationNames
-      let names = ctoList name migrations
+      let names = qtoList name migrations
           unrunNames = names \\ runNames
       liftIO $ displayRunned runNames >> displayUnrunned unrunNames
 
