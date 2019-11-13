@@ -144,7 +144,7 @@ module Squeal.PostgreSQL.Migration
   , migrate
   , migrateUp
   , migrateDown
-  , runDefinition
+  , indexedDefine
   , IsoQ (..)
   , MigrationsTable
   , mainMigrate
@@ -219,7 +219,7 @@ instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
           _ <- unsafePQ . runIndexed $ migration step
           manipulateParams_ insertMigration (Only (name step))
 instance Migratory Definition (Indexed PQ IO ()) where
-  runMigrations = runMigrations . cmap (cmap runDefinition)
+  runMigrations = runMigrations . cmap (cmap indexedDefine)
 instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
   runMigrations path = OpQ . Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
@@ -233,7 +233,7 @@ instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
           _ <- unsafePQ . runIndexed . getOpQ $ migration step
           manipulateParams_ deleteMigration (Only (name step))
 instance Migratory (OpQ Definition) (OpQ (Indexed PQ IO ())) where
-  runMigrations = runMigrations . cmap (cmap (cmap runDefinition))
+  runMigrations = runMigrations . cmap (cmap (cmap indexedDefine))
 instance Migratory
   (IsoQ (Indexed PQ IO ()))
   (IsoQ (Indexed PQ IO ())) where
@@ -241,7 +241,7 @@ instance Migratory
       (runMigrations (cmap (cmap up) path))
       (getOpQ (runMigrations (cmap (cmap (OpQ . down)) path)))
 instance Migratory (IsoQ Definition) (IsoQ (Indexed PQ IO ())) where
-  runMigrations = runMigrations . cmap (cmap (cmap runDefinition))
+  runMigrations = runMigrations . cmap (cmap (cmap indexedDefine))
 
 unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
 unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
@@ -264,8 +264,8 @@ migrateDown
   -> PQ db1 db0 IO ()
 migrateDown = runIndexed . down . runMigrations
 
-runDefinition :: Definition db0 db1 -> Indexed PQ IO () db0 db1
-runDefinition = Indexed . define
+indexedDefine :: Definition db0 db1 -> Indexed PQ IO () db0 db1
+indexedDefine = Indexed . define
 
 -- | The `TableType` for a Squeal migration.
 type MigrationsTable =
