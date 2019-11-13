@@ -197,11 +197,8 @@ instance CFunctor Migration where
   cmap f (Migration n i) = Migration n (f i)
 
 {- |
-A `Migratory` @p@ is a `Category` for which one can execute or
-possibly rewind a `Path` of `Migration`s over @p@.
-This includes the categories of pure SQL `Definition`s,
-impure `Indexed` `PQ` `IO` @()@ actions,
-and reversible `IsoQ` `Definition`s.
+A `Migratory` `Category` can run or
+possibly rewind a `Path` of `Migration`s.
 -}
 class (Category def, Category run) => Migratory def run | def -> run where
   {- | Run a `Path` of `Migration`s.-}
@@ -223,7 +220,7 @@ instance Migratory Definition (Indexed PQ IO ()) where
 instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
   runMigrations path = OpQ . Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
-    ctoMonoid @Path downMigration (creverse path)
+    ctoMonoid @FoldPath downMigration (creverse path)
     where
       downMigration (OpQ step) = do
         executed <- do
