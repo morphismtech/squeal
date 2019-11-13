@@ -46,8 +46,8 @@ module Squeal.PostgreSQL.Manipulation
   , Optional (..)
   , QueryClause (..)
   , pattern Values_
-  , InlineColumn (..)
-  , inlineColumns
+  , LiteralColumn (..)
+  , literalColumns
   , inline
   , inlineMany
   , ReturningClause (..)
@@ -383,44 +383,44 @@ instance (forall x. RenderSQL (expr x)) => RenderSQL (Optional expr ty) where
     Default -> "DEFAULT"
     Set expr -> renderSQL expr
 
-class InlineColumn field column where
-  inlineColumn
+class LiteralColumn field column where
+  literalColumn
     :: SOP.P field
     -> Aliased ( Optional
       ( Expression outer commons grp db params from
       ) ) column
 instance (Literal hask, column ~ (def :=> NullPG hask), KnownSymbol alias)
-  => InlineColumn (alias ::: hask) (alias ::: column) where
-    inlineColumn (SOP.P hask) = Set (literal hask) `as` (Alias @alias)
+  => LiteralColumn (alias ::: hask) (alias ::: column) where
+    literalColumn (SOP.P hask) = Set (literal hask) `as` (Alias @alias)
 instance (KnownSymbol alias, column ~ ('Def :=> ty))
-  => InlineColumn (alias ::: ()) (alias ::: column) where
-    inlineColumn _ = Default `as` (Alias @alias)
+  => LiteralColumn (alias ::: ()) (alias ::: column) where
+    literalColumn _ = Default `as` (Alias @alias)
 
-inlineColumns
+literalColumns
   :: ( SOP.IsRecord hask xs
-     , SOP.AllZip InlineColumn xs columns )
+     , SOP.AllZip LiteralColumn xs columns )
   => hask
   -> NP (Aliased (Optional (
       Expression '[] commons 'Ungrouped db params '[]
       ) ) ) columns
-inlineColumns
-  = SOP.htrans (SOP.Proxy @InlineColumn) inlineColumn
+literalColumns
+  = SOP.htrans (SOP.Proxy @LiteralColumn) literalColumn
   . SOP.toRecord
 
 inline
   :: ( SOP.IsRecord hask xs
-     , SOP.AllZip InlineColumn xs columns )
+     , SOP.AllZip LiteralColumn xs columns )
   => hask
   -> QueryClause commons db params columns
-inline = Values_ . inlineColumns
+inline = Values_ . literalColumns
 
 inlineMany
   :: ( SOP.IsRecord hask xs
-     , SOP.AllZip InlineColumn xs columns )
+     , SOP.AllZip LiteralColumn xs columns )
   => hask
   -> [hask]
   -> QueryClause commons db params columns
-inlineMany hask hasks = Values (inlineColumns hask) (inlineColumns <$> hasks)
+inlineMany hask hasks = Values (literalColumns hask) (literalColumns <$> hasks)
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
