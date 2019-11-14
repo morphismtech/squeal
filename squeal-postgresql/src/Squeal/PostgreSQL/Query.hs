@@ -883,9 +883,11 @@ crossJoin
 crossJoin right left = UnsafeFromClause $
   renderSQL left <+> "CROSS JOIN" <+> renderSQL right
 
+{- |Allows `crossJoin` to reference columns provided by
+preceding `from` items.-}
 crossJoinLateral
   :: FromClause (Join left outer) commons db params right
-  -- ^ right
+  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> FromClause outer commons db params left
   -- ^ left
   -> FromClause outer commons db params (Join left right)
@@ -907,9 +909,11 @@ innerJoin right on left = UnsafeFromClause $
   renderSQL left <+> "INNER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
+{- |Allows `innerJoin` to reference columns provided by
+preceding `from` items.-}
 innerJoinLateral
   :: FromClause (Join left outer) commons db params right
-  -- ^ right
+  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
   -> FromClause outer commons db params left
@@ -936,9 +940,11 @@ leftOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "LEFT OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
+{- |Allows `leftOuterJoin` to reference columns provided by
+preceding `from` items.-}
 leftOuterJoinLateral
   :: FromClause (Join left outer) commons db params right
-  -- ^ right
+  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
   -> FromClause outer commons db params left
@@ -966,9 +972,11 @@ rightOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "RIGHT OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
+{- |Allows `rightOuterJoin` to reference columns provided by
+preceding `from` items.-}
 rightOuterJoinLateral
   :: FromClause (Join left outer) commons db params right
-  -- ^ right
+  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
   -> FromClause outer commons db params left
@@ -998,9 +1006,11 @@ fullOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "FULL OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
+{- |Allows `fullOuterJoin` to reference columns provided by
+preceding `from` items.-}
 fullOuterJoinLateral
   :: FromClause (Join left outer) commons db params right
-  -- ^ right
+  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
   -> FromClause outer commons db params left
@@ -1051,11 +1061,6 @@ instance (Has rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
     rel ! col = By2 rel col :* Nil
 
 -- | A `GroupByClause` indicates the `Grouping` of a `TableExpression`.
--- A `NoGroups` indicates `Ungrouped` while a `Group` indicates `Grouped`.
--- @NoGroups@ is distinguised from @Group Nil@ since no aggregation can be
--- done on @NoGroups@ while all output `Expression`s must be aggregated
--- in @Group Nil@. In general, all output `Expression`s in the
--- complement of @bys@ must be aggregated in @Group bys@.
 newtype GroupByClause grp from = UnsafeGroupByClause
   { renderGroupByClause :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
@@ -1069,7 +1074,7 @@ group
   -> GroupByClause ('Grouped bys) from
 group bys = UnsafeGroupByClause $ case bys of
   Nil -> ""
-  bys' -> " GROUP BY" <+> renderCommaSeparated renderSQL bys'
+  _ -> " GROUP BY" <+> renderCommaSeparated renderSQL bys
 
 -- | A `HavingClause` is used to eliminate groups that are not of interest.
 -- An `Ungrouped` `TableExpression` may only use `NoHaving` while a `Grouped`
