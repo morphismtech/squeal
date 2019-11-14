@@ -451,7 +451,7 @@ type family Alter alias x xs where
   Alter alias x1 (alias ::: x0 ': xs) = alias ::: x1 ': xs
   Alter alias x1 (x0 ': xs) = x0 ': Alter alias x1 xs
 
--- Similar to `Alter` but no error on non-existence
+-- | Similar to `Alter` but no error on non-existence
 type family AlterIfExists alias x xs where
   AlterIfExists alias x '[] = '[]
   AlterIfExists alias x1 (alias ::: x0 ': xs) = alias ::: x1 ': xs
