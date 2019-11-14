@@ -145,6 +145,7 @@ type Operator x1 x2 y
   -> Expression outer commons grp db params from y
      -- ^ output
 
+-- | Like `Operator` but depends on the schemas of the database
 type OperatorDB db x1 x2 y
   =  forall outer commons grp params from
   .  Expression outer commons grp db params from x1
@@ -166,6 +167,7 @@ type (-->) x y
   -> Expression outer commons grp db params from y
      -- ^ output
 
+-- | Like `-->` but depends on the schemas of the database
 type FunctionDB db x y
   =  forall outer commons grp params from
   .  Expression outer commons grp db params from x
@@ -186,6 +188,7 @@ type (--->) xs y
   -> Expression outer commons grp db params from y
      -- ^ output
 
+-- | Like `--->` but depends on the schemas of the database
 type FunctionNDB db xs y
   =  forall outer commons grp params from
   .  NP (Expression outer commons grp db params from) xs
@@ -318,10 +321,11 @@ unsafeBinaryOp :: ByteString -> Operator ty0 ty1 ty2
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderSQL x <+> op <+> renderSQL y
 
+-- | Call user-defined binary operator using type application
 binaryOp
   :: forall op sch db schema x y z.
     ( Has sch db schema
-    , Has op schema ('Operator ('BinaryOp x y z)) )
+    , Has op schema ('Op ('BinOp x y z)) )
   => OperatorDB db x y z
 binaryOp = unsafeBinaryOp $ renderSymbol @op
 
@@ -330,10 +334,11 @@ binaryOp = unsafeBinaryOp $ renderSymbol @op
 unsafeLeftOp :: ByteString -> x --> y
 unsafeLeftOp op x = UnsafeExpression $ parenthesized $ op <+> renderSQL x
 
+-- | Call a user-defined left unary operator using type application
 leftOp
   :: forall op sch db schema x y.
     ( Has sch db schema
-    , Has op schema ('Operator ('LeftOp x y)) )
+    , Has op schema ('Op ('LeftOp x y)) )
   => FunctionDB db x y
 leftOp = unsafeLeftOp $ renderSymbol @op
 
@@ -342,10 +347,11 @@ leftOp = unsafeLeftOp $ renderSymbol @op
 unsafeRightOp :: ByteString -> x --> y
 unsafeRightOp op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
 
+-- | Call a user-defined right unary operator using type application
 rightOp
   :: forall op sch db schema x y.
     ( Has sch db schema
-    , Has op schema ('Operator ('RightOp x y)) )
+    , Has op schema ('Op ('RightOp x y)) )
   => FunctionDB db x y
 rightOp = unsafeRightOp $ renderSymbol @op
 
@@ -355,9 +361,10 @@ unsafeFunction :: ByteString -> x --> y
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
+-- | Call a user defined function of a single variable
 function
   :: (Has sch db schema, Has fun schema ('Function ('[x] :=> 'Returns y)))
-  => QualifiedAlias sch fun
+  => QualifiedAlias sch fun -- ^ function name
   -> FunctionDB db x y
 function = unsafeFunction . renderSQL
 
@@ -367,6 +374,7 @@ unsafeFunctionN :: SListI xs => ByteString -> xs ---> y
 unsafeFunctionN fun xs = UnsafeExpression $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
+-- | Call a user defined multivariable function
 functionN
   :: ( Has sch db schema
      , Has fun schema ('Function (xs :=> 'Returns y))
@@ -430,6 +438,7 @@ instance PGSubset 'PGtsquery
 instance PGSubset ('PGvararray ty)
 instance PGSubset ('PGrange ty)
 
+-- | Intersection operator
 class PGIntersect ty where
   (@&&) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
   (@&&) = unsafeBinaryOp "&&"

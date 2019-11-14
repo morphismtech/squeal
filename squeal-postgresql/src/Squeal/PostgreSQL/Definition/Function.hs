@@ -155,7 +155,7 @@ createBinaryOp
   -> TypeExpression db x
   -> TypeExpression db y
   -> Definition db
-      (Alter sch (Create op ('Operator ('BinaryOp x y z)) schema) db)
+      (Alter sch (Create op ('Op ('BinOp x y z)) schema) db)
 createBinaryOp fun x y = UnsafeDefinition $
   "CREATE" <+> "OPERATOR" <+> renderSymbol @op
     <+> parenthesized (commaSeparated opdef)
@@ -173,7 +173,7 @@ createLeftOp
   => QualifiedAlias sch fun
   -> TypeExpression db x
   -> Definition db
-      (Alter sch (Create op ('Operator ('LeftOp x y)) schema) db)
+      (Alter sch (Create op ('Op ('LeftOp x y)) schema) db)
 createLeftOp fun x = UnsafeDefinition $
   "CREATE" <+> "OPERATOR" <+> renderSymbol @op
     <+> parenthesized (commaSeparated opdef)
@@ -190,7 +190,7 @@ createRightOp
   => QualifiedAlias sch fun
   -> TypeExpression db x
   -> Definition db
-      (Alter sch (Create op ('Operator ('RightOp x y)) schema) db)
+      (Alter sch (Create op ('Op ('RightOp x y)) schema) db)
 createRightOp fun x = UnsafeDefinition $
   "CREATE" <+> "OPERATOR" <+> renderSymbol @op
     <+> parenthesized (commaSeparated opdef)
@@ -219,7 +219,7 @@ dropOperator
   :: (Has sch db schema, KnownSymbol op)
   => QualifiedAlias sch op
   -- ^ name of the user defined operator
-  -> Definition db (Alter sch (DropSchemum op 'Operator schema) db)
+  -> Definition db (Alter sch (DropSchemum op 'Op schema) db)
 dropOperator op = UnsafeDefinition $
   "DROP" <+> "OPERATOR" <+> renderSQL op <> ";"
 
@@ -227,7 +227,7 @@ dropOperatorIfExists
   :: (Has sch db schema, KnownSymbol op)
   => QualifiedAlias sch op
   -- ^ name of the user defined operator
-  -> Definition db (Alter sch (DropSchemumIfExists op 'Operator schema) db)
+  -> Definition db (Alter sch (DropSchemumIfExists op 'Op schema) db)
 dropOperatorIfExists op = UnsafeDefinition $
   "DROP OPERATOR IF EXISTS" <+> renderSQL op <> ";"
 

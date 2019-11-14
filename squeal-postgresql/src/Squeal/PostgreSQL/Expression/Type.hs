@@ -376,28 +376,32 @@ instance (KnownSymbol alias, PGTyped db ty)
   => FieldTyped db (alias ::: ty) where
     fieldtype = pgtype `As` Alias
 
--- | `ColumnTypeExpression`s are used in `createTable` commands.
+-- | `ColumnTypeExpression`s are used in
+-- `Squeal.PostgreSQL.Definition.createTable` commands.
 newtype ColumnTypeExpression (db :: SchemasType) (ty :: ColumnType)
   = UnsafeColumnTypeExpression { renderColumnTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance RenderSQL (ColumnTypeExpression db ty) where
   renderSQL = renderColumnTypeExpression
 
--- | used in `createTable` commands as a column constraint to note that
+-- | used in `Squeal.PostgreSQL.Definition.createTable`
+-- commands as a column constraint to note that
 -- @NULL@ may be present in a column
 nullable
   :: TypeExpression db (nullity ty)
   -> ColumnTypeExpression db ('NoDef :=> 'Null ty)
 nullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NULL"
 
--- | used in `createTable` commands as a column constraint to ensure
+-- | used in `Squeal.PostgreSQL.Definition.createTable`
+-- commands as a column constraint to ensure
 -- @NULL@ is not present in a column
 notNullable
   :: TypeExpression db (nullity ty)
   -> ColumnTypeExpression db ('NoDef :=> 'NotNull ty)
 notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
 
--- | used in `createTable` commands as a column constraint to give a default
+-- | used in `Squeal.PostgreSQL.Definition.createTable`
+-- commands as a column constraint to give a default
 default_
   :: Expression '[] '[] 'Ungrouped db '[] '[] ty
   -> ColumnTypeExpression db ('NoDef :=> ty)

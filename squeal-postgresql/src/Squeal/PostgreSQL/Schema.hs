@@ -46,7 +46,7 @@ module Squeal.PostgreSQL.Schema
   , SchemumType (..)
   , IndexType (..)
   , FunctionType
-  , OperatorType (..)
+  , OpType (..)
   , ReturnsType (..)
   , SchemaType
   , SchemasType
@@ -498,7 +498,7 @@ data SchemumType
   | Typedef PGType
   | Index IndexType
   | Function FunctionType
-  | Operator OperatorType
+  | Op OpType
   | UnsafeSchemum Symbol
 
 -- | Use `:=>` to pair the parameter types with the return
@@ -537,8 +537,8 @@ data ReturnsType
   | ReturnsTable RowType -- ^ set returning function
 
 {- | Operator type-}
-data OperatorType
-  = BinaryOp NullityType NullityType NullityType
+data OpType
+  = BinOp NullityType NullityType NullityType
   -- ^ left input, right input and output
   | LeftOp NullityType NullityType
   -- ^ right input and output
