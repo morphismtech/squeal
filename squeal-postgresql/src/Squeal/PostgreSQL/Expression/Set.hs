@@ -55,6 +55,7 @@ type SetFunction fun ty row
   -> FromClause outer commons db params '[fun ::: row]
      -- ^ output
 
+-- | Like `SetFunction` but depends on the schemas of the database
 type SetFunctionDB fun db ty row
   =  forall outer commons params
   .  Expression outer commons 'Ungrouped db params '[] ty
@@ -62,13 +63,14 @@ type SetFunctionDB fun db ty row
   -> FromClause outer commons db params '[fun ::: row]
      -- ^ output
 
--- | Escape hatch for a set returning function with 1 argument.
+-- | Escape hatch for a set returning function of a single variable
 unsafeSetFunction
   :: forall fun ty row. KnownSymbol fun
   => SetFunction fun ty row -- ^ set returning function
 unsafeSetFunction x = UnsafeFromClause $
   renderSymbol @fun <> parenthesized (renderSQL x)
 
+-- | Call a user defined set returning function of a single variable
 setFunction
   :: ( Has sch db schema
      , Has fun schema ('Function ('[ty] :=> 'ReturnsTable row)) )
@@ -86,13 +88,14 @@ type SetFunctionN fun tys row
   -> FromClause outer commons db params '[fun ::: row]
      -- ^ output
 
--- | Escape hatch for a set returning function with multiple argument.
+-- | Escape hatch for a multivariable set returning function
 unsafeSetFunctionN
   :: forall fun tys row. (SOP.SListI tys, KnownSymbol fun)
   => SetFunctionN fun tys row -- ^ set returning function
 unsafeSetFunctionN xs = UnsafeFromClause $
   renderSymbol @fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
+-- | Like `SetFunctionN` but depends on the schemas of the database
 type SetFunctionNDB fun db tys row
   =  forall outer commons params
   .  NP (Expression outer commons 'Ungrouped db params '[]) tys
@@ -100,6 +103,7 @@ type SetFunctionNDB fun db tys row
   -> FromClause outer commons db params '[fun ::: row]
      -- ^ output
 
+-- | Call a user defined multivariable set returning function
 setFunctionN
   :: ( Has sch db schema
      , Has fun schema ('Function (tys :=> 'ReturnsTable row))
@@ -110,7 +114,8 @@ setFunctionN _ = unsafeSetFunctionN
 
 {- | @generateSeries (start *: stop)@
 
-Generate a series of values, from @start@ to @stop@ with a step size of one
+Generate a series of values,
+from @start@ to @stop@ with a step size of one
 -}
 generateSeries
   :: ty `In` '[ 'PGint4, 'PGint8, 'PGnumeric]
@@ -120,7 +125,8 @@ generateSeries = unsafeSetFunctionN
 
 {- | @generateSeries (start :* stop *: step)@
 
-Generate a series of values, from @start@ to @stop@ with a step size of @step@
+Generate a series of values,
+from @start@ to @stop@ with a step size of @step@
 -}
 generateSeriesStep
   :: ty `In` '[ 'PGint4, 'PGint8, 'PGnumeric]
@@ -130,7 +136,8 @@ generateSeriesStep = unsafeSetFunctionN
 
 {- | @generateSeries (start :* stop *: step)@
 
-Generate a series of values, from @start@ to @stop@ with a step size of @step@
+Generate a series of values,
+from @start@ to @stop@ with a step size of @step@
 -}
 generateSeriesTimestamp
   :: ty `In` '[ 'PGtimestamp, 'PGtimestamptz]

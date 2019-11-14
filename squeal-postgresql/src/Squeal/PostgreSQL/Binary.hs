@@ -506,6 +506,7 @@ instance {-# OVERLAPPABLE #-} OidOf ('PGenum labels) where oidOf = LibPQ.invalid
 instance {-# OVERLAPPABLE #-} OidOf ('PGfixarray ns (null ('PGenum labels))) where oidOf = LibPQ.invalidOid
 instance {-# OVERLAPPABLE #-} OidOf ('PGvararray (null ('PGenum labels))) where oidOf = LibPQ.invalidOid
 
+-- | Lifts a `OidOf` constraint to a param.
 class OidOfParam (ty :: NullityType) where oidOfParam :: Oid
 instance OidOf ty => OidOfParam (null ty) where oidOfParam = oidOf @ty
 

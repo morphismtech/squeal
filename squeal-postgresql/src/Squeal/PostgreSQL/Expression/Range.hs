@@ -101,11 +101,17 @@ range ty = \case
     bra = \case Infinite -> "("; Closed _ -> "["; Open _ -> "("
     ket = \case Infinite -> ")"; Closed _ -> "]"; Open _ -> ")"
 
-data Bound x = Infinite | Closed x | Open x
+-- | The type of `Bound` for a `Range`.
+data Bound x
+  = Infinite -- ^ unbounded
+  | Closed x -- ^ inclusive
+  | Open x -- ^ exclusive
   deriving
     ( Eq, Ord, Show, Read, GHC.Generic
     , Functor, Foldable, Traversable )
 
+-- | A `Range` datatype that comprises connected subsets of
+-- the real line.
 data Range x = Empty | NonEmpty (Bound x) (Bound x)
   deriving
     ( Eq, Ord, Show, Read, GHC.Generic
@@ -156,6 +162,7 @@ instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
             return $ if testBit flag 2 then Closed l else Open l
       return $ NonEmpty lower upper
 
+-- | Finite `Range` constructor
 (<=..<=), (<..<), (<=..<), (<..<=) :: x -> x -> Range x
 infix 4 <=..<=, <..<, <=..<, <..<=
 x <=..<= y = NonEmpty (Closed x) (Closed y)
@@ -163,68 +170,97 @@ x <..< y = NonEmpty (Open x) (Open y)
 x <=..< y = NonEmpty (Closed x) (Open y)
 x <..<= y = NonEmpty (Open x) (Closed y)
 
+-- | Half-infinite `Range` constructor
 moreThan, atLeast, lessThan, atMost :: x -> Range x
 moreThan x = NonEmpty (Open x) Infinite
 atLeast x = NonEmpty (Closed x) Infinite
 lessThan x = NonEmpty Infinite (Open x)
 atMost x = NonEmpty Infinite (Closed x)
 
+-- | A point on the line
 singleton :: x -> Range x
 singleton x = x <=..<= x
 
+-- | The `whole` line
 whole :: Range x
 whole = NonEmpty Infinite Infinite
 
+-- | range is contained by
 (.<@) :: Operator ('NotNull ty) (null ('PGrange ty)) ('Null 'PGbool)
 (.<@) = unsafeBinaryOp "<@"
 
+-- | contains range
 (@>.) :: Operator (null ('PGrange ty)) ('NotNull ty) ('Null 'PGbool)
 (@>.) = unsafeBinaryOp "<@"
 
+-- | strictly left of,
+-- return false when an empty range is involved
 (<<@) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
 (<<@) = unsafeBinaryOp "<<"
 
+-- | strictly right of,
+-- return false when an empty range is involved
 (@>>) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
 (@>>) = unsafeBinaryOp ">>"
 
+-- | does not extend to the right of,
+-- return false when an empty range is involved
 (&<) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
 (&<) = unsafeBinaryOp "&<"
 
+-- | does not extend to the left of,
+-- return false when an empty range is involved
 (&>) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
 (&>) = unsafeBinaryOp "&>"
 
+-- | is adjacent to, return false when an empty range is involved
 (-|-) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) ('Null 'PGbool)
 (-|-) = unsafeBinaryOp "-|-"
 
+-- | union, will fail if the resulting range would
+-- need to contain two disjoint sub-ranges
 (@+) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
 (@+) = unsafeBinaryOp "+"
 
+-- | intersection
 (@*) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
 (@*) = unsafeBinaryOp "*"
 
+-- | difference, will fail if the resulting range would
+-- need to contain two disjoint sub-ranges
 (@-) :: Operator (null ('PGrange ty)) (null ('PGrange ty)) (null ('PGrange ty))
 (@-) = unsafeBinaryOp "-"
 
+-- | lower bound of range
 lowerBound :: null ('PGrange ty) --> 'Null ty
 lowerBound = unsafeFunction "lower"
 
+-- | upper bound of range
 upperBound :: null ('PGrange ty) --> 'Null ty
 upperBound = unsafeFunction "upper"
 
+-- | is the range empty?
 isEmpty :: null ('PGrange ty) --> 'Null 'PGbool
 isEmpty = unsafeFunction "isempty"
 
+-- | is the lower bound inclusive?
 lowerInc :: null ('PGrange ty) --> 'Null 'PGbool
 lowerInc = unsafeFunction "lower_inc"
 
+-- | is the lower bound infinite?
 lowerInf :: null ('PGrange ty) --> 'Null 'PGbool
 lowerInf = unsafeFunction "lower_inf"
 
+-- | is the upper bound inclusive?
 upperInc :: null ('PGrange ty) --> 'Null 'PGbool
 upperInc = unsafeFunction "upper_inc"
 
+-- | is the upper bound infinite?
 upperInf :: null ('PGrange ty) --> 'Null 'PGbool
 upperInf = unsafeFunction "upper_inf"
 
-rangeMerge :: '[null ('PGrange ty), null ('PGrange ty)] ---> null ('PGrange ty)
+-- | the smallest range which includes both of the given ranges
+rangeMerge ::
+  '[null ('PGrange ty), null ('PGrange ty)]
+  ---> null ('PGrange ty)
 rangeMerge = unsafeFunctionN "range_merge"
