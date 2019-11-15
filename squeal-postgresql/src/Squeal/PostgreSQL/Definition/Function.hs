@@ -65,6 +65,17 @@ import Squeal.PostgreSQL.Schema
 -- $setup
 -- >>> import Squeal.PostgreSQL
 
+{- | Create a function.
+>>> type Fn = 'Function ( '[ 'Null 'PGint4, 'Null 'PGint4] :=> 'Returns ( 'Null 'PGint4))
+>>> :{
+let
+  definition :: Definition (Public '[]) (Public '["fn" ::: Fn])
+  definition = createFunction #fn (int4 *: int4) int4 $
+    languageSqlExpr (param @1 * param @2 + 1)
+in printSQL definition
+:}
+CREATE FUNCTION "fn" (int4, int4) RETURNS int4 language sql as $$ SELECT * FROM (VALUES (((($1 :: int4) * ($2 :: int4)) + 1))) AS t ("ret") $$;
+-}
 createFunction
   :: ( Has sch db schema
      , KnownSymbol fun
@@ -79,6 +90,9 @@ createFunction fun args ret fundef = UnsafeDefinition $
     <+> parenthesized (renderCommaSeparated renderSQL args)
     <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
 
+-- | Create or replace a function.
+-- It is not possible to change the name or argument types
+-- or return type of a function this way.
 createOrReplaceFunction
   :: ( Has sch db schema
      , KnownSymbol fun
@@ -93,6 +107,7 @@ createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
     <+> parenthesized (renderCommaSeparated renderSQL args)
     <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
 
+-- | Use a parameterized `Expression` as a function body
 languageSqlExpr
   :: Expression '[] '[] 'Ungrouped db args '[] ret
   -> FunctionDefinition db args ('Returns ret)
@@ -100,6 +115,7 @@ languageSqlExpr expr = UnsafeFunctionDefinition $
   "language sql as"
     <+> "$$" <+> renderSQL (values_ (expr `as` #ret)) <+> "$$"
 
+-- | Use a parametrized `Query` as a function body
 languageSqlQuery
   :: Query '[] '[] db args rets
   -> FunctionDefinition db args ('ReturnsTable rets)
