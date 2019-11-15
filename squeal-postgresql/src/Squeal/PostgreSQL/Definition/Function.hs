@@ -122,6 +122,18 @@ languageSqlQuery
 languageSqlQuery qry = UnsafeFunctionDefinition $
   "language sql as" <+> "$$" <+> renderSQL qry <+> "$$"
 
+{- | Create a set function.
+>>> type Tab = 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])
+>>> type Fn = 'Function ('[ 'Null 'PGint4, 'Null 'PGint4] :=> 'ReturnsTable '["ret" ::: 'Null 'PGint4])
+>>> :{
+let
+  definition :: Definition (Public '["tab" ::: Tab]) (Public '["tab" ::: Tab, "fn" ::: Fn])
+  definition = createSetFunction #fn (int4 *: int4) (int4 `as` #ret) $
+    languageSqlQuery (select_ ((param @1 * param @2 + #col) `as` #ret) (from (table #tab)))
+in printSQL definition
+:}
+CREATE FUNCTION "fn" (int4, int4) RETURNS TABLE ("ret" int4) language sql as $$ SELECT ((($1 :: int4) * ($2 :: int4)) + "col") AS "ret" FROM "tab" AS "tab" $$;
+-}
 createSetFunction
   :: ( Has sch db schema
      , KnownSymbol fun
@@ -142,6 +154,18 @@ createSetFunction fun args rets fundef = UnsafeDefinition $
     renderRet :: Aliased (TypeExpression s) r -> ByteString
     renderRet (ty `As` col) = renderSQL col <+> renderSQL ty
 
+{- | Create or replace a set function.
+>>> type Tab = 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])
+>>> type Fn = 'Function ('[ 'Null 'PGint4, 'Null 'PGint4] :=> 'ReturnsTable '["ret" ::: 'Null 'PGint4])
+>>> :{
+let
+  definition :: Definition (Public '["tab" ::: Tab, "fn" ::: Fn]) (Public '["tab" ::: Tab, "fn" ::: Fn])
+  definition = createOrReplaceSetFunction #fn (int4 *: int4) (int4 `as` #ret) $
+    languageSqlQuery (select_ ((param @1 * param @2 + #col) `as` #ret) (from (table #tab)))
+in printSQL definition
+:}
+CREATE OR REPLACE FUNCTION "fn" (int4, int4) RETURNS TABLE ("ret" int4) language sql as $$ SELECT ((($1 :: int4) * ($2 :: int4)) + "col") AS "ret" FROM "tab" AS "tab" $$;
+-}
 createOrReplaceSetFunction
   :: ( Has sch db schema
      , KnownSymbol fun
