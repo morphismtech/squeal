@@ -58,7 +58,7 @@ import Squeal.PostgreSQL.Schema
 -- >>> import Squeal.PostgreSQL
 -- >>> :set -XPolyKinds
 
-{- |
+{- | Create an index.
 >>> :{
 type Table = '[] :=>
   '[ "a" ::: 'NoDef :=> 'Null 'PGint4
@@ -101,6 +101,7 @@ createIndex ix tab method cols = UnsafeDefinition $
       DescNullsLast expression -> parenthesized (renderSQL expression)
         <+> "DESC NULLS LAST"
 
+-- | Create an index if it doesn't exist.
 createIndexIfNotExists
   :: (Has sch db schema, Has tab schema ('Table table), KnownSymbol ix)
   => Alias ix
@@ -126,23 +127,41 @@ createIndexIfNotExists ix tab method cols = UnsafeDefinition $
       DescNullsLast expression -> parenthesized (renderSQL expression)
         <+> "DESC NULLS LAST"
 
+{- |
+PostgreSQL provides several index types:
+B-tree, Hash, GiST, SP-GiST, GIN and BRIN.
+Each index type uses a different algorithm
+that is best suited to different types of queries.
+-}
 newtype IndexMethod ty = UnsafeIndexMethod {renderIndexMethod :: ByteString}
   deriving stock (Eq, Ord, Show, GHC.Generic)
 instance RenderSQL (IndexMethod ty) where renderSQL = renderIndexMethod
+-- | B-trees can handle equality and range queries on data
+-- that can be sorted into some ordering.
 btree :: IndexMethod 'Btree
 btree = UnsafeIndexMethod "btree"
+-- | Hash indexes can only handle simple equality comparisons.
 hash :: IndexMethod 'Hash
 hash = UnsafeIndexMethod "hash"
+-- | GiST indexes are not a single kind of index,
+-- but rather an infrastructure within which many different
+-- indexing strategies can be implemented.
 gist :: IndexMethod 'Gist
 gist = UnsafeIndexMethod "gist"
+-- | SP-GiST indexes, like GiST indexes,
+-- offer an infrastructure that supports various kinds of searches.
 spgist :: IndexMethod 'Spgist
 spgist = UnsafeIndexMethod "spgist"
+-- | GIN indexes are “inverted indexes” which are appropriate for
+-- data values that contain multiple component values, such as arrays.
 gin :: IndexMethod 'Gin
 gin = UnsafeIndexMethod "gin"
+-- | BRIN indexes (a shorthand for Block Range INdexes) store summaries
+-- about the values stored in consecutive physical block ranges of a table.
 brin :: IndexMethod 'Brin
 brin = UnsafeIndexMethod "brin"
 
--- |
+-- | Drop an index.
 -- >>> printSQL (dropIndex #ix :: Definition (Public '["ix" ::: 'Index 'Btree]) (Public '[]))
 -- DROP INDEX "ix";
 dropIndex
@@ -152,6 +171,7 @@ dropIndex
   -> Definition db (Alter sch (DropSchemum ix 'Index schema) db)
 dropIndex ix = UnsafeDefinition $ "DROP INDEX" <+> renderSQL ix <> ";"
 
+-- | Drop an index if it exists.
 dropIndexIfExists
   :: (Has sch db schema, KnownSymbol ix)
   => QualifiedAlias sch ix
