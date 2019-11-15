@@ -166,17 +166,18 @@ with constraints (restrictions on the allowed set of values).
 
 Domains are useful for abstracting common constraints on fields
 into a single location for maintenance. For example, several tables might
-contain email address columns, all requiring the same `check` constraint
+contain email address columns, all requiring the same
+`Squeal.PostgreSQL.Definition.Table.Constraint.check` constraint
 to verify the address syntax. Define a domain rather than setting up
 each table's constraint individually.
 
 >>> :{
 let
   createPositive :: Definition (Public '[]) (Public '["positive" ::: 'Typedef 'PGfloat4])
-  createPositive = createDomain #positive real (#value .> 0 .&& (#value & isNotNull))
+  createPositive = createDomain #positive real (#value .> 0)
 in printSQL createPositive
 :}
-CREATE DOMAIN "positive" AS real CHECK ((("value" > 0) AND "value" IS NOT NULL));
+CREATE DOMAIN "positive" AS real CHECK (("value" > 0));
 -}
 createDomain
   :: (Has sch db schema, KnownSymbol dom)
@@ -221,6 +222,7 @@ dropType
   -> Definition db (Alter sch (DropSchemum td 'Typedef schema) db)
 dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderSQL tydef <> ";"
 
+-- | Drop a type if it exists.
 dropTypeIfExists
   :: (Has sch db schema, KnownSymbol td)
   => QualifiedAlias sch td

@@ -70,6 +70,7 @@ createView alias query = UnsafeDefinition $
   "CREATE" <+> "VIEW" <+> renderSQL alias <+> "AS"
   <+> renderQuery query <> ";"
 
+-- | Create or replace a view.
 createOrReplaceView
   :: (Has sch db schema, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ the name of the view to add
@@ -97,6 +98,7 @@ dropView
   -> Definition db (Alter sch (DropSchemum vw 'View schema) db)
 dropView vw = UnsafeDefinition $ "DROP VIEW" <+> renderSQL vw <> ";"
 
+-- | Drop a view if it exists.
 dropViewIfExists
   :: (Has sch db schema, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ view to remove

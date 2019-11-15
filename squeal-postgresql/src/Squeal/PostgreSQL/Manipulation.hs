@@ -294,7 +294,7 @@ insertInto tab qry conflict ret = UnsafeManipulation $
   <> renderSQL conflict
   <> renderSQL ret
 
--- | Like `insertInto` but with `OnConflictDoRaise` and `no` `ReturningClause`.
+-- | Like `insertInto` but with `OnConflictDoRaise` and no `ReturningClause`.
 insertInto_
   :: ( Has sch db schema
      , Has tab schema ('Table table)
@@ -383,7 +383,9 @@ instance (forall x. RenderSQL (expr x)) => RenderSQL (Optional expr ty) where
     Default -> "DEFAULT"
     Set expr -> renderSQL expr
 
+-- | Lifts `Literal` to a column entry
 class LiteralColumn field column where
+  -- | Haskell record field as a literal column
   literalColumn
     :: SOP.P field
     -> Aliased ( Optional
@@ -396,6 +398,7 @@ instance (KnownSymbol alias, column ~ ('Def :=> ty))
   => LiteralColumn (alias ::: ()) (alias ::: column) where
     literalColumn _ = Default `as` (Alias @alias)
 
+-- | Use a Haskell record as a literal list of columns
 literalColumns
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip LiteralColumn xs columns )
@@ -407,6 +410,7 @@ literalColumns
   = SOP.htrans (SOP.Proxy @LiteralColumn) literalColumn
   . SOP.toRecord
 
+-- | `inline` a Haskell record in `insertInto`
 inline
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip LiteralColumn xs columns )
@@ -414,6 +418,7 @@ inline
   -> QueryClause commons db params columns
 inline = Values_ . literalColumns
 
+-- | `inlineMany` Haskell records in `insertInto`
 inlineMany
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip LiteralColumn xs columns )
