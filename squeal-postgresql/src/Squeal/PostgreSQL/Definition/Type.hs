@@ -220,7 +220,7 @@ dropType
   => QualifiedAlias sch td
   -- ^ name of the user defined type
   -> Definition db (Alter sch (DropSchemum td 'Typedef schema) db)
-dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderSQL tydef <> ";"
+dropType tydef = UnsafeDefinition $ "DROP TYPE" <+> renderSQL tydef <> ";"
 
 -- | Drop a type if it exists.
 dropTypeIfExists
@@ -228,4 +228,5 @@ dropTypeIfExists
   => QualifiedAlias sch td
   -- ^ name of the user defined type
   -> Definition db (Alter sch (DropSchemumIfExists td 'Typedef schema) db)
-dropTypeIfExists tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderSQL tydef <> ";"
+dropTypeIfExists tydef = UnsafeDefinition $
+  "DROP TYPE IF EXISTS" <+> renderSQL tydef <> ";"

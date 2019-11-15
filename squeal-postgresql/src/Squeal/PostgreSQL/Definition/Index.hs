@@ -150,11 +150,12 @@ dropIndex
   => QualifiedAlias sch ix
   -- ^ name of the user defined index
   -> Definition db (Alter sch (DropSchemum ix 'Index schema) db)
-dropIndex ix = UnsafeDefinition $ "DROP" <+> "INDEX" <+> renderSQL ix <> ";"
+dropIndex ix = UnsafeDefinition $ "DROP INDEX" <+> renderSQL ix <> ";"
 
 dropIndexIfExists
   :: (Has sch db schema, KnownSymbol ix)
   => QualifiedAlias sch ix
   -- ^ name of the user defined index
   -> Definition db (Alter sch (DropSchemumIfExists ix 'Index schema) db)
-dropIndexIfExists ix = UnsafeDefinition $ "DROP INDEX IF EXISTS" <+> renderSQL ix <> ";"
+dropIndexIfExists ix = UnsafeDefinition $
+  "DROP INDEX IF EXISTS" <+> renderSQL ix <> ";"

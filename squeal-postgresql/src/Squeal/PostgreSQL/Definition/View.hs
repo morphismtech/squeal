@@ -103,4 +103,5 @@ dropViewIfExists
   :: (Has sch db schema, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ view to remove
   -> Definition db (Alter sch (DropIfExists vw schema) db)
-dropViewIfExists vw = UnsafeDefinition $ "DROP VIEW IF EXISTS" <+> renderSQL vw <> ";"
+dropViewIfExists vw = UnsafeDefinition $
+  "DROP VIEW IF EXISTS" <+> renderSQL vw <> ";"

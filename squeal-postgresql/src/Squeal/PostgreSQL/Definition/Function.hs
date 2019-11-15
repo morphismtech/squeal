@@ -205,7 +205,7 @@ dropFunction
   -- ^ name of the user defined function
   -> Definition db (Alter sch (DropSchemum fun 'Function schema) db)
 dropFunction fun = UnsafeDefinition $
-  "DROP" <+> "FUNCTION" <+> renderSQL fun <> ";"
+  "DROP FUNCTION" <+> renderSQL fun <> ";"
 
 dropFunctionIfExists
   :: (Has sch db schema, KnownSymbol fun)
@@ -221,7 +221,7 @@ dropOperator
   -- ^ name of the user defined operator
   -> Definition db (Alter sch (DropSchemum op 'Op schema) db)
 dropOperator op = UnsafeDefinition $
-  "DROP" <+> "OPERATOR" <+> renderSQL op <> ";"
+  "DROP OPERATOR" <+> renderSQL op <> ";"
 
 dropOperatorIfExists
   :: (Has sch db schema, KnownSymbol op)

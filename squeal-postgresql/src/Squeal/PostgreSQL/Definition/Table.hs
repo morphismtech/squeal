@@ -110,7 +110,7 @@ createTable tab columns constraints = UnsafeDefinition $
 {-| `createTableIfNotExists` creates a table if it doesn't exist, but does not add it to the schema.
 Instead, the schema already has the table so if the table did not yet exist, the schema was wrong.
 `createTableIfNotExists` fixes this. Interestingly, this property makes it an idempotent in
-the `Category` of `Definition`s.
+the `Control.Category.Category` of `Definition`s.
 
 >>> :set -XOverloadedLabels -XTypeApplications
 >>> :{
@@ -195,12 +195,14 @@ dropTable
   -> Definition db (Alter sch (DropSchemum tab 'Table schema) db)
 dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderSQL tab <> ";"
 
+-- | Drop a table if it exists.
 dropTableIfExists
   :: ( Has sch db schema
      , KnownSymbol tab)
   => QualifiedAlias sch tab -- ^ table to remove
   -> Definition db (Alter sch (DropSchemumIfExists tab 'Table schema) db)
-dropTableIfExists tab = UnsafeDefinition $ "DROP TABLE IF EXISTS" <+> renderSQL tab <> ";"
+dropTableIfExists tab = UnsafeDefinition $
+  "DROP TABLE IF EXISTS" <+> renderSQL tab <> ";"
 
 -- | `alterTable` changes the definition of a table from the schema.
 alterTable
@@ -239,6 +241,7 @@ alterTableRename tab0 tab1 = UnsafeDefinition $
   "ALTER TABLE" <+> renderSQL tab0
   <+> "RENAME TO" <+> renderSQL tab1 <> ";"
 
+-- | Rename a table if it exists.
 alterTableIfExistsRename
   :: (KnownSymbol tab0, KnownSymbol tab1)
   => Alias tab0 -- ^ table to rename

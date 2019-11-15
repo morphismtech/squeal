@@ -32,8 +32,8 @@ Create and drop schema definitions.
 module Squeal.PostgreSQL.Definition.Schema
   ( createSchema
   , createSchemaIfNotExists
-  , dropSchema
-  , dropSchemaIfExists
+  , dropSchemaCascade
+  , dropSchemaCascadeIfExists
   ) where
 
 import GHC.TypeLits
@@ -73,24 +73,32 @@ createSchemaIfNotExists sch = UnsafeDefinition $
   "CREATE" <+> "SCHEMA" <+> "IF" <+> "NOT" <+> "EXISTS"
   <+> renderSQL sch <> ";"
 
--- | >>> :{
+-- | Drop a schema.
+-- Automatically drop objects (tables, functions, etc.)
+-- that are contained in the schema.
+-- >>> :{
 -- let
 --   definition :: Definition '["muh_schema" ::: schema, "public" ::: public] '["public" ::: public]
---   definition = dropSchema #muh_schema
+--   definition = dropSchemaCascade #muh_schema
 -- :}
 --
 -- >>> printSQL definition
--- DROP SCHEMA "muh_schema";
-dropSchema
+-- DROP SCHEMA "muh_schema" CASCADE;
+dropSchemaCascade
   :: KnownSymbol sch
   => Alias sch
   -- ^ user defined schema
   -> Definition db (Drop sch db)
-dropSchema sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch <> ";"
+dropSchemaCascade sch = UnsafeDefinition $
+  "DROP SCHEMA" <+> renderSQL sch <+> "CASCADE;"
 
-dropSchemaIfExists
+-- | Drop a schema if it exists.
+-- Automatically drop objects (tables, functions, etc.)
+-- that are contained in the schema.
+dropSchemaCascadeIfExists
   :: KnownSymbol sch
   => Alias sch
   -- ^ user defined schema
   -> Definition db (DropIfExists sch db)
-dropSchemaIfExists sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch <> ";"
+dropSchemaCascadeIfExists sch = UnsafeDefinition $
+  "DROP SCHEMA IF EXISTS" <+> renderSQL sch <+> "CASCADE;"
