@@ -143,7 +143,7 @@ in printSQL manipulation
 :}
 INSERT INTO "tab" ("col1", "col2") VALUES (2, DEFAULT)
 
-parameterized insert:
+out-of-line parameterized insert:
 
 >>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
@@ -155,6 +155,19 @@ let
 in printSQL manipulation
 :}
 INSERT INTO "tab" ("col1", "col2") VALUES (($1 :: int4), ($2 :: int4))
+
+in-line parameterized insert:
+
+>>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> :{
+let
+  manipulation :: Row Int32 Int32 -> Manipulation_ (Public Schema) () ()
+  manipulation row =
+    insertInto_ #tab (inline row)
+in printSQL (manipulation (Row 1 2))
+:}
+INSERT INTO "tab" ("col1", "col2") VALUES (1, 2)
 
 returning insert:
 
@@ -410,7 +423,7 @@ literalColumns
   = SOP.htrans (SOP.Proxy @LiteralColumn) literalColumn
   . SOP.toRecord
 
--- | `inline` a Haskell record in `insertInto`
+-- | `inline` a Haskell record in `insertInto`.
 inline
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip LiteralColumn xs columns )
@@ -418,7 +431,7 @@ inline
   -> QueryClause commons db params columns
 inline = Values_ . literalColumns
 
--- | `inlineMany` Haskell records in `insertInto`
+-- | `inlineMany` Haskell records in `insertInto`.
 inlineMany
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip LiteralColumn xs columns )

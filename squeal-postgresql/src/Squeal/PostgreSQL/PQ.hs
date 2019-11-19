@@ -277,7 +277,7 @@ instance
     Indexed g . Indexed f = Indexed $ pqAp (fmap (<>) f) g
 
 {- | `IndexedMonadTransPQ` is a class for indexed monad transformers
-that support running `Definition`s using `define` which acts functorially.
+that support running `Definition`s using `define` which acts functorially in effect.
 
 * @define id = return ()@
 * @define (statement1 >> statement2) = define statement1 & pqThen (define statement2)@

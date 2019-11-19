@@ -243,24 +243,32 @@ instance Migratory (IsoQ Definition) (IsoQ (Indexed PQ IO ())) where
 unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
 unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
 
+-- | Run migrations.
 migrate
   :: Migratory def (Indexed PQ IO ())
   => Path (Migration def) db0 db1
   -> PQ db0 db1 IO ()
 migrate = runIndexed . runMigrations
 
+-- | Run rewindable migrations.
 migrateUp
   :: Migratory def (IsoQ (Indexed PQ IO ()))
   => Path (Migration def) db0 db1
   -> PQ db0 db1 IO ()
 migrateUp = runIndexed . up . runMigrations
 
+-- | Rewind migrations.
 migrateDown
   :: Migratory def (IsoQ (Indexed PQ IO ()))
   => Path (Migration def) db0 db1
   -> PQ db1 db0 IO ()
 migrateDown = runIndexed . down . runMigrations
 
+{- | Run a pure SQL `Definition` functorially in effect
+
+* @indexedDefine id = id@
+* @indexedDefine (def1 >>> def2) = indexedDefine def1 >>> indexedDefine def2
+-}
 indexedDefine :: Definition db0 db1 -> Indexed PQ IO () db0 db1
 indexedDefine = Indexed . define
 
