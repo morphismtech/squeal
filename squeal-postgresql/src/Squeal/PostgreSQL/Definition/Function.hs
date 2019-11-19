@@ -34,13 +34,8 @@ module Squeal.PostgreSQL.Definition.Function
   , createOrReplaceFunction
   , createSetFunction
   , createOrReplaceSetFunction
-  , createBinaryOp
-  , createLeftOp
-  , createRightOp
   , dropFunction
   , dropFunctionIfExists
-  , dropOperator
-  , dropOperatorIfExists
   , FunctionDefinition(..)
   , languageSqlExpr
   , languageSqlQuery
@@ -90,9 +85,22 @@ createFunction fun args ret fundef = UnsafeDefinition $
     <+> parenthesized (renderCommaSeparated renderSQL args)
     <+> "RETURNS" <+> renderSQL ret <+> renderSQL fundef <> ";"
 
--- | Create or replace a function.
--- It is not possible to change the name or argument types
--- or return type of a function this way.
+{- | Create or replace a function.
+It is not possible to change the name or argument types
+or return type of a function this way.
+
+>>> type Fn = 'Function ( '[ 'Null 'PGint4, 'Null 'PGint4] :=> 'Returns ( 'Null 'PGint4))
+>>> :{
+let
+  definition :: Definition (Public '["fn" ::: Fn]) (Public '["fn" ::: Fn])
+  definition =
+    createOrReplaceFunction #fn
+      (int4 *: int4) int4 $
+      languageSqlExpr (param @1 @('Null 'PGint4) * param @2 @('Null 'PGint4) + 1)
+in printSQL definition
+:}
+CREATE OR REPLACE FUNCTION "fn" (int4, int4) RETURNS int4 language sql as $$ SELECT * FROM (VALUES (((($1 :: int4) * ($2 :: int4)) + 1))) AS t ("ret") $$;
+-}
 createOrReplaceFunction
   :: ( Has sch db schema
      , KnownSymbol fun
@@ -109,7 +117,8 @@ createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
 
 -- | Use a parameterized `Expression` as a function body
 languageSqlExpr
-  :: Expression '[] '[] 'Ungrouped db args '[] ret
+  :: (args0 ~ args, ret0 ~ ret)
+  => Expression '[] '[] 'Ungrouped db args0 '[] ret0
   -> FunctionDefinition db args ('Returns ret)
 languageSqlExpr expr = UnsafeFunctionDefinition $
   "language sql as"
@@ -186,59 +195,16 @@ createOrReplaceSetFunction fun args rets fundef = UnsafeDefinition $
     renderRet :: Aliased (TypeExpression s) r -> ByteString
     renderRet (ty `As` col) = renderSQL col <+> renderSQL ty
 
-createBinaryOp
-  :: forall op fun sch db schema x y z.
-     ( Has sch db schema
-     , Has fun schema ('Function ('[x,y] :=> 'Returns z))
-     , KnownSymbol op )
-  => QualifiedAlias sch fun
-  -> TypeExpression db x
-  -> TypeExpression db y
-  -> Definition db
-      (Alter sch (Create op ('Op ('BinOp x y z)) schema) db)
-createBinaryOp fun x y = UnsafeDefinition $
-  "CREATE" <+> "OPERATOR" <+> renderSymbol @op
-    <+> parenthesized (commaSeparated opdef)
-    where
-      opdef =
-        [ "FUNCTION" <+> "=" <+> renderSQL fun
-        , "LEFTARG" <+> "=" <+> renderSQL x
-        , "RIGHTARG" <+> "=" <+> renderSQL y ]
-
-createLeftOp
-  :: forall op fun sch db schema x y.
-     ( Has sch db schema
-     , Has fun schema ('Function ('[x] :=> 'Returns y))
-     , KnownSymbol op )
-  => QualifiedAlias sch fun
-  -> TypeExpression db x
-  -> Definition db
-      (Alter sch (Create op ('Op ('LeftOp x y)) schema) db)
-createLeftOp fun x = UnsafeDefinition $
-  "CREATE" <+> "OPERATOR" <+> renderSymbol @op
-    <+> parenthesized (commaSeparated opdef)
-    where
-      opdef =
-        [ "FUNCTION" <+> "=" <+> renderSQL fun
-        , "RIGHTARG" <+> "=" <+> renderSQL x ]
-
-createRightOp
-  :: forall op fun sch db schema x y.
-     ( Has sch db schema
-     , Has fun schema ('Function ('[x] :=> 'Returns y))
-     , KnownSymbol op )
-  => QualifiedAlias sch fun
-  -> TypeExpression db x
-  -> Definition db
-      (Alter sch (Create op ('Op ('RightOp x y)) schema) db)
-createRightOp fun x = UnsafeDefinition $
-  "CREATE" <+> "OPERATOR" <+> renderSymbol @op
-    <+> parenthesized (commaSeparated opdef)
-    where
-      opdef =
-        [ "FUNCTION" <+> "=" <+> renderSQL fun
-        , "LEFTARG" <+> "=" <+> renderSQL x ]
-
+{- | Drop a function.
+>>> type Fn = 'Function ( '[ 'Null 'PGint4, 'Null 'PGint4] :=> 'Returns ( 'Null 'PGint4))
+>>> :{
+let
+  definition :: Definition (Public '["fn" ::: Fn]) (Public '[])
+  definition = dropFunction #fn
+in printSQL definition
+:}
+DROP FUNCTION "fn";
+-}
 dropFunction
   :: (Has sch db schema, KnownSymbol fun)
   => QualifiedAlias sch fun
@@ -247,6 +213,16 @@ dropFunction
 dropFunction fun = UnsafeDefinition $
   "DROP FUNCTION" <+> renderSQL fun <> ";"
 
+{- | Drop a function.
+>>> type Fn = 'Function ( '[ 'Null 'PGint4, 'Null 'PGint4] :=> 'Returns ( 'Null 'PGint4))
+>>> :{
+let
+  definition :: Definition (Public '[]) (Public '[])
+  definition = dropFunctionIfExists #fn
+in printSQL definition
+:}
+DROP FUNCTION IF EXISTS "fn";
+-}
 dropFunctionIfExists
   :: (Has sch db schema, KnownSymbol fun)
   => QualifiedAlias sch fun
@@ -254,22 +230,6 @@ dropFunctionIfExists
   -> Definition db (Alter sch (DropSchemumIfExists fun 'Function schema) db)
 dropFunctionIfExists fun = UnsafeDefinition $
   "DROP FUNCTION IF EXISTS" <+> renderSQL fun <> ";"
-
-dropOperator
-  :: (Has sch db schema, KnownSymbol op)
-  => QualifiedAlias sch op
-  -- ^ name of the user defined operator
-  -> Definition db (Alter sch (DropSchemum op 'Op schema) db)
-dropOperator op = UnsafeDefinition $
-  "DROP OPERATOR" <+> renderSQL op <> ";"
-
-dropOperatorIfExists
-  :: (Has sch db schema, KnownSymbol op)
-  => QualifiedAlias sch op
-  -- ^ name of the user defined operator
-  -> Definition db (Alter sch (DropSchemumIfExists op 'Op schema) db)
-dropOperatorIfExists op = UnsafeDefinition $
-  "DROP OPERATOR IF EXISTS" <+> renderSQL op <> ";"
 
 newtype FunctionDefinition db args ret = UnsafeFunctionDefinition
   { renderFunctionDefinition :: ByteString }
