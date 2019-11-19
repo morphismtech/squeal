@@ -39,13 +39,10 @@ module Squeal.PostgreSQL.Expression
   , unsafeFunction
   , function
   , unsafeLeftOp
-  , leftOp
   , unsafeRightOp
-  , rightOp
   , Operator
   , OperatorDB
   , unsafeBinaryOp
-  , binaryOp
   , FunctionVar
   , unsafeFunctionVar
   , type (--->)
@@ -321,39 +318,15 @@ unsafeBinaryOp :: ByteString -> Operator ty0 ty1 ty2
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderSQL x <+> op <+> renderSQL y
 
--- | Call user-defined binary operator using type application
-binaryOp
-  :: forall op sch db schema x y z.
-    ( Has sch db schema
-    , Has op schema ('Op ('BinOp x y z)) )
-  => OperatorDB db x y z
-binaryOp = unsafeBinaryOp $ renderSymbol @op
-
 -- | >>> printSQL $ unsafeLeftOp "NOT" true
 -- (NOT TRUE)
 unsafeLeftOp :: ByteString -> x --> y
 unsafeLeftOp op x = UnsafeExpression $ parenthesized $ op <+> renderSQL x
 
--- | Call a user-defined left unary operator using type application
-leftOp
-  :: forall op sch db schema x y.
-    ( Has sch db schema
-    , Has op schema ('Op ('LeftOp x y)) )
-  => FunctionDB db x y
-leftOp = unsafeLeftOp $ renderSymbol @op
-
 -- | >>> printSQL $ true & unsafeRightOp "IS NOT TRUE"
 -- (TRUE IS NOT TRUE)
 unsafeRightOp :: ByteString -> x --> y
 unsafeRightOp op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
-
--- | Call a user-defined right unary operator using type application
-rightOp
-  :: forall op sch db schema x y.
-    ( Has sch db schema
-    , Has op schema ('Op ('RightOp x y)) )
-  => FunctionDB db x y
-rightOp = unsafeRightOp $ renderSymbol @op
 
 -- | >>> printSQL $ unsafeFunction "f" true
 -- f(TRUE)
