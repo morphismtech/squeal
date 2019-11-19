@@ -34,7 +34,7 @@ module Squeal.PostgreSQL.Definition
   ( -- * Definition
     Definition (..)
   , (>>>)
-  , manipDefinition
+  , manipulation_
   ) where
 
 import Control.Category
@@ -79,9 +79,9 @@ instance db0 ~ db1 => Semigroup (Definition db0 db1) where (<>) = (>>>)
 instance db0 ~ db1 => Monoid (Definition db0 db1) where mempty = id
 
 -- | A `Manipulation` without input or output can be run as a statement
--- along with other `Definition`s, by embedding it using `manipDefinition`.
-manipDefinition
+-- along with other `Definition`s, by embedding it using `manipulation_`.
+manipulation_
   :: Manipulation '[] db '[] '[]
   -- ^ no input or output
   -> Definition db db
-manipDefinition = UnsafeDefinition . (<> ";") . renderSQL
+manipulation_ = UnsafeDefinition . (<> ";") . renderSQL
