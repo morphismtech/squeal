@@ -61,6 +61,7 @@ import Squeal.PostgreSQL.Schema
 -- >>> import Squeal.PostgreSQL
 
 {- | Create a function.
+
 >>> type Fn = 'Function ( '[ 'Null 'PGint4, 'Null 'PGint4] :=> 'Returns ( 'Null 'PGint4))
 >>> :{
 let
@@ -75,10 +76,10 @@ createFunction
   :: ( Has sch db schema
      , KnownSymbol fun
      , SOP.SListI args )
-  => QualifiedAlias sch fun
-  -> NP (TypeExpression db) args
-  -> TypeExpression db ret
-  -> FunctionDefinition db args ('Returns ret)
+  => QualifiedAlias sch fun -- ^ function alias
+  -> NP (TypeExpression db) args -- ^ arguments
+  -> TypeExpression db ret -- ^ return type
+  -> FunctionDefinition db args ('Returns ret) -- ^ function definition
   -> Definition db (Alter sch (Create fun ('Function (args :=> 'Returns ret)) schema) db)
 createFunction fun args ret fundef = UnsafeDefinition $
   "CREATE" <+> "FUNCTION" <+> renderSQL fun
@@ -105,10 +106,10 @@ createOrReplaceFunction
   :: ( Has sch db schema
      , KnownSymbol fun
      , SOP.SListI args )
-  => QualifiedAlias sch fun
-  -> NP (TypeExpression db) args
-  -> TypeExpression db ret
-  -> FunctionDefinition db args ('Returns ret)
+  => QualifiedAlias sch fun -- ^ function alias
+  -> NP (TypeExpression db) args -- ^ arguments
+  -> TypeExpression db ret -- ^ return type
+  -> FunctionDefinition db args ('Returns ret) -- ^ function definition
   -> Definition db (Alter sch (CreateOrReplace fun ('Function (args :=> 'Returns ret)) schema) db)
 createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
   "CREATE" <+> "OR" <+> "REPLACE" <+> "FUNCTION" <+> renderSQL fun
@@ -119,6 +120,7 @@ createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
 languageSqlExpr
   :: (args0 ~ args, ret0 ~ ret)
   => Expression '[] '[] 'Ungrouped db args0 '[] ret0
+  -- ^ function body
   -> FunctionDefinition db args ('Returns ret)
 languageSqlExpr expr = UnsafeFunctionDefinition $
   "language sql as"
@@ -127,11 +129,13 @@ languageSqlExpr expr = UnsafeFunctionDefinition $
 -- | Use a parametrized `Query` as a function body
 languageSqlQuery
   :: Query '[] '[] db args rets
+  -- ^ function body
   -> FunctionDefinition db args ('ReturnsTable rets)
 languageSqlQuery qry = UnsafeFunctionDefinition $
   "language sql as" <+> "$$" <+> renderSQL qry <+> "$$"
 
 {- | Create a set function.
+
 >>> type Tab = 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])
 >>> type Fn = 'Function ('[ 'Null 'PGint4, 'Null 'PGint4] :=> 'ReturnsTable '["ret" ::: 'Null 'PGint4])
 >>> :{
@@ -148,10 +152,10 @@ createSetFunction
      , KnownSymbol fun
      , SOP.SListI args
      , SOP.SListI rets )
-  => QualifiedAlias sch fun
-  -> NP (TypeExpression db) args
-  -> NP (Aliased (TypeExpression db)) rets
-  -> FunctionDefinition db args ('ReturnsTable rets)
+  => QualifiedAlias sch fun -- ^ function alias
+  -> NP (TypeExpression db) args -- ^ arguments
+  -> NP (Aliased (TypeExpression db)) rets -- ^ return type
+  -> FunctionDefinition db args ('ReturnsTable rets) -- ^ function definition
   -> Definition db (Alter sch (Create fun ('Function (args :=> 'ReturnsTable rets)) schema) db)
 createSetFunction fun args rets fundef = UnsafeDefinition $
   "CREATE" <+> "FUNCTION" <+> renderSQL fun
@@ -164,6 +168,7 @@ createSetFunction fun args rets fundef = UnsafeDefinition $
     renderRet (ty `As` col) = renderSQL col <+> renderSQL ty
 
 {- | Create or replace a set function.
+
 >>> type Tab = 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint4])
 >>> type Fn = 'Function ('[ 'Null 'PGint4, 'Null 'PGint4] :=> 'ReturnsTable '["ret" ::: 'Null 'PGint4])
 >>> :{
@@ -180,10 +185,10 @@ createOrReplaceSetFunction
      , KnownSymbol fun
      , SOP.SListI args
      , SOP.SListI rets )
-  => QualifiedAlias sch fun
-  -> NP (TypeExpression db) args
-  -> NP (Aliased (TypeExpression db)) rets
-  -> FunctionDefinition db args ('ReturnsTable rets)
+  => QualifiedAlias sch fun -- ^ function alias
+  -> NP (TypeExpression db) args -- ^ arguments
+  -> NP (Aliased (TypeExpression db)) rets -- ^ return type
+  -> FunctionDefinition db args ('ReturnsTable rets) -- ^ function definition
   -> Definition db (Alter sch (CreateOrReplace fun ('Function (args :=> 'ReturnsTable rets)) schema) db)
 createOrReplaceSetFunction fun args rets fundef = UnsafeDefinition $
   "CREATE" <+> "OR" <+> "REPLACE" <+> "FUNCTION" <+> renderSQL fun
@@ -196,6 +201,7 @@ createOrReplaceSetFunction fun args rets fundef = UnsafeDefinition $
     renderRet (ty `As` col) = renderSQL col <+> renderSQL ty
 
 {- | Drop a function.
+
 >>> type Fn = 'Function ( '[ 'Null 'PGint4, 'Null 'PGint4] :=> 'Returns ( 'Null 'PGint4))
 >>> :{
 let
@@ -208,12 +214,13 @@ DROP FUNCTION "fn";
 dropFunction
   :: (Has sch db schema, KnownSymbol fun)
   => QualifiedAlias sch fun
-  -- ^ name of the user defined function
+  -- ^ function alias
   -> Definition db (Alter sch (DropSchemum fun 'Function schema) db)
 dropFunction fun = UnsafeDefinition $
   "DROP FUNCTION" <+> renderSQL fun <> ";"
 
 {- | Drop a function.
+
 >>> type Fn = 'Function ( '[ 'Null 'PGint4, 'Null 'PGint4] :=> 'Returns ( 'Null 'PGint4))
 >>> :{
 let
@@ -226,7 +233,7 @@ DROP FUNCTION IF EXISTS "fn";
 dropFunctionIfExists
   :: (Has sch db schema, KnownSymbol fun)
   => QualifiedAlias sch fun
-  -- ^ name of the user defined function
+  -- ^ function alias
   -> Definition db (Alter sch (DropSchemumIfExists fun 'Function schema) db)
 dropFunctionIfExists fun = UnsafeDefinition $
   "DROP FUNCTION IF EXISTS" <+> renderSQL fun <> ";"

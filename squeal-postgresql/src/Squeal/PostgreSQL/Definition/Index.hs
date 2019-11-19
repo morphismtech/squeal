@@ -78,10 +78,11 @@ CREATE INDEX "ix" ON "tab" USING btree (("a") ASC NULLS FIRST, ("b") ASC NULLS L
 -}
 createIndex
   :: (Has sch db schema, Has tab schema ('Table table), KnownSymbol ix)
-  => Alias ix
-  -> QualifiedAlias sch tab
-  -> IndexMethod method
+  => Alias ix -- ^ index alias
+  -> QualifiedAlias sch tab -- ^ table alias
+  -> IndexMethod method -- ^ index method
   -> [SortExpression '[] '[] 'Ungrouped db '[] '[tab ::: TableToRow table]]
+  -- ^ sorted columns
   -> Definition db (Alter sch (Create ix ('Index method) schema) db)
 createIndex ix tab method cols = UnsafeDefinition $
   "CREATE" <+> "INDEX" <+> renderSQL ix <+> "ON" <+> renderSQL tab
