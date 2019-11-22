@@ -48,6 +48,7 @@ import Squeal.PostgreSQL.Schema
 -- >>> import Squeal.PostgreSQL
 
 {- | Create a view.
+
 >>> type ABC = '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4]
 >>> type BC = '["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4]
 >>> :{
@@ -70,7 +71,21 @@ createView alias query = UnsafeDefinition $
   "CREATE" <+> "VIEW" <+> renderSQL alias <+> "AS"
   <+> renderQuery query <> ";"
 
--- | Create or replace a view.
+{- | Create or replace a view.
+
+>>> type ABC = '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4]
+>>> type BC = '["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4]
+>>> :{
+let
+  definition :: Definition
+    '[ "public" ::: '["abc" ::: 'Table ('[] :=> ABC)]]
+    '[ "public" ::: '["abc" ::: 'Table ('[] :=> ABC), "bc"  ::: 'View BC]]
+  definition =
+    createOrReplaceView #bc (select_ (#b :* #c) (from (table #abc)))
+in printSQL definition
+:}
+CREATE OR REPLACE VIEW "bc" AS SELECT "b" AS "b", "c" AS "c" FROM "abc" AS "abc";
+-}
 createOrReplaceView
   :: (Has sch db schema, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ the name of the view to add
@@ -99,6 +114,17 @@ dropView
 dropView vw = UnsafeDefinition $ "DROP VIEW" <+> renderSQL vw <> ";"
 
 -- | Drop a view if it exists.
+--
+-- >>> :{
+-- let
+--   definition :: Definition
+--     '[ "public" ::: '["abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])
+--      , "bc"  ::: 'View ('["b" ::: 'Null 'PGint4, "c" ::: 'Null 'PGint4])]]
+--     '[ "public" ::: '["abc" ::: 'Table ('[] :=> '["a" ::: 'NoDef :=> 'Null 'PGint4, "b" ::: 'NoDef :=> 'Null 'PGint4, "c" ::: 'NoDef :=> 'Null 'PGint4])]]
+--   definition = dropViewIfExists #bc
+-- in printSQL definition
+-- :}
+-- DROP VIEW IF EXISTS "bc";
 dropViewIfExists
   :: (Has sch db schema, KnownSymbol vw)
   => QualifiedAlias sch vw -- ^ view to remove

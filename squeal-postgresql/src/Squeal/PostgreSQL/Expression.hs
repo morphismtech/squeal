@@ -53,8 +53,6 @@ module Squeal.PostgreSQL.Expression
   , PGIntersect (..)
     -- * Re-export
   , (&)
-  , K (..)
-  , unK
   ) where
 
 import Control.Category
@@ -86,9 +84,10 @@ column expressions
 {- | `Expression`s are used in a variety of contexts,
 such as in the target `Squeal.PostgreSQL.Query.List` of the
 `Squeal.PostgreSQL.Query.select` command,
-as new column values in `Squeal.PostgreSQL.Manipulation.insertRow` or
+as new column values in `Squeal.PostgreSQL.Manipulation.insertInto` or
 `Squeal.PostgreSQL.Manipulation.update`,
-or in search `Squeal.PostgreSQL.Logic.Condition`s in a number of commands.
+or in search `Squeal.PostgreSQL.Expression.Logic.Condition`s
+in a number of commands.
 
 The expression syntax allows the calculation of
 values from primitive expression using arithmetic, logical,
@@ -352,7 +351,7 @@ functionN
   :: ( Has sch db schema
      , Has fun schema ('Function (xs :=> 'Returns y))
      , SListI xs )
-  => QualifiedAlias sch fun
+  => QualifiedAlias sch fun -- ^ function alias
   -> FunctionNDB db xs y
 functionN = unsafeFunctionN . renderSQL
 

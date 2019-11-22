@@ -39,6 +39,7 @@ import qualified Data.Aeson as JSON
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as Lazy (Text)
 import qualified Data.Text.Lazy as Lazy.Text
+import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Expression
@@ -130,7 +131,7 @@ instance ToParam (Enumerated enum) (PG (Enumerated enum))
       = UnsafeExpression
       . singleQuotedUtf8
       . builderBytes
-      . unK
+      . SOP.unK
       . toParam @(Enumerated enum) @(PG (Enumerated enum))
 instance Literal (Range Int32) where
   literal = range int4range . fmap literal

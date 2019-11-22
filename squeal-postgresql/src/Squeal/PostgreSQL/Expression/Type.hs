@@ -296,7 +296,7 @@ fixarray ty = UnsafeTypeExpression $
       . ByteString.intercalate "]["
       . SOP.hcollapse
       $ SOP.hcmap (SOP.Proxy @KnownNat)
-        (K . fromString . show . natVal)
+        (SOP.K . fromString . show . natVal)
         (SOP.hpure SOP.Proxy :: SOP.NP SOP.Proxy ns)
 -- | text search query
 tsvector :: TypeExpression db (null 'PGtsvector)
