@@ -434,7 +434,7 @@ unsafeAggregateN
   -> Expression outer commons ('Grouped bys) db params from y
 unsafeAggregateN fun xs = UnsafeExpression $ fun <> parenthesized (renderSQL xs)
 
--- | A type family that calculates `PGSum``PGType` of
+-- | A type family that calculates `PGSum` `PGType` of
 -- a given argument `PGType`.
 type family PGSum ty where
   PGSum 'PGint2 = 'PGint8
