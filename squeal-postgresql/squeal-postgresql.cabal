@@ -25,10 +25,10 @@ library
     Squeal.PostgreSQL.Alias
     Squeal.PostgreSQL.Binary
     Squeal.PostgreSQL.Definition
+    Squeal.PostgreSQL.Definition.Constraint
     Squeal.PostgreSQL.Definition.Function
     Squeal.PostgreSQL.Definition.Index
     Squeal.PostgreSQL.Definition.Table
-    Squeal.PostgreSQL.Definition.Table.Constraint
     Squeal.PostgreSQL.Definition.Type
     Squeal.PostgreSQL.Definition.Schema
     Squeal.PostgreSQL.Definition.View
