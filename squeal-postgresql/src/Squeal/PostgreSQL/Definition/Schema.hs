@@ -56,18 +56,24 @@ A schema is essentially a namespace: it contains named objects
 can duplicate those of other objects existing in other schemas.
 Named objects are accessed by `QualifiedAlias`es with the schema
 name as a prefix.
+
+>>> :{
+let
+  definition :: Definition '["public" ::: '[]] '["public" ::: '[], "my_schema" ::: '[]]
+  definition = createSchema #my_schema
+:}
 -}
 createSchema
   :: KnownSymbol sch
-  => Alias sch
+  => Alias sch -- ^ schema alias
   -> Definition db (Create sch '[] db)
 createSchema sch = UnsafeDefinition $
   "CREATE" <+> "SCHEMA" <+> renderSQL sch <> ";"
 
-{- | Idempotent version of `createSchema`. -}
+{- | Create a schema if it does not yet exist.-}
 createSchemaIfNotExists
   :: (KnownSymbol sch, Has sch db schema)
-  => Alias sch
+  => Alias sch -- ^ schema alias
   -> Definition db (CreateIfNotExists sch '[] db)
 createSchemaIfNotExists sch = UnsafeDefinition $
   "CREATE" <+> "SCHEMA" <+> "IF" <+> "NOT" <+> "EXISTS"
@@ -76,6 +82,7 @@ createSchemaIfNotExists sch = UnsafeDefinition $
 -- | Drop a schema.
 -- Automatically drop objects (tables, functions, etc.)
 -- that are contained in the schema.
+--
 -- >>> :{
 -- let
 --   definition :: Definition '["muh_schema" ::: schema, "public" ::: public] '["public" ::: public]
@@ -86,8 +93,7 @@ createSchemaIfNotExists sch = UnsafeDefinition $
 -- DROP SCHEMA "muh_schema" CASCADE;
 dropSchemaCascade
   :: KnownSymbol sch
-  => Alias sch
-  -- ^ user defined schema
+  => Alias sch -- ^ schema alias
   -> Definition db (Drop sch db)
 dropSchemaCascade sch = UnsafeDefinition $
   "DROP SCHEMA" <+> renderSQL sch <+> "CASCADE;"
@@ -97,8 +103,7 @@ dropSchemaCascade sch = UnsafeDefinition $
 -- that are contained in the schema.
 dropSchemaCascadeIfExists
   :: KnownSymbol sch
-  => Alias sch
-  -- ^ user defined schema
+  => Alias sch -- ^ schema alias
   -> Definition db (DropIfExists sch db)
 dropSchemaCascadeIfExists sch = UnsafeDefinition $
   "DROP SCHEMA IF EXISTS" <+> renderSQL sch <+> "CASCADE;"

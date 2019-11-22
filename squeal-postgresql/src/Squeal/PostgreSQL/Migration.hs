@@ -366,7 +366,7 @@ mainMigrate connectTo migrations = do
       putStrLn "rollback   to rollback all available migrations"
 
 {- | `mainMigrateIso` creates a simple executable
-from a connection string and a `Path` of `Migration` `Iso`s. -}
+from a connection string and a `Path` of `Migration` `IsoQ`s. -}
 mainMigrateIso
   :: Migratory (IsoQ def) (IsoQ (Indexed PQ IO ()))
   => ByteString

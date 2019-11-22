@@ -73,7 +73,7 @@ infixr 6 :::
 
 
 -- | `Grouping` is an auxiliary namespace, created by
--- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
+-- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.groupBy`), and used
 -- for typesafe aggregation
 data Grouping
   = Ungrouped -- ^ no aggregation permitted
@@ -205,10 +205,11 @@ instance {-# OVERLAPPABLE #-}
 -- | Analagous to `IsLabel`, the constraint
 -- `IsQualified` defines `!` for a column alias qualified
 -- by a table alias.
-class IsQualified table column expression where
-  (!) :: Alias table -> Alias column -> expression
+class IsQualified qualifier alias expression where
+  (!) :: Alias qualifier -> Alias alias -> expression
   infixl 9 !
-instance IsQualified table column (Alias table, Alias column) where (!) = (,)
+instance IsQualified qualifier alias (Alias qualifier, Alias alias) where
+  (!) = (,)
 
 {-| `QualifiedAlias`es enables multi-schema support by allowing a reference
 to a `Squeal.PostgreSQL.Schema.Table`, `Squeal.PostgreSQL.Schema.Typedef`

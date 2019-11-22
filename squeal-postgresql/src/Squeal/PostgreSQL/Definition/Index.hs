@@ -59,6 +59,7 @@ import Squeal.PostgreSQL.Schema
 -- >>> :set -XPolyKinds
 
 {- | Create an index.
+
 >>> :{
 type Table = '[] :=>
   '[ "a" ::: 'NoDef :=> 'Null 'PGint4
@@ -105,10 +106,11 @@ createIndex ix tab method cols = UnsafeDefinition $
 -- | Create an index if it doesn't exist.
 createIndexIfNotExists
   :: (Has sch db schema, Has tab schema ('Table table), KnownSymbol ix)
-  => Alias ix
-  -> QualifiedAlias sch tab
-  -> IndexMethod method
+  => Alias ix -- ^ index alias
+  -> QualifiedAlias sch tab -- ^ table alias
+  -> IndexMethod method -- ^ index method
   -> [SortExpression '[] '[] 'Ungrouped db '[] '[tab ::: TableToRow table]]
+  -- ^ sorted columns
   -> Definition db (Alter sch (CreateIfNotExists ix ('Index method) schema) db)
 createIndexIfNotExists ix tab method cols = UnsafeDefinition $
   "CREATE INDEX IF NOT EXISTS" <+> renderSQL ix <+> "ON" <+> renderSQL tab
@@ -163,20 +165,19 @@ brin :: IndexMethod 'Brin
 brin = UnsafeIndexMethod "brin"
 
 -- | Drop an index.
+--
 -- >>> printSQL (dropIndex #ix :: Definition (Public '["ix" ::: 'Index 'Btree]) (Public '[]))
 -- DROP INDEX "ix";
 dropIndex
   :: (Has sch db schema, KnownSymbol ix)
-  => QualifiedAlias sch ix
-  -- ^ name of the user defined index
+  => QualifiedAlias sch ix -- index alias
   -> Definition db (Alter sch (DropSchemum ix 'Index schema) db)
 dropIndex ix = UnsafeDefinition $ "DROP INDEX" <+> renderSQL ix <> ";"
 
 -- | Drop an index if it exists.
 dropIndexIfExists
   :: (Has sch db schema, KnownSymbol ix)
-  => QualifiedAlias sch ix
-  -- ^ name of the user defined index
+  => QualifiedAlias sch ix -- index alias
   -> Definition db (Alter sch (DropSchemumIfExists ix 'Index schema) db)
 dropIndexIfExists ix = UnsafeDefinition $
   "DROP INDEX IF EXISTS" <+> renderSQL ix <> ";"

@@ -51,7 +51,8 @@ like `Int16` and `Data.Text.Text`, Squeal permits you to encode and decode Haske
 Postgres array, enumerated and composite types and json. Let's see another example,
 this time using the `Vector` type which corresponds to variable length arrays
 and homogeneous tuples which correspond to fixed length arrays. We can even
-create multi-dimensional fixed length arrays.
+create multi-dimensional fixed length arrays. Create a Haskell
+@Row@ type using the `VarArray` and `FixArray` newtypes as fields.
 
 >>> :{
 data Row = Row
@@ -513,11 +514,13 @@ instance OidOf ty => OidOfParam (null ty) where oidOfParam = oidOf @ty
 -- | Lifts a `OidOf` constraint to a field.
 class OidOfField (field :: (Symbol, NullityType)) where
   oidOfField :: Oid
-instance OidOf ty => OidOfField (alias ::: nullity ty) where
+instance OidOf ty => OidOfField (alias ::: null ty) where
   oidOfField = oidOf @ty
 
 -- | A `ToNullityParam` constraint gives an encoding of a Haskell `Type` into
 -- into the binary format of a PostgreSQL `NullityType`.
+-- You should not define instances for `ToNullityParam`,
+-- just use the provided instances.
 class ToNullityParam (x :: Type) (ty :: NullityType) where
   toNullityParam :: x -> K (Maybe Encoding.Encoding) ty
 instance ToParam x pg => ToNullityParam x ('NotNull pg) where
@@ -528,7 +531,7 @@ instance ToParam x pg => ToNullityParam (Maybe x) ('Null pg) where
 -- | A `ToField` constraint lifts the `ToParam` parser
 -- to an encoding of a @(Symbol, Type)@ to a @(Symbol, NullityType)@,
 -- encoding `Null`s to `Maybe`s. You should not define instances for
--- `FromField`, just use the provided instances.
+-- `ToField`, just use the provided instances.
 class ToField (x :: (Symbol, Type)) (field :: (Symbol, NullityType)) where
   toField :: P x -> K (Maybe Encoding.Encoding) field
 instance ToNullityParam x ty => ToField (alias ::: x) (alias ::: ty) where
@@ -553,7 +556,7 @@ instance
       (unK . unK . toFixArray @x @dims @ty) . unZ . unSOP . from
 
 -- | A `ToParams` constraint generically sequences the encodings of `Type`s
--- of the fields of a tuple or record to a row of `ColumnType`s. You should
+-- of the fields of a tuple or record to a row of `NullityType`s. You should
 -- not define instances of `ToParams`. Instead define `SOP.Generic` instances
 -- which in turn provide `ToParams` instances.
 class SListI tys => ToParams (x :: Type) (tys :: [NullityType]) where
@@ -702,7 +705,7 @@ instance
         fmap Composite (Decoding.fn (fromRow @fields <=< composite))
 
 -- | A `FromField` constraint lifts the `FromValue` parser
--- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
+-- to a decoding of a @(Symbol, NullityType)@ to a @(Symbol, Type)@ ,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromField`, just use the provided instances.
 class FromField (pg :: (Symbol, NullityType)) (y :: (Symbol, Type)) where

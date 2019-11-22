@@ -118,8 +118,7 @@ createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
 
 -- | Use a parameterized `Expression` as a function body
 languageSqlExpr
-  :: (args0 ~ args, ret0 ~ ret)
-  => Expression '[] '[] 'Ungrouped db args0 '[] ret0
+  :: Expression '[] '[] 'Ungrouped db args '[] ret
   -- ^ function body
   -> FunctionDefinition db args ('Returns ret)
 languageSqlExpr expr = UnsafeFunctionDefinition $
@@ -238,6 +237,7 @@ dropFunctionIfExists
 dropFunctionIfExists fun = UnsafeDefinition $
   "DROP FUNCTION IF EXISTS" <+> renderSQL fun <> ";"
 
+{- | Body of a user defined function-}
 newtype FunctionDefinition db args ret = UnsafeFunctionDefinition
   { renderFunctionDefinition :: ByteString }
   deriving (Eq,Show,GHC.Generic,NFData)

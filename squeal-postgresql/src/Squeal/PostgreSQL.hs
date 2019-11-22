@@ -44,7 +44,7 @@ type EmailsConstraints =
 type Schema =
   '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns)
    , "emails" ::: 'Table (EmailsConstraints :=> EmailsColumns) ]
-type Schemas = Public Schema
+type DB = Public Schema
 :}
 
 Notice the use of type operators.
@@ -66,7 +66,7 @@ labels to refer to named tables and columns in our schema.
 
 >>> :{
 let
-  setup :: Definition (Public '[]) Schemas
+  setup :: Definition (Public '[]) DB
   setup =
     createTable #users
       ( serial `as` #id :*
@@ -87,14 +87,14 @@ We can easily see the generated SQL is unsurprising looking.
 CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));
 CREATE TABLE "emails" ("id" serial, "user_id" int NOT NULL, "email" text NULL, CONSTRAINT "pk_emails" PRIMARY KEY ("id"), CONSTRAINT "fk_user_id" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 
-Notice that @setup@ starts with an empty public schema @(Public '[])@ and produces @Schemas@.
+Notice that @setup@ starts with an empty public schema @(Public '[])@ and produces @DB@.
 In our `createTable` commands we included `TableConstraint`s to define
 primary and foreign keys, making them somewhat complex. Our @teardown@
 `Definition` is simpler.
 
 >>> :{
 let
-  teardown :: Definition Schemas (Public '[])
+  teardown :: Definition DB (Public '[])
   teardown = dropTable #emails >>> dropTable #users
 :}
 
@@ -122,7 +122,7 @@ the emails table. We can do this in a single `Manipulation_` by using a
 
 >>> :{
 let
-  insertUser :: Manipulation_ Schemas User ()
+  insertUser :: Manipulation_ DB User ()
   insertUser = with (u `as` #u) e
     where
       u = insertInto #users
@@ -143,7 +143,7 @@ need to use an `innerJoin` to get the right result. A `Query_` is like a
 
 >>> :{
 let
-  getUsers :: Query_ Schemas () User
+  getUsers :: Query_ DB () User
   getUsers = select_
     (#u ! #name `as` #userName :* #e ! #email `as` #userEmail)
     ( from (table (#users `as` #u)
@@ -176,7 +176,7 @@ transformer and when the schema doesn't change we can use `Monad` and
 
 >>> :{
 let
-  session :: PQ Schemas Schemas IO ()
+  session :: PQ DB DB IO ()
   session = do
     _ <- traversePrepared_ insertUser users
     usersResult <- runQuery getUsers
