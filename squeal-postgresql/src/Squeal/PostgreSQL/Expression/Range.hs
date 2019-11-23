@@ -85,7 +85,9 @@ import Squeal.PostgreSQL.Schema
 -- ('empty' :: int4range)
 range
   :: TypeExpression db (null ('PGrange ty))
+  -- ^ range type
   -> Range (Expression outer commons grp db params from ('NotNull ty))
+  -- ^ range of values
   -> Expression outer commons grp db params from (null ('PGrange ty))
 range ty = \case
   Empty -> UnsafeExpression $ parenthesized

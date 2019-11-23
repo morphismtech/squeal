@@ -439,6 +439,7 @@ instance PGTyped db ('NotNull ty) => PGNullityTyped db ('NotNull ty) where
   pgNullityType = notNullable (pgtype @_ @('NotNull ty))
 
 -- | Allow you to specify pg column types in relation to haskell types.
+--
 -- >>> printSQL $ hask @(Maybe String)
 -- text NULL
 --

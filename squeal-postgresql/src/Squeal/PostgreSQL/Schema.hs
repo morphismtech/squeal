@@ -73,8 +73,6 @@ module Squeal.PostgreSQL.Schema
   , RenameIfExists
   , ConstraintInvolves
   , DropIfConstraintsInvolve
-  , IsNotElem
-  , AllUnique
     -- * Type Classifications
   , PGNum
   , PGIntegral
@@ -93,6 +91,10 @@ module Squeal.PostgreSQL.Schema
   , TableToColumns
   , ColumnsToRow
   , TableToRow
+    -- * Updating
+  , Updatable
+  , AllUnique
+  , IsNotElem
   ) where
 
 import Control.Category
@@ -616,3 +618,9 @@ instance (TypeError (      'Text "Cannot assign to "
 class AllUnique (xs :: [(Symbol, a)]) where
 instance AllUnique '[] where
 instance (IsNotElem x (Elem x xs), AllUnique xs) => AllUnique (x ': xs) where
+
+-- | Updatable lists of columns
+type Updatable table columns =
+  ( All (HasIn (TableToColumns table)) columns
+  , AllUnique columns
+  , SListI (TableToColumns table) )

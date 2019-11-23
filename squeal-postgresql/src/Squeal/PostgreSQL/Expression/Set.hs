@@ -74,7 +74,7 @@ unsafeSetFunction x = UnsafeFromClause $
 setFunction
   :: ( Has sch db schema
      , Has fun schema ('Function ('[ty] :=> 'ReturnsTable row)) )
-  => QualifiedAlias sch fun
+  => QualifiedAlias sch fun -- ^ function alias
   -> SetFunctionDB fun db ty row
 setFunction _ = unsafeSetFunction
 
@@ -108,7 +108,7 @@ setFunctionN
   :: ( Has sch db schema
      , Has fun schema ('Function (tys :=> 'ReturnsTable row))
      , SOP.SListI tys )
-  => QualifiedAlias sch fun
+  => QualifiedAlias sch fun -- ^ function alias
   -> SetFunctionNDB fun db tys row
 setFunctionN _ = unsafeSetFunctionN
 

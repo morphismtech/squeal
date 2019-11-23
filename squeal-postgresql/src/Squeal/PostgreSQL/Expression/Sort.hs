@@ -81,5 +81,6 @@ using `orderBy` within `Squeal.PostgreSQL.Query.Over`.
 class OrderBy expr where
   orderBy
     :: [SortExpression outer commons grp db params from]
+      -- ^ sorts
     -> expr outer commons grp db params from
     -> expr outer commons grp db params from

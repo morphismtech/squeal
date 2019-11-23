@@ -57,7 +57,7 @@ array
 array xs = UnsafeExpression $ "ARRAY" <>
   bracketed (commaSeparated (renderSQL <$> xs))
 
-{- | construct a 1-dimensional fixed length array
+{- | Construct a fixed length array.
 
 >>> printSQL $ array1 (null_ :* false *: true)
 ARRAY[NULL, FALSE, TRUE]
@@ -76,11 +76,12 @@ array1 (null_ :* false *: true)
 array1
   :: (n ~ Length tys, SOP.All ((~) ty) tys)
   => NP (Expression outer commons grp db params from) tys
+    -- ^ array elements
   -> Expression outer commons grp db params from (null ('PGfixarray '[n] ty))
 array1 xs = UnsafeExpression $ "ARRAY" <>
   bracketed (renderCommaSeparated renderSQL xs)
 
-{- | construct a 2-dimensional fixed length array
+{- | Construct a fixed size matrix.
 
 >>> printSQL $ array2 ((null_ :* false *: true) *: (false :* null_ *: true))
 ARRAY[[NULL, FALSE, TRUE], [FALSE, NULL, TRUE]]
@@ -103,6 +104,7 @@ array2
       , SOP.All ((~) ty) tys
       , Length tys ~ n2 )
   => NP (NP (Expression outer commons grp db params from)) tyss
+  -- ^ matrix elements
   -> Expression outer commons grp db params from (null ('PGfixarray '[n1,n2] ty))
 array2 xss = UnsafeExpression $ "ARRAY" <>
   bracketed (renderCommaSeparatedConstraint @SOP.SListI (bracketed . renderCommaSeparated renderSQL) xss)
