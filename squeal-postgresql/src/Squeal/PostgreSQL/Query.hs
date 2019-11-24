@@ -836,7 +836,7 @@ instance RenderSQL (FromClause outer commons db params from) where
 -- | A real `table` is a table from the database.
 table
   :: (Has sch db schema, Has tab schema ('Table table))
-  => Aliased (QualifiedAlias sch) (alias ::: tab)
+  => Aliased (QualifiedAlias sch) (alias ::: tab) -- ^ (renamable) table alias
   -> FromClause outer commons db params '[alias ::: TableToRow table]
 table (tab `As` alias) = UnsafeFromClause $
   renderSQL tab <+> "AS" <+> renderSQL alias
@@ -844,13 +844,14 @@ table (tab `As` alias) = UnsafeFromClause $
 -- | `subquery` derives a table from a `Query`.
 subquery
   :: Aliased (Query outer commons db params) query
+  -- ^ aliased `Query`
   -> FromClause outer commons db params '[query]
 subquery = UnsafeFromClause . renderAliased (parenthesized . renderSQL)
 
 -- | `view` derives a table from a `View`.
 view
   :: (Has sch db schema, Has vw schema ('View view))
-  => Aliased (QualifiedAlias sch) (alias ::: vw)
+  => Aliased (QualifiedAlias sch) (alias ::: vw) -- ^ (renamable) view alias
   -> FromClause outer commons db params '[alias ::: view]
 view (vw `As` alias) = UnsafeFromClause $
   renderSQL vw <+> "AS" <+> renderSQL alias
@@ -858,7 +859,7 @@ view (vw `As` alias) = UnsafeFromClause $
 -- | `common` derives a table from a common table expression.
 common
   :: Has cte commons common
-  => Aliased Alias (alias ::: cte)
+  => Aliased Alias (alias ::: cte) -- ^ (renamable) common table expression alias
   -> FromClause outer commons db params '[alias ::: common]
 common (cte `As` alias) = UnsafeFromClause $
   renderSQL cte <+> "AS" <+> renderSQL alias
@@ -1105,6 +1106,7 @@ data CommonTableExpression statement
   (commons1 :: FromType) where
   CommonTableExpression
     :: Aliased (statement commons db params) (cte ::: common)
+    -- ^ aliased statement
     -> CommonTableExpression statement db params commons (cte ::: common ': commons)
 instance
   ( KnownSymbol cte
@@ -1159,7 +1161,9 @@ WITH RECURSIVE "t" AS ((SELECT * FROM (VALUES ((1 :: int))) AS t ("n")) UNION AL
 -}
 withRecursive
   :: Aliased (Query outer (recursive ': commons) db params) recursive
+  -- ^ recursive query
   -> Query outer (recursive ': commons) db params row
+  -- ^ larger query
   -> Query outer commons db params row
 withRecursive (recursive `As` cte) query = UnsafeQuery $
   "WITH RECURSIVE" <+> renderSQL cte

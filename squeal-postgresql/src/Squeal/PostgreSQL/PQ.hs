@@ -50,10 +50,11 @@ module Squeal.PostgreSQL.PQ
   , runPQ
   , execPQ
   , evalPQ
-  , IndexedMonadTrans (..)
   , IndexedMonadTransPQ (..)
-  , Indexed (..)
   , MonadPQ (..)
+    -- * Indexed Monads
+  , IndexedMonadTrans (..)
+  , Indexed (..)
     -- * Results
   , LibPQ.Result
   , LibPQ.Row
@@ -74,6 +75,8 @@ module Squeal.PostgreSQL.PQ
   , catchSqueal
   , handleSqueal
   , trySqueal
+    -- * Re-export
+  , K (..)
   ) where
 
 import Control.Category
@@ -216,7 +219,7 @@ evalPQ (PQ pq) conn = unK <$> pq conn
 is a `Functor` [enriched category]
 (https://ncatlab.org/nlab/show/enriched+category).
 An indexed monad transformer transforms a `Monad` into an indexed monad,
-and _is_ a monad transformer when its source and target are the same,
+and is a monad transformer when its source and target are the same,
 enabling use of standard @do@ notation for endo-index operations.
 -}
 class
