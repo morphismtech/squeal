@@ -1,6 +1,6 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Range
-Description: range types and functions
+Description: Range types and functions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
@@ -119,7 +119,8 @@ data Range x = Empty | NonEmpty (Bound x) (Bound x)
     ( Eq, Ord, Show, Read, GHC.Generic
     , Functor, Foldable, Traversable )
   deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-type instance PG (Range x) = 'PGrange (PG x)
+-- | `PGrange` @(@`PG` @hask)@
+type instance PG (Range hask) = 'PGrange (PG hask)
 instance ToParam x pg => ToParam (Range x) ('PGrange pg) where
   toParam rng = SOP.K $
     word8 (setFlags rng 0) <>

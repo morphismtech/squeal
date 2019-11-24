@@ -372,6 +372,7 @@ newtype VarArray arr = VarArray {getVarArray :: arr}
   deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 -- | `PGvararray` @(@`NullPG` @hask)@
 type instance PG (VarArray (Vector hask)) = 'PGvararray (NullPG hask)
+-- | `PGvararray` @(@`NullPG` @hask)@
 type instance PG (VarArray [hask]) = 'PGvararray (NullPG hask)
 
 {- | The `FixArray` newtype is an indication that the Haskell

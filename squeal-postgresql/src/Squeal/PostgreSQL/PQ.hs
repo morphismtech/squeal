@@ -6,7 +6,8 @@ Maintainer: eitan@morphism.tech
 Stability: experimental
 
 This module is where Squeal commands actually get executed by
-`Database.PostgreSQL.LibPQ`. It containts two typeclasses, `IndexedMonadTransPQ` for executing
+`Database.PostgreSQL.LibPQ`. It containts two typeclasses,
+`IndexedMonadTransPQ` for executing
 a `Definition` and `MonadPQ` for executing a `Manipulation` or `Query`,
 and a `PQ` type with instances for them.
 

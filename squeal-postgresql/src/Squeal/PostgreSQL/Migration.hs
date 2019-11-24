@@ -36,9 +36,20 @@ type EmailsTable =
 
 Now we can define some `Migration`s to make our tables.
 
+`Migration`s are parameterized giving the option of a
+
+* pure one-way `Migration` `Definition`
+* impure one-way `Migration` @(@`Indexed` `PQ` `IO`@)@
+* pure reversible `Migration` @(@`IsoQ` `Definition`@)@
+* impure one-way `Migration` @(@`IsoQ` @(@`Indexed` `PQ` `IO`@)@@)@
+
+For this example, we'll use pure reversible `Migration`s.
+
 >>> :{
 let
-  makeUsers :: Migration (IsoQ Definition) (Public '[]) '["public" ::: '["users" ::: 'Table UsersTable]]
+  makeUsers :: Migration (IsoQ Definition)
+    '["public" ::: '[]]
+    '["public" ::: '["users" ::: 'Table UsersTable]]
   makeUsers = Migration "make users table" IsoQ
     { up = createTable #users
         ( serial `as` #id :*
@@ -50,7 +61,8 @@ let
 
 >>> :{
 let
-  makeEmails :: Migration (IsoQ Definition) '["public" ::: '["users" ::: 'Table UsersTable]]
+  makeEmails :: Migration (IsoQ Definition)
+    '["public" ::: '["users" ::: 'Table UsersTable]]
     '["public" ::: '["users" ::: 'Table UsersTable, "emails" ::: 'Table EmailsTable]]
   makeEmails = Migration "make emails table" IsoQ
     { up = createTable #emails
@@ -186,12 +198,11 @@ import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
 import Squeal.PostgreSQL.Transaction
 
--- | A `Migration` is a named "isomorphism" over a given category.
--- It should contain a migration and a unique `name`.
-data Migration p db0 db1 = Migration
+-- | A `Migration` consists of a name and a migration definition.
+data Migration def db0 db1 = Migration
   { name :: Text -- ^ The `name` of a `Migration`.
     -- Each `name` in a `Migration` should be unique.
-  , migration :: p db0 db1 -- ^ The migration of a `Migration`.
+  , migration :: def db0 db1 -- ^ The migration of a `Migration`.
   } deriving (GHC.Generic)
 instance QFunctor Migration where
   qmap f (Migration n i) = Migration n (f i)
@@ -267,7 +278,7 @@ migrateDown = runIndexed . down . runMigrations
 {- | Run a pure SQL `Definition` functorially in effect
 
 * @indexedDefine id = id@
-* @indexedDefine (def1 >>> def2) = indexedDefine def1 >>> indexedDefine def2
+* @indexedDefine (def1 >>> def2) = indexedDefine def1 >>> indexedDefine def2@
 -}
 indexedDefine :: Definition db0 db1 -> Indexed PQ IO () db0 db1
 indexedDefine = Indexed . define
