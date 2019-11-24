@@ -41,7 +41,7 @@ Now we can define some `Migration`s to make our tables.
 * pure one-way `Migration` `Definition`
 * impure one-way `Migration` @(@`Indexed` `PQ` `IO`@)@
 * pure reversible `Migration` @(@`IsoQ` `Definition`@)@
-* impure one-way `Migration` @(@`IsoQ` @(@`Indexed` `PQ` `IO`@)@@)@
+* impure reversible `Migration` @(@`IsoQ` @(@`Indexed` `PQ` `IO`@)@@)@
 
 For this example, we'll use pure reversible `Migration`s.
 
