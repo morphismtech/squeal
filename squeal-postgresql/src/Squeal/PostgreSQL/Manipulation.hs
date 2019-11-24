@@ -470,11 +470,11 @@ pattern Returning_ list = Returning (List list)
 data ConflictClause tab commons db params table where
   OnConflictDoRaise :: ConflictClause tab commons db params table
   OnConflict
-    :: ConflictTarget constraints
+    :: ConflictTarget table
     -- ^ conflict target
-    -> ConflictAction tab commons db params columns
+    -> ConflictAction tab commons db params table
     -- ^ conflict action
-    -> ConflictClause tab commons db params (constraints :=> columns)
+    -> ConflictClause tab commons db params table
 
 -- | Render a `ConflictClause`.
 instance SOP.SListI (TableToColumns table)
@@ -489,26 +489,24 @@ instance SOP.SListI (TableToColumns table)
 It can be either `DoNothing`, or a `DoUpdate` clause specifying
 the exact details of the `update` action to be performed in case of a conflict.
 The `Set` and WHERE `Condition`s in `OnConflict` `DoUpdate` have access to the
-existing row using the table's name (or an alias), and to rows proposed
-for insertion using the special @#excluded@ table.
+existing row using the table's name, and to rows proposed
+for insertion using the special @#excluded@ row.
 `OnConflict` `DoNothing` simply avoids inserting a row as its alternative action.
 `OnConflict` `DoUpdate` updates the existing row that conflicts
 with the row proposed for insertion as its alternative action.
 -}
-data ConflictAction tab commons db params columns where
-  DoNothing :: ConflictAction tab commons db params columns
+data ConflictAction tab commons db params table where
+  DoNothing :: ConflictAction tab commons db params table
   DoUpdate
-    :: ( row ~ ColumnsToRow columns
-       , SOP.SListI columns
-       , columns ~ (col0 ': cols)
-       , SOP.All (HasIn columns) subcolumns
-       , AllUnique subcolumns )
-    => NP (Aliased (Optional (Expression '[] commons 'Ungrouped db params '[tab ::: row, "excluded" ::: row]))) subcolumns
-    -> [Condition '[] commons 'Ungrouped db params '[tab ::: row, "excluded" ::: row]]
+    :: ( row ~ TableToRow table
+       , from ~ '[tab ::: row, "excluded" ::: row]
+       , Updatable table updates )
+    => NP (Aliased (Optional (Expression '[] commons 'Ungrouped db params from))) updates
+    -> [Condition '[] commons 'Ungrouped db params from]
        -- ^ WHERE `Condition`s
-    -> ConflictAction tab commons db params columns
+    -> ConflictAction tab commons db params table
 
-instance RenderSQL (ConflictAction tab commons db params columns) where
+instance RenderSQL (ConflictAction tab commons db params table) where
   renderSQL = \case
     DoNothing -> "DO NOTHING"
     DoUpdate updates whs'
@@ -526,11 +524,11 @@ renderUpdate (expr `As` col) = renderSQL col <+> "=" <+> renderSQL expr
 
 -- | A `ConflictTarget` specifies the constraint violation that triggers a
 -- `ConflictAction`.
-data ConflictTarget constraints where
+data ConflictTarget table where
   OnConstraint
     :: Has con constraints constraint
     => Alias con
-    -> ConflictTarget constraints
+    -> ConflictTarget (constraints :=> columns)
 
 -- | Render a `ConflictTarget`
 instance RenderSQL (ConflictTarget constraints) where
@@ -546,10 +544,10 @@ UPDATE statements
 update
   :: ( Has sch db schema
      , Has tab schema ('Table table)
-     , Updatable table subcolumns
+     , Updatable table updates
      , SOP.SListI row )
   => QualifiedAlias sch tab -- ^ table to update
-  -> NP (Aliased (Optional (Expression '[] '[] 'Ungrouped db params '[tab ::: TableToRow table]))) subcolumns
+  -> NP (Aliased (Optional (Expression '[] '[] 'Ungrouped db params '[tab ::: TableToRow table]))) updates
   -- ^ modified values to replace old values
   -> Condition '[] commons 'Ungrouped db params '[tab ::: TableToRow table]
   -- ^ condition under which to perform update on a row
@@ -567,9 +565,9 @@ update tab columns wh returning = UnsafeManipulation $
 update_
   :: ( Has sch db schema
      , Has tab schema ('Table table)
-     , Updatable table subcolumns )
+     , Updatable table updates )
   => QualifiedAlias sch tab -- ^ table to update
-  -> NP (Aliased (Optional (Expression '[] '[] 'Ungrouped db params '[tab ::: TableToRow table]))) subcolumns
+  -> NP (Aliased (Optional (Expression '[] '[] 'Ungrouped db params '[tab ::: TableToRow table]))) updates
   -- ^ modified values to replace old values
   -> Condition '[] commons 'Ungrouped db params '[tab ::: TableToRow table]
   -- ^ condition under which to perform update on a row
