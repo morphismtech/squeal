@@ -34,6 +34,7 @@ import Data.Text (Text)
 import Data.Time.Clock (DiffTime, diffTimeToPicoseconds, UTCTime(UTCTime))
 import Data.Time.Calendar (Day, toGregorian)
 import Data.Time.LocalTime (LocalTime(LocalTime), TimeOfDay(TimeOfDay))
+import Data.UUID.Types (UUID, toASCIIBytes)
 
 import qualified Data.Aeson as JSON
 import qualified Data.Text as Text
@@ -145,3 +146,5 @@ instance Literal (Range UTCTime) where
   literal = range tstzrange . fmap literal
 instance Literal (Range Day) where
   literal = range daterange . fmap literal
+instance Literal UUID where
+  literal = UnsafeExpression . toASCIIBytes
