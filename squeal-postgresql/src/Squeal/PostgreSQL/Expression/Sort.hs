@@ -10,6 +10,7 @@ Sort expressions
 
 {-# LANGUAGE
     DataKinds
+  , FlexibleInstances
   , GADTs
   , LambdaCase
   , OverloadedStrings
@@ -66,6 +67,11 @@ instance RenderSQL (SortExpression outer commons grp db params from) where
       <+> "DESC NULLS FIRST"
     AscNullsLast expression -> renderSQL expression <+> "ASC NULLS LAST"
     DescNullsLast expression -> renderSQL expression <+> "DESC NULLS LAST"
+instance RenderSQL [SortExpression outer commons grp db params from] where
+  renderSQL = \case
+    [] -> ""
+    srts -> " ORDER BY"
+      <+> commaSeparated (renderSQL <$> srts)
 
 {- |
 The `orderBy` clause causes the result rows of a `Squeal.PostgreSQL.Query.TableExpression`

@@ -114,15 +114,11 @@ instance OrderBy WindowDefinition where
 
 instance RenderSQL (WindowDefinition outer commons db from grp params) where
   renderSQL (WindowDefinition part ord) =
-    renderPartitionByClause part <> renderOrderByClause ord
+    renderPartitionByClause part <> renderSQL ord
     where
       renderPartitionByClause = \case
         Nil -> ""
         parts -> "PARTITION" <+> "BY" <+> renderCommaSeparated renderExpression parts
-      renderOrderByClause = \case
-        [] -> ""
-        srts -> " ORDER" <+> "BY"
-          <+> commaSeparated (renderSQL <$> srts)
 
 {- |
 The `partitionBy` clause within `Squeal.PostgreSQL.Query.Over` divides the rows into groups,

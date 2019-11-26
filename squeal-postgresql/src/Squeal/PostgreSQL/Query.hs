@@ -736,7 +736,7 @@ instance RenderSQL (TableExpression outer commons grp db params from) where
       , renderWheres whs'
       , renderSQL grps'
       , renderSQL hvs'
-      , renderOrderByClause srts'
+      , renderSQL srts'
       , renderLimits lims'
       , renderOffsets offs' ]
       where
@@ -744,10 +744,6 @@ instance RenderSQL (TableExpression outer commons grp db params from) where
           [] -> ""
           wh:[] -> " WHERE" <+> renderSQL wh
           wh:whs -> " WHERE" <+> renderSQL (foldr (.&&) wh whs)
-        renderOrderByClause = \case
-          [] -> ""
-          srts -> " ORDER BY"
-            <+> commaSeparated (renderSQL <$> srts)
         renderLimits = \case
           [] -> ""
           lims -> " LIMIT" <+> fromString (show (minimum lims))
