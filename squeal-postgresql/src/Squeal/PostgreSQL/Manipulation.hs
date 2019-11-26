@@ -298,7 +298,7 @@ insertInto
   -- ^ what to do in case of conflict
   -> ReturningClause commons db params '[tab ::: TableToRow table] row
   -- ^ what to return
-  -> Manipulation commons db params row1
+  -> Manipulation commons db params row
 insertInto tab qry conflict ret = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderSQL tab
   <+> renderSQL qry
