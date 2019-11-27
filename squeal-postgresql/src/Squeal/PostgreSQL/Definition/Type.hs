@@ -30,12 +30,14 @@ Create and drop type definitions.
 #-}
 
 module Squeal.PostgreSQL.Definition.Type
-  ( createTypeEnum
+  ( -- * Create
+    createTypeEnum
   , createTypeEnumFrom
   , createTypeComposite
   , createTypeCompositeFrom
   , createTypeRange
   , createDomain
+    -- * Drop
   , dropType
   , dropTypeIfExists
   ) where

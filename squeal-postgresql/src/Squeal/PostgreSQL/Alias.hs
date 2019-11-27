@@ -34,7 +34,8 @@ Squeal can reference aliases by prepending with a @#@.
 #-}
 
 module Squeal.PostgreSQL.Alias
-  ( (:::)
+  ( -- * Aliases
+    (:::)
   , Alias (..)
   , IsLabel (..)
   , Aliased (As)
@@ -44,6 +45,7 @@ module Squeal.PostgreSQL.Alias
   , HasUnique
   , HasAll
   , HasIn
+    -- * Qualified Aliases
   , QualifiedAlias (..)
   , IsQualified (..)
     -- * Grouping

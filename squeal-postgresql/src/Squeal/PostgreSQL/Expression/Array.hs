@@ -25,7 +25,8 @@ Array functions
 #-}
 
 module Squeal.PostgreSQL.Expression.Array
-  ( array
+  ( -- * Array Functions
+    array
   , array1
   , array2
   , cardinality

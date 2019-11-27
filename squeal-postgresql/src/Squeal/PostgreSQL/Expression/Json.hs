@@ -25,18 +25,18 @@ Json and Jsonb functions and operators
 #-}
 
 module Squeal.PostgreSQL.Expression.Json
-  ( -- * Json and Jsonb operators
+  ( -- * Json and Jsonb Operators
     (.->)
   , (.->>)
   , (.#>)
   , (.#>>)
-    -- * Jsonb operators
+    -- * Jsonb Operators
   , (.?)
   , (.?|)
   , (.?&)
   , (.-.)
   , (#-.)
-    -- * Json and Jsonb functions
+    -- * Json and Jsonb Functions
   , toJson
   , toJsonb
   , arrayToJson
@@ -57,7 +57,7 @@ module Squeal.PostgreSQL.Expression.Json
   , jsonbSet
   , jsonbInsert
   , jsonbPretty
-    -- * Json and Jsonb set returning functions
+    -- * Json and Jsonb Set Functions
   , jsonEach
   , jsonbEach
   , jsonEachText

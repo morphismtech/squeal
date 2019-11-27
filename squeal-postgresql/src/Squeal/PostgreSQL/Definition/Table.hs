@@ -30,20 +30,26 @@ Create, drop and alter table definitions.
 #-}
 
 module Squeal.PostgreSQL.Definition.Table
-  ( createTable
+  ( -- * Create
+    createTable
   , createTableIfNotExists
+    -- * Drop
   , dropTable
   , dropTableIfExists
+    -- * Alter
   , alterTable
   , alterTableIfExists
   , alterTableRename
   , alterTableIfExistsRename
   , AlterTable (..)
+    -- ** Constraints
   , addConstraint
   , dropConstraint
+    -- ** Columns
   , AddColumn (..)
   , dropColumn
   , renameColumn
+    -- ** Alter Column
   , alterColumn
   , AlterColumn (..)
   , setDefault

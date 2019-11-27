@@ -30,10 +30,12 @@ Table constraint expressions.
 #-}
 
 module Squeal.PostgreSQL.Definition.Constraint
-  ( TableConstraintExpression (..)
+  ( -- * Table Constraints
+    TableConstraintExpression (..)
   , check
   , unique
   , primaryKey
+    -- ** Foreign Keys
   , foreignKey
   , ForeignKeyed
   , OnDeleteClause (..)

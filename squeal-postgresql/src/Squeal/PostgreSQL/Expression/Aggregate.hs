@@ -24,8 +24,11 @@ Aggregate functions
 #-}
 
 module Squeal.PostgreSQL.Expression.Aggregate
-  ( Aggregate (..)
+  ( -- * Aggregate
+    Aggregate (..)
+    -- * Distinction
   , Distinction (..)
+    -- * Aggregate Types
   , PGSum
   , PGAvg
   ) where
@@ -49,7 +52,7 @@ import Squeal.PostgreSQL.Schema
 
 {- |
 `Aggregate` functions compute a single result from a set of input values.
-`Aggregate` functions can be used as `GroupedBy` `Expression`s as well
+`Aggregate` functions can be used as `Grouped` `Expression`s as well
 as `Squeal.PostgreSQL.Expression.Window.WindowFunction`s.
 -}
 class Aggregate expr1 exprN aggr
@@ -75,7 +78,6 @@ class Aggregate expr1 exprN aggr
   -- count(ALL "col")
   count
     :: expr1 ty
-    -- ^ what to count
     -> aggr ('NotNull 'PGint8)
 
   -- | >>> :{
@@ -118,7 +120,6 @@ class Aggregate expr1 exprN aggr
   bitAnd
     :: int `In` PGIntegral
     => expr1 (null int)
-    -- ^ what to aggregate
     -> aggr ('Null int)
 
   {- |
@@ -135,7 +136,6 @@ class Aggregate expr1 exprN aggr
   bitOr
     :: int `In` PGIntegral
     => expr1 (null int)
-    -- ^ what to aggregate
     -> aggr ('Null int)
 
   {- |
@@ -151,7 +151,6 @@ class Aggregate expr1 exprN aggr
   -}
   boolAnd
     :: expr1 (null 'PGbool)
-    -- ^ what to aggregate
     -> aggr ('Null 'PGbool)
 
   {- |
@@ -167,7 +166,6 @@ class Aggregate expr1 exprN aggr
   -}
   boolOr
     :: expr1 (null 'PGbool)
-    -- ^ what to aggregate
     -> aggr ('Null 'PGbool)
 
   {- |
@@ -183,25 +181,21 @@ class Aggregate expr1 exprN aggr
   -}
   every
     :: expr1 (null 'PGbool)
-    -- ^ what to aggregate
     -> aggr ('Null 'PGbool)
 
   {- |maximum value of expression across all input values-}
   max_
     :: expr1 (null ty)
-    -- ^ what to maximize
     -> aggr ('Null ty)
 
   -- | minimum value of expression across all input values
   min_
     :: expr1 (null ty)
-    -- ^ what to minimize
     -> aggr ('Null ty)
 
   -- | the average (arithmetic mean) of all input values
   avg
     :: expr1 (null ty)
-    -- ^ what to average
     -> aggr ('Null (PGAvg ty))
 
   {- | correlation coefficient

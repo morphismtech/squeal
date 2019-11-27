@@ -30,12 +30,15 @@ Create and drop function and operator definitions.
 #-}
 
 module Squeal.PostgreSQL.Definition.Function
-  ( createFunction
+  ( -- * Create
+    createFunction
   , createOrReplaceFunction
   , createSetFunction
   , createOrReplaceSetFunction
+    -- * Drop
   , dropFunction
   , dropFunctionIfExists
+    -- * Function Definition
   , FunctionDefinition(..)
   , languageSqlExpr
   , languageSqlQuery

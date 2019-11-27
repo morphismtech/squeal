@@ -34,23 +34,26 @@ module Squeal.PostgreSQL.Expression
   ( -- * Expression
     Expression (..)
   , Expr
+    -- * Function
   , type (-->)
   , FunctionDB
   , unsafeFunction
   , function
   , unsafeLeftOp
   , unsafeRightOp
+    -- * Operator
   , Operator
   , OperatorDB
   , unsafeBinaryOp
+  , PGSubset (..)
+  , PGIntersect (..)
+    -- * Multivariable Function
   , FunctionVar
   , unsafeFunctionVar
   , type (--->)
   , FunctionNDB
   , unsafeFunctionN
   , functionN
-  , PGSubset (..)
-  , PGIntersect (..)
     -- * Re-export
   , (&)
   ) where

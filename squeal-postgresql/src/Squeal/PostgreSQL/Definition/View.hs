@@ -30,8 +30,10 @@ Create and drop view definitions.
 #-}
 
 module Squeal.PostgreSQL.Definition.View
-  ( createView
+  ( -- * Create
+    createView
   , createOrReplaceView
+    -- * Drop
   , dropView
   , dropViewIfExists
   ) where

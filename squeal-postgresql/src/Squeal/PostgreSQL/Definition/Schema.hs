@@ -30,8 +30,10 @@ Create and drop schema definitions.
 #-}
 
 module Squeal.PostgreSQL.Definition.Schema
-  ( createSchema
+  ( -- * Create
+    createSchema
   , createSchemaIfNotExists
+    -- * Drop
   , dropSchemaCascade
   , dropSchemaCascadeIfExists
   ) where

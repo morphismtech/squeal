@@ -30,10 +30,13 @@ Create and drop index definitions.
 #-}
 
 module Squeal.PostgreSQL.Definition.Index
-  ( createIndex
+  ( -- * Create
+    createIndex
   , createIndexIfNotExists
+    -- * Drop
   , dropIndex
   , dropIndexIfExists
+    -- * Index Method
   , IndexMethod (..)
   , btree
   , hash
