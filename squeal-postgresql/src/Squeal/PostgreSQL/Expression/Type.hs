@@ -27,11 +27,11 @@ Type expressions.
 #-}
 
 module Squeal.PostgreSQL.Expression.Type
-  ( -- * type casting
+  ( -- * Type Cast
     cast
   , astype
   , inferredtype
-    -- * type expressions
+    -- * Type Expression
   , TypeExpression (..)
   , typedef
   , typetable
@@ -79,7 +79,7 @@ module Squeal.PostgreSQL.Expression.Type
   , tsrange
   , tstzrange
   , daterange
-    -- * column type definitions
+    -- * Column Type
   , ColumnTypeExpression (..)
   , nullable
   , notNullable
@@ -91,7 +91,7 @@ module Squeal.PostgreSQL.Expression.Type
   , serial8
   , bigserial
   , hask
-    -- * type inference
+    -- * Type Inference
   , PGTyped (..)
   , PGNullityTyped (..)
   , FieldTyped (..)

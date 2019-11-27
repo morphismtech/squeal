@@ -23,8 +23,16 @@ Window functions and definitions
 #-}
 
 module Squeal.PostgreSQL.Expression.Window
-  ( -- * functions
-    partitionBy
+  ( -- * Window Definition
+    WindowDefinition (..)
+  , partitionBy
+    -- * Window Function
+    -- ** Types
+  , WindowFunction (..)
+  , WinFun0
+  , WinFun1
+  , WinFunN
+    -- ** Functions
   , rank
   , rowNumber
   , denseRank
@@ -38,12 +46,6 @@ module Squeal.PostgreSQL.Expression.Window
   , nthValue
   , unsafeWindowFunction1
   , unsafeWindowFunctionN
-    -- * types
-  , WindowFunction (..)
-  , WindowDefinition (..)
-  , WinFun0
-  , WinFun1
-  , WinFunN
   ) where
 
 import Control.DeepSeq

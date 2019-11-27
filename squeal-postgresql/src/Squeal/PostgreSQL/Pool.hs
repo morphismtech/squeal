@@ -44,7 +44,7 @@ a
 #-}
 
 module Squeal.PostgreSQL.Pool
-  ( -- * Pools
+  ( -- * Pool
     Pool
   , createConnectionPool
   , usingConnectionPool

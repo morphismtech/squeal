@@ -34,7 +34,7 @@ Stability: experimental
 #-}
 
 module Squeal.PostgreSQL.PG
-  ( -- * PG embeddings
+  ( -- * PG
     PG
   , NullPG
   , TuplePG
@@ -48,7 +48,7 @@ module Squeal.PostgreSQL.PG
   , VarArray (..)
   , FixArray (..)
   , LibPQ.Oid (..)
-    -- * Type families
+    -- * Type Families
   , LabelsPG
   , DimPG
   , FixPG

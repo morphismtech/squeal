@@ -34,12 +34,12 @@ it defines an embedding of Haskell types into Postgres types.
 #-}
 
 module Squeal.PostgreSQL.Schema
-  ( -- * Postgres Types
+  ( -- * Postgres Type
     PGType (..)
   , NullityType (..)
   , RowType
   , FromType
-    -- * Schema Types
+    -- * Schema Type
   , ColumnType
   , ColumnsType
   , TableType
@@ -50,16 +50,16 @@ module Squeal.PostgreSQL.Schema
   , SchemaType
   , SchemasType
   , Public
-    -- * Constraints
+    -- * Constraint
   , (:=>)
   , ColumnConstraint (..)
   , TableConstraint (..)
   , TableConstraints
   , Uniquely
-    -- * Enumerated Labels
+    -- * Enumerated Label
   , IsPGlabel (..)
   , PGlabel (..)
-    -- * Data Definitions
+    -- * Data Definition
   , Create
   , CreateIfNotExists
   , CreateOrReplace
@@ -73,7 +73,7 @@ module Squeal.PostgreSQL.Schema
   , RenameIfExists
   , ConstraintInvolves
   , DropIfConstraintsInvolve
-    -- * Type Classifications
+    -- * Type Classification
   , PGNum
   , PGIntegral
   , PGFloating
@@ -83,15 +83,15 @@ module Squeal.PostgreSQL.Schema
   , SamePGType
   , AllNotNull
   , NotAllNull
-    -- * Nullifications
+    -- * Nullification
   , NullifyType
   , NullifyRow
   , NullifyFrom
-    -- * Table Conversions
+    -- * Table Conversion
   , TableToColumns
   , ColumnsToRow
   , TableToRow
-    -- * Updating
+    -- * Updatable
   , Updatable
   , AllUnique
   , IsNotElem

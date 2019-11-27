@@ -52,10 +52,10 @@ module Squeal.PostgreSQL.PQ
   , evalPQ
   , IndexedMonadTransPQ (..)
   , MonadPQ (..)
-    -- * Indexed Monads
+    -- * Indexed Monad
   , IndexedMonadTrans (..)
   , Indexed (..)
-    -- * Results
+    -- * Result
   , LibPQ.Result
   , LibPQ.Row
   , ntuples
@@ -68,7 +68,7 @@ module Squeal.PostgreSQL.PQ
   , resultStatus
   , resultErrorMessage
   , resultErrorCode
-    -- * Exceptions
+    -- * Exception
   , SquealException (..)
   , PQState (..)
   , okResult

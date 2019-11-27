@@ -28,13 +28,16 @@ lists and type aligned lists.
 #-}
 
 module Squeal.PostgreSQL.List
-  ( SOP.NP (..)
+  ( -- * Heterogeneous List
+    SOP.NP (..)
   , (*:)
   , one
   , Join
   , disjoin
   , Additional (..)
+    -- * Path
   , Path (..)
+    -- * Type Level List
   , Elem
   , In
   , Length

@@ -31,7 +31,7 @@ Squeal queries.
   #-}
 
 module Squeal.PostgreSQL.Query
-  ( -- * Queries
+  ( -- * Query
     Query_
   , Query (..)
     -- ** Select
@@ -56,7 +56,7 @@ module Squeal.PostgreSQL.Query
   , With (..)
   , CommonTableExpression (..)
   , withRecursive
-    -- * Table Expressions
+    -- * Table Expression
   , TableExpression (..)
   , from
   , where_
@@ -64,7 +64,7 @@ module Squeal.PostgreSQL.Query
   , having
   , limit
   , offset
-    -- * From Clauses
+    -- * From Clause
   , FromClause (..)
   , table
   , subquery

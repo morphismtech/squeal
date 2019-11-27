@@ -157,10 +157,12 @@ module Squeal.PostgreSQL.Migration
   , migrateUp
   , migrateDown
   , indexedDefine
-  , IsoQ (..)
   , MigrationsTable
+    -- * Executable
   , mainMigrate
   , mainMigrateIso
+    -- * Re-export
+  , IsoQ (..)
   ) where
 
 import Control.Category
