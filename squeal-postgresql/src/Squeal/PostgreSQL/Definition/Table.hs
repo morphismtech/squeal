@@ -30,20 +30,26 @@ Create, drop and alter table definitions.
 #-}
 
 module Squeal.PostgreSQL.Definition.Table
-  ( createTable
+  ( -- * Create
+    createTable
   , createTableIfNotExists
+    -- * Drop
   , dropTable
   , dropTableIfExists
+    -- * Alter
   , alterTable
   , alterTableIfExists
   , alterTableRename
   , alterTableIfExistsRename
   , AlterTable (..)
+    -- ** Constraints
   , addConstraint
   , dropConstraint
+    -- ** Columns
   , AddColumn (..)
   , dropColumn
   , renameColumn
+    -- ** Alter Column
   , alterColumn
   , AlterColumn (..)
   , setDefault
@@ -62,7 +68,7 @@ import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Definition
-import Squeal.PostgreSQL.Definition.Table.Constraint
+import Squeal.PostgreSQL.Definition.Constraint
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.List
@@ -110,7 +116,7 @@ createTable tab columns constraints = UnsafeDefinition $
 {-| `createTableIfNotExists` creates a table if it doesn't exist, but does not add it to the schema.
 Instead, the schema already has the table so if the table did not yet exist, the schema was wrong.
 `createTableIfNotExists` fixes this. Interestingly, this property makes it an idempotent in
-the `Category` of `Definition`s.
+the `Control.Category.Category` of `Definition`s.
 
 >>> :set -XOverloadedLabels -XTypeApplications
 >>> :{
@@ -195,12 +201,14 @@ dropTable
   -> Definition db (Alter sch (DropSchemum tab 'Table schema) db)
 dropTable tab = UnsafeDefinition $ "DROP TABLE" <+> renderSQL tab <> ";"
 
+-- | Drop a table if it exists.
 dropTableIfExists
   :: ( Has sch db schema
      , KnownSymbol tab)
   => QualifiedAlias sch tab -- ^ table to remove
   -> Definition db (Alter sch (DropSchemumIfExists tab 'Table schema) db)
-dropTableIfExists tab = UnsafeDefinition $ "DROP TABLE IF EXISTS" <+> renderSQL tab <> ";"
+dropTableIfExists tab = UnsafeDefinition $
+  "DROP TABLE IF EXISTS" <+> renderSQL tab <> ";"
 
 -- | `alterTable` changes the definition of a table from the schema.
 alterTable
@@ -239,6 +247,7 @@ alterTableRename tab0 tab1 = UnsafeDefinition $
   "ALTER TABLE" <+> renderSQL tab0
   <+> "RENAME TO" <+> renderSQL tab1 <> ";"
 
+-- | Rename a table if it exists.
 alterTableIfExistsRename
   :: (KnownSymbol tab0, KnownSymbol tab1)
   => Alias tab0 -- ^ table to rename
@@ -272,13 +281,11 @@ newtype AlterTable
 addConstraint
   :: ( KnownSymbol alias
      , Has sch db schema
-     , Has tab schema ('Table table0)
-     , table0 ~ (constraints :=> columns)
-     , table1 ~ (Create alias constraint constraints :=> columns) )
+     , Has tab schema ('Table (constraints :=> columns)) )
   => Alias alias
   -> TableConstraintExpression sch tab db constraint
   -- ^ constraint to add
-  -> AlterTable sch tab db table1
+  -> AlterTable sch tab db (Create alias constraint constraints :=> columns)
 addConstraint alias constraint = UnsafeAlterTable $
   "ADD" <+> "CONSTRAINT" <+> renderSQL alias
     <+> renderSQL constraint
@@ -297,12 +304,10 @@ addConstraint alias constraint = UnsafeAlterTable $
 dropConstraint
   :: ( KnownSymbol constraint
      , Has sch db schema
-     , Has tab schema ('Table table0)
-     , table0 ~ (constraints :=> columns)
-     , table1 ~ (Drop constraint constraints :=> columns) )
+     , Has tab schema ('Table (constraints :=> columns)) )
   => Alias constraint
   -- ^ constraint to drop
-  -> AlterTable sch tab db table1
+  -> AlterTable sch tab db (Drop constraint constraints :=> columns)
 dropConstraint constraint = UnsafeAlterTable $
   "DROP" <+> "CONSTRAINT" <+> renderSQL constraint
 
@@ -337,8 +342,7 @@ class AddColumn ty where
   addColumn
     :: ( KnownSymbol column
        , Has sch db schema
-       , Has tab schema ('Table table0)
-       , table0 ~ (constraints :=> columns) )
+       , Has tab schema ('Table (constraints :=> columns)) )
     => Alias column -- ^ column to add
     -> ColumnTypeExpression db ty -- ^ type of the new column
     -> AlterTable sch tab db (constraints :=> Create column ty columns)
@@ -366,11 +370,9 @@ instance {-# OVERLAPPABLE #-} AddColumn ('NoDef :=> 'Null ty)
 dropColumn
   :: ( KnownSymbol column
      , Has sch db schema
-     , Has tab schema ('Table table0)
-     , table0 ~ (constraints :=> columns)
-     , table1 ~ (constraints :=> Drop column columns) )
+     , Has tab schema ('Table (constraints :=> columns)) )
   => Alias column -- ^ column to remove
-  -> AlterTable sch tab db table1
+  -> AlterTable sch tab db (constraints :=> Drop column columns)
 dropColumn column = UnsafeAlterTable $
   "DROP COLUMN" <+> renderSQL column
 
@@ -389,12 +391,10 @@ renameColumn
   :: ( KnownSymbol column0
      , KnownSymbol column1
      , Has sch db schema
-     , Has tab schema ('Table table0)
-     , table0 ~ (constraints :=> columns)
-     , table1 ~ (constraints :=> Rename column0 column1 columns) )
+     , Has tab schema ('Table (constraints :=> columns)) )
   => Alias column0 -- ^ column to rename
   -> Alias column1 -- ^ what to rename the column
-  -> AlterTable sch tab db table1
+  -> AlterTable sch tab db (constraints :=> Rename column0 column1 columns)
 renameColumn column0 column1 = UnsafeAlterTable $
   "RENAME COLUMN" <+> renderSQL column0  <+> "TO" <+> renderSQL column1
 
@@ -402,13 +402,11 @@ renameColumn column0 column1 = UnsafeAlterTable $
 alterColumn
   :: ( KnownSymbol column
      , Has sch db schema
-     , Has tab schema ('Table table0)
-     , table0 ~ (constraints :=> columns)
-     , Has column columns ty0
-     , table1 ~ (constraints :=> Alter column ty1 columns))
+     , Has tab schema ('Table (constraints :=> columns))
+     , Has column columns ty0 )
   => Alias column -- ^ column to alter
   -> AlterColumn db ty0 ty1 -- ^ alteration to perform
-  -> AlterTable sch tab db table1
+  -> AlterTable sch tab db (constraints :=> Alter column ty1 columns)
 alterColumn column alteration = UnsafeAlterTable $
   "ALTER COLUMN" <+> renderSQL column <+> renderAlterColumn alteration
 

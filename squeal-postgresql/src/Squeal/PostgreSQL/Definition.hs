@@ -34,7 +34,7 @@ module Squeal.PostgreSQL.Definition
   ( -- * Definition
     Definition (..)
   , (>>>)
-  , manipDefinition
+  , manipulation_
   ) where
 
 import Control.Category
@@ -57,7 +57,9 @@ statements
 -----------------------------------------}
 
 -- | A `Definition` is a statement that changes the schemas of the
--- database, like a `createTable`, `dropTable`, or `alterTable` command.
+-- database, like a `Squeal.PostgreSQL.Definition.Table.createTable`,
+-- `Squeal.PostgreSQL.Definition.Table.dropTable`,
+-- or `Squeal.PostgreSQL.Definition.Table.alterTable` command.
 -- `Definition`s may be composed using the `>>>` operator.
 newtype Definition
   (db0 :: SchemasType)
@@ -73,10 +75,13 @@ instance Category Definition where
   ddl1 . ddl0 = UnsafeDefinition $
     renderSQL ddl0 <> "\n" <> renderSQL ddl1
 
+instance db0 ~ db1 => Semigroup (Definition db0 db1) where (<>) = (>>>)
+instance db0 ~ db1 => Monoid (Definition db0 db1) where mempty = id
+
 -- | A `Manipulation` without input or output can be run as a statement
--- along with other `Definition`s, by embedding it using `manipDefinition`.
-manipDefinition
+-- along with other `Definition`s, by embedding it using `manipulation_`.
+manipulation_
   :: Manipulation '[] db '[] '[]
   -- ^ no input or output
   -> Definition db db
-manipDefinition = UnsafeDefinition . (<> ";") . renderSQL
+manipulation_ = UnsafeDefinition . (<> ";") . renderSQL

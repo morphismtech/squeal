@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.Definition.Table.Constraint
+Module: Squeal.PostgreSQL.Definition.Constraint
 Description: Table constraint expressions
 Copyright: (c) Eitan Chatav, 2017
 Maintainer: eitan@morphism.tech
@@ -29,11 +29,13 @@ Table constraint expressions.
   , UndecidableSuperClasses
 #-}
 
-module Squeal.PostgreSQL.Definition.Table.Constraint
-  ( TableConstraintExpression (..)
+module Squeal.PostgreSQL.Definition.Constraint
+  ( -- * Table Constraints
+    TableConstraintExpression (..)
   , check
   , unique
   , primaryKey
+    -- ** Foreign Keys
   , foreignKey
   , ForeignKeyed
   , OnDeleteClause (..)
@@ -141,7 +143,7 @@ CREATE TABLE "tab" ("a" int NULL, "b" int NULL, CONSTRAINT "uq_a_b" UNIQUE ("a",
 -}
 unique
   :: ( Has sch db schema
-     , Has tab schema('Table table)
+     , Has tab schema ('Table table)
      , HasAll aliases (TableToRow table) subcolumns )
   => NP Alias aliases
   -- ^ specify subcolumns which together are unique for each row

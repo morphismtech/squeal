@@ -111,16 +111,16 @@ instance With Manipulation where
 
 {- |
 The top level `Manipulation_` type is parameterized by a @db@ `SchemasType`,
-against which the query is type-checked, an input @parameters@ Haskell `Type`,
+against which the query is type-checked, an input @params@ Haskell `Type`,
 and an ouput row Haskell `Type`.
 
 A top-level `Manipulation_` can be run
-using `Squeal.PostgreSQL.PQ.manipulateParams`, or if @parameters = ()@
+using `Squeal.PostgreSQL.PQ.manipulateParams`, or if @params = ()@
 using `Squeal.PostgreSQL.PQ.manipulate`.
 
-Generally, @parameters@ will be a Haskell tuple or record whose entries
+Generally, @params@ will be a Haskell tuple or record whose entries
 may be referenced using positional
-`Squeal.PostgreSQL.Expression.Parameter.parameter`s and @row@ will be a
+`Squeal.PostgreSQL.Expression.Parameter.param`s and @row@ will be a
 Haskell record, whose entries will be targeted using overloaded labels.
 
 >>> :set -XDeriveAnyClass -XDerivingStrategies
@@ -143,7 +143,7 @@ in printSQL manipulation
 :}
 INSERT INTO "tab" ("col1", "col2") VALUES (2, DEFAULT)
 
-parameterized insert:
+out-of-line parameterized insert:
 
 >>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
@@ -155,6 +155,19 @@ let
 in printSQL manipulation
 :}
 INSERT INTO "tab" ("col1", "col2") VALUES (($1 :: int4), ($2 :: int4))
+
+in-line parameterized insert:
+
+>>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> :{
+let
+  manipulation :: Row Int32 Int32 -> Manipulation_ (Public Schema) () ()
+  manipulation row =
+    insertInto_ #tab (inline row)
+in printSQL (manipulation (Row 1 2))
+:}
+INSERT INTO "tab" ("col1", "col2") VALUES (1, 2)
 
 returning insert:
 
@@ -275,35 +288,31 @@ Even if you know only some column values, a complete row must be created.
 insertInto
   :: ( Has sch db schema
      , Has tab schema ('Table table)
-     , columns ~ TableToColumns table
-     , row0 ~ TableToRow table
-     , SOP.SListI columns
-     , SOP.SListI row1 )
+     , SOP.SListI (TableToColumns table)
+     , SOP.SListI row )
   => QualifiedAlias sch tab
   -- ^ table
-  -> QueryClause commons db params columns
+  -> QueryClause commons db params (TableToColumns table)
   -- ^ what to insert
   -> ConflictClause tab commons db params table
   -- ^ what to do in case of conflict
-  -> ReturningClause commons db params '[tab ::: row0] row1
+  -> ReturningClause commons db params '[tab ::: TableToRow table] row
   -- ^ what to return
-  -> Manipulation commons db params row1
+  -> Manipulation commons db params row
 insertInto tab qry conflict ret = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderSQL tab
   <+> renderSQL qry
   <> renderSQL conflict
   <> renderSQL ret
 
--- | Like `insertInto` but with `OnConflictDoRaise` and `no` `ReturningClause`.
+-- | Like `insertInto` but with `OnConflictDoRaise` and no `ReturningClause`.
 insertInto_
   :: ( Has sch db schema
      , Has tab schema ('Table table)
-     , columns ~ TableToColumns table
-     , row ~ TableToRow table
-     , SOP.SListI columns )
+     , SOP.SListI (TableToColumns table) )
   => QualifiedAlias sch tab
   -- ^ table
-  -> QueryClause commons db params columns
+  -> QueryClause commons db params (TableToColumns table)
   -- ^ what to insert
   -> Manipulation commons db params '[]
 insertInto_ tab qry =
@@ -383,7 +392,9 @@ instance (forall x. RenderSQL (expr x)) => RenderSQL (Optional expr ty) where
     Default -> "DEFAULT"
     Set expr -> renderSQL expr
 
+-- | Lifts `Literal` to a column entry
 class LiteralColumn field column where
+  -- | Haskell record field as a literal column
   literalColumn
     :: SOP.P field
     -> Aliased ( Optional
@@ -396,10 +407,11 @@ instance (KnownSymbol alias, column ~ ('Def :=> ty))
   => LiteralColumn (alias ::: ()) (alias ::: column) where
     literalColumn _ = Default `as` (Alias @alias)
 
+-- | Use a Haskell record as a literal list of columns
 literalColumns
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip LiteralColumn xs columns )
-  => hask
+  => hask -- ^ record
   -> NP (Aliased (Optional (
       Expression '[] commons 'Ungrouped db params '[]
       ) ) ) columns
@@ -407,18 +419,20 @@ literalColumns
   = SOP.htrans (SOP.Proxy @LiteralColumn) literalColumn
   . SOP.toRecord
 
+-- | `inline` a Haskell record in `insertInto`.
 inline
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip LiteralColumn xs columns )
-  => hask
+  => hask -- ^ record
   -> QueryClause commons db params columns
 inline = Values_ . literalColumns
 
+-- | `inlineMany` Haskell records in `insertInto`.
 inlineMany
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip LiteralColumn xs columns )
-  => hask
-  -> [hask]
+  => hask -- ^ record
+  -> [hask] -- ^ more
   -> QueryClause commons db params columns
 inlineMany hask hasks = Values (literalColumns hask) (literalColumns <$> hasks)
 
@@ -456,11 +470,11 @@ pattern Returning_ list = Returning (List list)
 data ConflictClause tab commons db params table where
   OnConflictDoRaise :: ConflictClause tab commons db params table
   OnConflict
-    :: ConflictTarget constraints
+    :: ConflictTarget table
     -- ^ conflict target
-    -> ConflictAction tab commons db params columns
+    -> ConflictAction tab commons db params table
     -- ^ conflict action
-    -> ConflictClause tab commons db params (constraints :=> columns)
+    -> ConflictClause tab commons db params table
 
 -- | Render a `ConflictClause`.
 instance SOP.SListI (TableToColumns table)
@@ -475,26 +489,24 @@ instance SOP.SListI (TableToColumns table)
 It can be either `DoNothing`, or a `DoUpdate` clause specifying
 the exact details of the `update` action to be performed in case of a conflict.
 The `Set` and WHERE `Condition`s in `OnConflict` `DoUpdate` have access to the
-existing row using the table's name (or an alias), and to rows proposed
-for insertion using the special @#excluded@ table.
+existing row using the table's name, and to rows proposed
+for insertion using the special @#excluded@ row.
 `OnConflict` `DoNothing` simply avoids inserting a row as its alternative action.
 `OnConflict` `DoUpdate` updates the existing row that conflicts
 with the row proposed for insertion as its alternative action.
 -}
-data ConflictAction tab commons db params columns where
-  DoNothing :: ConflictAction tab commons db params columns
+data ConflictAction tab commons db params table where
+  DoNothing :: ConflictAction tab commons db params table
   DoUpdate
-    :: ( row ~ ColumnsToRow columns
-       , SOP.SListI columns
-       , columns ~ (col0 ': cols)
-       , SOP.All (HasIn columns) subcolumns
-       , AllUnique subcolumns )
-    => NP (Aliased (Optional (Expression '[] commons 'Ungrouped db params '[tab ::: row, "excluded" ::: row]))) subcolumns
-    -> [Condition '[] commons 'Ungrouped db params '[tab ::: row, "excluded" ::: row]]
+    :: ( row ~ TableToRow table
+       , from ~ '[tab ::: row, "excluded" ::: row]
+       , Updatable table updates )
+    => NP (Aliased (Optional (Expression '[] commons 'Ungrouped db params from))) updates
+    -> [Condition '[] commons 'Ungrouped db params from]
        -- ^ WHERE `Condition`s
-    -> ConflictAction tab commons db params columns
+    -> ConflictAction tab commons db params table
 
-instance RenderSQL (ConflictAction tab commons db params columns) where
+instance RenderSQL (ConflictAction tab commons db params table) where
   renderSQL = \case
     DoNothing -> "DO NOTHING"
     DoUpdate updates whs'
@@ -512,11 +524,11 @@ renderUpdate (expr `As` col) = renderSQL col <+> "=" <+> renderSQL expr
 
 -- | A `ConflictTarget` specifies the constraint violation that triggers a
 -- `ConflictAction`.
-data ConflictTarget constraints where
+data ConflictTarget table where
   OnConstraint
     :: Has con constraints constraint
     => Alias con
-    -> ConflictTarget constraints
+    -> ConflictTarget (constraints :=> columns)
 
 -- | Render a `ConflictTarget`
 instance RenderSQL (ConflictTarget constraints) where
@@ -530,21 +542,17 @@ UPDATE statements
 -- | An `update` command changes the values of the specified columns
 -- in all rows that satisfy the condition.
 update
-  :: ( SOP.SListI columns
-     , SOP.SListI row1
-     , Has sch db schema
+  :: ( Has sch db schema
      , Has tab schema ('Table table)
-     , row0 ~ TableToRow table
-     , columns ~ TableToColumns table
-     , SOP.All (HasIn columns) subcolumns
-     , AllUnique subcolumns )
+     , Updatable table updates
+     , SOP.SListI row )
   => QualifiedAlias sch tab -- ^ table to update
-  -> NP (Aliased (Optional (Expression '[] '[] 'Ungrouped db params '[tab ::: row0]))) subcolumns
+  -> NP (Aliased (Optional (Expression '[] '[] 'Ungrouped db params '[tab ::: TableToRow table]))) updates
   -- ^ modified values to replace old values
-  -> Condition '[] commons 'Ungrouped db params '[tab ::: row0]
+  -> Condition '[] commons 'Ungrouped db params '[tab ::: TableToRow table]
   -- ^ condition under which to perform update on a row
-  -> ReturningClause commons db params '[tab ::: row0] row1 -- ^ results to return
-  -> Manipulation commons db params row1
+  -> ReturningClause commons db params '[tab ::: TableToRow table] row -- ^ results to return
+  -> Manipulation commons db params row
 update tab columns wh returning = UnsafeManipulation $
   "UPDATE"
   <+> renderSQL tab
@@ -555,17 +563,13 @@ update tab columns wh returning = UnsafeManipulation $
 
 -- | Update a row returning `Nil`.
 update_
-  :: ( SOP.SListI columns
-     , Has sch db schema
+  :: ( Has sch db schema
      , Has tab schema ('Table table)
-     , row ~ TableToRow table
-     , columns ~ TableToColumns table
-     , SOP.All (HasIn columns) subcolumns
-     , AllUnique subcolumns )
+     , Updatable table updates )
   => QualifiedAlias sch tab -- ^ table to update
-  -> NP (Aliased (Optional (Expression '[] '[] 'Ungrouped db params '[tab ::: row]))) subcolumns
+  -> NP (Aliased (Optional (Expression '[] '[] 'Ungrouped db params '[tab ::: TableToRow table]))) updates
   -- ^ modified values to replace old values
-  -> Condition '[] commons 'Ungrouped db params '[tab ::: row]
+  -> Condition '[] commons 'Ungrouped db params '[tab ::: TableToRow table]
   -- ^ condition under which to perform update on a row
   -> Manipulation commons db params '[]
 update_ tab columns wh = update tab columns wh (Returning_ Nil)
@@ -592,17 +596,16 @@ data UsingClause commons db params from where
 
 -- | Delete rows from a table.
 deleteFrom
-  :: ( SOP.SListI row1
+  :: ( SOP.SListI row
      , Has sch db schema
-     , Has tab schema ('Table table)
-     , row0 ~ TableToRow table
-     , columns ~ TableToColumns table )
+     , Has tab schema ('Table table) )
   => QualifiedAlias sch tab -- ^ table to delete from
   -> UsingClause commons db params from
-  -> Condition '[] commons 'Ungrouped db params (tab ::: row0 ': from)
+  -> Condition '[] commons 'Ungrouped db params (tab ::: TableToRow table ': from)
   -- ^ condition under which to delete a row
-  -> ReturningClause commons db params '[tab ::: row0] row1 -- ^ results to return
-  -> Manipulation commons db params row1
+  -> ReturningClause commons db params '[tab ::: TableToRow table] row
+  -- ^ results to return
+  -> Manipulation commons db params row
 deleteFrom tab using wh returning = UnsafeManipulation $
   "DELETE FROM"
   <+> renderSQL tab
@@ -615,11 +618,9 @@ deleteFrom tab using wh returning = UnsafeManipulation $
 -- | Delete rows returning `Nil`.
 deleteFrom_
   :: ( Has sch db schema
-     , Has tab schema ('Table table)
-     , row ~ TableToRow table
-     , columns ~ TableToColumns table )
+     , Has tab schema ('Table table) )
   => QualifiedAlias sch tab -- ^ table to delete from
-  -> Condition '[] commons 'Ungrouped db params '[tab ::: row]
+  -> Condition '[] commons 'Ungrouped db params '[tab ::: TableToRow table]
   -- ^ condition under which to delete a row
   -> Manipulation commons db params '[]
 deleteFrom_ tab wh = deleteFrom tab NoUsing wh (Returning_ Nil)

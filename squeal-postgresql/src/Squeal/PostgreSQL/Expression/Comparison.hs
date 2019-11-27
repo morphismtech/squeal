@@ -16,19 +16,23 @@ Comparison functions and operators
 #-}
 
 module Squeal.PostgreSQL.Expression.Comparison
-  ( (.==)
+  ( -- * Comparison Operators
+    (.==)
   , (./=)
   , (.>=)
   , (.<)
   , (.<=)
   , (.>)
+    -- * Comparison Functions
   , greatest
   , least
+    -- * Between
   , BetweenExpr
   , between
   , notBetween
   , betweenSymmetric
   , notBetweenSymmetric
+    -- * Null Comparison
   , isDistinctFrom
   , isNotDistinctFrom
   , isTrue

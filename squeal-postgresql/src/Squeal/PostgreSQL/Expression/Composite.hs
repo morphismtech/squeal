@@ -25,7 +25,8 @@ Composite functions
 #-}
 
 module Squeal.PostgreSQL.Expression.Composite
-  ( row
+  ( -- * Composite Functions
+    row
   , field
   ) where
 

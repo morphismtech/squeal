@@ -36,9 +36,20 @@ type EmailsTable =
 
 Now we can define some `Migration`s to make our tables.
 
+`Migration`s are parameterized giving the option of a
+
+* pure one-way `Migration` `Definition`
+* impure one-way `Migration` @(@`Indexed` `PQ` `IO`@)@
+* pure reversible `Migration` @(@`IsoQ` `Definition`@)@
+* impure reversible `Migration` @(@`IsoQ` @(@`Indexed` `PQ` `IO`@)@@)@
+
+For this example, we'll use pure reversible `Migration`s.
+
 >>> :{
 let
-  makeUsers :: Migration (IsoQ Definition) (Public '[]) '["public" ::: '["users" ::: 'Table UsersTable]]
+  makeUsers :: Migration (IsoQ Definition)
+    '["public" ::: '[]]
+    '["public" ::: '["users" ::: 'Table UsersTable]]
   makeUsers = Migration "make users table" IsoQ
     { up = createTable #users
         ( serial `as` #id :*
@@ -50,7 +61,8 @@ let
 
 >>> :{
 let
-  makeEmails :: Migration (IsoQ Definition) '["public" ::: '["users" ::: 'Table UsersTable]]
+  makeEmails :: Migration (IsoQ Definition)
+    '["public" ::: '["users" ::: 'Table UsersTable]]
     '["public" ::: '["users" ::: 'Table UsersTable, "emails" ::: 'Table EmailsTable]]
   makeEmails = Migration "make emails table" IsoQ
     { up = createTable #emails
@@ -145,10 +157,12 @@ module Squeal.PostgreSQL.Migration
   , migrateUp
   , migrateDown
   , indexedDefine
-  , IsoQ (..)
   , MigrationsTable
+    -- * Executable
   , mainMigrate
   , mainMigrateIso
+    -- * Re-export
+  , IsoQ (..)
   ) where
 
 import Control.Category
@@ -173,8 +187,8 @@ import qualified GHC.Generics as GHC
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Definition
+import Squeal.PostgreSQL.Definition.Constraint
 import Squeal.PostgreSQL.Definition.Table
-import Squeal.PostgreSQL.Definition.Table.Constraint
 import Squeal.PostgreSQL.Expression.Comparison
 import Squeal.PostgreSQL.Expression.Parameter
 import Squeal.PostgreSQL.Expression.Time
@@ -186,12 +200,11 @@ import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
 import Squeal.PostgreSQL.Transaction
 
--- | A `Migration` is a named "isomorphism" over a given category.
--- It should contain a migration and a unique `name`.
-data Migration p db0 db1 = Migration
+-- | A `Migration` consists of a name and a migration definition.
+data Migration def db0 db1 = Migration
   { name :: Text -- ^ The `name` of a `Migration`.
     -- Each `name` in a `Migration` should be unique.
-  , migration :: p db0 db1 -- ^ The migration of a `Migration`.
+  , migration :: def db0 db1 -- ^ The migration of a `Migration`.
   } deriving (GHC.Generic)
 instance QFunctor Migration where
   qmap f (Migration n i) = Migration n (f i)
@@ -243,24 +256,32 @@ instance Migratory (IsoQ Definition) (IsoQ (Indexed PQ IO ())) where
 unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
 unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
 
+-- | Run migrations.
 migrate
   :: Migratory def (Indexed PQ IO ())
   => Path (Migration def) db0 db1
   -> PQ db0 db1 IO ()
 migrate = runIndexed . runMigrations
 
+-- | Run rewindable migrations.
 migrateUp
   :: Migratory def (IsoQ (Indexed PQ IO ()))
   => Path (Migration def) db0 db1
   -> PQ db0 db1 IO ()
 migrateUp = runIndexed . up . runMigrations
 
+-- | Rewind migrations.
 migrateDown
   :: Migratory def (IsoQ (Indexed PQ IO ()))
   => Path (Migration def) db0 db1
   -> PQ db1 db0 IO ()
 migrateDown = runIndexed . down . runMigrations
 
+{- | Run a pure SQL `Definition` functorially in effect
+
+* @indexedDefine id = id@
+* @indexedDefine (def1 >>> def2) = indexedDefine def1 >>> indexedDefine def2@
+-}
 indexedDefine :: Definition db0 db1 -> Indexed PQ IO () db0 db1
 indexedDefine = Indexed . define
 
@@ -358,7 +379,7 @@ mainMigrate connectTo migrations = do
       putStrLn "rollback   to rollback all available migrations"
 
 {- | `mainMigrateIso` creates a simple executable
-from a connection string and a `Path` of `Migration` `Iso`s. -}
+from a connection string and a `Path` of `Migration` `IsoQ`s. -}
 mainMigrateIso
   :: Migratory (IsoQ def) (IsoQ (Indexed PQ IO ()))
   => ByteString

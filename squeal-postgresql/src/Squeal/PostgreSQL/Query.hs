@@ -31,7 +31,7 @@ Squeal queries.
   #-}
 
 module Squeal.PostgreSQL.Query
-  ( -- * Queries
+  ( -- * Query
     Query_
   , Query (..)
     -- ** Select
@@ -56,7 +56,7 @@ module Squeal.PostgreSQL.Query
   , With (..)
   , CommonTableExpression (..)
   , withRecursive
-    -- * Table Expressions
+    -- * Table Expression
   , TableExpression (..)
   , from
   , where_
@@ -64,7 +64,7 @@ module Squeal.PostgreSQL.Query
   , having
   , limit
   , offset
-    -- * From Clauses
+    -- * From Clause
   , FromClause (..)
   , table
   , subquery
@@ -736,7 +736,7 @@ instance RenderSQL (TableExpression outer commons grp db params from) where
       , renderWheres whs'
       , renderSQL grps'
       , renderSQL hvs'
-      , renderOrderByClause srts'
+      , renderSQL srts'
       , renderLimits lims'
       , renderOffsets offs' ]
       where
@@ -744,10 +744,6 @@ instance RenderSQL (TableExpression outer commons grp db params from) where
           [] -> ""
           wh:[] -> " WHERE" <+> renderSQL wh
           wh:whs -> " WHERE" <+> renderSQL (foldr (.&&) wh whs)
-        renderOrderByClause = \case
-          [] -> ""
-          srts -> " ORDER BY"
-            <+> commaSeparated (renderSQL <$> srts)
         renderLimits = \case
           [] -> ""
           lims -> " LIMIT" <+> fromString (show (minimum lims))
@@ -836,7 +832,7 @@ instance RenderSQL (FromClause outer commons db params from) where
 -- | A real `table` is a table from the database.
 table
   :: (Has sch db schema, Has tab schema ('Table table))
-  => Aliased (QualifiedAlias sch) (alias ::: tab)
+  => Aliased (QualifiedAlias sch) (alias ::: tab) -- ^ (renamable) table alias
   -> FromClause outer commons db params '[alias ::: TableToRow table]
 table (tab `As` alias) = UnsafeFromClause $
   renderSQL tab <+> "AS" <+> renderSQL alias
@@ -844,13 +840,14 @@ table (tab `As` alias) = UnsafeFromClause $
 -- | `subquery` derives a table from a `Query`.
 subquery
   :: Aliased (Query outer commons db params) query
+  -- ^ aliased `Query`
   -> FromClause outer commons db params '[query]
 subquery = UnsafeFromClause . renderAliased (parenthesized . renderSQL)
 
 -- | `view` derives a table from a `View`.
 view
   :: (Has sch db schema, Has vw schema ('View view))
-  => Aliased (QualifiedAlias sch) (alias ::: vw)
+  => Aliased (QualifiedAlias sch) (alias ::: vw) -- ^ (renamable) view alias
   -> FromClause outer commons db params '[alias ::: view]
 view (vw `As` alias) = UnsafeFromClause $
   renderSQL vw <+> "AS" <+> renderSQL alias
@@ -858,7 +855,7 @@ view (vw `As` alias) = UnsafeFromClause $
 -- | `common` derives a table from a common table expression.
 common
   :: Has cte commons common
-  => Aliased Alias (alias ::: cte)
+  => Aliased Alias (alias ::: cte) -- ^ (renamable) common table expression alias
   -> FromClause outer commons db params '[alias ::: common]
 common (cte `As` alias) = UnsafeFromClause $
   renderSQL cte <+> "AS" <+> renderSQL alias
@@ -883,9 +880,11 @@ crossJoin
 crossJoin right left = UnsafeFromClause $
   renderSQL left <+> "CROSS JOIN" <+> renderSQL right
 
+{- |Allows `crossJoin` to reference columns provided by
+preceding `from` items.-}
 crossJoinLateral
   :: FromClause (Join left outer) commons db params right
-  -- ^ right
+  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> FromClause outer commons db params left
   -- ^ left
   -> FromClause outer commons db params (Join left right)
@@ -907,9 +906,11 @@ innerJoin right on left = UnsafeFromClause $
   renderSQL left <+> "INNER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
+{- |Allows `innerJoin` to reference columns provided by
+preceding `from` items.-}
 innerJoinLateral
   :: FromClause (Join left outer) commons db params right
-  -- ^ right
+  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
   -> FromClause outer commons db params left
@@ -936,9 +937,11 @@ leftOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "LEFT OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
+{- |Allows `leftOuterJoin` to reference columns provided by
+preceding `from` items.-}
 leftOuterJoinLateral
   :: FromClause (Join left outer) commons db params right
-  -- ^ right
+  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
   -> FromClause outer commons db params left
@@ -966,9 +969,11 @@ rightOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "RIGHT OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
+{- |Allows `rightOuterJoin` to reference columns provided by
+preceding `from` items.-}
 rightOuterJoinLateral
   :: FromClause (Join left outer) commons db params right
-  -- ^ right
+  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
   -> FromClause outer commons db params left
@@ -998,9 +1003,11 @@ fullOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "FULL OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
 
+{- |Allows `fullOuterJoin` to reference columns provided by
+preceding `from` items.-}
 fullOuterJoinLateral
   :: FromClause (Join left outer) commons db params right
-  -- ^ right
+  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
   -> FromClause outer commons db params left
@@ -1051,11 +1058,6 @@ instance (Has rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
     rel ! col = By2 rel col :* Nil
 
 -- | A `GroupByClause` indicates the `Grouping` of a `TableExpression`.
--- A `NoGroups` indicates `Ungrouped` while a `Group` indicates `Grouped`.
--- @NoGroups@ is distinguised from @Group Nil@ since no aggregation can be
--- done on @NoGroups@ while all output `Expression`s must be aggregated
--- in @Group Nil@. In general, all output `Expression`s in the
--- complement of @bys@ must be aggregated in @Group bys@.
 newtype GroupByClause grp from = UnsafeGroupByClause
   { renderGroupByClause :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
@@ -1069,7 +1071,7 @@ group
   -> GroupByClause ('Grouped bys) from
 group bys = UnsafeGroupByClause $ case bys of
   Nil -> ""
-  bys' -> " GROUP BY" <+> renderCommaSeparated renderSQL bys'
+  _ -> " GROUP BY" <+> renderCommaSeparated renderSQL bys
 
 -- | A `HavingClause` is used to eliminate groups that are not of interest.
 -- An `Ungrouped` `TableExpression` may only use `NoHaving` while a `Grouped`
@@ -1100,6 +1102,7 @@ data CommonTableExpression statement
   (commons1 :: FromType) where
   CommonTableExpression
     :: Aliased (statement commons db params) (cte ::: common)
+    -- ^ aliased statement
     -> CommonTableExpression statement db params commons (cte ::: common ': commons)
 instance
   ( KnownSymbol cte
@@ -1154,7 +1157,9 @@ WITH RECURSIVE "t" AS ((SELECT * FROM (VALUES ((1 :: int))) AS t ("n")) UNION AL
 -}
 withRecursive
   :: Aliased (Query outer (recursive ': commons) db params) recursive
+  -- ^ recursive query
   -> Query outer (recursive ': commons) db params row
+  -- ^ larger query
   -> Query outer commons db params row
 withRecursive (recursive `As` cte) query = UnsafeQuery $
   "WITH RECURSIVE" <+> renderSQL cte

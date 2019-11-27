@@ -27,11 +27,11 @@ Type expressions.
 #-}
 
 module Squeal.PostgreSQL.Expression.Type
-  ( -- * type casting
+  ( -- * Type Cast
     cast
   , astype
   , inferredtype
-    -- * type expressions
+    -- * Type Expression
   , TypeExpression (..)
   , typedef
   , typetable
@@ -79,7 +79,7 @@ module Squeal.PostgreSQL.Expression.Type
   , tsrange
   , tstzrange
   , daterange
-    -- * column type definitions
+    -- * Column Type
   , ColumnTypeExpression (..)
   , nullable
   , notNullable
@@ -91,7 +91,7 @@ module Squeal.PostgreSQL.Expression.Type
   , serial8
   , bigserial
   , hask
-    -- * type inference
+    -- * Type Inference
   , PGTyped (..)
   , PGNullityTyped (..)
   , FieldTyped (..)
@@ -296,7 +296,7 @@ fixarray ty = UnsafeTypeExpression $
       . ByteString.intercalate "]["
       . SOP.hcollapse
       $ SOP.hcmap (SOP.Proxy @KnownNat)
-        (K . fromString . show . natVal)
+        (SOP.K . fromString . show . natVal)
         (SOP.hpure SOP.Proxy :: SOP.NP SOP.Proxy ns)
 -- | text search query
 tsvector :: TypeExpression db (null 'PGtsvector)
@@ -376,28 +376,32 @@ instance (KnownSymbol alias, PGTyped db ty)
   => FieldTyped db (alias ::: ty) where
     fieldtype = pgtype `As` Alias
 
--- | `ColumnTypeExpression`s are used in `createTable` commands.
+-- | `ColumnTypeExpression`s are used in
+-- `Squeal.PostgreSQL.Definition.createTable` commands.
 newtype ColumnTypeExpression (db :: SchemasType) (ty :: ColumnType)
   = UnsafeColumnTypeExpression { renderColumnTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance RenderSQL (ColumnTypeExpression db ty) where
   renderSQL = renderColumnTypeExpression
 
--- | used in `createTable` commands as a column constraint to note that
+-- | used in `Squeal.PostgreSQL.Definition.createTable`
+-- commands as a column constraint to note that
 -- @NULL@ may be present in a column
 nullable
   :: TypeExpression db (nullity ty)
   -> ColumnTypeExpression db ('NoDef :=> 'Null ty)
 nullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NULL"
 
--- | used in `createTable` commands as a column constraint to ensure
+-- | used in `Squeal.PostgreSQL.Definition.createTable`
+-- commands as a column constraint to ensure
 -- @NULL@ is not present in a column
 notNullable
   :: TypeExpression db (nullity ty)
   -> ColumnTypeExpression db ('NoDef :=> 'NotNull ty)
 notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
 
--- | used in `createTable` commands as a column constraint to give a default
+-- | used in `Squeal.PostgreSQL.Definition.createTable`
+-- commands as a column constraint to give a default
 default_
   :: Expression '[] '[] 'Ungrouped db '[] '[] ty
   -> ColumnTypeExpression db ('NoDef :=> ty)
@@ -435,6 +439,7 @@ instance PGTyped db ('NotNull ty) => PGNullityTyped db ('NotNull ty) where
   pgNullityType = notNullable (pgtype @_ @('NotNull ty))
 
 -- | Allow you to specify pg column types in relation to haskell types.
+--
 -- >>> printSQL $ hask @(Maybe String)
 -- text NULL
 --

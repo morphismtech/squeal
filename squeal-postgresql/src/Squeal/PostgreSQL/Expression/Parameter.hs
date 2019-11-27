@@ -74,7 +74,7 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
 -- >>> printSQL expr
 -- ($1 :: int4)
 param
-  :: forall n outer commons db params from grp ty
+  :: forall n ty outer commons db params from grp
    . (PGTyped db ty, HasParameter n params ty)
   => Expression outer commons grp db params from ty -- ^ param
 param = parameter @n (pgtype @db)

@@ -34,33 +34,32 @@ it defines an embedding of Haskell types into Postgres types.
 #-}
 
 module Squeal.PostgreSQL.Schema
-  ( -- * Postgres Types
+  ( -- * Postgres Type
     PGType (..)
   , NullityType (..)
   , RowType
   , FromType
-    -- * Schema Types
+    -- * Schema Type
   , ColumnType
   , ColumnsType
   , TableType
   , SchemumType (..)
   , IndexType (..)
   , FunctionType
-  , OperatorType (..)
   , ReturnsType (..)
   , SchemaType
   , SchemasType
   , Public
-    -- * Constraints
+    -- * Constraint
   , (:=>)
   , ColumnConstraint (..)
   , TableConstraint (..)
   , TableConstraints
   , Uniquely
-    -- * Enumerated Labels
+    -- * Enumerated Label
   , IsPGlabel (..)
   , PGlabel (..)
-    -- * Data Definitions
+    -- * Data Definition
   , Create
   , CreateIfNotExists
   , CreateOrReplace
@@ -74,9 +73,7 @@ module Squeal.PostgreSQL.Schema
   , RenameIfExists
   , ConstraintInvolves
   , DropIfConstraintsInvolve
-  , IsNotElem
-  , AllUnique
-    -- * Type Classifications
+    -- * Type Classification
   , PGNum
   , PGIntegral
   , PGFloating
@@ -86,14 +83,18 @@ module Squeal.PostgreSQL.Schema
   , SamePGType
   , AllNotNull
   , NotAllNull
-    -- * Nullifications
+    -- * Nullification
   , NullifyType
   , NullifyRow
   , NullifyFrom
-    -- * Table Conversions
+    -- * Table Conversion
   , TableToColumns
   , ColumnsToRow
   , TableToRow
+    -- * Updatable
+  , Updatable
+  , AllUnique
+  , IsNotElem
   ) where
 
 import Control.Category
@@ -374,11 +375,14 @@ type family Create alias x xs where
     ':<>: 'Text "already exists")
   Create alias y (x ': xs) = x ': Create alias y xs
 
+{-| Similar to `Create` but no error on pre-existence-}
 type family CreateIfNotExists alias x xs where
   CreateIfNotExists alias x '[] = '[alias ::: x]
   CreateIfNotExists alias x (alias ::: y ': xs) = alias ::: y ': xs
   CreateIfNotExists alias y (x ': xs) = x ': CreateIfNotExists alias y xs
 
+{-| Similar to `Create` but used to replace values
+with the same type.-}
 type family CreateOrReplace alias x xs where
   CreateOrReplace alias x '[] = '[alias ::: x]
   CreateOrReplace alias x (alias ::: x ': xs) = alias ::: x ': xs
@@ -402,6 +406,7 @@ type family Drop alias xs where
   Drop alias (alias ::: x ': xs) = xs
   Drop alias (x ': xs) = x ': Drop alias xs
 
+-- | Drop a particular flavor of schemum type
 type family DropSchemum alias sch xs where
   DropSchemum alias sch '[] = TypeError
     ('Text "DropSchemum: alias "
@@ -417,11 +422,13 @@ type family DropSchemum alias sch xs where
     ':<>: 'ShowType sch1)
   DropSchemum alias sch (x ': xs) = x ': DropSchemum alias sch xs
 
+-- | Similar to `Drop` but no error on non-existence
 type family DropIfExists alias xs where
   DropIfExists alias '[] = '[]
   DropIfExists alias (alias ::: x ': xs) = xs
   DropIfExists alias (x ': xs) = x ': DropIfExists alias xs
 
+-- | Similar to `DropSchemum` but no error on non-existence
 type family DropSchemumIfExists alias sch xs where
   DropSchemumIfExists alias sch '[] = '[]
   DropSchemumIfExists alias sch (alias ::: sch x ': xs) = xs
@@ -445,6 +452,7 @@ type family Alter alias x xs where
   Alter alias x1 (alias ::: x0 ': xs) = alias ::: x1 ': xs
   Alter alias x1 (x0 ': xs) = x0 ': Alter alias x1 xs
 
+-- | Similar to `Alter` but no error on non-existence
 type family AlterIfExists alias x xs where
   AlterIfExists alias x '[] = '[]
   AlterIfExists alias x1 (alias ::: x0 ': xs) = alias ::: x1 ': xs
@@ -461,6 +469,7 @@ type family Rename alias0 alias1 xs where
   Rename alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
   Rename alias0 alias1 (x ': xs) = x ': Rename alias0 alias1 xs
 
+-- | Similar to `Rename` but no error on non-existence
 type family RenameIfExists alias0 alias1 xs where
   RenameIfExists alias x '[] = '[]
   RenameIfExists alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
@@ -490,27 +499,42 @@ data SchemumType
   | Typedef PGType
   | Index IndexType
   | Function FunctionType
-  | Operator OperatorType
   | UnsafeSchemum Symbol
 
+-- | Use `:=>` to pair the parameter types with the return
+-- type of a function.
 type FunctionType = ([NullityType], ReturnsType)
 
+{- |
+PostgreSQL provides several index types:
+B-tree, Hash, GiST, SP-GiST, GIN and BRIN.
+Each index type uses a different algorithm
+that is best suited to different types of queries.
+-}
 data IndexType
   = Btree
+  -- ^ B-trees can handle equality and range queries on data
+  -- that can be sorted into some ordering.
   | Hash
+  -- ^ Hash indexes can only handle simple equality comparisons.
   | Gist
+  -- ^ GiST indexes are not a single kind of index,
+  -- but rather an infrastructure within which many different
+  -- indexing strategies can be implemented.
   | Spgist
+  -- ^ SP-GiST indexes, like GiST indexes,
+  -- offer an infrastructure that supports various kinds of searches.
   | Gin
+  -- ^ GIN indexes are “inverted indexes” which are appropriate for
+  -- data values that contain multiple component values, such as arrays.
   | Brin
+  -- ^ BRIN indexes (a shorthand for Block Range INdexes) store summaries
+  -- about the values stored in consecutive physical block ranges of a table.
 
+{- | Return type of a function-}
 data ReturnsType
-  = Returns NullityType
-  | ReturnsTable RowType
-
-data OperatorType
-  = BinaryOp NullityType NullityType NullityType
-  | LeftOp NullityType NullityType
-  | RightOp NullityType NullityType
+  = Returns NullityType -- ^ function
+  | ReturnsTable RowType -- ^ set returning function
 
 {- | The schema of a database consists of a list of aliased,
 user-defined `SchemumType`s.
@@ -594,3 +618,9 @@ instance (TypeError (      'Text "Cannot assign to "
 class AllUnique (xs :: [(Symbol, a)]) where
 instance AllUnique '[] where
 instance (IsNotElem x (Elem x xs), AllUnique xs) => AllUnique (x ': xs) where
+
+-- | Updatable lists of columns
+type Updatable table columns =
+  ( All (HasIn (TableToColumns table)) columns
+  , AllUnique columns
+  , SListI (TableToColumns table) )

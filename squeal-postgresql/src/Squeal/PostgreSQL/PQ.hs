@@ -6,7 +6,8 @@ Maintainer: eitan@morphism.tech
 Stability: experimental
 
 This module is where Squeal commands actually get executed by
-`Database.PostgreSQL.LibPQ`. It containts two typeclasses, `IndexedMonadTransPQ` for executing
+`Database.PostgreSQL.LibPQ`. It containts two typeclasses,
+`IndexedMonadTransPQ` for executing
 a `Definition` and `MonadPQ` for executing a `Manipulation` or `Query`,
 and a `PQ` type with instances for them.
 
@@ -49,11 +50,12 @@ module Squeal.PostgreSQL.PQ
   , runPQ
   , execPQ
   , evalPQ
-  , IndexedMonadTrans (..)
   , IndexedMonadTransPQ (..)
-  , Indexed (..)
   , MonadPQ (..)
-    -- * Results
+    -- * Indexed Monad
+  , IndexedMonadTrans (..)
+  , Indexed (..)
+    -- * Result
   , LibPQ.Result
   , LibPQ.Row
   , ntuples
@@ -66,13 +68,15 @@ module Squeal.PostgreSQL.PQ
   , resultStatus
   , resultErrorMessage
   , resultErrorCode
-    -- * Exceptions
+    -- * Exception
   , SquealException (..)
   , PQState (..)
   , okResult
   , catchSqueal
   , handleSqueal
   , trySqueal
+    -- * Re-export
+  , K (..)
   ) where
 
 import Control.Category
@@ -215,7 +219,7 @@ evalPQ (PQ pq) conn = unK <$> pq conn
 is a `Functor` [enriched category]
 (https://ncatlab.org/nlab/show/enriched+category).
 An indexed monad transformer transforms a `Monad` into an indexed monad,
-and _is_ a monad transformer when its source and target are the same,
+and is a monad transformer when its source and target are the same,
 enabling use of standard @do@ notation for endo-index operations.
 -}
 class
@@ -277,7 +281,7 @@ instance
     Indexed g . Indexed f = Indexed $ pqAp (fmap (<>) f) g
 
 {- | `IndexedMonadTransPQ` is a class for indexed monad transformers
-that support running `Definition`s using `define` which acts functorially.
+that support running `Definition`s using `define` which acts functorially in effect.
 
 * @define id = return ()@
 * @define (statement1 >> statement2) = define statement1 & pqThen (define statement2)@

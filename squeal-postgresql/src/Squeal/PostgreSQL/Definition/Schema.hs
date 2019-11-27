@@ -30,10 +30,12 @@ Create and drop schema definitions.
 #-}
 
 module Squeal.PostgreSQL.Definition.Schema
-  ( createSchema
+  ( -- * Create
+    createSchema
   , createSchemaIfNotExists
-  , dropSchema
-  , dropSchemaIfExists
+    -- * Drop
+  , dropSchemaCascade
+  , dropSchemaCascadeIfExists
   ) where
 
 import GHC.TypeLits
@@ -56,41 +58,54 @@ A schema is essentially a namespace: it contains named objects
 can duplicate those of other objects existing in other schemas.
 Named objects are accessed by `QualifiedAlias`es with the schema
 name as a prefix.
+
+>>> :{
+let
+  definition :: Definition '["public" ::: '[]] '["public" ::: '[], "my_schema" ::: '[]]
+  definition = createSchema #my_schema
+:}
 -}
 createSchema
   :: KnownSymbol sch
-  => Alias sch
+  => Alias sch -- ^ schema alias
   -> Definition db (Create sch '[] db)
 createSchema sch = UnsafeDefinition $
   "CREATE" <+> "SCHEMA" <+> renderSQL sch <> ";"
 
-{- | Idempotent version of `createSchema`. -}
+{- | Create a schema if it does not yet exist.-}
 createSchemaIfNotExists
   :: (KnownSymbol sch, Has sch db schema)
-  => Alias sch
+  => Alias sch -- ^ schema alias
   -> Definition db (CreateIfNotExists sch '[] db)
 createSchemaIfNotExists sch = UnsafeDefinition $
   "CREATE" <+> "SCHEMA" <+> "IF" <+> "NOT" <+> "EXISTS"
   <+> renderSQL sch <> ";"
 
--- | >>> :{
+-- | Drop a schema.
+-- Automatically drop objects (tables, functions, etc.)
+-- that are contained in the schema.
+--
+-- >>> :{
 -- let
 --   definition :: Definition '["muh_schema" ::: schema, "public" ::: public] '["public" ::: public]
---   definition = dropSchema #muh_schema
+--   definition = dropSchemaCascade #muh_schema
 -- :}
 --
 -- >>> printSQL definition
--- DROP SCHEMA "muh_schema";
-dropSchema
+-- DROP SCHEMA "muh_schema" CASCADE;
+dropSchemaCascade
   :: KnownSymbol sch
-  => Alias sch
-  -- ^ user defined schema
+  => Alias sch -- ^ schema alias
   -> Definition db (Drop sch db)
-dropSchema sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch <> ";"
+dropSchemaCascade sch = UnsafeDefinition $
+  "DROP SCHEMA" <+> renderSQL sch <+> "CASCADE;"
 
-dropSchemaIfExists
+-- | Drop a schema if it exists.
+-- Automatically drop objects (tables, functions, etc.)
+-- that are contained in the schema.
+dropSchemaCascadeIfExists
   :: KnownSymbol sch
-  => Alias sch
-  -- ^ user defined schema
+  => Alias sch -- ^ schema alias
   -> Definition db (DropIfExists sch db)
-dropSchemaIfExists sch = UnsafeDefinition $ "DROP SCHEMA" <+> renderSQL sch <> ";"
+dropSchemaCascadeIfExists sch = UnsafeDefinition $
+  "DROP SCHEMA IF EXISTS" <+> renderSQL sch <+> "CASCADE;"

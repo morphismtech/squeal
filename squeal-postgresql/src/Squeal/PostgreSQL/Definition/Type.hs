@@ -30,12 +30,14 @@ Create and drop type definitions.
 #-}
 
 module Squeal.PostgreSQL.Definition.Type
-  ( createTypeEnum
+  ( -- * Create
+    createTypeEnum
   , createTypeEnumFrom
   , createTypeComposite
   , createTypeCompositeFrom
   , createTypeRange
   , createDomain
+    -- * Drop
   , dropType
   , dropTypeIfExists
   ) where
@@ -166,30 +168,43 @@ with constraints (restrictions on the allowed set of values).
 
 Domains are useful for abstracting common constraints on fields
 into a single location for maintenance. For example, several tables might
-contain email address columns, all requiring the same `check` constraint
+contain email address columns, all requiring the same
+`Squeal.PostgreSQL.Definition.Table.Constraint.check` constraint
 to verify the address syntax. Define a domain rather than setting up
 each table's constraint individually.
 
 >>> :{
 let
   createPositive :: Definition (Public '[]) (Public '["positive" ::: 'Typedef 'PGfloat4])
-  createPositive = createDomain #positive real (#value .> 0 .&& (#value & isNotNull))
+  createPositive = createDomain #positive real (#value .> 0)
 in printSQL createPositive
 :}
-CREATE DOMAIN "positive" AS real CHECK ((("value" > 0) AND "value" IS NOT NULL));
+CREATE DOMAIN "positive" AS real CHECK (("value" > 0));
 -}
 createDomain
   :: (Has sch db schema, KnownSymbol dom)
-  => QualifiedAlias sch dom
-  -> (forall null. TypeExpression db (null ty))
+  => QualifiedAlias sch dom -- ^ domain alias
+  -> (forall null. TypeExpression db (null ty)) -- ^ underlying type
   -> (forall tab. Condition '[] '[] 'Ungrouped db '[] '[tab ::: '["value" ::: 'Null ty]])
+    -- ^ constraint on type
   -> Definition db (Alter sch (Create dom ('Typedef ty) schema) db)
 createDomain dom ty condition =
   UnsafeDefinition $ "CREATE DOMAIN" <+> renderSQL dom
     <+> "AS" <+> renderTypeExpression ty
     <+> "CHECK" <+> parenthesized (renderSQL condition) <> ";"
 
-{- |
+{- | Range types are data types representing a range of values
+of some element type (called the range's subtype).
+The subtype must have a total order so that it is well-defined
+whether element values are within, before, or after a range of values.
+
+Range types are useful because they represent many element values
+in a single range value, and because concepts such as overlapping ranges
+can be expressed clearly.
+The use of time and date ranges for scheduling purposes
+is the clearest example; but price ranges,
+measurement ranges from an instrument, and so forth can also be useful.
+
 >>> :{
 let
   createSmallIntRange :: Definition (Public '[]) (Public '["int2range" ::: 'Typedef ('PGrange 'PGint2)])
@@ -200,8 +215,8 @@ CREATE TYPE "int2range" AS RANGE (subtype = int2);
 -}
 createTypeRange
   :: (Has sch db schema, KnownSymbol range)
-  => QualifiedAlias sch range
-  -> (forall null. TypeExpression db (null ty))
+  => QualifiedAlias sch range -- ^ range alias
+  -> (forall null. TypeExpression db (null ty)) -- ^ underlying type
   -> Definition db (Alter sch (Create range ('Typedef ('PGrange ty)) schema) db)
 createTypeRange range ty = UnsafeDefinition $
   "CREATE" <+> "TYPE" <+> renderSQL range <+> "AS" <+> "RANGE" <+>
@@ -219,11 +234,13 @@ dropType
   => QualifiedAlias sch td
   -- ^ name of the user defined type
   -> Definition db (Alter sch (DropSchemum td 'Typedef schema) db)
-dropType tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderSQL tydef <> ";"
+dropType tydef = UnsafeDefinition $ "DROP TYPE" <+> renderSQL tydef <> ";"
 
+-- | Drop a type if it exists.
 dropTypeIfExists
   :: (Has sch db schema, KnownSymbol td)
   => QualifiedAlias sch td
   -- ^ name of the user defined type
   -> Definition db (Alter sch (DropSchemumIfExists td 'Typedef schema) db)
-dropTypeIfExists tydef = UnsafeDefinition $ "DROP" <+> "TYPE" <+> renderSQL tydef <> ";"
+dropTypeIfExists tydef = UnsafeDefinition $
+  "DROP TYPE IF EXISTS" <+> renderSQL tydef <> ";"

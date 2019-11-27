@@ -34,30 +34,28 @@ module Squeal.PostgreSQL.Expression
   ( -- * Expression
     Expression (..)
   , Expr
+    -- * Function
   , type (-->)
   , FunctionDB
   , unsafeFunction
   , function
   , unsafeLeftOp
-  , leftOp
   , unsafeRightOp
-  , rightOp
+    -- * Operator
   , Operator
   , OperatorDB
   , unsafeBinaryOp
-  , binaryOp
+  , PGSubset (..)
+  , PGIntersect (..)
+    -- * Multivariable Function
   , FunctionVar
   , unsafeFunctionVar
   , type (--->)
   , FunctionNDB
   , unsafeFunctionN
   , functionN
-  , PGSubset (..)
-  , PGIntersect (..)
     -- * Re-export
   , (&)
-  , K (..)
-  , unK
   ) where
 
 import Control.Category
@@ -89,9 +87,10 @@ column expressions
 {- | `Expression`s are used in a variety of contexts,
 such as in the target `Squeal.PostgreSQL.Query.List` of the
 `Squeal.PostgreSQL.Query.select` command,
-as new column values in `Squeal.PostgreSQL.Manipulation.insertRow` or
+as new column values in `Squeal.PostgreSQL.Manipulation.insertInto` or
 `Squeal.PostgreSQL.Manipulation.update`,
-or in search `Squeal.PostgreSQL.Logic.Condition`s in a number of commands.
+or in search `Squeal.PostgreSQL.Expression.Logic.Condition`s
+in a number of commands.
 
 The expression syntax allows the calculation of
 values from primitive expression using arithmetic, logical,
@@ -145,6 +144,7 @@ type Operator x1 x2 y
   -> Expression outer commons grp db params from y
      -- ^ output
 
+-- | Like `Operator` but depends on the schemas of the database
 type OperatorDB db x1 x2 y
   =  forall outer commons grp params from
   .  Expression outer commons grp db params from x1
@@ -166,6 +166,7 @@ type (-->) x y
   -> Expression outer commons grp db params from y
      -- ^ output
 
+-- | Like `-->` but depends on the schemas of the database
 type FunctionDB db x y
   =  forall outer commons grp params from
   .  Expression outer commons grp db params from x
@@ -186,6 +187,7 @@ type (--->) xs y
   -> Expression outer commons grp db params from y
      -- ^ output
 
+-- | Like `--->` but depends on the schemas of the database
 type FunctionNDB db xs y
   =  forall outer commons grp params from
   .  NP (Expression outer commons grp db params from) xs
@@ -318,36 +320,15 @@ unsafeBinaryOp :: ByteString -> Operator ty0 ty1 ty2
 unsafeBinaryOp op x y = UnsafeExpression $ parenthesized $
   renderSQL x <+> op <+> renderSQL y
 
-binaryOp
-  :: forall op sch db schema x y z.
-    ( Has sch db schema
-    , Has op schema ('Operator ('BinaryOp x y z)) )
-  => OperatorDB db x y z
-binaryOp = unsafeBinaryOp $ renderSymbol @op
-
 -- | >>> printSQL $ unsafeLeftOp "NOT" true
 -- (NOT TRUE)
 unsafeLeftOp :: ByteString -> x --> y
 unsafeLeftOp op x = UnsafeExpression $ parenthesized $ op <+> renderSQL x
 
-leftOp
-  :: forall op sch db schema x y.
-    ( Has sch db schema
-    , Has op schema ('Operator ('LeftOp x y)) )
-  => FunctionDB db x y
-leftOp = unsafeLeftOp $ renderSymbol @op
-
 -- | >>> printSQL $ true & unsafeRightOp "IS NOT TRUE"
 -- (TRUE IS NOT TRUE)
 unsafeRightOp :: ByteString -> x --> y
 unsafeRightOp op x = UnsafeExpression $ parenthesized $ renderSQL x <+> op
-
-rightOp
-  :: forall op sch db schema x y.
-    ( Has sch db schema
-    , Has op schema ('Operator ('RightOp x y)) )
-  => FunctionDB db x y
-rightOp = unsafeRightOp $ renderSymbol @op
 
 -- | >>> printSQL $ unsafeFunction "f" true
 -- f(TRUE)
@@ -355,9 +336,10 @@ unsafeFunction :: ByteString -> x --> y
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
+-- | Call a user defined function of a single variable
 function
   :: (Has sch db schema, Has fun schema ('Function ('[x] :=> 'Returns y)))
-  => QualifiedAlias sch fun
+  => QualifiedAlias sch fun -- ^ function name
   -> FunctionDB db x y
 function = unsafeFunction . renderSQL
 
@@ -367,11 +349,12 @@ unsafeFunctionN :: SListI xs => ByteString -> xs ---> y
 unsafeFunctionN fun xs = UnsafeExpression $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
+-- | Call a user defined multivariable function
 functionN
   :: ( Has sch db schema
      , Has fun schema ('Function (xs :=> 'Returns y))
      , SListI xs )
-  => QualifiedAlias sch fun
+  => QualifiedAlias sch fun -- ^ function alias
   -> FunctionNDB db xs y
 functionN = unsafeFunctionN . renderSQL
 
@@ -430,6 +413,7 @@ instance PGSubset 'PGtsquery
 instance PGSubset ('PGvararray ty)
 instance PGSubset ('PGrange ty)
 
+-- | Intersection operator
 class PGIntersect ty where
   (@&&) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
   (@&&) = unsafeBinaryOp "&&"

@@ -23,8 +23,16 @@ Window functions and definitions
 #-}
 
 module Squeal.PostgreSQL.Expression.Window
-  ( -- * functions
-    partitionBy
+  ( -- * Window Definition
+    WindowDefinition (..)
+  , partitionBy
+    -- * Window Function
+    -- ** Types
+  , WindowFunction (..)
+  , WinFun0
+  , WinFun1
+  , WinFunN
+    -- ** Functions
   , rank
   , rowNumber
   , denseRank
@@ -38,12 +46,6 @@ module Squeal.PostgreSQL.Expression.Window
   , nthValue
   , unsafeWindowFunction1
   , unsafeWindowFunctionN
-    -- * types
-  , WindowFunction (..)
-  , WindowDefinition (..)
-  , WinFun0
-  , WinFun1
-  , WinFunN
   ) where
 
 import Control.DeepSeq
@@ -114,15 +116,11 @@ instance OrderBy WindowDefinition where
 
 instance RenderSQL (WindowDefinition outer commons db from grp params) where
   renderSQL (WindowDefinition part ord) =
-    renderPartitionByClause part <> renderOrderByClause ord
+    renderPartitionByClause part <> renderSQL ord
     where
       renderPartitionByClause = \case
         Nil -> ""
         parts -> "PARTITION" <+> "BY" <+> renderCommaSeparated renderExpression parts
-      renderOrderByClause = \case
-        [] -> ""
-        srts -> " ORDER" <+> "BY"
-          <+> commaSeparated (renderSQL <$> srts)
 
 {- |
 The `partitionBy` clause within `Squeal.PostgreSQL.Query.Over` divides the rows into groups,

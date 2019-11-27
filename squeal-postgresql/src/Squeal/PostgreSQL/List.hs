@@ -28,12 +28,16 @@ lists and type aligned lists.
 #-}
 
 module Squeal.PostgreSQL.List
-  ( SOP.NP (..)
+  ( -- * Heterogeneous List
+    SOP.NP (..)
   , (*:)
+  , one
   , Join
   , disjoin
   , Additional (..)
+    -- * Path
   , Path (..)
+    -- * Type Level List
   , Elem
   , In
   , Length
@@ -73,10 +77,15 @@ instance Additional (NP expr) where
     Nil -> ys
     x :* xs -> x :* (xs & also ys)
 
--- | A useful operator for ending an `NP` list of length at least 2 without `Nil`.
+-- | A useful operator for ending an `NP` list of length
+-- at least 2 without `Nil`
 (*:) :: f x -> f y -> NP f '[x,y]
 x *: y = x :* y :* Nil
 infixl 9 *:
+
+-- | A list of length `one`.
+one :: f x -> NP f '[x]
+one f = f :* Nil
 
 -- | @Elem@ is a promoted `Data.List.elem`.
 type family Elem x xs where
