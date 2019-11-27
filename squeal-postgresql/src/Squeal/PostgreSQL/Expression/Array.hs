@@ -125,4 +125,4 @@ index n expr = UnsafeExpression $
 
 -- | Expand an array to a set of rows
 unnest :: SetFunction "unnest" (null ('PGvararray ty)) '["unnest" ::: ty]
-unnest = unsafeSetFunction
+unnest = unsafeSetFunction "unnest"

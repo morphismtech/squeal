@@ -339,7 +339,7 @@ SELECT * FROM json_each(('{"a":"foo","b":"bar"}' :: json))
 -}
 jsonEach :: SetFunction "json_each" (null 'PGjson)
   '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]
-jsonEach = unsafeSetFunction
+jsonEach = unsafeSetFunction "json_each"
 
 {- | Expands the outermost binary JSON object into a set of key/value pairs.
 
@@ -349,7 +349,7 @@ SELECT * FROM jsonb_each(('{"a":"foo","b":"bar"}' :: jsonb))
 jsonbEach
   :: SetFunction "jsonb_each" (nullity 'PGjsonb)
     '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]
-jsonbEach = unsafeSetFunction
+jsonbEach = unsafeSetFunction "jsonb_each"
 
 {- | Expands the outermost JSON object into a set of key/value pairs.
 
@@ -359,7 +359,7 @@ SELECT * FROM json_each_text(('{"a":"foo","b":"bar"}' :: json))
 jsonEachText
   :: SetFunction "json_each_text" (null 'PGjson)
     '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
-jsonEachText = unsafeSetFunction
+jsonEachText = unsafeSetFunction "json_each_text"
 
 {- | Expands the outermost binary JSON object into a set of key/value pairs.
 
@@ -369,7 +369,7 @@ SELECT * FROM jsonb_each_text(('{"a":"foo","b":"bar"}' :: jsonb))
 jsonbEachText
   :: SetFunction "jsonb_each_text" (null 'PGjsonb)
     '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
-jsonbEachText = unsafeSetFunction
+jsonbEachText = unsafeSetFunction "jsonb_each_text"
 
 {- | Returns set of keys in the outermost JSON object.
 
@@ -379,7 +379,7 @@ json_object_keys(('{"a":"foo","b":"bar"}' :: json))
 jsonObjectKeys
   :: SetFunction "json_object_keys" (nullity 'PGjson)
     '["json_object_keys" ::: 'NotNull 'PGtext]
-jsonObjectKeys = unsafeSetFunction
+jsonObjectKeys = unsafeSetFunction "json_object_keys"
 
 {- | Returns set of keys in the outermost JSON object.
 
@@ -389,7 +389,7 @@ jsonb_object_keys(('{"a":"foo","b":"bar"}' :: jsonb))
 jsonbObjectKeys
   :: SetFunction "jsonb_object_keys" (null 'PGjsonb)
     '["jsonb_object_keys" ::: 'NotNull 'PGtext]
-jsonbObjectKeys = unsafeSetFunction
+jsonbObjectKeys = unsafeSetFunction "jsonb_object_keys"
 
 -- | Build rows from Json types.
 type JsonPopulateFunction fun json

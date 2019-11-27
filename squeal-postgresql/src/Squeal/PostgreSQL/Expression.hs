@@ -336,7 +336,19 @@ unsafeFunction :: ByteString -> x --> y
 unsafeFunction fun x = UnsafeExpression $
   fun <> parenthesized (renderSQL x)
 
--- | Call a user defined function of a single variable
+{- | Call a user defined function of a single variable
+
+>>> type Fn = '[ 'Null 'PGint4] :=> 'Returns ('NotNull 'PGnumeric)
+>>> type Schema = '["fn" ::: 'Function Fn]
+>>> :{
+let
+  fn :: FunctionDB (Public Schema) ('Null 'PGint4) ('NotNull 'PGnumeric)
+  fn = function #fn
+in
+  printSQL (fn 1)
+:}
+"fn"(1)
+-}
 function
   :: (Has sch db schema, Has fun schema ('Function ('[x] :=> 'Returns y)))
   => QualifiedAlias sch fun -- ^ function name
@@ -349,7 +361,19 @@ unsafeFunctionN :: SListI xs => ByteString -> xs ---> y
 unsafeFunctionN fun xs = UnsafeExpression $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
--- | Call a user defined multivariable function
+{- | Call a user defined multivariable function
+
+>>> type Fn = '[ 'Null 'PGint4, 'Null 'PGbool] :=> 'Returns ('NotNull 'PGnumeric)
+>>> type Schema = '["fn" ::: 'Function Fn]
+>>> :{
+let
+  fn :: FunctionNDB (Public Schema) '[ 'Null 'PGint4, 'Null 'PGbool] ('NotNull 'PGnumeric)
+  fn = functionN #fn
+in
+  printSQL (fn (1 *: true))
+:}
+"fn"(1, TRUE)
+-}
 functionN
   :: ( Has sch db schema
      , Has fun schema ('Function (xs :=> 'Returns y))
