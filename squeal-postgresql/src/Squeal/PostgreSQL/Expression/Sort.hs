@@ -18,7 +18,8 @@ Sort expressions
 #-}
 
 module Squeal.PostgreSQL.Expression.Sort
-  ( SortExpression (..)
+  ( -- * Sort
+    SortExpression (..)
   , OrderBy (..)
   ) where
 

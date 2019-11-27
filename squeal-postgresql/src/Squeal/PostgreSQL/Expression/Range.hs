@@ -32,12 +32,16 @@ Range types and functions
 #-}
 
 module Squeal.PostgreSQL.Expression.Range
-  ( range
-  , Range (..)
+  ( -- * Range
+    Range (..)
   , (<=..<=), (<..<), (<=..<), (<..<=)
   , moreThan, atLeast, lessThan, atMost
   , singleton, whole
   , Bound (..)
+    -- * Range Function
+    -- ** Range Construction
+  , range
+    -- ** Range Operator
   , (.<@)
   , (@>.)
   , (<<@)
@@ -48,6 +52,7 @@ module Squeal.PostgreSQL.Expression.Range
   , (@+)
   , (@*)
   , (@-)
+    -- ** Range Function
   , lowerBound
   , upperBound
   , isEmpty

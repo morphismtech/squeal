@@ -21,7 +21,8 @@ Set returning functions
 #-}
 
 module Squeal.PostgreSQL.Expression.Set
-  ( generateSeries
+  ( -- * Set Function
+    generateSeries
   , generateSeriesStep
   , generateSeriesTimestamp
   , SetFunction

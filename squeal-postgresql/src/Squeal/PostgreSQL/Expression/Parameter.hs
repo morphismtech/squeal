@@ -25,7 +25,8 @@ Parameters, out-of-line data values
 #-}
 
 module Squeal.PostgreSQL.Expression.Parameter
-  ( HasParameter (parameter)
+  ( -- * Parameter
+    HasParameter (parameter)
   , param
   ) where
 

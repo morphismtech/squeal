@@ -15,12 +15,15 @@ Logical expressions and operators
 #-}
 
 module Squeal.PostgreSQL.Expression.Logic
-  ( Condition
+  ( -- * Condition
+    Condition
   , true
   , false
+    -- * Logic
   , not_
   , (.&&)
   , (.||)
+    -- * Conditional
   , caseWhenThenElse
   , ifThenElse
   ) where

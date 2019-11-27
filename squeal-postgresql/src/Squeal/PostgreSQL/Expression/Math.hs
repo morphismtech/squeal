@@ -5,7 +5,7 @@ Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Mathematical functions and operators
+Mathematical functions
 -}
 
 {-# LANGUAGE
@@ -15,7 +15,8 @@ Mathematical functions and operators
 #-}
 
 module Squeal.PostgreSQL.Expression.Math
-  ( atan2_
+  ( -- * Math Function
+    atan2_
   , quot_
   , rem_
   , trunc

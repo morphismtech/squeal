@@ -15,11 +15,13 @@ Text search functions and operators
 #-}
 
 module Squeal.PostgreSQL.Expression.TextSearch
-  ( (@@)
+  ( -- * Text Search Operator
+    (@@)
   , (.&)
   , (.|)
   , (.!)
   , (<->)
+    -- * Text Search Function
   , arrayToTSvector
   , tsvectorLength
   , numnode

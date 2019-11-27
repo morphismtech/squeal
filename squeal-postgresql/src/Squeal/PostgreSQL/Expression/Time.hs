@@ -21,7 +21,9 @@ Date/Time functions and operators
 #-}
 
 module Squeal.PostgreSQL.Expression.Time
-  ( TimeOp (..)
+  ( -- * Time Operation
+    TimeOp (..)
+    -- * Time Function
   , currentDate
   , currentTime
   , currentTimestamp
@@ -32,6 +34,7 @@ module Squeal.PostgreSQL.Expression.Time
   , makeTime
   , makeTimestamp
   , makeTimestamptz
+    -- * Interval
   , interval_
   , TimeUnit (..)
   ) where

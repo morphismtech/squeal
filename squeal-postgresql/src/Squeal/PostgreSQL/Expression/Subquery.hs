@@ -16,7 +16,8 @@ Subquery expressions
 #-}
 
 module Squeal.PostgreSQL.Expression.Subquery
-  ( exists
+  ( -- * Subquery
+    exists
   , in_
   , notIn
   , subAll

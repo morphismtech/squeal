@@ -15,7 +15,8 @@ String functions and operators
 #-}
 
 module Squeal.PostgreSQL.Expression.Text
-  ( lower
+  ( -- * Text Function
+    lower
   , upper
   , charLength
   , like

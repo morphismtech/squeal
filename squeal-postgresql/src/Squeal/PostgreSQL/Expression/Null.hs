@@ -15,7 +15,8 @@ Null values and null handling functions
 #-}
 
 module Squeal.PostgreSQL.Expression.Null
-  ( null_
+  ( -- * Null
+    null_
   , notNull
   , coalesce
   , fromNull
