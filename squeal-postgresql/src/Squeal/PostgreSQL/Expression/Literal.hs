@@ -21,7 +21,10 @@ Literal expressions
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.Expression.Literal (Literal (..)) where
+module Squeal.PostgreSQL.Expression.Literal
+  ( -- * Literal
+    Literal (..)
+  ) where
 
 import ByteString.StrictBuilder (builderBytes)
 import Data.Binary.Builder (toLazyByteString)
@@ -35,6 +38,7 @@ import Data.Time.Clock (DiffTime, diffTimeToPicoseconds, UTCTime(UTCTime))
 import Data.Time.Calendar (Day, toGregorian)
 import Data.Time.LocalTime (LocalTime(LocalTime), TimeOfDay(TimeOfDay))
 import Data.UUID.Types (UUID, toASCIIBytes)
+import Data.Vector (Vector, toList)
 
 import qualified Data.Aeson as JSON
 import qualified Data.Text as Text
@@ -44,6 +48,7 @@ import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Expression
+import Squeal.PostgreSQL.Expression.Array
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Null
 import Squeal.PostgreSQL.Expression.Range
@@ -148,3 +153,15 @@ instance Literal (Range Day) where
   literal = range daterange . fmap literal
 instance Literal UUID where
   literal = UnsafeExpression . toASCIIBytes
+instance Literal Money where
+  literal moolah = UnsafeExpression $
+    fromString (show dollars)
+    <> "." <> fromString (show pennies)
+    where
+      (dollars,pennies) = cents moolah `divMod` 100
+instance Literal ty => Literal (VarArray [ty]) where
+  literal (VarArray xs) = array (literal <$> xs)
+instance Literal ty => Literal (VarArray (Vector ty)) where
+  literal (VarArray xs) = array (literal <$> toList xs)
+instance Literal Oid where
+  literal (Oid o) = UnsafeExpression . fromString $ show o
