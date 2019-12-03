@@ -216,6 +216,10 @@ module Squeal.PostgreSQL.Binary
   , FromFixArray (..)
     -- * Only
   , Only (..)
+    -- * VarChar
+  , VarChar
+  , constructVarChar
+  , unVarChar
     -- * Oid
   , OidOf (..)
   , OidOfParam (..)
@@ -598,6 +602,14 @@ instance FromValue 'PGtext Strict.Text where fromValue = Decoding.text_strict
 instance FromValue 'PGtext Lazy.Text where fromValue = Decoding.text_lazy
 instance FromValue 'PGtext String where
   fromValue = Strict.Text.unpack <$> Decoding.text_strict
+instance KnownNat n => FromValue ('PGvarchar n) (VarChar n) where
+  fromValue = (constructVarChar <$> Decoding.text_strict) >>= \case
+      Just t -> return t
+      Nothing -> failure "Could not construct VarChar."
+instance KnownNat n => FromValue ('PGchar n) (VarChar n) where
+  fromValue = (constructVarChar <$> Decoding.text_strict) >>= \case
+      Just t -> return t
+      Nothing -> failure "Could not construct VarChar."
 instance FromValue 'PGbytea Strict.ByteString where
   fromValue = Decoding.bytea_strict
 instance FromValue 'PGbytea Lazy.ByteString where
@@ -834,6 +846,20 @@ newtype Only x = Only { fromOnly :: x }
   deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
 instance Generic (Only x)
 instance HasDatatypeInfo (Only x)
+
+-- | A refined text type for use with 'varchar' and 'char'.
+-- The constructor is not exposed. You have to use @constructVarChar@ and @unVarChar@.
+newtype VarChar (n :: Nat) = VarChar Strict.Text
+  deriving (Eq,Ord,Read,Show)
+
+constructVarChar :: forall n. KnownNat n => Strict.Text -> Maybe (VarChar n)
+constructVarChar t =
+  if Strict.Text.length t <= (fromIntegral $ natVal @n Proxy)
+    then Just . VarChar $ t
+    else Nothing
+
+unVarChar :: VarChar n -> Strict.Text
+unVarChar (VarChar t) = t
 
 foldlN
   :: All ((~) x) xs
