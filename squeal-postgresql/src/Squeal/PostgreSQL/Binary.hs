@@ -294,6 +294,8 @@ instance ToParam (NetAddr IP) 'PGinet where toParam = K . Encoding.inet
 instance ToParam Char ('PGchar 1) where toParam = K . Encoding.char_utf8
 instance ToParam Strict.Text 'PGtext where toParam = K . Encoding.text_strict
 instance ToParam Lazy.Text 'PGtext where toParam = K . Encoding.text_lazy
+instance ToParam (VarChar n) ('PGvarchar n) where toParam = K . Encoding.text_strict . unVarChar
+instance ToParam (VarChar n) ('PGchar n) where toParam = K . Encoding.text_strict . unVarChar
 instance ToParam String 'PGtext where
   toParam = K . Encoding.text_strict . Strict.Text.pack
 instance ToParam Strict.ByteString 'PGbytea where
