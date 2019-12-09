@@ -220,12 +220,17 @@ module Squeal.PostgreSQL.Binary
   , OidOf (..)
   , OidOfParam (..)
   , OidOfField (..)
+    -- * Statement
+  , Statement (..)
+  , query
+  , manipulation
   ) where
 
 import BinaryParser
-import ByteString.StrictBuilder (builderLength, int32BE, int64BE, word32BE)
+import ByteString.StrictBuilder
 import Control.Arrow (left)
 import Control.Monad
+import Data.Bits
 import Data.Int
 import Data.Kind
 import Data.Profunctor (Profunctor(..))
@@ -254,6 +259,7 @@ import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
 
 import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Expression.Range
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Manipulation (Manipulation, Manipulation_)
 import Squeal.PostgreSQL.PG
@@ -400,6 +406,30 @@ instance
 
       in
         composite . encoders . toRecord . getComposite
+instance ToParam x pg => ToParam (Range x) ('PGrange pg) where
+  toParam rng = K $
+    word8 (setFlags rng 0) <>
+      case rng of
+        Empty -> mempty
+        NonEmpty lower upper -> putBound lower <> putBound upper
+    where
+      putBound = \case
+        Infinite -> mempty
+        Closed value -> putValue (unK (toParam @x @pg value))
+        Open value -> putValue (unK (toParam @x @pg value))
+      putValue value = int32BE (fromIntegral (builderLength value)) <> value
+      setFlags = \case
+        Empty -> (`setBit` 0)
+        NonEmpty lower upper ->
+          setLowerFlags lower . setUpperFlags upper
+      setLowerFlags = \case
+        Infinite -> (`setBit` 3)
+        Closed _ -> (`setBit` 1)
+        Open _ -> id
+      setUpperFlags = \case
+        Infinite -> (`setBit` 4)
+        Closed _ -> (`setBit` 2)
+        Open _ -> id
 
 -- | The object identifier of a `PGType`.
 --
@@ -706,6 +736,26 @@ instance
               else K . Just <$> bytesOfSize len
       in
         fmap Composite (Decoding.fn (fromRow @fields <=< composite))
+
+instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
+  fromValue = do
+    flag <- byte
+    if testBit flag 0 then return Empty else do
+      lower <-
+        if testBit flag 3
+          then return Infinite
+          else do
+            len <- sized 4 Decoding.int
+            l <- sized len (fromValue @pg)
+            return $ if testBit flag 1 then Closed l else Open l
+      upper <-
+        if testBit flag 4
+          then return Infinite
+          else do
+            len <- sized 4 Decoding.int
+            l <- sized len (fromValue @pg)
+            return $ if testBit flag 2 then Closed l else Open l
+      return $ NonEmpty lower upper
 
 -- | A `FromField` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, NullityType)@ to a @(Symbol, Type)@ ,

@@ -359,8 +359,8 @@ class Monad pq => MonadPQ db pq | pq -> db where
     => Manipulation '[] db params ys
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> x -> pq (K LibPQ.Result ys)
-  manipulateParams manipulation params = lift $
-    manipulateParams manipulation params
+  manipulateParams statement params = lift $
+    manipulateParams statement params
 
   manipulateParams_
     :: (ToParams x params, All OidOfParam params)
@@ -397,8 +397,8 @@ class Monad pq => MonadPQ db pq | pq -> db where
     :: (MonadTrans t, MonadPQ db pq1, pq ~ t pq1)
     => (ToParams x params, Traversable list, All OidOfParam params)
     => Manipulation '[] db params ys -> list x -> pq (list (K LibPQ.Result ys))
-  traversePrepared manipulation params = lift $
-    traversePrepared manipulation params
+  traversePrepared statement params = lift $
+    traversePrepared statement params
 
   forPrepared
     :: (ToParams x params, Traversable list, All OidOfParam params)
@@ -419,8 +419,8 @@ class Monad pq => MonadPQ db pq | pq -> db where
     => Manipulation '[] db params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> list x -> pq ()
-  traversePrepared_ manipulation params = lift $
-    traversePrepared_ manipulation params
+  traversePrepared_ statement params = lift $
+    traversePrepared_ statement params
 
   forPrepared_
     :: (ToParams x params, Foldable list, All OidOfParam params)
