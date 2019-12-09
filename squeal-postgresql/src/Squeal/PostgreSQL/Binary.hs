@@ -228,6 +228,7 @@ import Control.Arrow (left)
 import Control.Monad
 import Data.Int
 import Data.Kind
+import Data.Profunctor (Profunctor(..))
 import Data.Scientific
 import Data.Time
 import Data.UUID.Types
@@ -254,7 +255,9 @@ import qualified PostgreSQL.Binary.Encoding as Encoding
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.Manipulation (Manipulation, Manipulation_)
 import Squeal.PostgreSQL.PG
+import Squeal.PostgreSQL.Query (Query, Query_)
 import Squeal.PostgreSQL.Schema
 
 -- | A `ToParam` constraint gives an encoding of a Haskell `Type` into
@@ -850,3 +853,33 @@ replicateMN mx = hsequence' $
 
 getOid :: LibPQ.Oid -> Word32
 getOid (LibPQ.Oid (CUInt oid)) = oid
+
+data Statement db x y where
+  Query
+    :: (x -> NP (K (Maybe Encoding.Encoding)) params)
+    -> (NP (K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
+    -> Query '[] '[] db params row
+    -> Statement db x y
+  Manipulation
+    :: (x -> NP (K (Maybe Encoding.Encoding)) params)
+    -> (NP (K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
+    -> Manipulation '[] db params row
+    -> Statement db x y
+
+instance Profunctor (Statement db) where
+  dimap f g (Query encode decode q) =
+    Query (encode . f) (fmap g . decode) q
+  dimap f g (Manipulation encode decode q) =
+    Manipulation (encode . f) (fmap g . decode) q
+
+query
+  :: (ToParams x (TuplePG x), FromRow (RowPG y) y)
+  => Query_ db x y
+  -> Statement db x y
+query = Query toParams fromRow
+
+manipulation
+  :: (ToParams x (TuplePG x), FromRow (RowPG y) y)
+  => Manipulation_ db x y
+  -> Statement db x y
+manipulation = Manipulation toParams fromRow
