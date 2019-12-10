@@ -85,7 +85,7 @@ Now run the migrations.
 >>> import Control.Monad.IO.Class
 >>> :{
 withConnection "host=localhost port=5432 dbname=exampledb" $
-  manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
+  manipulate_ (UnsafeManipulation "SET client_min_messages TO WARNING;")
     -- suppress notices
   & pqThen (liftIO (putStrLn "Migrate"))
   & pqThen (migrateUp migrations)
@@ -224,7 +224,7 @@ instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
       upMigration step = do
         executed <- do
           result <- runQueryParams selectMigration (Only (name step))
-          ntuples result
+          ntuples (result :: Result (Only UTCTime))
         unless (executed == 1) $ do
           _ <- unsafePQ . runIndexed $ migration step
           manipulateParams_ insertMigration (Only (name step))
@@ -238,7 +238,7 @@ instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
       downMigration (OpQ step) = do
         executed <- do
           result <- runQueryParams selectMigration (Only (name step))
-          ntuples result
+          ntuples (result :: Result (Only UTCTime))
         unless (executed == 0) $ do
           _ <- unsafePQ . runIndexed . getOpQ $ migration step
           manipulateParams_ deleteMigration (Only (name step))

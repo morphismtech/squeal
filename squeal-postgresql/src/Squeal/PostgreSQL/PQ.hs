@@ -52,13 +52,24 @@ module Squeal.PostgreSQL.PQ
   , evalPQ
   , IndexedMonadTransPQ (..)
   , MonadPQ (..)
+  , manipulateParams
+  , manipulateParams_
+  , manipulate
+  , manipulate_
+  , runQueryParams
+  , runQuery
+  , traversePrepared
+  , forPrepared
+  , traversePrepared_
+  , forPrepared_
     -- * Indexed Monad
   , IndexedMonadTrans (..)
   , Indexed (..)
     -- * Result
-  , LibPQ.Result
   , LibPQ.Row
+  , LibPQ.Column
   , ntuples
+  , nfields
   , getRow
   , getRows
   , nextRow
@@ -348,163 +359,194 @@ a default instance.
 
 -}
 class Monad pq => MonadPQ db pq | pq -> db where
-  manipulateParams
-    :: (ToParams x params, All OidOfParam params)
-    => Manipulation '[] db params ys
-    -- ^ `insertInto`, `update` or `deleteFrom`
-    -> x -> pq (K LibPQ.Result ys)
-  default manipulateParams
-    :: (MonadTrans t, MonadPQ db pq1, pq ~ t pq1)
-    => (ToParams x params, All OidOfParam params)
-    => Manipulation '[] db params ys
-    -- ^ `insertInto`, `update` or `deleteFrom`
-    -> x -> pq (K LibPQ.Result ys)
-  manipulateParams statement params = lift $
-    manipulateParams statement params
 
-  manipulateParams_
-    :: (ToParams x params, All OidOfParam params)
-    => Manipulation '[] db params '[]
-    -- ^ `insertInto`, `update` or `deleteFrom`
-    -> x -> pq ()
-  manipulateParams_ q x = void $ manipulateParams q x
+  executeParams :: Statement db x y -> x -> pq (Result y)
+  default executeParams
+    :: (MonadTrans t, MonadPQ db m, pq ~ t m)
+    => Statement db x y -> x -> pq (Result y)
+  executeParams statement params = lift $ executeParams statement params
 
-  manipulate :: Manipulation '[] db '[] ys -> pq (K LibPQ.Result ys)
-  manipulate statement = manipulateParams statement ()
+  executeParams_ :: Statement db x () -> x -> pq ()
+  executeParams_ statement params = void $ executeParams statement params
 
-  manipulate_ :: Manipulation '[] db '[] '[] -> pq ()
-  manipulate_ = void . manipulate
+  execute :: Statement db () y -> pq (Result y)
+  execute statement = executeParams statement ()
 
-  runQueryParams
-    :: (ToParams x params, All OidOfParam params)
-    => Query '[] '[] db params ys
-    -- ^ `select` and friends
-    -> x -> pq (K LibPQ.Result ys)
-  runQueryParams = manipulateParams . queryStatement
+  execute_ :: Statement db () () -> pq ()
+  execute_ = void . execute
 
-  runQuery
-    :: Query '[] '[] db '[] ys
-    -- ^ `select` and friends
-    -> pq (K LibPQ.Result ys)
-  runQuery q = runQueryParams q ()
+  executePrepared
+    :: Traversable list
+    => Statement db x y -> list x -> pq (list (Result y))
+  default executePrepared
+    :: (MonadTrans t, MonadPQ db m, pq ~ t m)
+    => Traversable list
+    => Statement db x y -> list x -> pq (list (Result y))
+  executePrepared statement x = lift $ executePrepared statement x
 
-  traversePrepared
-    :: (ToParams x params, Traversable list, All OidOfParam params)
-    => Manipulation '[] db params ys
-    -- ^ `insertInto`, `update`, or `deleteFrom`, and friends
-    -> list x -> pq (list (K LibPQ.Result ys))
-  default traversePrepared
-    :: (MonadTrans t, MonadPQ db pq1, pq ~ t pq1)
-    => (ToParams x params, Traversable list, All OidOfParam params)
-    => Manipulation '[] db params ys -> list x -> pq (list (K LibPQ.Result ys))
-  traversePrepared statement params = lift $
-    traversePrepared statement params
+  executePrepared_
+    :: Foldable list
+    => Statement db x () -> list x -> pq ()
+  default executePrepared_
+    :: (MonadTrans t, MonadPQ db m, pq ~ t m)
+    => Foldable list
+    => Statement db x () -> list x -> pq ()
+  executePrepared_ statement x = lift $ executePrepared_ statement x
 
-  forPrepared
-    :: (ToParams x params, Traversable list, All OidOfParam params)
-    => list x
-    -> Manipulation '[] db params ys
-    -- ^ `insertInto`, `update` or `deleteFrom`
-    -> pq (list (K LibPQ.Result ys))
-  forPrepared = flip traversePrepared
+manipulateParams
+  :: (MonadPQ db pq, ToParams x params, All OidOfParam params, FromRow row y)
+  => Manipulation '[] db params row
+  -- ^ `insertInto`, `update` or `deleteFrom`
+  -> x -> pq (Result y)
+manipulateParams = executeParams . manipulation
 
-  traversePrepared_
-    :: (ToParams x params, Foldable list, All OidOfParam params)
-    => Manipulation '[] db params '[]
-    -- ^ `insertInto`, `update` or `deleteFrom`
-    -> list x -> pq ()
-  default traversePrepared_
-    :: (MonadTrans t, MonadPQ db pq1, pq ~ t pq1)
-    => (ToParams x params, Foldable list, All OidOfParam params)
-    => Manipulation '[] db params '[]
-    -- ^ `insertInto`, `update` or `deleteFrom`
-    -> list x -> pq ()
-  traversePrepared_ statement params = lift $
-    traversePrepared_ statement params
+manipulateParams_
+  :: (MonadPQ db pq, ToParams x params, All OidOfParam params)
+  => Manipulation '[] db params '[]
+  -- ^ `insertInto`, `update` or `deleteFrom`
+  -> x -> pq ()
+manipulateParams_ = executeParams_ . manipulation
 
-  forPrepared_
-    :: (ToParams x params, Foldable list, All OidOfParam params)
-    => list x
-    -> Manipulation '[] db params '[]
-    -- ^ `insertInto`, `update` or `deleteFrom`
-    -> pq ()
-  forPrepared_ = flip traversePrepared_
+manipulate
+  :: (MonadPQ db pq, FromRow row y)
+  => Manipulation '[] db '[] row
+  -> pq (Result y)
+manipulate = execute . manipulation
 
-  liftPQ :: (LibPQ.Connection -> IO a) -> pq a
-  default liftPQ
-    :: (MonadTrans t, MonadPQ db pq1, pq ~ t pq1)
-    => (LibPQ.Connection -> IO a) -> pq a
-  liftPQ = lift . liftPQ
+manipulate_
+  :: MonadPQ db pq
+  => Manipulation '[] db '[] '[]
+  -> pq ()
+manipulate_ = execute_ . manipulation
 
-instance (MonadIO io, db0 ~ db, db1 ~ db)
-  => MonadPQ db (PQ db0 db1 io) where
+runQueryParams
+  :: (MonadPQ db pq, ToParams x params, All OidOfParam params, FromRow row y)
+  => Query '[] '[] db params row
+  -- ^ `select` and friends
+  -> x -> pq (Result y)
+runQueryParams = executeParams . query
 
-  manipulateParams
-    (UnsafeManipulation q :: Manipulation '[] db ps ys) (params :: x) =
-      PQ $ \ (K conn) -> do
+runQuery
+  :: (MonadPQ db pq, FromRow row y)
+  => Query '[] '[] db '[] row
+  -- ^ `select` and friends
+  -> pq (Result y)
+runQuery = execute . query
+
+traversePrepared
+  :: ( MonadPQ db pq
+     , ToParams x params
+     , Traversable list
+     , All OidOfParam params
+     , FromRow row y )
+  => Manipulation '[] db params row
+  -- ^ `insertInto`, `update`, or `deleteFrom`, and friends
+  -> list x -> pq (list (Result y))
+traversePrepared = executePrepared . manipulation
+
+forPrepared
+  :: ( MonadPQ db pq
+     , ToParams x params
+     , Traversable list
+     , All OidOfParam params
+     , FromRow row y )
+  => list x
+  -> Manipulation '[] db params row
+  -- ^ `insertInto`, `update` or `deleteFrom`
+  -> pq (list (Result y))
+forPrepared = flip traversePrepared
+
+traversePrepared_
+  :: ( MonadPQ db pq
+     , ToParams x params
+     , Foldable list
+     , All OidOfParam params )
+  => Manipulation '[] db params '[]
+  -- ^ `insertInto`, `update` or `deleteFrom`
+  -> list x -> pq ()
+traversePrepared_ = executePrepared_ . manipulation
+
+forPrepared_
+  :: ( MonadPQ db pq
+     , ToParams x params
+     , Foldable list
+     , All OidOfParam params )
+  => list x
+  -> Manipulation '[] db params '[]
+  -- ^ `insertInto`, `update` or `deleteFrom`
+  -> pq ()
+forPrepared_ = flip traversePrepared_
+
+instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
+
+  executeParams (Manipulation encode decode (UnsafeManipulation q)) x =
+    PQ $ \ (K conn) -> do
+      let
+        paramSet
+          :: forall param. OidOfParam param
+          => K (Maybe Encoding.Encoding) param
+          -> K (Maybe (LibPQ.Oid, ByteString, LibPQ.Format)) param
+        paramSet (K maybeEncoding) = K $
+          maybeEncoding <&> \encoding ->
+            (oidOfParam @param, encodingBytes encoding, LibPQ.Binary)
+        params'
+          = hcollapse
+          . hcmap (Proxy @OidOfParam) paramSet
+          $ encode x
+        q' = q <> ";"
+      resultMaybe <- liftIO $ LibPQ.execParams conn q' params' LibPQ.Binary
+      case resultMaybe of
+        Nothing -> throw $ ResultException
+          "executeParams: LibPQ.execParams returned no results"
+        Just result -> do
+          okResult_ result
+          return $ K (Result decode result)
+
+  executeParams (Query encode decode q) params =
+    executeParams (Manipulation encode decode (queryStatement q)) params
+
+  executePrepared (Manipulation encode decode (UnsafeManipulation q :: Manipulation '[] db params row)) list =
+    PQ $ \ (K conn) -> liftIO $ do
+      let
+        temp = "temporary_statement"
+        paramOid :: forall p. OidOfParam p => K LibPQ.Oid p
+        paramOid = K (oidOfParam @p)
+        paramOids :: NP (K LibPQ.Oid) params
+        paramOids = hcpure (Proxy @OidOfParam) paramOid
+        paramOids' :: [LibPQ.Oid]
+        paramOids' = hcollapse paramOids
+      prepResultMaybe <- LibPQ.prepare conn temp q (Just paramOids')
+      case prepResultMaybe of
+        Nothing -> throw $ ResultException
+          "traversePrepared: LibPQ.prepare returned no results"
+        Just prepResult -> okResult_ prepResult
+      results <- for list $ \ params -> do
         let
-          paramSet
-            :: forall param. OidOfParam param
-            => K (Maybe Encoding.Encoding) param
-            -> K (Maybe (LibPQ.Oid, ByteString, LibPQ.Format)) param
-          paramSet (K maybeEncoding) = K $
-            maybeEncoding <&> \encoding ->
-              (oidOfParam @param, encodingBytes encoding, LibPQ.Binary)
-          params'
-            = hcollapse
-            . hcmap (Proxy @OidOfParam) paramSet
-            $ toParams @x @ps params
-          q' = q <> ";"
-        resultMaybe <- liftIO $ LibPQ.execParams conn q' params' LibPQ.Binary
+          toParam' encoding = (encodingBytes encoding, LibPQ.Binary)
+          params' = fmap (fmap toParam') (hcollapse (encode params))
+        resultMaybe <- LibPQ.execPrepared conn temp params' LibPQ.Binary
         case resultMaybe of
           Nothing -> throw $ ResultException
-            "manipulateParams: LibPQ.execParams returned no results"
+            "traversePrepared: LibPQ.execParams returned no results"
           Just result -> do
             okResult_ result
-            return $ K (K result)
+            return $ Result decode result
+      deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
+      case deallocResultMaybe of
+        Nothing -> throw $ ResultException
+          "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
+        Just deallocResult -> okResult_ deallocResult
+      return (K results)
+  executePrepared (Query encode decode q) list =
+    executePrepared (Manipulation encode decode (queryStatement q)) list
 
-  traversePrepared
-    (UnsafeManipulation q :: Manipulation '[] db xs ys) (list :: list x) =
+  executePrepared_ (Manipulation encode _ (UnsafeManipulation q :: Manipulation '[] db params row)) list =
       PQ $ \ (K conn) -> liftIO $ do
         let
           temp = "temporary_statement"
           paramOid :: forall p. OidOfParam p => K LibPQ.Oid p
           paramOid = K (oidOfParam @p)
-          paramOids :: NP (K LibPQ.Oid) xs
-          paramOids = hcpure (Proxy @OidOfParam) paramOid
-          paramOids' :: [LibPQ.Oid]
-          paramOids' = hcollapse paramOids
-        prepResultMaybe <- LibPQ.prepare conn temp q (Just paramOids')
-        case prepResultMaybe of
-          Nothing -> throw $ ResultException
-            "traversePrepared: LibPQ.prepare returned no results"
-          Just prepResult -> okResult_ prepResult
-        results <- for list $ \ params -> do
-          let
-            toParam' encoding = (encodingBytes encoding, LibPQ.Binary)
-            params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
-          resultMaybe <- LibPQ.execPrepared conn temp params' LibPQ.Binary
-          case resultMaybe of
-            Nothing -> throw $ ResultException
-              "traversePrepared: LibPQ.execParams returned no results"
-            Just result -> do
-              okResult_ result
-              return $ K result
-        deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
-        case deallocResultMaybe of
-          Nothing -> throw $ ResultException
-            "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
-          Just deallocResult -> okResult_ deallocResult
-        return (K results)
-
-  traversePrepared_
-    (UnsafeManipulation q :: Manipulation '[] db xs '[]) (list :: list x) =
-      PQ $ \ (K conn) -> liftIO $ do
-        let
-          temp = "temporary_statement"
-          paramOid :: forall p. OidOfParam p => K LibPQ.Oid p
-          paramOid = K (oidOfParam @p)
-          paramOids :: NP (K LibPQ.Oid) xs
+          paramOids :: NP (K LibPQ.Oid) params
           paramOids = hcpure (Proxy @OidOfParam) paramOid
           paramOids' :: [LibPQ.Oid]
           paramOids' = hcollapse paramOids
@@ -516,7 +558,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db)
         for_ list $ \ params -> do
           let
             toParam' encoding = (encodingBytes encoding, LibPQ.Binary)
-            params' = fmap (fmap toParam') (hcollapse (toParams @x @xs params))
+            params' = fmap (fmap toParam') (hcollapse (encode params))
           resultMaybe <- LibPQ.execPrepared conn temp params' LibPQ.Binary
           case resultMaybe of
             Nothing -> throw $ ResultException
@@ -528,10 +570,8 @@ instance (MonadIO io, db0 ~ db, db1 ~ db)
             "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
           Just deallocResult -> okResult_ deallocResult
         return (K ())
-
-  liftPQ pq = PQ $ \ (K conn) -> do
-    y <- liftIO $ pq conn
-    return (K y)
+  executePrepared_ (Query encode decode q) list =
+    executePrepared_ (Manipulation encode decode (queryStatement q)) list
 
 instance MonadPQ db m => MonadPQ db (IdentityT m)
 instance MonadPQ db m => MonadPQ db (ReaderT r m)
@@ -592,23 +632,17 @@ instance (Monad m, Monoid r, db0 ~ db1) => Monoid (PQ db0 db1 m r) where
 
 -- | Get a row corresponding to a given row number from a `LibPQ.Result`,
 -- throwing an exception if the row number is out of bounds.
-getRow
-  :: (FromRow columns y, MonadIO io)
-  => LibPQ.Row
-  -- ^ row number
-  -> K LibPQ.Result columns
-  -- ^ result
-  -> io y
-getRow r (K result :: K LibPQ.Result columns) = liftIO $ do
+getRow :: MonadIO io => LibPQ.Row -> Result y -> io y
+getRow r (Result decode result) = liftIO $ do
   numRows <- LibPQ.ntuples result
+  numCols <- LibPQ.nfields result
   when (numRows < r) $ throw $ ResultException $
     "getRow: expected at least " <> pack (show r) <> "rows but only saw "
     <> pack (show numRows)
-  let len = fromIntegral (lengthSList (Proxy @columns))
-  row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
+  row' <- traverse (LibPQ.getvalue result r) [0 .. numCols - 1]
   case fromList row' of
     Nothing -> throw $ ResultException "getRow: found unexpected length"
-    Just row -> case fromRow @columns row of
+    Just row -> case decode row of
       Left parseError -> throw $ ParseException $ "getRow: " <> parseError
       Right y -> return y
 
@@ -633,34 +667,28 @@ nextRow total (K result :: K LibPQ.Result columns) r
         Right y -> return $ Just (r+1, y)
 
 -- | Get all rows from a `LibPQ.Result`.
-getRows
-  :: (FromRow columns y, MonadIO io)
-  => K LibPQ.Result columns -- ^ result
-  -> io [y]
-getRows (K result :: K LibPQ.Result columns) = liftIO $ do
-  let len = fromIntegral (lengthSList (Proxy @columns))
+getRows :: MonadIO io => Result y -> io [y]
+getRows (Result decode result) = liftIO $ do
+  numCols <- LibPQ.nfields result
   numRows <- LibPQ.ntuples result
   for [0 .. numRows - 1] $ \ r -> do
-    row' <- traverse (LibPQ.getvalue result r) [0 .. len - 1]
+    row' <- traverse (LibPQ.getvalue result r) [0 .. numCols - 1]
     case fromList row' of
       Nothing -> throw $ ResultException "getRows: found unexpected length"
-      Just row -> case fromRow @columns row of
+      Just row -> case decode row of
         Left parseError -> throw $ ParseException $ "getRows: " <> parseError
         Right y -> return y
 
 -- | Get the first row if possible from a `LibPQ.Result`.
-firstRow
-  :: (FromRow columns y, MonadIO io)
-  => K LibPQ.Result columns -- ^ result
-  -> io (Maybe y)
-firstRow (K result :: K LibPQ.Result columns) = liftIO $ do
+firstRow :: MonadIO io => Result y -> io (Maybe y)
+firstRow (Result decode result) = liftIO $ do
   numRows <- LibPQ.ntuples result
+  numCols <- LibPQ.nfields result
   if numRows <= 0 then return Nothing else do
-    let len = fromIntegral (lengthSList (Proxy @columns))
-    row' <- traverse (LibPQ.getvalue result 0) [0 .. len - 1]
+    row' <- traverse (LibPQ.getvalue result 0) [0 .. numCols - 1]
     case fromList row' of
       Nothing -> throw $ ResultException "firstRow: found unexpected length"
-      Just row -> case fromRow @columns row of
+      Just row -> case decode row of
         Left parseError -> throw $ ParseException $ "firstRow: " <> parseError
         Right y -> return $ Just y
 
@@ -668,21 +696,25 @@ firstRow (K result :: K LibPQ.Result columns) = liftIO $ do
 liftResult
   :: MonadIO io
   => (LibPQ.Result -> IO x)
-  -> K LibPQ.Result results -> io x
-liftResult f (K result) = liftIO $ f result
+  -> Result y -> io x
+liftResult f (Result _ result) = liftIO $ f result
 
 -- | Returns the number of rows (tuples) in the query result.
-ntuples :: MonadIO io => K LibPQ.Result columns -> io LibPQ.Row
+ntuples :: MonadIO io => Result y -> io LibPQ.Row
 ntuples = liftResult LibPQ.ntuples
 
+-- | Returns the number of columns (fields) in the query result.
+nfields :: MonadIO io => Result y -> io LibPQ.Column
+nfields = liftResult LibPQ.nfields
+
 -- | Returns the result status of the command.
-resultStatus :: MonadIO io => K LibPQ.Result results -> io LibPQ.ExecStatus
+resultStatus :: MonadIO io => Result y -> io LibPQ.ExecStatus
 resultStatus = liftResult LibPQ.resultStatus
 
 -- | Returns the error message most recently generated by an operation
 -- on the connection.
 resultErrorMessage
-  :: MonadIO io => K LibPQ.Result results -> io (Maybe ByteString)
+  :: MonadIO io => Result y -> io (Maybe ByteString)
 resultErrorMessage = liftResult LibPQ.resultErrorMessage
 
 -- | Returns the error code most recently generated by an operation
@@ -691,7 +723,7 @@ resultErrorMessage = liftResult LibPQ.resultErrorMessage
 -- https://www.postgresql.org/docs/current/static/errcodes-appendix.html
 resultErrorCode
   :: MonadIO io
-  => K LibPQ.Result results
+  => Result y
   -> io (Maybe ByteString)
 resultErrorCode = liftResult (flip LibPQ.resultErrorField LibPQ.DiagSqlstate)
 

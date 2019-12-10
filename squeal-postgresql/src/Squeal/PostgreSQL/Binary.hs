@@ -224,6 +224,7 @@ module Squeal.PostgreSQL.Binary
   , Statement (..)
   , query
   , manipulation
+  , Result (..)
   ) where
 
 import BinaryParser
@@ -261,9 +262,9 @@ import qualified PostgreSQL.Binary.Encoding as Encoding
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression.Range
 import Squeal.PostgreSQL.List
-import Squeal.PostgreSQL.Manipulation (Manipulation, Manipulation_)
+import Squeal.PostgreSQL.Manipulation (Manipulation)
 import Squeal.PostgreSQL.PG
-import Squeal.PostgreSQL.Query (Query, Query_)
+import Squeal.PostgreSQL.Query (Query)
 import Squeal.PostgreSQL.Schema
 
 -- | A `ToParam` constraint gives an encoding of a Haskell `Type` into
@@ -906,12 +907,14 @@ getOid (LibPQ.Oid (CUInt oid)) = oid
 
 data Statement db x y where
   Query
-    :: (x -> NP (K (Maybe Encoding.Encoding)) params)
+    :: (All OidOfParam params, SListI row)
+    => (x -> NP (K (Maybe Encoding.Encoding)) params)
     -> (NP (K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
     -> Query '[] '[] db params row
     -> Statement db x y
   Manipulation
-    :: (x -> NP (K (Maybe Encoding.Encoding)) params)
+    :: (All OidOfParam params, SListI row)
+    => (x -> NP (K (Maybe Encoding.Encoding)) params)
     -> (NP (K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
     -> Manipulation '[] db params row
     -> Statement db x y
@@ -923,13 +926,20 @@ instance Profunctor (Statement db) where
     Manipulation (encode . f) (fmap g . decode) q
 
 query
-  :: (ToParams x (TuplePG x), FromRow (RowPG y) y)
-  => Query_ db x y
+  :: (All OidOfParam params, ToParams x params, FromRow row y)
+  => Query '[] '[] db params row
   -> Statement db x y
 query = Query toParams fromRow
 
 manipulation
-  :: (ToParams x (TuplePG x), FromRow (RowPG y) y)
-  => Manipulation_ db x y
+  :: (All OidOfParam params, ToParams x params, FromRow row y)
+  => Manipulation '[] db params row
   -> Statement db x y
 manipulation = Manipulation toParams fromRow
+
+data Result y where
+  Result
+    :: SListI row
+    => (NP (K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
+    -> LibPQ.Result
+    -> Result y

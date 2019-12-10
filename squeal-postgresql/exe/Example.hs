@@ -96,7 +96,7 @@ session :: (MonadIO pq, MonadPQ Schemas pq) => pq ()
 session = do
   liftIO $ Char8.putStrLn "manipulating"
   idResults <- traversePrepared insertUser ([(userName user, userVec user) | user <- users])
-  ids <- traverse (fmap fromOnly . getRow 0) idResults
+  ids <- traverse (fmap fromOnly . getRow 0) (idResults :: [Result (Only Int32)])
   traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
   liftIO $ Char8.putStrLn "querying"
   usersResult <- runQuery getUsers

@@ -67,7 +67,7 @@ E'a'
 >>> printSQL (literal (1 :: Double))
 1.0
 
->>> printSQL (literal (Json [1 :: Double, 2]))
+>>> printSQL (literal (Json ([1, 2] :: [Double])))
 ('[1.0,2.0]' :: json)
 
 >>> printSQL (literal (Enumerated GT))
