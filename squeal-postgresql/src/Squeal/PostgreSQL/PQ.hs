@@ -479,7 +479,7 @@ forPrepared_ = flip traversePrepared_
 
 instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
 
-  executeParams (Manipulation encode decode (UnsafeManipulation q)) x =
+  executeParams (Statement encode decode (UnsafeManipulation q)) x =
     PQ $ \ (K conn) -> do
       let
         paramSet
@@ -502,10 +502,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
           okResult_ result
           return $ K (Result decode result)
 
-  executeParams (Query encode decode q) params =
-    executeParams (Manipulation encode decode (queryStatement q)) params
-
-  executePrepared (Manipulation encode decode (UnsafeManipulation q :: Manipulation '[] db params row)) list =
+  executePrepared (Statement encode decode (UnsafeManipulation q :: Manipulation '[] db params row)) list =
     PQ $ \ (K conn) -> liftIO $ do
       let
         temp = "temporary_statement"
@@ -537,10 +534,8 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
           "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
         Just deallocResult -> okResult_ deallocResult
       return (K results)
-  executePrepared (Query encode decode q) list =
-    executePrepared (Manipulation encode decode (queryStatement q)) list
 
-  executePrepared_ (Manipulation encode _ (UnsafeManipulation q :: Manipulation '[] db params row)) list =
+  executePrepared_ (Statement encode _ (UnsafeManipulation q :: Manipulation '[] db params row)) list =
       PQ $ \ (K conn) -> liftIO $ do
         let
           temp = "temporary_statement"
@@ -570,8 +565,6 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
             "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
           Just deallocResult -> okResult_ deallocResult
         return (K ())
-  executePrepared_ (Query encode decode q) list =
-    executePrepared_ (Manipulation encode decode (queryStatement q)) list
 
 instance MonadPQ db m => MonadPQ db (IdentityT m)
 instance MonadPQ db m => MonadPQ db (ReaderT r m)

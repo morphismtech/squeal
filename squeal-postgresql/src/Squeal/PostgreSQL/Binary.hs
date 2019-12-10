@@ -262,7 +262,7 @@ import qualified PostgreSQL.Binary.Encoding as Encoding
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression.Range
 import Squeal.PostgreSQL.List
-import Squeal.PostgreSQL.Manipulation (Manipulation)
+import Squeal.PostgreSQL.Manipulation (Manipulation, queryStatement)
 import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Query (Query)
 import Squeal.PostgreSQL.Schema
@@ -906,13 +906,7 @@ getOid :: LibPQ.Oid -> Word32
 getOid (LibPQ.Oid (CUInt oid)) = oid
 
 data Statement db x y where
-  Query
-    :: (All OidOfParam params, SListI row)
-    => (x -> NP (K (Maybe Encoding.Encoding)) params)
-    -> (NP (K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
-    -> Query '[] '[] db params row
-    -> Statement db x y
-  Manipulation
+  Statement
     :: (All OidOfParam params, SListI row)
     => (x -> NP (K (Maybe Encoding.Encoding)) params)
     -> (NP (K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
@@ -920,22 +914,20 @@ data Statement db x y where
     -> Statement db x y
 
 instance Profunctor (Statement db) where
-  dimap f g (Query encode decode q) =
-    Query (encode . f) (fmap g . decode) q
-  dimap f g (Manipulation encode decode q) =
-    Manipulation (encode . f) (fmap g . decode) q
+  dimap f g (Statement encode decode q) =
+    Statement (encode . f) (fmap g . decode) q
 
 query
   :: (All OidOfParam params, ToParams x params, FromRow row y)
   => Query '[] '[] db params row
   -> Statement db x y
-query = Query toParams fromRow
+query = manipulation . queryStatement
 
 manipulation
   :: (All OidOfParam params, ToParams x params, FromRow row y)
   => Manipulation '[] db params row
   -> Statement db x y
-manipulation = Manipulation toParams fromRow
+manipulation = Statement toParams fromRow
 
 data Result y where
   Result
@@ -943,3 +935,5 @@ data Result y where
     => (NP (K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
     -> LibPQ.Result
     -> Result y
+instance Functor Result where
+  fmap f (Result decode result) = Result (fmap f . decode) result
