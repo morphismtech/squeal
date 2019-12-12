@@ -48,7 +48,13 @@ module Squeal.PostgreSQL.PG
   , VarArray (..)
   , FixArray (..)
   , LibPQ.Oid (..)
-    -- * Type Families
+  , VarChar
+  , varChar
+  , getVarChar
+  , ConstChar
+  , constChar
+  , getConstChar
+    -- * Type families
   , LabelsPG
   , DimPG
   , FixPG
@@ -62,6 +68,7 @@ module Squeal.PostgreSQL.PG
 
 import Data.Aeson (Value)
 import Data.Kind (Type)
+import Data.Proxy
 import Data.Int (Int16, Int32, Int64)
 import Data.Scientific (Scientific)
 import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime)
@@ -74,6 +81,7 @@ import qualified Data.ByteString.Lazy as Lazy (ByteString)
 import qualified Data.ByteString as Strict (ByteString)
 import qualified Data.Text.Lazy as Lazy (Text)
 import qualified Data.Text as Strict (Text)
+import qualified Data.Text as Strict.Text
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
@@ -145,6 +153,10 @@ type instance PG UUID = 'PGuuid
 type instance PG (NetAddr IP) = 'PGinet
 -- | `PGjson`
 type instance PG Value = 'PGjson
+-- | `PGvarchar`
+type instance PG (VarChar n) = 'PGvarchar n
+-- | `PGvarchar`
+type instance PG (ConstChar n) = 'PGchar n
 
 {-| The `LabelsPG` type family calculates the constructors of a
 Haskell enum type.
@@ -387,3 +399,29 @@ newtype FixArray arr = FixArray {getFixArray :: arr}
   deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 -- | `PGfixarray` @(@`DimPG` @hask) (@`FixPG` @hask)@
 type instance PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
+
+-- | A refined text type for use with 'varchar'.
+-- The constructor is not exposed. You have to use @varChar@ and @getVarChar@.
+newtype VarChar (n :: Nat) = VarChar Strict.Text
+  deriving (Eq,Ord,Read,Show)
+
+varChar :: forall  n . KnownNat n => Strict.Text -> Maybe (VarChar n)
+varChar t = if Strict.Text.length t <= (fromIntegral $ natVal @n Proxy)
+  then Just . VarChar $ t
+  else Nothing
+
+getVarChar :: VarChar n -> Strict.Text
+getVarChar (VarChar t) = t
+
+-- | A refined text type for use with 'varchar'.
+-- The constructor is not exposed. You have to use @constChar@ and @getVarChar@.
+newtype ConstChar (n :: Nat) = ConstChar Strict.Text
+  deriving (Eq,Ord,Read,Show)
+
+constChar :: forall  n . KnownNat n => Strict.Text -> Maybe (ConstChar n)
+constChar t = if Strict.Text.length t == (fromIntegral $ natVal @n Proxy)
+  then Just . ConstChar $ t
+  else Nothing
+
+getConstChar :: ConstChar n -> Strict.Text
+getConstChar (ConstChar t) = t

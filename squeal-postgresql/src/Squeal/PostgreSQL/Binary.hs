@@ -216,10 +216,6 @@ module Squeal.PostgreSQL.Binary
   , FromFixArray (..)
     -- * Only
   , Only (..)
-    -- * VarChar
-  , VarChar
-  , constructVarChar
-  , unVarChar
     -- * Oid
   , OidOf (..)
   , OidOfParam (..)
@@ -294,8 +290,8 @@ instance ToParam (NetAddr IP) 'PGinet where toParam = K . Encoding.inet
 instance ToParam Char ('PGchar 1) where toParam = K . Encoding.char_utf8
 instance ToParam Strict.Text 'PGtext where toParam = K . Encoding.text_strict
 instance ToParam Lazy.Text 'PGtext where toParam = K . Encoding.text_lazy
-instance ToParam (VarChar n) ('PGvarchar n) where toParam = K . Encoding.text_strict . unVarChar
-instance ToParam (VarChar n) ('PGchar n) where toParam = K . Encoding.text_strict . unVarChar
+instance ToParam (VarChar n) ('PGvarchar n) where toParam = K . Encoding.text_strict . getVarChar
+instance ToParam (ConstChar n) ('PGchar n) where toParam = K . Encoding.text_strict . getConstChar
 instance ToParam String 'PGtext where
   toParam = K . Encoding.text_strict . Strict.Text.pack
 instance ToParam Strict.ByteString 'PGbytea where
@@ -605,11 +601,11 @@ instance FromValue 'PGtext Lazy.Text where fromValue = Decoding.text_lazy
 instance FromValue 'PGtext String where
   fromValue = Strict.Text.unpack <$> Decoding.text_strict
 instance KnownNat n => FromValue ('PGvarchar n) (VarChar n) where
-  fromValue = (constructVarChar <$> Decoding.text_strict) >>= \case
+  fromValue = (varChar <$> Decoding.text_strict) >>= \case
       Just t -> return t
       Nothing -> failure "Could not construct VarChar."
-instance KnownNat n => FromValue ('PGchar n) (VarChar n) where
-  fromValue = (constructVarChar <$> Decoding.text_strict) >>= \case
+instance KnownNat n => FromValue ('PGchar n) (ConstChar n) where
+  fromValue = (constChar <$> Decoding.text_strict) >>= \case
       Just t -> return t
       Nothing -> failure "Could not construct VarChar."
 instance FromValue 'PGbytea Strict.ByteString where
@@ -848,20 +844,6 @@ newtype Only x = Only { fromOnly :: x }
   deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
 instance Generic (Only x)
 instance HasDatatypeInfo (Only x)
-
--- | A refined text type for use with 'varchar' and 'char'.
--- The constructor is not exposed. You have to use @constructVarChar@ and @unVarChar@.
-newtype VarChar (n :: Nat) = VarChar Strict.Text
-  deriving (Eq,Ord,Read,Show)
-
-constructVarChar :: forall n. KnownNat n => Strict.Text -> Maybe (VarChar n)
-constructVarChar t =
-  if Strict.Text.length t <= (fromIntegral $ natVal @n Proxy)
-    then Just . VarChar $ t
-    else Nothing
-
-unVarChar :: VarChar n -> Strict.Text
-unVarChar (VarChar t) = t
 
 foldlN
   :: All ((~) x) xs
