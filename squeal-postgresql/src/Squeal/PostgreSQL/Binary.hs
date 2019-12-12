@@ -291,7 +291,7 @@ instance ToParam Char ('PGchar 1) where toParam = K . Encoding.char_utf8
 instance ToParam Strict.Text 'PGtext where toParam = K . Encoding.text_strict
 instance ToParam Lazy.Text 'PGtext where toParam = K . Encoding.text_lazy
 instance ToParam (VarChar n) ('PGvarchar n) where toParam = K . Encoding.text_strict . getVarChar
-instance ToParam (ConstChar n) ('PGchar n) where toParam = K . Encoding.text_strict . getConstChar
+instance ToParam (FixChar n) ('PGchar n) where toParam = K . Encoding.text_strict . getFixChar
 instance ToParam String 'PGtext where
   toParam = K . Encoding.text_strict . Strict.Text.pack
 instance ToParam Strict.ByteString 'PGbytea where
@@ -604,8 +604,8 @@ instance KnownNat n => FromValue ('PGvarchar n) (VarChar n) where
   fromValue = (varChar <$> Decoding.text_strict) >>= \case
       Just t -> return t
       Nothing -> failure "Could not construct VarChar."
-instance KnownNat n => FromValue ('PGchar n) (ConstChar n) where
-  fromValue = (constChar <$> Decoding.text_strict) >>= \case
+instance KnownNat n => FromValue ('PGchar n) (FixChar n) where
+  fromValue = (fixChar <$> Decoding.text_strict) >>= \case
       Just t -> return t
       Nothing -> failure "Could not construct VarChar."
 instance FromValue 'PGbytea Strict.ByteString where

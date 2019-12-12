@@ -51,9 +51,9 @@ module Squeal.PostgreSQL.PG
   , VarChar
   , varChar
   , getVarChar
-  , ConstChar
-  , constChar
-  , getConstChar
+  , FixChar
+  , fixChar
+  , getFixChar
     -- * Type families
   , LabelsPG
   , DimPG
@@ -156,7 +156,7 @@ type instance PG Value = 'PGjson
 -- | `PGvarchar`
 type instance PG (VarChar n) = 'PGvarchar n
 -- | `PGvarchar`
-type instance PG (ConstChar n) = 'PGchar n
+type instance PG (FixChar n) = 'PGchar n
 
 {-| The `LabelsPG` type family calculates the constructors of a
 Haskell enum type.
@@ -414,14 +414,14 @@ getVarChar :: VarChar n -> Strict.Text
 getVarChar (VarChar t) = t
 
 -- | A refined text type for use with 'varchar'.
--- The constructor is not exposed. You have to use @constChar@ and @getVarChar@.
-newtype ConstChar (n :: Nat) = ConstChar Strict.Text
+-- The constructor is not exposed. You have to use @fixChar@ and @getVarChar@.
+newtype FixChar (n :: Nat) = FixChar Strict.Text
   deriving (Eq,Ord,Read,Show)
 
-constChar :: forall  n . KnownNat n => Strict.Text -> Maybe (ConstChar n)
-constChar t = if Strict.Text.length t == (fromIntegral $ natVal @n Proxy)
-  then Just . ConstChar $ t
+fixChar :: forall  n . KnownNat n => Strict.Text -> Maybe (FixChar n)
+fixChar t = if Strict.Text.length t == (fromIntegral $ natVal @n Proxy)
+  then Just . FixChar $ t
   else Nothing
 
-getConstChar :: ConstChar n -> Strict.Text
-getConstChar (ConstChar t) = t
+getFixChar :: FixChar n -> Strict.Text
+getFixChar (FixChar t) = t
