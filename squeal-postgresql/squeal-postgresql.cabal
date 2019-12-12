@@ -32,6 +32,7 @@ library
     Squeal.PostgreSQL.Definition.Type
     Squeal.PostgreSQL.Definition.Schema
     Squeal.PostgreSQL.Definition.View
+    Squeal.PostgreSQL.Encode
     Squeal.PostgreSQL.Expression
     Squeal.PostgreSQL.Expression.Aggregate
     Squeal.PostgreSQL.Expression.Array
