@@ -90,10 +90,13 @@ module Squeal.PostgreSQL.Expression.Type
   , serial
   , serial8
   , bigserial
-  , hask
     -- * Type Inference
   , PGTyped (..)
-  , PGNullityTyped (..)
+  , pgtypeFrom
+  , NullityTyped (..)
+  , nullitytypeFrom
+  , ColumnTyped
+  , columntypeFrom
   , FieldTyped (..)
   ) where
 
@@ -148,11 +151,11 @@ astype = cast
 -- >>> printSQL (inferredtype true)
 -- (TRUE :: bool)
 inferredtype
-  :: PGTyped db ty
+  :: NullityTyped db ty
   => Expression outer common grp db params from ty
   -- ^ value
   -> Expression outer common grp db params from ty
-inferredtype = astype pgtype
+inferredtype = astype nullitytype
 
 {-----------------------------------------
 type expressions
@@ -328,53 +331,62 @@ daterange :: TypeExpression db (null ('PGrange 'PGdate))
 daterange = UnsafeTypeExpression "daterange"
 
 -- | `pgtype` is a demoted version of a `PGType`
-class PGTyped db (ty :: NullityType) where
-  pgtype :: TypeExpression db ty
-instance PGTyped db (null 'PGbool) where pgtype = bool
-instance PGTyped db (null 'PGint2) where pgtype = int2
-instance PGTyped db (null 'PGint4) where pgtype = int4
-instance PGTyped db (null 'PGint8) where pgtype = int8
-instance PGTyped db (null 'PGnumeric) where pgtype = numeric
-instance PGTyped db (null 'PGfloat4) where pgtype = float4
-instance PGTyped db (null 'PGfloat8) where pgtype = float8
-instance PGTyped db (null 'PGmoney) where pgtype = money
-instance PGTyped db (null 'PGtext) where pgtype = text
+class PGTyped db (ty :: PGType) where pgtype :: TypeExpression db (null ty)
+instance PGTyped db 'PGbool where pgtype = bool
+instance PGTyped db 'PGint2 where pgtype = int2
+instance PGTyped db 'PGint4 where pgtype = int4
+instance PGTyped db 'PGint8 where pgtype = int8
+instance PGTyped db 'PGnumeric where pgtype = numeric
+instance PGTyped db 'PGfloat4 where pgtype = float4
+instance PGTyped db 'PGfloat8 where pgtype = float8
+instance PGTyped db 'PGmoney where pgtype = money
+instance PGTyped db 'PGtext where pgtype = text
 instance (KnownNat n, 1 <= n)
-  => PGTyped db (null ('PGchar n)) where pgtype = char @n
+  => PGTyped db ('PGchar n) where pgtype = char @n
 instance (KnownNat n, 1 <= n)
-  => PGTyped db (null ('PGvarchar n)) where pgtype = varchar @n
-instance PGTyped db (null 'PGbytea) where pgtype = bytea
-instance PGTyped db (null 'PGtimestamp) where pgtype = timestamp
-instance PGTyped db (null 'PGtimestamptz) where pgtype = timestampWithTimeZone
-instance PGTyped db (null 'PGdate) where pgtype = date
-instance PGTyped db (null 'PGtime) where pgtype = time
-instance PGTyped db (null 'PGtimetz) where pgtype = timeWithTimeZone
-instance PGTyped db (null 'PGinterval) where pgtype = interval
-instance PGTyped db (null 'PGuuid) where pgtype = uuid
-instance PGTyped db (null 'PGjson) where pgtype = json
-instance PGTyped db (null 'PGjsonb) where pgtype = jsonb
-instance PGTyped db ty
-  => PGTyped db (null ('PGvararray ty)) where
-    pgtype = vararray (pgtype @db @ty)
-instance (SOP.All KnownNat dims, PGTyped db ty)
-  => PGTyped db (null ('PGfixarray dims ty)) where
-    pgtype = fixarray @dims (pgtype @db @ty)
-instance PGTyped db (null 'PGtsvector) where pgtype = tsvector
-instance PGTyped db (null 'PGtsquery) where pgtype = tsquery
-instance PGTyped db (null 'PGoid) where pgtype = oid
-instance PGTyped db (null ('PGrange 'PGint4)) where pgtype = int4range
-instance PGTyped db (null ('PGrange 'PGint8)) where pgtype = int8range
-instance PGTyped db (null ('PGrange 'PGnumeric)) where pgtype = numrange
-instance PGTyped db (null ('PGrange 'PGtimestamp)) where pgtype = tsrange
-instance PGTyped db (null ('PGrange 'PGtimestamptz)) where pgtype = tstzrange
-instance PGTyped db (null ('PGrange 'PGdate)) where pgtype = daterange
+  => PGTyped db ('PGvarchar n) where pgtype = varchar @n
+instance PGTyped db 'PGbytea where pgtype = bytea
+instance PGTyped db 'PGtimestamp where pgtype = timestamp
+instance PGTyped db 'PGtimestamptz where pgtype = timestampWithTimeZone
+instance PGTyped db 'PGdate where pgtype = date
+instance PGTyped db 'PGtime where pgtype = time
+instance PGTyped db 'PGtimetz where pgtype = timeWithTimeZone
+instance PGTyped db 'PGinterval where pgtype = interval
+instance PGTyped db 'PGuuid where pgtype = uuid
+instance PGTyped db 'PGjson where pgtype = json
+instance PGTyped db 'PGjsonb where pgtype = jsonb
+instance PGTyped db pg => PGTyped db ('PGvararray (null pg)) where
+  pgtype = vararray (pgtype @db @pg)
+instance (SOP.All KnownNat dims, PGTyped db pg)
+  => PGTyped db ('PGfixarray dims (null pg)) where
+    pgtype = fixarray @dims (pgtype @db @pg)
+instance PGTyped db 'PGtsvector where pgtype = tsvector
+instance PGTyped db 'PGtsquery where pgtype = tsquery
+instance PGTyped db 'PGoid where pgtype = oid
+instance PGTyped db ('PGrange 'PGint4) where pgtype = int4range
+instance PGTyped db ('PGrange 'PGint8) where pgtype = int8range
+instance PGTyped db ('PGrange 'PGnumeric) where pgtype = numrange
+instance PGTyped db ('PGrange 'PGtimestamp) where pgtype = tsrange
+instance PGTyped db ('PGrange 'PGtimestamptz) where pgtype = tstzrange
+instance PGTyped db ('PGrange 'PGdate) where pgtype = daterange
+
+-- | Specify `TypeExpression` from a Haskell type.
+--
+-- >>> printSQL $ pgtypeFrom @String
+-- text
+--
+-- >>> printSQL $ pgtypeFrom @Double
+-- float8
+pgtypeFrom
+  :: forall hask db null. PGTyped db (PG hask)
+  => TypeExpression db (null (PG hask))
+pgtypeFrom = pgtype @db @(PG hask)
 
 -- | Lift `PGTyped` to a field
-class FieldTyped db ty where
-  fieldtype :: Aliased (TypeExpression db) ty
-instance (KnownSymbol alias, PGTyped db ty)
+class FieldTyped db ty where fieldtype :: Aliased (TypeExpression db) ty
+instance (KnownSymbol alias, NullityTyped db ty)
   => FieldTyped db (alias ::: ty) where
-    fieldtype = pgtype `As` Alias
+    fieldtype = nullitytype `As` Alias
 
 -- | `ColumnTypeExpression`s are used in
 -- `Squeal.PostgreSQL.Definition.createTable` commands.
@@ -429,23 +441,41 @@ serial8 = UnsafeColumnTypeExpression "serial8"
 bigserial = UnsafeColumnTypeExpression "bigserial"
 
 -- | Like @PGTyped@ but also accounts for nullity.
-class PGNullityTyped db (nullty :: NullityType) where
-  pgNullityType :: ColumnTypeExpression db ('NoDef :=> nullty)
+class NullityTyped db (ty :: NullityType) where
+  nullitytype :: TypeExpression db ty
+instance PGTyped db pg => NullityTyped db (null pg) where
+  nullitytype = pgtype @db @pg
 
-instance PGTyped db ('Null ty) => PGNullityTyped db ('Null ty) where
-  pgNullityType = nullable (pgtype @_ @('Null ty))
-
-instance PGTyped db ('NotNull ty) => PGNullityTyped db ('NotNull ty) where
-  pgNullityType = notNullable (pgtype @_ @('NotNull ty))
-
--- | Allow you to specify pg column types in relation to haskell types.
+-- | Specify null `TypeExpression` from a Haskell type.
 --
--- >>> printSQL $ hask @(Maybe String)
+-- >>> printSQL $ nullitytypeFrom @(Maybe String)
+-- text
+--
+-- >>> printSQL $ nullitytypeFrom @Double
+-- float8
+nullitytypeFrom
+  :: forall hask db. NullityTyped db (NullPG hask)
+  => TypeExpression db (NullPG hask)
+nullitytypeFrom = nullitytype @db @(NullPG hask)
+
+-- | Like @PGTyped@ but also accounts for nullity.
+class ColumnTyped db (column :: ColumnType) where
+  columntype :: ColumnTypeExpression db column
+instance NullityTyped db ('Null ty)
+  => ColumnTyped db ('NoDef :=> 'Null ty) where
+    columntype = nullable (nullitytype @db @('Null ty))
+instance NullityTyped db ('NotNull ty)
+  => ColumnTyped db ('NoDef :=> 'NotNull ty) where
+    columntype = notNullable (nullitytype @db @('NotNull ty))
+
+-- | Specify `ColumnTypeExpression` from a Haskell type.
+--
+-- >>> printSQL $ columntypeFrom @(Maybe String)
 -- text NULL
 --
--- >>> printSQL $ hask @Double
+-- >>> printSQL $ columntypeFrom @Double
 -- float8 NOT NULL
-hask
-  :: forall hask db. PGNullityTyped db (NullPG hask)
+columntypeFrom
+  :: forall hask db. (ColumnTyped db ('NoDef :=> NullPG hask))
   => ColumnTypeExpression db ('NoDef :=> NullPG hask)
-hask = pgNullityType
+columntypeFrom = columntype @db @('NoDef :=> NullPG hask)
