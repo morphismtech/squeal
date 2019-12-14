@@ -106,6 +106,12 @@ instance Literal Scientific where
     . scientificBuilder
 instance Literal Text where literal = fromString . Text.unpack
 instance Literal Lazy.Text where literal = fromString . Lazy.Text.unpack
+instance Literal (VarChar n) where
+  literal str = UnsafeExpression $
+      "E\'" <> fromString (escape =<< (Text.unpack . getVarChar) str) <> "\'"
+instance Literal (FixChar n) where
+  literal str = UnsafeExpression $
+      "E\'" <> fromString (escape =<< (Text.unpack . getFixChar) str) <> "\'"
 instance Literal DiffTime where
   literal dt =
     let musecs = fromIntegral (diffTimeToPicoseconds dt) / 1000
