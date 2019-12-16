@@ -59,6 +59,7 @@ library
     Squeal.PostgreSQL.Pool
     Squeal.PostgreSQL.PG
     Squeal.PostgreSQL.PQ
+    Squeal.PostgreSQL.PQ.Encode
     Squeal.PostgreSQL.Render
     Squeal.PostgreSQL.Query
     Squeal.PostgreSQL.Schema
