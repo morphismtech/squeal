@@ -25,17 +25,6 @@ surround it with single quotes, e.g., keyword = 'a value'. Single quotes and
 backslashes within the value must be escaped with a backslash, i.e., ' and \.
 
 To specify the schema you wish to connect with, use type application.
-
->>> :set -XDataKinds
->>> :set -XPolyKinds
->>> :set -XTypeOperators
->>> type Schema = '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint2]]
->>> :set -XTypeApplications
->>> :set -XOverloadedStrings
->>> conn <- connectdb @Schema "host=localhost port=5432 dbname=exampledb"
-
-Note that, for now, squeal doesn't offer any protection from connecting
-with the wrong schema!
 -}
 connectdb
   :: forall db io
