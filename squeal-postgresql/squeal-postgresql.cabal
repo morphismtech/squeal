@@ -62,6 +62,7 @@ library
     Squeal.PostgreSQL.PQ.Decode
     Squeal.PostgreSQL.PQ.Encode
     Squeal.PostgreSQL.PQ.Exception
+    Squeal.PostgreSQL.PQ.Indexed
     Squeal.PostgreSQL.PQ.Monad
     Squeal.PostgreSQL.PQ.Oid
     Squeal.PostgreSQL.PQ.Result

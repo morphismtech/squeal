@@ -17,15 +17,12 @@ module Squeal.PostgreSQL.PQ.Monad where
 
 import Control.Category (Category (..))
 import Control.Monad
-import Control.Monad.IO.Class
 import Control.Monad.Morph
-import Data.Function ((&))
 import Prelude hiding (id, (.))
 
 import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
 
-import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.PQ.Decode
 import Squeal.PostgreSQL.PQ.Encode
@@ -46,81 +43,6 @@ import qualified Control.Monad.Trans.Writer.Lazy as Lazy
 import qualified Control.Monad.Trans.Writer.Strict as Strict
 import qualified Control.Monad.Trans.RWS.Lazy as Lazy
 import qualified Control.Monad.Trans.RWS.Strict as Strict
-
-{- | An [Atkey indexed monad]
-(https://bentnib.org/paramnotions-jfp.pdf)
-is a `Functor` [enriched category]
-(https://ncatlab.org/nlab/show/enriched+category).
-An indexed monad transformer transforms a `Monad` into an indexed monad,
-and is a monad transformer when its source and target are the same,
-enabling use of standard @do@ notation for endo-index operations.
--}
-class
-  ( forall i j m. Monad m => Functor (t i j m)
-  , forall i j m. (i ~ j, Monad m) => Monad (t i j m)
-  , forall i j. i ~ j => MonadTrans (t i j)
-  ) => IndexedMonadTrans t where
-
-  {-# MINIMAL pqJoin | pqBind #-}
-
-  -- | indexed analog of `<*>`
-  pqAp
-    :: Monad m
-    => t i j m (x -> y)
-    -> t j k m x
-    -> t i k m y
-  pqAp tf tx = pqBind (<$> tx) tf
-
-  -- | indexed analog of `join`
-  pqJoin
-    :: Monad m
-    => t i j m (t j k m y)
-    -> t i k m y
-  pqJoin t = t & pqBind id
-
-  -- | indexed analog of `=<<`
-  pqBind
-    :: Monad m
-    => (x -> t j k m y)
-    -> t i j m x
-    -> t i k m y
-  pqBind f t = pqJoin (f <$> t)
-
-  -- | indexed analog of flipped `>>`
-  pqThen
-    :: Monad m
-    => t j k m y
-    -> t i j m x
-    -> t i k m y
-  pqThen pq2 pq1 = pq1 & pqBind (\ _ -> pq2)
-
-  -- | indexed analog of `<=<`
-  pqAndThen
-    :: Monad m
-    => (y -> t j k m z)
-    -> (x -> t i j m y)
-    -> x -> t i k m z
-  pqAndThen g f x = pqBind g (f x)
-
-{- | `Indexed` reshuffles the arguments of an `IndexedMonadTrans`,
-exposing its `Category` instance.-}
-newtype Indexed t m r i j = Indexed {runIndexed :: t i j m r}
-instance
-  ( IndexedMonadTrans t
-  , Monad m
-  , Monoid r
-  ) => Category (Indexed t m r) where
-    id = Indexed (pure mempty)
-    Indexed g . Indexed f = Indexed $ pqAp (fmap (<>) f) g
-
-{- | `IndexedMonadTransPQ` is a class for indexed monad transformers
-that support running `Definition`s using `define` which acts functorially in effect.
-
-* @define id = return ()@
-* @define (statement1 >> statement2) = define statement1 & pqThen (define statement2)@
--}
-class IndexedMonadTrans pq => IndexedMonadTransPQ pq where
-  define :: MonadIO io => Definition db0 db1 -> pq db0 db1 io ()
 
 {- | `MonadPQ` is an @mtl@ style constraint, similar to
 `Control.Monad.State.Class.MonadState`, for using `Database.PostgreSQL.LibPQ` to
