@@ -11,8 +11,6 @@ module Squeal.PostgreSQL.PQ.Result where
 import Control.Exception (throw)
 import Control.Monad (when)
 import Control.Monad.IO.Class
-import Control.Monad.Except
-import Control.Monad.Reader
 import Data.ByteString (ByteString)
 import Data.Text (Text, pack)
 import Data.Traversable (for)
@@ -149,4 +147,4 @@ execDecodeRow
   :: DecodeRow row y
   -> SOP.NP (SOP.K (Maybe ByteString)) row
   -> Either Text y
-execDecodeRow decode = runExcept . runReaderT (runDecodeRow decode)
+execDecodeRow decode = runDecodeRow decode

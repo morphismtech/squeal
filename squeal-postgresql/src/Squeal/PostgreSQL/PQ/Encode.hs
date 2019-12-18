@@ -17,24 +17,19 @@
 #-}
 
 module Squeal.PostgreSQL.PQ.Encode
-  ( EncodeParam (..)
-  , ToParam (..)
-  , EncodeParams (..)
+  ( EncodeParams (..)
   , genericParams
   , nilParams
   , (.*)
   , (*.)
-  , EncodeNullParam (..)
+  , ToParam (..)
   , ToNullParam (..)
-  , EncodeField (..)
   , ToField (..)
-  , EncodeFixArray (..)
   , ToFixArray (..)
   ) where
 
 import Data.Functor.Contravariant
 import Data.Kind
-import GHC.TypeLits
 import PostgreSQL.Binary.Encoding
 
 import qualified Generics.SOP as SOP
@@ -44,47 +39,29 @@ import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Schema
 
-newtype EncodeParam (pg :: PGType) (x :: Type) = EncodeParam
-  { runEncodeParam :: x -> Encoding }
-instance Contravariant (EncodeParam pg) where
-  contramap f (EncodeParam g) = EncodeParam (g . f)
-class ToParam pg x where toParam :: EncodeParam pg x
+class ToParam pg x where toParam :: x -> Encoding
 
-newtype EncodeNullParam (null :: NullType) (x :: Type) = EncodeNullParam
-  { runEncodeNullParam :: x -> Maybe Encoding }
-instance Contravariant (EncodeNullParam pg) where
-  contramap f (EncodeNullParam g) = EncodeNullParam (g . f)
-class ToNullParam ty x where toNullParam :: EncodeNullParam ty x
+class ToNullParam ty x where toNullParam :: x -> Maybe Encoding
 instance ToParam pg x => ToNullParam ('NotNull pg) x where
-  toNullParam = EncodeNullParam $ return . runEncodeParam (toParam @pg)
+  toNullParam = return . toParam @pg
 instance ToParam pg x => ToNullParam ('Null pg) (Maybe x) where
-  toNullParam = EncodeNullParam $ fmap (runEncodeParam (toParam @pg))
+  toNullParam = fmap (toParam @pg)
 
-newtype EncodeField
-  (field :: (Symbol, NullType)) (x :: (Symbol,Type)) = EncodeField
-    { runEncodeField :: SOP.P x -> Maybe Encoding }
-class ToField field x where toField :: EncodeField field x
+class ToField field x where toField :: SOP.P x -> Maybe Encoding
 instance ToNullParam ty x => ToField (fld ::: ty) (fld ::: x) where
-  toField = EncodeField $ \(SOP.P x) -> runEncodeNullParam (toNullParam @ty) x
+  toField (SOP.P x) = toNullParam @ty x
 
-newtype EncodeFixArray
-  (dims :: [Nat]) (ty :: NullType) (x :: Type) = EncodeFixArray
-    { runEncodeFixArray :: x -> Array }
-instance Contravariant (EncodeFixArray dims ty) where
-  contramap f (EncodeFixArray g) = EncodeFixArray (g . f)
-class ToFixArray dims ty x where toFixArray :: EncodeFixArray dims ty x
+class ToFixArray dims ty x where toFixArray :: x -> Array
 instance ToNullParam ty x => ToFixArray '[] ty x where
-  toFixArray = EncodeFixArray
-    $ maybe nullArray encodingArray
-    . runEncodeNullParam (toNullParam @ty)
+  toFixArray = maybe nullArray encodingArray . toNullParam @ty
 instance
   ( SOP.IsProductType tuple xs
   , Length xs ~ dim
   , SOP.All ((~) x) xs
   , ToFixArray dims ty x )
   => ToFixArray (dim ': dims) ty tuple where
-    toFixArray = EncodeFixArray
-      $ dimensionArray foldlN (runEncodeFixArray (toFixArray @dims @ty @x))
+    toFixArray
+      = dimensionArray foldlN (toFixArray @dims @ty @x)
       . SOP.unZ . SOP.unSOP . SOP.from
 foldlN
   :: SOP.All ((~) x) xs
@@ -97,7 +74,7 @@ newtype EncodeParams (tys :: [NullType]) (x :: Type) = EncodeParams
   { runEncodeParams :: x -> NP (SOP.K (Maybe Encoding)) tys }
 instance Contravariant (EncodeParams tys) where
   contramap f (EncodeParams g) = EncodeParams (g . f)
-genericParams :: forall x xs tys .
+genericParams ::
   ( SOP.IsProductType x xs
   , SOP.AllZip ToNullParam tys xs
   ) => EncodeParams tys x
@@ -107,7 +84,7 @@ genericParams = EncodeParams
 encode_
   :: forall ty x. ToNullParam ty x
   => SOP.I x -> SOP.K (Maybe Encoding) ty
-encode_ = SOP.K . runEncodeNullParam (toNullParam @ty) . SOP.unI
+encode_ = SOP.K . toNullParam @ty . SOP.unI
 trans_NP_flip
   :: SOP.AllZip c ys xs
   => proxy c
@@ -125,7 +102,7 @@ nilParams = EncodeParams $ return Nil
   -> EncodeParams tys x
   -> EncodeParams (ty ': tys) x
 f .* EncodeParams params = EncodeParams $ \x ->
-  SOP.K (runEncodeNullParam (toNullParam @ty) (f x)) :* params x
+  SOP.K (toNullParam @ty (f x)) :* params x
 infixr 5 .*
 
 (*.)
