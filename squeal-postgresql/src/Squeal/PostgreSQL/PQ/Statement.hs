@@ -51,6 +51,8 @@ instance Profunctor (Statement db) where
   dimap f g (Query encode decode q) =
     Query (contramap f encode) (fmap g decode) q
 
+instance Functor (Statement db x) where fmap = rmap
+
 query ::
   ( SOP.All OidOfNull params
   , SOP.IsProductType x xs
