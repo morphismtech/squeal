@@ -22,12 +22,17 @@ module Squeal.PostgreSQL.PQ.Encode
   , nilParams
   , (.*)
   , (*.)
+  , oneParam
+  , appendParams
+  , deconsParams
+  , disjoinParams
   , ToParam (..)
   , ToNullParam (..)
   , ToField (..)
   , ToFixArray (..)
   ) where
 
+import Data.Function ((&))
 import Data.Functor.Contravariant
 import Data.Kind
 import PostgreSQL.Binary.Encoding
@@ -113,3 +118,31 @@ infixr 5 .*
   -> EncodeParams '[ty0, ty1] x
 f *. g = f .* g .* nilParams
 infixl 9 *.
+
+oneParam :: ToNullParam ty y => (x -> y) -> EncodeParams '[ty] x
+oneParam f = f .* nilParams
+
+appendParams
+  :: EncodeParams params0 x
+  -> EncodeParams params1 x
+  -> EncodeParams (Join params0 params1) x
+appendParams encode0 encode1 = EncodeParams $ \x ->
+  runEncodeParams encode0 x & also (runEncodeParams encode1 x)
+
+deconsParams
+  :: forall param params x y z. ToNullParam param y
+  => (x -> (y,z))
+  -> EncodeParams params z
+  -> EncodeParams (param ': params) x
+deconsParams u encode = EncodeParams $ \x ->
+  let (y,z) = u x
+  in SOP.K (toNullParam @param y) :* runEncodeParams encode z
+
+disjoinParams
+  :: (x -> (y,z))
+  -> EncodeParams params0 y
+  -> EncodeParams params1 z
+  -> EncodeParams (Join params0 params1) x
+disjoinParams u encode0 encode1 = EncodeParams $ \x ->
+  let (y,z) = u x
+  in runEncodeParams encode0 y & also (runEncodeParams encode1 z)
