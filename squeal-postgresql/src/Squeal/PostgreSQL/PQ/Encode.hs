@@ -20,12 +20,10 @@ module Squeal.PostgreSQL.PQ.Encode
   ( EncodeParam (..)
   , ToParam (..)
   , EncodeParams (..)
-  , gtoParams
+  , genericParams
   , nilParams
   , (.*)
   , (*.)
-  , alsoParams
-  , ToParams (..)
   , EncodeNullParam (..)
   , ToNullParam (..)
   , EncodeField (..)
@@ -34,7 +32,6 @@ module Squeal.PostgreSQL.PQ.Encode
   , ToFixArray (..)
   ) where
 
-import Data.Function
 import Data.Functor.Contravariant
 import Data.Kind
 import GHC.TypeLits
@@ -100,17 +97,11 @@ newtype EncodeParams (tys :: [NullType]) (x :: Type) = EncodeParams
   { runEncodeParams :: x -> NP (SOP.K (Maybe Encoding)) tys }
 instance Contravariant (EncodeParams tys) where
   contramap f (EncodeParams g) = EncodeParams (g . f)
-class ToParams tys x where toParams :: EncodeParams tys x
-instance
-  ( SOP.IsProductType x xs
-  , SOP.AllZip ToNullParam tys xs
-  ) => ToParams tys x where toParams = gtoParams
-
-gtoParams :: forall x xs tys .
+genericParams :: forall x xs tys .
   ( SOP.IsProductType x xs
   , SOP.AllZip ToNullParam tys xs
   ) => EncodeParams tys x
-gtoParams = EncodeParams
+genericParams = EncodeParams
   $ trans_NP_flip (SOP.Proxy @ToNullParam) encode_
   . SOP.unZ . SOP.unSOP . SOP.from
 encode_
@@ -145,13 +136,3 @@ infixr 5 .*
   -> EncodeParams '[ty0, ty1] x
 f *. g = f .* g .* nilParams
 infixl 9 *.
-
-alsoParams
-  :: forall x x0 tys0 x1 tys1
-   . (ToParams tys0 x0, ToParams tys1 x1)
-  => (x -> x1)
-  -> (x -> x0)
-  -> EncodeParams (Join tys0 tys1) x
-alsoParams g f = EncodeParams $ \x ->
-  runEncodeParams (toParams @tys0) (f x)
-  & also (runEncodeParams (toParams @tys1) (g x))

@@ -1,6 +1,6 @@
 {-# LANGUAGE
     DataKinds
-  , DerivingVia
+  , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
   , GeneralizedNewtypeDeriving
@@ -19,8 +19,7 @@ module Squeal.PostgreSQL.PQ.Decode
   ( DecodeValue (..)
   , FromValue (..)
   , DecodeRow (..)
-  , gfromRow
-  , FromRow (..)
+  , genericRow
   , DecodeNullValue (..)
   , FromNullValue (..)
   , DecodeField (..)
@@ -109,18 +108,12 @@ instance {-# OVERLAPPABLE #-} IsLabel fld (DecodeRow row y)
   => IsLabel fld (DecodeRow (field ': row) y) where
     fromLabel = DecodeRow . ReaderT $ \(_ SOP.:* bs) ->
       runReaderT (runDecodeRow (fromLabel @fld)) bs
-class FromRow row y where fromRow :: DecodeRow row y
-instance
-  ( SOP.SListI row
-  , SOP.IsRecord y ys
-  , SOP.AllZip FromField row ys
-  ) => FromRow row y where fromRow = gfromRow
-gfromRow ::
+genericRow ::
   ( SOP.SListI row
   , SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
   ) => DecodeRow row y
-gfromRow
+genericRow
   = DecodeRow
   . ReaderT
   $ fmap SOP.fromRecord

@@ -2,14 +2,20 @@
     DataKinds
   , FlexibleContexts
   , GADTs
+  , RankNTypes
 #-}
 
-module Squeal.PostgreSQL.PQ.Statement where
+module Squeal.PostgreSQL.PQ.Statement
+  ( Statement (..)
+  , query
+  , manipulation
+  ) where
 
 import Data.Functor.Contravariant
 import Data.Profunctor (Profunctor (..))
 
 import qualified Generics.SOP as SOP
+import qualified Generics.SOP.Record as SOP
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.PQ.Decode
@@ -45,14 +51,22 @@ instance Profunctor (Statement db) where
   dimap f g (Query encode decode q) =
     Query (contramap f encode) (fmap g decode) q
 
-query
-  :: (SOP.All OidOfNull params, ToParams params x, FromRow row y)
-  => Query '[] '[] db params row
-  -> Statement db x y
-query = Query toParams fromRow
+query ::
+  ( SOP.All OidOfNull params
+  , SOP.IsProductType x xs
+  , SOP.AllZip ToNullParam params xs
+  , SOP.IsRecord y ys
+  , SOP.AllZip FromField row ys
+  ) => Query '[] '[] db params row
+    -> Statement db x y
+query = Query genericParams genericRow
 
-manipulation
-  :: (SOP.All OidOfNull params, ToParams params x, FromRow row y)
-  => Manipulation '[] db params row
-  -> Statement db x y
-manipulation = Manipulation toParams fromRow
+manipulation ::
+  ( SOP.All OidOfNull params
+  , SOP.IsProductType x xs
+  , SOP.AllZip ToNullParam params xs
+  , SOP.IsRecord y ys
+  , SOP.AllZip FromField row ys
+  ) => Manipulation '[] db params row
+    -> Statement db x y
+manipulation = Manipulation genericParams genericRow
