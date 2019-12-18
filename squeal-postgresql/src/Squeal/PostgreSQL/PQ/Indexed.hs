@@ -13,7 +13,12 @@
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.PQ.Indexed where
+module Squeal.PostgreSQL.PQ.Indexed
+  ( IndexedMonadTrans (..)
+  , Indexed (..)
+  , IndexedMonadTransPQ (..)
+  , indexedDefine
+  ) where
 
 import Control.Category (Category (..))
 import Control.Monad
@@ -94,7 +99,17 @@ instance
 that support running `Definition`s using `define` which acts functorially in effect.
 
 * @define id = return ()@
-* @define (statement1 >> statement2) = define statement1 & pqThen (define statement2)@
+* @define (statement1 >>> statement2) = define statement1 & pqThen (define statement2)@
 -}
 class IndexedMonadTrans pq => IndexedMonadTransPQ pq where
   define :: MonadIO io => Definition db0 db1 -> pq db0 db1 io ()
+
+{- | Run a pure SQL `Definition` functorially in effect
+
+* @indexedDefine id = id@
+* @indexedDefine (def1 >>> def2) = indexedDefine def1 >>> indexedDefine def2@
+-}
+indexedDefine
+  :: (IndexedMonadTransPQ pq, MonadIO io)
+  => Definition db0 db1 -> Indexed pq io () db0 db1
+indexedDefine = Indexed . define
