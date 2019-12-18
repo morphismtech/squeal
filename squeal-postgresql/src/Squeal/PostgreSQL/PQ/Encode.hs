@@ -19,19 +19,19 @@
 module Squeal.PostgreSQL.PQ.Encode
   ( EncodeParam (..)
   , ToParam (..)
+  , EncodeParams (..)
+  , gtoParams
+  , nilParams
+  , (.*)
+  , (*.)
+  , alsoParams
+  , ToParams (..)
   , EncodeNullParam (..)
   , ToNullParam (..)
   , EncodeField (..)
   , ToField (..)
   , EncodeFixArray (..)
   , ToFixArray (..)
-  , EncodeParams (..)
-  , ToParams (..)
-  , gtoParams
-  , nilParams
-  , (.*)
-  , (*.)
-  , alsoParams
   ) where
 
 import Data.Function
@@ -53,7 +53,7 @@ instance Contravariant (EncodeParam pg) where
   contramap f (EncodeParam g) = EncodeParam (g . f)
 class ToParam pg x where toParam :: EncodeParam pg x
 
-newtype EncodeNullParam (null :: NullityType) (x :: Type) = EncodeNullParam
+newtype EncodeNullParam (null :: NullType) (x :: Type) = EncodeNullParam
   { runEncodeNullParam :: x -> Maybe Encoding }
 instance Contravariant (EncodeNullParam pg) where
   contramap f (EncodeNullParam g) = EncodeNullParam (g . f)
@@ -64,14 +64,14 @@ instance ToParam pg x => ToNullParam ('Null pg) (Maybe x) where
   toNullParam = EncodeNullParam $ fmap (runEncodeParam (toParam @pg))
 
 newtype EncodeField
-  (field :: (Symbol, NullityType)) (x :: (Symbol,Type)) = EncodeField
+  (field :: (Symbol, NullType)) (x :: (Symbol,Type)) = EncodeField
     { runEncodeField :: SOP.P x -> Maybe Encoding }
 class ToField field x where toField :: EncodeField field x
 instance ToNullParam ty x => ToField (fld ::: ty) (fld ::: x) where
   toField = EncodeField $ \(SOP.P x) -> runEncodeNullParam (toNullParam @ty) x
 
 newtype EncodeFixArray
-  (dims :: [Nat]) (ty :: NullityType) (x :: Type) = EncodeFixArray
+  (dims :: [Nat]) (ty :: NullType) (x :: Type) = EncodeFixArray
     { runEncodeFixArray :: x -> Array }
 instance Contravariant (EncodeFixArray dims ty) where
   contramap f (EncodeFixArray g) = EncodeFixArray (g . f)
@@ -96,7 +96,7 @@ foldlN f z = \case
   Nil -> z
   SOP.I x :* xs -> let z' = f z x in seq z' $ foldlN f z' xs
 
-newtype EncodeParams (tys :: [NullityType]) (x :: Type) = EncodeParams
+newtype EncodeParams (tys :: [NullType]) (x :: Type) = EncodeParams
   { runEncodeParams :: x -> NP (SOP.K (Maybe Encoding)) tys }
 instance Contravariant (EncodeParams tys) where
   contramap f (EncodeParams g) = EncodeParams (g . f)

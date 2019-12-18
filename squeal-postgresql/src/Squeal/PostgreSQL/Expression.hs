@@ -108,16 +108,16 @@ The type parameters of `Expression` are
   scope for the `Expression`;
 * @from :: @ `FromType`, the @from@ clause which the `Expression` may use
   to reference columns by alias;
-* @ty :: @ `NullityType`, the type of the `Expression`.
+* @ty :: @ `NullType`, the type of the `Expression`.
 -}
 newtype Expression
   (outer :: FromType)
   (commons :: FromType)
   (grp :: Grouping)
   (db :: SchemasType)
-  (params :: [NullityType])
+  (params :: [NullType])
   (from :: FromType)
-  (ty :: NullityType)
+  (ty :: NullType)
     = UnsafeExpression { renderExpression :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance RenderSQL (Expression outer commons grp db params from ty) where

@@ -54,7 +54,7 @@ a `TableConstraint` or a `ColumnType`. It is intended to connote Haskell's @::@
 operator.
 
 `:=>` is used to pair `TableConstraints` with a `ColumnsType`,
-yielding a `TableType`, or to pair a `ColumnConstraint` with a `NullityType`,
+yielding a `TableType`, or to pair a `ColumnConstraint` with a `NullType`,
 yielding a `ColumnType`. It is intended to connote Haskell's @=>@ operator
 
 Next, we'll write `Definition`s to set up and tear down the schema. In

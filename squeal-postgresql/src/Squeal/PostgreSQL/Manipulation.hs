@@ -92,13 +92,13 @@ The general `Manipulation` type is parameterized by
 
 * @commons :: FromType@ - scope for all `common` table expressions,
 * @db :: SchemasType@ - scope for all `table`s and `view`s,
-* @params :: [NullityType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
+* @params :: [NullType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
 * @row :: RowType@ - return type of the `Query`.
 -}
 newtype Manipulation
   (commons :: FromType)
   (db :: SchemasType)
-  (params :: [NullityType])
+  (params :: [NullType])
   (columns :: RowType)
     = UnsafeManipulation { renderManipulation :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)

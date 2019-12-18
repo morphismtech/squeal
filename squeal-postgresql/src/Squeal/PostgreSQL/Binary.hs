@@ -206,7 +206,7 @@ module Squeal.PostgreSQL.Binary
   ( -- * Encoding
     ToParam (..)
   , ToParams (..)
-  , ToNullityParam (..)
+  , ToNullParam (..)
   , ToField (..)
   , ToFixArray (..)
     -- * Decoding
@@ -323,11 +323,11 @@ instance Aeson.ToJSON x => ToParam (Json x) 'PGjson where
 instance Aeson.ToJSON x => ToParam (Jsonb x) 'PGjsonb where
   toParam = K . Encoding.jsonb_bytes
     . Lazy.ByteString.toStrict . Aeson.encode . getJsonb
-instance (ToNullityParam x ty, ty ~ nullity pg, OidOf pg)
+instance (ToNullParam x ty, ty ~ null pg, OidOf pg)
   => ToParam (VarArray [x]) ('PGvararray ty) where
     toParam = K
       . Encoding.array_foldable
-        (getOid (oidOf @pg)) (unK . toNullityParam @x @ty)
+        (getOid (oidOf @pg)) (unK . toNullParam @x @ty)
       . getVarArray
 instance (ToParam x pg, OidOf pg)
   => ToParam (VarArray (Vector x)) ('PGvararray ('NotNull pg)) where
@@ -340,7 +340,7 @@ instance (ToParam x pg, OidOf pg)
       . Encoding.nullableArray_vector
         (getOid (oidOf @pg)) (unK . toParam @x @pg)
       . getVarArray
-instance (ToFixArray x dims ty, ty ~ nullity pg, OidOf pg)
+instance (ToFixArray x dims ty, ty ~ null pg, OidOf pg)
   => ToParam (FixArray x) ('PGfixarray dims ty) where
     toParam = K . Encoding.array (getOid (oidOf @pg))
       . unK . unK . toFixArray @x @dims @ty . getFixArray
@@ -542,44 +542,44 @@ instance {-# OVERLAPPABLE #-} OidOf ('PGfixarray ns (null ('PGenum labels))) whe
 instance {-# OVERLAPPABLE #-} OidOf ('PGvararray (null ('PGenum labels))) where oidOf = LibPQ.invalidOid
 
 -- | Lifts a `OidOf` constraint to a param.
-class OidOfParam (ty :: NullityType) where oidOfParam :: Oid
+class OidOfParam (ty :: NullType) where oidOfParam :: Oid
 instance OidOf ty => OidOfParam (null ty) where oidOfParam = oidOf @ty
 
 -- | Lifts a `OidOf` constraint to a field.
-class OidOfField (field :: (Symbol, NullityType)) where
+class OidOfField (field :: (Symbol, NullType)) where
   oidOfField :: Oid
 instance OidOf ty => OidOfField (alias ::: null ty) where
   oidOfField = oidOf @ty
 
--- | A `ToNullityParam` constraint gives an encoding of a Haskell `Type` into
--- into the binary format of a PostgreSQL `NullityType`.
--- You should not define instances for `ToNullityParam`,
+-- | A `ToNullParam` constraint gives an encoding of a Haskell `Type` into
+-- into the binary format of a PostgreSQL `NullType`.
+-- You should not define instances for `ToNullParam`,
 -- just use the provided instances.
-class ToNullityParam (x :: Type) (ty :: NullityType) where
-  toNullityParam :: x -> K (Maybe Encoding.Encoding) ty
-instance ToParam x pg => ToNullityParam x ('NotNull pg) where
-  toNullityParam = K . Just . unK . toParam @x @pg
-instance ToParam x pg => ToNullityParam (Maybe x) ('Null pg) where
-  toNullityParam = K . fmap (unK . toParam @x @pg)
+class ToNullParam (x :: Type) (ty :: NullType) where
+  toNullParam :: x -> K (Maybe Encoding.Encoding) ty
+instance ToParam x pg => ToNullParam x ('NotNull pg) where
+  toNullParam = K . Just . unK . toParam @x @pg
+instance ToParam x pg => ToNullParam (Maybe x) ('Null pg) where
+  toNullParam = K . fmap (unK . toParam @x @pg)
 
 -- | A `ToField` constraint lifts the `ToParam` parser
--- to an encoding of a @(Symbol, Type)@ to a @(Symbol, NullityType)@,
+-- to an encoding of a @(Symbol, Type)@ to a @(Symbol, NullType)@,
 -- encoding `Null`s to `Maybe`s. You should not define instances for
 -- `ToField`, just use the provided instances.
-class ToField (x :: (Symbol, Type)) (field :: (Symbol, NullityType)) where
+class ToField (x :: (Symbol, Type)) (field :: (Symbol, NullType)) where
   toField :: P x -> K (Maybe Encoding.Encoding) field
-instance ToNullityParam x ty => ToField (alias ::: x) (alias ::: ty) where
-  toField (P x) = K . unK $ toNullityParam @x @ty x
+instance ToNullParam x ty => ToField (alias ::: x) (alias ::: ty) where
+  toField (P x) = K . unK $ toNullParam @x @ty x
 
 -- | A `ToFixArray` constraint gives an encoding of a Haskell `Type`
 -- into the binary format of a PostgreSQL fixed-length array.
 -- You should not define instances for
 -- `ToFixArray`, just use the provided instances.
-class ToFixArray (x :: Type) (dims :: [Nat]) (array :: NullityType) where
+class ToFixArray (x :: Type) (dims :: [Nat]) (array :: NullType) where
   toFixArray :: x -> K (K Encoding.Array dims) array
-instance ToNullityParam x ty => ToFixArray x '[] ty where
+instance ToNullParam x ty => ToFixArray x '[] ty where
   toFixArray = K . K . maybe Encoding.nullArray Encoding.encodingArray . unK
-    . toNullityParam @x @ty
+    . toNullParam @x @ty
 instance
   ( IsProductType product xs
   , Length xs ~ dim
@@ -590,10 +590,10 @@ instance
       (unK . unK . toFixArray @x @dims @ty) . unZ . unSOP . from
 
 -- | A `ToParams` constraint generically sequences the encodings of `Type`s
--- of the fields of a tuple or record to a row of `NullityType`s. You should
+-- of the fields of a tuple or record to a row of `NullType`s. You should
 -- not define instances of `ToParams`. Instead define `SOP.Generic` instances
 -- which in turn provide `ToParams` instances.
-class SListI tys => ToParams (x :: Type) (tys :: [NullityType]) where
+class SListI tys => ToParams (x :: Type) (tys :: [NullType]) where
   -- | >>> type Params = '[ 'NotNull 'PGbool, 'Null 'PGint2]
   -- >>> toParams @(Bool, Maybe Int16) @'[ 'NotNull 'PGbool, 'Null 'PGint2] (False, Just 0)
   -- K (Just "\NUL") :* K (Just "\NUL\NUL") :* Nil
@@ -604,10 +604,10 @@ class SListI tys => ToParams (x :: Type) (tys :: [NullityType]) where
   -- >>> toParams @Tuple @Params (Tuple False (Just 0))
   -- K (Just "\NUL") :* K (Just "\NUL\NUL") :* Nil
   toParams :: x -> NP (K (Maybe Encoding.Encoding)) tys
-instance (SListI tys, IsProductType x xs, AllZip ToNullityParam xs tys)
+instance (SListI tys, IsProductType x xs, AllZip ToNullParam xs tys)
   => ToParams x tys where
       toParams
-        = htrans (Proxy @ToNullityParam) (toNullityParam . unI)
+        = htrans (Proxy @ToNullParam) (toNullParam . unI)
         . unZ . unSOP . from
 
 -- | A `FromValue` constraint gives a parser from the binary format of
@@ -759,10 +759,10 @@ instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
       return $ NonEmpty lower upper
 
 -- | A `FromField` constraint lifts the `FromValue` parser
--- to a decoding of a @(Symbol, NullityType)@ to a @(Symbol, Type)@ ,
+-- to a decoding of a @(Symbol, NullType)@ to a @(Symbol, Type)@ ,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromField`, just use the provided instances.
-class FromField (pg :: (Symbol, NullityType)) (y :: (Symbol, Type)) where
+class FromField (pg :: (Symbol, NullType)) (y :: (Symbol, Type)) where
   fromField
     :: K (Maybe Strict.ByteString) pg
     -> (Either Strict.Text :.: P) y
@@ -783,7 +783,7 @@ instance FromValue pg y
 -- from the binary format of a PostgreSQL fixed-length array.
 -- You should not define instances for
 -- `FromFixArray`, just use the provided instances.
-class FromFixArray (dims :: [Nat]) (ty :: NullityType) (y :: Type) where
+class FromFixArray (dims :: [Nat]) (ty :: NullType) (y :: Type) where
   fromFixArray :: Decoding.Array y
 instance FromValue pg y => FromFixArray '[] ('NotNull pg) y where
   fromFixArray = Decoding.valueArray (fromValue @pg @y)

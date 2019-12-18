@@ -50,8 +50,8 @@ refer to the out-of-line data values.
 -}
 class KnownNat n => HasParameter
   (n :: Nat)
-  (params :: [NullityType])
-  (ty :: NullityType)
+  (params :: [NullType])
+  (ty :: NullType)
   | n params -> ty where
     -- | `parameter` takes a `Nat` using type application and a `TypeExpression`.
     --

@@ -15,7 +15,17 @@
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.PQ.Decode where
+module Squeal.PostgreSQL.PQ.Decode
+  ( DecodeValue (..)
+  , FromValue (..)
+  , DecodeRow (..)
+  , gfromRow
+  , FromRow (..)
+  , DecodeNullValue (..)
+  , FromNullValue (..)
+  , DecodeField (..)
+  , FromField (..)
+  ) where
 
 import Control.Applicative
 import Control.Monad
@@ -46,10 +56,10 @@ newtype DecodeValue (pg :: PGType) (y :: Type) = DecodeValue
     , Alternative
     , Monad
     , MonadPlus
-    , MonadError Strict.Text
-    )
+    , MonadError Strict.Text )
+class FromValue pg y where fromValue :: DecodeValue pg y
 
-newtype DecodeNullValue (ty :: NullityType) (y :: Type) = DecodeNullValue
+newtype DecodeNullValue (ty :: NullType) (y :: Type) = DecodeNullValue
   { runDecodeNullValue :: ReaderT
       (Maybe Strict.ByteString) (Except Strict.Text) y }
   deriving newtype
@@ -58,27 +68,7 @@ newtype DecodeNullValue (ty :: NullityType) (y :: Type) = DecodeNullValue
     , Alternative
     , Monad
     , MonadPlus
-    , MonadError Strict.Text
-    )
-
-newtype DecodeField
-  (ty :: (Symbol, NullityType)) (y :: (Symbol, Type)) = DecodeField
-    { runDecodeField :: ReaderT
-        (Maybe Strict.ByteString) (Except Strict.Text) (SOP.P y) }
-
-newtype DecodeRow (row :: RowType) (y :: Type) = DecodeRow
-  { runDecodeRow :: ReaderT
-      (SOP.NP (SOP.K (Maybe Strict.ByteString)) row) (Except Strict.Text) y }
-  deriving newtype
-    ( Functor
-    , Applicative
-    , Alternative
-    , Monad
-    , MonadPlus
-    , MonadError Strict.Text
-    )
-
-class FromValue pg y where fromValue :: DecodeValue pg y
+    , MonadError Strict.Text )
 class FromNullValue ty y where fromNullValue :: DecodeNullValue ty y
 instance FromValue pg y => FromNullValue ('NotNull pg) y where
   fromNullValue = DecodeNullValue . ReaderT $ \case
@@ -90,29 +80,27 @@ instance FromValue pg y => FromNullValue ('Null pg) (Maybe y) where
     Nothing -> return Nothing
     Just bytestring -> liftEither . fmap Just $ valueParser
       (runDecodeValue (fromValue @pg)) bytestring
+
+newtype DecodeField
+  (ty :: (Symbol, NullType)) (y :: (Symbol, Type)) = DecodeField
+    { runDecodeField :: ReaderT
+        (Maybe Strict.ByteString) (Except Strict.Text) (SOP.P y) }
 class FromField field y where fromField :: DecodeField field y
 instance (fld0 ~ fld1, FromNullValue ty y)
   => FromField (fld0 ::: ty) (fld1 ::: y) where
     fromField = DecodeField . fmap SOP.P $
       runDecodeNullValue (fromNullValue @ty)
-class FromRow row y where fromRow :: DecodeRow row y
-instance
-  ( SOP.SListI row
-  , SOP.IsRecord y ys
-  , SOP.AllZip FromField row ys
-  ) => FromRow row y where
-    fromRow
-      = DecodeRow
-      . ReaderT
-      $ fmap SOP.fromRecord
-      . SOP.hsequence'
-      . SOP.htrans (SOP.Proxy @FromField) (SOP.Comp . runField)
-runField
-  :: forall ty y. FromField ty y
-  => SOP.K (Maybe Strict.ByteString) ty
-  -> Except Strict.Text (SOP.P y)
-runField (SOP.K b) = runReaderT (runDecodeField (fromField @ty)) b
 
+newtype DecodeRow (row :: RowType) (y :: Type) = DecodeRow
+  { runDecodeRow :: ReaderT
+      (SOP.NP (SOP.K (Maybe Strict.ByteString)) row) (Except Strict.Text) y }
+  deriving newtype
+    ( Functor
+    , Applicative
+    , Alternative
+    , Monad
+    , MonadPlus
+    , MonadError Strict.Text )
 instance {-# OVERLAPPING #-} (fld0 ~ fld1, FromNullValue ty y)
   => IsLabel fld0 (DecodeRow ((fld1 ::: ty) ': row) y) where
     fromLabel = DecodeRow . ReaderT $ \(SOP.K b SOP.:* _) ->
@@ -121,3 +109,25 @@ instance {-# OVERLAPPABLE #-} IsLabel fld (DecodeRow row y)
   => IsLabel fld (DecodeRow (field ': row) y) where
     fromLabel = DecodeRow . ReaderT $ \(_ SOP.:* bs) ->
       runReaderT (runDecodeRow (fromLabel @fld)) bs
+class FromRow row y where fromRow :: DecodeRow row y
+instance
+  ( SOP.SListI row
+  , SOP.IsRecord y ys
+  , SOP.AllZip FromField row ys
+  ) => FromRow row y where fromRow = gfromRow
+gfromRow ::
+  ( SOP.SListI row
+  , SOP.IsRecord y ys
+  , SOP.AllZip FromField row ys
+  ) => DecodeRow row y
+gfromRow
+  = DecodeRow
+  . ReaderT
+  $ fmap SOP.fromRecord
+  . SOP.hsequence'
+  . SOP.htrans (SOP.Proxy @FromField) (SOP.Comp . runField)
+runField
+  :: forall ty y. FromField ty y
+  => SOP.K (Maybe Strict.ByteString) ty
+  -> Except Strict.Text (SOP.P y)
+runField (SOP.K b) = runReaderT (runDecodeField (fromField @ty)) b

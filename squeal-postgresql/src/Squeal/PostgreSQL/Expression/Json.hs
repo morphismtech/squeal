@@ -347,7 +347,7 @@ jsonEach = unsafeSetFunction "json_each"
 SELECT * FROM jsonb_each(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbEach
-  :: SetFunction "jsonb_each" (nullity 'PGjsonb)
+  :: SetFunction "jsonb_each" (null 'PGjsonb)
     '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]
 jsonbEach = unsafeSetFunction "jsonb_each"
 
@@ -377,7 +377,7 @@ jsonbEachText = unsafeSetFunction "jsonb_each_text"
 json_object_keys(('{"a":"foo","b":"bar"}' :: json))
 -}
 jsonObjectKeys
-  :: SetFunction "json_object_keys" (nullity 'PGjson)
+  :: SetFunction "json_object_keys" (null 'PGjson)
     '["json_object_keys" ::: 'NotNull 'PGtext]
 jsonObjectKeys = unsafeSetFunction "json_object_keys"
 

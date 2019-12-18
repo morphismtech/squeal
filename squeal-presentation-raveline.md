@@ -597,7 +597,7 @@ type BaseParliamentSelection =
 
 ```haskell
 baseParliamentTables ::
-    FromClause Schema (param :: [NullityType]) BaseParliamentSelection
+    FromClause Schema (param :: [NullType]) BaseParliamentSelection
 baseParliamentTables =
   table
     (#groupp `as` #g)

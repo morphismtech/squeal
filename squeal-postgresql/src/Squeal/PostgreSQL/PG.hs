@@ -170,7 +170,7 @@ have `SOP.Generic` and `SOP.HasDatatypeInfo` instances;
 >>> instance SOP.Generic Person
 >>> instance SOP.HasDatatypeInfo Person
 >>> :kind! RowPG Person
-RowPG Person :: [(Symbol, NullityType)]
+RowPG Person :: [(Symbol, NullType)]
 = '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
 -}
 type family RowPG (hask :: Type) :: RowType where
@@ -189,31 +189,31 @@ type family RowOf (record :: [(Symbol, Type)]) :: RowType where
   RowOf (col ::: ty ': record) = col ::: NullPG ty ': RowOf record
   RowOf '[] = '[]
 
-{- | `NullPG` turns a Haskell type into a `NullityType`.
+{- | `NullPG` turns a Haskell type into a `NullType`.
 
 >>> :kind! NullPG Double
-NullPG Double :: NullityType
+NullPG Double :: NullType
 = 'NotNull 'PGfloat8
 >>> :kind! NullPG (Maybe Double)
-NullPG (Maybe Double) :: NullityType
+NullPG (Maybe Double) :: NullType
 = 'Null 'PGfloat8
 -}
-type family NullPG (hask :: Type) :: NullityType where
+type family NullPG (hask :: Type) :: NullType where
   NullPG (Maybe hask) = 'Null (PG hask)
   NullPG hask = 'NotNull (PG hask)
 
 {- | `TuplePG` turns a Haskell tuple type (including record types) into
-the corresponding list of `NullityType`s.
+the corresponding list of `NullType`s.
 
 >>> :kind! TuplePG (Double, Maybe Char)
-TuplePG (Double, Maybe Char) :: [NullityType]
+TuplePG (Double, Maybe Char) :: [NullType]
 = '[ 'NotNull 'PGfloat8, 'Null ('PGchar 1)]
 -}
-type family TuplePG (hask :: Type) :: [NullityType] where
+type family TuplePG (hask :: Type) :: [NullType] where
   TuplePG hask = TupleOf (TupleCodeOf hask (SOP.Code hask))
 
--- | `TupleOf` turns a list of Haskell `Type`s into a list of `NullityType`s.
-type family TupleOf (tuple :: [Type]) :: [NullityType] where
+-- | `TupleOf` turns a list of Haskell `Type`s into a list of `NullType`s.
+type family TupleOf (tuple :: [Type]) :: [NullType] where
   TupleOf (hask ': hask1 ': hask2 ': hask3 ': hask4 ': hask5 ': tuple) =
     NullPG hask ': NullPG hask1 ': NullPG hask2 ': NullPG hask3 ': NullPG hask4 ': NullPG hask5 ': TupleOf tuple
   TupleOf (hask ': hask1 ': hask2 ': hask3 ': hask4 ': tuple) =
@@ -282,7 +282,7 @@ type family DimPG (hask :: Type) :: [Nat] where
   DimPG x = '[]
 
 -- | `FixPG` extracts `NullPG` of the base type of nested homogeneous tuples.
-type family FixPG (hask :: Type) :: NullityType where
+type family FixPG (hask :: Type) :: NullType where
   FixPG (x,x) = FixPG x
   FixPG (x,x,x) = FixPG x
   FixPG (x,x,x,x) = FixPG x
