@@ -156,14 +156,6 @@ instance
           => SOP.P y -> SOP.K (Maybe Encoding) field
         encodeField = SOP.K . toField @field
 
-        -- trans_NP ::
-        --     SOP.AllZip c xs ys
-        --   => proxy c
-        --   -> (forall x y . c x y => f x -> g y)
-        --   -> NP f xs -> NP g ys
-        -- trans_NP _ _t Nil       = Nil
-        -- trans_NP p  t (x :* xs) = t x :* trans_NP p t xs
-
         encoders
           :: SOP.AllZip ToField fields ys
           => NP SOP.P ys -> NP (SOP.K (Maybe Encoding)) fields
