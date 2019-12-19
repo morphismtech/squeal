@@ -17,16 +17,20 @@ import qualified Database.PostgreSQL.LibPQ as LibPQ
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Schema
 
-class OidOf (pg :: PGType) where oidOf :: LibPQ.Oid
-class OidOfArray (pg :: PGType) where oidOfArray :: LibPQ.Oid
+class OidOf (pg :: PGType) where
+  oidOf :: LibPQ.Oid
+class OidOfArray (pg :: PGType) where
+  oidOfArray :: LibPQ.Oid
 instance OidOfArray pg => OidOf ('PGvararray (null pg)) where
   oidOf = oidOfArray @pg
 instance OidOfArray pg => OidOf ('PGfixarray dims (null pg)) where
   oidOf = oidOfArray @pg
-class OidOfNull (ty :: NullType) where oidOfNull :: LibPQ.Oid
+class OidOfNull (ty :: NullType) where
+  oidOfNull :: LibPQ.Oid
 instance OidOf pg => OidOfNull (null pg) where
   oidOfNull = oidOf @pg
-class OidOfField (field :: (Symbol, NullType)) where oidOfField :: LibPQ.Oid
+class OidOfField (field :: (Symbol, NullType)) where
+  oidOfField :: LibPQ.Oid
 instance OidOfNull ty => OidOfField (fld ::: ty) where
   oidOfField = oidOfNull @ty
 
