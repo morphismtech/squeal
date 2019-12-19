@@ -290,6 +290,8 @@ instance ToParam (NetAddr IP) 'PGinet where toParam = K . Encoding.inet
 instance ToParam Char ('PGchar 1) where toParam = K . Encoding.char_utf8
 instance ToParam Strict.Text 'PGtext where toParam = K . Encoding.text_strict
 instance ToParam Lazy.Text 'PGtext where toParam = K . Encoding.text_lazy
+instance ToParam (VarChar n) ('PGvarchar n) where toParam = K . Encoding.text_strict . getVarChar
+instance ToParam (FixChar n) ('PGchar n) where toParam = K . Encoding.text_strict . getFixChar
 instance ToParam String 'PGtext where
   toParam = K . Encoding.text_strict . Strict.Text.pack
 instance ToParam Strict.ByteString 'PGbytea where
@@ -598,6 +600,14 @@ instance FromValue 'PGtext Strict.Text where fromValue = Decoding.text_strict
 instance FromValue 'PGtext Lazy.Text where fromValue = Decoding.text_lazy
 instance FromValue 'PGtext String where
   fromValue = Strict.Text.unpack <$> Decoding.text_strict
+instance KnownNat n => FromValue ('PGvarchar n) (VarChar n) where
+  fromValue = (varChar <$> Decoding.text_strict) >>= \case
+      Just t -> return t
+      Nothing -> failure "Could not construct VarChar."
+instance KnownNat n => FromValue ('PGchar n) (FixChar n) where
+  fromValue = (fixChar <$> Decoding.text_strict) >>= \case
+      Just t -> return t
+      Nothing -> failure "Could not construct VarChar."
 instance FromValue 'PGbytea Strict.ByteString where
   fromValue = Decoding.bytea_strict
 instance FromValue 'PGbytea Lazy.ByteString where
