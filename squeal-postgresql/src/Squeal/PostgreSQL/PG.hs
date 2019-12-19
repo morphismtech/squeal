@@ -48,6 +48,7 @@ module Squeal.PostgreSQL.PG
   , VarArray (..)
   , FixArray (..)
   , LibPQ.Oid (..)
+  , Only (..)
     -- * Type Families
   , LabelsPG
   , DimPG
@@ -387,3 +388,19 @@ newtype FixArray arr = FixArray {getFixArray :: arr}
   deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 -- | `PGfixarray` @(@`DimPG` @hask) (@`FixPG` @hask)@
 type instance PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
+
+-- | `Only` is a 1-tuple type, useful for encoding a single parameter with
+-- `toParams` or decoding a single value with `fromRow`.
+--
+-- >>> import Data.Text
+-- >>> let onlyParams = genericParams :: EncodeParams '[ 'Null 'PGtext] (Only (Maybe Text))
+-- >>> runEncodeParams onlyParams (Only (Just "foo"))
+-- K (Just "foo") :* Nil
+--
+-- >>> let onlyRow = genericRow :: DecodeRow '["fromOnly" ::: 'Null 'PGtext] (Only (Maybe Text))
+-- >>> runDecodeRow onlyRow (K (Just "bar") :* Nil)
+-- Right (Only {fromOnly = Just "bar"})
+newtype Only x = Only { fromOnly :: x }
+  deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
+instance SOP.Generic (Only x)
+instance SOP.HasDatatypeInfo (Only x)

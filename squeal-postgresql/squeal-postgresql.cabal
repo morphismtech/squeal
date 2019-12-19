@@ -23,7 +23,6 @@ library
   exposed-modules:
     Squeal.PostgreSQL
     Squeal.PostgreSQL.Alias
-    Squeal.PostgreSQL.Binary
     Squeal.PostgreSQL.Definition
     Squeal.PostgreSQL.Definition.Constraint
     Squeal.PostgreSQL.Definition.Function
@@ -54,8 +53,6 @@ library
     Squeal.PostgreSQL.Expression.Window
     Squeal.PostgreSQL.List
     Squeal.PostgreSQL.Manipulation
-    Squeal.PostgreSQL.Migration
-    Squeal.PostgreSQL.Pool
     Squeal.PostgreSQL.PG
     Squeal.PostgreSQL.PQ
     Squeal.PostgreSQL.PQ.Connection
@@ -63,14 +60,16 @@ library
     Squeal.PostgreSQL.PQ.Encode
     Squeal.PostgreSQL.PQ.Exception
     Squeal.PostgreSQL.PQ.Indexed
+    Squeal.PostgreSQL.PQ.Migration
     Squeal.PostgreSQL.PQ.Monad
     Squeal.PostgreSQL.PQ.Oid
+    Squeal.PostgreSQL.PQ.Pool
     Squeal.PostgreSQL.PQ.Result
     Squeal.PostgreSQL.PQ.Statement
+    Squeal.PostgreSQL.PQ.Transaction
     Squeal.PostgreSQL.Render
     Squeal.PostgreSQL.Query
     Squeal.PostgreSQL.Schema
-    Squeal.PostgreSQL.Transaction
   default-language: Haskell2010
   ghc-options: -Wall
   build-depends:

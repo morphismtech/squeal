@@ -6,7 +6,20 @@
   , TypeApplications
 #-}
 
-module Squeal.PostgreSQL.PQ.Result where
+module Squeal.PostgreSQL.PQ.Result
+  ( Result (..)
+  , getRow
+  , firstRow
+  , getRows
+  , nextRow
+  , ntuples
+  , nfields
+  , resultStatus
+  , okResult
+  , resultErrorMessage
+  , resultErrorCode
+  , LibPQ.ExecStatus (..)
+  ) where
 
 import Control.Exception (throw)
 import Control.Monad (when)

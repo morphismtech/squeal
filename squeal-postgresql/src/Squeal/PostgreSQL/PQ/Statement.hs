@@ -1,5 +1,9 @@
 {-# LANGUAGE
     DataKinds
+  , DeriveFunctor
+  , DeriveFoldable
+  , DeriveGeneric
+  , DeriveTraversable
   , FlexibleContexts
   , GADTs
   , RankNTypes
@@ -25,13 +29,13 @@ import Squeal.PostgreSQL.Query
 
 data Statement db x y where
   Manipulation
-    :: SOP.All OidOfNull params
+    :: (SOP.All OidOfNull params, SOP.SListI row)
     => EncodeParams params x
     -> DecodeRow row y
     -> Manipulation '[] db params row
     -> Statement db x y
   Query
-    :: SOP.All OidOfNull params
+    :: (SOP.All OidOfNull params, SOP.SListI row)
     => EncodeParams params x
     -> DecodeRow row y
     -> Query '[] '[] db params row
