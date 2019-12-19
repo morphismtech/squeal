@@ -50,6 +50,13 @@ module Squeal.PostgreSQL.PG
   , LibPQ.Oid (..)
   , Only (..)
     -- * Type Families
+  , VarChar
+  , varChar
+  , getVarChar
+  , FixChar
+  , fixChar
+  , getFixChar
+    -- * Type families
   , LabelsPG
   , DimPG
   , FixPG
@@ -63,6 +70,7 @@ module Squeal.PostgreSQL.PG
 
 import Data.Aeson (Value)
 import Data.Kind (Type)
+import Data.Proxy
 import Data.Int (Int16, Int32, Int64)
 import Data.Scientific (Scientific)
 import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime)
@@ -75,6 +83,7 @@ import qualified Data.ByteString.Lazy as Lazy (ByteString)
 import qualified Data.ByteString as Strict (ByteString)
 import qualified Data.Text.Lazy as Lazy (Text)
 import qualified Data.Text as Strict (Text)
+import qualified Data.Text as Strict.Text
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
@@ -146,6 +155,10 @@ type instance PG UUID = 'PGuuid
 type instance PG (NetAddr IP) = 'PGinet
 -- | `PGjson`
 type instance PG Value = 'PGjson
+-- | `PGvarchar`
+type instance PG (VarChar n) = 'PGvarchar n
+-- | `PGvarchar`
+type instance PG (FixChar n) = 'PGchar n
 
 {-| The `LabelsPG` type family calculates the constructors of a
 Haskell enum type.
@@ -404,3 +417,28 @@ newtype Only x = Only { fromOnly :: x }
   deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
 instance SOP.Generic (Only x)
 instance SOP.HasDatatypeInfo (Only x)
+-- | A refined text type for use with 'varchar'.
+-- The constructor is not exposed. You have to use @varChar@ and @getVarChar@.
+newtype VarChar (n :: Nat) = VarChar Strict.Text
+  deriving (Eq,Ord,Read,Show)
+
+varChar :: forall  n . KnownNat n => Strict.Text -> Maybe (VarChar n)
+varChar t = if Strict.Text.length t <= (fromIntegral $ natVal @n Proxy)
+  then Just . VarChar $ t
+  else Nothing
+
+getVarChar :: VarChar n -> Strict.Text
+getVarChar (VarChar t) = t
+
+-- | A refined text type for use with 'varchar'.
+-- The constructor is not exposed. You have to use @fixChar@ and @getVarChar@.
+newtype FixChar (n :: Nat) = FixChar Strict.Text
+  deriving (Eq,Ord,Read,Show)
+
+fixChar :: forall  n . KnownNat n => Strict.Text -> Maybe (FixChar n)
+fixChar t = if Strict.Text.length t == (fromIntegral $ natVal @n Proxy)
+  then Just . FixChar $ t
+  else Nothing
+
+getFixChar :: FixChar n -> Strict.Text
+getFixChar (FixChar t) = t
