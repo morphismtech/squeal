@@ -48,6 +48,7 @@ import Data.UUID.Types (UUID)
 import Data.Vector (Vector)
 import Data.Word (Word32)
 import Foreign.C.Types (CUInt(CUInt))
+import GHC.TypeLits (Symbol)
 import Network.IP.Addr (NetAddr, IP)
 import PostgreSQL.Binary.Encoding
 
@@ -151,19 +152,9 @@ instance
   ) => ToParam ('PGcomposite fields) (Composite x) where
     toParam =
       let
-        encodeField
-          :: forall field y. ToField field y
-          => SOP.P y -> SOP.K (Maybe Encoding) field
-        encodeField = SOP.K . toField @field
-
-        encoders
-          :: SOP.AllZip ToField fields ys
-          => NP SOP.P ys -> NP (SOP.K (Maybe Encoding)) fields
-        encoders = SOP.htrans (SOP.Proxy @ToField) encodeField
-
+        toFields = trans_NP_flip (SOP.Proxy @ToField) toField
         composite
-          :: SOP.All OidOfField row
-          => NP (SOP.K (Maybe Encoding)) row
+          :: NP (SOP.K (Maybe Encoding)) fields
           -> Encoding
         composite fields =
           -- <number of fields: 4 bytes>
@@ -192,7 +183,7 @@ instance
             in
               SOP.hcfoldMap (SOP.Proxy @OidOfField) each fields
       in
-        composite . encoders . SOP.toRecord . getComposite
+        composite . toFields . SOP.toRecord . getComposite
 instance ToParam pg x => ToParam ('PGrange pg) (Range x) where
   toParam rng =
     word8 (setFlags rng 0) <>
@@ -224,9 +215,10 @@ instance ToParam pg x => ToNullParam ('NotNull pg) x where
 instance ToParam pg x => ToNullParam ('Null pg) (Maybe x) where
   toNullParam = fmap (toParam @pg)
 
-class ToField field x where toField :: SOP.P x -> Maybe Encoding
-instance (fld0 ~ fld1, ToNullParam ty x) => ToField (fld0 ::: ty) (fld1 ::: x) where
-  toField (SOP.P x) = toNullParam @ty x
+class ToField (field :: (Symbol,NullType)) x where
+  toField :: SOP.P x -> SOP.K (Maybe Encoding) field
+instance (ToNullParam ty x) => ToField (fld ::: ty) (fld ::: x) where
+  toField (SOP.P x) = SOP.K (toNullParam @ty x)
 
 class ToFixArray dims ty x where toFixArray :: x -> Array
 instance ToNullParam ty x => ToFixArray '[] ty x where
