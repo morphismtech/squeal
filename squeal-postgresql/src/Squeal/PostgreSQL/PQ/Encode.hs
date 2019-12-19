@@ -48,7 +48,6 @@ import Data.UUID.Types (UUID)
 import Data.Vector (Vector)
 import Data.Word (Word32)
 import Foreign.C.Types (CUInt(CUInt))
-import GHC.TypeLits (Symbol)
 import Network.IP.Addr (NetAddr, IP)
 import PostgreSQL.Binary.Encoding
 
@@ -215,10 +214,11 @@ instance ToParam pg x => ToNullParam ('NotNull pg) x where
 instance ToParam pg x => ToNullParam ('Null pg) (Maybe x) where
   toNullParam = fmap (toParam @pg)
 
-class ToField (field :: (Symbol,NullType)) x where
+class ToField field x where
   toField :: SOP.P x -> SOP.K (Maybe Encoding) field
-instance (ToNullParam ty x) => ToField (fld ::: ty) (fld ::: x) where
-  toField (SOP.P x) = SOP.K (toNullParam @ty x)
+instance (fld0 ~ fld1, ToNullParam ty x)
+  => ToField (fld0 ::: ty) (fld1 ::: x) where
+    toField (SOP.P x) = SOP.K (toNullParam @ty x)
 
 class ToFixArray dims ty x where toFixArray :: x -> Array
 instance ToNullParam ty x => ToFixArray '[] ty x where
