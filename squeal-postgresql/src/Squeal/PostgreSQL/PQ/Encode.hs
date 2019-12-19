@@ -149,59 +149,58 @@ instance
   , SOP.AllZip ToField fields xs
   , SOP.All OidOfField fields
   ) => ToParam ('PGcomposite fields) (Composite x) where
-    toParam = undefined
-      -- let
-      --   encodeField
-      --     :: forall field y. ToField field y
-      --     => SOP.P y -> SOP.K (Maybe Encoding) field
-      --   encodeField = SOP.K . toField @field
+    toParam =
+      let
+        encodeField
+          :: forall field y. ToField field y
+          => SOP.P y -> SOP.K (Maybe Encoding) field
+        encodeField = SOP.K . toField @field
 
-      --   -- trans_NP ::
-      --   --     SOP.AllZip c xs ys
-      --   --   => proxy c
-      --   --   -> (forall x y . c x y => f x -> g y)
-      --   --   -> NP f xs -> NP g ys
-      --   -- trans_NP _ _t Nil       = Nil
-      --   -- trans_NP p  t (x :* xs) = t x :* trans_NP p t xs
+        -- trans_NP ::
+        --     SOP.AllZip c xs ys
+        --   => proxy c
+        --   -> (forall x y . c x y => f x -> g y)
+        --   -> NP f xs -> NP g ys
+        -- trans_NP _ _t Nil       = Nil
+        -- trans_NP p  t (x :* xs) = t x :* trans_NP p t xs
 
-      --   encoders
-      --     :: SOP.AllZip ToField fields ys
-      --     => NP SOP.P ys -> NP (SOP.K (Maybe Encoding)) fields
-      --   encoders = SOP.htrans (SOP.Proxy @ToField) encodeField
+        encoders
+          :: SOP.AllZip ToField fields ys
+          => NP SOP.P ys -> NP (SOP.K (Maybe Encoding)) fields
+        encoders = SOP.htrans (SOP.Proxy @ToField) encodeField
 
-      --   composite
-      --     :: SOP.All OidOfField row
-      --     => NP (SOP.K (Maybe Encoding)) row
-      --     -> Encoding
-      --   composite fields =
-      --     -- <number of fields: 4 bytes>
-      --     -- [for each field]
-      --     --  <OID of field's type: sizeof(Oid) bytes>
-      --     --  [if value is NULL]
-      --     --    <-1: 4 bytes>
-      --     --  [else]
-      --     --    <length of value: 4 bytes>
-      --     --    <value: <length> bytes>
-      --     --  [end if]
-      --     -- [end for]
-      --     int32BE (fromIntegral (SOP.lengthSList (SOP.Proxy @xs))) <>
-      --       let
-      --         each
-      --           :: OidOfField field
-      --           => SOP.K (Maybe Encoding) field
-      --           -> Encoding
-      --         each (SOP.K field :: SOP.K (Maybe Encoding) field) =
-      --           word32BE (getOid (oidOfField @field))
-      --           <> case field of
-      --             Nothing -> int64BE (-1)
-      --             Just value ->
-      --               int32BE (fromIntegral (builderLength value))
-      --               <> value
-      --       in
-      --         SOP.hcfoldMap (SOP.Proxy @OidOfField) each fields
-
-      -- in
-      --   composite . encoders . SOP.toRecord . getComposite
+        composite
+          :: SOP.All OidOfField row
+          => NP (SOP.K (Maybe Encoding)) row
+          -> Encoding
+        composite fields =
+          -- <number of fields: 4 bytes>
+          -- [for each field]
+          --  <OID of field's type: sizeof(Oid) bytes>
+          --  [if value is NULL]
+          --    <-1: 4 bytes>
+          --  [else]
+          --    <length of value: 4 bytes>
+          --    <value: <length> bytes>
+          --  [end if]
+          -- [end for]
+          int32BE (fromIntegral (SOP.lengthSList (SOP.Proxy @xs))) <>
+            let
+              each
+                :: OidOfField field
+                => SOP.K (Maybe Encoding) field
+                -> Encoding
+              each (SOP.K field :: SOP.K (Maybe Encoding) field) =
+                word32BE (getOid (oidOfField @field))
+                <> case field of
+                  Nothing -> int64BE (-1)
+                  Just value ->
+                    int32BE (fromIntegral (builderLength value))
+                    <> value
+            in
+              SOP.hcfoldMap (SOP.Proxy @OidOfField) each fields
+      in
+        composite . encoders . SOP.toRecord . getComposite
 instance ToParam pg x => ToParam ('PGrange pg) (Range x) where
   toParam rng =
     word8 (setFlags rng 0) <>
