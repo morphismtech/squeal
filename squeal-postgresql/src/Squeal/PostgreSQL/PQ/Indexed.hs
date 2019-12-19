@@ -84,7 +84,7 @@ class
     -> x -> t i k m z
   pqAndThen g f x = pqBind g (f x)
 
-{- | `Indexed` reshuffles the arguments of an `IndexedMonadTrans`,
+{- | `Indexed` reshuffles the type parameters of an `IndexedMonadTrans`,
 exposing its `Category` instance.-}
 newtype Indexed t m r i j = Indexed {runIndexed :: t i j m r}
 instance
