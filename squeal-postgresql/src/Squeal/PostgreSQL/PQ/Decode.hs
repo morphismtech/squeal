@@ -4,6 +4,7 @@
   , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
+  , FunctionalDependencies
   , GeneralizedNewtypeDeriving
   , LambdaCase
   , MultiParamTypeClasses
@@ -21,6 +22,7 @@ module Squeal.PostgreSQL.PQ.Decode
   , decodeRow
   , runDecodeRow
   , genericRow
+  , NullRow(nullRow)
   , FromValue (..)
   , FromNullValue (..)
   , FromField (..)
@@ -272,8 +274,8 @@ decodeRow
   :: (SOP.NP (SOP.K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
   -> DecodeRow row y
 decodeRow dec = DecodeRow . ReaderT $ liftEither . dec
-instance {-# OVERLAPPING #-} (fld0 ~ fld1, FromNullValue ty y)
-  => IsLabel fld0 (DecodeRow ((fld1 ::: ty) ': row) y) where
+instance {-# OVERLAPPING #-} FromNullValue ty y
+  => IsLabel fld (DecodeRow (fld ::: ty ': row) y) where
     fromLabel = decodeRow $ \(SOP.K b SOP.:* _) -> fromNullValue @ty b
 instance {-# OVERLAPPABLE #-} IsLabel fld (DecodeRow row y)
   => IsLabel fld (DecodeRow (field ': row) y) where
@@ -294,3 +296,34 @@ runField
   => SOP.K (Maybe Strict.ByteString) ty
   -> Except Strict.Text (SOP.P y)
 runField (SOP.K b) = liftEither $ fromField @ty b
+
+{- |
+>>> :{
+let
+  decode :: DecodeRow
+    '[ "foo" ::: 'NotNull 'PGint4
+     , "bar" ::: 'Null 'PGfloat8
+     , "baz" ::: 'Null 'PGtext
+     ] (Int32, Maybe (Double, String))
+  decode = do
+    foo <- #foo
+    bar <- #bar
+    baz <- #baz
+    return (foo, (,) <$> bar <*> baz)
+:}
+-}
+class NullRow row nullRow | nullRow -> row, row -> nullRow where
+  notNullRow
+    :: SOP.NP (SOP.K (Maybe Strict.ByteString)) nullRow
+    -> Maybe (SOP.NP (SOP.K (Maybe Strict.ByteString)) row)
+  nullRow :: DecodeRow row x -> DecodeRow nullRow (Maybe x)
+  nullRow decode = decodeRow $ \fields -> do
+    case notNullRow fields of
+      Nothing -> return Nothing
+      Just row -> Just <$> runDecodeRow decode row
+instance NullRow '[] '[] where notNullRow Nil = Just Nil
+instance NullRow row nullRow
+  => NullRow (fld ::: 'NotNull pg ': row) (fld ::: 'Null pg ': nullRow) where
+    notNullRow (fld :* flds) = case SOP.unK fld of
+      Nothing -> Nothing
+      Just b -> (SOP.K (Just b) :*) <$> notNullRow flds
