@@ -28,17 +28,20 @@ import Squeal.PostgreSQL.PQ.Oid
 import Squeal.PostgreSQL.Query
 
 data Statement db x y where
+  -- | Constructor for a data manipulation language statement
   Manipulation
     :: (SOP.All OidOfNull params, SOP.SListI row)
-    => EncodeParams params x
-    -> DecodeRow row y
+    => EncodeParams params x -- ^ encoding of parameters
+    -> DecodeRow row y -- ^ decoding of returned rows
     -> Manipulation '[] db params row
+    -- ^ `insertInto`, `update`, `deleteFrom`, ...
     -> Statement db x y
+  -- | Constructor for a structured query language statement
   Query
     :: (SOP.All OidOfNull params, SOP.SListI row)
-    => EncodeParams params x
-    -> DecodeRow row y
-    -> Query '[] '[] db params row
+    => EncodeParams params x -- ^ encoding of parameters
+    -> DecodeRow row y -- ^ decoding of returned rows
+    -> Query '[] '[] db params row -- ^ `select`, `values`, ...
     -> Statement db x y
 
 instance Profunctor (Statement db) where
@@ -57,16 +60,18 @@ instance Profunctor (Statement db) where
 
 instance Functor (Statement db x) where fmap = rmap
 
+-- | Smart constructor for a structured query language statement
 query ::
   ( SOP.All OidOfNull params
   , SOP.IsProductType x xs
   , SOP.AllZip ToNullParam params xs
   , SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
-  ) => Query '[] '[] db params row
+  ) => Query '[] '[] db params row -- ^ `select`, `values`, ...
     -> Statement db x y
 query = Query genericParams genericRow
 
+-- | Smart constructor for a data manipulation language statement
 manipulation ::
   ( SOP.All OidOfNull params
   , SOP.IsProductType x xs
@@ -74,5 +79,6 @@ manipulation ::
   , SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
   ) => Manipulation '[] db params row
+    -- ^ `insertInto`, `update`, `deleteFrom`, ...
     -> Statement db x y
 manipulation = Manipulation genericParams genericRow

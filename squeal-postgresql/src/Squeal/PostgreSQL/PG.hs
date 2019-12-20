@@ -402,8 +402,7 @@ newtype FixArray arr = FixArray {getFixArray :: arr}
 -- | `PGfixarray` @(@`DimPG` @hask) (@`FixPG` @hask)@
 type instance PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
 
--- | `Only` is a 1-tuple type, useful for encoding a single parameter with
--- `toParams` or decoding a single value with `fromRow`.
+-- | `Only` is a 1-tuple type, useful for encoding or decoding a singleton
 --
 -- >>> import Data.Text
 -- >>> let onlyParams = genericParams :: EncodeParams '[ 'Null 'PGtext] (Only (Maybe Text))

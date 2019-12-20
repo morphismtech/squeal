@@ -45,60 +45,45 @@ import qualified Control.Monad.Trans.RWS.Lazy as Lazy
 import qualified Control.Monad.Trans.RWS.Strict as Strict
 
 {- | `MonadPQ` is an @mtl@ style constraint, similar to
-`Control.Monad.State.Class.MonadState`, for using `Database.PostgreSQL.LibPQ` to
-
-* `manipulateParams` runs a `Manipulation` with params from a type
-   with a `ToParams` constraint. It calls `LibPQ.execParams` and
-   doesn't afraid of anything.
-
-* `manipulateParams_` is like `manipulateParams` for a returning-free statement.
-
-* `manipulate` is like `manipulateParams` for a parameter-free statement.
-
-* `manipulate_` is like `manipulate` for a returning-free statement.
-
-* `runQueryParams` is like `manipulateParams` for query statements.
-
-* `runQuery` is like `runQueryParams` for a parameter-free statement.
-
-* `traversePrepared` has the same type signature as a composition of
-  `traverse` and `manipulateParams` but provides an optimization by
-  preparing the statement with `LibPQ.prepare` and then traversing a
-  `Traversable` container with `LibPQ.execPrepared`. The temporary prepared
-  statement is then deallocated.
-
-* `forPrepared` is a flipped `traversePrepared`
-
-* `traversePrepared_` is like `traversePrepared` but works on `Foldable`
-  containers for a returning-free statement.
-
-* `forPrepared_` is a flipped `traversePrepared_`.
-
-* `liftPQ` lets you lift actions from `Database.PostgreSQL.LibPQ` that require a connection
-  into your monad.
-
-To define an instance, you can minimally define only `manipulateParams`,
-`traversePrepared`, `traversePrepared_` and `liftPQ`. Monad transformers get
-a default instance.
-
+`Control.Monad.State.Class.MonadState`, for using `Database.PostgreSQL.LibPQ`
+to run `Statement`s.
 -}
 class Monad pq => MonadPQ db pq | pq -> db where
 
+  {- |
+  `executeParams` runs a `Statement`.
+  It calls `LibPQ.execParams` and doesn't afraid of anything.
+  -}
   executeParams :: Statement db x y -> x -> pq (Result y)
   default executeParams
     :: (MonadTrans t, MonadPQ db m, pq ~ t m)
     => Statement db x y -> x -> pq (Result y)
   executeParams statement params = lift $ executeParams statement params
 
+  {- |
+  `executeParams_` runs a returning-free `Statement`.
+  It calls `LibPQ.execParams` and doesn't afraid of anything.
+  -}
   executeParams_ :: Statement db x () -> x -> pq ()
   executeParams_ statement params = void $ executeParams statement params
 
+  {- |
+  `execute` runs a parameter-free `Statement`.
+  -}
   execute :: Statement db () y -> pq (Result y)
   execute statement = executeParams statement ()
 
+  {- |
+  `execute_` runs a parameter-free, returning-free `Statement`.
+  -}
   execute_ :: Statement db () () -> pq ()
   execute_ = void . execute
 
+  {- |
+  `executePrepared` runs a `Statement` on a `Traversable`
+  container by first preparing the statement, then running the prepared
+  statement on each element.
+  -}
   executePrepared
     :: Traversable list
     => Statement db x y -> list x -> pq (list (Result y))
@@ -108,6 +93,11 @@ class Monad pq => MonadPQ db pq | pq -> db where
     => Statement db x y -> list x -> pq (list (Result y))
   executePrepared statement x = lift $ executePrepared statement x
 
+  {- |
+  `executePrepared_` runs a returning-free `Statement` on a `Foldable`
+  container by first preparing the statement, then running the prepared
+  statement on each element.
+  -}
   executePrepared_
     :: Foldable list
     => Statement db x () -> list x -> pq ()
@@ -117,6 +107,9 @@ class Monad pq => MonadPQ db pq | pq -> db where
     => Statement db x () -> list x -> pq ()
   executePrepared_ statement x = lift $ executePrepared_ statement x
 
+{- |
+`manipulateParams` runs a `Manipulation`.
+-}
 manipulateParams ::
   ( MonadPQ db pq
   , SOP.IsProductType x xs
@@ -129,6 +122,9 @@ manipulateParams ::
     -> x -> pq (Result y)
 manipulateParams = executeParams . manipulation
 
+{- |
+`manipulateParams_` runs a `Manipulation`, for a returning-free statement.
+-}
 manipulateParams_ ::
   ( MonadPQ db pq
   , SOP.IsProductType x xs
@@ -139,18 +135,28 @@ manipulateParams_ ::
     -> x -> pq ()
 manipulateParams_ = executeParams_ . manipulation
 
+{- |
+`manipulate` runs a `Manipulation`, for a parameter-free statement.
+-}
 manipulate
   :: (MonadPQ db pq, SOP.IsRecord y ys, SOP.AllZip FromField row ys)
   => Manipulation '[] db '[] row
   -> pq (Result y)
 manipulate = execute . manipulation
 
+{- |
+`manipulate_` runs a `Manipulation`,
+for a returning-free, parameter-free statement.
+-}
 manipulate_
   :: MonadPQ db pq
   => Manipulation '[] db '[] '[]
   -> pq ()
 manipulate_ = execute_ . manipulation
 
+{- |
+`runQueryParams` runs a `Query`.
+-}
 runQueryParams ::
   ( MonadPQ db pq
   , SOP.IsProductType x xs
@@ -163,6 +169,9 @@ runQueryParams ::
     -> x -> pq (Result y)
 runQueryParams = executeParams . query
 
+{- |
+`runQuery` runs a `Query`, for a parameter-free statement.
+-}
 runQuery
   :: (MonadPQ db pq, SOP.IsRecord y ys, SOP.AllZip FromField row ys)
   => Query '[] '[] db '[] row
@@ -170,6 +179,11 @@ runQuery
   -> pq (Result y)
 runQuery = execute . query
 
+{- |
+`traversePrepared` runs a `Manipulation` on a `Traversable`
+container by first preparing the statement, then running the prepared
+statement on each element.
+-}
 traversePrepared
   :: ( MonadPQ db pq
      , SOP.IsProductType x xs
@@ -183,6 +197,9 @@ traversePrepared
   -> list x -> pq (list (Result y))
 traversePrepared = executePrepared . manipulation
 
+{- |
+`forPrepared` is a flipped `traversePrepared`
+-}
 forPrepared
   :: ( MonadPQ db pq
      , SOP.IsProductType x xs
@@ -197,6 +214,11 @@ forPrepared
   -> pq (list (Result y))
 forPrepared = flip traversePrepared
 
+{- |
+`traversePrepared` runs a returning-free `Manipulation` on a `Foldable`
+container by first preparing the statement, then running the prepared
+statement on each element.
+-}
 traversePrepared_
   :: ( MonadPQ db pq
      , SOP.IsProductType x xs
@@ -208,6 +230,9 @@ traversePrepared_
   -> list x -> pq ()
 traversePrepared_ = executePrepared_ . manipulation
 
+{- |
+`forPrepared_` is a flipped `traversePrepared_`
+-}
 forPrepared_
   :: ( MonadPQ db pq
      , SOP.IsProductType x xs
