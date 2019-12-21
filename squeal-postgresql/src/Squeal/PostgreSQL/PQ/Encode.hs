@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.PQ.Encode
+Description: Encoding of statement parameters
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Encoding of statement parameters
+-}
+
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
@@ -17,7 +27,8 @@
 #-}
 
 module Squeal.PostgreSQL.PQ.Encode
-  ( EncodeParams (..)
+  ( -- * Encode Parameters
+    EncodeParams (..)
   , genericParams
   , nilParams
   , (.*)
@@ -26,6 +37,7 @@ module Squeal.PostgreSQL.PQ.Encode
   , appendParams
   , deconsParams
   , disjoinParams
+    -- * Encoding Classes
   , ToParam (..)
   , ToNullParam (..)
   , ToField (..)

@@ -1,15 +1,12 @@
 {-|
 Module: Squeal.PostgreSQL.PQ.Exception
-Description: PQ monad
-Copyright: (c) Eitan Chatav, 2017
+Description: Squeal exceptions
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
+Squeal exceptions
 -}
-
-{-# LANGUAGE
-    RankNTypes
-#-}
 
 module Squeal.PostgreSQL.PQ.Exception
   ( SquealException (..)

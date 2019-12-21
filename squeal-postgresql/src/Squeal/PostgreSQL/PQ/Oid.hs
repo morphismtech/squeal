@@ -1,3 +1,15 @@
+{-|
+Module: Squeal.PostgreSQL.PQ.Oid
+Description: Object identifiers
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Object identifiers are used internally by PostgreSQL as
+primary keys. They are needed to correctly encode
+statement parameters.
+-}
+
 {-# LANGUAGE
     AllowAmbiguousTypes
   , DataKinds
@@ -8,7 +20,14 @@
   , TypeOperators
 #-}
 
-module Squeal.PostgreSQL.PQ.Oid where
+module Squeal.PostgreSQL.PQ.Oid
+  ( -- * Oids
+    LibPQ.Oid
+  , OidOf (..)
+  , OidOfArray (..)
+  , OidOfNull (..)
+  , OidOfField (..)
+  ) where
 
 import GHC.TypeLits
 
@@ -17,18 +36,22 @@ import qualified Database.PostgreSQL.LibPQ as LibPQ
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Schema
 
+-- | The `LibPQ.Oid` of a `PGType`
 class OidOf (pg :: PGType) where
   oidOf :: LibPQ.Oid
+-- | The `LibPQ.Oid` of an array
 class OidOfArray (pg :: PGType) where
   oidOfArray :: LibPQ.Oid
 instance OidOfArray pg => OidOf ('PGvararray (null pg)) where
   oidOf = oidOfArray @pg
 instance OidOfArray pg => OidOf ('PGfixarray dims (null pg)) where
   oidOf = oidOfArray @pg
+-- | The `LibPQ.Oid` of a `NullType`
 class OidOfNull (ty :: NullType) where
   oidOfNull :: LibPQ.Oid
 instance OidOf pg => OidOfNull (null pg) where
   oidOfNull = oidOf @pg
+-- | The `LibPQ.Oid` of a field
 class OidOfField (field :: (Symbol, NullType)) where
   oidOfField :: LibPQ.Oid
 instance OidOfNull ty => OidOfField (fld ::: ty) where

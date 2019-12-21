@@ -1,7 +1,7 @@
 {-|
 Module: Squeal.PostgreSQL.Definition.Constraint
 Description: Table constraint expressions
-Copyright: (c) Eitan Chatav, 2017
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 

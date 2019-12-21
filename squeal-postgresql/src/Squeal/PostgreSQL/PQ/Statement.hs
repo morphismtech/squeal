@@ -1,3 +1,15 @@
+{-|
+Module: Squeal.PostgreSQL.PQ.Statement
+Description: Statements
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+A top-level `Statement` type wraps a `Squeal.PostgreSQL.Query.Query`
+or `Squeal.PostgreSQL.Manipulation.Manipulation`
+together with an `EncodeParams` and a `DecodeRow`.
+-}
+
 {-# LANGUAGE
     DataKinds
   , DeriveFunctor

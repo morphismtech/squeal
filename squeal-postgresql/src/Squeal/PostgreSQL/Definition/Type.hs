@@ -1,7 +1,7 @@
 {-|
 Module: Squeal.PostgreSQL.Definition.Type
 Description: Create and drop type definitions
-Copyright: (c) Eitan Chatav, 2017
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 

@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.PQ.Encode
+Description: Decoding of result values
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Decoding of result values
+-}
+
 {-# LANGUAGE
     AllowAmbiguousTypes
   , DataKinds
@@ -18,10 +28,12 @@
 #-}
 
 module Squeal.PostgreSQL.PQ.Decode
-  ( DecodeRow (..)
+  ( -- * Decode Rows
+    DecodeRow (..)
   , decodeRow
   , runDecodeRow
   , genericRow
+    -- * Decoding Classes
   , FromValue (..)
   , FromNullValue (..)
   , FromField (..)

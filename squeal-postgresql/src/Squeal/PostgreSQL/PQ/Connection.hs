@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.PQ.Connection
+Description: Database connections
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Database connections
+-}
+
 {-# LANGUAGE
     DataKinds
   , PolyKinds

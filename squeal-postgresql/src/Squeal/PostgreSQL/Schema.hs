@@ -10,6 +10,7 @@ tables, schema, constraints, aliases, enumerated labels, and groupings.
 It also defines useful type families to operate on these. Finally,
 it defines an embedding of Haskell types into Postgres types.
 -}
+
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds

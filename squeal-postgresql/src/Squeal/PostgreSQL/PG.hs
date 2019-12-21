@@ -48,14 +48,9 @@ module Squeal.PostgreSQL.PG
   , VarArray (..)
   , FixArray (..)
   , LibPQ.Oid (..)
+  , VarChar, varChar, getVarChar
+  , FixChar, fixChar, getFixChar
   , Only (..)
-    -- * Type Families
-  , VarChar
-  , varChar
-  , getVarChar
-  , FixChar
-  , fixChar
-  , getFixChar
     -- * Type families
   , LabelsPG
   , DimPG
@@ -416,28 +411,33 @@ newtype Only x = Only { fromOnly :: x }
   deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
 instance SOP.Generic (Only x)
 instance SOP.HasDatatypeInfo (Only x)
--- | A refined text type for use with 'varchar'.
--- The constructor is not exposed. You have to use @varChar@ and @getVarChar@.
+
+-- | Variable-length text type with limit
 newtype VarChar (n :: Nat) = VarChar Strict.Text
   deriving (Eq,Ord,Read,Show)
 
+-- | Constructor for `VarChar`
 varChar :: forall  n . KnownNat n => Strict.Text -> Maybe (VarChar n)
-varChar t = if Strict.Text.length t <= (fromIntegral $ natVal @n Proxy)
-  then Just . VarChar $ t
+varChar t =
+  if Strict.Text.length t <= fromIntegral (natVal @n Proxy)
+  then Just $ VarChar t
   else Nothing
 
+-- | Access the `Strict.Text` of a `VarChar`
 getVarChar :: VarChar n -> Strict.Text
 getVarChar (VarChar t) = t
 
--- | A refined text type for use with 'varchar'.
--- The constructor is not exposed. You have to use @fixChar@ and @getVarChar@.
+-- | Fixed-length, blank padded
 newtype FixChar (n :: Nat) = FixChar Strict.Text
   deriving (Eq,Ord,Read,Show)
 
+-- | Constructor for `FixChar`
 fixChar :: forall  n . KnownNat n => Strict.Text -> Maybe (FixChar n)
-fixChar t = if Strict.Text.length t == (fromIntegral $ natVal @n Proxy)
-  then Just . FixChar $ t
+fixChar t =
+  if Strict.Text.length t == fromIntegral (natVal @n Proxy)
+  then Just $ FixChar t
   else Nothing
 
+-- | Access the `Strict.Text` of a `FixChar`
 getFixChar :: FixChar n -> Strict.Text
 getFixChar (FixChar t) = t
