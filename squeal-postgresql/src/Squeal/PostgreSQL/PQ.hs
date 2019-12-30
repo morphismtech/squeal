@@ -5,18 +5,9 @@ Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-This module is where Squeal commands actually get executed by
-`Database.PostgreSQL.LibPQ`. It containts two typeclasses,
-`IndexedMonadTransPQ` for executing
-a `Definition` and `MonadPQ` for executing a `Manipulation` or `Query`,
-and a `PQ` type with instances for them.
-
 Using Squeal in your application will come down to defining
 the @db@ of your database and including @PQ db db@ in your
 application's monad transformer stack, giving it an instance of `MonadPQ`.
-
-This module also provides functions for retrieving rows from the `LibPQ.Result`
-of executing Squeal commands.
 -}
 
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}

@@ -81,7 +81,7 @@ instance Additional (NP expr) where
 -- at least 2 without `Nil`
 (*:) :: f x -> f y -> NP f '[x,y]
 x *: y = x :* y :* Nil
-infixl 9 *:
+infixl 8 *:
 
 -- | A list of length `one`.
 one :: f x -> NP f '[x]

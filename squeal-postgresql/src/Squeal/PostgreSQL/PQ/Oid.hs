@@ -37,6 +37,10 @@ import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Schema
 
 -- | The `LibPQ.Oid` of a `PGType`
+--
+-- >>> :set -XTypeApplications
+-- >>> oidOf @'PGbool
+-- Oid 16
 class OidOf (pg :: PGType) where
   oidOf :: LibPQ.Oid
 -- | The `LibPQ.Oid` of an array

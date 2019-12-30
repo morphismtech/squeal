@@ -562,18 +562,18 @@ type family Schema :: SchemaType where
 type SchemaType = [(Symbol,SchemumType)]
 
 {- |
-A database contains one or more named db, which in turn contain tables.
-The same object name can be used in different db without conflict;
+A database contains one or more named schemas, which in turn contain tables.
+The same object name can be used in different schemas without conflict;
 for example, both schema1 and myschema can contain tables named mytable.
-Unlike databases, db are not rigidly separated:
-a user can access objects in any of the db in the database they are connected to,
+Unlike databases, schemas are not rigidly separated:
+a user can access objects in any of the schemas in the database they are connected to,
 if they have privileges to do so.
 
-There are several reasons why one might want to use db:
+There are several reasons why one might want to use schemas:
 
   * To allow many users to use one database without interfering with each other.
   * To organize database objects into logical groups to make them more manageable.
-  * Third-party applications can be put into separate db
+  * Third-party applications can be put into separate schemas
   so they do not collide with the names of other objects.
 -}
 type SchemasType = [(Symbol,SchemaType)]

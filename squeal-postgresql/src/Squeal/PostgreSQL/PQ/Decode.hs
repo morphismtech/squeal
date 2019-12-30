@@ -76,7 +76,14 @@ import Squeal.PostgreSQL.Schema
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
 
-class FromValue pg y where fromValue :: Value y
+-- | A `FromValue` constraint gives a parser from the binary format of
+-- a PostgreSQL `PGType` into a Haskell `Type`.
+class FromValue pg y where
+  -- |
+  -- >>> :set -XMultiParamTypeClasses
+  -- >>> newtype Id = Id { getId :: Int16 } deriving Show
+  -- >>> instance FromValue 'PGint2 Id where fromValue = Id <$> fromValue @'PGint2
+  fromValue :: Value y
 instance FromValue 'PGbool Bool where fromValue = bool
 instance FromValue 'PGint2 Int16 where fromValue = int
 instance FromValue 'PGint4 Int32 where fromValue = int
@@ -221,6 +228,10 @@ instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
             return $ if testBit flag 2 then Closed l else Open l
       return $ NonEmpty lower upper
 
+-- | A `FromNullValue` constraint lifts the `FromValue` parser
+-- to a decoding of a @NullityType@ to a `Type`,
+-- decoding `Null`s to `Maybe`s. You should not define instances for
+-- `FromNullValue`, just use the provided instances.
 class FromNullValue ty y where
   fromNullValue :: Maybe Strict.ByteString -> Either Strict.Text y
 instance FromValue pg y => FromNullValue ('NotNull pg) y where
@@ -233,6 +244,10 @@ instance FromValue pg y => FromNullValue ('Null pg) (Maybe y) where
     Just bytestring -> fmap Just $
       valueParser (fromValue @pg) bytestring
 
+-- | A `FromField` constraint lifts the `FromValue` parser
+-- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
+-- decoding `Null`s to `Maybe`s. You should not define instances for
+-- `FromField`, just use the provided instances.
 class FromField field y where
   fromField :: Maybe Strict.ByteString -> Either Strict.Text (SOP.P y)
 instance (fld0 ~ fld1, FromNullValue ty y)
@@ -267,6 +282,39 @@ replicateMN
 replicateMN mx = SOP.hsequence' $
   SOP.hcpure (SOP.Proxy :: SOP.Proxy ((~) x)) (SOP.Comp (SOP.I <$> mx))
 
+{- |
+`DecodeRow` describes a decoding of a PostgreSQL `RowType`
+into a Haskell `Type`.
+
+`DecodeRow` has an interface given by the classes
+`Functor`, `Applicative`, `Alternative`, `Monad`,
+`MonadPlus`, `MonadError Strict.Text`, and `IsLabel`.
+
+>>> :set -XOverloadedLabels
+>>> :{
+let
+  decode :: DecodeRow
+    '[ "fst" ::: 'NotNull 'PGint2, "snd" ::: 'NotNull ('PGchar 1)]
+    (Int16, Char)
+  decode = (,) <$> #fst <*> #snd
+in runDecodeRow decode (SOP.K (Just "\NUL\SOH") :* SOP.K (Just "a") :* Nil)
+:}
+Right (1,'a')
+
+There is also an `IsLabel` instance for `MaybeT` `DecodeRow`s, useful
+for decoding outer joined rows.
+
+>>> :{
+let
+  decode :: DecodeRow
+    '[ "fst" ::: 'Null 'PGint2, "snd" ::: 'Null ('PGchar 1)]
+    (Maybe (Int16, Char))
+  decode = runMaybeT $ (,) <$> #fst <*> #snd
+in runDecodeRow decode (SOP.K (Just "\NUL\SOH") :* SOP.K (Just "a") :* Nil)
+:}
+Right (Just (1,'a'))
+
+-}
 newtype DecodeRow (row :: RowType) (y :: Type) = DecodeRow
   { unDecodeRow :: ReaderT
       (SOP.NP (SOP.K (Maybe Strict.ByteString)) row) (Except Strict.Text) y }
@@ -277,11 +325,15 @@ newtype DecodeRow (row :: RowType) (y :: Type) = DecodeRow
     , Monad
     , MonadPlus
     , MonadError Strict.Text )
+
+-- | Run a `DecodeRow`.
 runDecodeRow
   :: DecodeRow row y
   -> SOP.NP (SOP.K (Maybe Strict.ByteString)) row
   -> Either Strict.Text y
 runDecodeRow = fmap runExcept . runReaderT . unDecodeRow
+
+-- | Smart constructor for a `DecodeRow`.
 decodeRow
   :: (SOP.NP (SOP.K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
   -> DecodeRow row y
@@ -302,6 +354,20 @@ instance {-# OVERLAPPABLE #-} IsLabel fld (MaybeT (DecodeRow row) y)
   => IsLabel fld (MaybeT (DecodeRow (field ': row)) y) where
     fromLabel = MaybeT . decodeRow $ \(_ SOP.:* bs) ->
       runDecodeRow (runMaybeT (fromLabel @fld)) bs
+
+{- | Row decoder for `SOP.Generic` records.
+
+>>> import qualified GHC.Generics as GHC
+>>> import qualified Generics.SOP as SOP
+>>> data Two = Two {frst :: Int16, scnd :: String} deriving (Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
+>>> :{
+let
+  decode :: DecodeRow '[ "frst" ::: 'NotNull 'PGint2, "scnd" ::: 'NotNull 'PGtext] Two
+  decode = genericRow
+in runDecodeRow decode (SOP.K (Just "\NUL\STX") :* SOP.K (Just "two") :* Nil)
+:}
+Right (Two {frst = 2, scnd = "two"})
+-}
 genericRow ::
   ( SOP.SListI row
   , SOP.IsRecord y ys

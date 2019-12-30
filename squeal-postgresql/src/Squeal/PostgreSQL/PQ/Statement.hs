@@ -39,6 +39,9 @@ import Squeal.PostgreSQL.PQ.Encode
 import Squeal.PostgreSQL.PQ.Oid
 import Squeal.PostgreSQL.Query
 
+-- | A `Statement` consists of a `Squeal.PostgreSQL.Statement.Manipulation`
+-- or a `Squeal.PostgreSQL.PQ.Statement.Query` that can be run
+-- in a `Squeal.PostgreSQL.PQ.Monad.MonadPQ`.
 data Statement db x y where
   -- | Constructor for a data manipulation language statement
   Manipulation

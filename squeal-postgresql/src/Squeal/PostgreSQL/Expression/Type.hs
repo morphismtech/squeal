@@ -95,7 +95,7 @@ module Squeal.PostgreSQL.Expression.Type
   , pgtypeFrom
   , NullTyped (..)
   , nulltypeFrom
-  , ColumnTyped
+  , ColumnTyped (..)
   , columntypeFrom
   , FieldTyped (..)
   ) where

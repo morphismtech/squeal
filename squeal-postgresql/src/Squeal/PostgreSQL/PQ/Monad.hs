@@ -1,3 +1,13 @@
+{-|
+Module: Squeal.PostgreSQL.PQ.Monad
+Description: MonadPQ
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+Run `Squeal.PostgreSQL.PQ.Statement`s in the mtl-style
+typeclass `MonadPQ`.
+-}
 {-# LANGUAGE
     DataKinds
   , DefaultSignatures
@@ -108,7 +118,7 @@ class Monad pq => MonadPQ db pq | pq -> db where
   executePrepared_ statement x = lift $ executePrepared_ statement x
 
 {- |
-`manipulateParams` runs a `Manipulation`.
+`manipulateParams` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`.
 -}
 manipulateParams ::
   ( MonadPQ db pq
@@ -123,7 +133,8 @@ manipulateParams ::
 manipulateParams = executeParams . manipulation
 
 {- |
-`manipulateParams_` runs a `Manipulation`, for a returning-free statement.
+`manipulateParams_` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`,
+for a returning-free statement.
 -}
 manipulateParams_ ::
   ( MonadPQ db pq
@@ -136,7 +147,8 @@ manipulateParams_ ::
 manipulateParams_ = executeParams_ . manipulation
 
 {- |
-`manipulate` runs a `Manipulation`, for a parameter-free statement.
+`manipulate` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`,
+for a parameter-free statement.
 -}
 manipulate
   :: (MonadPQ db pq, SOP.IsRecord y ys, SOP.AllZip FromField row ys)
@@ -145,7 +157,7 @@ manipulate
 manipulate = execute . manipulation
 
 {- |
-`manipulate_` runs a `Manipulation`,
+`manipulate_` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`,
 for a returning-free, parameter-free statement.
 -}
 manipulate_
@@ -155,7 +167,7 @@ manipulate_
 manipulate_ = execute_ . manipulation
 
 {- |
-`runQueryParams` runs a `Query`.
+`runQueryParams` runs a `Squeal.PostgreSQL.Query.Query`.
 -}
 runQueryParams ::
   ( MonadPQ db pq
@@ -170,7 +182,8 @@ runQueryParams ::
 runQueryParams = executeParams . query
 
 {- |
-`runQuery` runs a `Query`, for a parameter-free statement.
+`runQuery` runs a `Squeal.PostgreSQL.Query.Query`,
+for a parameter-free statement.
 -}
 runQuery
   :: (MonadPQ db pq, SOP.IsRecord y ys, SOP.AllZip FromField row ys)
@@ -180,9 +193,9 @@ runQuery
 runQuery = execute . query
 
 {- |
-`traversePrepared` runs a `Manipulation` on a `Traversable`
-container by first preparing the statement, then running the prepared
-statement on each element.
+`traversePrepared` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`
+on a `Traversable` container by first preparing the statement,
+then running the prepared statement on each element.
 -}
 traversePrepared
   :: ( MonadPQ db pq
@@ -215,7 +228,8 @@ forPrepared
 forPrepared = flip traversePrepared
 
 {- |
-`traversePrepared` runs a returning-free `Manipulation` on a `Foldable`
+`traversePrepared` runs a returning-free
+`Squeal.PostgreSQL.Manipulation.Manipulation` on a `Foldable`
 container by first preparing the statement, then running the prepared
 statement on each element.
 -}

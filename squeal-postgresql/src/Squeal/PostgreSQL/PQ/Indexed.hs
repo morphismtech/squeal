@@ -1,3 +1,14 @@
+{-|
+Module: Squeal.PostgreSQL.PQ.Indexed
+Description: Indexed Monad Transformers
+Copyright: (c) Eitan Chatav, 2019
+Maintainer: eitan@morphism.tech
+Stability: experimental
+
+`Squeal.PostgreSQL.Indexed` provides an indexed monad transformer
+class and a class extending it to run `Definition`s.
+-}
+
 {-# LANGUAGE
     DataKinds
   , DefaultSignatures
