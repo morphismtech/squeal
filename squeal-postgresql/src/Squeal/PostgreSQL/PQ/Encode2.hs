@@ -29,12 +29,12 @@ Encoding of statement parameters
 module Squeal.PostgreSQL.PQ.Encode2
   ( -- * Encode Parameters
     EncodeParams (..)
-  -- , genericParams
+  , genericParams
   , nilParams
-  -- , (.*)
-  -- , (*.)
-  -- , aParam
-  -- , appendParams
+  , (.*)
+  , (*.)
+  , aParam
+  , appendParams
     -- * Encoding Classes
   , ToParam (..)
   , ToNullParam (..)
@@ -47,7 +47,7 @@ import Control.Monad
 import Data.Bits
 import Data.ByteString as Strict (ByteString)
 import Data.ByteString.Lazy as Lazy (ByteString)
-import Data.Function ((&))
+-- import Data.Function ((&))
 import Data.Functor.Contravariant
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind
@@ -56,7 +56,6 @@ import Data.Text as Strict (Text)
 import Data.Text.Lazy as Lazy (Text)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
 import Data.UUID.Types (UUID)
-import Data.Vector (Vector)
 import Data.Word (Word32)
 import Foreign.C.Types (CUInt(CUInt))
 import GHC.TypeLits
@@ -181,6 +180,11 @@ instance
   ) => ToParam m ('PGcomposite fields) (Composite x) where
     toParam (Composite x) = do
       let
+        compositeSize
+          = int4_int32
+          $ fromIntegral
+          $ SOP.lengthSList
+          $ SOP.Proxy @xs
         each
           :: OidOfField m field
           => SOP.K (Maybe Encoding) field
@@ -192,74 +196,31 @@ instance
         (SOP.Proxy @(ToField m)) toField (SOP.toRecord x)
       compositePayload <- hcfoldMapM
         (SOP.Proxy @(OidOfField m)) each fields
-      let
-        compositeSize
-          = int4_int32
-          $ fromIntegral
-          $ SOP.lengthSList
-          $ SOP.Proxy @xs
       return . SOP.K $ compositeSize <> compositePayload
-
-        -- composite
-        --   :: NP (SOP.K (Maybe Encoding)) fields
-        --   -> m Encoding
-        -- composite fields =
-        --   -- <number of fields: 4 bytes>
-        --   -- [for each field]
-        --   --  <OID of field's type: sizeof(Oid) bytes>
-        --   --  [if value is NULL]
-        --   --    <-1: 4 bytes>
-        --   --  [else]
-        --   --    <length of value: 4 bytes>
-        --   --    <value: <length> bytes>
-        --   --  [end if]
-        --   -- [end for]
-        --   int4_int32 (fromIntegral (SOP.lengthSList (SOP.Proxy @xs))) <>
-        --     let
-        --       each
-        --         :: OidOfField m field
-        --         => SOP.K (Maybe Encoding) field
-        --         -> m Encoding
-        --       each (SOP.K field :: SOP.K (Maybe Encoding) field) = do
-        --         oid <- getOid <$> oidOfField @field
-        --         return $ int4_word32 oid
-        --           <> case field of
-        --             Nothing -> null4
-        --             Just value -> sized value
-        --     in
-        --       _hcfoldMapM (SOP.Proxy @OidOfField) each fields
-        -- fields <- _htransverse (SOP.Proxy @ToField) toField
---       in
---         pure
---         . SOP.K
---         . composite
---         . toFields
---         . SOP.toRecord
---         . getComposite
--- instance ToParam m pg x => ToParam m ('PGrange pg) (Range x) where
---   toParam rng = pure . SOP.K $
---     word8 (setFlags rng 0) <>
---       case rng of
---         Empty -> mempty
---         NonEmpty lower upper -> putBound lower <> putBound upper
---     where
---       putBound = \case
---         Infinite -> mempty
---         Closed value -> putValue (SOP.unK $ toParam @pg value)
---         Open value -> putValue (SOP.unK $ toParam @pg value)
---       putValue value = int4_int32 (fromIntegral (builderLength value)) <> value
---       setFlags = \case
---         Empty -> (`setBit` 0)
---         NonEmpty lower upper ->
---           setLowerFlags lower . setUpperFlags upper
---       setLowerFlags = \case
---         Infinite -> (`setBit` 3)
---         Closed _ -> (`setBit` 1)
---         Open _ -> id
---       setUpperFlags = \case
---         Infinite -> (`setBit` 4)
---         Closed _ -> (`setBit` 2)
---         Open _ -> id
+instance (Monad m, ToParam m pg x)
+  => ToParam m ('PGrange pg) (Range x) where
+  toParam r = do
+    payload <- case r of
+      Empty -> return mempty
+      NonEmpty lower upper -> (<>) <$> putBound lower <*> putBound upper
+    return . SOP.K $ word8 (setFlags r 0) <> payload
+    where
+      putBound = \case
+        Infinite -> return mempty
+        Closed value -> sized . SOP.unK <$> toParam @m @pg value
+        Open value -> sized . SOP.unK <$> toParam @m @pg value
+      setFlags = \case
+        Empty -> (`setBit` 0)
+        NonEmpty lower upper ->
+          setLowerFlags lower . setUpperFlags upper
+      setLowerFlags = \case
+        Infinite -> (`setBit` 3)
+        Closed _ -> (`setBit` 1)
+        Open _ -> id
+      setUpperFlags = \case
+        Infinite -> (`setBit` 4)
+        Closed _ -> (`setBit` 2)
+        Open _ -> id
 
 -- | A `ToNullParam` constraint gives an encoding of a Haskell `Type` into
 -- into the binary format of a PostgreSQL `NullType`.
@@ -367,19 +328,20 @@ in runEncodeParams encode (2, "two")
 :}
 K (Just "\NUL\STX") :* K (Just "two") :* Nil
 
-genericParams ::
+-}
+genericParams :: forall m tys x xs.
   ( SOP.IsProductType x xs
   , SOP.AllZip (ToNullParam m) tys xs
+  , Monad m
   ) => EncodeParams m tys x
 genericParams = EncodeParams
-  $ trans_NP_flip (SOP.Proxy @ToNullParam) encodeNullParam
+  $ hctransverse (SOP.Proxy @(ToNullParam m)) encodeNullParam
   . SOP.unZ . SOP.unSOP . SOP.from
   where
     encodeNullParam
-      :: forall ty x. ToNullParam ty x
-      => SOP.I x -> SOP.K (Maybe Encoding) ty
-    encodeNullParam = SOP.K . toNullParam @ty . SOP.unI
--}
+      :: forall ty y. ToNullParam m ty y
+      => SOP.I y -> m (SOP.K (Maybe Encoding) ty)
+    encodeNullParam = fmap SOP.K . toNullParam @m @ty . SOP.unI
 
 -- | Encode 0 parameters.
 nilParams :: Applicative m => EncodeParams m '[] x
@@ -396,16 +358,16 @@ let
 in runEncodeParams encode (Nothing, "foo")
 :}
 K Nothing :* K (Just "foo") :* Nil
-
-(.*)
-  :: forall x0 ty x tys. ToNullParam ty x0
-  => (x -> x0)
-  -> EncodeParams tys x
-  -> EncodeParams (ty ': tys) x
-f .* EncodeParams params = EncodeParams $ \x ->
-  SOP.K (toNullParam @ty (f x)) :* params x
-infixr 5 .*
 -}
+(.*)
+  :: forall m x0 ty x tys. (ToNullParam m ty x0, Applicative m)
+  => (x -> x0)
+  -> EncodeParams m tys x
+  -> EncodeParams m (ty ': tys) x
+f .* EncodeParams params = EncodeParams $ \x ->
+  (:*) <$> (SOP.K <$> toNullParam @m @ty (f x)) <*> params x
+infixr 5 .*
+
 {- | End a parameter encoding.
 
 >>> :{
@@ -417,16 +379,16 @@ let
 in runEncodeParams encode (Nothing, "foo", 'z')
 :}
 K Nothing :* K (Just "foo") :* K (Just "z") :* Nil
-
+-}
 (*.)
-  :: forall x x0 ty0 x1 ty1
-   . (ToNullParam ty0 x0, ToNullParam ty1 x1)
+  :: forall m x x0 ty0 x1 ty1
+   . (ToNullParam m ty0 x0, ToNullParam m ty1 x1, Applicative m)
   => (x -> x0)
   -> (x -> x1)
-  -> EncodeParams '[ty0, ty1] x
+  -> EncodeParams m '[ty0, ty1] x
 f *. g = f .* g .* nilParams
 infixl 8 *.
--}
+
 {- | Encode 1 parameter.
 
 >>> :{
@@ -436,10 +398,13 @@ let
 in runEncodeParams encode 1776
 :}
 K (Just "\NUL\NUL\ACK\240") :* Nil
-
-aParam :: forall ty x. ToNullParam ty x => EncodeParams '[ty] x
-aParam = EncodeParams $ \x -> SOP.K (toNullParam @ty x) :* Nil
 -}
+aParam
+  :: forall m ty x. (Functor m, ToNullParam m ty x)
+  => EncodeParams m '[ty] x
+aParam = EncodeParams $
+  fmap (\param -> SOP.K param :* Nil) . toNullParam @m @ty
+
 {- | Append parameter encodings.
 
 >>> :{
@@ -451,14 +416,16 @@ let
 in runEncodeParams encode (1776, 2)
 :}
 K (Just "\NUL\NUL\ACK\240") :* K (Just "\NUL\STX") :* Nil
-
-appendParams
-  :: EncodeParams params0 x
-  -> EncodeParams params1 x
-  -> EncodeParams (Join params0 params1) x
-appendParams encode0 encode1 = EncodeParams $ \x ->
-  runEncodeParams encode0 x & also (runEncodeParams encode1 x)
 -}
+appendParams
+  :: Applicative m
+  => EncodeParams m params0 x
+  -> EncodeParams m params1 x
+  -> EncodeParams m (Join params0 params1) x
+appendParams encode0 encode1 = EncodeParams $ \x -> also
+  <$> runEncodeParams encode1 x
+  <*> runEncodeParams encode0 x
+
 getOid :: LibPQ.Oid -> Word32
 getOid (LibPQ.Oid (CUInt oid)) = oid
 
