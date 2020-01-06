@@ -1,5 +1,18 @@
 ## RELEASE NOTES
 
+### Version 0.5.2
+
+Bugfix.
+Previously connection pools were handled by defining
+a `PoolPQ` `Monad` with a `MonadPQ` instance.
+Turns out this was sort of dumb.
+What it did was run each query by taking a connection from the pool,
+running the query, and then returning the connection to the pool.
+This is not what is usually expected in a real use case.
+In a real use case, like a web service,
+you probably want to use a single connection
+to serve an endpoint when it's called.
+
 ### Version 0.5
 
 Version 0.5 makes a number of large changes and additions to Squeal.
