@@ -3,13 +3,17 @@
   , DeriveAnyClass
   , DeriveGeneric
   , DerivingStrategies
+  , DerivingVia
   , DuplicateRecordFields
   , FlexibleContexts
+  , FlexibleInstances
+  , MultiParamTypeClasses
   , OverloadedLabels
-  , OverloadedLists
   , OverloadedStrings
+  , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
+  , TypeSynonymInstances
   , TypeInType
   , TypeOperators
 #-}
@@ -17,6 +21,7 @@
 module Main (main) where
 
 import Control.Concurrent.Async (replicateConcurrently)
+import Control.Monad.IO.Class (liftIO)
 import Data.ByteString (ByteString)
 import Data.Int (Int32)
 import Data.Text (Text)
@@ -72,6 +77,19 @@ dropDB = withConnection connectionString $
 
 connectionString :: ByteString
 connectionString = "host=localhost port=5432 dbname=exampledb"
+
+data Person = Person { name :: String, age :: Int32 }
+  deriving (Eq, Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
+  -- deriving (FromValue PGperson) via (Composite Person)
+  deriving (ToParam PGperson) via (Composite Person)
+type PGperson = 'PGcomposite
+  '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
+type PersonDB = '["public" ::: '["person" ::: 'Typedef PGperson]]
+type instance PG Person = PGperson
+instance PGTyped PersonDB PGperson where
+  pgtype = typedef #person
+instance FromValue PGperson Person where
+  fromValue = getComposite <$> fromValue @PGperson
 
 spec :: Spec
 spec = before_ setupDB . after_ dropDB $ do
@@ -134,3 +152,39 @@ spec = before_ setupDB . after_ dropDB $ do
           qry = values_ (param @2 `as` #fromOnly)
         firstRow =<< runQueryParams qry ('a', 3 :: Int32)
       (fromOnly <$> out :: Maybe Int32) `shouldBe` Just 3
+
+  describe "User Types" $ do
+
+    it "should be definable" $ do
+
+      let
+        setupPerson :: Definition (Public '[]) PersonDB
+        setupPerson = createTypeCompositeFrom @Person #person
+
+        teardownPerson :: Definition PersonDB (Public '[])
+        teardownPerson = dropType #person
+
+        roundtrip :: Query_ PersonDB (Only Person) (Only Person)
+        roundtrip = values_ (param @1 `as` #fromOnly)
+
+        roundtrip_array :: Query_ PersonDB
+          (Only (VarArray [Person])) (Only (VarArray [Person]))
+        roundtrip_array = values_ (param @1 `as` #fromOnly)
+
+        adam = Person "Adam" 6000
+        lucy = Person "Lucy" 2420000
+        people = VarArray [adam, lucy]
+
+        session :: PQ PersonDB PersonDB IO ()
+        session = do
+          out <- firstRow =<< runQueryParams roundtrip (Only adam)
+          out_array <- firstRow =<<
+            runQueryParams roundtrip_array (Only people)
+          liftIO $ do
+            out `shouldBe` Just (Only adam)
+            out_array `shouldBe` Just (Only people)
+
+      withConnection connectionString $
+        define setupPerson
+        & pqThen session
+        & pqThen (define teardownPerson)

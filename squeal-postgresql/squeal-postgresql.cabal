@@ -58,11 +58,13 @@ library
     Squeal.PostgreSQL.PQ.Connection
     Squeal.PostgreSQL.PQ.Decode
     Squeal.PostgreSQL.PQ.Encode
+    Squeal.PostgreSQL.PQ.Encode2
     Squeal.PostgreSQL.PQ.Exception
     Squeal.PostgreSQL.PQ.Indexed
     Squeal.PostgreSQL.PQ.Migration
     Squeal.PostgreSQL.PQ.Monad
     Squeal.PostgreSQL.PQ.Oid
+    Squeal.PostgreSQL.PQ.Oid2
     Squeal.PostgreSQL.PQ.Pool
     Squeal.PostgreSQL.PQ.Result
     Squeal.PostgreSQL.PQ.Statement
