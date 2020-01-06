@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Encode2
+Module: Squeal.PostgreSQL.PQ.Encode3
 Description: Encoding of statement parameters
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -26,7 +26,7 @@ Encoding of statement parameters
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.PQ.Encode2
+module Squeal.PostgreSQL.PQ.Encode3
   ( -- * Encode Parameters
     EncodeParams (..)
   , genericParams
@@ -73,12 +73,12 @@ import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression.Range
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
-import Squeal.PostgreSQL.PQ.Oid2
+import Squeal.PostgreSQL.PQ.Oid3
 import Squeal.PostgreSQL.Schema
 
 -- | A `ToParam` constraint gives an encoding of a Haskell `Type` into
 -- into the binary format of a PostgreSQL `PGType`.
-class ToParam m pg x where
+class ToParam c pg x where
   -- | >>> :set -XTypeApplications -XDataKinds
   -- >>> toParam @'PGbool False
   -- K "\NUL"
@@ -90,67 +90,66 @@ class ToParam m pg x where
   -- K "\NUL\NUL\NUL\NUL"
   --
   -- >>> :set -XMultiParamTypeClasses -XGeneralizedNewtypeDeriving
-  -- >>> newtype Id = Id { getId :: Int16 } deriving newtype (Applicative m => ToParam m 'PGint2)
+  -- >>> newtype Id = Id { getId :: Int16 } deriving newtype (ToParam Applicative 'PGint2)
   -- >>> toParam @'PGint2 (Id 1)
   -- K "\NUL\SOH"
-  toParam :: x -> m (SOP.K Encoding pg)
-instance Applicative m => ToParam m 'PGbool Bool where toParam = pure . SOP.K . bool
-instance Applicative m => ToParam m 'PGint2 Int16 where toParam = pure . SOP.K . int2_int16
-instance Applicative m => ToParam m 'PGint4 Int32 where toParam = pure . SOP.K . int4_int32
-instance Applicative m => ToParam m 'PGint8 Int64 where toParam = pure . SOP.K . int8_int64
-instance Applicative m => ToParam m 'PGoid Oid where toParam = pure . SOP.K . int4_word32 . getOid
-instance Applicative m => ToParam m 'PGfloat4 Float where toParam = pure . SOP.K . float4
-instance Applicative m => ToParam m 'PGfloat8 Double where toParam = pure . SOP.K . float8
-instance Applicative m => ToParam m 'PGnumeric Scientific where toParam = pure . SOP.K . numeric
-instance Applicative m => ToParam m 'PGmoney Money where toParam = pure . SOP.K . int8_int64 . cents
-instance Applicative m => ToParam m 'PGuuid UUID where toParam = pure . SOP.K . uuid
-instance Applicative m => ToParam m 'PGinet (NetAddr IP) where toParam = pure . SOP.K . inet
-instance Applicative m => ToParam m ('PGchar 1) Char where toParam = pure . SOP.K . char_utf8
-instance Applicative m => ToParam m 'PGtext Strict.Text where toParam = pure . SOP.K . text_strict
-instance Applicative m => ToParam m 'PGtext Lazy.Text where toParam = pure . SOP.K . text_lazy
-instance Applicative m => ToParam m 'PGtext String where
+  toParam :: forall m. c m => x -> m (SOP.K Encoding pg)
+instance ToParam Applicative 'PGbool Bool where toParam = pure . SOP.K . bool
+instance ToParam Applicative 'PGint2 Int16 where toParam = pure . SOP.K . int2_int16
+instance ToParam Applicative 'PGint4 Int32 where toParam = pure . SOP.K . int4_int32
+instance ToParam Applicative 'PGint8 Int64 where toParam = pure . SOP.K . int8_int64
+instance ToParam Applicative 'PGoid Oid where toParam = pure . SOP.K . int4_word32 . getOid
+instance ToParam Applicative 'PGfloat4 Float where toParam = pure . SOP.K . float4
+instance ToParam Applicative 'PGfloat8 Double where toParam = pure . SOP.K . float8
+instance ToParam Applicative 'PGnumeric Scientific where toParam = pure . SOP.K . numeric
+instance ToParam Applicative 'PGmoney Money where toParam = pure . SOP.K . int8_int64 . cents
+instance ToParam Applicative 'PGuuid UUID where toParam = pure . SOP.K . uuid
+instance ToParam Applicative 'PGinet (NetAddr IP) where toParam = pure . SOP.K . inet
+instance ToParam Applicative ('PGchar 1) Char where toParam = pure . SOP.K . char_utf8
+instance ToParam Applicative 'PGtext Strict.Text where toParam = pure . SOP.K . text_strict
+instance ToParam Applicative 'PGtext Lazy.Text where toParam = pure . SOP.K . text_lazy
+instance ToParam Applicative 'PGtext String where
   toParam = pure . SOP.K . text_strict . Strict.Text.pack
-instance Applicative m => ToParam m 'PGbytea Strict.ByteString where toParam = pure . SOP.K . bytea_strict
-instance Applicative m => ToParam m 'PGbytea Lazy.ByteString where toParam = pure . SOP.K . bytea_lazy
-instance Applicative m => ToParam m 'PGdate Day where toParam = pure . SOP.K . date
-instance Applicative m => ToParam m 'PGtime TimeOfDay where toParam = pure . SOP.K . time_int
-instance Applicative m => ToParam m 'PGtimetz (TimeOfDay, TimeZone) where toParam = pure . SOP.K . timetz_int
-instance Applicative m => ToParam m 'PGtimestamp LocalTime where toParam = pure . SOP.K . timestamp_int
-instance Applicative m => ToParam m 'PGtimestamptz UTCTime where toParam = pure . SOP.K . timestamptz_int
-instance Applicative m => ToParam m 'PGinterval DiffTime where toParam = pure . SOP.K . interval_int
-instance Applicative m => ToParam m 'PGjson Aeson.Value where toParam = pure . SOP.K . json_ast
-instance Applicative m => ToParam m 'PGjsonb Aeson.Value where toParam = pure . SOP.K . jsonb_ast
-instance (Aeson.ToJSON x, Applicative m) => ToParam m 'PGjson (Json x) where
+instance ToParam Applicative 'PGbytea Strict.ByteString where toParam = pure . SOP.K . bytea_strict
+instance ToParam Applicative 'PGbytea Lazy.ByteString where toParam = pure . SOP.K . bytea_lazy
+instance ToParam Applicative 'PGdate Day where toParam = pure . SOP.K . date
+instance ToParam Applicative 'PGtime TimeOfDay where toParam = pure . SOP.K . time_int
+instance ToParam Applicative 'PGtimetz (TimeOfDay, TimeZone) where toParam = pure . SOP.K . timetz_int
+instance ToParam Applicative 'PGtimestamp LocalTime where toParam = pure . SOP.K . timestamp_int
+instance ToParam Applicative 'PGtimestamptz UTCTime where toParam = pure . SOP.K . timestamptz_int
+instance ToParam Applicative 'PGinterval DiffTime where toParam = pure . SOP.K . interval_int
+instance ToParam Applicative 'PGjson Aeson.Value where toParam = pure . SOP.K . json_ast
+instance ToParam Applicative 'PGjsonb Aeson.Value where toParam = pure . SOP.K . jsonb_ast
+instance Aeson.ToJSON x => ToParam Applicative 'PGjson (Json x) where
   toParam = pure . SOP.K . json_bytes
     . Lazy.ByteString.toStrict . Aeson.encode . getJson
-instance (Aeson.ToJSON x, Applicative m) => ToParam m 'PGjsonb (Jsonb x) where
+instance Aeson.ToJSON x => ToParam Applicative 'PGjsonb (Jsonb x) where
   toParam = pure . SOP.K . jsonb_bytes
     . Lazy.ByteString.toStrict . Aeson.encode . getJsonb
-instance (ToArray m '[] ty x, OidOfNull m ty, Monad m, Foldable list)
-  => ToParam m ('PGvararray ty) (VarArray (list x)) where
+instance (ToArray Monad '[] ty x, OidOfNull Monad ty, Foldable list)
+  => ToParam Monad ('PGvararray ty) (VarArray (list x)) where
     toParam (VarArray arr) = do
-      oid <- oidOfNull @m @ty
+      oid <- oidOfNull @Monad @ty
       let
         dims = [fromIntegral (length arr)]
-        nulls = arrayNulls @m @'[] @ty @x
-      payload <- dimArray foldM (arrayPayload @m @'[] @ty @x) arr
+        nulls = arrayNulls @Monad @'[] @ty @x
+      payload <- dimArray foldM (arrayPayload @Monad @'[] @ty @x) arr
       return . SOP.K $ encodeArray 1 nulls oid dims payload
-instance (ToArray m dims ty x, OidOfNull m ty, Monad m)
-  => ToParam m ('PGfixarray dims ty) (FixArray x) where
+instance (ToArray Monad dims ty x, OidOfNull Monad ty)
+  => ToParam Monad ('PGfixarray dims ty) (FixArray x) where
     toParam (FixArray arr) = do
-      oid <- oidOfNull @m @ty
-      payload <- arrayPayload @m @dims @ty arr
+      oid <- oidOfNull @Monad @ty
+      payload <- arrayPayload @Monad @dims @ty arr
       let
-        dims = arrayDims @m @dims @ty @x
-        nulls = arrayNulls @m @dims @ty @x
+        dims = arrayDims @Monad @dims @ty @x
+        nulls = arrayNulls @Monad @dims @ty @x
         ndims = fromIntegral (length dims)
       return . SOP.K $ encodeArray ndims nulls oid dims payload
 instance
   ( SOP.IsEnumType x
   , SOP.HasDatatypeInfo x
   , LabelsPG x ~ labels
-  , Applicative m
-  ) => ToParam m ('PGenum labels) (Enumerated x) where
+  ) => ToParam Applicative ('PGenum labels) (Enumerated x) where
     toParam =
       let
         gshowConstructor
@@ -174,10 +173,9 @@ instance
 instance
   ( SOP.SListI fields
   , SOP.IsRecord x xs
-  , SOP.AllZip (ToField m) fields xs
-  , SOP.All (OidOfField m) fields
-  , Monad m
-  ) => ToParam m ('PGcomposite fields) (Composite x) where
+  , SOP.AllZip (ToField Monad) fields xs
+  , SOP.All (OidOfField Monad) fields
+  ) => ToParam Monad ('PGcomposite fields) (Composite x) where
     toParam (Composite x) = do
       let
         compositeSize
@@ -186,19 +184,19 @@ instance
           $ SOP.lengthSList
           $ SOP.Proxy @xs
         each
-          :: OidOfField m field
+          :: (OidOfField Monad field, Monad m)
           => SOP.K (Maybe Encoding) field
           -> m Encoding
         each (SOP.K field :: SOP.K (Maybe Encoding) field) = do
-          oid <- getOid <$> oidOfField @m @field
+          oid <- getOid <$> oidOfField @Monad @field
           return $ int4_word32 oid <> maybe null4 sized field
       fields :: NP (SOP.K (Maybe Encoding)) fields <- hctransverse
-        (SOP.Proxy @(ToField m)) toField (SOP.toRecord x)
+        (SOP.Proxy @(ToField Monad)) (toField @Monad) (SOP.toRecord x)
       compositePayload <- hcfoldMapM
-        (SOP.Proxy @(OidOfField m)) each fields
+        (SOP.Proxy @(OidOfField Monad)) each fields
       return . SOP.K $ compositeSize <> compositePayload
-instance (Monad m, ToParam m pg x)
-  => ToParam m ('PGrange pg) (Range x) where
+instance (ToParam Monad pg x)
+  => ToParam Monad ('PGrange pg) (Range x) where
   toParam r = do
     payload <- case r of
       Empty -> return mempty
@@ -207,8 +205,8 @@ instance (Monad m, ToParam m pg x)
     where
       putBound = \case
         Infinite -> return mempty
-        Closed value -> sized . SOP.unK <$> toParam @m @pg value
-        Open value -> sized . SOP.unK <$> toParam @m @pg value
+        Closed value -> sized . SOP.unK <$> toParam @Monad @pg value
+        Open value -> sized . SOP.unK <$> toParam @Monad @pg value
       setFlags = \case
         Empty -> (`setBit` 0)
         NonEmpty lower upper ->
@@ -226,59 +224,62 @@ instance (Monad m, ToParam m pg x)
 -- into the binary format of a PostgreSQL `NullType`.
 -- You should not define instances for `ToNullParam`,
 -- just use the provided instances.
-class ToNullParam m ty x where toNullParam :: x -> m (Maybe Encoding)
-instance (Functor m, ToParam m pg x)
-  => ToNullParam m ('NotNull pg) x where
-    toNullParam = fmap (return . SOP.unK) . toParam @m @pg
-instance (Applicative m, ToParam m pg x)
-  => ToNullParam m ('Null pg) (Maybe x) where
+class ToNullParam c ty x where
+  toNullParam :: forall m. c m => x -> m (Maybe Encoding)
+instance (ToParam Functor pg x)
+  => ToNullParam Functor ('NotNull pg) x where
+    toNullParam = fmap (return . SOP.unK) . toParam @Functor @pg
+instance (ToParam Applicative pg x)
+  => ToNullParam Applicative ('Null pg) (Maybe x) where
     toNullParam = maybe (pure Nothing)
-      (fmap (Just . SOP.unK) . toParam @m @pg)
+      (fmap (Just . SOP.unK) . toParam @Applicative @pg)
 
 -- | A `ToField` constraint lifts the `ToParam` parser
 -- to an encoding of a @(Symbol, Type)@ to a @(Symbol, NullityType)@,
 -- encoding `Null`s to `Maybe`s. You should not define instances for
 -- `ToField`, just use the provided instances.
-class ToField m (field :: (Symbol, NullType)) x where
-  toField :: SOP.P x -> m (SOP.K (Maybe Encoding) field)
-instance (fld0 ~ fld1, ToNullParam m ty x, Functor m)
-  => ToField m (fld0 ::: ty) (fld1 ::: x) where
-    toField (SOP.P x) = SOP.K <$> toNullParam @m @ty x
+class ToField c (field :: (Symbol, NullType)) x where
+  toField
+    :: forall m. c m
+    => SOP.P x
+    -> m (SOP.K (Maybe Encoding) field)
+instance (fld0 ~ fld1, ToNullParam Functor ty x)
+  => ToField Functor (fld0 ::: ty) (fld1 ::: x) where
+    toField (SOP.P x) = SOP.K <$> toNullParam @Functor @ty x
 
 -- | A `ToArray` constraint gives an encoding of a Haskell `Type`
 -- into the binary format of a PostgreSQL fixed-length array.
 -- You should not define instances for
 -- `ToArray`, just use the provided instances.
-class ToArray m (dims :: [Nat]) (ty :: NullType) x where
-  arrayPayload :: x -> m Encoding
+class ToArray c (dims :: [Nat]) (ty :: NullType) x where
+  arrayPayload :: forall m. c m => x -> m Encoding
   arrayDims :: [Int32]
   arrayNulls :: Bool
-instance (Functor m, ToParam m pg x)
-  => ToArray m '[] ('NotNull pg) x where
-    arrayPayload = fmap (sized . SOP.unK) . toParam @m @pg @x
+instance ToParam Functor pg x
+  => ToArray Functor '[] ('NotNull pg) x where
+    arrayPayload = fmap (sized . SOP.unK) . toParam @Functor @pg @x
     arrayDims = []
     arrayNulls = True
-instance (Applicative m, ToParam m pg x)
-  => ToArray m '[] ('Null pg) (Maybe x) where
+instance ToParam Applicative pg x
+  => ToArray Applicative '[] ('Null pg) (Maybe x) where
     arrayPayload = maybe
-      (pure null4) (fmap (sized . SOP.unK) . toParam @m @pg @x)
+      (pure null4) (fmap (sized . SOP.unK) . toParam @Applicative @pg @x)
     arrayDims = []
     arrayNulls = False
 instance
   ( SOP.IsProductType tuple xs
   , Length xs ~ dim
   , SOP.All ((~) x) xs
-  , ToArray m dims ty x
-  , KnownNat dim
-  , Monad m )
-  => ToArray m (dim ': dims) ty tuple where
+  , ToArray Monad dims ty x
+  , KnownNat dim )
+  => ToArray Monad (dim ': dims) ty tuple where
     arrayPayload
-      = dimArray foldlNP (arrayPayload @m @dims @ty @x)
+      = dimArray foldlNP (arrayPayload @Monad @dims @ty @x)
       . SOP.unZ . SOP.unSOP . SOP.from
     arrayDims
       = fromIntegral (natVal (SOP.Proxy @dim))
-      : arrayDims @m @dims @ty @x
-    arrayNulls = arrayNulls @m @dims @ty @x
+      : arrayDims @Monad @dims @ty @x
+    arrayNulls = arrayNulls @Monad @dims @ty @x
 foldlNP
   :: (SOP.All ((~) x) xs, Monad m)
   => (z -> x -> m z) -> z -> NP SOP.I xs -> m z
@@ -302,8 +303,9 @@ in runEncodeParams encode (1,('a',"foo"))
 :}
 K (Just "\NUL\SOH") :* K (Just "a") :* K (Just "foo") :* Nil
 -}
-newtype EncodeParams m (tys :: [NullType]) (x :: Type) = EncodeParams
-  { runEncodeParams :: x -> m (NP (SOP.K (Maybe Encoding)) tys) }
+newtype EncodeParams c (tys :: [NullType]) (x :: Type) = EncodeParams
+  { runEncodeParams
+    :: forall m. c m => x -> m (NP (SOP.K (Maybe Encoding)) tys) }
 instance Contravariant (EncodeParams m tys) where
   contramap f (EncodeParams g) = EncodeParams (g . f)
 
@@ -329,22 +331,21 @@ in runEncodeParams encode (2, "two")
 K (Just "\NUL\STX") :* K (Just "two") :* Nil
 
 -}
-genericParams :: forall m x xs tys.
+genericParams :: forall x xs tys.
   ( SOP.IsProductType x xs
-  , SOP.AllZip (ToNullParam m) tys xs
-  , Monad m
-  ) => EncodeParams m tys x
+  , SOP.AllZip (ToNullParam Monad) tys xs
+  ) => EncodeParams Monad tys x
 genericParams = EncodeParams
-  $ hctransverse (SOP.Proxy @(ToNullParam m)) encodeNullParam
+  $ hctransverse (SOP.Proxy @(ToNullParam Monad)) encodeNullParam
   . SOP.unZ . SOP.unSOP . SOP.from
   where
     encodeNullParam
-      :: forall ty y. ToNullParam m ty y
-      => SOP.I y -> m (SOP.K (Maybe Encoding) ty)
-    encodeNullParam = fmap SOP.K . toNullParam @m @ty . SOP.unI
+      :: forall m ty y. ToNullParam Monad ty y
+      => Monad m => SOP.I y -> m (SOP.K (Maybe Encoding) ty)
+    encodeNullParam = fmap SOP.K . toNullParam @Monad @ty . SOP.unI
 
 -- | Encode 0 parameters.
-nilParams :: Applicative m => EncodeParams m '[] x
+nilParams :: EncodeParams Applicative '[] x
 nilParams = EncodeParams $ return (pure Nil)
 
 {- | Cons a parameter encoding.
@@ -360,12 +361,12 @@ in runEncodeParams encode (Nothing, "foo")
 K Nothing :* K (Just "foo") :* Nil
 -}
 (.*)
-  :: forall m x0 ty x tys. (ToNullParam m ty x0, Applicative m)
+  :: forall x0 ty x tys. (ToNullParam Applicative ty x0)
   => (x -> x0)
-  -> EncodeParams m tys x
-  -> EncodeParams m (ty ': tys) x
+  -> EncodeParams Applicative tys x
+  -> EncodeParams Applicative (ty ': tys) x
 f .* EncodeParams params = EncodeParams $ \x ->
-  (:*) <$> (SOP.K <$> toNullParam @m @ty (f x)) <*> params x
+  (:*) <$> (SOP.K <$> toNullParam @Applicative @ty (f x)) <*> params x
 infixr 5 .*
 
 {- | End a parameter encoding.
@@ -381,11 +382,11 @@ in runEncodeParams encode (Nothing, "foo", 'z')
 K Nothing :* K (Just "foo") :* K (Just "z") :* Nil
 -}
 (*.)
-  :: forall m x x0 ty0 x1 ty1
-   . (ToNullParam m ty0 x0, ToNullParam m ty1 x1, Applicative m)
+  :: forall x x0 ty0 x1 ty1
+   . (ToNullParam Applicative ty0 x0, ToNullParam Applicative ty1 x1)
   => (x -> x0)
   -> (x -> x1)
-  -> EncodeParams m '[ty0, ty1] x
+  -> EncodeParams Applicative '[ty0, ty1] x
 f *. g = f .* g .* nilParams
 infixl 8 *.
 
@@ -400,10 +401,10 @@ in runEncodeParams encode 1776
 K (Just "\NUL\NUL\ACK\240") :* Nil
 -}
 aParam
-  :: forall m ty x. (Functor m, ToNullParam m ty x)
-  => EncodeParams m '[ty] x
+  :: forall ty x. (ToNullParam Functor ty x)
+  => EncodeParams Functor '[ty] x
 aParam = EncodeParams $
-  fmap (\param -> SOP.K param :* Nil) . toNullParam @m @ty
+  fmap (\param -> SOP.K param :* Nil) . toNullParam @Functor @ty
 
 {- | Append parameter encodings.
 
@@ -418,10 +419,9 @@ in runEncodeParams encode (1776, 2)
 K (Just "\NUL\NUL\ACK\240") :* K (Just "\NUL\STX") :* Nil
 -}
 appendParams
-  :: Applicative m
-  => EncodeParams m params0 x
-  -> EncodeParams m params1 x
-  -> EncodeParams m (Join params0 params1) x
+  :: EncodeParams Applicative params0 x
+  -> EncodeParams Applicative params1 x
+  -> EncodeParams Applicative (Join params0 params1) x
 appendParams encode0 encode1 = EncodeParams $ \x -> also
   <$> runEncodeParams encode1 x
   <*> runEncodeParams encode0 x
