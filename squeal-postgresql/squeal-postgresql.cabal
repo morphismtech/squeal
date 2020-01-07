@@ -55,22 +55,27 @@ library
     Squeal.PostgreSQL.Manipulation
     Squeal.PostgreSQL.PG
     Squeal.PostgreSQL.PQ
+    Squeal.PostgreSQL.PQ2
     Squeal.PostgreSQL.PQ.Connection
     Squeal.PostgreSQL.PQ.Decode
     Squeal.PostgreSQL.PQ.Encode
     Squeal.PostgreSQL.PQ.Encode2
     Squeal.PostgreSQL.PQ.Encode3
+    Squeal.PostgreSQL.PQ.Encode4
     Squeal.PostgreSQL.PQ.Exception
     Squeal.PostgreSQL.PQ.Indexed
     Squeal.PostgreSQL.PQ.Migration
     Squeal.PostgreSQL.PQ.Monad
     Squeal.PostgreSQL.PQ.Monad2
+    Squeal.PostgreSQL.PQ.Monad3
     Squeal.PostgreSQL.PQ.Oid
     Squeal.PostgreSQL.PQ.Oid2
     Squeal.PostgreSQL.PQ.Oid3
+    Squeal.PostgreSQL.PQ.Oid4
     Squeal.PostgreSQL.PQ.Pool
     Squeal.PostgreSQL.PQ.Result
     Squeal.PostgreSQL.PQ.Statement
+    Squeal.PostgreSQL.PQ.Statement2
     Squeal.PostgreSQL.PQ.Transaction
     Squeal.PostgreSQL.Render
     Squeal.PostgreSQL.Query
