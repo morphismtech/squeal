@@ -15,11 +15,13 @@ statement parameters.
   , ConstraintKinds
   , DataKinds
   , FlexibleInstances
+  , QuantifiedConstraints
   , MultiParamTypeClasses
   , PolyKinds
   , ScopedTypeVariables
   , TypeApplications
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.PQ.Oid3
@@ -63,68 +65,68 @@ class OidOfField c (field :: (Symbol, NullType)) where
 instance OidOfNull c ty => OidOfField c (fld ::: ty) where
   oidOfField = oidOfNull @c @ty
 
-instance OidOf Applicative 'PGbool where oidOf = pure $ LibPQ.Oid 16
-instance OidOfArray Applicative 'PGbool where oidOfArray = pure $ LibPQ.Oid 1000
-instance OidOf Applicative 'PGint2 where oidOf = pure $ LibPQ.Oid 21
-instance OidOfArray Applicative 'PGint2 where oidOfArray = pure $ LibPQ.Oid 1005
-instance OidOf Applicative 'PGint4 where oidOf = pure $ LibPQ.Oid 23
-instance OidOfArray Applicative 'PGint4 where oidOfArray = pure $ LibPQ.Oid 1007
-instance OidOf Applicative 'PGint8 where oidOf = pure $ LibPQ.Oid 20
-instance OidOfArray Applicative 'PGint8 where oidOfArray = pure $ LibPQ.Oid 1016
-instance OidOf Applicative 'PGnumeric where oidOf = pure $ LibPQ.Oid 1700
-instance OidOfArray Applicative 'PGnumeric where oidOfArray = pure $ LibPQ.Oid 1231
-instance OidOf Applicative 'PGfloat4 where oidOf = pure $ LibPQ.Oid 700
-instance OidOfArray Applicative 'PGfloat4 where oidOfArray = pure $ LibPQ.Oid 1021
-instance OidOf Applicative 'PGfloat8 where oidOf = pure $ LibPQ.Oid 701
-instance OidOfArray Applicative 'PGfloat8 where oidOfArray = pure $ LibPQ.Oid 1022
-instance OidOf Applicative 'PGmoney where oidOf = pure $ LibPQ.Oid 790
-instance OidOfArray Applicative 'PGmoney where oidOfArray = pure $ LibPQ.Oid 791
-instance OidOf Applicative ('PGchar n) where oidOf = pure $ LibPQ.Oid 18
-instance OidOfArray Applicative ('PGchar n) where oidOfArray = pure $ LibPQ.Oid 1002
-instance OidOf Applicative ('PGvarchar n) where oidOf = pure $ LibPQ.Oid 1043
-instance OidOfArray Applicative ('PGvarchar n) where oidOfArray = pure $ LibPQ.Oid 1015
-instance OidOf Applicative 'PGtext where oidOf = pure $ LibPQ.Oid 25
-instance OidOfArray Applicative 'PGtext where oidOfArray = pure $ LibPQ.Oid 1009
-instance OidOf Applicative 'PGbytea where oidOf = pure $ LibPQ.Oid 17
-instance OidOfArray Applicative 'PGbytea where oidOfArray = pure $ LibPQ.Oid 1001
-instance OidOf Applicative 'PGtimestamp where oidOf = pure $ LibPQ.Oid 1114
-instance OidOfArray Applicative 'PGtimestamp where oidOfArray = pure $ LibPQ.Oid 1115
-instance OidOf Applicative 'PGtimestamptz where oidOf = pure $ LibPQ.Oid 1184
-instance OidOfArray Applicative 'PGtimestamptz where oidOfArray = pure $ LibPQ.Oid 1185
-instance OidOf Applicative 'PGdate where oidOf = pure $ LibPQ.Oid 1082
-instance OidOfArray Applicative 'PGdate where oidOfArray = pure $ LibPQ.Oid 1182
-instance OidOf Applicative 'PGtime where oidOf = pure $ LibPQ.Oid 1083
-instance OidOfArray Applicative 'PGtime where oidOfArray = pure $ LibPQ.Oid 1183
-instance OidOf Applicative 'PGtimetz where oidOf = pure $ LibPQ.Oid 1266
-instance OidOfArray Applicative 'PGtimetz where oidOfArray = pure $ LibPQ.Oid 1270
-instance OidOf Applicative 'PGinterval where oidOf = pure $ LibPQ.Oid 1186
-instance OidOfArray Applicative 'PGinterval where oidOfArray = pure $ LibPQ.Oid 1187
-instance OidOf Applicative 'PGuuid where oidOf = pure $ LibPQ.Oid 2950
-instance OidOfArray Applicative 'PGuuid where oidOfArray = pure $ LibPQ.Oid 2951
-instance OidOf Applicative 'PGinet where oidOf = pure $ LibPQ.Oid 869
-instance OidOfArray Applicative 'PGinet where oidOfArray = pure $ LibPQ.Oid 1041
-instance OidOf Applicative 'PGjson where oidOf = pure $ LibPQ.Oid 114
-instance OidOfArray Applicative 'PGjson where oidOfArray = pure $ LibPQ.Oid 199
-instance OidOf Applicative 'PGjsonb where oidOf = pure $ LibPQ.Oid 3802
-instance OidOfArray Applicative 'PGjsonb where oidOfArray = pure $ LibPQ.Oid 3807
-instance OidOf Applicative 'PGtsvector where oidOf = pure $ LibPQ.Oid 3614
-instance OidOfArray Applicative 'PGtsvector where oidOfArray = pure $ LibPQ.Oid 3643
-instance OidOf Applicative 'PGtsquery where oidOf = pure $ LibPQ.Oid 3615
-instance OidOfArray Applicative 'PGtsquery where oidOfArray = pure $ LibPQ.Oid 3645
-instance OidOf Applicative 'PGoid where oidOf = pure $ LibPQ.Oid 26
-instance OidOfArray Applicative 'PGoid where oidOfArray = pure $ LibPQ.Oid 1028
-instance OidOf Applicative ('PGrange 'PGint4) where oidOf = pure $ LibPQ.Oid 3904
-instance OidOfArray Applicative ('PGrange 'PGint4) where oidOfArray = pure $ LibPQ.Oid 3905
-instance OidOf Applicative ('PGrange 'PGint8) where oidOf = pure $ LibPQ.Oid 3926
-instance OidOfArray Applicative ('PGrange 'PGint8) where oidOfArray = pure $ LibPQ.Oid 3927
-instance OidOf Applicative ('PGrange 'PGnumeric) where oidOf = pure $ LibPQ.Oid 3906
-instance OidOfArray Applicative ('PGrange 'PGnumeric) where oidOfArray = pure $ LibPQ.Oid 3907
-instance OidOf Applicative ('PGrange 'PGtimestamp) where oidOf = pure $ LibPQ.Oid 3908
-instance OidOfArray Applicative ('PGrange 'PGtimestamp) where oidOfArray = pure $ LibPQ.Oid 3909
-instance OidOf Applicative ('PGrange 'PGtimestamptz) where oidOf = pure $ LibPQ.Oid 3910
-instance OidOfArray Applicative ('PGrange 'PGtimestamptz) where oidOfArray = pure $ LibPQ.Oid 3911
-instance OidOf Applicative ('PGrange 'PGdate) where oidOf = pure $ LibPQ.Oid 3912
-instance OidOfArray Applicative ('PGrange 'PGdate) where oidOfArray = pure $ LibPQ.Oid 3913
+instance (forall m. c m => Applicative m) => OidOf c 'PGbool where oidOf = pure $ LibPQ.Oid 16
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGbool where oidOfArray = pure $ LibPQ.Oid 1000
+instance (forall m. c m => Applicative m) => OidOf c 'PGint2 where oidOf = pure $ LibPQ.Oid 21
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGint2 where oidOfArray = pure $ LibPQ.Oid 1005
+instance (forall m. c m => Applicative m) => OidOf c 'PGint4 where oidOf = pure $ LibPQ.Oid 23
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGint4 where oidOfArray = pure $ LibPQ.Oid 1007
+instance (forall m. c m => Applicative m) => OidOf c 'PGint8 where oidOf = pure $ LibPQ.Oid 20
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGint8 where oidOfArray = pure $ LibPQ.Oid 1016
+instance (forall m. c m => Applicative m) => OidOf c 'PGnumeric where oidOf = pure $ LibPQ.Oid 1700
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGnumeric where oidOfArray = pure $ LibPQ.Oid 1231
+instance (forall m. c m => Applicative m) => OidOf c 'PGfloat4 where oidOf = pure $ LibPQ.Oid 700
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGfloat4 where oidOfArray = pure $ LibPQ.Oid 1021
+instance (forall m. c m => Applicative m) => OidOf c 'PGfloat8 where oidOf = pure $ LibPQ.Oid 701
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGfloat8 where oidOfArray = pure $ LibPQ.Oid 1022
+instance (forall m. c m => Applicative m) => OidOf c 'PGmoney where oidOf = pure $ LibPQ.Oid 790
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGmoney where oidOfArray = pure $ LibPQ.Oid 791
+instance (forall m. c m => Applicative m) => OidOf c ('PGchar n) where oidOf = pure $ LibPQ.Oid 18
+instance (forall m. c m => Applicative m) => OidOfArray c ('PGchar n) where oidOfArray = pure $ LibPQ.Oid 1002
+instance (forall m. c m => Applicative m) => OidOf c ('PGvarchar n) where oidOf = pure $ LibPQ.Oid 1043
+instance (forall m. c m => Applicative m) => OidOfArray c ('PGvarchar n) where oidOfArray = pure $ LibPQ.Oid 1015
+instance (forall m. c m => Applicative m) => OidOf c 'PGtext where oidOf = pure $ LibPQ.Oid 25
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGtext where oidOfArray = pure $ LibPQ.Oid 1009
+instance (forall m. c m => Applicative m) => OidOf c 'PGbytea where oidOf = pure $ LibPQ.Oid 17
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGbytea where oidOfArray = pure $ LibPQ.Oid 1001
+instance (forall m. c m => Applicative m) => OidOf c 'PGtimestamp where oidOf = pure $ LibPQ.Oid 1114
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGtimestamp where oidOfArray = pure $ LibPQ.Oid 1115
+instance (forall m. c m => Applicative m) => OidOf c 'PGtimestamptz where oidOf = pure $ LibPQ.Oid 1184
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGtimestamptz where oidOfArray = pure $ LibPQ.Oid 1185
+instance (forall m. c m => Applicative m) => OidOf c 'PGdate where oidOf = pure $ LibPQ.Oid 1082
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGdate where oidOfArray = pure $ LibPQ.Oid 1182
+instance (forall m. c m => Applicative m) => OidOf c 'PGtime where oidOf = pure $ LibPQ.Oid 1083
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGtime where oidOfArray = pure $ LibPQ.Oid 1183
+instance (forall m. c m => Applicative m) => OidOf c 'PGtimetz where oidOf = pure $ LibPQ.Oid 1266
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGtimetz where oidOfArray = pure $ LibPQ.Oid 1270
+instance (forall m. c m => Applicative m) => OidOf c 'PGinterval where oidOf = pure $ LibPQ.Oid 1186
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGinterval where oidOfArray = pure $ LibPQ.Oid 1187
+instance (forall m. c m => Applicative m) => OidOf c 'PGuuid where oidOf = pure $ LibPQ.Oid 2950
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGuuid where oidOfArray = pure $ LibPQ.Oid 2951
+instance (forall m. c m => Applicative m) => OidOf c 'PGinet where oidOf = pure $ LibPQ.Oid 869
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGinet where oidOfArray = pure $ LibPQ.Oid 1041
+instance (forall m. c m => Applicative m) => OidOf c 'PGjson where oidOf = pure $ LibPQ.Oid 114
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGjson where oidOfArray = pure $ LibPQ.Oid 199
+instance (forall m. c m => Applicative m) => OidOf c 'PGjsonb where oidOf = pure $ LibPQ.Oid 3802
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGjsonb where oidOfArray = pure $ LibPQ.Oid 3807
+instance (forall m. c m => Applicative m) => OidOf c 'PGtsvector where oidOf = pure $ LibPQ.Oid 3614
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGtsvector where oidOfArray = pure $ LibPQ.Oid 3643
+instance (forall m. c m => Applicative m) => OidOf c 'PGtsquery where oidOf = pure $ LibPQ.Oid 3615
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGtsquery where oidOfArray = pure $ LibPQ.Oid 3645
+instance (forall m. c m => Applicative m) => OidOf c 'PGoid where oidOf = pure $ LibPQ.Oid 26
+instance (forall m. c m => Applicative m) => OidOfArray c 'PGoid where oidOfArray = pure $ LibPQ.Oid 1028
+instance (forall m. c m => Applicative m) => OidOf c ('PGrange 'PGint4) where oidOf = pure $ LibPQ.Oid 3904
+instance (forall m. c m => Applicative m) => OidOfArray c ('PGrange 'PGint4) where oidOfArray = pure $ LibPQ.Oid 3905
+instance (forall m. c m => Applicative m) => OidOf c ('PGrange 'PGint8) where oidOf = pure $ LibPQ.Oid 3926
+instance (forall m. c m => Applicative m) => OidOfArray c ('PGrange 'PGint8) where oidOfArray = pure $ LibPQ.Oid 3927
+instance (forall m. c m => Applicative m) => OidOf c ('PGrange 'PGnumeric) where oidOf = pure $ LibPQ.Oid 3906
+instance (forall m. c m => Applicative m) => OidOfArray c ('PGrange 'PGnumeric) where oidOfArray = pure $ LibPQ.Oid 3907
+instance (forall m. c m => Applicative m) => OidOf c ('PGrange 'PGtimestamp) where oidOf = pure $ LibPQ.Oid 3908
+instance (forall m. c m => Applicative m) => OidOfArray c ('PGrange 'PGtimestamp) where oidOfArray = pure $ LibPQ.Oid 3909
+instance (forall m. c m => Applicative m) => OidOf c ('PGrange 'PGtimestamptz) where oidOf = pure $ LibPQ.Oid 3910
+instance (forall m. c m => Applicative m) => OidOfArray c ('PGrange 'PGtimestamptz) where oidOfArray = pure $ LibPQ.Oid 3911
+instance (forall m. c m => Applicative m) => OidOf c ('PGrange 'PGdate) where oidOf = pure $ LibPQ.Oid 3912
+instance (forall m. c m => Applicative m) => OidOfArray c ('PGrange 'PGdate) where oidOfArray = pure $ LibPQ.Oid 3913
 -- instance {-# OVERLAPPABLE #-} OidOf ('PGrange ty) where oidOf = LibPQ.invalidOid
 -- instance {-# OVERLAPPABLE #-} OidOfArray ('PGrange ty) where oidOfArray = LibPQ.invalidOid
 -- instance {-# OVERLAPPABLE #-} OidOf ('PGcomposite row) where oidOf = LibPQ.invalidOid

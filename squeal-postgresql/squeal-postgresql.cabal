@@ -64,6 +64,7 @@ library
     Squeal.PostgreSQL.PQ.Indexed
     Squeal.PostgreSQL.PQ.Migration
     Squeal.PostgreSQL.PQ.Monad
+    Squeal.PostgreSQL.PQ.Monad2
     Squeal.PostgreSQL.PQ.Oid
     Squeal.PostgreSQL.PQ.Oid2
     Squeal.PostgreSQL.PQ.Oid3
