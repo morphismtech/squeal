@@ -63,14 +63,9 @@ module Squeal.PostgreSQL.Expression.Range
   , rangeMerge
   ) where
 
-import BinaryParser
-import ByteString.StrictBuilder
-import Data.Bits
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
-import qualified PostgreSQL.Binary.Decoding as Decoding
 
-import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Type hiding (bool)
 import Squeal.PostgreSQL.PG
@@ -126,49 +121,6 @@ data Range x = Empty | NonEmpty (Bound x) (Bound x)
   deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
 -- | `PGrange` @(@`PG` @hask)@
 type instance PG (Range hask) = 'PGrange (PG hask)
-instance ToParam x pg => ToParam (Range x) ('PGrange pg) where
-  toParam rng = SOP.K $
-    word8 (setFlags rng 0) <>
-      case rng of
-        Empty -> mempty
-        NonEmpty lower upper -> putBound lower <> putBound upper
-    where
-      putBound = \case
-        Infinite -> mempty
-        Closed value -> putValue (SOP.unK (toParam @x @pg value))
-        Open value -> putValue (SOP.unK (toParam @x @pg value))
-      putValue value = int32BE (fromIntegral (builderLength value)) <> value
-      setFlags = \case
-        Empty -> (`setBit` 0)
-        NonEmpty lower upper ->
-          setLowerFlags lower . setUpperFlags upper
-      setLowerFlags = \case
-        Infinite -> (`setBit` 3)
-        Closed _ -> (`setBit` 1)
-        Open _ -> id
-      setUpperFlags = \case
-        Infinite -> (`setBit` 4)
-        Closed _ -> (`setBit` 2)
-        Open _ -> id
-instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
-  fromValue = do
-    flag <- byte
-    if testBit flag 0 then return Empty else do
-      lower <-
-        if testBit flag 3
-          then return Infinite
-          else do
-            len <- sized 4 Decoding.int
-            l <- sized len (fromValue @pg)
-            return $ if testBit flag 1 then Closed l else Open l
-      upper <-
-        if testBit flag 4
-          then return Infinite
-          else do
-            len <- sized 4 Decoding.int
-            l <- sized len (fromValue @pg)
-            return $ if testBit flag 2 then Closed l else Open l
-      return $ NonEmpty lower upper
 
 -- | Finite `Range` constructor
 (<=..<=), (<..<), (<=..<), (<..<=) :: x -> x -> Range x

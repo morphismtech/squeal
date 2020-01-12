@@ -26,7 +26,6 @@ module Squeal.PostgreSQL.Expression.Literal
     Literal (..)
   ) where
 
-import ByteString.StrictBuilder (builderBytes)
 import Data.Binary.Builder (toLazyByteString)
 import Data.ByteString.Lazy (toStrict)
 import Data.ByteString.Builder.Scientific (scientificBuilder)
@@ -46,7 +45,6 @@ import qualified Data.Text.Lazy as Lazy (Text)
 import qualified Data.Text.Lazy as Lazy.Text
 import qualified Generics.SOP as SOP
 
-import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Array
 import Squeal.PostgreSQL.Expression.Logic
@@ -69,7 +67,7 @@ E'a'
 >>> printSQL (literal (1 :: Double))
 1.0
 
->>> printSQL (literal (Json [1 :: Double, 2]))
+>>> printSQL (literal (Json ([1, 2] :: [Double])))
 ('[1.0,2.0]' :: json)
 
 >>> printSQL (literal (Enumerated GT))
@@ -137,14 +135,29 @@ instance Literal LocalTime where
     in makeTimestamp
       ( fromInteger y :* fromIntegral m :* fromIntegral d
         :* fromIntegral hr :* fromIntegral mn *: fromRational (toRational sc) )
-instance ToParam (Enumerated enum) (PG (Enumerated enum))
-  => Literal (Enumerated enum) where
-    literal
-      = UnsafeExpression
-      . singleQuotedUtf8
-      . builderBytes
-      . SOP.unK
-      . toParam @(Enumerated enum) @(PG (Enumerated enum))
+instance
+  ( SOP.IsEnumType x
+  , SOP.HasDatatypeInfo x
+  ) => Literal (Enumerated x) where
+    literal =
+      let
+        gshowConstructor
+          :: NP SOP.ConstructorInfo xss
+          -> SOP.SOP SOP.I xss
+          -> String
+        gshowConstructor Nil _ = ""
+        gshowConstructor (constructor :* _) (SOP.SOP (SOP.Z _)) =
+          SOP.constructorName constructor
+        gshowConstructor (_ :* constructors) (SOP.SOP (SOP.S xs)) =
+          gshowConstructor constructors (SOP.SOP xs)
+      in
+        UnsafeExpression
+        . singleQuotedUtf8
+        . fromString
+        . gshowConstructor
+            (SOP.constructorInfo (SOP.datatypeInfo (SOP.Proxy @x)))
+        . SOP.from
+        . getEnumerated
 instance Literal (Range Int32) where
   literal = range int4range . fmap literal
 instance Literal (Range Int64) where

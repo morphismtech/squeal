@@ -48,12 +48,9 @@ module Squeal.PostgreSQL.PG
   , VarArray (..)
   , FixArray (..)
   , LibPQ.Oid (..)
-  , VarChar
-  , varChar
-  , getVarChar
-  , FixChar
-  , fixChar
-  , getFixChar
+  , VarChar, varChar, getVarChar
+  , FixChar, fixChar, getFixChar
+  , Only (..)
     -- * Type families
   , LabelsPG
   , DimPG
@@ -182,7 +179,7 @@ have `SOP.Generic` and `SOP.HasDatatypeInfo` instances;
 >>> instance SOP.Generic Person
 >>> instance SOP.HasDatatypeInfo Person
 >>> :kind! RowPG Person
-RowPG Person :: [(Symbol, NullityType)]
+RowPG Person :: [(Symbol, NullType)]
 = '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
 -}
 type family RowPG (hask :: Type) :: RowType where
@@ -201,31 +198,31 @@ type family RowOf (record :: [(Symbol, Type)]) :: RowType where
   RowOf (col ::: ty ': record) = col ::: NullPG ty ': RowOf record
   RowOf '[] = '[]
 
-{- | `NullPG` turns a Haskell type into a `NullityType`.
+{- | `NullPG` turns a Haskell type into a `NullType`.
 
 >>> :kind! NullPG Double
-NullPG Double :: NullityType
+NullPG Double :: NullType
 = 'NotNull 'PGfloat8
 >>> :kind! NullPG (Maybe Double)
-NullPG (Maybe Double) :: NullityType
+NullPG (Maybe Double) :: NullType
 = 'Null 'PGfloat8
 -}
-type family NullPG (hask :: Type) :: NullityType where
+type family NullPG (hask :: Type) :: NullType where
   NullPG (Maybe hask) = 'Null (PG hask)
   NullPG hask = 'NotNull (PG hask)
 
 {- | `TuplePG` turns a Haskell tuple type (including record types) into
-the corresponding list of `NullityType`s.
+the corresponding list of `NullType`s.
 
 >>> :kind! TuplePG (Double, Maybe Char)
-TuplePG (Double, Maybe Char) :: [NullityType]
+TuplePG (Double, Maybe Char) :: [NullType]
 = '[ 'NotNull 'PGfloat8, 'Null ('PGchar 1)]
 -}
-type family TuplePG (hask :: Type) :: [NullityType] where
+type family TuplePG (hask :: Type) :: [NullType] where
   TuplePG hask = TupleOf (TupleCodeOf hask (SOP.Code hask))
 
--- | `TupleOf` turns a list of Haskell `Type`s into a list of `NullityType`s.
-type family TupleOf (tuple :: [Type]) :: [NullityType] where
+-- | `TupleOf` turns a list of Haskell `Type`s into a list of `NullType`s.
+type family TupleOf (tuple :: [Type]) :: [NullType] where
   TupleOf (hask ': hask1 ': hask2 ': hask3 ': hask4 ': hask5 ': tuple) =
     NullPG hask ': NullPG hask1 ': NullPG hask2 ': NullPG hask3 ': NullPG hask4 ': NullPG hask5 ': TupleOf tuple
   TupleOf (hask ': hask1 ': hask2 ': hask3 ': hask4 ': tuple) =
@@ -294,7 +291,7 @@ type family DimPG (hask :: Type) :: [Nat] where
   DimPG x = '[]
 
 -- | `FixPG` extracts `NullPG` of the base type of nested homogeneous tuples.
-type family FixPG (hask :: Type) :: NullityType where
+type family FixPG (hask :: Type) :: NullType where
   FixPG (x,x) = FixPG x
   FixPG (x,x,x) = FixPG x
   FixPG (x,x,x,x) = FixPG x
@@ -400,28 +397,47 @@ newtype FixArray arr = FixArray {getFixArray :: arr}
 -- | `PGfixarray` @(@`DimPG` @hask) (@`FixPG` @hask)@
 type instance PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
 
--- | A refined text type for use with 'varchar'.
--- The constructor is not exposed. You have to use @varChar@ and @getVarChar@.
+-- | `Only` is a 1-tuple type, useful for encoding or decoding a singleton
+--
+-- >>> import Data.Text
+-- >>> let onlyParams = genericParams :: EncodeParams '[ 'Null 'PGtext] (Only (Maybe Text))
+-- >>> runEncodeParams onlyParams (Only (Just "foo"))
+-- K (Just "foo") :* Nil
+--
+-- >>> let onlyRow = genericRow :: DecodeRow '["fromOnly" ::: 'Null 'PGtext] (Only (Maybe Text))
+-- >>> runDecodeRow onlyRow (K (Just "bar") :* Nil)
+-- Right (Only {fromOnly = Just "bar"})
+newtype Only x = Only { fromOnly :: x }
+  deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
+instance SOP.Generic (Only x)
+instance SOP.HasDatatypeInfo (Only x)
+
+-- | Variable-length text type with limit
 newtype VarChar (n :: Nat) = VarChar Strict.Text
   deriving (Eq,Ord,Read,Show)
 
+-- | Constructor for `VarChar`
 varChar :: forall  n . KnownNat n => Strict.Text -> Maybe (VarChar n)
-varChar t = if Strict.Text.length t <= (fromIntegral $ natVal @n Proxy)
-  then Just . VarChar $ t
+varChar t =
+  if Strict.Text.length t <= fromIntegral (natVal @n Proxy)
+  then Just $ VarChar t
   else Nothing
 
+-- | Access the `Strict.Text` of a `VarChar`
 getVarChar :: VarChar n -> Strict.Text
 getVarChar (VarChar t) = t
 
--- | A refined text type for use with 'varchar'.
--- The constructor is not exposed. You have to use @fixChar@ and @getVarChar@.
+-- | Fixed-length, blank padded
 newtype FixChar (n :: Nat) = FixChar Strict.Text
   deriving (Eq,Ord,Read,Show)
 
+-- | Constructor for `FixChar`
 fixChar :: forall  n . KnownNat n => Strict.Text -> Maybe (FixChar n)
-fixChar t = if Strict.Text.length t == (fromIntegral $ natVal @n Proxy)
-  then Just . FixChar $ t
+fixChar t =
+  if Strict.Text.length t == fromIntegral (natVal @n Proxy)
+  then Just $ FixChar t
   else Nothing
 
+-- | Access the `Strict.Text` of a `FixChar`
 getFixChar :: FixChar n -> Strict.Text
 getFixChar (FixChar t) = t

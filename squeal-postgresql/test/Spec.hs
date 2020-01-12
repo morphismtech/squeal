@@ -99,10 +99,10 @@ spec = before_ setupDB . after_ dropDB $ do
       pool <- createConnectionPool
         "host=localhost port=5432 dbname=exampledb" 1 0.5 10
       let
-        query :: Query_ (Public '[]) () (Only Char)
-        query = values_ (literal 'a' `as` #fromOnly)
+        qry :: Query_ (Public '[]) () (Only Char)
+        qry = values_ (literal 'a' `as` #fromOnly)
         session = usingConnectionPool pool . transactionally_ $ do
-          result <- runQuery query
+          result <- runQuery qry
           Just (Only chr) <- firstRow result
           return chr
       chrs <- replicateConcurrently 10 session
@@ -114,13 +114,13 @@ spec = before_ setupDB . after_ dropDB $ do
 
       rangesOut <- withConnection connectionString $ do
         let
-          query :: Query_ (Public '[]) () (Only (Range Int32))
-          query = values
+          qry :: Query_ (Public '[]) () (Only (Range Int32))
+          qry = values
             ( range int4range (atLeast 3) `as` #fromOnly )
             [ range int4range (3 <=..< 5) `as` #fromOnly
             , range int4range Empty `as` #fromOnly
             , range int4range whole `as` #fromOnly ]
-        getRows =<< runQuery query
+        getRows =<< runQuery qry
       (fromOnly <$> rangesOut :: [Range Int32]) `shouldBe`
         [ atLeast 3, 3 <=..< 5, Empty, whole ]
 
@@ -130,7 +130,7 @@ spec = before_ setupDB . after_ dropDB $ do
 
       out <- withConnection connectionString $ do
         let
-          query :: Query_ (Public '[]) (Char,Int32) (Only Int32)
-          query = values_ (param @2 `as` #fromOnly)
-        firstRow =<< runQueryParams query ('a', 3 :: Int32)
+          qry :: Query_ (Public '[]) (Char,Int32) (Only Int32)
+          qry = values_ (param @2 `as` #fromOnly)
+        firstRow =<< runQueryParams qry ('a', 3 :: Int32)
       (fromOnly <$> out :: Maybe Int32) `shouldBe` Just 3

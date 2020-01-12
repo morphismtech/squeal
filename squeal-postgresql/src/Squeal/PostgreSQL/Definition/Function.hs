@@ -1,7 +1,7 @@
 {-|
 Module: Squeal.PostgreSQL.Definition.Function
 Description: Create and drop function and operator definitions
-Copyright: (c) Eitan Chatav, 2017
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 

@@ -93,9 +93,9 @@ module Squeal.PostgreSQL.Expression.Type
     -- * Type Inference
   , PGTyped (..)
   , pgtypeFrom
-  , NullityTyped (..)
-  , nullitytypeFrom
-  , ColumnTyped
+  , NullTyped (..)
+  , nulltypeFrom
+  , ColumnTyped (..)
   , columntypeFrom
   , FieldTyped (..)
   ) where
@@ -151,11 +151,11 @@ astype = cast
 -- >>> printSQL (inferredtype true)
 -- (TRUE :: bool)
 inferredtype
-  :: NullityTyped db ty
+  :: NullTyped db ty
   => Expression outer common grp db params from ty
   -- ^ value
   -> Expression outer common grp db params from ty
-inferredtype = astype nullitytype
+inferredtype = astype nulltype
 
 {-----------------------------------------
 type expressions
@@ -163,7 +163,7 @@ type expressions
 
 -- | `TypeExpression`s are used in `cast`s and
 -- `Squeal.PostgreSQL.Definition.createTable` commands.
-newtype TypeExpression (db :: SchemasType) (ty :: NullityType)
+newtype TypeExpression (db :: SchemasType) (ty :: NullType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance RenderSQL (TypeExpression db ty) where
@@ -384,9 +384,9 @@ pgtypeFrom = pgtype @db @(PG hask)
 
 -- | Lift `PGTyped` to a field
 class FieldTyped db ty where fieldtype :: Aliased (TypeExpression db) ty
-instance (KnownSymbol alias, NullityTyped db ty)
+instance (KnownSymbol alias, NullTyped db ty)
   => FieldTyped db (alias ::: ty) where
-    fieldtype = nullitytype `As` Alias
+    fieldtype = nulltype `As` Alias
 
 -- | `ColumnTypeExpression`s are used in
 -- `Squeal.PostgreSQL.Definition.createTable` commands.
@@ -400,7 +400,7 @@ instance RenderSQL (ColumnTypeExpression db ty) where
 -- commands as a column constraint to note that
 -- @NULL@ may be present in a column
 nullable
-  :: TypeExpression db (nullity ty)
+  :: TypeExpression db (null ty)
   -> ColumnTypeExpression db ('NoDef :=> 'Null ty)
 nullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NULL"
 
@@ -408,7 +408,7 @@ nullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NULL"
 -- commands as a column constraint to ensure
 -- @NULL@ is not present in a column
 notNullable
-  :: TypeExpression db (nullity ty)
+  :: TypeExpression db (null ty)
   -> ColumnTypeExpression db ('NoDef :=> 'NotNull ty)
 notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
 
@@ -440,33 +440,34 @@ serial8, bigserial
 serial8 = UnsafeColumnTypeExpression "serial8"
 bigserial = UnsafeColumnTypeExpression "bigserial"
 
--- | Like @PGTyped@ but also accounts for nullity.
-class NullityTyped db (ty :: NullityType) where
-  nullitytype :: TypeExpression db ty
-instance PGTyped db pg => NullityTyped db (null pg) where
-  nullitytype = pgtype @db @pg
+-- | Like @PGTyped@ but also accounts for null.
+class NullTyped db (ty :: NullType) where
+  nulltype :: TypeExpression db ty
+
+instance PGTyped db ty => NullTyped db (null ty) where
+  nulltype = pgtype @db @ty
 
 -- | Specify null `TypeExpression` from a Haskell type.
 --
--- >>> printSQL $ nullitytypeFrom @(Maybe String)
+-- >>> printSQL $ nulltypeFrom @(Maybe String)
 -- text
 --
--- >>> printSQL $ nullitytypeFrom @Double
+-- >>> printSQL $ nulltypeFrom @Double
 -- float8
-nullitytypeFrom
-  :: forall hask db. NullityTyped db (NullPG hask)
+nulltypeFrom
+  :: forall hask db. NullTyped db (NullPG hask)
   => TypeExpression db (NullPG hask)
-nullitytypeFrom = nullitytype @db @(NullPG hask)
+nulltypeFrom = nulltype @db @(NullPG hask)
 
--- | Like @PGTyped@ but also accounts for nullity.
+-- | Like @PGTyped@ but also accounts for null.
 class ColumnTyped db (column :: ColumnType) where
   columntype :: ColumnTypeExpression db column
-instance NullityTyped db ('Null ty)
+instance NullTyped db ('Null ty)
   => ColumnTyped db ('NoDef :=> 'Null ty) where
-    columntype = nullable (nullitytype @db @('Null ty))
-instance NullityTyped db ('NotNull ty)
+    columntype = nullable (nulltype @db @('Null ty))
+instance NullTyped db ('NotNull ty)
   => ColumnTyped db ('NoDef :=> 'NotNull ty) where
-    columntype = notNullable (nullitytype @db @('NotNull ty))
+    columntype = notNullable (nulltype @db @('NotNull ty))
 
 -- | Specify `ColumnTypeExpression` from a Haskell type.
 --

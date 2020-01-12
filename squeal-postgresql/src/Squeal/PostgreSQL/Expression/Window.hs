@@ -149,9 +149,9 @@ newtype WindowFunction
   (commons :: FromType)
   (grp :: Grouping)
   (db :: SchemasType)
-  (params :: [NullityType])
+  (params :: [NullType])
   (from :: FromType)
-  (ty :: NullityType)
+  (ty :: NullType)
     = UnsafeWindowFunction { renderWindowFunction :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
 

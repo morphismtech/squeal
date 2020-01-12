@@ -54,7 +54,7 @@ a `TableConstraint` or a `ColumnType`. It is intended to connote Haskell's @::@
 operator.
 
 `:=>` is used to pair `TableConstraints` with a `ColumnsType`,
-yielding a `TableType`, or to pair a `ColumnConstraint` with a `NullityType`,
+yielding a `TableType`, or to pair a `ColumnConstraint` with a `NullType`,
 yielding a `ColumnType`. It is intended to connote Haskell's @=>@ operator
 
 Next, we'll write `Definition`s to set up and tear down the schema. In
@@ -193,7 +193,6 @@ in
 module Squeal.PostgreSQL (module X, RenderSQL(..), printSQL) where
 
 import Squeal.PostgreSQL.Alias as X
-import Squeal.PostgreSQL.Binary as X
 import Squeal.PostgreSQL.Definition as X
 import Squeal.PostgreSQL.Definition.Constraint as X
 import Squeal.PostgreSQL.Definition.Function as X
@@ -224,11 +223,20 @@ import Squeal.PostgreSQL.Expression.Type as X
 import Squeal.PostgreSQL.Expression.Window as X
 import Squeal.PostgreSQL.List as X
 import Squeal.PostgreSQL.Manipulation as X
-import Squeal.PostgreSQL.Migration as X
 import Squeal.PostgreSQL.PG as X
-import Squeal.PostgreSQL.Pool as X
 import Squeal.PostgreSQL.PQ as X
+import Squeal.PostgreSQL.PQ.Connection as X
+import Squeal.PostgreSQL.PQ.Decode as X
+import Squeal.PostgreSQL.PQ.Encode as X
+import Squeal.PostgreSQL.PQ.Exception as X
+import Squeal.PostgreSQL.PQ.Indexed as X
+import Squeal.PostgreSQL.PQ.Migration as X
+import Squeal.PostgreSQL.PQ.Monad as X
+import Squeal.PostgreSQL.PQ.Oid as X
+import Squeal.PostgreSQL.PQ.Pool as X
+import Squeal.PostgreSQL.PQ.Result as X
+import Squeal.PostgreSQL.PQ.Statement as X
+import Squeal.PostgreSQL.PQ.Transaction as X
 import Squeal.PostgreSQL.Query as X
 import Squeal.PostgreSQL.Render (RenderSQL(..), printSQL)
 import Squeal.PostgreSQL.Schema as X
-import Squeal.PostgreSQL.Transaction as X

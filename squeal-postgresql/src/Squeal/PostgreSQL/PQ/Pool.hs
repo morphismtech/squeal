@@ -1,7 +1,7 @@
 {-|
 Module: Squeal.PostgreSQL.Pool
 Description: Connection pools
-Copyright: (c) Eitan Chatav, 2017
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
@@ -36,6 +36,7 @@ a
   , FlexibleInstances
   , InstanceSigs
   , MultiParamTypeClasses
+  , PolyKinds
   , RankNTypes
   , ScopedTypeVariables
   , TypeFamilies
@@ -43,7 +44,7 @@ a
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.Pool
+module Squeal.PostgreSQL.PQ.Pool
   ( -- * Pool
     Pool
   , createConnectionPool
@@ -53,11 +54,11 @@ module Squeal.PostgreSQL.Pool
 
 import Data.ByteString
 import Data.Time
-import Generics.SOP (K(..), unK)
 import UnliftIO (MonadUnliftIO (..))
 import UnliftIO.Pool (Pool, createPool, destroyAllResources, withResource)
 
-import Squeal.PostgreSQL.PQ
+import Squeal.PostgreSQL.PQ (PQ (..))
+import Squeal.PostgreSQL.PQ.Connection
 
 -- | Create a striped pool of connections.
 -- Although the garbage collector will destroy all idle connections when the pool is garbage collected it's recommended to manually `destroyAllResources` when you're done with the pool so that the connections are freed up as soon as possible.

@@ -50,8 +50,8 @@ refer to the out-of-line data values.
 -}
 class KnownNat n => HasParameter
   (n :: Nat)
-  (params :: [NullityType])
-  (ty :: NullityType)
+  (params :: [NullType])
+  (ty :: NullType)
   | n params -> ty where
     -- | `parameter` takes a `Nat` using type application and a `TypeExpression`.
     --
@@ -76,6 +76,6 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
 -- ($1 :: int4)
 param
   :: forall n ty outer commons db params from grp
-   . (NullityTyped db ty, HasParameter n params ty)
+   . (NullTyped db ty, HasParameter n params ty)
   => Expression outer commons grp db params from ty -- ^ param
-param = parameter @n (nullitytype @db)
+param = parameter @n (nulltype @db)

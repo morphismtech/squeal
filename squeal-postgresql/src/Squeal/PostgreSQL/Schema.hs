@@ -10,6 +10,7 @@ tables, schema, constraints, aliases, enumerated labels, and groupings.
 It also defines useful type families to operate on these. Finally,
 it defines an embedding of Haskell types into Postgres types.
 -}
+
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
@@ -36,7 +37,7 @@ it defines an embedding of Haskell types into Postgres types.
 module Squeal.PostgreSQL.Schema
   ( -- * Postgres Type
     PGType (..)
-  , NullityType (..)
+  , NullType (..)
   , RowType
   , FromType
     -- * Schema Type
@@ -139,8 +140,8 @@ data PGType
   | PGinet -- ^ IPv4 or IPv6 host address
   | PGjson -- ^	textual JSON data
   | PGjsonb -- ^ binary JSON data, decomposed
-  | PGvararray NullityType -- ^ variable length array
-  | PGfixarray [Nat] NullityType -- ^ fixed length array
+  | PGvararray NullType -- ^ variable length array
+  | PGfixarray [Nat] NullType -- ^ fixed length array
   | PGenum [Symbol] -- ^ enumerated (enum) types are data types that comprise a static, ordered set of values.
   | PGcomposite RowType -- ^ a composite type represents the structure of a row or record; it is essentially just a list of field names and their data types.
   | PGtsvector -- ^ A tsvector value is a sorted list of distinct lexemes, which are words that have been normalized to merge different variants of the same word.
@@ -149,20 +150,20 @@ data PGType
   | PGrange PGType -- ^ Range types are data types representing a range of values of some element type (called the range's subtype).
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
--- | `NullityType` encodes the potential presence or definite absence of a
+-- | `NullType` encodes the potential presence or definite absence of a
 -- @NULL@ allowing operations which are sensitive to such to be well typed.
 --
 -- >>> :kind 'Null 'PGint4
--- 'Null 'PGint4 :: NullityType
+-- 'Null 'PGint4 :: NullType
 -- >>> :kind 'NotNull ('PGvarchar 50)
--- 'NotNull ('PGvarchar 50) :: NullityType
-data NullityType
+-- 'NotNull ('PGvarchar 50) :: NullType
+data NullType
   = Null PGType -- ^ @NULL@ may be present
   | NotNull PGType -- ^ @NULL@ is absent
 
 -- | The constraint  operator, `:=>` is a type level pair
 -- between a "constraint" and some type, for use in pairing
--- a `ColumnConstraint` with a `NullityType` to produce a `ColumnType`
+-- a `ColumnConstraint` with a `NullType` to produce a `ColumnType`
 -- or a `TableConstraints` and a `ColumnsType` to produce a `TableType`.
 type (:=>) constraint ty = '(constraint,ty)
 infixr 7 :=>
@@ -183,7 +184,7 @@ data ColumnConstraint
 -- >>> import GHC.TypeLits
 -- >>> type family IdColumn :: ColumnType where IdColumn = 'Def :=> 'NotNull 'PGint4
 -- >>> type family EmailColumn :: ColumnType where EmailColumn = 'NoDef :=> 'Null 'PGtext
-type ColumnType = (ColumnConstraint,NullityType)
+type ColumnType = (ColumnConstraint,NullType)
 
 -- | `ColumnsType` is a row of `ColumnType`s.
 --
@@ -239,7 +240,7 @@ type family Uniquely
 -- :}
 type TableType = (TableConstraints,ColumnsType)
 
-{- | A `RowType` is a row of `NullityType`. They correspond to Haskell
+{- | A `RowType` is a row of `NullType`. They correspond to Haskell
 record types by means of `Squeal.PostgreSQL.Binary.RowPG` and are used in many places.
 
 >>> :{
@@ -251,7 +252,7 @@ type family PersonRow :: RowType where
      ]
 :}
 -}
-type RowType = [(Symbol,NullityType)]
+type RowType = [(Symbol,NullType)]
 
 {- | `FromType` is a row of `RowType`s. It can be thought of as
 a product, or horizontal gluing and is used in `Squeal.PostgreSQL.Query.FromClause`s
@@ -294,15 +295,15 @@ type PGFloating = '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 type PGIntegral = '[ 'PGint2, 'PGint4, 'PGint8]
 
 -- | `PGTypeOf` forgets about @NULL@ and any column constraints.
-type family PGTypeOf (ty :: NullityType) :: PGType where
-  PGTypeOf (nullity pg) = pg
+type family PGTypeOf (ty :: NullType) :: PGType where
+  PGTypeOf (null pg) = pg
 
 -- | Equality constraint on the underlying `PGType` of two columns.
 class SamePGType
   (ty0 :: (Symbol,ColumnType)) (ty1 :: (Symbol,ColumnType)) where
 instance ty0 ~ ty1 => SamePGType
-  (alias0 ::: def0 :=> nullity0 ty0)
-  (alias1 ::: def1 :=> nullity1 ty1)
+  (alias0 ::: def0 :=> null0 ty0)
+  (alias1 ::: def1 :=> null1 ty1)
 
 -- | `AllNotNull` is a constraint that proves a `ColumnsType` has no @NULL@s.
 type family AllNotNull (columns :: ColumnsType) :: Constraint where
@@ -325,8 +326,8 @@ type family NotAllNull (columns :: ColumnsType) :: Constraint where
   NotAllNull (_ ::: _ :=> 'NotNull _ ': _) = ()
   NotAllNull (_ ::: _ :=> 'Null _ ': columns) = NotAllNull columns
 
--- | `NullifyType` is an idempotent that nullifies a `NullityType`.
-type family NullifyType (ty :: NullityType) :: NullityType where
+-- | `NullifyType` is an idempotent that nullifies a `NullType`.
+type family NullifyType (ty :: NullType) :: NullType where
   NullifyType ('Null ty) = 'Null ty
   NullifyType ('NotNull ty) = 'Null ty
 
@@ -503,7 +504,7 @@ data SchemumType
 
 -- | Use `:=>` to pair the parameter types with the return
 -- type of a function.
-type FunctionType = ([NullityType], ReturnsType)
+type FunctionType = ([NullType], ReturnsType)
 
 {- |
 PostgreSQL provides several index types:
@@ -533,7 +534,7 @@ data IndexType
 
 {- | Return type of a function-}
 data ReturnsType
-  = Returns NullityType -- ^ function
+  = Returns NullType -- ^ function
   | ReturnsTable RowType -- ^ set returning function
 
 {- | The schema of a database consists of a list of aliased,
@@ -561,18 +562,18 @@ type family Schema :: SchemaType where
 type SchemaType = [(Symbol,SchemumType)]
 
 {- |
-A database contains one or more named db, which in turn contain tables.
-The same object name can be used in different db without conflict;
+A database contains one or more named schemas, which in turn contain tables.
+The same object name can be used in different schemas without conflict;
 for example, both schema1 and myschema can contain tables named mytable.
-Unlike databases, db are not rigidly separated:
-a user can access objects in any of the db in the database they are connected to,
+Unlike databases, schemas are not rigidly separated:
+a user can access objects in any of the schemas in the database they are connected to,
 if they have privileges to do so.
 
-There are several reasons why one might want to use db:
+There are several reasons why one might want to use schemas:
 
   * To allow many users to use one database without interfering with each other.
   * To organize database objects into logical groups to make them more manageable.
-  * Third-party applications can be put into separate db
+  * Third-party applications can be put into separate schemas
   so they do not collide with the names of other objects.
 -}
 type SchemasType = [(Symbol,SchemaType)]

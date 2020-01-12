@@ -1,7 +1,7 @@
 {-|
-Module: Squeal.PostgreSQL.Migration
+Module: Squeal.PostgreSQL.PQ.Migration
 Description: Squeal migrations
-Copyright: (c) Eitan Chatav, 2017
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
@@ -85,7 +85,7 @@ Now run the migrations.
 >>> import Control.Monad.IO.Class
 >>> :{
 withConnection "host=localhost port=5432 dbname=exampledb" $
-  manipulate (UnsafeManipulation "SET client_min_messages TO WARNING;")
+  manipulate_ (UnsafeManipulation "SET client_min_messages TO WARNING;")
     -- suppress notices
   & pqThen (liftIO (putStrLn "Migrate"))
   & pqThen (migrateUp migrations)
@@ -149,14 +149,13 @@ by using a `Migration`s over the `Indexed` `PQ` `IO` category.
   , TypeOperators
 #-}
 
-module Squeal.PostgreSQL.Migration
+module Squeal.PostgreSQL.PQ.Migration
   ( -- * Migration
     Migration (..)
   , Migratory (..)
   , migrate
   , migrateUp
   , migrateDown
-  , indexedDefine
   , MigrationsTable
     -- * Executable
   , mainMigrate
@@ -185,7 +184,6 @@ import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Alias
-import Squeal.PostgreSQL.Binary
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Definition.Constraint
 import Squeal.PostgreSQL.Definition.Table
@@ -195,10 +193,14 @@ import Squeal.PostgreSQL.Expression.Time
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Manipulation
+import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.PQ
+import Squeal.PostgreSQL.PQ.Indexed
+import Squeal.PostgreSQL.PQ.Monad
+import Squeal.PostgreSQL.PQ.Result
+import Squeal.PostgreSQL.PQ.Transaction
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
-import Squeal.PostgreSQL.Transaction
 
 -- | A `Migration` consists of a name and a migration definition.
 data Migration def db0 db1 = Migration
@@ -224,12 +226,12 @@ instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
       upMigration step = do
         executed <- do
           result <- runQueryParams selectMigration (Only (name step))
-          ntuples result
+          ntuples (result :: Result (Only UTCTime))
         unless (executed == 1) $ do
           _ <- unsafePQ . runIndexed $ migration step
           manipulateParams_ insertMigration (Only (name step))
 instance Migratory Definition (Indexed PQ IO ()) where
-  runMigrations = runMigrations . qmap (qmap indexedDefine)
+  runMigrations = runMigrations . qmap (qmap ixDefine)
 instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
   runMigrations path = OpQ . Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
@@ -238,12 +240,12 @@ instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
       downMigration (OpQ step) = do
         executed <- do
           result <- runQueryParams selectMigration (Only (name step))
-          ntuples result
+          ntuples (result :: Result (Only UTCTime))
         unless (executed == 0) $ do
           _ <- unsafePQ . runIndexed . getOpQ $ migration step
           manipulateParams_ deleteMigration (Only (name step))
 instance Migratory (OpQ Definition) (OpQ (Indexed PQ IO ())) where
-  runMigrations = runMigrations . qmap (qmap (qmap indexedDefine))
+  runMigrations = runMigrations . qmap (qmap (qmap ixDefine))
 instance Migratory
   (IsoQ (Indexed PQ IO ()))
   (IsoQ (Indexed PQ IO ())) where
@@ -251,7 +253,7 @@ instance Migratory
       (runMigrations (qmap (qmap up) path))
       (getOpQ (runMigrations (qmap (qmap (OpQ . down)) path)))
 instance Migratory (IsoQ Definition) (IsoQ (Indexed PQ IO ())) where
-  runMigrations = runMigrations . qmap (qmap (qmap indexedDefine))
+  runMigrations = runMigrations . qmap (qmap (qmap ixDefine))
 
 unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
 unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
@@ -277,13 +279,8 @@ migrateDown
   -> PQ db1 db0 IO ()
 migrateDown = runIndexed . down . runMigrations
 
-{- | Run a pure SQL `Definition` functorially in effect
-
-* @indexedDefine id = id@
-* @indexedDefine (def1 >>> def2) = indexedDefine def1 >>> indexedDefine def2@
--}
-indexedDefine :: Definition db0 db1 -> Indexed PQ IO () db0 db1
-indexedDefine = Indexed . define
+ixDefine :: Definition db0 db1 -> Indexed PQ IO () db0 db1
+ixDefine = indexedDefine
 
 -- | The `TableType` for a Squeal migration.
 type MigrationsTable =

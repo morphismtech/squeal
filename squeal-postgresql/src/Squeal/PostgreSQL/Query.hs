@@ -123,14 +123,14 @@ The general `Query` type is parameterized by
 * @outer :: FromType@ - outer scope for a correlated subquery,
 * @commons :: FromType@ - scope for all `common` table expressions,
 * @db :: SchemasType@ - scope for all `table`s and `view`s,
-* @params :: [NullityType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
+* @params :: [NullType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
 * @row :: RowType@ - return type of the `Query`.
 -}
 newtype Query
   (outer :: FromType)
   (commons :: FromType)
   (db :: SchemasType)
-  (params :: [NullityType])
+  (params :: [NullType])
   (row :: RowType)
     = UnsafeQuery { renderQuery :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
@@ -684,7 +684,7 @@ data TableExpression
   (commons :: FromType)
   (grp :: Grouping)
   (db :: SchemasType)
-  (params :: [NullityType])
+  (params :: [NullType])
   (from :: FromType)
     = TableExpression
     { fromClause :: FromClause outer commons db params from
@@ -1097,7 +1097,7 @@ instance RenderSQL (HavingClause outer commons grp db params from) where
 -- | A `CommonTableExpression` is an auxiliary statement in a `with` clause.
 data CommonTableExpression statement
   (db :: SchemasType)
-  (params :: [NullityType])
+  (params :: [NullType])
   (commons0 :: FromType)
   (commons1 :: FromType) where
   CommonTableExpression
