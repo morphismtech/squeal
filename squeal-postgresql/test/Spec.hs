@@ -85,7 +85,7 @@ connectionString = "host=localhost port=5432 dbname=exampledb"
 data Person = Person { name :: String, age :: Int32 }
   deriving (Eq, Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
   -- deriving (FromValue PGperson) via (Composite Person)
-  deriving (ToParam Schemas PGperson) via (Composite Person)
+  deriving (ToParam PersonDB PGperson) via (Composite Person)
 type PGperson = 'PGcomposite
   '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
 type PersonDB = '["public" ::: '["person" ::: 'Typedef PGperson]]
@@ -94,6 +94,10 @@ instance PGTyped PersonDB PGperson where
   pgtype = typedef #person
 instance FromValue PGperson Person where
   fromValue = getComposite <$> fromValue @PGperson
+instance OidOf PersonDB PGperson where
+  oidOf = oidOfTypedef #person
+instance OidOfArray PersonDB PGperson where
+  oidOfArray = oidOfArrayTypedef #person
 
 spec :: Spec
 spec = before_ setupDB . after_ dropDB $ do

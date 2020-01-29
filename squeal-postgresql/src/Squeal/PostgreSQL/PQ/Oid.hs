@@ -41,11 +41,17 @@ import qualified Generics.SOP as SOP
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Schema
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 -- | The `LibPQ.Oid` of a `PGType`
 --
 -- >>> :set -XTypeApplications
--- >>> oidOf @'PGbool
+-- >>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
+-- >>> runReaderT (oidOf @'[] @'PGbool) conn
 -- Oid 16
+--
+-- >>> finish conn
 class OidOf (db :: SchemasType) (pg :: PGType) where
   oidOf :: ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
 -- | The `LibPQ.Oid` of an array
@@ -135,10 +141,10 @@ instance OidOfArray db ('PGrange 'PGdate) where oidOfArray = pure $ LibPQ.Oid 39
 oidOfTypedef
   :: (Has sch db schema, Has ty schema pg)
   => QualifiedAlias sch ty
-  -> ReaderT LibPQ.Connection IO LibPQ.Oid
+  -> ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
 oidOfTypedef = undefined
 oidOfArrayTypedef
   :: (Has sch db schema, Has ty schema pg)
   => QualifiedAlias sch ty
-  -> ReaderT LibPQ.Connection IO LibPQ.Oid
+  -> ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
 oidOfArrayTypedef = undefined

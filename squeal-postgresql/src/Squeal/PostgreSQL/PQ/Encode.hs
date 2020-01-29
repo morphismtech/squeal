@@ -76,23 +76,29 @@ import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.PQ.Oid
 import Squeal.PostgreSQL.Schema
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 -- | A `ToParam` constraint gives an encoding of a Haskell `Type` into
 -- into the binary format of a PostgreSQL `PGType`.
-class ToParam (db :: SchemasType) (pg :: PGType) x where
+class ToParam (db :: SchemasType) (pg :: PGType) (x :: Type) where
   -- | >>> :set -XTypeApplications -XDataKinds
-  -- >>> toParam @'PGbool False
+  -- >>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
+  -- >>> runReaderT (toParam @'[] @'PGbool False) conn
   -- K "\NUL"
   --
-  -- >>> toParam @'PGint2 (0 :: Int16)
+  -- >>> runReaderT (toParam @'[] @'PGint2 (0 :: Int16)) conn
   -- K "\NUL\NUL"
   --
-  -- >>> toParam @'PGint4 (0 :: Int32)
+  -- >>> runReaderT (toParam @'[] @'PGint4 (0 :: Int32)) conn
   -- K "\NUL\NUL\NUL\NUL"
   --
   -- >>> :set -XMultiParamTypeClasses -XGeneralizedNewtypeDeriving
   -- >>> newtype Id = Id { getId :: Int16 } deriving newtype (ToParam db 'PGint2)
-  -- >>> toParam @'PGint2 (Id 1)
+  -- >>> runReaderT (toParam @'[] @'PGint2 (Id 1)) conn
   -- K "\NUL\SOH"
+  --
+  -- >>> finish conn
   toParam :: x -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K Encoding pg)
 instance ToParam db 'PGbool Bool where toParam = pure . SOP.K . bool
 instance ToParam db 'PGint2 Int16 where toParam = pure . SOP.K . int2_int16
@@ -224,7 +230,7 @@ instance ToParam db pg x
 -- into the binary format of a PostgreSQL `NullType`.
 -- You should not define instances for `ToNullParam`,
 -- just use the provided instances.
-class ToNullParam db ty x where
+class ToNullParam (db :: SchemasType) (ty :: NullType) (x :: Type) where
   toNullParam :: x -> ReaderT (SOP.K LibPQ.Connection db) IO (Maybe Encoding)
 instance ToParam db pg x
   => ToNullParam db ('NotNull pg) x where
@@ -238,7 +244,10 @@ instance ToParam db pg x
 -- to an encoding of a @(Symbol, Type)@ to a @(Symbol, NullityType)@,
 -- encoding `Null`s to `Maybe`s. You should not define instances for
 -- `ToField`, just use the provided instances.
-class ToField db (field :: (Symbol, NullType)) x where
+class ToField
+  (db :: SchemasType)
+  (field :: (Symbol, NullType))
+  (x :: (Symbol, Type)) where
   toField :: SOP.P x
     -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K (Maybe Encoding) field)
 instance (fld0 ~ fld1, ToNullParam db ty x)
@@ -249,7 +258,11 @@ instance (fld0 ~ fld1, ToNullParam db ty x)
 -- into the binary format of a PostgreSQL fixed-length array.
 -- You should not define instances for
 -- `ToArray`, just use the provided instances.
-class ToArray db (dims :: [Nat]) (ty :: NullType) x where
+class ToArray
+  (db :: SchemasType)
+  (dims :: [Nat])
+  (ty :: NullType)
+  (x :: Type) where
   arrayPayload :: x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
   arrayDims :: [Int32]
   arrayNulls :: Bool
@@ -289,17 +302,23 @@ foldlNP f z = \case
 `EncodeParams` describes an encoding of a Haskell `Type`
 into a list of parameter `NullType`s.
 
+>>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
 >>> :{
 let
-  encode :: EncodeParams
+  encode :: EncodeParams '[]
     '[ 'NotNull 'PGint2, 'NotNull ('PGchar 1), 'NotNull 'PGtext]
     (Int16, (Char, String))
   encode = fst .* fst.snd *. snd.snd
-in runEncodeParams encode (1,('a',"foo"))
+in runReaderT (runEncodeParams encode (1,('a',"foo"))) conn
 :}
 K (Just "\NUL\SOH") :* K (Just "a") :* K (Just "foo") :* Nil
+
+>>> finish conn
 -}
-newtype EncodeParams db (tys :: [NullType]) (x :: Type) = EncodeParams
+newtype EncodeParams
+  (db :: SchemasType)
+  (tys :: [NullType])
+  (x :: Type) = EncodeParams
   { runEncodeParams :: x
     -> ReaderT (SOP.K LibPQ.Connection db) IO (NP (SOP.K (Maybe Encoding)) tys) }
 instance Contravariant (EncodeParams db tys) where
@@ -310,22 +329,24 @@ instance Contravariant (EncodeParams db tys) where
 >>> import qualified GHC.Generics as GHC
 >>> import qualified Generics.SOP as SOP
 >>> data Two = Two Int16 String deriving (GHC.Generic, SOP.Generic)
+>>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
 >>> :{
 let
-  encode :: EncodeParams '[ 'NotNull 'PGint2, 'NotNull 'PGtext] Two
+  encode :: EncodeParams '[] '[ 'NotNull 'PGint2, 'NotNull 'PGtext] Two
   encode = genericParams
-in runEncodeParams encode (Two 2 "two")
+in runReaderT (runEncodeParams encode (Two 2 "two")) conn
 :}
 K (Just "\NUL\STX") :* K (Just "two") :* Nil
 
 >>> :{
 let
-  encode :: EncodeParams '[ 'NotNull 'PGint2, 'NotNull 'PGtext] (Int16, String)
+  encode :: EncodeParams '[] '[ 'NotNull 'PGint2, 'NotNull 'PGtext] (Int16, String)
   encode = genericParams
-in runEncodeParams encode (2, "two")
+in runReaderT (runEncodeParams encode (2, "two")) conn
 :}
 K (Just "\NUL\STX") :* K (Just "two") :* Nil
 
+>>> finish conn
 -}
 genericParams :: forall db x xs tys.
   ( SOP.IsProductType x xs
@@ -346,15 +367,18 @@ nilParams = EncodeParams $ \ _ -> pure Nil
 
 {- | Cons a parameter encoding.
 
+>>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
 >>> :{
 let
-  encode :: EncodeParams
+  encode :: EncodeParams '[]
     '[ 'Null 'PGint4, 'NotNull 'PGtext]
     (Maybe Int32, String)
   encode = fst .* snd .* nilParams
-in runEncodeParams encode (Nothing, "foo")
+in runReaderT (runEncodeParams encode (Nothing, "foo")) conn
 :}
 K Nothing :* K (Just "foo") :* Nil
+
+>>> finish conn
 -}
 (.*)
   :: forall db x0 ty x tys. (ToNullParam db ty x0)
@@ -367,15 +391,18 @@ infixr 5 .*
 
 {- | End a parameter encoding.
 
+>>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
 >>> :{
 let
-  encode :: EncodeParams
+  encode :: EncodeParams '[]
     '[ 'Null 'PGint4, 'NotNull 'PGtext, 'NotNull ('PGchar 1)]
     (Maybe Int32, String, Char)
   encode = (\(x,_,_) -> x) .* (\(_,y,_) -> y) *. (\(_,_,z) -> z)
-in runEncodeParams encode (Nothing, "foo", 'z')
+in runReaderT (runEncodeParams encode (Nothing, "foo", 'z')) conn
 :}
 K Nothing :* K (Just "foo") :* K (Just "z") :* Nil
+
+>>> finish conn
 -}
 (*.)
   :: forall db x x0 ty0 x1 ty1
@@ -388,13 +415,16 @@ infixl 8 *.
 
 {- | Encode 1 parameter.
 
+>>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
 >>> :{
 let
-  encode :: EncodeParams '[ 'NotNull 'PGint4] Int32
+  encode :: EncodeParams '[] '[ 'NotNull 'PGint4] Int32
   encode = aParam
-in runEncodeParams encode 1776
+in runReaderT (runEncodeParams encode 1776) conn
 :}
 K (Just "\NUL\NUL\ACK\240") :* Nil
+
+>>> finish conn
 -}
 aParam
   :: forall db x. ToNullParam db (NullPG x) x
@@ -404,15 +434,18 @@ aParam = EncodeParams $
 
 {- | Append parameter encodings.
 
+>>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
 >>> :{
 let
-  encode :: EncodeParams
+  encode :: EncodeParams '[]
     '[ 'NotNull 'PGint4, 'NotNull 'PGint2]
     (Int32, Int16)
   encode = contramap fst aParam `appendParams` contramap snd aParam
-in runEncodeParams encode (1776, 2)
+in runReaderT (runEncodeParams encode (1776, 2)) conn
 :}
 K (Just "\NUL\NUL\ACK\240") :* K (Just "\NUL\STX") :* Nil
+
+>>> finish conn
 -}
 appendParams
   :: EncodeParams db params0 x

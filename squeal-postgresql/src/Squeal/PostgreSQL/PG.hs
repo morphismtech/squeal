@@ -400,13 +400,17 @@ type instance PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
 -- | `Only` is a 1-tuple type, useful for encoding or decoding a singleton
 --
 -- >>> import Data.Text
--- >>> let onlyParams = genericParams :: EncodeParams '[ 'Null 'PGtext] (Only (Maybe Text))
--- >>> runEncodeParams onlyParams (Only (Just "foo"))
+-- >>> import Control.Monad.Reader
+-- >>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
+-- >>> let onlyParams = genericParams :: EncodeParams '[] '[ 'Null 'PGtext] (Only (Maybe Text))
+-- >>> runReaderT (runEncodeParams onlyParams (Only (Just "foo"))) conn
 -- K (Just "foo") :* Nil
 --
 -- >>> let onlyRow = genericRow :: DecodeRow '["fromOnly" ::: 'Null 'PGtext] (Only (Maybe Text))
 -- >>> runDecodeRow onlyRow (K (Just "bar") :* Nil)
 -- Right (Only {fromOnly = Just "bar"})
+--
+-- >>> finish conn
 newtype Only x = Only { fromOnly :: x }
   deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
 instance SOP.Generic (Only x)
