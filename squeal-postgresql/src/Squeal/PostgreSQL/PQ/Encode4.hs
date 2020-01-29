@@ -93,7 +93,7 @@ class ToParam (db :: SchemasType) (pg :: PGType) x where
   -- >>> newtype Id = Id { getId :: Int16 } deriving newtype (ToParam db 'PGint2)
   -- >>> toParam @'PGint2 (Id 1)
   -- K "\NUL\SOH"
-  toParam :: x -> ReaderT LibPQ.Connection IO (SOP.K Encoding pg)
+  toParam :: x -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K Encoding pg)
 instance ToParam db 'PGbool Bool where toParam = pure . SOP.K . bool
 instance ToParam db 'PGint2 Int16 where toParam = pure . SOP.K . int2_int16
 instance ToParam db 'PGint4 Int32 where toParam = pure . SOP.K . int4_int32
@@ -186,7 +186,7 @@ instance
         each
           :: OidOfField db field
           => SOP.K (Maybe Encoding) field
-          -> ReaderT LibPQ.Connection IO Encoding
+          -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
         each (SOP.K field :: SOP.K (Maybe Encoding) field) = do
           oid <- getOid <$> oidOfField @db @field
           return $ int4_word32 oid <> maybe null4 sized field
@@ -225,7 +225,7 @@ instance ToParam db pg x
 -- You should not define instances for `ToNullParam`,
 -- just use the provided instances.
 class ToNullParam db ty x where
-  toNullParam :: x -> ReaderT LibPQ.Connection IO (Maybe Encoding)
+  toNullParam :: x -> ReaderT (SOP.K LibPQ.Connection db) IO (Maybe Encoding)
 instance (Functor m, ToParam db pg x)
   => ToNullParam db ('NotNull pg) x where
     toNullParam = fmap (return . SOP.unK) . toParam @db @pg
@@ -240,7 +240,7 @@ instance (Applicative m, ToParam db pg x)
 -- `ToField`, just use the provided instances.
 class ToField db (field :: (Symbol, NullType)) x where
   toField :: SOP.P x
-    -> ReaderT LibPQ.Connection IO (SOP.K (Maybe Encoding) field)
+    -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K (Maybe Encoding) field)
 instance (fld0 ~ fld1, ToNullParam db ty x)
   => ToField db (fld0 ::: ty) (fld1 ::: x) where
     toField (SOP.P x) = SOP.K <$> toNullParam @db @ty x
@@ -250,7 +250,7 @@ instance (fld0 ~ fld1, ToNullParam db ty x)
 -- You should not define instances for
 -- `ToArray`, just use the provided instances.
 class ToArray db (dims :: [Nat]) (ty :: NullType) x where
-  arrayPayload :: x -> ReaderT LibPQ.Connection IO Encoding
+  arrayPayload :: x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
   arrayDims :: [Int32]
   arrayNulls :: Bool
 instance (Functor m, ToParam db pg x)
@@ -303,7 +303,7 @@ K (Just "\NUL\SOH") :* K (Just "a") :* K (Just "foo") :* Nil
 -}
 newtype EncodeParams db (tys :: [NullType]) (x :: Type) = EncodeParams
   { runEncodeParams :: x
-    -> ReaderT LibPQ.Connection IO (NP (SOP.K (Maybe Encoding)) tys) }
+    -> ReaderT (SOP.K LibPQ.Connection db) IO (NP (SOP.K (Maybe Encoding)) tys) }
 instance Contravariant (EncodeParams db tys) where
   contramap f (EncodeParams g) = EncodeParams (g . f)
 
@@ -339,7 +339,7 @@ genericParams = EncodeParams
   where
     encodeNullParam
       :: forall ty y. ToNullParam db ty y
-      => SOP.I y -> ReaderT LibPQ.Connection IO (SOP.K (Maybe Encoding) ty)
+      => SOP.I y -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K (Maybe Encoding) ty)
     encodeNullParam = fmap SOP.K . toNullParam @db @ty . SOP.unI
 
 -- | Encode 0 parameters.

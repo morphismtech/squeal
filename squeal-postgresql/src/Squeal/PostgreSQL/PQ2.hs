@@ -130,17 +130,17 @@ instance IndexedMonadTransPQ PQ where
 instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
 
   executeParams (Manipulation encode decode (UnsafeManipulation q)) x =
-    PQ $ \ (K conn) -> do
+    PQ $ \ kconn@(K conn) -> do
       let
         formatParam
           :: forall param. OidOfNull db param
           => K (Maybe Encoding.Encoding) param
           -> io (K (Maybe (LibPQ.Oid, ByteString, LibPQ.Format)) param)
         formatParam (K maybeEncoding) = do
-          oid <- liftIO $ runReaderT (oidOfNull @db @param) conn
+          oid <- liftIO $ runReaderT (oidOfNull @db @param) kconn
           return . K $ maybeEncoding <&> \encoding ->
             (oid, encodingBytes encoding, LibPQ.Binary)
-      encodedParams <- liftIO $ runReaderT (runEncodeParams encode x) conn
+      encodedParams <- liftIO $ runReaderT (runEncodeParams encode x) kconn
       formattedParams <- hcollapse <$>
         hctraverse' (Proxy @(OidOfNull db)) formatParam encodedParams
       resultMaybe <- liftIO $
@@ -155,11 +155,11 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
     executeParams (Manipulation encode decode (queryStatement q)) x
 
   executePrepared (Manipulation encode decode (UnsafeManipulation q :: Manipulation '[] db params row)) list =
-    PQ $ \ (K conn) -> liftIO $ do
+    PQ $ \ kconn@(K conn) -> liftIO $ do
       let
         temp = "temporary_statement"
         oidOfParam :: forall p. OidOfNull db p => (IO :.: K LibPQ.Oid) p
-        oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) conn
+        oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) kconn
         oidsOfParams :: NP (IO :.: K LibPQ.Oid) params
         oidsOfParams = hcpure (Proxy @(OidOfNull db)) oidOfParam
       oids <- hcollapse <$> hsequence' oidsOfParams
@@ -169,7 +169,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
           "traversePrepared: LibPQ.prepare returned no results"
         Just prepResult -> okResult_ prepResult
       results <- for list $ \ params -> do
-        encodedParams <- runReaderT (runEncodeParams encode params) conn
+        encodedParams <- runReaderT (runEncodeParams encode params) kconn
         let
           formatParam encoding = (encodingBytes encoding, LibPQ.Binary)
           formattedParams =
@@ -194,11 +194,11 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
     executePrepared (Manipulation encode decode (queryStatement q)) list
 
   executePrepared_ (Manipulation encode _ (UnsafeManipulation q :: Manipulation '[] db params row)) list =
-    PQ $ \ (K conn) -> liftIO $ do
+    PQ $ \ kconn@(K conn) -> liftIO $ do
       let
         temp = "temporary_statement"
         oidOfParam :: forall p. OidOfNull db p => (IO :.: K LibPQ.Oid) p
-        oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) conn
+        oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) kconn
         oidsOfParams :: NP (IO :.: K LibPQ.Oid) params
         oidsOfParams = hcpure (Proxy @(OidOfNull db)) oidOfParam
       oids <- hcollapse <$> hsequence' oidsOfParams
@@ -208,7 +208,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
           "traversePrepared_: LibPQ.prepare returned no results"
         Just prepResult -> okResult_ prepResult
       for_ list $ \ params -> do
-        encodedParams <- runReaderT (runEncodeParams encode params) conn
+        encodedParams <- runReaderT (runEncodeParams encode params) kconn
         let
           formatParam encoding = (encodingBytes encoding, LibPQ.Binary)
           formattedParams =

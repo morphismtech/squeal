@@ -36,6 +36,7 @@ import Control.Monad.Reader
 import GHC.TypeLits
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
+import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Schema
@@ -46,22 +47,22 @@ import Squeal.PostgreSQL.Schema
 -- >>> oidOf @'PGbool
 -- Oid 16
 class OidOf (db :: SchemasType) (pg :: PGType) where
-  oidOf :: ReaderT LibPQ.Connection IO LibPQ.Oid
+  oidOf :: ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
 -- | The `LibPQ.Oid` of an array
 class OidOfArray (db :: SchemasType) (pg :: PGType) where
-  oidOfArray :: ReaderT LibPQ.Connection IO LibPQ.Oid
+  oidOfArray :: ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
 instance OidOfArray db pg => OidOf db ('PGvararray (null pg)) where
   oidOf = oidOfArray @db @pg
 instance OidOfArray db pg => OidOf db ('PGfixarray dims (null pg)) where
   oidOf = oidOfArray @db @pg
 -- | The `LibPQ.Oid` of a `NullType`
 class OidOfNull (db :: SchemasType) (ty :: NullType) where
-  oidOfNull :: ReaderT LibPQ.Connection IO LibPQ.Oid
+  oidOfNull :: ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
 instance OidOf db pg => OidOfNull db (null pg) where
   oidOfNull = oidOf @db @pg
 -- | The `LibPQ.Oid` of a field
 class OidOfField (db :: SchemasType) (field :: (Symbol, NullType)) where
-  oidOfField :: ReaderT LibPQ.Connection IO LibPQ.Oid
+  oidOfField :: ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
 instance OidOfNull db ty => OidOfField db (fld ::: ty) where
   oidOfField = oidOfNull @db @ty
 
