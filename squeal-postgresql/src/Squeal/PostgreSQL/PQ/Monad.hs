@@ -14,6 +14,7 @@ typeclass `MonadPQ`.
   , FlexibleContexts
   , FlexibleInstances
   , FunctionalDependencies
+  , GADTs
   , PolyKinds
   , MultiParamTypeClasses
   , QuantifiedConstraints
@@ -123,8 +124,8 @@ class Monad pq => MonadPQ db pq | pq -> db where
 manipulateParams ::
   ( MonadPQ db pq
   , SOP.IsProductType x xs
-  , SOP.AllZip ToNullParam params xs
-  , SOP.All OidOfNull params
+  , SOP.AllZip (ToNullParam db) params xs
+  , SOP.All (OidOfNull db) params
   , SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
   ) => Manipulation '[] db params row
@@ -139,8 +140,8 @@ for a returning-free statement.
 manipulateParams_ ::
   ( MonadPQ db pq
   , SOP.IsProductType x xs
-  , SOP.AllZip ToNullParam params xs
-  , SOP.All OidOfNull params
+  , SOP.AllZip (ToNullParam db) params xs
+  , SOP.All (OidOfNull db) params
   ) => Manipulation '[] db params '[]
     -- ^ `insertInto`, `update` or `deleteFrom`
     -> x -> pq ()
@@ -172,8 +173,8 @@ manipulate_ = execute_ . manipulation
 runQueryParams ::
   ( MonadPQ db pq
   , SOP.IsProductType x xs
-  , SOP.AllZip ToNullParam params xs
-  , SOP.All OidOfNull params
+  , SOP.AllZip (ToNullParam db) params xs
+  , SOP.All (OidOfNull db) params
   , SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
   ) => Query '[] '[] db params row
@@ -200,9 +201,9 @@ then running the prepared statement on each element.
 traversePrepared
   :: ( MonadPQ db pq
      , SOP.IsProductType x xs
-     , SOP.AllZip ToNullParam params xs
+     , SOP.AllZip (ToNullParam db) params xs
+     , SOP.All (OidOfNull db) params
      , Traversable list
-     , SOP.All OidOfNull params
      , SOP.IsRecord y ys
      , SOP.AllZip FromField row ys )
   => Manipulation '[] db params row
@@ -216,9 +217,9 @@ traversePrepared = executePrepared . manipulation
 forPrepared
   :: ( MonadPQ db pq
      , SOP.IsProductType x xs
-     , SOP.AllZip ToNullParam params xs
+     , SOP.AllZip (ToNullParam db) params xs
+     , SOP.All (OidOfNull db) params
      , Traversable list
-     , SOP.All OidOfNull params
      , SOP.IsRecord y ys
      , SOP.AllZip FromField row ys )
   => list x
@@ -236,9 +237,9 @@ statement on each element.
 traversePrepared_
   :: ( MonadPQ db pq
      , SOP.IsProductType x xs
-     , SOP.AllZip ToNullParam params xs
-     , Foldable list
-     , SOP.All OidOfNull params )
+     , SOP.AllZip (ToNullParam db) params xs
+     , SOP.All (OidOfNull db) params
+     , Foldable list )
   => Manipulation '[] db params '[]
   -- ^ `insertInto`, `update` or `deleteFrom`
   -> list x -> pq ()
@@ -250,9 +251,9 @@ traversePrepared_ = executePrepared_ . manipulation
 forPrepared_
   :: ( MonadPQ db pq
      , SOP.IsProductType x xs
-     , SOP.AllZip ToNullParam params xs
-     , Foldable list
-     , SOP.All OidOfNull params )
+     , SOP.AllZip (ToNullParam db) params xs
+     , SOP.All (OidOfNull db) params
+     , Foldable list )
   => list x
   -> Manipulation '[] db params '[]
   -- ^ `insertInto`, `update` or `deleteFrom`

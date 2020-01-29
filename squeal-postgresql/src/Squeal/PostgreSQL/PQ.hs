@@ -40,6 +40,7 @@ module Squeal.PostgreSQL.PQ
 import Control.Category
 import Control.Monad.Except
 import Control.Monad.Morph
+import Control.Monad.Reader
 import UnliftIO (MonadUnliftIO (..), bracket,  throwIO)
 import Data.ByteString (ByteString)
 import Data.Foldable
@@ -129,21 +130,21 @@ instance IndexedMonadTransPQ PQ where
 instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
 
   executeParams (Manipulation encode decode (UnsafeManipulation q)) x =
-    PQ $ \ (K conn) -> do
+    PQ $ \ kconn@(K conn) -> do
       let
-        paramSet
-          :: forall param. OidOfNull param
+        formatParam
+          :: forall param. OidOfNull db param
           => K (Maybe Encoding.Encoding) param
-          -> K (Maybe (LibPQ.Oid, ByteString, LibPQ.Format)) param
-        paramSet (K maybeEncoding) = K $
-          maybeEncoding <&> \encoding ->
-            (oidOfNull @param, encodingBytes encoding, LibPQ.Binary)
-        params'
-          = hcollapse
-          . hcmap (Proxy @OidOfNull) paramSet
-          $ runEncodeParams encode x
-        q' = q <> ";"
-      resultMaybe <- liftIO $ LibPQ.execParams conn q' params' LibPQ.Binary
+          -> io (K (Maybe (LibPQ.Oid, ByteString, LibPQ.Format)) param)
+        formatParam (K maybeEncoding) = do
+          oid <- liftIO $ runReaderT (oidOfNull @db @param) kconn
+          return . K $ maybeEncoding <&> \encoding ->
+            (oid, encodingBytes encoding, LibPQ.Binary)
+      encodedParams <- liftIO $ runReaderT (runEncodeParams encode x) kconn
+      formattedParams <- hcollapse <$>
+        hctraverse' (Proxy @(OidOfNull db)) formatParam encodedParams
+      resultMaybe <- liftIO $
+        LibPQ.execParams conn (q <> ";") formattedParams LibPQ.Binary
       case resultMaybe of
         Nothing -> throwIO $ ResultException
           "executeParams: LibPQ.execParams returned no results"
@@ -154,26 +155,29 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
     executeParams (Manipulation encode decode (queryStatement q)) x
 
   executePrepared (Manipulation encode decode (UnsafeManipulation q :: Manipulation '[] db params row)) list =
-    PQ $ \ (K conn) -> liftIO $ do
+    PQ $ \ kconn@(K conn) -> liftIO $ do
       let
         temp = "temporary_statement"
-        paramOid :: forall p. OidOfNull p => K LibPQ.Oid p
-        paramOid = K (oidOfNull @p)
-        paramOids :: NP (K LibPQ.Oid) params
-        paramOids = hcpure (Proxy @OidOfNull) paramOid
-        paramOids' :: [LibPQ.Oid]
-        paramOids' = hcollapse paramOids
-      prepResultMaybe <- LibPQ.prepare conn temp q (Just paramOids')
+        oidOfParam :: forall p. OidOfNull db p => (IO :.: K LibPQ.Oid) p
+        oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) kconn
+        oidsOfParams :: NP (IO :.: K LibPQ.Oid) params
+        oidsOfParams = hcpure (Proxy @(OidOfNull db)) oidOfParam
+      oids <- hcollapse <$> hsequence' oidsOfParams
+      prepResultMaybe <- LibPQ.prepare conn temp (q <> ";") (Just oids)
       case prepResultMaybe of
         Nothing -> throwIO $ ResultException
           "traversePrepared: LibPQ.prepare returned no results"
         Just prepResult -> okResult_ prepResult
       results <- for list $ \ params -> do
+        encodedParams <- runReaderT (runEncodeParams encode params) kconn
         let
-          toParam' encoding = (encodingBytes encoding, LibPQ.Binary)
-          params' = fmap (fmap toParam')
-            (hcollapse (runEncodeParams encode params))
-        resultMaybe <- LibPQ.execPrepared conn temp params' LibPQ.Binary
+          formatParam encoding = (encodingBytes encoding, LibPQ.Binary)
+          formattedParams =
+            [ formatParam <$> maybeParam
+            | maybeParam <- hcollapse encodedParams
+            ]
+        resultMaybe <-
+          LibPQ.execPrepared conn temp formattedParams LibPQ.Binary
         case resultMaybe of
           Nothing -> throwIO $ ResultException
             "traversePrepared: LibPQ.execParams returned no results"
@@ -190,36 +194,39 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
     executePrepared (Manipulation encode decode (queryStatement q)) list
 
   executePrepared_ (Manipulation encode _ (UnsafeManipulation q :: Manipulation '[] db params row)) list =
-      PQ $ \ (K conn) -> liftIO $ do
+    PQ $ \ kconn@(K conn) -> liftIO $ do
+      let
+        temp = "temporary_statement"
+        oidOfParam :: forall p. OidOfNull db p => (IO :.: K LibPQ.Oid) p
+        oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) kconn
+        oidsOfParams :: NP (IO :.: K LibPQ.Oid) params
+        oidsOfParams = hcpure (Proxy @(OidOfNull db)) oidOfParam
+      oids <- hcollapse <$> hsequence' oidsOfParams
+      prepResultMaybe <- LibPQ.prepare conn temp (q <> ";") (Just oids)
+      case prepResultMaybe of
+        Nothing -> throwIO $ ResultException
+          "traversePrepared_: LibPQ.prepare returned no results"
+        Just prepResult -> okResult_ prepResult
+      for_ list $ \ params -> do
+        encodedParams <- runReaderT (runEncodeParams encode params) kconn
         let
-          temp = "temporary_statement"
-          paramOid :: forall p. OidOfNull p => K LibPQ.Oid p
-          paramOid = K (oidOfNull @p)
-          paramOids :: NP (K LibPQ.Oid) params
-          paramOids = hcpure (Proxy @OidOfNull) paramOid
-          paramOids' :: [LibPQ.Oid]
-          paramOids' = hcollapse paramOids
-        prepResultMaybe <- LibPQ.prepare conn temp q (Just paramOids')
-        case prepResultMaybe of
+          formatParam encoding = (encodingBytes encoding, LibPQ.Binary)
+          formattedParams =
+            [ formatParam <$> maybeParam
+            | maybeParam <- hcollapse encodedParams
+            ]
+        resultMaybe <-
+          LibPQ.execPrepared conn temp formattedParams LibPQ.Binary
+        case resultMaybe of
           Nothing -> throwIO $ ResultException
-            "traversePrepared_: LibPQ.prepare returned no results"
-          Just prepResult -> okResult_ prepResult
-        for_ list $ \ params -> do
-          let
-            toParam' encoding = (encodingBytes encoding, LibPQ.Binary)
-            params' = fmap (fmap toParam')
-              (hcollapse (runEncodeParams encode params))
-          resultMaybe <- LibPQ.execPrepared conn temp params' LibPQ.Binary
-          case resultMaybe of
-            Nothing -> throwIO $ ResultException
-              "traversePrepared_: LibPQ.execParams returned no results"
-            Just result -> okResult_ result
-        deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
-        case deallocResultMaybe of
-          Nothing -> throwIO $ ResultException
-            "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
-          Just deallocResult -> okResult_ deallocResult
-        return (K ())
+            "traversePrepared_: LibPQ.execParams returned no results"
+          Just result -> okResult_ result
+      deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
+      case deallocResultMaybe of
+        Nothing -> throwIO $ ResultException
+          "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
+        Just deallocResult -> okResult_ deallocResult
+      return (K ())
   executePrepared_ (Query encode decode q) list =
     executePrepared_ (Manipulation encode decode (queryStatement q)) list
 

@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Statement
+Module: Squeal.PostgreSQL.PQ.Statement2
 Description: Statements
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -45,16 +45,16 @@ import Squeal.PostgreSQL.Query
 data Statement db x y where
   -- | Constructor for a data manipulation language statement
   Manipulation
-    :: (SOP.All OidOfNull params, SOP.SListI row)
-    => EncodeParams params x -- ^ encoding of parameters
+    :: (SOP.All (OidOfNull db) params, SOP.SListI row)
+    => EncodeParams db params x -- ^ encoding of parameters
     -> DecodeRow row y -- ^ decoding of returned rows
     -> Manipulation '[] db params row
     -- ^ `insertInto`, `update`, `deleteFrom`, ...
     -> Statement db x y
   -- | Constructor for a structured query language statement
   Query
-    :: (SOP.All OidOfNull params, SOP.SListI row)
-    => EncodeParams params x -- ^ encoding of parameters
+    :: (SOP.All (OidOfNull db) params, SOP.SListI row)
+    => EncodeParams db params x -- ^ encoding of parameters
     -> DecodeRow row y -- ^ decoding of returned rows
     -> Query '[] '[] db params row -- ^ `select`, `values`, ...
     -> Statement db x y
@@ -77,9 +77,9 @@ instance Functor (Statement db x) where fmap = rmap
 
 -- | Smart constructor for a structured query language statement
 query ::
-  ( SOP.All OidOfNull params
+  ( SOP.All (OidOfNull db) params
   , SOP.IsProductType x xs
-  , SOP.AllZip ToNullParam params xs
+  , SOP.AllZip (ToNullParam db) params xs
   , SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
   ) => Query '[] '[] db params row -- ^ `select`, `values`, ...
@@ -88,9 +88,9 @@ query = Query genericParams genericRow
 
 -- | Smart constructor for a data manipulation language statement
 manipulation ::
-  ( SOP.All OidOfNull params
+  ( SOP.All (OidOfNull db) params
   , SOP.IsProductType x xs
-  , SOP.AllZip ToNullParam params xs
+  , SOP.AllZip (ToNullParam db) params xs
   , SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
   ) => Manipulation '[] db params row

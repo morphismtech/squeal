@@ -35,13 +35,17 @@ import Squeal.PostgreSQL
 main :: IO ()
 main = hspec spec
 
-type Schemas = Public
-  '[ "users" ::: 'Table (
-     '[ "pk_users" ::: 'PrimaryKey '["id"]
-      , "unique_names" ::: 'Unique '["name"]
-      ] :=>
-     '[ "id" ::: 'Def :=> 'NotNull 'PGint4
-      , "name" ::: 'NoDef :=> 'NotNull 'PGtext ] ) ]
+type UsersConstraints =
+  '[ "pk_users" ::: 'PrimaryKey '["id"]
+   , "unique_names" ::: 'Unique '["name"] ]
+
+type UsersColumns =
+  '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+   , "name" ::: 'NoDef :=> 'NotNull 'PGtext ]
+
+type Schema = '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns) ]
+
+type Schemas = '[ "public" ::: Schema ]
 
 data User = User
   { userName  :: Text
@@ -81,7 +85,7 @@ connectionString = "host=localhost port=5432 dbname=exampledb"
 data Person = Person { name :: String, age :: Int32 }
   deriving (Eq, Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
   -- deriving (FromValue PGperson) via (Composite Person)
-  deriving (ToParam PGperson) via (Composite Person)
+  deriving (ToParam Schemas PGperson) via (Composite Person)
 type PGperson = 'PGcomposite
   '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
 type PersonDB = '["public" ::: '["person" ::: 'Typedef PGperson]]

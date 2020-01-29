@@ -2,7 +2,7 @@
 Module: Squeal.PostgreSQL.PQ.Encode
 Description: Encoding of statement parameters
 Copyright: (c) Eitan Chatav, 2019
-Maintainer: eitan@morphism.tech
+Maintainer: eitan@dborphism.tech
 Stability: experimental
 
 Encoding of statement parameters
@@ -39,14 +39,15 @@ module Squeal.PostgreSQL.PQ.Encode
   , ToParam (..)
   , ToNullParam (..)
   , ToField (..)
-  , ToFixArray (..)
+  , ToArray (..)
   ) where
 
 import ByteString.StrictBuilder
+import Control.Monad
+import Control.Monad.Reader
 import Data.Bits
 import Data.ByteString as Strict (ByteString)
 import Data.ByteString.Lazy as Lazy (ByteString)
-import Data.Function ((&))
 import Data.Functor.Contravariant
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind
@@ -55,9 +56,9 @@ import Data.Text as Strict (Text)
 import Data.Text.Lazy as Lazy (Text)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
 import Data.UUID.Types (UUID)
-import Data.Vector (Vector)
 import Data.Word (Word32)
 import Foreign.C.Types (CUInt(CUInt))
+import GHC.TypeLits
 import Network.IP.Addr (NetAddr, IP)
 import PostgreSQL.Binary.Encoding
 
@@ -77,7 +78,7 @@ import Squeal.PostgreSQL.Schema
 
 -- | A `ToParam` constraint gives an encoding of a Haskell `Type` into
 -- into the binary format of a PostgreSQL `PGType`.
-class ToParam pg x where
+class ToParam (db :: SchemasType) (pg :: PGType) x where
   -- | >>> :set -XTypeApplications -XDataKinds
   -- >>> toParam @'PGbool False
   -- K "\NUL"
@@ -89,69 +90,66 @@ class ToParam pg x where
   -- K "\NUL\NUL\NUL\NUL"
   --
   -- >>> :set -XMultiParamTypeClasses -XGeneralizedNewtypeDeriving
-  -- >>> newtype Id = Id { getId :: Int16 } deriving newtype (ToParam 'PGint2)
+  -- >>> newtype Id = Id { getId :: Int16 } deriving newtype (ToParam db 'PGint2)
   -- >>> toParam @'PGint2 (Id 1)
   -- K "\NUL\SOH"
-  toParam :: x -> SOP.K Encoding pg
-instance ToParam 'PGbool Bool where toParam = SOP.K . bool
-instance ToParam 'PGint2 Int16 where toParam = SOP.K . int2_int16
-instance ToParam 'PGint4 Int32 where toParam = SOP.K . int4_int32
-instance ToParam 'PGint8 Int64 where toParam = SOP.K . int8_int64
-instance ToParam 'PGoid Oid where toParam = SOP.K . int4_word32 . getOid
-instance ToParam 'PGfloat4 Float where toParam = SOP.K . float4
-instance ToParam 'PGfloat8 Double where toParam = SOP.K . float8
-instance ToParam 'PGnumeric Scientific where toParam = SOP.K . numeric
-instance ToParam 'PGmoney Money where toParam = SOP.K . int8_int64 . cents
-instance ToParam 'PGuuid UUID where toParam = SOP.K . uuid
-instance ToParam 'PGinet (NetAddr IP) where toParam = SOP.K . inet
-instance ToParam ('PGchar 1) Char where toParam = SOP.K . char_utf8
-instance ToParam 'PGtext Strict.Text where toParam = SOP.K . text_strict
-instance ToParam 'PGtext Lazy.Text where toParam = SOP.K . text_lazy
-instance ToParam 'PGtext String where
-  toParam = SOP.K . text_strict . Strict.Text.pack
-instance ToParam 'PGbytea Strict.ByteString where toParam = SOP.K . bytea_strict
-instance ToParam 'PGbytea Lazy.ByteString where toParam = SOP.K . bytea_lazy
-instance ToParam 'PGdate Day where toParam = SOP.K . date
-instance ToParam 'PGtime TimeOfDay where toParam = SOP.K . time_int
-instance ToParam 'PGtimetz (TimeOfDay, TimeZone) where toParam = SOP.K . timetz_int
-instance ToParam 'PGtimestamp LocalTime where toParam = SOP.K . timestamp_int
-instance ToParam 'PGtimestamptz UTCTime where toParam = SOP.K . timestamptz_int
-instance ToParam 'PGinterval DiffTime where toParam = SOP.K . interval_int
-instance ToParam 'PGjson Aeson.Value where toParam = SOP.K . json_ast
-instance ToParam 'PGjsonb Aeson.Value where toParam = SOP.K . jsonb_ast
-instance Aeson.ToJSON x => ToParam 'PGjson (Json x) where
-  toParam = SOP.K . json_bytes
+  toParam :: x -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K Encoding pg)
+instance ToParam db 'PGbool Bool where toParam = pure . SOP.K . bool
+instance ToParam db 'PGint2 Int16 where toParam = pure . SOP.K . int2_int16
+instance ToParam db 'PGint4 Int32 where toParam = pure . SOP.K . int4_int32
+instance ToParam db 'PGint8 Int64 where toParam = pure . SOP.K . int8_int64
+instance ToParam db 'PGoid Oid where toParam = pure . SOP.K . int4_word32 . getOid
+instance ToParam db 'PGfloat4 Float where toParam = pure . SOP.K . float4
+instance ToParam db 'PGfloat8 Double where toParam = pure . SOP.K . float8
+instance ToParam db 'PGnumeric Scientific where toParam = pure . SOP.K . numeric
+instance ToParam db 'PGmoney Money where toParam = pure . SOP.K . int8_int64 . cents
+instance ToParam db 'PGuuid UUID where toParam = pure . SOP.K . uuid
+instance ToParam db 'PGinet (NetAddr IP) where toParam = pure . SOP.K . inet
+instance ToParam db ('PGchar 1) Char where toParam = pure . SOP.K . char_utf8
+instance ToParam db 'PGtext Strict.Text where toParam = pure . SOP.K . text_strict
+instance ToParam db 'PGtext Lazy.Text where toParam = pure . SOP.K . text_lazy
+instance ToParam db 'PGtext String where
+  toParam = pure . SOP.K . text_strict . Strict.Text.pack
+instance ToParam db 'PGbytea Strict.ByteString where toParam = pure . SOP.K . bytea_strict
+instance ToParam db 'PGbytea Lazy.ByteString where toParam = pure . SOP.K . bytea_lazy
+instance ToParam db 'PGdate Day where toParam = pure . SOP.K . date
+instance ToParam db 'PGtime TimeOfDay where toParam = pure . SOP.K . time_int
+instance ToParam db 'PGtimetz (TimeOfDay, TimeZone) where toParam = pure . SOP.K . timetz_int
+instance ToParam db 'PGtimestamp LocalTime where toParam = pure . SOP.K . timestamp_int
+instance ToParam db 'PGtimestamptz UTCTime where toParam = pure . SOP.K . timestamptz_int
+instance ToParam db 'PGinterval DiffTime where toParam = pure . SOP.K . interval_int
+instance ToParam db 'PGjson Aeson.Value where toParam = pure . SOP.K . json_ast
+instance ToParam db 'PGjsonb Aeson.Value where toParam = pure . SOP.K . jsonb_ast
+instance Aeson.ToJSON x => ToParam db 'PGjson (Json x) where
+  toParam = pure . SOP.K . json_bytes
     . Lazy.ByteString.toStrict . Aeson.encode . getJson
-instance Aeson.ToJSON x => ToParam 'PGjsonb (Jsonb x) where
-  toParam = SOP.K . jsonb_bytes
+instance Aeson.ToJSON x => ToParam db 'PGjsonb (Jsonb x) where
+  toParam = pure . SOP.K . jsonb_bytes
     . Lazy.ByteString.toStrict . Aeson.encode . getJsonb
-instance (ToNullParam ty x, OidOfNull ty)
-  => ToParam ('PGvararray ty) (VarArray [x]) where
-    toParam
-      = SOP.K . array_foldable (getOid (oidOfNull @ty)) (toNullParam @ty)
-      . getVarArray
-instance (ToParam pg x, OidOf pg)
-  => ToParam ('PGvararray ('NotNull pg)) (VarArray (Vector x)) where
-    toParam
-      = SOP.K . array_vector (getOid (oidOf @pg)) (SOP.unK . toParam @pg)
-      . getVarArray
-instance (ToParam pg x, OidOf pg)
-  => ToParam ('PGvararray ('Null pg)) (VarArray (Vector (Maybe x))) where
-    toParam
-      = SOP.K . nullableArray_vector
-        (getOid (oidOf @pg)) (SOP.unK . toParam @pg)
-      . getVarArray
-instance (ToFixArray dims ty x, OidOfNull ty)
-  => ToParam ('PGfixarray dims ty) (FixArray x) where
-    toParam
-      = SOP.K . array (getOid (oidOfNull @ty))
-      . toFixArray @dims @ty
-      . getFixArray
+instance (ToArray db '[] ty x, OidOfNull db ty, Foldable list)
+  => ToParam db ('PGvararray ty) (VarArray (list x)) where
+    toParam (VarArray arr) = do
+      oid <- oidOfNull @db @ty
+      let
+        dims = [fromIntegral (length arr)]
+        nulls = arrayNulls @db @'[] @ty @x
+      payload <- dimArray foldM (arrayPayload @db @'[] @ty @x) arr
+      return . SOP.K $ encodeArray 1 nulls oid dims payload
+instance (ToArray db dims ty x, OidOfNull db ty)
+  => ToParam db ('PGfixarray dims ty) (FixArray x) where
+    toParam (FixArray arr) = do
+      oid <- oidOfNull @db @ty
+      payload <- arrayPayload @db @dims @ty arr
+      let
+        dims = arrayDims @db @dims @ty @x
+        nulls = arrayNulls @db @dims @ty @x
+        ndims = fromIntegral (length dims)
+      return . SOP.K $ encodeArray ndims nulls oid dims payload
 instance
   ( SOP.IsEnumType x
   , SOP.HasDatatypeInfo x
   , LabelsPG x ~ labels
-  ) => ToParam ('PGenum labels) (Enumerated x) where
+  ) => ToParam db ('PGenum labels) (Enumerated x) where
     toParam =
       let
         gshowConstructor
@@ -164,7 +162,8 @@ instance
         gshowConstructor (_ :* constructors) (SOP.SOP (SOP.S xs)) =
           gshowConstructor constructors (SOP.SOP xs)
       in
-        SOP.K
+        pure
+        . SOP.K
         . text_strict
         . Strict.Text.pack
         . gshowConstructor
@@ -174,55 +173,40 @@ instance
 instance
   ( SOP.SListI fields
   , SOP.IsRecord x xs
-  , SOP.AllZip ToField fields xs
-  , SOP.All OidOfField fields
-  ) => ToParam ('PGcomposite fields) (Composite x) where
-    toParam =
+  , SOP.AllZip (ToField db) fields xs
+  , SOP.All (OidOfField db) fields
+  ) => ToParam db ('PGcomposite fields) (Composite x) where
+    toParam (Composite x) = do
       let
-        toFields = trans_NP_flip (SOP.Proxy @ToField) toField
-        composite
-          :: NP (SOP.K (Maybe Encoding)) fields
-          -> Encoding
-        composite fields =
-          -- <number of fields: 4 bytes>
-          -- [for each field]
-          --  <OID of field's type: sizeof(Oid) bytes>
-          --  [if value is NULL]
-          --    <-1: 4 bytes>
-          --  [else]
-          --    <length of value: 4 bytes>
-          --    <value: <length> bytes>
-          --  [end if]
-          -- [end for]
-          int32BE (fromIntegral (SOP.lengthSList (SOP.Proxy @xs))) <>
-            let
-              each
-                :: OidOfField field
-                => SOP.K (Maybe Encoding) field
-                -> Encoding
-              each (SOP.K field :: SOP.K (Maybe Encoding) field) =
-                word32BE (getOid (oidOfField @field))
-                <> case field of
-                  Nothing -> int64BE (-1)
-                  Just value ->
-                    int32BE (fromIntegral (builderLength value))
-                    <> value
-            in
-              SOP.hcfoldMap (SOP.Proxy @OidOfField) each fields
-      in
-        SOP.K . composite . toFields . SOP.toRecord . getComposite
-instance ToParam pg x => ToParam ('PGrange pg) (Range x) where
-  toParam rng = SOP.K $
-    word8 (setFlags rng 0) <>
-      case rng of
-        Empty -> mempty
-        NonEmpty lower upper -> putBound lower <> putBound upper
+        compositeSize
+          = int4_int32
+          $ fromIntegral
+          $ SOP.lengthSList
+          $ SOP.Proxy @xs
+        each
+          :: OidOfField db field
+          => SOP.K (Maybe Encoding) field
+          -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
+        each (SOP.K field :: SOP.K (Maybe Encoding) field) = do
+          oid <- getOid <$> oidOfField @db @field
+          return $ int4_word32 oid <> maybe null4 sized field
+      fields :: NP (SOP.K (Maybe Encoding)) fields <- hctransverse
+        (SOP.Proxy @(ToField db)) (toField @db) (SOP.toRecord x)
+      compositePayload <- hcfoldMapM
+        (SOP.Proxy @(OidOfField db)) each fields
+      return . SOP.K $ compositeSize <> compositePayload
+instance ToParam db pg x
+  => ToParam db ('PGrange pg) (Range x) where
+  toParam r = do
+    payload <- case r of
+      Empty -> return mempty
+      NonEmpty lower upper -> (<>) <$> putBound lower <*> putBound upper
+    return . SOP.K $ word8 (setFlags r 0) <> payload
     where
       putBound = \case
-        Infinite -> mempty
-        Closed value -> putValue (SOP.unK $ toParam @pg value)
-        Open value -> putValue (SOP.unK $ toParam @pg value)
-      putValue value = int32BE (fromIntegral (builderLength value)) <> value
+        Infinite -> return mempty
+        Closed value -> sized . SOP.unK <$> toParam @db @pg value
+        Open value -> sized . SOP.unK <$> toParam @db @pg value
       setFlags = \case
         Empty -> (`setBit` 0)
         NonEmpty lower upper ->
@@ -240,44 +224,66 @@ instance ToParam pg x => ToParam ('PGrange pg) (Range x) where
 -- into the binary format of a PostgreSQL `NullType`.
 -- You should not define instances for `ToNullParam`,
 -- just use the provided instances.
-class ToNullParam ty x where toNullParam :: x -> Maybe Encoding
-instance ToParam pg x => ToNullParam ('NotNull pg) x where
-  toNullParam = return . SOP.unK . toParam @pg
-instance ToParam pg x => ToNullParam ('Null pg) (Maybe x) where
-  toNullParam = fmap (SOP.unK . toParam @pg)
+class ToNullParam db ty x where
+  toNullParam :: x -> ReaderT (SOP.K LibPQ.Connection db) IO (Maybe Encoding)
+instance ToParam db pg x
+  => ToNullParam db ('NotNull pg) x where
+    toNullParam = fmap (return . SOP.unK) . toParam @db @pg
+instance ToParam db pg x
+  => ToNullParam db ('Null pg) (Maybe x) where
+    toNullParam = maybe (pure Nothing)
+      (fmap (Just . SOP.unK) . toParam @db @pg)
 
 -- | A `ToField` constraint lifts the `ToParam` parser
 -- to an encoding of a @(Symbol, Type)@ to a @(Symbol, NullityType)@,
 -- encoding `Null`s to `Maybe`s. You should not define instances for
 -- `ToField`, just use the provided instances.
-class ToField field x where
-  toField :: SOP.P x -> SOP.K (Maybe Encoding) field
-instance (fld0 ~ fld1, ToNullParam ty x)
-  => ToField (fld0 ::: ty) (fld1 ::: x) where
-    toField (SOP.P x) = SOP.K $ toNullParam @ty x
+class ToField db (field :: (Symbol, NullType)) x where
+  toField :: SOP.P x
+    -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K (Maybe Encoding) field)
+instance (fld0 ~ fld1, ToNullParam db ty x)
+  => ToField db (fld0 ::: ty) (fld1 ::: x) where
+    toField (SOP.P x) = SOP.K <$> toNullParam @db @ty x
 
--- | A `ToFixArray` constraint gives an encoding of a Haskell `Type`
+-- | A `ToArray` constraint gives an encoding of a Haskell `Type`
 -- into the binary format of a PostgreSQL fixed-length array.
 -- You should not define instances for
--- `ToFixArray`, just use the provided instances.
-class ToFixArray dims ty x where toFixArray :: x -> Array
-instance ToNullParam ty x => ToFixArray '[] ty x where
-  toFixArray = maybe nullArray encodingArray . toNullParam @ty
+-- `ToArray`, just use the provided instances.
+class ToArray db (dims :: [Nat]) (ty :: NullType) x where
+  arrayPayload :: x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
+  arrayDims :: [Int32]
+  arrayNulls :: Bool
+instance ToParam db pg x => ToArray db '[] ('NotNull pg) x where
+  arrayPayload = fmap (sized . SOP.unK) . toParam @db @pg @x
+  arrayDims = []
+  arrayNulls = True
+instance ToParam db pg x => ToArray db '[] ('Null pg) (Maybe x) where
+  arrayPayload = maybe
+    (pure null4) (fmap (sized . SOP.unK) . toParam @db @pg @x)
+  arrayDims = []
+  arrayNulls = False
 instance
   ( SOP.IsProductType tuple xs
   , Length xs ~ dim
   , SOP.All ((~) x) xs
-  , ToFixArray dims ty x )
-  => ToFixArray (dim ': dims) ty tuple where
-    toFixArray
-      = dimensionArray foldlN (toFixArray @dims @ty @x)
+  , ToArray db dims ty x
+  , KnownNat dim )
+  => ToArray db (dim ': dims) ty tuple where
+    arrayPayload
+      = dimArray foldlNP (arrayPayload @db @dims @ty @x)
       . SOP.unZ . SOP.unSOP . SOP.from
-foldlN
-  :: SOP.All ((~) x) xs
-  => (z -> x -> z) -> z -> NP SOP.I xs -> z
-foldlN f z = \case
-  Nil -> z
-  SOP.I x :* xs -> let z' = f z x in seq z' $ foldlN f z' xs
+    arrayDims
+      = fromIntegral (natVal (SOP.Proxy @dim))
+      : arrayDims @db @dims @ty @x
+    arrayNulls = arrayNulls @db @dims @ty @x
+foldlNP
+  :: (SOP.All ((~) x) xs, Monad m)
+  => (z -> x -> m z) -> z -> NP SOP.I xs -> m z
+foldlNP f z = \case
+  Nil -> pure z
+  SOP.I x :* xs -> do
+    z' <- f z x
+    foldlNP f z' xs
 
 {- |
 `EncodeParams` describes an encoding of a Haskell `Type`
@@ -293,9 +299,10 @@ in runEncodeParams encode (1,('a',"foo"))
 :}
 K (Just "\NUL\SOH") :* K (Just "a") :* K (Just "foo") :* Nil
 -}
-newtype EncodeParams (tys :: [NullType]) (x :: Type) = EncodeParams
-  { runEncodeParams :: x -> NP (SOP.K (Maybe Encoding)) tys }
-instance Contravariant (EncodeParams tys) where
+newtype EncodeParams db (tys :: [NullType]) (x :: Type) = EncodeParams
+  { runEncodeParams :: x
+    -> ReaderT (SOP.K LibPQ.Connection db) IO (NP (SOP.K (Maybe Encoding)) tys) }
+instance Contravariant (EncodeParams db tys) where
   contramap f (EncodeParams g) = EncodeParams (g . f)
 
 {- | Parameter encoding for `SOP.Generic` tuples and records.
@@ -318,31 +325,24 @@ let
 in runEncodeParams encode (2, "two")
 :}
 K (Just "\NUL\STX") :* K (Just "two") :* Nil
+
 -}
-genericParams ::
+genericParams :: forall db x xs tys.
   ( SOP.IsProductType x xs
-  , SOP.AllZip ToNullParam tys xs
-  ) => EncodeParams tys x
+  , SOP.AllZip (ToNullParam db) tys xs
+  ) => EncodeParams db tys x
 genericParams = EncodeParams
-  $ trans_NP_flip (SOP.Proxy @ToNullParam) encodeNullParam
+  $ hctransverse (SOP.Proxy @(ToNullParam db)) encodeNullParam
   . SOP.unZ . SOP.unSOP . SOP.from
   where
     encodeNullParam
-      :: forall ty x. ToNullParam ty x
-      => SOP.I x -> SOP.K (Maybe Encoding) ty
-    encodeNullParam = SOP.K . toNullParam @ty . SOP.unI
-
-trans_NP_flip
-  :: SOP.AllZip c ys xs
-  => proxy c
-  -> (forall y x . c y x => f x -> g y)
-  -> NP f xs -> NP g ys
-trans_NP_flip _ _t Nil = Nil
-trans_NP_flip p  t (x :* xs) = t x :* trans_NP_flip p t xs
+      :: forall ty y. ToNullParam db ty y
+      => SOP.I y -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K (Maybe Encoding) ty)
+    encodeNullParam = fmap SOP.K . toNullParam @db @ty . SOP.unI
 
 -- | Encode 0 parameters.
-nilParams :: EncodeParams '[] x
-nilParams = EncodeParams $ return Nil
+nilParams :: EncodeParams db '[] x
+nilParams = EncodeParams $ \ _ -> pure Nil
 
 {- | Cons a parameter encoding.
 
@@ -357,12 +357,12 @@ in runEncodeParams encode (Nothing, "foo")
 K Nothing :* K (Just "foo") :* Nil
 -}
 (.*)
-  :: forall x0 ty x tys. ToNullParam ty x0
+  :: forall db x0 ty x tys. (ToNullParam db ty x0)
   => (x -> x0)
-  -> EncodeParams tys x
-  -> EncodeParams (ty ': tys) x
+  -> EncodeParams db tys x
+  -> EncodeParams db (ty ': tys) x
 f .* EncodeParams params = EncodeParams $ \x ->
-  SOP.K (toNullParam @ty (f x)) :* params x
+  (:*) <$> (SOP.K <$> toNullParam @db @ty (f x)) <*> params x
 infixr 5 .*
 
 {- | End a parameter encoding.
@@ -378,11 +378,11 @@ in runEncodeParams encode (Nothing, "foo", 'z')
 K Nothing :* K (Just "foo") :* K (Just "z") :* Nil
 -}
 (*.)
-  :: forall x x0 ty0 x1 ty1
-   . (ToNullParam ty0 x0, ToNullParam ty1 x1)
+  :: forall db x x0 ty0 x1 ty1
+   . (ToNullParam db ty0 x0, ToNullParam db ty1 x1)
   => (x -> x0)
   -> (x -> x1)
-  -> EncodeParams '[ty0, ty1] x
+  -> EncodeParams db '[ty0, ty1] x
 f *. g = f .* g .* nilParams
 infixl 8 *.
 
@@ -396,10 +396,13 @@ in runEncodeParams encode 1776
 :}
 K (Just "\NUL\NUL\ACK\240") :* Nil
 -}
-aParam :: forall ty x. ToNullParam ty x => EncodeParams '[ty] x
-aParam = EncodeParams $ \x -> SOP.K (toNullParam @ty x) :* Nil
+aParam
+  :: forall db x. ToNullParam db (NullPG x) x
+  => EncodeParams db '[NullPG x] x
+aParam = EncodeParams $
+  fmap (\param -> SOP.K param :* Nil) . toNullParam @db @(NullPG x)
 
-{- | End a parameter encoding.
+{- | Append parameter encodings.
 
 >>> :{
 let
@@ -412,11 +415,54 @@ in runEncodeParams encode (1776, 2)
 K (Just "\NUL\NUL\ACK\240") :* K (Just "\NUL\STX") :* Nil
 -}
 appendParams
-  :: EncodeParams params0 x
-  -> EncodeParams params1 x
-  -> EncodeParams (Join params0 params1) x
-appendParams encode0 encode1 = EncodeParams $ \x ->
-  runEncodeParams encode0 x & also (runEncodeParams encode1 x)
+  :: EncodeParams db params0 x
+  -> EncodeParams db params1 x
+  -> EncodeParams db (Join params0 params1) x
+appendParams encode0 encode1 = EncodeParams $ \x -> also
+  <$> runEncodeParams encode1 x
+  <*> runEncodeParams encode0 x
 
 getOid :: LibPQ.Oid -> Word32
 getOid (LibPQ.Oid (CUInt oid)) = oid
+
+encodeArray :: Int32 -> Bool -> LibPQ.Oid -> [Int32] -> Encoding -> Encoding
+encodeArray ndim nulls oid dimensions payload = mconcat
+  [ int4_int32 ndim
+  , if nulls then true4 else false4
+  , int4_word32 (getOid oid)
+  , foldMap (\dimension -> int4_int32 dimension <> true4) dimensions
+  , payload ]
+
+dimArray
+  :: Functor m
+  => (forall b. (b -> a -> m b) -> b -> c -> m b)
+  -> (a -> m Encoding) -> c -> m Encoding
+dimArray folder elementArray = folder step mempty
+  where
+    step builder element = (builder <>) <$> elementArray element
+
+null4, true4, false4 :: Encoding
+null4 = int4_int32 (-1)
+true4 = int4_word32 1
+false4 = int4_word32 0
+
+sized :: Encoding -> Encoding
+sized bs = int4_int32 (fromIntegral (builderLength bs)) <> bs
+
+hctransverse
+  :: (SOP.AllZip c ys xs, Applicative m)
+  => SOP.Proxy c
+  -> (forall y x. c y x => f x -> m (g y))
+  -> NP f xs -> m (NP g ys)
+hctransverse c f = \case
+  Nil -> pure Nil
+  x :* xs -> (:*) <$> f x <*> hctransverse c f xs
+
+hcfoldMapM
+  :: (Monoid r, Applicative m, SOP.All c xs)
+  => SOP.Proxy c
+  -> (forall x. c x => f x -> m r)
+  -> NP f xs -> m r
+hcfoldMapM c f = \case
+  Nil -> pure mempty
+  x :* xs -> (<>) <$> f x <*> hcfoldMapM c f xs
