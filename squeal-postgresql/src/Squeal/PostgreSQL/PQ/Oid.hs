@@ -15,6 +15,7 @@ statement parameters.
   , DataKinds
   , FlexibleInstances
   , MultiParamTypeClasses
+  , OverloadedStrings
   , PolyKinds
   , ScopedTypeVariables
   , TypeApplications
@@ -33,12 +34,17 @@ module Squeal.PostgreSQL.PQ.Oid
   ) where
 
 import Control.Monad.Reader
+import Data.String
 import GHC.TypeLits
+import UnliftIO (throwIO)
+import PostgreSQL.Binary.Decoding (valueParser, int)
 
+import qualified Data.ByteString as ByteString
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.PQ.Exception
 import Squeal.PostgreSQL.Schema
 
 -- $setup
@@ -142,9 +148,54 @@ oidOfTypedef
   :: (Has sch db schema, Has ty schema pg)
   => QualifiedAlias sch ty
   -> ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
-oidOfTypedef = undefined
+oidOfTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
+  resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
+  case resultMaybe of
+    Nothing -> throwIO $ ResultException "oidOfTypedef error 1"
+    Just result -> do
+      valueMaybe <- LibPQ.getvalue result 0 0
+      case valueMaybe of
+        Nothing -> throwIO $ ResultException "oidOfTypedef error 2"
+        Just value -> case valueParser int value of
+          Left err -> throwIO $ ResultException $ "oidOfTypedef error: " <> err
+          Right oid -> return $ LibPQ.Oid oid
+  where
+    q = ByteString.intercalate " "
+      [ "SELECT pg_type.oid"
+      , "FROM pg_type"
+      , "INNER JOIN pg_namespace"
+      , "ON pg_type.typnamespace = pg_namespace.oid"
+      , "WHERE pg_type.typname = "
+      , "\'" <> fromString (symbolVal (SOP.Proxy @ty)) <> "\'"
+      , "AND pg_namespace.nspname = "
+      , "\'" <> fromString (symbolVal (SOP.Proxy @sch)) <> "\'"
+      , ";"
+      ]
+
 oidOfArrayTypedef
   :: (Has sch db schema, Has ty schema pg)
   => QualifiedAlias sch ty
   -> ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
-oidOfArrayTypedef = undefined
+oidOfArrayTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
+  resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
+  case resultMaybe of
+    Nothing -> throwIO $ ResultException "oidOfArrayTypedef error"
+    Just result -> do
+      valueMaybe <- LibPQ.getvalue result 0 0
+      case valueMaybe of
+        Nothing -> throwIO $ ResultException "oidOfArrayTypedef error"
+        Just value -> case valueParser int value of
+          Left err -> throwIO $ ResultException $ "oidOfArrayTypedef error: " <> err
+          Right oid -> return $ LibPQ.Oid oid
+  where
+    q = ByteString.intercalate " "
+      [ "SELECT pg_type.typelem"
+      , "FROM pg_type"
+      , "INNER JOIN pg_namespace"
+      , "ON pg_type.typnamespace = pg_namespace.oid"
+      , "WHERE pg_type.typname = "
+      , "\'" <> fromString (symbolVal (SOP.Proxy @ty)) <> "\'"
+      , "AND pg_namespace.nspname = "
+      , "\'" <> fromString (symbolVal (SOP.Proxy @sch)) <> "\'"
+      , ";"
+      ]

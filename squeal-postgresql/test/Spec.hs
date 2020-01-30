@@ -45,7 +45,7 @@ type UsersColumns =
 
 type Schema =
   '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns)
-   , "personn" ::: 'Typedef PGperson ]
+   , "person" ::: 'Typedef PGperson ]
 
 type DB = '[ "public" ::: Schema ]
 
@@ -65,10 +65,10 @@ setup =
       notNullable text `as` #name )
     ( primaryKey #id `as` #pk_users :*
       unique #name `as` #unique_names ) >>>
-  createTypeCompositeFrom @Person #personn
+  createTypeCompositeFrom @Person #person
 
 teardown :: Definition DB (Public '[])
-teardown = dropType #personn >>> dropTable #users
+teardown = dropType #person >>> dropTable #users
 
 silence :: MonadPQ db pq => pq ()
 silence = manipulate_ $
@@ -93,13 +93,13 @@ type PGperson = 'PGcomposite
   '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
 type instance PG Person = PGperson
 instance PGTyped DB PGperson where
-  pgtype = typedef #personn
+  pgtype = typedef #person
 instance FromValue PGperson Person where
   fromValue = getComposite <$> fromValue @PGperson
 instance OidOf DB PGperson where
-  oidOf = oidOfTypedef #personn
+  oidOf = oidOfTypedef #person
 instance OidOfArray DB PGperson where
-  oidOfArray = oidOfArrayTypedef #personn
+  oidOfArray = oidOfArrayTypedef #person
 
 spec :: Spec
 spec = before_ setupDB . after_ dropDB $ do
