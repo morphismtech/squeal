@@ -21,7 +21,6 @@
 module Main (main) where
 
 import Control.Concurrent.Async (replicateConcurrently)
-import Control.Monad.IO.Class (liftIO)
 import Data.ByteString (ByteString)
 import Data.Int (Int32)
 import Data.Text (Text)

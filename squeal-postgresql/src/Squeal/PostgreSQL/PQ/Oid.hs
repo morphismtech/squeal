@@ -140,10 +140,7 @@ instance OidOf db ('PGrange 'PGtimestamptz) where oidOf = pure $ LibPQ.Oid 3910
 instance OidOfArray db ('PGrange 'PGtimestamptz) where oidOfArray = pure $ LibPQ.Oid 3911
 instance OidOf db ('PGrange 'PGdate) where oidOf = pure $ LibPQ.Oid 3912
 instance OidOfArray db ('PGrange 'PGdate) where oidOfArray = pure $ LibPQ.Oid 3913
--- instance {-# OVERLAPPABLE #-} OidOf db ('PGcomposite row) where oidOf = LibPQ.invalidOid
--- instance {-# OVERLAPPABLE #-} OidOfArray db ('PGcomposite row) where oidOfArray = LibPQ.invalidOid
--- instance {-# OVERLAPPABLE #-} OidOf db ('PGenum labels) where oidOf = LibPQ.invalidOid
--- instance {-# OVERLAPPABLE #-} OidOfArray db ('PGenum labels) where oidOfArray = LibPQ.invalidOid
+
 oidOfTypedef
   :: (Has sch db schema, Has ty schema pg)
   => QualifiedAlias sch ty
@@ -197,5 +194,4 @@ oidOfArrayTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
       , "\'" <> fromString (symbolVal (SOP.Proxy @ty)) <> "\'"
       , "AND pg_namespace.nspname = "
       , "\'" <> fromString (symbolVal (SOP.Proxy @sch)) <> "\'"
-      , ";"
-      ]
+      , ";" ]

@@ -96,6 +96,10 @@ module Squeal.PostgreSQL.Schema
   , Updatable
   , AllUnique
   , IsNotElem
+    -- * User Types
+  , UserType
+  , UserTypeName
+  , UserTypeNamespace
   ) where
 
 import Control.Category
@@ -625,3 +629,22 @@ type Updatable table columns =
   ( All (HasIn (TableToColumns table)) columns
   , AllUnique columns
   , SListI (TableToColumns table) )
+
+type family UserTypeName (schema :: SchemaType) (ty :: PGType) where
+  UserTypeName '[] ty = 'Nothing
+  UserTypeName (td ::: 'Typedef ty ': _) ty = 'Just td
+  UserTypeName (_ ': schema) ty = UserTypeName schema ty
+
+type family UserTypeNamespace
+  (td :: Maybe Symbol)
+  (sch :: Symbol)
+  (schemas :: SchemasType)
+  (ty :: PGType) where
+    UserTypeNamespace 'Nothing sch schemas ty = UserType schemas ty
+    UserTypeNamespace ('Just td) sch schemas ty = '(sch, td)
+
+type family UserType (db :: SchemasType) (ty :: PGType) where
+  UserType '[] ty = TypeError
+    ('Text "No such user type: " ':<>: 'ShowType ty)
+  UserType (sch ::: schema ': schemas) ty =
+    UserTypeNamespace (UserTypeName schema ty) sch schemas ty
