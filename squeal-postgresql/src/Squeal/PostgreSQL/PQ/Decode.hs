@@ -52,7 +52,6 @@ import Data.Int (Int16, Int32, Int64)
 import Data.Kind
 import Data.Scientific (Scientific)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
-import Data.Word (Word32)
 import Data.UUID.Types (UUID)
 import Data.Vector (Vector)
 import GHC.OverloadedLabels
@@ -202,10 +201,10 @@ instance
           unitOfSize 4
           SOP.hsequence' $ SOP.hpure $ SOP.Comp $ do
             unitOfSize 4
-            len <- sized 4 int
+            len :: Int32 <- sized 4 int
             if len == -1
               then return (SOP.K Nothing)
-              else SOP.K . Just <$> bytesOfSize len
+              else SOP.K . Just <$> bytesOfSize (fromIntegral len)
       in
         fmap Composite (fn (runDecodeRow (genericRow @row) <=< comp))
 instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
