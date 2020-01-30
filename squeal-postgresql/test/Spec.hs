@@ -91,14 +91,8 @@ data Person = Person { name :: String, age :: Int32 }
 type PGperson = 'PGcomposite
   '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
 type instance PG Person = PGperson
-instance PGTyped DB PGperson where
-  pgtype = typedef #person
 instance FromValue PGperson Person where
   fromValue = getComposite <$> fromValue @PGperson
-instance OidOf DB PGperson where
-  oidOf = oidOfTypedef #person
-instance OidOfArray DB PGperson where
-  oidOfArray = oidOfArrayTypedef #person
 
 spec :: Spec
 spec = before_ setupDB . after_ dropDB $ do

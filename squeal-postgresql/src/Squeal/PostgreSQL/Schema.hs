@@ -636,15 +636,15 @@ type family UserTypeName (schema :: SchemaType) (ty :: PGType) where
   UserTypeName (_ ': schema) ty = UserTypeName schema ty
 
 type family UserTypeNamespace
-  (td :: Maybe Symbol)
   (sch :: Symbol)
+  (td :: Maybe Symbol)
   (schemas :: SchemasType)
   (ty :: PGType) where
-    UserTypeNamespace 'Nothing sch schemas ty = UserType schemas ty
-    UserTypeNamespace ('Just td) sch schemas ty = '(sch, td)
+    UserTypeNamespace sch 'Nothing schemas ty = UserType schemas ty
+    UserTypeNamespace sch ('Just td) schemas ty = '(sch, td)
 
 type family UserType (db :: SchemasType) (ty :: PGType) where
   UserType '[] ty = TypeError
     ('Text "No such user type: " ':<>: 'ShowType ty)
   UserType (sch ::: schema ': schemas) ty =
-    UserTypeNamespace (UserTypeName schema ty) sch schemas ty
+    UserTypeNamespace sch (UserTypeName schema ty) schemas ty

@@ -13,13 +13,16 @@ statement parameters.
 {-# LANGUAGE
     AllowAmbiguousTypes
   , DataKinds
+  , FlexibleContexts
   , FlexibleInstances
   , MultiParamTypeClasses
   , OverloadedStrings
   , PolyKinds
   , ScopedTypeVariables
   , TypeApplications
+  , TypeFamilies
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.PQ.Oid
@@ -27,8 +30,6 @@ module Squeal.PostgreSQL.PQ.Oid
     LibPQ.Oid
   , OidOf (..)
   , OidOfArray (..)
-  , oidOfTypedef
-  , oidOfArrayTypedef
   , OidOfNull (..)
   , OidOfField (..)
   ) where
@@ -140,6 +141,30 @@ instance OidOf db ('PGrange 'PGtimestamptz) where oidOf = pure $ LibPQ.Oid 3910
 instance OidOfArray db ('PGrange 'PGtimestamptz) where oidOfArray = pure $ LibPQ.Oid 3911
 instance OidOf db ('PGrange 'PGdate) where oidOf = pure $ LibPQ.Oid 3912
 instance OidOfArray db ('PGrange 'PGdate) where oidOfArray = pure $ LibPQ.Oid 3913
+instance
+  ( UserType db ('PGcomposite row) ~ '(sch,td)
+  , Has sch db schema
+  , Has td schema ('Typedef ('PGcomposite row)) )
+  => OidOf db ('PGcomposite row) where
+    oidOf = oidOfTypedef (QualifiedAlias @sch @td)
+instance
+  ( UserType db ('PGcomposite row) ~ '(sch,td)
+  , Has sch db schema
+  , Has td schema ('Typedef ('PGcomposite row)) )
+  => OidOfArray db ('PGcomposite row) where
+    oidOfArray = oidOfArrayTypedef (QualifiedAlias @sch @td)
+instance
+  ( UserType db ('PGenum labels) ~ '(sch,td)
+  , Has sch db schema
+  , Has td schema ('Typedef ('PGenum labels)) )
+  => OidOf db ('PGenum labels) where
+    oidOf = oidOfTypedef (QualifiedAlias @sch @td)
+instance
+  ( UserType db ('PGenum labels) ~ '(sch,td)
+  , Has sch db schema
+  , Has td schema ('Typedef ('PGenum labels)) )
+  => OidOfArray db ('PGenum labels) where
+    oidOfArray = oidOfArrayTypedef (QualifiedAlias @sch @td)
 
 oidOfTypedef
   :: (Has sch db schema, Has ty schema pg)
@@ -166,8 +191,7 @@ oidOfTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
       , "\'" <> fromString (symbolVal (SOP.Proxy @ty)) <> "\'"
       , "AND pg_namespace.nspname = "
       , "\'" <> fromString (symbolVal (SOP.Proxy @sch)) <> "\'"
-      , ";"
-      ]
+      , ";" ]
 
 oidOfArrayTypedef
   :: (Has sch db schema, Has ty schema pg)

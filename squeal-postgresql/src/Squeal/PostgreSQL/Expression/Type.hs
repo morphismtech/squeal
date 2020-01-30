@@ -369,6 +369,18 @@ instance PGTyped db ('PGrange 'PGnumeric) where pgtype = numrange
 instance PGTyped db ('PGrange 'PGtimestamp) where pgtype = tsrange
 instance PGTyped db ('PGrange 'PGtimestamptz) where pgtype = tstzrange
 instance PGTyped db ('PGrange 'PGdate) where pgtype = daterange
+instance
+  ( UserType db ('PGcomposite row) ~ '(sch,td)
+  , Has sch db schema
+  , Has td schema ('Typedef ('PGcomposite row))
+  ) => PGTyped db ('PGcomposite row) where
+    pgtype = typedef (QualifiedAlias @sch @td)
+instance
+  ( UserType db ('PGenum labels) ~ '(sch,td)
+  , Has sch db schema
+  , Has td schema ('Typedef ('PGenum labels))
+  ) => PGTyped db ('PGenum labels) where
+    pgtype = typedef (QualifiedAlias @sch @td)
 
 -- | Specify `TypeExpression` from a Haskell type.
 --
