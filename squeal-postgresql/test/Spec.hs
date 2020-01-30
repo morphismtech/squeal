@@ -43,29 +43,32 @@ type UsersColumns =
   '[ "id" ::: 'Def :=> 'NotNull 'PGint4
    , "name" ::: 'NoDef :=> 'NotNull 'PGtext ]
 
-type Schema = '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns) ]
+type Schema =
+  '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns)
+   , "personn" ::: 'Typedef PGperson ]
 
-type Schemas = '[ "public" ::: Schema ]
+type DB = '[ "public" ::: Schema ]
 
 data User = User
   { userName  :: Text
   } deriving stock (Eq, Show, GHC.Generic)
     deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
 
-insertUser :: Manipulation_ Schemas User ()
+insertUser :: Manipulation_ DB User ()
 insertUser = insertInto_ #users
   (Values_ (Default `as` #id :* Set (param @1) `as` #name))
 
-setup :: Definition (Public '[]) Schemas
+setup :: Definition (Public '[]) DB
 setup =
   createTable #users
     ( serial `as` #id :*
       notNullable text `as` #name )
     ( primaryKey #id `as` #pk_users :*
-      unique #name `as` #unique_names )
+      unique #name `as` #unique_names ) >>>
+  createTypeCompositeFrom @Person #personn
 
-teardown :: Definition Schemas (Public '[])
-teardown = dropTable #users
+teardown :: Definition DB (Public '[])
+teardown = dropType #personn >>> dropTable #users
 
 silence :: MonadPQ db pq => pq ()
 silence = manipulate_ $
@@ -85,19 +88,18 @@ connectionString = "host=localhost port=5432 dbname=exampledb"
 data Person = Person { name :: String, age :: Int32 }
   deriving (Eq, Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
   -- deriving (FromValue PGperson) via (Composite Person)
-  deriving (ToParam PersonDB PGperson) via (Composite Person)
+  deriving (ToParam DB PGperson) via (Composite Person)
 type PGperson = 'PGcomposite
   '["name" ::: 'NotNull 'PGtext, "age" ::: 'NotNull 'PGint4]
-type PersonDB = '["public" ::: '["person" ::: 'Typedef PGperson]]
 type instance PG Person = PGperson
-instance PGTyped PersonDB PGperson where
-  pgtype = typedef #person
+instance PGTyped DB PGperson where
+  pgtype = typedef #personn
 instance FromValue PGperson Person where
   fromValue = getComposite <$> fromValue @PGperson
-instance OidOf PersonDB PGperson where
-  oidOf = oidOfTypedef #person
-instance OidOfArray PersonDB PGperson where
-  oidOfArray = oidOfArrayTypedef #person
+instance OidOf DB PGperson where
+  oidOf = oidOfTypedef #personn
+instance OidOfArray DB PGperson where
+  oidOfArray = oidOfArrayTypedef #personn
 
 spec :: Spec
 spec = before_ setupDB . after_ dropDB $ do
@@ -166,16 +168,11 @@ spec = before_ setupDB . after_ dropDB $ do
     it "should be definable" $ do
 
       let
-        setupPerson :: Definition (Public '[]) PersonDB
-        setupPerson = createTypeCompositeFrom @Person #person
 
-        teardownPerson :: Definition PersonDB (Public '[])
-        teardownPerson = dropType #person
-
-        roundtrip :: Query_ PersonDB (Only Person) (Only Person)
+        roundtrip :: Query_ DB (Only Person) (Only Person)
         roundtrip = values_ (param @1 `as` #fromOnly)
 
-        roundtrip_array :: Query_ PersonDB
+        roundtrip_array :: Query_ DB
           (Only (VarArray [Person])) (Only (VarArray [Person]))
         roundtrip_array = values_ (param @1 `as` #fromOnly)
 
@@ -183,16 +180,10 @@ spec = before_ setupDB . after_ dropDB $ do
         lucy = Person "Lucy" 2420000
         people = VarArray [adam, lucy]
 
-        session :: PQ PersonDB PersonDB IO ()
-        session = do
-          out <- firstRow =<< runQueryParams roundtrip (Only adam)
-          out_array <- firstRow =<<
-            runQueryParams roundtrip_array (Only people)
-          liftIO $ do
-            out `shouldBe` Just (Only adam)
-            out_array `shouldBe` Just (Only people)
+      out <- withConnection connectionString $
+        firstRow =<< runQueryParams roundtrip (Only adam)
+      out_array <- withConnection connectionString $
+        firstRow =<< runQueryParams roundtrip_array (Only people)
 
-      withConnection connectionString $
-        define setupPerson
-        & pqThen session
-        & pqThen (define teardownPerson)
+      out `shouldBe` Just (Only adam)
+      out_array `shouldBe` Just (Only people)
