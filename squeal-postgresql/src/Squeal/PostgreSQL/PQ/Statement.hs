@@ -38,6 +38,7 @@ import Squeal.PostgreSQL.PQ.Decode
 import Squeal.PostgreSQL.PQ.Encode
 import Squeal.PostgreSQL.PQ.Oid
 import Squeal.PostgreSQL.Query
+import Squeal.PostgreSQL.Render
 
 -- | A `Statement` consists of a `Squeal.PostgreSQL.Statement.Manipulation`
 -- or a `Squeal.PostgreSQL.PQ.Statement.Query` that can be run
@@ -74,6 +75,10 @@ instance Profunctor (Statement db) where
     Query (contramap f encode) (fmap g decode) q
 
 instance Functor (Statement db x) where fmap = rmap
+
+instance RenderSQL (Statement db x y) where
+  renderSQL (Manipulation _ _ q) = renderSQL q
+  renderSQL (Query _ _ q) = renderSQL q
 
 -- | Smart constructor for a structured query language statement
 query ::

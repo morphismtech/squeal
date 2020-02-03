@@ -13,7 +13,6 @@ module Main (main, main2) where
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int16, Int32)
-import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Vector (Vector)
 

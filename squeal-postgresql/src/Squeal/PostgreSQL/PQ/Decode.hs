@@ -77,7 +77,7 @@ import Squeal.PostgreSQL.PG
 
 -- | A `FromValue` constraint gives a parser from the binary format of
 -- a PostgreSQL `PGType` into a Haskell `Type`.
-class FromValue pg y where
+class FromValue (pg :: PGType) (y :: Type) where
   -- |
   -- >>> :set -XMultiParamTypeClasses
   -- >>> newtype Id = Id { getId :: Int16 } deriving Show
@@ -231,7 +231,7 @@ instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
 -- to a decoding of a @NullityType@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromNullValue`, just use the provided instances.
-class FromNullValue ty y where
+class FromNullValue (ty :: NullType) (y :: Type) where
   fromNullValue :: Maybe Strict.ByteString -> Either Strict.Text y
 instance FromValue pg y => FromNullValue ('NotNull pg) y where
   fromNullValue = \case
@@ -247,7 +247,7 @@ instance FromValue pg y => FromNullValue ('Null pg) (Maybe y) where
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromField`, just use the provided instances.
-class FromField field y where
+class FromField (field :: (Symbol, NullType)) (y :: (Symbol, Type)) where
   fromField :: Maybe Strict.ByteString -> Either Strict.Text (SOP.P y)
 instance (fld0 ~ fld1, FromNullValue ty y)
   => FromField (fld0 ::: ty) (fld1 ::: y) where

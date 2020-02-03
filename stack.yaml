@@ -1,7 +1,7 @@
-resolver: lts-14.12
+resolver: nightly-2020-01-30
 packages:
 - squeal-postgresql
 
 extra-deps:
 - github: morphismtech/free-categories
-  commit: 80c636e3dfd2bb33098483f4998d9ba5b1bd0df9
+  commit: 33b5d9e0345ff59c5be3bdb7257c70b1977e5c67

@@ -232,12 +232,12 @@ in printSQL alias1 >> printSQL alias2
 data QualifiedAlias (qualifier :: Symbol) (alias :: Symbol) = QualifiedAlias
   deriving (Eq,GHC.Generic,Ord,Show,NFData)
 instance (q ~ q', a ~ a') => IsQualified q a (QualifiedAlias q' a') where
-  _!_ = QualifiedAlias
+  _ ! _ = QualifiedAlias
 instance (q' ~ "public", a ~ a') => IsLabel a (QualifiedAlias q' a') where
   fromLabel = QualifiedAlias
 instance (q0 ~ q1, a0 ~ a1, a1 ~ a2, KnownSymbol a2) =>
   IsQualified q0 a0 (Aliased (QualifiedAlias q1) (a1 ::: a2)) where
-    _!_ = QualifiedAlias `As` Alias
+    _ ! _ = QualifiedAlias `As` Alias
 instance (q ~ "public", a0 ~ a1, a1 ~ a2, KnownSymbol a2) =>
   IsLabel a0 (Aliased (QualifiedAlias q) (a1 ::: a2)) where
     fromLabel = QualifiedAlias `As` Alias

@@ -10,6 +10,7 @@ Stability: experimental
 -}
 {-# LANGUAGE
     AllowAmbiguousTypes
+  , CPP
   , DeriveAnyClass
   , DeriveFoldable
   , DeriveFunctor
@@ -253,8 +254,13 @@ type family TupleCodeOf (hask :: Type) (code :: [[Type]]) :: [Type] where
 -- | Calculates constructors of a datatype.
 type family ConstructorsOf (datatype :: Type.DatatypeInfo)
   :: [Type.ConstructorInfo] where
+#if MIN_VERSION_generics_sop(0,5,0)
+    ConstructorsOf ('Type.ADT _module _datatype constructors _strictness) =
+      constructors
+#else
     ConstructorsOf ('Type.ADT _module _datatype constructors) =
       constructors
+#endif
     ConstructorsOf ('Type.Newtype _module _datatype constructor) =
       '[constructor]
 
