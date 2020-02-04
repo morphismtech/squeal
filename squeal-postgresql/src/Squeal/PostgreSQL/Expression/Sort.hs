@@ -41,21 +41,27 @@ import Squeal.PostgreSQL.Schema
 data SortExpression outer commons grp db params from where
   Asc
     :: Expression outer commons grp db params from ('NotNull ty)
+    -- ^ sort by
     -> SortExpression outer commons grp db params from
   Desc
     :: Expression outer commons grp db params from ('NotNull ty)
+    -- ^ sort by
     -> SortExpression outer commons grp db params from
   AscNullsFirst
     :: Expression outer commons grp db params from  ('Null ty)
+    -- ^ sort by
     -> SortExpression outer commons grp db params from
   AscNullsLast
     :: Expression outer commons grp db params from  ('Null ty)
+    -- ^ sort by
     -> SortExpression outer commons grp db params from
   DescNullsFirst
     :: Expression outer commons grp db params from  ('Null ty)
+    -- ^ sort by
     -> SortExpression outer commons grp db params from
   DescNullsLast
     :: Expression outer commons grp db params from  ('Null ty)
+    -- ^ sort by
     -> SortExpression outer commons grp db params from
 deriving instance Show (SortExpression outer commons grp db params from)
 instance RenderSQL (SortExpression outer commons grp db params from) where

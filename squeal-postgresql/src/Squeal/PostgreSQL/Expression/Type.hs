@@ -413,6 +413,7 @@ instance RenderSQL (ColumnTypeExpression db ty) where
 -- @NULL@ may be present in a column
 nullable
   :: TypeExpression db (null ty)
+  -- ^ type
   -> ColumnTypeExpression db ('NoDef :=> 'Null ty)
 nullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NULL"
 
@@ -421,6 +422,7 @@ nullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NULL"
 -- @NULL@ is not present in a column
 notNullable
   :: TypeExpression db (null ty)
+  -- ^ type
   -> ColumnTypeExpression db ('NoDef :=> 'NotNull ty)
 notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
 
@@ -428,7 +430,9 @@ notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
 -- commands as a column constraint to give a default
 default_
   :: Expression '[] '[] 'Ungrouped db '[] '[] ty
+  -- ^ default value
   -> ColumnTypeExpression db ('NoDef :=> ty)
+  -- ^ column type
   -> ColumnTypeExpression db ('Def :=> ty)
 default_ x ty = UnsafeColumnTypeExpression $
   renderSQL ty <+> "DEFAULT" <+> renderExpression x

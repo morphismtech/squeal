@@ -49,6 +49,7 @@ at least one row is returned, not all the way to completion.
 -}
 exists
   :: Query (Join outer from) commons db params row
+  -- ^ subquery
   -> Condition outer commons grp db params from
 exists query = UnsafeExpression $ "EXISTS" <+> parenthesized (renderSQL query)
 
