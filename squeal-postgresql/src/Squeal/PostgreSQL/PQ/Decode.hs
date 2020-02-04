@@ -287,7 +287,7 @@ into a Haskell `Type`.
 
 `DecodeRow` has an interface given by the classes
 `Functor`, `Applicative`, `Alternative`, `Monad`,
-`MonadPlus`, `MonadError Strict.Text`, and `IsLabel`.
+`MonadPlus`, `MonadError` `Strict.Text`, and `IsLabel`.
 
 >>> :set -XOverloadedLabels
 >>> :{
