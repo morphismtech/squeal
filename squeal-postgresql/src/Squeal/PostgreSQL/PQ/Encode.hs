@@ -2,7 +2,7 @@
 Module: Squeal.PostgreSQL.PQ.Encode
 Description: Encoding of statement parameters
 Copyright: (c) Eitan Chatav, 2019
-Maintainer: eitan@dborphism.tech
+Maintainer: eitan@morphism.tech
 Stability: experimental
 
 Encoding of statement parameters
