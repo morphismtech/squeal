@@ -83,11 +83,20 @@ instance RenderSQL (Statement db x y) where
   renderSQL (Manipulation _ _ q) = renderSQL q
   renderSQL (Query _ _ q) = renderSQL q
 
+-- | A `GenericParams` constraint to ensure that
+-- a Haskell type is a product type,
+-- all its terms have known Oids,
+-- and can be encoded to corresponding
+-- Postgres types.
 type GenericParams db params x xs =
   ( SOP.All (OidOfNull db) params
   , SOP.IsProductType x xs
   , SOP.AllZip (ToNullParam db) params xs )
 
+-- | A `GenericRow` constraint to ensure that
+-- a Haskell type is a record type,
+-- and all its fields and can be decoded from corresponding
+-- Postgres fields.
 type GenericRow row y ys =
   ( SOP.IsRecord y ys
   , SOP.AllZip FromField row ys )
