@@ -100,67 +100,67 @@ class FromValue (pg :: PGType) (y :: Type) where
   -- |
   -- >>> :set -XMultiParamTypeClasses
   -- >>> newtype Id = Id { getId :: Int16 } deriving Show
-  -- >>> instance FromValue 'PGint2 Id where fromValue = Id <$> fromValue @'PGint2
-  fromValue :: Value y
+  -- >>> instance FromValue 'PGint2 Id where fromValue _ = Id <$> fromValue @'PGint2
+  fromValue :: proxy pg -> Value y
 instance FromValue 'PGbool Bool where
-  fromValue = coerceValue bool
+  fromValue _ = coerceValue bool
 instance FromValue 'PGint2 Int16 where
-  fromValue = coerceValue int
+  fromValue _ = coerceValue int
 instance FromValue 'PGint4 Int32 where
-  fromValue = coerceValue int
+  fromValue _ = coerceValue int
 instance FromValue 'PGint8 Int64 where
-  fromValue = coerceValue int
+  fromValue _ = coerceValue int
 instance FromValue 'PGoid Oid where
-  fromValue = coerceValue $ Oid <$> int
+  fromValue _ = coerceValue $ Oid <$> int
 instance FromValue 'PGfloat4 Float where
-  fromValue = coerceValue float4
+  fromValue _ = coerceValue float4
 instance FromValue 'PGfloat8 Double where
-  fromValue = coerceValue float8
+  fromValue _ = coerceValue float8
 instance FromValue 'PGnumeric Scientific where
-  fromValue = coerceValue numeric
+  fromValue _ = coerceValue numeric
 instance FromValue 'PGmoney Money where
-  fromValue = coerceValue $  Money <$> int
+  fromValue _ = coerceValue $  Money <$> int
 instance FromValue 'PGuuid UUID where
-  fromValue = coerceValue uuid
+  fromValue _ = coerceValue uuid
 instance FromValue 'PGinet (NetAddr IP) where
-  fromValue = coerceValue inet
+  fromValue _ = coerceValue inet
 instance FromValue ('PGchar 1) Char where
-  fromValue = coerceValue char
+  fromValue _ = coerceValue char
 instance FromValue 'PGtext Strict.Text where
-  fromValue = coerceValue text_strict
+  fromValue _ = coerceValue text_strict
 instance FromValue 'PGtext Lazy.Text where
-  fromValue = coerceValue text_lazy
+  fromValue _ = coerceValue text_lazy
 instance FromValue 'PGtext String where
-  fromValue = coerceValue $ Strict.Text.unpack <$> text_strict
+  fromValue _ = coerceValue $ Strict.Text.unpack <$> text_strict
 instance FromValue 'PGbytea Strict.ByteString where
-  fromValue = coerceValue bytea_strict
+  fromValue _ = coerceValue bytea_strict
 instance FromValue 'PGbytea Lazy.ByteString where
-  fromValue = coerceValue bytea_lazy
+  fromValue _ = coerceValue bytea_lazy
 instance FromValue 'PGdate Day where
-  fromValue = coerceValue date
+  fromValue _ = coerceValue date
 instance FromValue 'PGtime TimeOfDay where
-  fromValue = coerceValue time_int
+  fromValue _ = coerceValue time_int
 instance FromValue 'PGtimetz (TimeOfDay, TimeZone) where
-  fromValue = coerceValue timetz_int
+  fromValue _ = coerceValue timetz_int
 instance FromValue 'PGtimestamp LocalTime where
-  fromValue = coerceValue timestamp_int
+  fromValue _ = coerceValue timestamp_int
 instance FromValue 'PGtimestamptz UTCTime where
-  fromValue = coerceValue timestamptz_int
+  fromValue _ = coerceValue timestamptz_int
 instance FromValue 'PGinterval DiffTime where
-  fromValue = coerceValue interval_int
+  fromValue _ = coerceValue interval_int
 instance FromValue 'PGjson Aeson.Value where
-  fromValue = coerceValue json_ast
+  fromValue _ = coerceValue json_ast
 instance FromValue 'PGjsonb Aeson.Value where
-  fromValue = coerceValue jsonb_ast
+  fromValue _ = coerceValue jsonb_ast
 instance Aeson.FromJSON x => FromValue 'PGjson (Json x) where
-  fromValue = coerceValue $ Json <$>
+  fromValue _ = coerceValue $ Json <$>
     json_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
 instance Aeson.FromJSON x => FromValue 'PGjsonb (Jsonb x) where
-  fromValue = coerceValue $ Jsonb <$>
+  fromValue _ = coerceValue $ Jsonb <$>
     jsonb_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
 instance FromValue pg y
   => FromValue ('PGvararray ('NotNull pg)) (VarArray (Vector y)) where
-    fromValue =
+    fromValue _ =
       let
         rep n x = VarArray <$> Vector.replicateM n x
       in
@@ -168,7 +168,7 @@ instance FromValue pg y
           (fromFixArray @'[] @('NotNull pg))
 instance FromValue pg y
   => FromValue ('PGvararray ('Null pg)) (VarArray (Vector (Maybe y))) where
-    fromValue =
+    fromValue _ =
       let
         rep n x = VarArray <$> Vector.replicateM n x
       in
@@ -176,7 +176,7 @@ instance FromValue pg y
           (fromFixArray @'[] @('Null pg))
 instance FromValue pg y
   => FromValue ('PGvararray ('NotNull pg)) (VarArray [y]) where
-    fromValue =
+    fromValue _ =
       let
         rep n x = VarArray <$> replicateM n x
       in
@@ -184,7 +184,7 @@ instance FromValue pg y
           (fromFixArray @'[] @('NotNull pg))
 instance FromValue pg y
   => FromValue ('PGvararray ('Null pg)) (VarArray [Maybe y]) where
-    fromValue =
+    fromValue _ =
       let
         rep n x = VarArray <$> replicateM n x
       in
@@ -192,13 +192,13 @@ instance FromValue pg y
           (fromFixArray @'[] @('Null pg))
 instance FromFixArray dims ty y
   => FromValue ('PGfixarray dims ty) (FixArray y) where
-    fromValue = coerceValue $ FixArray <$> array (fromFixArray @dims @ty @y)
+    fromValue _ = coerceValue $ FixArray <$> array (fromFixArray @dims @ty @y)
 instance
   ( SOP.IsEnumType y
   , SOP.HasDatatypeInfo y
   , LabelsPG y ~ labels
   ) => FromValue ('PGenum labels) (Enumerated y) where
-    fromValue =
+    fromValue _ =
       let
         greadConstructor
           :: SOP.All ((~) '[]) xss
@@ -223,7 +223,7 @@ instance
   ( SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
   ) => FromValue ('PGcomposite row) (Composite y) where
-    fromValue =
+    fromValue _ =
       let
         -- <number of fields: 4 bytes>
         -- [for each field]
@@ -247,7 +247,7 @@ instance
         coerceValue $
           fmap Composite (fn (runDecodeRow (genericRow @row) <=< comp))
 instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
-  fromValue = coerceValue $ do
+  fromValue _ = coerceValue $ do
     flag <- byte
     if testBit flag 0 then return Empty else do
       lower <-
@@ -255,14 +255,14 @@ instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
           then return Infinite
           else do
             len <- sized 4 int
-            l <- sized len (coerceParser $ fromValue @pg)
+            l <- sized len (coerceParser $ fromValue (SOP.Proxy @pg))
             return $ if testBit flag 1 then Closed l else Open l
       upper <-
         if testBit flag 4
           then return Infinite
           else do
             len <- sized 4 int
-            l <- sized len (coerceParser $ fromValue @pg)
+            l <- sized len (coerceParser $ fromValue (SOP.Proxy @pg))
             return $ if testBit flag 2 then Closed l else Open l
       return $ NonEmpty lower upper
 
@@ -275,12 +275,13 @@ class FromNullValue (ty :: NullType) (y :: Type) where
 instance FromValue pg y => FromNullValue ('NotNull pg) y where
   fromNullValue = \case
     Nothing -> throwError "fromField: saw NULL when expecting NOT NULL"
-    Just bytestring -> valueParser (coerceParser $ fromValue @pg) bytestring
+    Just bytestring -> valueParser
+      (coerceParser $ fromValue (SOP.Proxy @pg)) bytestring
 instance FromValue pg y => FromNullValue ('Null pg) (Maybe y) where
   fromNullValue = \case
     Nothing -> return Nothing
     Just bytestring -> fmap Just $
-      valueParser (coerceParser $ fromValue @pg) bytestring
+      valueParser (coerceParser $ fromValue (SOP.Proxy @pg)) bytestring
 
 -- | A `FromField` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
@@ -299,9 +300,11 @@ instance (fld0 ~ fld1, FromNullValue ty y)
 class FromFixArray (dims :: [Nat]) (ty :: NullType) (y :: Type) where
   fromFixArray :: Array y
 instance FromValue pg y => FromFixArray '[] ('NotNull pg) y where
-  fromFixArray = valueArray (coerceParser $ fromValue @pg @y)
+  fromFixArray = valueArray
+    (coerceParser $ fromValue (SOP.Proxy @pg))
 instance FromValue pg y => FromFixArray '[] ('Null pg) (Maybe y) where
-  fromFixArray = nullableValueArray (coerceParser $ fromValue @pg @y)
+  fromFixArray = nullableValueArray
+    (coerceParser $ fromValue (SOP.Proxy @pg))
 instance
   ( SOP.IsProductType product ys
   , Length ys ~ dim
