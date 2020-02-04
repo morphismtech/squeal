@@ -38,6 +38,7 @@ module Squeal.PostgreSQL.PQ.Decode
   , FromNullValue (..)
   , FromField (..)
   , FromFixArray (..)
+  , Value (..)
   ) where
 
 import BinaryParser
@@ -46,6 +47,7 @@ import Control.Arrow
 import Control.Monad
 import Control.Monad.Except
 import Control.Monad.Reader
+import Control.Monad.State
 import Control.Monad.Trans.Maybe
 import Data.Bits
 import Data.Int (Int16, Int32, Int64)
@@ -57,7 +59,8 @@ import Data.Vector (Vector)
 import GHC.OverloadedLabels
 import GHC.TypeLits
 import Network.IP.Addr (NetAddr, IP)
-import PostgreSQL.Binary.Decoding hiding (Composite)
+import PostgreSQL.Binary.Decoding hiding (Composite, Value)
+import Unsafe.Coerce
 
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as Lazy (ByteString)
@@ -75,6 +78,22 @@ import Squeal.PostgreSQL.Schema
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
 
+newtype Value x =
+  Value (StateT Strict.ByteString (Except Strict.Text) x)
+  deriving
+    ( Functor
+    , Applicative
+    , Alternative
+    , Monad
+    , MonadPlus
+    , MonadError Strict.Text )
+
+coerceValue :: BinaryParser x -> Value x
+coerceValue = unsafeCoerce
+
+coerceParser :: Value x -> BinaryParser x
+coerceParser = unsafeCoerce
+
 -- | A `FromValue` constraint gives a parser from the binary format of
 -- a PostgreSQL `PGType` into a Haskell `Type`.
 class FromValue (pg :: PGType) (y :: Type) where
@@ -83,43 +102,61 @@ class FromValue (pg :: PGType) (y :: Type) where
   -- >>> newtype Id = Id { getId :: Int16 } deriving Show
   -- >>> instance FromValue 'PGint2 Id where fromValue = Id <$> fromValue @'PGint2
   fromValue :: Value y
-instance FromValue 'PGbool Bool where fromValue = bool
-instance FromValue 'PGint2 Int16 where fromValue = int
-instance FromValue 'PGint4 Int32 where fromValue = int
-instance FromValue 'PGint8 Int64 where fromValue = int
-instance FromValue 'PGoid Oid where fromValue = Oid <$> int
-instance FromValue 'PGfloat4 Float where fromValue = float4
-instance FromValue 'PGfloat8 Double where fromValue = float8
-instance FromValue 'PGnumeric Scientific where fromValue = numeric
-instance FromValue 'PGmoney Money where fromValue = Money <$> int
-instance FromValue 'PGuuid UUID where fromValue = uuid
-instance FromValue 'PGinet (NetAddr IP) where fromValue = inet
-instance FromValue ('PGchar 1) Char where fromValue = char
-instance FromValue 'PGtext Strict.Text where fromValue = text_strict
-instance FromValue 'PGtext Lazy.Text where fromValue = text_lazy
+instance FromValue 'PGbool Bool where
+  fromValue = coerceValue bool
+instance FromValue 'PGint2 Int16 where
+  fromValue = coerceValue int
+instance FromValue 'PGint4 Int32 where
+  fromValue = coerceValue int
+instance FromValue 'PGint8 Int64 where
+  fromValue = coerceValue int
+instance FromValue 'PGoid Oid where
+  fromValue = coerceValue $ Oid <$> int
+instance FromValue 'PGfloat4 Float where
+  fromValue = coerceValue float4
+instance FromValue 'PGfloat8 Double where
+  fromValue = coerceValue float8
+instance FromValue 'PGnumeric Scientific where
+  fromValue = coerceValue numeric
+instance FromValue 'PGmoney Money where
+  fromValue = coerceValue $  Money <$> int
+instance FromValue 'PGuuid UUID where
+  fromValue = coerceValue uuid
+instance FromValue 'PGinet (NetAddr IP) where
+  fromValue = coerceValue inet
+instance FromValue ('PGchar 1) Char where
+  fromValue = coerceValue char
+instance FromValue 'PGtext Strict.Text where
+  fromValue = coerceValue text_strict
+instance FromValue 'PGtext Lazy.Text where
+  fromValue = coerceValue text_lazy
 instance FromValue 'PGtext String where
-  fromValue = Strict.Text.unpack <$> text_strict
+  fromValue = coerceValue $ Strict.Text.unpack <$> text_strict
 instance FromValue 'PGbytea Strict.ByteString where
-  fromValue = bytea_strict
+  fromValue = coerceValue bytea_strict
 instance FromValue 'PGbytea Lazy.ByteString where
-  fromValue = bytea_lazy
-instance FromValue 'PGdate Day where fromValue = date
-instance FromValue 'PGtime TimeOfDay where fromValue = time_int
+  fromValue = coerceValue bytea_lazy
+instance FromValue 'PGdate Day where
+  fromValue = coerceValue date
+instance FromValue 'PGtime TimeOfDay where
+  fromValue = coerceValue time_int
 instance FromValue 'PGtimetz (TimeOfDay, TimeZone) where
-  fromValue = timetz_int
+  fromValue = coerceValue timetz_int
 instance FromValue 'PGtimestamp LocalTime where
-  fromValue = timestamp_int
+  fromValue = coerceValue timestamp_int
 instance FromValue 'PGtimestamptz UTCTime where
-  fromValue = timestamptz_int
+  fromValue = coerceValue timestamptz_int
 instance FromValue 'PGinterval DiffTime where
-  fromValue = interval_int
-instance FromValue 'PGjson Aeson.Value where fromValue = json_ast
-instance FromValue 'PGjsonb Aeson.Value where fromValue = jsonb_ast
+  fromValue = coerceValue interval_int
+instance FromValue 'PGjson Aeson.Value where
+  fromValue = coerceValue json_ast
+instance FromValue 'PGjsonb Aeson.Value where
+  fromValue = coerceValue jsonb_ast
 instance Aeson.FromJSON x => FromValue 'PGjson (Json x) where
-  fromValue = Json <$>
+  fromValue = coerceValue $ Json <$>
     json_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
 instance Aeson.FromJSON x => FromValue 'PGjsonb (Jsonb x) where
-  fromValue = Jsonb <$>
+  fromValue = coerceValue $ Jsonb <$>
     jsonb_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
 instance FromValue pg y
   => FromValue ('PGvararray ('NotNull pg)) (VarArray (Vector y)) where
@@ -127,7 +164,7 @@ instance FromValue pg y
       let
         rep n x = VarArray <$> Vector.replicateM n x
       in
-        array $ dimensionArray rep
+        coerceValue . array $ dimensionArray rep
           (fromFixArray @'[] @('NotNull pg))
 instance FromValue pg y
   => FromValue ('PGvararray ('Null pg)) (VarArray (Vector (Maybe y))) where
@@ -135,7 +172,7 @@ instance FromValue pg y
       let
         rep n x = VarArray <$> Vector.replicateM n x
       in
-        array $ dimensionArray rep
+        coerceValue . array $ dimensionArray rep
           (fromFixArray @'[] @('Null pg))
 instance FromValue pg y
   => FromValue ('PGvararray ('NotNull pg)) (VarArray [y]) where
@@ -143,7 +180,7 @@ instance FromValue pg y
       let
         rep n x = VarArray <$> replicateM n x
       in
-        array $ dimensionArray rep
+        coerceValue . array $ dimensionArray rep
           (fromFixArray @'[] @('NotNull pg))
 instance FromValue pg y
   => FromValue ('PGvararray ('Null pg)) (VarArray [Maybe y]) where
@@ -151,11 +188,11 @@ instance FromValue pg y
       let
         rep n x = VarArray <$> replicateM n x
       in
-        array $ dimensionArray rep
+        coerceValue . array $ dimensionArray rep
           (fromFixArray @'[] @('Null pg))
 instance FromFixArray dims ty y
   => FromValue ('PGfixarray dims ty) (FixArray y) where
-    fromValue = FixArray <$> array (fromFixArray @dims @ty @y)
+    fromValue = coerceValue $ FixArray <$> array (fromFixArray @dims @ty @y)
 instance
   ( SOP.IsEnumType y
   , SOP.HasDatatypeInfo y
@@ -175,7 +212,8 @@ instance
             else SOP.SOP . SOP.S . SOP.unSOP <$>
               greadConstructor constructors name
       in
-        fmap Enumerated
+        coerceValue
+        $ fmap Enumerated
         . enum
         $ fmap SOP.to
         . greadConstructor
@@ -206,9 +244,10 @@ instance
               then return (SOP.K Nothing)
               else SOP.K . Just <$> bytesOfSize (fromIntegral len)
       in
-        fmap Composite (fn (runDecodeRow (genericRow @row) <=< comp))
+        coerceValue $
+          fmap Composite (fn (runDecodeRow (genericRow @row) <=< comp))
 instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
-  fromValue = do
+  fromValue = coerceValue $ do
     flag <- byte
     if testBit flag 0 then return Empty else do
       lower <-
@@ -216,14 +255,14 @@ instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
           then return Infinite
           else do
             len <- sized 4 int
-            l <- sized len (fromValue @pg)
+            l <- sized len (coerceParser $ fromValue @pg)
             return $ if testBit flag 1 then Closed l else Open l
       upper <-
         if testBit flag 4
           then return Infinite
           else do
             len <- sized 4 int
-            l <- sized len (fromValue @pg)
+            l <- sized len (coerceParser $ fromValue @pg)
             return $ if testBit flag 2 then Closed l else Open l
       return $ NonEmpty lower upper
 
@@ -236,12 +275,12 @@ class FromNullValue (ty :: NullType) (y :: Type) where
 instance FromValue pg y => FromNullValue ('NotNull pg) y where
   fromNullValue = \case
     Nothing -> throwError "fromField: saw NULL when expecting NOT NULL"
-    Just bytestring -> valueParser (fromValue @pg) bytestring
+    Just bytestring -> valueParser (coerceParser $ fromValue @pg) bytestring
 instance FromValue pg y => FromNullValue ('Null pg) (Maybe y) where
   fromNullValue = \case
     Nothing -> return Nothing
     Just bytestring -> fmap Just $
-      valueParser (fromValue @pg) bytestring
+      valueParser (coerceParser $ fromValue @pg) bytestring
 
 -- | A `FromField` constraint lifts the `FromValue` parser
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
@@ -260,9 +299,9 @@ instance (fld0 ~ fld1, FromNullValue ty y)
 class FromFixArray (dims :: [Nat]) (ty :: NullType) (y :: Type) where
   fromFixArray :: Array y
 instance FromValue pg y => FromFixArray '[] ('NotNull pg) y where
-  fromFixArray = valueArray (fromValue @pg @y)
+  fromFixArray = valueArray (coerceParser $ fromValue @pg @y)
 instance FromValue pg y => FromFixArray '[] ('Null pg) (Maybe y) where
-  fromFixArray = nullableValueArray (fromValue @pg @y)
+  fromFixArray = nullableValueArray (coerceParser $ fromValue @pg @y)
 instance
   ( SOP.IsProductType product ys
   , Length ys ~ dim
@@ -287,7 +326,7 @@ into a Haskell `Type`.
 
 `DecodeRow` has an interface given by the classes
 `Functor`, `Applicative`, `Alternative`, `Monad`,
-`MonadPlus`, `MonadError Strict.Text`, and `IsLabel`.
+`MonadPlus`, `MonadError` `Strict.Text`, and `IsLabel`.
 
 >>> :set -XOverloadedLabels
 >>> :{

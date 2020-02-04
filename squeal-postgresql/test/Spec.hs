@@ -86,13 +86,13 @@ connectionString = "host=localhost port=5432 dbname=exampledb"
 
 data Person = Person { name :: Maybe String, age :: Maybe Int32 }
   deriving (Eq, Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
-  -- deriving (FromValue PGperson) via (Composite Person)
+  deriving (FromValue PGperson) via (Composite Person)
   deriving (ToParam DB PGperson) via (Composite Person)
 type PGperson = 'PGcomposite
   '["name" ::: 'Null 'PGtext, "age" ::: 'Null 'PGint4]
 type instance PG Person = PGperson
-instance FromValue PGperson Person where
-  fromValue = getComposite <$> fromValue @PGperson
+-- instance FromValue PGperson Person where
+--   fromValue = getComposite <$> fromValue @PGperson
 
 spec :: Spec
 spec = before_ setupDB . after_ dropDB $ do
