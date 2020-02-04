@@ -63,7 +63,9 @@ name as a prefix.
 let
   definition :: Definition '["public" ::: '[]] '["public" ::: '[], "my_schema" ::: '[]]
   definition = createSchema #my_schema
+in printSQL definition
 :}
+CREATE SCHEMA "my_schema";
 -}
 createSchema
   :: KnownSymbol sch

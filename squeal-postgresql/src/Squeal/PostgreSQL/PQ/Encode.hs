@@ -348,10 +348,10 @@ K (Just "\NUL\STX") :* K (Just "two") :* Nil
 
 >>> finish conn
 -}
-genericParams :: forall db x xs tys.
+genericParams :: forall db params x xs.
   ( SOP.IsProductType x xs
-  , SOP.AllZip (ToNullParam db) tys xs
-  ) => EncodeParams db tys x
+  , SOP.AllZip (ToNullParam db) params xs
+  ) => EncodeParams db params x
 genericParams = EncodeParams
   $ hctransverse (SOP.Proxy @(ToNullParam db)) encodeNullParam
   . SOP.unZ . SOP.unSOP . SOP.from

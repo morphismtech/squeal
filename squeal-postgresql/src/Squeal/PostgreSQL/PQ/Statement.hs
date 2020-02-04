@@ -11,7 +11,8 @@ together with an `EncodeParams` and a `DecodeRow`.
 -}
 
 {-# LANGUAGE
-    DataKinds
+    ConstraintKinds
+  , DataKinds
   , DeriveFunctor
   , DeriveFoldable
   , DeriveGeneric
@@ -25,6 +26,8 @@ module Squeal.PostgreSQL.PQ.Statement
   ( Statement (..)
   , query
   , manipulation
+  , GenericParams
+  , GenericRow
   ) where
 
 import Data.Functor.Contravariant
@@ -80,24 +83,27 @@ instance RenderSQL (Statement db x y) where
   renderSQL (Manipulation _ _ q) = renderSQL q
   renderSQL (Query _ _ q) = renderSQL q
 
--- | Smart constructor for a structured query language statement
-query ::
+type GenericParams db params x xs =
   ( SOP.All (OidOfNull db) params
   , SOP.IsProductType x xs
-  , SOP.AllZip (ToNullParam db) params xs
-  , SOP.IsRecord y ys
-  , SOP.AllZip FromField row ys
+  , SOP.AllZip (ToNullParam db) params xs )
+
+type GenericRow row y ys =
+  ( SOP.IsRecord y ys
+  , SOP.AllZip FromField row ys )
+
+-- | Smart constructor for a structured query language statement
+query ::
+  ( GenericParams db params x xs
+  , GenericRow row y ys
   ) => Query '[] '[] db params row -- ^ `select`, `values`, ...
     -> Statement db x y
 query = Query genericParams genericRow
 
 -- | Smart constructor for a data manipulation language statement
 manipulation ::
-  ( SOP.All (OidOfNull db) params
-  , SOP.IsProductType x xs
-  , SOP.AllZip (ToNullParam db) params xs
-  , SOP.IsRecord y ys
-  , SOP.AllZip FromField row ys
+  ( GenericParams db params x xs
+  , GenericRow row y ys
   ) => Manipulation '[] db params row
     -- ^ `insertInto`, `update`, `deleteFrom`, ...
     -> Statement db x y

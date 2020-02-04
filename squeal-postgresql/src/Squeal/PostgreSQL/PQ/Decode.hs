@@ -367,9 +367,8 @@ in runDecodeRow decode (SOP.K (Just "\NUL\STX") :* SOP.K (Just "two") :* Nil)
 :}
 Right (Two {frst = 2, scnd = "two"})
 -}
-genericRow ::
-  ( SOP.SListI row
-  , SOP.IsRecord y ys
+genericRow :: forall row y ys.
+  ( SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
   ) => DecodeRow row y
 genericRow
