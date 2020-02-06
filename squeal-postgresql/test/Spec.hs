@@ -88,6 +88,7 @@ data Person = Person { name :: Maybe String, age :: Maybe Int32 }
   deriving (Eq, Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
   deriving (FromValue PGperson) via (Composite Person)
   deriving (ToParam DB PGperson) via (Composite Person)
+  deriving Literal via (Composite Person)
 type PGperson = 'PGcomposite
   '["name" ::: 'Null 'PGtext, "age" ::: 'Null 'PGint4]
 type instance PG Person = PGperson
@@ -156,14 +157,17 @@ spec = before_ setupDB . after_ dropDB $ do
         firstRow =<< runQueryParams qry ('a', 3 :: Int32)
       (fromOnly <$> out :: Maybe Int32) `shouldBe` Just 3
 
-  describe "User Types" $ do
+  describe "Composite types" $ do
 
-    it "should be definable" $ do
+    it "should be embeddible" $ do
 
       let
 
         roundtrip :: Query_ DB (Only Person) (Only Person)
         roundtrip = values_ (param @1 `as` #fromOnly)
+
+        roundtrip_inline :: Person -> Query_ DB () (Only Person)
+        roundtrip_inline person = values_ (literal person `as` #fromOnly)
 
         roundtrip_array :: Query_ DB
           (Only (VarArray [Person])) (Only (VarArray [Person]))
@@ -190,6 +194,8 @@ spec = before_ setupDB . after_ dropDB $ do
 
       out <- withConnection connectionString $
         firstRow =<< runQueryParams roundtrip (Only adam)
+      out_inline <- withConnection connectionString $
+        firstRow =<< runQuery (roundtrip_inline adam)
       out_array <- withConnection connectionString $
         firstRow =<< runQueryParams roundtrip_array (Only people)
       out2 <- withConnection connectionString $
@@ -202,6 +208,7 @@ spec = before_ setupDB . after_ dropDB $ do
         firstRow =<< runQuery nothingQ
 
       out `shouldBe` Just (Only adam)
+      out_inline `shouldBe` Just (Only adam)
       out_array `shouldBe` Just (Only people)
       out2 `shouldBe` Just (Only adam)
       out2_array `shouldBe` Just (Only people)

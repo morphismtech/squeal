@@ -194,8 +194,6 @@ module Squeal.PostgreSQL
   ( module X
   , RenderSQL (..)
   , printSQL
-  , StateT (..)
-  , ExceptT (..)
   ) where
 
 import Control.Monad.State
