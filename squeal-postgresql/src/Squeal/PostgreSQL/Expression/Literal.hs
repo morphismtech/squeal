@@ -197,7 +197,7 @@ instance
   ) => Literal (Composite x) where
     literal
       = row
-      . SOP.htrans (SOP.Proxy @(LiteralField )) literalField
+      . SOP.htrans (SOP.Proxy @(LiteralField)) literalField
       . SOP.toRecord
       . getComposite
 

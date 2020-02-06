@@ -123,8 +123,7 @@ instance IndexedMonadTransPQ PQ where
   define (UnsafeDefinition q) = PQ $ \ (K conn) -> do
     resultMaybe <- liftIO $ LibPQ.exec conn q
     case resultMaybe of
-      Nothing -> throwIO $ ResultException
-        "define: LibPQ.exec returned no results"
+      Nothing -> throwIO ConnectionException
       Just result -> K <$> okResult_ result
 
 instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
@@ -146,8 +145,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
       resultMaybe <- liftIO $
         LibPQ.execParams conn (q <> ";") formattedParams LibPQ.Binary
       case resultMaybe of
-        Nothing -> throwIO $ ResultException
-          "executeParams: LibPQ.execParams returned no results"
+        Nothing -> throwIO ConnectionException
         Just result -> do
           okResult_ result
           return $ K (Result decode result)
@@ -165,8 +163,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
       oids <- hcollapse <$> hsequence' oidsOfParams
       prepResultMaybe <- LibPQ.prepare conn temp (q <> ";") (Just oids)
       case prepResultMaybe of
-        Nothing -> throwIO $ ResultException
-          "traversePrepared: LibPQ.prepare returned no results"
+        Nothing -> throwIO ConnectionException
         Just prepResult -> okResult_ prepResult
       results <- for list $ \ params -> do
         encodedParams <- runReaderT (runEncodeParams encode params) kconn
@@ -179,15 +176,13 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
         resultMaybe <-
           LibPQ.execPrepared conn temp formattedParams LibPQ.Binary
         case resultMaybe of
-          Nothing -> throwIO $ ResultException
-            "traversePrepared: LibPQ.execParams returned no results"
+          Nothing -> throwIO ConnectionException
           Just result -> do
             okResult_ result
             return $ Result decode result
       deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
       case deallocResultMaybe of
-        Nothing -> throwIO $ ResultException
-          "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
+        Nothing -> throwIO ConnectionException
         Just deallocResult -> okResult_ deallocResult
       return (K results)
   executePrepared (Query encode decode q) list =
@@ -204,8 +199,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
       oids <- hcollapse <$> hsequence' oidsOfParams
       prepResultMaybe <- LibPQ.prepare conn temp (q <> ";") (Just oids)
       case prepResultMaybe of
-        Nothing -> throwIO $ ResultException
-          "traversePrepared_: LibPQ.prepare returned no results"
+        Nothing -> throwIO ConnectionException
         Just prepResult -> okResult_ prepResult
       for_ list $ \ params -> do
         encodedParams <- runReaderT (runEncodeParams encode params) kconn
@@ -218,13 +212,11 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
         resultMaybe <-
           LibPQ.execPrepared conn temp formattedParams LibPQ.Binary
         case resultMaybe of
-          Nothing -> throwIO $ ResultException
-            "traversePrepared_: LibPQ.execParams returned no results"
+          Nothing -> throwIO ConnectionException
           Just result -> okResult_ result
       deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
       case deallocResultMaybe of
-        Nothing -> throwIO $ ResultException
-          "traversePrepared: LibPQ.exec DEALLOCATE returned no results"
+        Nothing -> throwIO ConnectionException
         Just deallocResult -> okResult_ deallocResult
       return (K ())
   executePrepared_ (Query encode decode q) list =
