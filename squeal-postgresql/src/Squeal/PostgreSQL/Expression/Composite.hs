@@ -27,6 +27,7 @@ Composite functions
 module Squeal.PostgreSQL.Expression.Composite
   ( -- * Composite Functions
     row
+  , rowStar
   , field
   ) where
 
@@ -60,6 +61,14 @@ row
   -> Expression outer commons grp db params from (null ('PGcomposite row))
 row exprs = UnsafeExpression $ "ROW" <> parenthesized
   (renderCommaSeparated (\ (expr `As` _) -> renderSQL expr) exprs)
+
+-- | A row constructor on all columns in a table expression.
+rowStar
+  :: Has tab from row
+  => Alias tab
+  -> Expression outer commons grp db params from (null ('PGcomposite row))
+rowStar tab = UnsafeExpression $ "ROW" <>
+  parenthesized (renderSQL tab <> ".*")
 
 -- | >>> :{
 -- type Complex = 'PGcomposite
