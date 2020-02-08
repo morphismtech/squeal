@@ -883,7 +883,7 @@ crossJoin right left = UnsafeFromClause $
 {- |Allows `crossJoin` to reference columns provided by
 preceding `from` items.-}
 crossJoinLateral
-  :: FromClause (Join left outer) commons db params right
+  :: FromClause (Join outer left) commons db params right
   -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> FromClause outer commons db params left
   -- ^ left
@@ -909,7 +909,7 @@ innerJoin right on left = UnsafeFromClause $
 {- |Allows `innerJoin` to reference columns provided by
 preceding `from` items.-}
 innerJoinLateral
-  :: FromClause (Join left outer) commons db params right
+  :: FromClause (Join outer left) commons db params right
   -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
@@ -940,7 +940,7 @@ leftOuterJoin right on left = UnsafeFromClause $
 {- |Allows `leftOuterJoin` to reference columns provided by
 preceding `from` items.-}
 leftOuterJoinLateral
-  :: FromClause (Join left outer) commons db params right
+  :: FromClause (Join outer left) commons db params right
   -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
@@ -972,7 +972,7 @@ rightOuterJoin right on left = UnsafeFromClause $
 {- |Allows `rightOuterJoin` to reference columns provided by
 preceding `from` items.-}
 rightOuterJoinLateral
-  :: FromClause (Join left outer) commons db params right
+  :: FromClause (Join outer left) commons db params right
   -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
@@ -1006,7 +1006,7 @@ fullOuterJoin right on left = UnsafeFromClause $
 {- |Allows `fullOuterJoin` to reference columns provided by
 preceding `from` items.-}
 fullOuterJoinLateral
-  :: FromClause (Join left outer) commons db params right
+  :: FromClause (Join outer left) commons db params right
   -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
   -> Condition outer commons 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
