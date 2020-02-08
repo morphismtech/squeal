@@ -59,9 +59,9 @@ type family Join xs ys where
 
 -- | `disjoin` is a utility function for splitting an `NP` list into pieces.
 disjoin
- :: forall xs ys expr. SListI xs
- => NP expr (Join xs ys)
- -> (NP expr xs, NP expr ys)
+  :: forall xs ys expr. SListI xs
+  => NP expr (Join xs ys)
+  -> (NP expr xs, NP expr ys)
 disjoin = case sList @xs of
   SNil -> \ys -> (Nil, ys)
   SCons -> \(x :* xsys) ->

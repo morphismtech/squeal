@@ -81,7 +81,7 @@ library
     , bytestring-strict-builder >= 0.4.5
     , deepseq >= 1.4.3.0
     , free-categories >= 0.2.0.0
-    , generics-sop >= 0.3.2.0 && < 0.5.0.0
+    , generics-sop >= 0.3.2.0
     , mmorph >= 1.1.1
     , mtl >= 2.2.2
     , network-ip >= 0.3.0.2

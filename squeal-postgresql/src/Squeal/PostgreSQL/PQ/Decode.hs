@@ -52,7 +52,6 @@ import Data.Int (Int16, Int32, Int64)
 import Data.Kind
 import Data.Scientific (Scientific)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
-import Data.Word (Word32)
 import Data.UUID.Types (UUID)
 import Data.Vector (Vector)
 import GHC.OverloadedLabels
@@ -78,7 +77,7 @@ import Squeal.PostgreSQL.PG
 
 -- | A `FromValue` constraint gives a parser from the binary format of
 -- a PostgreSQL `PGType` into a Haskell `Type`.
-class FromValue pg y where
+class FromValue (pg :: PGType) (y :: Type) where
   -- |
   -- >>> :set -XMultiParamTypeClasses
   -- >>> newtype Id = Id { getId :: Int16 } deriving Show
@@ -88,7 +87,7 @@ instance FromValue 'PGbool Bool where fromValue = bool
 instance FromValue 'PGint2 Int16 where fromValue = int
 instance FromValue 'PGint4 Int32 where fromValue = int
 instance FromValue 'PGint8 Int64 where fromValue = int
-instance FromValue 'PGoid Word32 where fromValue = int
+instance FromValue 'PGoid Oid where fromValue = Oid <$> int
 instance FromValue 'PGfloat4 Float where fromValue = float4
 instance FromValue 'PGfloat8 Double where fromValue = float8
 instance FromValue 'PGnumeric Scientific where fromValue = numeric
@@ -202,10 +201,10 @@ instance
           unitOfSize 4
           SOP.hsequence' $ SOP.hpure $ SOP.Comp $ do
             unitOfSize 4
-            len <- sized 4 int
+            len :: Int32 <- sized 4 int
             if len == -1
               then return (SOP.K Nothing)
-              else SOP.K . Just <$> bytesOfSize len
+              else SOP.K . Just <$> bytesOfSize (fromIntegral len)
       in
         fmap Composite (fn (runDecodeRow (genericRow @row) <=< comp))
 instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
@@ -232,7 +231,7 @@ instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
 -- to a decoding of a @NullityType@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromNullValue`, just use the provided instances.
-class FromNullValue ty y where
+class FromNullValue (ty :: NullType) (y :: Type) where
   fromNullValue :: Maybe Strict.ByteString -> Either Strict.Text y
 instance FromValue pg y => FromNullValue ('NotNull pg) y where
   fromNullValue = \case
@@ -248,7 +247,7 @@ instance FromValue pg y => FromNullValue ('Null pg) (Maybe y) where
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromField`, just use the provided instances.
-class FromField field y where
+class FromField (field :: (Symbol, NullType)) (y :: (Symbol, Type)) where
   fromField :: Maybe Strict.ByteString -> Either Strict.Text (SOP.P y)
 instance (fld0 ~ fld1, FromNullValue ty y)
   => FromField (fld0 ::: ty) (fld1 ::: y) where
@@ -288,7 +287,7 @@ into a Haskell `Type`.
 
 `DecodeRow` has an interface given by the classes
 `Functor`, `Applicative`, `Alternative`, `Monad`,
-`MonadPlus`, `MonadError Strict.Text`, and `IsLabel`.
+`MonadPlus`, `MonadError` `Strict.Text`, and `IsLabel`.
 
 >>> :set -XOverloadedLabels
 >>> :{
@@ -368,9 +367,8 @@ in runDecodeRow decode (SOP.K (Just "\NUL\STX") :* SOP.K (Just "two") :* Nil)
 :}
 Right (Two {frst = 2, scnd = "two"})
 -}
-genericRow ::
-  ( SOP.SListI row
-  , SOP.IsRecord y ys
+genericRow :: forall row y ys.
+  ( SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
   ) => DecodeRow row y
 genericRow

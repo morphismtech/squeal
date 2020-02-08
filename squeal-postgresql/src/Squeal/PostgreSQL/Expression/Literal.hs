@@ -135,29 +135,6 @@ instance Literal LocalTime where
     in makeTimestamp
       ( fromInteger y :* fromIntegral m :* fromIntegral d
         :* fromIntegral hr :* fromIntegral mn *: fromRational (toRational sc) )
-instance
-  ( SOP.IsEnumType x
-  , SOP.HasDatatypeInfo x
-  ) => Literal (Enumerated x) where
-    literal =
-      let
-        gshowConstructor
-          :: NP SOP.ConstructorInfo xss
-          -> SOP.SOP SOP.I xss
-          -> String
-        gshowConstructor Nil _ = ""
-        gshowConstructor (constructor :* _) (SOP.SOP (SOP.Z _)) =
-          SOP.constructorName constructor
-        gshowConstructor (_ :* constructors) (SOP.SOP (SOP.S xs)) =
-          gshowConstructor constructors (SOP.SOP xs)
-      in
-        UnsafeExpression
-        . singleQuotedUtf8
-        . fromString
-        . gshowConstructor
-            (SOP.constructorInfo (SOP.datatypeInfo (SOP.Proxy @x)))
-        . SOP.from
-        . getEnumerated
 instance Literal (Range Int32) where
   literal = range int4range . fmap literal
 instance Literal (Range Int64) where
@@ -184,3 +161,26 @@ instance Literal ty => Literal (VarArray (Vector ty)) where
   literal (VarArray xs) = array (literal <$> toList xs)
 instance Literal Oid where
   literal (Oid o) = UnsafeExpression . fromString $ show o
+instance
+  ( SOP.IsEnumType x
+  , SOP.HasDatatypeInfo x
+  ) => Literal (Enumerated x) where
+    literal =
+      let
+        gshowConstructor
+          :: NP SOP.ConstructorInfo xss
+          -> SOP.SOP SOP.I xss
+          -> String
+        gshowConstructor Nil _ = ""
+        gshowConstructor (constructor :* _) (SOP.SOP (SOP.Z _)) =
+          SOP.constructorName constructor
+        gshowConstructor (_ :* constructors) (SOP.SOP (SOP.S xs)) =
+          gshowConstructor constructors (SOP.SOP xs)
+      in
+        UnsafeExpression
+        . singleQuotedUtf8
+        . fromString
+        . gshowConstructor
+            (SOP.constructorInfo (SOP.datatypeInfo (SOP.Proxy @x)))
+        . SOP.from
+        . getEnumerated

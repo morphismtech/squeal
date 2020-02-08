@@ -43,7 +43,6 @@ module Squeal.PostgreSQL.Render
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
 import Data.Maybe (catMaybes)
-import Data.Monoid ((<>))
 import Data.Text (Text)
 import Generics.SOP
 import GHC.Exts

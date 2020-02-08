@@ -10,6 +10,7 @@ Stability: experimental
 -}
 {-# LANGUAGE
     AllowAmbiguousTypes
+  , CPP
   , DeriveAnyClass
   , DeriveFoldable
   , DeriveFunctor
@@ -253,8 +254,13 @@ type family TupleCodeOf (hask :: Type) (code :: [[Type]]) :: [Type] where
 -- | Calculates constructors of a datatype.
 type family ConstructorsOf (datatype :: Type.DatatypeInfo)
   :: [Type.ConstructorInfo] where
+#if MIN_VERSION_generics_sop(0,5,0)
+    ConstructorsOf ('Type.ADT _module _datatype constructors _strictness) =
+      constructors
+#else
     ConstructorsOf ('Type.ADT _module _datatype constructors) =
       constructors
+#endif
     ConstructorsOf ('Type.Newtype _module _datatype constructor) =
       '[constructor]
 
@@ -400,13 +406,17 @@ type instance PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
 -- | `Only` is a 1-tuple type, useful for encoding or decoding a singleton
 --
 -- >>> import Data.Text
--- >>> let onlyParams = genericParams :: EncodeParams '[ 'Null 'PGtext] (Only (Maybe Text))
--- >>> runEncodeParams onlyParams (Only (Just "foo"))
+-- >>> import Control.Monad.Reader
+-- >>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
+-- >>> let onlyParams = genericParams :: EncodeParams '[] '[ 'Null 'PGtext] (Only (Maybe Text))
+-- >>> runReaderT (runEncodeParams onlyParams (Only (Just "foo"))) conn
 -- K (Just "foo") :* Nil
 --
 -- >>> let onlyRow = genericRow :: DecodeRow '["fromOnly" ::: 'Null 'PGtext] (Only (Maybe Text))
 -- >>> runDecodeRow onlyRow (K (Just "bar") :* Nil)
 -- Right (Only {fromOnly = Just "bar"})
+--
+-- >>> finish conn
 newtype Only x = Only { fromOnly :: x }
   deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
 instance SOP.Generic (Only x)

@@ -11,7 +11,7 @@ Squeal exceptions
 module Squeal.PostgreSQL.PQ.Exception
   ( SquealException (..)
   , PQState (..)
-  , LibPQ.ExecStatus
+  , LibPQ.ExecStatus (..)
   , catchSqueal
   , handleSqueal
   , trySqueal

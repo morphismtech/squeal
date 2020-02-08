@@ -85,7 +85,7 @@ import Squeal.PostgreSQL.Schema
 
 {- |
 A `Manipulation` is a statement which may modify data in the database,
-but does not alter its db. Examples are inserts, updates and deletes.
+but does not alter its schemas. Examples are inserts, updates and deletes.
 A `Query` is also considered a `Manipulation` even though it does not modify data.
 
 The general `Manipulation` type is parameterized by

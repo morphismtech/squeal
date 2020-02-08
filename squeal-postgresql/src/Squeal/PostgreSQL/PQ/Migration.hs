@@ -193,11 +193,13 @@ import Squeal.PostgreSQL.Expression.Time
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Manipulation
-import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.PQ
+import Squeal.PostgreSQL.PQ.Decode
+import Squeal.PostgreSQL.PQ.Encode
 import Squeal.PostgreSQL.PQ.Indexed
 import Squeal.PostgreSQL.PQ.Monad
 import Squeal.PostgreSQL.PQ.Result
+import Squeal.PostgreSQL.PQ.Statement
 import Squeal.PostgreSQL.PQ.Transaction
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Schema
@@ -225,11 +227,11 @@ instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
     where
       upMigration step = do
         executed <- do
-          result <- runQueryParams selectMigration (Only (name step))
-          ntuples (result :: Result (Only UTCTime))
+          result <- executeParams selectMigration (name step)
+          ntuples (result :: Result UTCTime)
         unless (executed == 1) $ do
           _ <- unsafePQ . runIndexed $ migration step
-          manipulateParams_ insertMigration (Only (name step))
+          executeParams_ insertMigration (name step)
 instance Migratory Definition (Indexed PQ IO ()) where
   runMigrations = runMigrations . qmap (qmap ixDefine)
 instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
@@ -239,11 +241,11 @@ instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
     where
       downMigration (OpQ step) = do
         executed <- do
-          result <- runQueryParams selectMigration (Only (name step))
-          ntuples (result :: Result (Only UTCTime))
+          result <- executeParams selectMigration (name step)
+          ntuples (result :: Result UTCTime)
         unless (executed == 0) $ do
           _ <- unsafePQ . runIndexed . getOpQ $ migration step
-          manipulateParams_ deleteMigration (Only (name step))
+          executeParams_ deleteMigration (name step)
 instance Migratory (OpQ Definition) (OpQ (Indexed PQ IO ())) where
   runMigrations = runMigrations . qmap (qmap (qmap ixDefine))
 instance Migratory
@@ -311,26 +313,28 @@ createMigrations =
 
 -- | Inserts a `Migration` into the `MigrationsTable`, returning
 -- the time at which it was inserted.
-insertMigration :: Manipulation_ MigrationsSchemas (Only Text) ()
-insertMigration = insertInto_ #schema_migrations
-  (Values_ (Set (param @1) `as` #name :* Default `as` #executed_at))
+insertMigration :: Statement MigrationsSchemas Text ()
+insertMigration = Manipulation aParam genericRow $
+  insertInto_ #schema_migrations $
+    Values_ (Set (param @1) `as` #name :* Default `as` #executed_at)
 
 -- | Deletes a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was inserted.
-deleteMigration :: Manipulation_ MigrationsSchemas (Only Text) ()
-deleteMigration = deleteFrom_ #schema_migrations (#name .== param @1)
+deleteMigration :: Statement MigrationsSchemas Text ()
+deleteMigration = Manipulation aParam genericRow $
+  deleteFrom_ #schema_migrations (#name .== param @1)
 
 -- | Selects a `Migration` from the `MigrationsTable`, returning
 -- the time at which it was inserted.
-selectMigration
-  :: Query_ MigrationsSchemas (Only Text) (Only UTCTime)
-selectMigration = select_ (#executed_at `as` #fromOnly)
-  $ from (table (#schema_migrations))
-  & where_ (#name .== param @1)
+selectMigration :: Statement MigrationsSchemas Text UTCTime
+selectMigration = Query aParam #executed_at $
+  select_ #executed_at
+    $ from (table (#schema_migrations))
+    & where_ (#name .== param @1)
 
-selectMigrations :: Query_ MigrationsSchemas () MigrationRow
-selectMigrations = select_
-  (#name `as` #migrationName :* #executed_at `as` #migrationTime)
+selectMigrations :: Statement MigrationsSchemas () MigrationRow
+selectMigrations = query $
+  select_ (#name `as` #migrationName :* #executed_at `as` #migrationTime)
   (from (table #schema_migrations))
 
 {- | `mainMigrate` creates a simple executable
@@ -424,7 +428,7 @@ getRunMigrationNames :: PQ db0 db0 IO [Text]
 getRunMigrationNames =
   fmap migrationName <$>
     (unsafePQ (define createMigrations
-    & pqThen (runQuery selectMigrations)) >>= getRows)
+    & pqThen (execute selectMigrations)) >>= getRows)
 
 displayListOfNames :: [Text] -> IO ()
 displayListOfNames [] = Text.putStrLn "  None"

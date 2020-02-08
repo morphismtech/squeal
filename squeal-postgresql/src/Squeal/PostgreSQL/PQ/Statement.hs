@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Statement
+Module: Squeal.PostgreSQL.PQ.Statement2
 Description: Statements
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -11,7 +11,8 @@ together with an `EncodeParams` and a `DecodeRow`.
 -}
 
 {-# LANGUAGE
-    DataKinds
+    ConstraintKinds
+  , DataKinds
   , DeriveFunctor
   , DeriveFoldable
   , DeriveGeneric
@@ -25,6 +26,8 @@ module Squeal.PostgreSQL.PQ.Statement
   ( Statement (..)
   , query
   , manipulation
+  , GenericParams
+  , GenericRow
   ) where
 
 import Data.Functor.Contravariant
@@ -38,6 +41,7 @@ import Squeal.PostgreSQL.PQ.Decode
 import Squeal.PostgreSQL.PQ.Encode
 import Squeal.PostgreSQL.PQ.Oid
 import Squeal.PostgreSQL.Query
+import Squeal.PostgreSQL.Render
 
 -- | A `Statement` consists of a `Squeal.PostgreSQL.Statement.Manipulation`
 -- or a `Squeal.PostgreSQL.PQ.Statement.Query` that can be run
@@ -45,16 +49,16 @@ import Squeal.PostgreSQL.Query
 data Statement db x y where
   -- | Constructor for a data manipulation language statement
   Manipulation
-    :: (SOP.All OidOfNull params, SOP.SListI row)
-    => EncodeParams params x -- ^ encoding of parameters
+    :: (SOP.All (OidOfNull db) params, SOP.SListI row)
+    => EncodeParams db params x -- ^ encoding of parameters
     -> DecodeRow row y -- ^ decoding of returned rows
     -> Manipulation '[] db params row
     -- ^ `insertInto`, `update`, `deleteFrom`, ...
     -> Statement db x y
   -- | Constructor for a structured query language statement
   Query
-    :: (SOP.All OidOfNull params, SOP.SListI row)
-    => EncodeParams params x -- ^ encoding of parameters
+    :: (SOP.All (OidOfNull db) params, SOP.SListI row)
+    => EncodeParams db params x -- ^ encoding of parameters
     -> DecodeRow row y -- ^ decoding of returned rows
     -> Query '[] '[] db params row -- ^ `select`, `values`, ...
     -> Statement db x y
@@ -75,24 +79,40 @@ instance Profunctor (Statement db) where
 
 instance Functor (Statement db x) where fmap = rmap
 
+instance RenderSQL (Statement db x y) where
+  renderSQL (Manipulation _ _ q) = renderSQL q
+  renderSQL (Query _ _ q) = renderSQL q
+
+-- | A `GenericParams` constraint to ensure that
+-- a Haskell type is a product type,
+-- all its terms have known Oids,
+-- and can be encoded to corresponding
+-- Postgres types.
+type GenericParams db params x xs =
+  ( SOP.All (OidOfNull db) params
+  , SOP.IsProductType x xs
+  , SOP.AllZip (ToNullParam db) params xs )
+
+-- | A `GenericRow` constraint to ensure that
+-- a Haskell type is a record type,
+-- and all its fields and can be decoded from corresponding
+-- Postgres fields.
+type GenericRow row y ys =
+  ( SOP.IsRecord y ys
+  , SOP.AllZip FromField row ys )
+
 -- | Smart constructor for a structured query language statement
 query ::
-  ( SOP.All OidOfNull params
-  , SOP.IsProductType x xs
-  , SOP.AllZip ToNullParam params xs
-  , SOP.IsRecord y ys
-  , SOP.AllZip FromField row ys
+  ( GenericParams db params x xs
+  , GenericRow row y ys
   ) => Query '[] '[] db params row -- ^ `select`, `values`, ...
     -> Statement db x y
 query = Query genericParams genericRow
 
 -- | Smart constructor for a data manipulation language statement
 manipulation ::
-  ( SOP.All OidOfNull params
-  , SOP.IsProductType x xs
-  , SOP.AllZip ToNullParam params xs
-  , SOP.IsRecord y ys
-  , SOP.AllZip FromField row ys
+  ( GenericParams db params x xs
+  , GenericRow row y ys
   ) => Manipulation '[] db params row
     -- ^ `insertInto`, `update`, `deleteFrom`, ...
     -> Statement db x y

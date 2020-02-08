@@ -27,6 +27,8 @@ module Squeal.PostgreSQL.PQ.Connection
 import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
 
+import Squeal.PostgreSQL.Schema
+
 import qualified Generics.SOP as SOP
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
@@ -50,16 +52,16 @@ To specify the schema you wish to connect with, use type application.
 >>> :set -XDataKinds
 >>> :set -XPolyKinds
 >>> :set -XTypeOperators
->>> type Schema = '["tab" ::: '[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint2]]
+>>> type DB = '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint2])]]
 >>> :set -XTypeApplications
 >>> :set -XOverloadedStrings
->>> conn <- connectdb @Schema "host=localhost port=5432 dbname=exampledb"
+>>> conn <- connectdb @DB "host=localhost port=5432 dbname=exampledb"
 
 Note that, for now, squeal doesn't offer any protection from connecting
 with the wrong schema!
 -}
 connectdb
-  :: forall db io
+  :: forall (db :: SchemasType) io
    . MonadIO io
   => ByteString -- ^ conninfo
   -> io (SOP.K LibPQ.Connection db)

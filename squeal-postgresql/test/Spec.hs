@@ -3,13 +3,17 @@
   , DeriveAnyClass
   , DeriveGeneric
   , DerivingStrategies
+  , DerivingVia
   , DuplicateRecordFields
   , FlexibleContexts
+  , FlexibleInstances
+  , MultiParamTypeClasses
   , OverloadedLabels
-  , OverloadedLists
   , OverloadedStrings
+  , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
+  , TypeSynonymInstances
   , TypeInType
   , TypeOperators
 #-}
@@ -30,33 +34,40 @@ import Squeal.PostgreSQL
 main :: IO ()
 main = hspec spec
 
-type Schemas = Public
-  '[ "users" ::: 'Table (
-     '[ "pk_users" ::: 'PrimaryKey '["id"]
-      , "unique_names" ::: 'Unique '["name"]
-      ] :=>
-     '[ "id" ::: 'Def :=> 'NotNull 'PGint4
-      , "name" ::: 'NoDef :=> 'NotNull 'PGtext ] ) ]
+type UsersConstraints =
+  '[ "pk_users" ::: 'PrimaryKey '["id"]
+   , "unique_names" ::: 'Unique '["name"] ]
+
+type UsersColumns =
+  '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+   , "name" ::: 'NoDef :=> 'NotNull 'PGtext ]
+
+type Schema =
+  '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns)
+   , "person" ::: 'Typedef PGperson ]
+
+type DB = '[ "public" ::: Schema ]
 
 data User = User
   { userName  :: Text
   } deriving stock (Eq, Show, GHC.Generic)
     deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
 
-insertUser :: Manipulation_ Schemas User ()
+insertUser :: Manipulation_ DB User ()
 insertUser = insertInto_ #users
   (Values_ (Default `as` #id :* Set (param @1) `as` #name))
 
-setup :: Definition (Public '[]) Schemas
+setup :: Definition (Public '[]) DB
 setup =
   createTable #users
     ( serial `as` #id :*
       notNullable text `as` #name )
     ( primaryKey #id `as` #pk_users :*
-      unique #name `as` #unique_names )
+      unique #name `as` #unique_names ) >>>
+  createTypeCompositeFrom @Person #person
 
-teardown :: Definition Schemas (Public '[])
-teardown = dropTable #users
+teardown :: Definition DB (Public '[])
+teardown = dropType #person >>> dropTable #users
 
 silence :: MonadPQ db pq => pq ()
 silence = manipulate_ $
@@ -72,6 +83,16 @@ dropDB = withConnection connectionString $
 
 connectionString :: ByteString
 connectionString = "host=localhost port=5432 dbname=exampledb"
+
+data Person = Person { name :: Maybe String, age :: Maybe Int32 }
+  deriving (Eq, Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
+  -- deriving (FromValue PGperson) via (Composite Person)
+  deriving (ToParam DB PGperson) via (Composite Person)
+type PGperson = 'PGcomposite
+  '["name" ::: 'Null 'PGtext, "age" ::: 'Null 'PGint4]
+type instance PG Person = PGperson
+instance FromValue PGperson Person where
+  fromValue = getComposite <$> fromValue @PGperson
 
 spec :: Spec
 spec = before_ setupDB . after_ dropDB $ do
@@ -134,3 +155,55 @@ spec = before_ setupDB . after_ dropDB $ do
           qry = values_ (param @2 `as` #fromOnly)
         firstRow =<< runQueryParams qry ('a', 3 :: Int32)
       (fromOnly <$> out :: Maybe Int32) `shouldBe` Just 3
+
+  describe "User Types" $ do
+
+    it "should be definable" $ do
+
+      let
+
+        roundtrip :: Query_ DB (Only Person) (Only Person)
+        roundtrip = values_ (param @1 `as` #fromOnly)
+
+        roundtrip_array :: Query_ DB
+          (Only (VarArray [Person])) (Only (VarArray [Person]))
+        roundtrip_array = values_ (param @1 `as` #fromOnly)
+
+        oneway :: Query_ DB () (Only Person)
+        oneway = values_ (row ("Adam" `as` #name :* 6000 `as` #age) `as` #fromOnly)
+
+        oneway_array :: Query_ DB () (Only (VarArray [Person]))
+        oneway_array = values_ $ array
+          [ row ("Adam" `as` #name :* 6000 `as` #age)
+          , row ("Lucy" `as` #name :* 2420000 `as` #age)
+          ] `as` #fromOnly
+
+        unsafeQ :: Query_ DB () (Only (VarArray [Composite Person]))
+        unsafeQ = UnsafeQuery "select array[row(\'Adam\', 6000)]"
+
+        nothingQ :: Query_ DB () (Only Person)
+        nothingQ = values_ (row (null_ `as` #name :* null_ `as` #age) `as` #fromOnly)
+
+        adam = Person (Just "Adam") (Just 6000)
+        lucy = Person (Just "Lucy") (Just 2420000)
+        people = VarArray [adam, lucy]
+
+      out <- withConnection connectionString $
+        firstRow =<< runQueryParams roundtrip (Only adam)
+      out_array <- withConnection connectionString $
+        firstRow =<< runQueryParams roundtrip_array (Only people)
+      out2 <- withConnection connectionString $
+        firstRow =<< runQuery oneway
+      out2_array <- withConnection connectionString $
+        firstRow =<< runQuery oneway_array
+      unsafe_array <- withConnection connectionString $
+        firstRow =<< runQuery unsafeQ
+      nothings <- withConnection connectionString $
+        firstRow =<< runQuery nothingQ
+
+      out `shouldBe` Just (Only adam)
+      out_array `shouldBe` Just (Only people)
+      out2 `shouldBe` Just (Only adam)
+      out2_array `shouldBe` Just (Only people)
+      unsafe_array `shouldBe` Just (Only (VarArray [Composite adam]))
+      nothings `shouldBe` Just (Only (Person Nothing Nothing))

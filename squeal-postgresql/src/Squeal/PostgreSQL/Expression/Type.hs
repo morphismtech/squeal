@@ -369,6 +369,18 @@ instance PGTyped db ('PGrange 'PGnumeric) where pgtype = numrange
 instance PGTyped db ('PGrange 'PGtimestamp) where pgtype = tsrange
 instance PGTyped db ('PGrange 'PGtimestamptz) where pgtype = tstzrange
 instance PGTyped db ('PGrange 'PGdate) where pgtype = daterange
+instance
+  ( UserType db ('PGcomposite row) ~ '(sch,td)
+  , Has sch db schema
+  , Has td schema ('Typedef ('PGcomposite row))
+  ) => PGTyped db ('PGcomposite row) where
+    pgtype = typedef (QualifiedAlias @sch @td)
+instance
+  ( UserType db ('PGenum labels) ~ '(sch,td)
+  , Has sch db schema
+  , Has td schema ('Typedef ('PGenum labels))
+  ) => PGTyped db ('PGenum labels) where
+    pgtype = typedef (QualifiedAlias @sch @td)
 
 -- | Specify `TypeExpression` from a Haskell type.
 --
@@ -401,6 +413,7 @@ instance RenderSQL (ColumnTypeExpression db ty) where
 -- @NULL@ may be present in a column
 nullable
   :: TypeExpression db (null ty)
+  -- ^ type
   -> ColumnTypeExpression db ('NoDef :=> 'Null ty)
 nullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NULL"
 
@@ -409,6 +422,7 @@ nullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NULL"
 -- @NULL@ is not present in a column
 notNullable
   :: TypeExpression db (null ty)
+  -- ^ type
   -> ColumnTypeExpression db ('NoDef :=> 'NotNull ty)
 notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
 
@@ -416,7 +430,9 @@ notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
 -- commands as a column constraint to give a default
 default_
   :: Expression '[] '[] 'Ungrouped db '[] '[] ty
+  -- ^ default value
   -> ColumnTypeExpression db ('NoDef :=> ty)
+  -- ^ column type
   -> ColumnTypeExpression db ('Def :=> ty)
 default_ x ty = UnsafeColumnTypeExpression $
   renderSQL ty <+> "DEFAULT" <+> renderExpression x
