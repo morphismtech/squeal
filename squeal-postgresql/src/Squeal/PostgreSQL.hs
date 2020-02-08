@@ -196,8 +196,6 @@ module Squeal.PostgreSQL
   , printSQL
   ) where
 
-import Control.Monad.State
-import Control.Monad.Except
 import Squeal.PostgreSQL.Alias as X
 import Squeal.PostgreSQL.Definition as X
 import Squeal.PostgreSQL.Definition.Constraint as X
