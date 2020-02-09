@@ -51,14 +51,14 @@ import Squeal.PostgreSQL.Schema
 --    , "imaginary" ::: 'NotNull 'PGfloat8 ]
 -- :}
 --
--- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression outer commons grp db params from ('NotNull Complex)
+-- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression lat with grp db params from ('NotNull Complex)
 -- >>> printSQL i
 -- ROW(0, 1)
 row
   :: SOP.SListI row
-  => NP (Aliased (Expression outer commons grp db params from)) row
+  => NP (Aliased (Expression lat with grp db params from)) row
   -- ^ zero or more expressions for the row field values
-  -> Expression outer commons grp db params from (null ('PGcomposite row))
+  -> Expression lat with grp db params from (null ('PGcomposite row))
 row exprs = UnsafeExpression $ "ROW" <> parenthesized
   (renderCommaSeparated (\ (expr `As` _) -> renderSQL expr) exprs)
 
@@ -66,7 +66,7 @@ row exprs = UnsafeExpression $ "ROW" <> parenthesized
 rowStar
   :: Has tab from row
   => Alias tab
-  -> Expression outer commons grp db params from (null ('PGcomposite row))
+  -> Expression lat with grp db params from (null ('PGcomposite row))
 rowStar tab = UnsafeExpression $ "ROW" <>
   parenthesized (renderSQL tab <> ".*")
 
@@ -77,7 +77,7 @@ rowStar tab = UnsafeExpression $ "ROW" <>
 -- type Schema = '["complex" ::: 'Typedef Complex]
 -- :}
 --
--- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression outer '[] grp (Public Schema) from params ('NotNull Complex)
+-- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression lat '[] grp (Public Schema) from params ('NotNull Complex)
 -- >>> printSQL $ i & field #complex #imaginary
 -- (ROW(0, 1)::"complex")."imaginary"
 field
@@ -86,8 +86,8 @@ field
      , Has field row ty)
   => QualifiedAlias sch tydef -- ^ row type
   -> Alias field -- ^ field name
-  -> Expression outer commons grp db params from ('NotNull ('PGcomposite row))
-  -> Expression outer commons grp db params from ty
+  -> Expression lat with grp db params from ('NotNull ('PGcomposite row))
+  -> Expression lat with grp db params from ty
 field td fld expr = UnsafeExpression $
   parenthesized (renderSQL expr <> "::" <> renderSQL td)
     <> "." <> renderSQL fld

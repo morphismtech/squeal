@@ -206,7 +206,7 @@ class LiteralField
   (fieldpg :: (Symbol, NullType)) where
     literalField
       :: SOP.P field
-      -> Aliased (Expression outer commons grp db params from) fieldpg
+      -> Aliased (Expression lat with grp db params from) fieldpg
 instance (KnownSymbol alias, Literal x, ty ~ NullPG x)
   => LiteralField (alias ::: x) (alias ::: ty) where
     literalField (SOP.P x) = literal x `as` Alias @alias

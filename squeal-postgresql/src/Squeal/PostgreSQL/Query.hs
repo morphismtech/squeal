@@ -120,21 +120,21 @@ a database is called a `Query`.
 
 The general `Query` type is parameterized by
 
-* @outer :: FromType@ - outer scope for a correlated subquery,
-* @commons :: FromType@ - scope for all `common` table expressions,
+* @lat :: FromType@ - lateral scope for a correlated subquery,
+* @with :: FromType@ - scope for all `common` table expressions,
 * @db :: SchemasType@ - scope for all `table`s and `view`s,
 * @params :: [NullType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
 * @row :: RowType@ - return type of the `Query`.
 -}
 newtype Query
-  (outer :: FromType)
-  (commons :: FromType)
+  (lat :: FromType)
+  (with :: FromType)
   (db :: SchemasType)
   (params :: [NullType])
   (row :: RowType)
     = UnsafeQuery { renderQuery :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance RenderSQL (Query outer commons db params row) where renderSQL = renderQuery
+instance RenderSQL (Query lat with db params row) where renderSQL = renderQuery
 
 {- |
 The top level `Query_` type is parameterized by a @db@ `SchemasType`,
@@ -376,9 +376,9 @@ type family Query_
 -- | The results of two queries can be combined using the set operation
 -- `union`. Duplicate rows are eliminated.
 union
-  :: Query outer commons db params columns
-  -> Query outer commons db params columns
-  -> Query outer commons db params columns
+  :: Query lat with db params columns
+  -> Query lat with db params columns
+  -> Query lat with db params columns
 q1 `union` q2 = UnsafeQuery $
   parenthesized (renderSQL q1)
   <+> "UNION"
@@ -387,9 +387,9 @@ q1 `union` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `unionAll`, the disjoint union. Duplicate rows are retained.
 unionAll
-  :: Query outer commons db params columns
-  -> Query outer commons db params columns
-  -> Query outer commons db params columns
+  :: Query lat with db params columns
+  -> Query lat with db params columns
+  -> Query lat with db params columns
 q1 `unionAll` q2 = UnsafeQuery $
   parenthesized (renderSQL q1)
   <+> "UNION" <+> "ALL"
@@ -398,9 +398,9 @@ q1 `unionAll` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `intersect`, the intersection. Duplicate rows are eliminated.
 intersect
-  :: Query outer commons db params columns
-  -> Query outer commons db params columns
-  -> Query outer commons db params columns
+  :: Query lat with db params columns
+  -> Query lat with db params columns
+  -> Query lat with db params columns
 q1 `intersect` q2 = UnsafeQuery $
   parenthesized (renderSQL q1)
   <+> "INTERSECT"
@@ -409,9 +409,9 @@ q1 `intersect` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `intersectAll`, the intersection. Duplicate rows are retained.
 intersectAll
-  :: Query outer commons db params columns
-  -> Query outer commons db params columns
-  -> Query outer commons db params columns
+  :: Query lat with db params columns
+  -> Query lat with db params columns
+  -> Query lat with db params columns
 q1 `intersectAll` q2 = UnsafeQuery $
   parenthesized (renderSQL q1)
   <+> "INTERSECT" <+> "ALL"
@@ -420,9 +420,9 @@ q1 `intersectAll` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `except`, the set difference. Duplicate rows are eliminated.
 except
-  :: Query outer commons db params columns
-  -> Query outer commons db params columns
-  -> Query outer commons db params columns
+  :: Query lat with db params columns
+  -> Query lat with db params columns
+  -> Query lat with db params columns
 q1 `except` q2 = UnsafeQuery $
   parenthesized (renderSQL q1)
   <+> "EXCEPT"
@@ -431,9 +431,9 @@ q1 `except` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `exceptAll`, the set difference. Duplicate rows are retained.
 exceptAll
-  :: Query outer commons db params columns
-  -> Query outer commons db params columns
-  -> Query outer commons db params columns
+  :: Query lat with db params columns
+  -> Query lat with db params columns
+  -> Query lat with db params columns
 q1 `exceptAll` q2 = UnsafeQuery $
   parenthesized (renderSQL q1)
   <+> "EXCEPT" <+> "ALL"
@@ -449,65 +449,65 @@ is a list of `Expression`s. A `Selection` could be a list of
 `WindowFunction`s `Over` `WindowDefinition`. `Additional` `Selection`s can
 be selected with `Also`.
 -}
-data Selection outer commons grp db params from row where
+data Selection lat with grp db params from row where
   Star
     :: HasUnique tab from row
-    => Selection outer commons 'Ungrouped db params from row
+    => Selection lat with 'Ungrouped db params from row
     -- ^ `HasUnique` table in the `FromClause`
   DotStar
     :: Has tab from row
     => Alias tab
        -- ^ `Has` table with `Alias`
-    -> Selection outer commons 'Ungrouped db params from row
+    -> Selection lat with 'Ungrouped db params from row
   List
     :: SListI row
-    => NP (Aliased (Expression outer commons grp db params from)) row
+    => NP (Aliased (Expression lat with grp db params from)) row
        -- ^ `NP` list of `Aliased` `Expression`s
-    -> Selection outer commons grp db params from row
+    -> Selection lat with grp db params from row
   Over
     :: SListI row
-    => NP (Aliased (WindowFunction outer commons grp db params from)) row
+    => NP (Aliased (WindowFunction lat with grp db params from)) row
        -- ^ `NP` list of `Aliased` `WindowFunction`s
-    -> WindowDefinition outer commons grp db params from
-    -> Selection outer commons grp db params from row
+    -> WindowDefinition lat with grp db params from
+    -> Selection lat with grp db params from row
   Also
-    :: Selection outer commons grp db params from right
+    :: Selection lat with grp db params from right
        -- ^ `Additional` `Selection`
-    -> Selection outer commons grp db params from left
-    -> Selection outer commons grp db params from (Join left right)
-instance Additional (Selection outer commons grp db params from) where
+    -> Selection lat with grp db params from left
+    -> Selection lat with grp db params from (Join left right)
+instance Additional (Selection lat with grp db params from) where
   also = Also
 instance (KnownSymbol col, row ~ '[col ::: ty])
   => Aliasable col
-    (Expression outer commons grp db params from ty)
-    (Selection outer commons grp db params from row) where
+    (Expression lat with grp db params from ty)
+    (Selection lat with grp db params from row) where
       expr `as` col = List (expr `as` col)
-instance (Has tab (Join outer from) row0, Has col row0 ty, row1 ~ '[col ::: ty])
+instance (Has tab (Join lat from) row0, Has col row0 ty, row1 ~ '[col ::: ty])
   => IsQualified tab col
-    (Selection outer commons 'Ungrouped db params from row1) where
+    (Selection lat with 'Ungrouped db params from row1) where
       tab ! col = tab ! col `as` col
 instance
-  ( Has tab (Join outer from) row0
+  ( Has tab (Join lat from) row0
   , Has col row0 ty
   , row1 ~ '[col ::: ty]
   , GroupedBy tab col bys )
   => IsQualified tab col
-    (Selection outer commons ('Grouped bys) db params from row1) where
+    (Selection lat with ('Grouped bys) db params from row1) where
       tab ! col = tab ! col `as` col
-instance (HasUnique tab (Join outer from) row0, Has col row0 ty, row1 ~ '[col ::: ty])
+instance (HasUnique tab (Join lat from) row0, Has col row0 ty, row1 ~ '[col ::: ty])
   => IsLabel col
-    (Selection outer commons 'Ungrouped db params from row1) where
+    (Selection lat with 'Ungrouped db params from row1) where
       fromLabel = fromLabel @col `as` Alias
 instance
-  ( HasUnique tab (Join outer from) row0
+  ( HasUnique tab (Join lat from) row0
   , Has col row0 ty
   , row1 ~ '[col ::: ty]
   , GroupedBy tab col bys )
   => IsLabel col
-    (Selection outer commons ('Grouped bys) db params from row1) where
+    (Selection lat with ('Grouped bys) db params from row1) where
       fromLabel = fromLabel @col `as` Alias
 
-instance RenderSQL (Selection outer commons grp db params from row) where
+instance RenderSQL (Selection lat with grp db params from row) where
   renderSQL = \case
     List list -> renderCommaSeparated (renderAliased renderSQL) list
     Star -> "*"
@@ -516,7 +516,7 @@ instance RenderSQL (Selection outer commons grp db params from row) where
     Over winFns winDef ->
       let
         renderOver
-          :: Aliased (WindowFunction outer commons grp db params from) field
+          :: Aliased (WindowFunction lat with grp db params from) field
           -> ByteString
         renderOver (winFn `As` col) = renderSQL winFn
           <+> "OVER" <+> parenthesized (renderSQL winDef)
@@ -525,7 +525,7 @@ instance RenderSQL (Selection outer commons grp db params from row) where
         renderCommaSeparated renderOver winFns
 
 instance IsString
-  (Selection outer commons grp db params from '["fromOnly" ::: 'NotNull 'PGtext]) where
+  (Selection lat with grp db params from '["fromOnly" ::: 'NotNull 'PGtext]) where
     fromString str = fromString str `as` Alias
 
 -- | the `TableExpression` in the `select` command constructs an intermediate
@@ -535,11 +535,11 @@ instance IsString
 -- the intermediate table are actually output.
 select
   :: (SListI row, row ~ (x ': xs))
-  => Selection outer commons grp db params from row
+  => Selection lat with grp db params from row
   -- ^ selection
-  -> TableExpression outer commons grp db params from
+  -> TableExpression lat with grp db params from
   -- ^ intermediate virtual table
-  -> Query outer commons db params row
+  -> Query lat with db params row
 select selection tabexpr = UnsafeQuery $
   "SELECT"
   <+> renderSQL selection
@@ -549,22 +549,22 @@ select selection tabexpr = UnsafeQuery $
 -- of a general `Selection`.
 select_
   :: (SListI row, row ~ (x ': xs))
-  => NP (Aliased (Expression outer commons grp db params from)) row
+  => NP (Aliased (Expression lat with grp db params from)) row
   -- ^ select list
-  -> TableExpression outer commons grp db params from
+  -> TableExpression lat with grp db params from
   -- ^ intermediate virtual table
-  -> Query outer commons db params row
+  -> Query lat with db params row
 select_ = select . List
 
 -- | After the select list has been processed, the result table can
 -- be subject to the elimination of duplicate rows using `selectDistinct`.
 selectDistinct
   :: (SListI columns, columns ~ (col ': cols))
-  => Selection outer commons grp db params from columns
+  => Selection lat with grp db params from columns
   -- ^ selection
-  -> TableExpression outer commons grp db params from
+  -> TableExpression lat with grp db params from
   -- ^ intermediate virtual table
-  -> Query outer commons db params columns
+  -> Query lat with db params columns
 selectDistinct selection tabexpr = UnsafeQuery $
   "SELECT DISTINCT"
   <+> renderSQL selection
@@ -574,11 +574,11 @@ selectDistinct selection tabexpr = UnsafeQuery $
 -- of a general `Selection`.
 selectDistinct_
   :: (SListI columns, columns ~ (col ': cols))
-  => NP (Aliased (Expression outer commons grp db params from)) columns
+  => NP (Aliased (Expression lat with grp db params from)) columns
   -- ^ select list
-  -> TableExpression outer commons grp db params from
+  -> TableExpression lat with grp db params from
   -- ^ intermediate virtual table
-  -> Query outer commons db params columns
+  -> Query lat with db params columns
 selectDistinct_ = selectDistinct . List
 
 {-|
@@ -596,13 +596,13 @@ will prepend the The DISTINCT ON expressions to the ORDER BY clause.
 -}
 selectDistinctOn
   :: (SListI columns, columns ~ (col ': cols))
-  => [SortExpression outer commons grp db params from]
+  => [SortExpression lat with grp db params from]
   -- ^ DISTINCT ON expression(s) and prepended to ORDER BY clause
-  -> Selection outer commons grp db params from columns
+  -> Selection lat with grp db params from columns
   -- ^ selection
-  -> TableExpression outer commons grp db params from
+  -> TableExpression lat with grp db params from
   -- ^ intermediate virtual table
-  -> Query outer commons db params columns
+  -> Query lat with db params columns
 selectDistinctOn distincts selection tab = UnsafeQuery $
   "SELECT DISTINCT ON"
   <+> parenthesized (commaSeparated (renderDistinctOn <$> distincts))
@@ -621,13 +621,13 @@ selectDistinctOn distincts selection tab = UnsafeQuery $
 -- of a general `Selection`.
 selectDistinctOn_
   :: (SListI columns, columns ~ (col ': cols))
-  => [SortExpression outer commons grp db params from]
+  => [SortExpression lat with grp db params from]
   -- ^ distinct on and return the first row in ordering
-  -> NP (Aliased (Expression outer commons grp db params from)) columns
+  -> NP (Aliased (Expression lat with grp db params from)) columns
   -- ^ selection
-  -> TableExpression outer commons grp db params from
+  -> TableExpression lat with grp db params from
   -- ^ intermediate virtual table
-  -> Query outer commons db params columns
+  -> Query lat with db params columns
 selectDistinctOn_ distincts = selectDistinctOn distincts . List
 
 -- | `values` computes a row value or set of row values
@@ -636,16 +636,16 @@ selectDistinctOn_ distincts = selectDistinctOn distincts . List
 -- but it can be used on its own.
 --
 -- >>> type Row = '["a" ::: 'NotNull 'PGint4, "b" ::: 'NotNull 'PGtext]
--- >>> let query = values (1 `as` #a :* "one" `as` #b) [] :: Query outer commons db '[] Row
+-- >>> let query = values (1 `as` #a :* "one" `as` #b) [] :: Query lat with db '[] Row
 -- >>> printSQL query
 -- SELECT * FROM (VALUES (1, E'one')) AS t ("a", "b")
 values
   :: SListI cols
-  => NP (Aliased (Expression outer commons 'Ungrouped db params '[] )) cols
-  -> [NP (Aliased (Expression outer commons 'Ungrouped db params '[] )) cols]
+  => NP (Aliased (Expression lat with 'Ungrouped db params '[] )) cols
+  -> [NP (Aliased (Expression lat with 'Ungrouped db params '[] )) cols]
   -- ^ When more than one row is specified, all the rows must
   -- must have the same number of elements
-  -> Query outer commons db params cols
+  -> Query lat with db params cols
 values rw rws = UnsafeQuery $ "SELECT * FROM"
   <+> parenthesized (
     "VALUES"
@@ -656,7 +656,7 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
   <+> parenthesized (renderCommaSeparated renderAliasPart rw)
   where
     renderAliasPart, renderValuePart
-      :: Aliased (Expression outer commons 'Ungrouped db params '[] ) ty -> ByteString
+      :: Aliased (Expression lat with 'Ungrouped db params '[] ) ty -> ByteString
     renderAliasPart (_ `As` name) = renderSQL name
     renderValuePart (value `As` _) = renderSQL value
 
@@ -664,9 +664,9 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
 -- specified by value expressions.
 values_
   :: SListI cols
-  => NP (Aliased (Expression outer commons 'Ungrouped db params '[] )) cols
+  => NP (Aliased (Expression lat with 'Ungrouped db params '[] )) cols
   -- ^ one row of values
-  -> Query outer commons db params cols
+  -> Query lat with db params cols
 values_ rw = values rw []
 
 {-----------------------------------------
@@ -680,17 +680,17 @@ Table Expressions
 -- to a table on disk, a so-called base table, but more complex expressions
 -- can be used to modify or combine base tables in various ways.
 data TableExpression
-  (outer :: FromType)
-  (commons :: FromType)
+  (lat :: FromType)
+  (with :: FromType)
   (grp :: Grouping)
   (db :: SchemasType)
   (params :: [NullType])
   (from :: FromType)
     = TableExpression
-    { fromClause :: FromClause outer commons db params from
+    { fromClause :: FromClause lat with db params from
     -- ^ A table reference that can be a table name, or a derived table such
     -- as a subquery, a @JOIN@ construct, or complex combinations of these.
-    , whereClause :: [Condition outer commons 'Ungrouped db params from]
+    , whereClause :: [Condition lat with 'Ungrouped db params from]
     -- ^ optional search coditions, combined with `.&&`. After the processing
     -- of the `fromClause` is done, each row of the derived virtual table
     -- is checked against the search condition. If the result of the
@@ -706,13 +706,13 @@ data TableExpression
     -- set of rows having common values into one group row that represents all
     -- rows in the group. This is done to eliminate redundancy in the output
     -- and/or compute aggregates that apply to these groups.
-    , havingClause :: HavingClause outer commons grp db params from
+    , havingClause :: HavingClause lat with grp db params from
     -- ^ If a table has been grouped using `groupBy`, but only certain groups
     -- are of interest, the `havingClause` can be used, much like a
     -- `whereClause`, to eliminate groups from the result. Expressions in the
     -- `havingClause` can refer both to grouped expressions and to ungrouped
     -- expressions (which necessarily involve an aggregate function).
-    , orderByClause :: [SortExpression outer commons grp db params from]
+    , orderByClause :: [SortExpression lat with grp db params from]
     -- ^ The `orderByClause` is for optional sorting. When more than one
     -- `SortExpression` is specified, the later (right) values are used to sort
     -- rows that are equal according to the earlier (left) values.
@@ -729,7 +729,7 @@ data TableExpression
     } deriving (GHC.Generic)
 
 -- | Render a `TableExpression`
-instance RenderSQL (TableExpression outer commons grp db params from) where
+instance RenderSQL (TableExpression lat with grp db params from) where
   renderSQL
     (TableExpression frm' whs' grps' hvs' srts' lims' offs') = mconcat
       [ "FROM ", renderSQL frm'
@@ -757,16 +757,16 @@ instance RenderSQL (TableExpression outer commons grp db params from) where
 -- `groupBy`, `having`, `orderBy`, `limit` and `offset`, using the `&` operator
 -- to match the left-to-right sequencing of their placement in SQL.
 from
-  :: FromClause outer commons db params from -- ^ table reference
-  -> TableExpression outer commons 'Ungrouped db params from
+  :: FromClause lat with db params from -- ^ table reference
+  -> TableExpression lat with 'Ungrouped db params from
 from tab = TableExpression tab [] noGroups NoHaving [] [] []
 
 -- | A `where_` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `whereClause`.
 where_
-  :: Condition outer commons 'Ungrouped db params from -- ^ filtering condition
-  -> TableExpression outer commons grp db params from
-  -> TableExpression outer commons grp db params from
+  :: Condition lat with 'Ungrouped db params from -- ^ filtering condition
+  -> TableExpression lat with grp db params from
+  -> TableExpression lat with grp db params from
 where_ wh rels = rels {whereClause = wh : whereClause rels}
 
 -- | A `groupBy` is a transformation of `TableExpression`s which switches
@@ -775,8 +775,8 @@ where_ wh rels = rels {whereClause = wh : whereClause rels}
 groupBy
   :: SListI bys
   => NP (By from) bys -- ^ grouped columns
-  -> TableExpression outer commons 'Ungrouped db params from
-  -> TableExpression outer commons ('Grouped bys) db params from
+  -> TableExpression lat with 'Ungrouped db params from
+  -> TableExpression lat with ('Grouped bys) db params from
 groupBy bys rels = TableExpression
   { fromClause = fromClause rels
   , whereClause = whereClause rels
@@ -790,9 +790,9 @@ groupBy bys rels = TableExpression
 -- | A `having` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `havingClause`.
 having
-  :: Condition outer commons ('Grouped bys) db params from -- ^ having condition
-  -> TableExpression outer commons ('Grouped bys) db params from
-  -> TableExpression outer commons ('Grouped bys) db params from
+  :: Condition lat with ('Grouped bys) db params from -- ^ having condition
+  -> TableExpression lat with ('Grouped bys) db params from
+  -> TableExpression lat with ('Grouped bys) db params from
 having hv rels = rels
   { havingClause = case havingClause rels of Having hvs -> Having (hv:hvs) }
 
@@ -803,16 +803,16 @@ instance OrderBy TableExpression where
 -- `limitClause`.
 limit
   :: Word64 -- ^ limit parameter
-  -> TableExpression outer commons grp db params from
-  -> TableExpression outer commons grp db params from
+  -> TableExpression lat with grp db params from
+  -> TableExpression lat with grp db params from
 limit lim rels = rels {limitClause = lim : limitClause rels}
 
 -- | An `offset` is an endomorphism of `TableExpression`s which adds to the
 -- `offsetClause`.
 offset
   :: Word64 -- ^ offset parameter
-  -> TableExpression outer commons grp db params from
-  -> TableExpression outer commons grp db params from
+  -> TableExpression lat with grp db params from
+  -> TableExpression lat with grp db params from
 offset off rels = rels {offsetClause = off : offsetClause rels}
 
 {-----------------------------------------
@@ -823,44 +823,44 @@ FROM clauses
 A `FromClause` can be a table name, or a derived table such
 as a subquery, a @JOIN@ construct, or complex combinations of these.
 -}
-newtype FromClause outer commons db params from
+newtype FromClause lat with db params from
   = UnsafeFromClause { renderFromClause :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance RenderSQL (FromClause outer commons db params from) where
+instance RenderSQL (FromClause lat with db params from) where
   renderSQL = renderFromClause
 
 -- | A real `table` is a table from the database.
 table
   :: (Has sch db schema, Has tab schema ('Table table))
   => Aliased (QualifiedAlias sch) (alias ::: tab) -- ^ (renamable) table alias
-  -> FromClause outer commons db params '[alias ::: TableToRow table]
+  -> FromClause lat with db params '[alias ::: TableToRow table]
 table (tab `As` alias) = UnsafeFromClause $
   renderSQL tab <+> "AS" <+> renderSQL alias
 
 -- | `subquery` derives a table from a `Query`.
 subquery
-  :: Aliased (Query outer commons db params) query
+  :: Aliased (Query lat with db params) query
   -- ^ aliased `Query`
-  -> FromClause outer commons db params '[query]
+  -> FromClause lat with db params '[query]
 subquery = UnsafeFromClause . renderAliased (parenthesized . renderSQL)
 
 -- | `view` derives a table from a `View`.
 view
   :: (Has sch db schema, Has vw schema ('View view))
   => Aliased (QualifiedAlias sch) (alias ::: vw) -- ^ (renamable) view alias
-  -> FromClause outer commons db params '[alias ::: view]
+  -> FromClause lat with db params '[alias ::: view]
 view (vw `As` alias) = UnsafeFromClause $
   renderSQL vw <+> "AS" <+> renderSQL alias
 
 -- | `common` derives a table from a common table expression.
 common
-  :: Has cte commons common
+  :: Has cte with common
   => Aliased Alias (alias ::: cte) -- ^ (renamable) common table expression alias
-  -> FromClause outer commons db params '[alias ::: common]
+  -> FromClause lat with db params '[alias ::: common]
 common (cte `As` alias) = UnsafeFromClause $
   renderSQL cte <+> "AS" <+> renderSQL alias
 
-instance Additional (FromClause outer commons db params) where
+instance Additional (FromClause lat with db params) where
   also right left = UnsafeFromClause $
     renderSQL left <> ", " <> renderSQL right
 
@@ -872,22 +872,22 @@ If the tables have @n@ and @m@ rows respectively, the joined table will
 have @n * m@ rows.
 -}
 crossJoin
-  :: FromClause outer commons db params right
+  :: FromClause lat with db params right
   -- ^ right
-  -> FromClause outer commons db params left
+  -> FromClause lat with db params left
   -- ^ left
-  -> FromClause outer commons db params (Join left right)
+  -> FromClause lat with db params (Join left right)
 crossJoin right left = UnsafeFromClause $
   renderSQL left <+> "CROSS JOIN" <+> renderSQL right
 
 {- |Allows `crossJoin` to reference columns provided by
 preceding `from` items.-}
 crossJoinLateral
-  :: FromClause (Join outer left) commons db params right
+  :: FromClause (Join lat left) with db params right
   -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
-  -> FromClause outer commons db params left
+  -> FromClause lat with db params left
   -- ^ left
-  -> FromClause outer commons db params (Join left right)
+  -> FromClause lat with db params (Join left right)
 crossJoinLateral right left = UnsafeFromClause $
   renderSQL left <+> "CROSS JOIN LATERAL" <+> renderSQL right
 
@@ -895,13 +895,13 @@ crossJoinLateral right left = UnsafeFromClause $
 the @on@ condition.
 -}
 innerJoin
-  :: FromClause outer commons db params right
+  :: FromClause lat with db params right
   -- ^ right
-  -> Condition outer commons 'Ungrouped db params (Join left right)
+  -> Condition lat with 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons db params left
+  -> FromClause lat with db params left
   -- ^ left
-  -> FromClause outer commons db params (Join left right)
+  -> FromClause lat with db params (Join left right)
 innerJoin right on left = UnsafeFromClause $
   renderSQL left <+> "INNER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
@@ -909,13 +909,13 @@ innerJoin right on left = UnsafeFromClause $
 {- |Allows `innerJoin` to reference columns provided by
 preceding `from` items.-}
 innerJoinLateral
-  :: FromClause (Join outer left) commons db params right
+  :: FromClause (Join lat left) with db params right
   -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
-  -> Condition outer commons 'Ungrouped db params (Join left right)
+  -> Condition lat with 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons db params left
+  -> FromClause lat with db params left
   -- ^ left
-  -> FromClause outer commons db params (Join left right)
+  -> FromClause lat with db params (Join left right)
 innerJoinLateral right on left = UnsafeFromClause $
   renderSQL left <+> "INNER JOIN LATERAL" <+> renderSQL right
   <+> "ON" <+> renderSQL on
@@ -926,13 +926,13 @@ innerJoinLateral right on left = UnsafeFromClause $
     Thus, the joined table always has at least one row for each row in @left@.
 -}
 leftOuterJoin
-  :: FromClause outer commons db params right
+  :: FromClause lat with db params right
   -- ^ right
-  -> Condition outer commons 'Ungrouped db params (Join left right)
+  -> Condition lat with 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons db params left
+  -> FromClause lat with db params left
   -- ^ left
-  -> FromClause outer commons db params (Join left (NullifyFrom right))
+  -> FromClause lat with db params (Join left (NullifyFrom right))
 leftOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "LEFT OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
@@ -940,13 +940,13 @@ leftOuterJoin right on left = UnsafeFromClause $
 {- |Allows `leftOuterJoin` to reference columns provided by
 preceding `from` items.-}
 leftOuterJoinLateral
-  :: FromClause (Join outer left) commons db params right
+  :: FromClause (Join lat left) with db params right
   -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
-  -> Condition outer commons 'Ungrouped db params (Join left right)
+  -> Condition lat with 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons db params left
+  -> FromClause lat with db params left
   -- ^ left
-  -> FromClause outer commons db params (Join left (NullifyFrom right))
+  -> FromClause lat with db params (Join left (NullifyFrom right))
 leftOuterJoinLateral right on left = UnsafeFromClause $
   renderSQL left <+> "LEFT OUTER JOIN LATERAL" <+> renderSQL right
   <+> "ON" <+> renderSQL on
@@ -958,13 +958,13 @@ leftOuterJoinLateral right on left = UnsafeFromClause $
     have a row for each row in @right@.
 -}
 rightOuterJoin
-  :: FromClause outer commons db params right
+  :: FromClause lat with db params right
   -- ^ right
-  -> Condition outer commons 'Ungrouped db params (Join left right)
+  -> Condition lat with 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons db params left
+  -> FromClause lat with db params left
   -- ^ left
-  -> FromClause outer commons db params (Join (NullifyFrom left) right)
+  -> FromClause lat with db params (Join (NullifyFrom left) right)
 rightOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "RIGHT OUTER JOIN" <+> renderSQL right
   <+> "ON" <+> renderSQL on
@@ -972,13 +972,13 @@ rightOuterJoin right on left = UnsafeFromClause $
 {- |Allows `rightOuterJoin` to reference columns provided by
 preceding `from` items.-}
 rightOuterJoinLateral
-  :: FromClause (Join outer left) commons db params right
+  :: FromClause (Join lat left) with db params right
   -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
-  -> Condition outer commons 'Ungrouped db params (Join left right)
+  -> Condition lat with 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons db params left
+  -> FromClause lat with db params left
   -- ^ left
-  -> FromClause outer commons db params (Join (NullifyFrom left) right)
+  -> FromClause lat with db params (Join (NullifyFrom left) right)
 rightOuterJoinLateral right on left = UnsafeFromClause $
   renderSQL left <+> "RIGHT OUTER JOIN LATERAL" <+> renderSQL right
   <+> "ON" <+> renderSQL on
@@ -991,13 +991,13 @@ rightOuterJoinLateral right on left = UnsafeFromClause $
     is added.
 -}
 fullOuterJoin
-  :: FromClause outer commons db params right
+  :: FromClause lat with db params right
   -- ^ right
-  -> Condition outer commons 'Ungrouped db params (Join left right)
+  -> Condition lat with 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons db params left
+  -> FromClause lat with db params left
   -- ^ left
-  -> FromClause outer commons db params
+  -> FromClause lat with db params
       (Join (NullifyFrom left) (NullifyFrom right))
 fullOuterJoin right on left = UnsafeFromClause $
   renderSQL left <+> "FULL OUTER JOIN" <+> renderSQL right
@@ -1006,13 +1006,13 @@ fullOuterJoin right on left = UnsafeFromClause $
 {- |Allows `fullOuterJoin` to reference columns provided by
 preceding `from` items.-}
 fullOuterJoinLateral
-  :: FromClause (Join outer left) commons db params right
+  :: FromClause (Join lat left) with db params right
   -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
-  -> Condition outer commons 'Ungrouped db params (Join left right)
+  -> Condition lat with 'Ungrouped db params (Join left right)
   -- ^ @on@ condition
-  -> FromClause outer commons db params left
+  -> FromClause lat with db params left
   -- ^ left
-  -> FromClause outer commons db params
+  -> FromClause lat with db params
       (Join (NullifyFrom left) (NullifyFrom right))
 fullOuterJoinLateral right on left = UnsafeFromClause $
   renderSQL left <+> "FULL OUTER JOIN LATERAL" <+> renderSQL right
@@ -1077,17 +1077,17 @@ group bys = UnsafeGroupByClause $ case bys of
 -- An `Ungrouped` `TableExpression` may only use `NoHaving` while a `Grouped`
 -- `TableExpression` must use `Having` whose conditions are combined with
 -- `.&&`.
-data HavingClause outer commons grp db params from where
-  NoHaving :: HavingClause outer commons 'Ungrouped db params from
+data HavingClause lat with grp db params from where
+  NoHaving :: HavingClause lat with 'Ungrouped db params from
   Having
-    :: [Condition outer commons ('Grouped bys) db params from]
-    -> HavingClause outer commons ('Grouped bys) db params from
-deriving instance Show (HavingClause outer commons grp db params from)
-deriving instance Eq (HavingClause outer commons grp db params from)
-deriving instance Ord (HavingClause outer commons grp db params from)
+    :: [Condition lat with ('Grouped bys) db params from]
+    -> HavingClause lat with ('Grouped bys) db params from
+deriving instance Show (HavingClause lat with grp db params from)
+deriving instance Eq (HavingClause lat with grp db params from)
+deriving instance Ord (HavingClause lat with grp db params from)
 
 -- | Render a `HavingClause`.
-instance RenderSQL (HavingClause outer commons grp db params from) where
+instance RenderSQL (HavingClause lat with grp db params from) where
   renderSQL = \case
     NoHaving -> ""
     Having [] -> ""
@@ -1098,29 +1098,29 @@ instance RenderSQL (HavingClause outer commons grp db params from) where
 data CommonTableExpression statement
   (db :: SchemasType)
   (params :: [NullType])
-  (commons0 :: FromType)
-  (commons1 :: FromType) where
+  (with0 :: FromType)
+  (with1 :: FromType) where
   CommonTableExpression
-    :: Aliased (statement commons db params) (cte ::: common)
+    :: Aliased (statement with db params) (cte ::: common)
     -- ^ aliased statement
-    -> CommonTableExpression statement db params commons (cte ::: common ': commons)
+    -> CommonTableExpression statement db params with (cte ::: common ': with)
 instance
   ( KnownSymbol cte
-  , commons1 ~ (cte ::: common ': commons)
+  , with1 ~ (cte ::: common ': with)
   ) => Aliasable cte
-    (statement commons db params common)
-    (CommonTableExpression statement db params commons commons1) where
+    (statement with db params common)
+    (CommonTableExpression statement db params with with1) where
       statement `as` cte = CommonTableExpression (statement `as` cte)
 instance
   ( KnownSymbol cte
-  , commons1 ~ (cte ::: common ': commons)
+  , with1 ~ (cte ::: common ': with)
   ) => Aliasable cte
-    (statement commons db params common)
-    (Path (CommonTableExpression statement db params) commons commons1) where
+    (statement with db params common)
+    (Path (CommonTableExpression statement db params) with with1) where
       statement `as` cte = qsingle (statement `as` cte)
 
 instance (forall c s p r. RenderSQL (statement c s p r)) => RenderSQL
-  (CommonTableExpression statement db params commons0 commons1) where
+  (CommonTableExpression statement db params with0 with1) where
     renderSQL (CommonTableExpression (statement `As` cte)) =
       renderSQL cte <+> "AS" <+> parenthesized (renderSQL statement)
 
@@ -1129,12 +1129,12 @@ instance (forall c s p r. RenderSQL (statement c s p r)) => RenderSQL
 -- defining temporary tables that exist just for one query.
 class With statement where
   with
-    :: Path (CommonTableExpression statement db params) commons0 commons1
+    :: Path (CommonTableExpression statement db params) with0 with1
     -- ^ common table expressions
-    -> statement commons1 db params row
+    -> statement with1 db params row
     -- ^ larger query
-    -> statement commons0 db params row
-instance With (Query outer) where
+    -> statement with0 db params row
+instance With (Query lat) where
   with Done query = query
   with ctes query = UnsafeQuery $
     "WITH" <+> commaSeparated (qtoList renderSQL ctes) <+> renderSQL query
@@ -1156,11 +1156,11 @@ instance With (Query outer) where
 WITH RECURSIVE "t" AS ((SELECT * FROM (VALUES ((1 :: int))) AS t ("n")) UNION ALL (SELECT ("n" + 1) AS "n" FROM "t" AS "t" WHERE ("n" < 100))) SELECT COALESCE(sum(ALL "n"), 0) AS "getSum" FROM "t" AS "t"
 -}
 withRecursive
-  :: Aliased (Query outer (recursive ': commons) db params) recursive
+  :: Aliased (Query lat (recursive ': with) db params) recursive
   -- ^ recursive query
-  -> Query outer (recursive ': commons) db params row
+  -> Query lat (recursive ': with) db params row
   -- ^ larger query
-  -> Query outer commons db params row
+  -> Query lat with db params row
 withRecursive (recursive `As` cte) query = UnsafeQuery $
   "WITH RECURSIVE" <+> renderSQL cte
     <+> "AS" <+> parenthesized (renderSQL recursive)

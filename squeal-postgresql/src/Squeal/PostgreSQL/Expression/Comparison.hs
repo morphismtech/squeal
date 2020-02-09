@@ -92,7 +92,7 @@ infix 4 .<=
 (.>) = unsafeBinaryOp ">"
 infix 4 .>
 
--- | >>> let expr = greatest [param @1] currentTimestamp :: Expression outer commons grp db '[ 'NotNull 'PGtimestamptz] from ('NotNull 'PGtimestamptz)
+-- | >>> let expr = greatest [param @1] currentTimestamp :: Expression lat with grp db '[ 'NotNull 'PGtimestamptz] from ('NotNull 'PGtimestamptz)
 -- >>> printSQL expr
 -- GREATEST(($1 :: timestamp with time zone), CURRENT_TIMESTAMP)
 greatest :: FunctionVar ty ty ty
@@ -107,11 +107,11 @@ least = unsafeFunctionVar "LEAST"
 A @RankNType@ for comparison expressions like `between`.
 -}
 type BetweenExpr
-  =  forall outer commons grp db params from ty
-  .  Expression outer commons grp db params from ty
-  -> ( Expression outer commons grp db params from ty
-     , Expression outer commons grp db params from ty ) -- ^ bounds
-  -> Condition outer commons grp db params from
+  =  forall lat with grp db params from ty
+  .  Expression lat with grp db params from ty
+  -> ( Expression lat with grp db params from ty
+     , Expression lat with grp db params from ty ) -- ^ bounds
+  -> Condition lat with grp db params from
 
 unsafeBetweenExpr :: ByteString -> BetweenExpr
 unsafeBetweenExpr fun a (x,y) = UnsafeExpression $

@@ -90,19 +90,19 @@ A `Query` is also considered a `Manipulation` even though it does not modify dat
 
 The general `Manipulation` type is parameterized by
 
-* @commons :: FromType@ - scope for all `common` table expressions,
+* @with :: FromType@ - scope for all `common` table expressions,
 * @db :: SchemasType@ - scope for all `table`s and `view`s,
 * @params :: [NullType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
 * @row :: RowType@ - return type of the `Query`.
 -}
 newtype Manipulation
-  (commons :: FromType)
+  (with :: FromType)
   (db :: SchemasType)
   (params :: [NullType])
   (columns :: RowType)
     = UnsafeManipulation { renderManipulation :: ByteString }
     deriving (GHC.Generic,Show,Eq,Ord,NFData)
-instance RenderSQL (Manipulation commons db params columns) where
+instance RenderSQL (Manipulation with db params columns) where
   renderSQL = renderManipulation
 instance With Manipulation where
   with Done manip = manip
@@ -269,9 +269,9 @@ type family Manipulation_ (db :: SchemasType) (params :: Type) (row :: Type) whe
 
 -- | Convert a `Query` into a `Manipulation`.
 queryStatement
-  :: Query '[] commons db params columns
+  :: Query '[] with db params columns
   -- ^ `Query` to embed as a `Manipulation`
-  -> Manipulation commons db params columns
+  -> Manipulation with db params columns
 queryStatement q = UnsafeManipulation $ renderSQL q
 
 {-----------------------------------------
@@ -292,13 +292,13 @@ insertInto
      , SOP.SListI row )
   => QualifiedAlias sch tab
   -- ^ table
-  -> QueryClause commons db params (TableToColumns table)
+  -> QueryClause with db params (TableToColumns table)
   -- ^ what to insert
-  -> ConflictClause tab commons db params table
+  -> ConflictClause tab with db params table
   -- ^ what to do in case of conflict
-  -> ReturningClause commons db params '[tab ::: TableToRow table] row
+  -> ReturningClause with db params '[tab ::: TableToRow table] row
   -- ^ what to return
-  -> Manipulation commons db params row
+  -> Manipulation with db params row
 insertInto tab qry conflict ret = UnsafeManipulation $
   "INSERT" <+> "INTO" <+> renderSQL tab
   <+> renderSQL qry
@@ -312,35 +312,35 @@ insertInto_
      , SOP.SListI (TableToColumns table) )
   => QualifiedAlias sch tab
   -- ^ table
-  -> QueryClause commons db params (TableToColumns table)
+  -> QueryClause with db params (TableToColumns table)
   -- ^ what to insert
-  -> Manipulation commons db params '[]
+  -> Manipulation with db params '[]
 insertInto_ tab qry =
   insertInto tab qry OnConflictDoRaise (Returning_ Nil)
 
 -- | A `QueryClause` describes what to `insertInto` a table.
-data QueryClause commons db params columns where
+data QueryClause with db params columns where
   Values
     :: SOP.SListI columns
-    => NP (Aliased (Optional (Expression '[] commons 'Ungrouped db params '[]))) columns
+    => NP (Aliased (Optional (Expression '[] with 'Ungrouped db params '[]))) columns
     -- ^ row of values
-    -> [NP (Aliased (Optional (Expression '[] commons 'Ungrouped db params '[]))) columns]
+    -> [NP (Aliased (Optional (Expression '[] with 'Ungrouped db params '[]))) columns]
     -- ^ additional rows of values
-    -> QueryClause commons db params columns
+    -> QueryClause with db params columns
   Select
     :: SOP.SListI columns
-    => NP (Aliased (Optional (Expression '[] commons grp db params from))) columns
+    => NP (Aliased (Optional (Expression '[] with grp db params from))) columns
     -- ^ row of values
-    -> TableExpression '[] commons grp db params from
+    -> TableExpression '[] with grp db params from
     -- ^ from a table expression
-    -> QueryClause commons db params columns
+    -> QueryClause with db params columns
   Subquery
     :: ColumnsToRow columns ~ row
-    => Query '[] commons db params row
+    => Query '[] with db params row
     -- ^ subquery to insert
-    -> QueryClause commons db params columns
+    -> QueryClause with db params columns
 
-instance RenderSQL (QueryClause commons db params columns) where
+instance RenderSQL (QueryClause with db params columns) where
   renderSQL = \case
     Values row0 rows ->
       parenthesized (renderCommaSeparated renderSQLPart row0)
@@ -356,7 +356,7 @@ instance RenderSQL (QueryClause commons db params columns) where
     Subquery qry -> renderQuery qry
     where
       renderSQLPartMaybe, renderValuePartMaybe
-        :: Aliased (Optional (Expression '[] commons grp db params from)) column
+        :: Aliased (Optional (Expression '[] with grp db params from)) column
         -> Maybe ByteString
       renderSQLPartMaybe = \case
         Default `As` _ -> Nothing
@@ -365,7 +365,7 @@ instance RenderSQL (QueryClause commons db params columns) where
         Default `As` _ -> Nothing
         Set value `As` _ -> Just $ renderExpression value
       renderSQLPart, renderValuePart
-        :: Aliased (Optional (Expression '[] commons grp db params from)) column
+        :: Aliased (Optional (Expression '[] with grp db params from)) column
         -> ByteString
       renderSQLPart (_ `As` name) = renderSQL name
       renderValuePart (value `As` _) = renderSQL value
@@ -374,9 +374,9 @@ instance RenderSQL (QueryClause commons db params columns) where
 -- whose `ColumnsType` must match the tables'.
 pattern Values_
   :: SOP.SListI columns
-  => NP (Aliased (Optional (Expression '[] commons 'Ungrouped db params '[]))) columns
+  => NP (Aliased (Optional (Expression '[] with 'Ungrouped db params '[]))) columns
   -- ^ row of values
-  -> QueryClause commons db params columns
+  -> QueryClause with db params columns
 pattern Values_ vals = Values vals []
 
 -- | `Optional` is either `Default` or a value, parameterized by an appropriate
@@ -398,7 +398,7 @@ class LiteralColumn field column where
   literalColumn
     :: SOP.P field
     -> Aliased ( Optional
-      ( Expression outer commons grp db params from
+      ( Expression lat with grp db params from
       ) ) column
 instance (Literal hask, column ~ (def :=> NullPG hask), KnownSymbol alias)
   => LiteralColumn (alias ::: hask) (alias ::: column) where
@@ -413,7 +413,7 @@ literalColumns
      , SOP.AllZip LiteralColumn xs columns )
   => hask -- ^ record
   -> NP (Aliased (Optional (
-      Expression '[] commons 'Ungrouped db params '[]
+      Expression '[] with 'Ungrouped db params '[]
       ) ) ) columns
 literalColumns
   = SOP.htrans (SOP.Proxy @LiteralColumn) literalColumn
@@ -424,7 +424,7 @@ inline
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip LiteralColumn xs columns )
   => hask -- ^ record
-  -> QueryClause commons db params columns
+  -> QueryClause with db params columns
 inline = Values_ . literalColumns
 
 -- | `inlineMany` Haskell records in `insertInto`.
@@ -433,7 +433,7 @@ inlineMany
      , SOP.AllZip LiteralColumn xs columns )
   => hask -- ^ record
   -> [hask] -- ^ more
-  -> QueryClause commons db params columns
+  -> QueryClause with db params columns
 inlineMany hask hasks = Values (literalColumns hask) (literalColumns <$> hasks)
 
 -- | A `ReturningClause` computes and return value(s) based
@@ -446,10 +446,10 @@ inlineMany hask hasks = Values (literalColumns hask) (literalColumns <$> hasks)
 -- the row will not be returned. `Returning` `Star` will return all columns
 -- in the row. Use `Returning` `Nil` in the common case where no return
 -- values are desired.
-newtype ReturningClause commons db params from row =
-  Returning (Selection '[] commons 'Ungrouped db params from row)
+newtype ReturningClause with db params from row =
+  Returning (Selection '[] with 'Ungrouped db params from row)
 
-instance RenderSQL (ReturningClause commons db params from row) where
+instance RenderSQL (ReturningClause with db params from row) where
   renderSQL = \case
     Returning (List Nil) -> ""
     Returning selection -> " RETURNING" <+> renderSQL selection
@@ -457,9 +457,9 @@ instance RenderSQL (ReturningClause commons db params from row) where
 -- | `Returning` a `List`
 pattern Returning_
   :: SOP.SListI row
-  => NP (Aliased (Expression '[] commons 'Ungrouped db params from)) row
+  => NP (Aliased (Expression '[] with 'Ungrouped db params from)) row
   -- ^ row of values
-  -> ReturningClause commons db params from row
+  -> ReturningClause with db params from row
 pattern Returning_ list = Returning (List list)
 
 -- | A `ConflictClause` specifies an action to perform upon a constraint
@@ -467,18 +467,18 @@ pattern Returning_ list = Returning (List list)
 -- `OnConflict` `DoNothing` simply avoids inserting a row.
 -- `OnConflict` `DoUpdate` updates the existing row that conflicts with the row
 -- proposed for insertion.
-data ConflictClause tab commons db params table where
-  OnConflictDoRaise :: ConflictClause tab commons db params table
+data ConflictClause tab with db params table where
+  OnConflictDoRaise :: ConflictClause tab with db params table
   OnConflict
     :: ConflictTarget table
     -- ^ conflict target
-    -> ConflictAction tab commons db params table
+    -> ConflictAction tab with db params table
     -- ^ conflict action
-    -> ConflictClause tab commons db params table
+    -> ConflictClause tab with db params table
 
 -- | Render a `ConflictClause`.
 instance SOP.SListI (TableToColumns table)
-  => RenderSQL (ConflictClause tab commons db params table) where
+  => RenderSQL (ConflictClause tab with db params table) where
     renderSQL = \case
       OnConflictDoRaise -> ""
       OnConflict target action -> " ON CONFLICT"
@@ -495,18 +495,18 @@ for insertion using the special @#excluded@ row.
 `OnConflict` `DoUpdate` updates the existing row that conflicts
 with the row proposed for insertion as its alternative action.
 -}
-data ConflictAction tab commons db params table where
-  DoNothing :: ConflictAction tab commons db params table
+data ConflictAction tab with db params table where
+  DoNothing :: ConflictAction tab with db params table
   DoUpdate
     :: ( row ~ TableToRow table
        , from ~ '[tab ::: row, "excluded" ::: row]
        , Updatable table updates )
-    => NP (Aliased (Optional (Expression '[] commons 'Ungrouped db params from))) updates
-    -> [Condition '[] commons 'Ungrouped db params from]
+    => NP (Aliased (Optional (Expression '[] with 'Ungrouped db params from))) updates
+    -> [Condition '[] with 'Ungrouped db params from]
        -- ^ WHERE `Condition`s
-    -> ConflictAction tab commons db params table
+    -> ConflictAction tab with db params table
 
-instance RenderSQL (ConflictAction tab commons db params table) where
+instance RenderSQL (ConflictAction tab with db params table) where
   renderSQL = \case
     DoNothing -> "DO NOTHING"
     DoUpdate updates whs'
@@ -549,10 +549,10 @@ update
   => QualifiedAlias sch tab -- ^ table to update
   -> NP (Aliased (Optional (Expression '[] '[] 'Ungrouped db params '[tab ::: TableToRow table]))) updates
   -- ^ modified values to replace old values
-  -> Condition '[] commons 'Ungrouped db params '[tab ::: TableToRow table]
+  -> Condition '[] with 'Ungrouped db params '[tab ::: TableToRow table]
   -- ^ condition under which to perform update on a row
-  -> ReturningClause commons db params '[tab ::: TableToRow table] row -- ^ results to return
-  -> Manipulation commons db params row
+  -> ReturningClause with db params '[tab ::: TableToRow table] row -- ^ results to return
+  -> Manipulation with db params row
 update tab columns wh returning = UnsafeManipulation $
   "UPDATE"
   <+> renderSQL tab
@@ -569,9 +569,9 @@ update_
   => QualifiedAlias sch tab -- ^ table to update
   -> NP (Aliased (Optional (Expression '[] '[] 'Ungrouped db params '[tab ::: TableToRow table]))) updates
   -- ^ modified values to replace old values
-  -> Condition '[] commons 'Ungrouped db params '[tab ::: TableToRow table]
+  -> Condition '[] with 'Ungrouped db params '[tab ::: TableToRow table]
   -- ^ condition under which to perform update on a row
-  -> Manipulation commons db params '[]
+  -> Manipulation with db params '[]
 update_ tab columns wh = update tab columns wh (Returning_ Nil)
 
 {-----------------------------------------
@@ -587,12 +587,12 @@ DELETE statements
 -- Do not repeat the target table in the `Using` list,
 -- unless you wish to set up a self-join.
 -- `NoUsing` if no additional tables are to be used.
-data UsingClause commons db params from where
-  NoUsing :: UsingClause commons db params '[]
+data UsingClause with db params from where
+  NoUsing :: UsingClause with db params '[]
   Using
-    :: FromClause '[] commons db params from
+    :: FromClause '[] with db params from
     -- ^ what to use
-    -> UsingClause commons db params from
+    -> UsingClause with db params from
 
 -- | Delete rows from a table.
 deleteFrom
@@ -600,12 +600,12 @@ deleteFrom
      , Has sch db schema
      , Has tab schema ('Table table) )
   => QualifiedAlias sch tab -- ^ table to delete from
-  -> UsingClause commons db params from
-  -> Condition '[] commons 'Ungrouped db params (tab ::: TableToRow table ': from)
+  -> UsingClause with db params from
+  -> Condition '[] with 'Ungrouped db params (tab ::: TableToRow table ': from)
   -- ^ condition under which to delete a row
-  -> ReturningClause commons db params '[tab ::: TableToRow table] row
+  -> ReturningClause with db params '[tab ::: TableToRow table] row
   -- ^ results to return
-  -> Manipulation commons db params row
+  -> Manipulation with db params row
 deleteFrom tab using wh returning = UnsafeManipulation $
   "DELETE FROM"
   <+> renderSQL tab
@@ -620,7 +620,7 @@ deleteFrom_
   :: ( Has sch db schema
      , Has tab schema ('Table table) )
   => QualifiedAlias sch tab -- ^ table to delete from
-  -> Condition '[] commons 'Ungrouped db params '[tab ::: TableToRow table]
+  -> Condition '[] with 'Ungrouped db params '[tab ::: TableToRow table]
   -- ^ condition under which to delete a row
-  -> Manipulation commons db params '[]
+  -> Manipulation with db params '[]
 deleteFrom_ tab wh = deleteFrom tab NoUsing wh (Returning_ Nil)

@@ -127,9 +127,9 @@ import Squeal.PostgreSQL.Schema
 cast
   :: TypeExpression db ty1
   -- ^ type to cast as
-  -> Expression outer commons grp db params from ty0
+  -> Expression lat with grp db params from ty0
   -- ^ value to convert
-  -> Expression outer commons grp db params from ty1
+  -> Expression lat with grp db params from ty1
 cast ty x = UnsafeExpression $ parenthesized $
   renderSQL x <+> "::" <+> renderSQL ty
 
@@ -140,9 +140,9 @@ cast ty x = UnsafeExpression $ parenthesized $
 astype
   :: TypeExpression db ty
   -- ^ type to specify as
-  -> Expression outer commons grp db params from ty
+  -> Expression lat with grp db params from ty
   -- ^ value
-  -> Expression outer commons grp db params from ty
+  -> Expression lat with grp db params from ty
 astype = cast
 
 -- | `inferredtype` will add a type annotation to an `Expression`
@@ -152,9 +152,9 @@ astype = cast
 -- (TRUE :: bool)
 inferredtype
   :: NullTyped db ty
-  => Expression outer common grp db params from ty
+  => Expression lat common grp db params from ty
   -- ^ value
-  -> Expression outer common grp db params from ty
+  -> Expression lat common grp db params from ty
 inferredtype = astype nulltype
 
 {-----------------------------------------
