@@ -393,12 +393,12 @@ jsonbObjectKeys = unsafeSetFunction "jsonb_object_keys"
 
 -- | Build rows from Json types.
 type JsonPopulateFunction fun json
-  =  forall db row outer commons params
+  =  forall db row lat with params
   .  json `In` PGJsonType
   => TypeExpression db ('NotNull ('PGcomposite row)) -- ^ row type
-  -> Expression outer commons 'Ungrouped db params '[] ('NotNull json)
+  -> Expression lat with 'Ungrouped db params '[] ('NotNull json)
       -- ^ json type
-  -> FromClause outer commons db params '[fun ::: row]
+  -> FromClause lat with db params '[fun ::: row]
 
 unsafePopulateFunction
   :: forall fun ty
@@ -429,13 +429,13 @@ jsonbPopulateRecordSet = unsafePopulateFunction #jsonb_populate_record_set
 
 -- | Build rows from Json types.
 type JsonToRecordFunction json
-  =  forall outer commons db params tab row
+  =  forall lat with db params tab row
   .  (SOP.SListI row, json `In` PGJsonType)
-  => Expression outer commons 'Ungrouped db params '[] ('NotNull json)
+  => Expression lat with 'Ungrouped db params '[] ('NotNull json)
       -- ^ json type
   -> Aliased (NP (Aliased (TypeExpression db))) (tab ::: row)
       -- ^ row type
-  -> FromClause outer commons db params '[tab ::: row]
+  -> FromClause lat with db params '[tab ::: row]
 
 unsafeRecordFunction :: ByteString -> JsonToRecordFunction json
 unsafeRecordFunction fun expr (types `As` tab) = UnsafeFromClause $

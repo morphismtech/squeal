@@ -52,9 +52,9 @@ import Squeal.PostgreSQL.Schema
 -- | >>> printSQL $ array [null_, false, true]
 -- ARRAY[NULL, FALSE, TRUE]
 array
-  :: [Expression outer commons grp db params from ty]
+  :: [Expression lat with grp db params from ty]
   -- ^ array elements
-  -> Expression outer commons grp db params from (null ('PGvararray ty))
+  -> Expression lat with grp db params from (null ('PGvararray ty))
 array xs = UnsafeExpression $ "ARRAY" <>
   bracketed (commaSeparated (renderSQL <$> xs))
 
@@ -66,8 +66,8 @@ ARRAY[NULL, FALSE, TRUE]
 >>> :type array1 (null_ :* false *: true)
 array1 (null_ :* false *: true)
   :: Expression
-       outer
-       commons
+       lat
+       with
        grp
        db
        params
@@ -76,9 +76,9 @@ array1 (null_ :* false *: true)
 -}
 array1
   :: (n ~ Length tys, SOP.All ((~) ty) tys)
-  => NP (Expression outer commons grp db params from) tys
+  => NP (Expression lat with grp db params from) tys
     -- ^ array elements
-  -> Expression outer commons grp db params from (null ('PGfixarray '[n] ty))
+  -> Expression lat with grp db params from (null ('PGfixarray '[n] ty))
 array1 xs = UnsafeExpression $ "ARRAY" <>
   bracketed (renderCommaSeparated renderSQL xs)
 
@@ -90,8 +90,8 @@ ARRAY[[NULL, FALSE, TRUE], [FALSE, NULL, TRUE]]
 >>> :type array2 ((null_ :* false *: true) *: (false :* null_ *: true))
 array2 ((null_ :* false *: true) *: (false :* null_ *: true))
   :: Expression
-       outer
-       commons
+       lat
+       with
        grp
        db
        params
@@ -104,9 +104,9 @@ array2
       , Length tyss ~ n1
       , SOP.All ((~) ty) tys
       , Length tys ~ n2 )
-  => NP (NP (Expression outer commons grp db params from)) tyss
+  => NP (NP (Expression lat with grp db params from)) tyss
   -- ^ matrix elements
-  -> Expression outer commons grp db params from (null ('PGfixarray '[n1,n2] ty))
+  -> Expression lat with grp db params from (null ('PGfixarray '[n1,n2] ty))
 array2 xss = UnsafeExpression $ "ARRAY" <>
   bracketed (renderCommaSeparatedConstraint @SOP.SListI (bracketed . renderCommaSeparated renderSQL) xss)
 
