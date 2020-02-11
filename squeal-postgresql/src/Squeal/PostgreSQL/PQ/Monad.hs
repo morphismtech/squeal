@@ -42,7 +42,6 @@ import Squeal.PostgreSQL.Query
 
 -- For `MonadPQ` transformer instances
 import Control.Monad.Trans.Cont
-import Control.Monad.Trans.Except
 import Control.Monad.Trans.Identity
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader

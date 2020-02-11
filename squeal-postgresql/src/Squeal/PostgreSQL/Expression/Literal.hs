@@ -12,11 +12,13 @@ Literal expressions
     DataKinds
   , FlexibleInstances
   , LambdaCase
+  , MultiParamTypeClasses
   , OverloadedStrings
   , RankNTypes
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
+  , TypeOperators
   , TypeSynonymInstances
   , UndecidableInstances
 #-}
@@ -30,6 +32,7 @@ import Data.Binary.Builder (toLazyByteString)
 import Data.ByteString.Lazy (toStrict)
 import Data.ByteString.Builder.Scientific (scientificBuilder)
 import Data.Int (Int16, Int32, Int64)
+import Data.Kind (Type)
 import Data.Scientific (Scientific)
 import Data.String
 import Data.Text (Text)
@@ -38,15 +41,19 @@ import Data.Time.Calendar (Day, toGregorian)
 import Data.Time.LocalTime (LocalTime(LocalTime), TimeOfDay(TimeOfDay))
 import Data.UUID.Types (UUID, toASCIIBytes)
 import Data.Vector (Vector, toList)
+import GHC.TypeLits
 
 import qualified Data.Aeson as JSON
 import qualified Data.Text as Text
 import qualified Data.Text.Lazy as Lazy (Text)
 import qualified Data.Text.Lazy as Lazy.Text
 import qualified Generics.SOP as SOP
+import qualified Generics.SOP.Record as SOP
 
+import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Array
+import Squeal.PostgreSQL.Expression.Composite
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Null
 import Squeal.PostgreSQL.Expression.Range
@@ -184,3 +191,22 @@ instance
             (SOP.constructorInfo (SOP.datatypeInfo (SOP.Proxy @x)))
         . SOP.from
         . getEnumerated
+instance
+  ( SOP.IsRecord x xs
+  , SOP.AllZip LiteralField xs (RowPG x)
+  ) => Literal (Composite x) where
+    literal
+      = row
+      . SOP.htrans (SOP.Proxy @(LiteralField)) literalField
+      . SOP.toRecord
+      . getComposite
+
+class LiteralField
+  (field :: (Symbol, Type))
+  (fieldpg :: (Symbol, NullType)) where
+    literalField
+      :: SOP.P field
+      -> Aliased (Expression outer commons grp db params from) fieldpg
+instance (KnownSymbol alias, Literal x, ty ~ NullPG x)
+  => LiteralField (alias ::: x) (alias ::: ty) where
+    literalField (SOP.P x) = literal x `as` Alias @alias

@@ -37,9 +37,10 @@ data PQState = PQState
 
 -- | `Exception`s that can be thrown by Squeal.
 data SquealException
-  = PQException PQState
-  | ResultException Text
+  = ConnectionException
   | ParseException Text
+  | PQException PQState
+  | ResultException Text
   deriving (Eq, Show)
 instance Exception SquealException
 

@@ -190,7 +190,11 @@ in
 :}
 [User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole@hotmail.com"}]
 -}
-module Squeal.PostgreSQL (module X, RenderSQL(..), printSQL) where
+module Squeal.PostgreSQL
+  ( module X
+  , RenderSQL (..)
+  , printSQL
+  ) where
 
 import Squeal.PostgreSQL.Alias as X
 import Squeal.PostgreSQL.Definition as X
