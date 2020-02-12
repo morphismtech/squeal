@@ -155,7 +155,11 @@ instance Literal (Range UTCTime) where
 instance Literal (Range Day) where
   literal = range daterange . fmap literal
 instance Literal UUID where
-  literal = UnsafeExpression . toASCIIBytes
+  literal
+    = inferredtype
+    . UnsafeExpression
+    . singleQuotedUtf8
+    . toASCIIBytes
 instance Literal Money where
   literal moolah = UnsafeExpression $
     fromString (show dollars)
