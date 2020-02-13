@@ -8,19 +8,27 @@ Stability: experimental
 Squeal exceptions
 -}
 
+{-# LANGUAGE
+    OverloadedStrings
+  , PatternSynonyms
+#-}
+
 module Squeal.PostgreSQL.PQ.Exception
   ( SquealException (..)
-  , PQState (..)
+  , pattern UniqueViolation
+  , pattern CheckViolation
+  , SQLState (..)
   , LibPQ.ExecStatus (..)
   , catchSqueal
   , handleSqueal
   , trySqueal
+  , throwSqueal
   ) where
 
 import Control.Exception (Exception)
 import Data.ByteString (ByteString)
 import Data.Text (Text)
-import UnliftIO (MonadUnliftIO (..), catch, handle, try)
+import UnliftIO (MonadUnliftIO (..), catch, handle, try, throwIO)
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
@@ -28,21 +36,32 @@ import qualified Database.PostgreSQL.LibPQ as LibPQ
 -- >>> import Squeal.PostgreSQL
 
 -- | the state of LibPQ
-data PQState = PQState
+data SQLState = SQLState
   { sqlExecStatus :: LibPQ.ExecStatus
-  , sqlStateCode :: Maybe ByteString
+  , sqlStateCode :: ByteString
     -- ^ https://www.postgresql.org/docs/current/static/errcodes-appendix.html
-  , sqlErrorMessage :: Maybe ByteString
+  , sqlErrorMessage :: ByteString
   } deriving (Eq, Show)
 
 -- | `Exception`s that can be thrown by Squeal.
 data SquealException
-  = ConnectionException
-  | ParseException Text
-  | PQException PQState
-  | ResultException Text
+  = SQLException SQLState
+  -- ^ SQL exception state
+  | ConnectionException Text
+  -- ^ `Database.PostgreSQL.LibPQ` function connection exception
+  | DecodingException Text Text
+  -- ^ decoding exception function and error message
+  | ColumnsException Text LibPQ.Column
+  -- ^ unexpected number of columns
+  | RowsException Text LibPQ.Row LibPQ.Row
+  -- ^ too few rows, expected at least and actual number of rows
   deriving (Eq, Show)
 instance Exception SquealException
+
+pattern UniqueViolation :: ByteString -> SquealException
+pattern UniqueViolation msg = SQLException (SQLState LibPQ.FatalError "23505" msg)
+pattern CheckViolation :: ByteString -> SquealException
+pattern CheckViolation msg = SQLException (SQLState LibPQ.FatalError "23514" msg)
 
 -- | Catch `SquealException`s.
 catchSqueal
@@ -60,8 +79,9 @@ handleSqueal
 handleSqueal = handle
 
 -- | `Either` return a `SquealException` or a result.
-trySqueal
-  :: MonadUnliftIO io
-  => io a
-  -> io (Either SquealException a)
+trySqueal :: MonadUnliftIO io => io a -> io (Either SquealException a)
 trySqueal = try
+
+-- | Throw `SquealException`s.
+throwSqueal :: MonadUnliftIO io => SquealException -> io a
+throwSqueal = throwIO
