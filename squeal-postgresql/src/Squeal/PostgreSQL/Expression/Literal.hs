@@ -119,8 +119,18 @@ instance Literal (FixChar n) where
       "E\'" <> fromString (escape =<< (Text.unpack . getFixChar) str) <> "\'"
 instance Literal DiffTime where
   literal dt =
-    let musecs = fromIntegral (diffTimeToPicoseconds dt) / 1000
-    in interval_ musecs Microseconds
+    let
+      picosecs = diffTimeToPicoseconds dt
+      (hours,leftover1) = picosecs `divMod` 3600000000000000
+      (mins,leftover2) = leftover1 `divMod` 60000000000000
+      (secs,leftover3) = leftover2 `divMod` 1000000000000
+      musecs = leftover3 `div` 1000000
+      -- musecs = fromIntegral (diffTimeToPicoseconds dt `div` 1000000)
+    in
+      interval_ (fromIntegral hours) Hours
+      +! interval_ (fromIntegral mins) Minutes
+      +! interval_ (fromIntegral secs) Seconds
+      +! interval_ (fromIntegral musecs) Microseconds
 instance Literal Day where
   literal day =
     let (y,m,d) = toGregorian day
