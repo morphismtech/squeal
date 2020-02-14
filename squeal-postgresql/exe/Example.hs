@@ -76,7 +76,7 @@ getUsers :: Query_ Schemas () User
 getUsers = select_
   (#u ! #name `as` #userName :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)
   ( from (table (#users `as` #u)
-    & (inner.Join) (table (#emails `as` #e))
+    & innerJoin (table (#emails `as` #e))
       (#u ! #id .== #e ! #user_id)) )
 
 data User = User { userName :: Text, userEmail :: Maybe Text, userVec :: VarArray (Vector (Maybe Int16)) }

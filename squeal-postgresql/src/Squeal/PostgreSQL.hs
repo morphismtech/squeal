@@ -147,7 +147,7 @@ let
   getUsers = select_
     (#u ! #name `as` #userName :* #e ! #email `as` #userEmail)
     ( from (table (#users `as` #u)
-      & (inner.Join) (table (#emails `as` #e))
+      & innerJoin (table (#emails `as` #e))
         (#u ! #id .== #e ! #user_id)) )
 :}
 
