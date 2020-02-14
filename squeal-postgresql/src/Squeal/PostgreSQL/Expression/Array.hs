@@ -124,5 +124,5 @@ index n expr = UnsafeExpression $
   parenthesized (renderSQL expr) <> "[" <> fromString (show n) <> "]"
 
 -- | Expand an array to a set of rows
-unnest :: SetFunction "unnest" (null ('PGvararray ty)) '["unnest" ::: ty]
+unnest :: SetFunction (null ('PGvararray ty)) ("unnest" ::: '["unnest" ::: ty])
 unnest = unsafeSetFunction "unnest"
