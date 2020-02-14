@@ -100,7 +100,7 @@ instance Literal Char where
 instance Literal String where literal = fromString
 instance Literal Int16 where literal = fromIntegral
 instance Literal Int32 where literal = fromIntegral
-instance Literal Int64 where literal = fromIntegral
+instance Literal Int64 where literal = inferredtype . fromIntegral
 instance Literal Float where literal = fromRational . toRational
 instance Literal Double where literal = fromRational . toRational
 instance Literal Scientific where
