@@ -71,10 +71,15 @@ module Squeal.PostgreSQL.Query
   , view
   , common
   , cross
+  , crossJoin
   , inner
+  , innerJoin
   , leftOuter
+  , leftOuterJoin
   , rightOuter
+  , rightOuterJoin
   , fullOuter
+  , fullOuterJoin
   , JoinItem (..)
   , SetOf
   , SetOfN
@@ -283,13 +288,29 @@ let
       #c ! #name `as` #customerName :*
       #s ! #name `as` #shipperName )
     ( from (table (#orders `as` #o)
-      & (inner.Join) (table (#customers `as` #c))
+      & innerJoin (table (#customers `as` #c))
         (#o ! #customer_id .== #c ! #id)
-      & (inner.Join) (table (#shippers `as` #s))
+      & innerJoin (table (#shippers `as` #s))
         (#o ! #shipper_id .== #s ! #id)) )
 in printSQL query
 :}
 SELECT "o"."price" AS "price", "c"."name" AS "customerName", "s"."name" AS "shipperName" FROM "orders" AS "o" INNER JOIN "customers" AS "c" ON ("o"."customer_id" = "c"."id") INNER JOIN "shippers" AS "s" ON ("o"."shipper_id" = "s"."id")
+
+>>> :{
+let
+  query :: Query_ (Public OrdersSchema) () Order
+  query = select_
+    ( #o ! #price `as` #price :*
+      #c ! #name `as` #customerName :*
+      #s ! #name `as` #shipperName )
+    ( from (table (#orders `as` #o)
+      & (inner.JoinLateral) (select Star (from (table #customers)) `as` #c)
+        (#o ! #customer_id .== #c ! #id)
+      & (inner.JoinLateral) (select Star (from (table #shippers)) `as` #s)
+        (#o ! #shipper_id .== #s ! #id)) )
+in printSQL query
+:}
+SELECT "o"."price" AS "price", "c"."name" AS "customerName", "s"."name" AS "shipperName" FROM "orders" AS "o" INNER JOIN LATERAL (SELECT * FROM "customers" AS "customers") AS "c" ON ("o"."customer_id" = "c"."id") INNER JOIN LATERAL (SELECT * FROM "shippers" AS "shippers") AS "s" ON ("o"."shipper_id" = "s"."id")
 
 self-join:
 
@@ -298,7 +319,7 @@ let
   query :: Query_ (Public Schema) () (Row Int32 Int32)
   query = select
     (#t1 & DotStar)
-    (from (table (#tab `as` #t1) & (cross.Join) (table (#tab `as` #t2))))
+    (from (table (#tab `as` #t1) & crossJoin (table (#tab `as` #t2))))
 in printSQL query
 :}
 SELECT "t1".* FROM "tab" AS "t1" CROSS JOIN "tab" AS "t2"
@@ -896,13 +917,13 @@ data JoinItem
       :: Aliased (Query (Join lat left) with db params) query
       -> JoinItem lat with db params left '[query]
     JoinFunction
-      :: SetOf fun ty set
-      -> Expression (Join lat left) with 'Ungrouped db params '[] ty
+      :: SetOf db ty set
+      -> Expression lat with 'Ungrouped db params left ty
       -> JoinItem lat with db params left '[set]
     JoinFunctionN
       :: SListI tys
       => SetOfN db tys set
-      -> NP (Expression (Join lat left) with 'Ungrouped db params '[]) tys
+      -> NP (Expression lat with 'Ungrouped db params left) tys
       -> JoinItem lat with db params left '[set]
 instance RenderSQL (JoinItem lat with db params left right) where
   renderSQL = \case
@@ -928,6 +949,19 @@ cross
 cross item tab = UnsafeFromClause $
   renderSQL tab <+> "CROSS" <+> renderSQL item
 
+{- |
+@left & crossJoin right@. For every possible combination of rows from
+@left@ and @right@ (i.e., a Cartesian product), the joined table will contain
+a row consisting of all columns in @left@ followed by all columns in @right@.
+If the tables have @n@ and @m@ rows respectively, the joined table will
+have @n * m@ rows.
+-}
+crossJoin
+  :: FromClause lat with db params right
+  -> FromClause lat with db params left
+  -> FromClause lat with db params (Join left right)
+crossJoin = cross . Join
+
 {- | @left & inner (Join right) on@. The joined table is filtered by
 the @on@ condition.
 -}
@@ -938,6 +972,16 @@ inner
   -> FromClause lat with db params (Join left right)
 inner item on tab = UnsafeFromClause $
   renderSQL tab <+> "INNER" <+> renderSQL item <+> "ON" <+> renderSQL on
+
+{- | @left & innerJoin right on@. The joined table is filtered by
+the @on@ condition.
+-}
+innerJoin
+  :: FromClause lat with db params right
+  -> Condition lat with 'Ungrouped db params (Join left right)
+  -> FromClause lat with db params left
+  -> FromClause lat with db params (Join left right)
+innerJoin = inner . Join
 
 {- | @left & leftOuter (Join right) on@. First, an inner join is performed.
 Then, for each row in @left@ that does not satisfy the @on@ condition with
@@ -951,6 +995,18 @@ leftOuter
   -> FromClause lat with db params (Join left (NullifyFrom right))
 leftOuter item on tab = UnsafeFromClause $
   renderSQL tab <+> "LEFT OUTER" <+> renderSQL item <+> "ON" <+> renderSQL on
+
+{- | @left & leftOuterJoin right on@. First, an inner join is performed.
+Then, for each row in @left@ that does not satisfy the @on@ condition with
+any row in @right@, a joined row is added with null values in columns of @right@.
+Thus, the joined table always has at least one row for each row in @left@.
+-}
+leftOuterJoin
+  :: FromClause lat with db params right
+  -> Condition lat with 'Ungrouped db params (Join left right)
+  -> FromClause lat with db params left
+  -> FromClause lat with db params (Join left (NullifyFrom right))
+leftOuterJoin = leftOuter . Join
 
 {- | @left & rightOuter (Join right) on@. First, an inner join is performed.
 Then, for each row in @right@ that does not satisfy the @on@ condition with
@@ -966,6 +1022,19 @@ rightOuter
 rightOuter item on tab = UnsafeFromClause $
   renderSQL tab <+> "RIGHT OUTER" <+> renderSQL item <+> "ON" <+> renderSQL on
 
+{- | @left & rightOuterJoin right on@. First, an inner join is performed.
+Then, for each row in @right@ that does not satisfy the @on@ condition with
+any row in @left@, a joined row is added with null values in columns of @left@.
+This is the converse of a left join: the result table will always
+have a row for each row in @right@.
+-}
+rightOuterJoin
+  :: FromClause lat with db params right
+  -> Condition lat with 'Ungrouped db params (Join left right)
+  -> FromClause lat with db params left
+  -> FromClause lat with db params (Join (NullifyFrom left) right)
+rightOuterJoin = rightOuter . Join
+
 {- | @left & fullOuter (Join right) on@. First, an inner join is performed.
 Then, for each row in @left@ that does not satisfy the @on@ condition with
 any row in @right@, a joined row is added with null values in columns of @right@.
@@ -980,6 +1049,20 @@ fullOuter
   -> FromClause lat with db params (NullifyFrom (Join left right))
 fullOuter item on tab = UnsafeFromClause $
   renderSQL tab <+> "FULL OUTER" <+> renderSQL item <+> "ON" <+> renderSQL on
+
+{- | @left & fullOuterJoin right on@. First, an inner join is performed.
+Then, for each row in @left@ that does not satisfy the @on@ condition with
+any row in @right@, a joined row is added with null values in columns of @right@.
+Also, for each row of @right@ that does not satisfy the join condition
+with any row in @left@, a joined row with null values in the columns of @left@
+is added.
+-}
+fullOuterJoin
+  :: FromClause lat with db params right
+  -> Condition lat with 'Ungrouped db params (Join left right)
+  -> FromClause lat with db params left
+  -> FromClause lat with db params (NullifyFrom (Join left right))
+fullOuterJoin = fullOuter . Join
 
 {-----------------------------------------
 Grouping
