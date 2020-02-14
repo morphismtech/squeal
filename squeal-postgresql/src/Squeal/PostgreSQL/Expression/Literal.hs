@@ -125,7 +125,6 @@ instance Literal DiffTime where
       (mins,leftover2) = leftover1 `divMod` 60000000000000
       (secs,leftover3) = leftover2 `divMod` 1000000000000
       musecs = leftover3 `div` 1000000
-      -- musecs = fromIntegral (diffTimeToPicoseconds dt `div` 1000000)
     in
       interval_ (fromIntegral hours) Hours
       +! interval_ (fromIntegral mins) Minutes
