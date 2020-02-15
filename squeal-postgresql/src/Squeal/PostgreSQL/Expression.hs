@@ -356,7 +356,7 @@ function
 function = unsafeFunction . renderSQL
 
 -- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: literal 'a')
--- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, E'a')
+-- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, (E'a' :: char(1)))
 unsafeFunctionN :: SListI xs => ByteString -> xs ---> y
 unsafeFunctionN fun xs = UnsafeExpression $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)

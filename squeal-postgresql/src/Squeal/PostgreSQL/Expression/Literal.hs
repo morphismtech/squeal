@@ -13,6 +13,7 @@ Literal expressions
   , FlexibleInstances
   , LambdaCase
   , MultiParamTypeClasses
+  , MultiWayIf
   , OverloadedStrings
   , RankNTypes
   , ScopedTypeVariables
@@ -36,9 +37,10 @@ import Data.Kind (Type)
 import Data.Scientific (Scientific)
 import Data.String
 import Data.Text (Text)
-import Data.Time.Clock (DiffTime, diffTimeToPicoseconds, UTCTime(UTCTime))
+import Data.Time.Clock (DiffTime, diffTimeToPicoseconds, UTCTime)
+import Data.Time.Format (formatTime, defaultTimeLocale)
 import Data.Time.Calendar (Day, toGregorian)
-import Data.Time.LocalTime (LocalTime(LocalTime), TimeOfDay(TimeOfDay))
+import Data.Time.LocalTime (LocalTime(LocalTime), TimeOfDay(TimeOfDay), TimeZone)
 import Data.UUID.Types (UUID, toASCIIBytes)
 import Data.Vector (Vector, toList)
 import GHC.TypeLits
@@ -69,10 +71,10 @@ The `Literal` class allows embedding a Haskell value directly
 as an `Expression` using `literal`.
 
 >>> printSQL (literal 'a')
-E'a'
+(E'a' :: char(1))
 
 >>> printSQL (literal (1 :: Double))
-1.0
+(1.0 :: float8)
 
 >>> printSQL (literal (Json ([1, 2] :: [Double])))
 ('[1.0,2.0]' :: json)
@@ -89,66 +91,89 @@ instance Literal Bool where
     True -> true
     False -> false
 instance JSON.ToJSON hask => Literal (Json hask) where
-  literal = UnsafeExpression . parenthesized . (<> " :: json")
+  literal = inferredtype . UnsafeExpression
     . singleQuotedUtf8 . toStrict . JSON.encode . getJson
 instance JSON.ToJSON hask => Literal (Jsonb hask) where
-  literal =  UnsafeExpression . parenthesized . (<> " :: jsonb")
+  literal = inferredtype . UnsafeExpression
     . singleQuotedUtf8 . toStrict . JSON.encode . getJsonb
 instance Literal Char where
-  literal chr = UnsafeExpression $
+  literal chr = inferredtype . UnsafeExpression $
     "E\'" <> fromString (escape chr) <> "\'"
-instance Literal String where literal = fromString
-instance Literal Int16 where literal = fromIntegral
-instance Literal Int32 where literal = fromIntegral
-instance Literal Int64 where literal = inferredtype . fromIntegral
-instance Literal Float where literal = fromRational . toRational
-instance Literal Double where literal = fromRational . toRational
+instance Literal String where literal = inferredtype . fromString
+instance Literal Int16 where literal = inferredtype . fromIntegral
+instance Literal Int32 where literal = inferredtype . fromIntegral
+instance Literal Int64 where
+  literal x = inferredtype $
+    if x == minBound
+      -- For some reason Postgres throws an error with (-9223372036854775808::int8)
+      -- even though its a valid lowest value for int8
+      then UnsafeExpression "-9223372036854775807-1"
+      else fromIntegral x
+instance Literal Float where
+  literal x = inferredtype $
+    if | isNaN x -> UnsafeExpression $ singleQuotedUtf8 "NaN"
+       | isInfinite x && x > 0 -> UnsafeExpression $ singleQuotedUtf8 "Infinity"
+       | isInfinite x && x < 0 -> UnsafeExpression $ singleQuotedUtf8 "-Infinity"
+       | otherwise -> fromRational $ toRational x
+instance Literal Double where
+  literal x = inferredtype $
+    if | isNaN x -> UnsafeExpression $ singleQuotedUtf8 "NaN"
+       | isInfinite x && x > 0 -> UnsafeExpression $ singleQuotedUtf8 "Infinity"
+       | isInfinite x && x < 0 -> UnsafeExpression $ singleQuotedUtf8 "-Infinity"
+       | otherwise -> fromRational $ toRational x
 instance Literal Scientific where
   literal
-    = UnsafeExpression
+    = inferredtype
+    . UnsafeExpression
     . toStrict
     . toLazyByteString
     . scientificBuilder
-instance Literal Text where literal = fromString . Text.unpack
-instance Literal Lazy.Text where literal = fromString . Lazy.Text.unpack
-instance Literal (VarChar n) where
-  literal str = UnsafeExpression $
+instance Literal Text where literal = inferredtype . fromString . Text.unpack
+instance Literal Lazy.Text where literal = inferredtype . fromString . Lazy.Text.unpack
+instance (KnownNat n, 1 <= n) => Literal (VarChar n) where
+  literal str = inferredtype . UnsafeExpression $
       "E\'" <> fromString (escape =<< (Text.unpack . getVarChar) str) <> "\'"
-instance Literal (FixChar n) where
-  literal str = UnsafeExpression $
+instance (KnownNat n, 1 <= n) => Literal (FixChar n) where
+  literal str = inferredtype . UnsafeExpression $
       "E\'" <> fromString (escape =<< (Text.unpack . getFixChar) str) <> "\'"
 instance Literal DiffTime where
   literal dt =
     let
       picosecs = diffTimeToPicoseconds dt
-      (hours,leftover1) = picosecs `divMod` 3600000000000000
-      (mins,leftover2) = leftover1 `divMod` 60000000000000
-      (secs,leftover3) = leftover2 `divMod` 1000000000000
-      musecs = leftover3 `div` 1000000
+      (secs,leftover) = picosecs `quotRem` 1000000000000
+      microsecs = leftover `quot` 1000000
     in
-      interval_ (fromIntegral hours) Hours
-      +! interval_ (fromIntegral mins) Minutes
-      +! interval_ (fromIntegral secs) Seconds
-      +! interval_ (fromIntegral musecs) Microseconds
+      inferredtype $
+        interval_ (fromIntegral secs) Seconds
+        +! interval_ (fromIntegral microsecs) Microseconds
 instance Literal Day where
   literal day =
     let (y,m,d) = toGregorian day
-    in makeDate (fromInteger y :* fromIntegral m *: fromIntegral d)
+    in inferredtype $ makeDate (fromInteger y :* fromIntegral m *: fromIntegral d)
 instance Literal UTCTime where
-  literal (UTCTime day t) =
-    let (y,m,d) = toGregorian day
-    in makeTimestamptz
-      ( fromInteger y :* fromIntegral m :* fromIntegral d
-        :* 0 :* 0 *: 0 ) !+ literal t
+  literal
+    = inferredtype
+    . UnsafeExpression
+    . singleQuotedUtf8
+    . fromString
+    . formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S%z"
+instance Literal (TimeOfDay, TimeZone) where
+  literal (hms, tz)
+    = inferredtype
+    . UnsafeExpression
+    . singleQuotedUtf8
+    . fromString
+    $ formatTime defaultTimeLocale "%H:%M:%S" hms
+      <> formatTime defaultTimeLocale "%z" tz
 instance Literal TimeOfDay where
-  literal (TimeOfDay hr mn sc) = makeTime
+  literal (TimeOfDay hr mn sc) = inferredtype $ makeTime
     (fromIntegral hr :* fromIntegral mn *: fromRational (toRational sc))
 instance Literal LocalTime where
   literal (LocalTime day t) =
     let
       (y,m,d) = toGregorian day
       TimeOfDay hr mn sc = t
-    in makeTimestamp
+    in inferredtype $ makeTimestamp
       ( fromInteger y :* fromIntegral m :* fromIntegral d
         :* fromIntegral hr :* fromIntegral mn *: fromRational (toRational sc) )
 instance Literal (Range Int32) where
@@ -170,7 +195,7 @@ instance Literal UUID where
     . singleQuotedUtf8
     . toASCIIBytes
 instance Literal Money where
-  literal moolah = UnsafeExpression $
+  literal moolah = inferredtype . UnsafeExpression $
     fromString (show dollars)
     <> "." <> fromString (show pennies)
     where
@@ -180,7 +205,7 @@ instance Literal ty => Literal (VarArray [ty]) where
 instance Literal ty => Literal (VarArray (Vector ty)) where
   literal (VarArray xs) = array (literal <$> toList xs)
 instance Literal Oid where
-  literal (Oid o) = UnsafeExpression . fromString $ show o
+  literal (Oid o) = inferredtype . UnsafeExpression . fromString $ show o
 instance
   ( SOP.IsEnumType x
   , SOP.HasDatatypeInfo x

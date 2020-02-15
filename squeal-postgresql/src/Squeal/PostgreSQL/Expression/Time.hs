@@ -39,6 +39,7 @@ module Squeal.PostgreSQL.Expression.Time
   , TimeUnit (..)
   ) where
 
+import Data.Fixed
 import Data.String
 
 import qualified GHC.Generics as GHC
@@ -189,7 +190,7 @@ instance RenderSQL TimeUnit where
     Millennia -> "millennia"
 
 -- | >>> printSQL $ interval_ 7 Days
--- (INTERVAL '7.0 days')
-interval_ :: Double -> TimeUnit -> Expr (null 'PGinterval)
+-- (INTERVAL '7.000 days')
+interval_ :: Milli -> TimeUnit -> Expr (null 'PGinterval)
 interval_ num unit = UnsafeExpression . parenthesized $ "INTERVAL" <+>
   "'" <> fromString (show num) <+> renderSQL unit <> "'"

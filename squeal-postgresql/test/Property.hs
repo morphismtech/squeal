@@ -1,5 +1,6 @@
 {-# LANGUAGE
     DataKinds
+  , FlexibleContexts
   , GADTs
   , LambdaCase
   , OverloadedLabels
@@ -36,7 +37,7 @@ roundtrips = Group "roundtrips"
   , roundtrip float4 genFloat
   , roundtrip float8 genDouble
   , roundtripOn normalizeTimeOfDay time genTimeOfDay
-  -- , roundtrip timetz genTimeWithZone normalizeTimeWithZone
+  -- , roundtrip timetz genTimeWithZone
   , roundtripOn normalizeLocalTime timestamp genLocalTime
   , roundtrip timestamptz genUTCTime
   , roundtrip date genDay
@@ -58,13 +59,15 @@ roundtrips = Group "roundtrips"
     genFloat = Gen.prune $ Gen.choice
       [ genPosFloat
       , negate <$> genPosFloat
-      , Gen.element [0,1/0] ]
+      , Gen.element [0,1/0,-1/0]
+      ]
     genPosDouble = Gen.double
       (Range.exponentialFloatFrom 1 minPosFloat maxPosFloat)
     genDouble = Gen.prune $ Gen.choice
       [ genPosDouble
       , negate <$> genPosDouble
-      , Gen.element [0,1/0] ]
+      , Gen.element [0,1/0,-1/0]
+      ]
     genRange gen = do
       lb <- gen
       ub <- Gen.filter (lb <) gen
@@ -89,17 +92,20 @@ roundtrips = Group "roundtrips"
     -- genTimeZone = Gen.element $ map (read @TimeZone)
     --   [ "UTC", "UT", "GMT", "EST", "EDT", "CST"
     --   , "CDT", "MST", "MDT", "PST", "PDT" ]
-    -- genTimeWithZone = (,) <$> genTimeOfDay <*> genTimeZone
 
 roundtrip
-  :: (OidOf db ty, ToParam db ty x, FromValue ty x, Show x, Eq x)
+  :: ( OidOf db ty, ToParam db ty x, FromValue ty x
+     , Literal x, FromNullValue (NullPG x) x, NullTyped db (NullPG x)
+     , Show x, Eq x )
   => TypeExpression db ('NotNull ty)
   -> Gen x
   -> (PropertyName, Property)
 roundtrip = roundtripOn id
 
 roundtripOn
-  :: (OidOf db ty, ToParam db ty x, FromValue ty x, Show x, Eq x)
+  :: ( OidOf db ty, ToParam db ty x, FromValue ty x
+     , Literal x, FromNullValue (NullPG x) x, NullTyped db (NullPG x)
+     , Show x, Eq x )
   => (x -> x)
   -> TypeExpression db ('NotNull ty)
   -> Gen x
@@ -109,6 +115,10 @@ roundtripOn norm ty gen = propertyWithName $ do
   Just (Only y) <- lift . withConnection connectionString $
     firstRow =<< runQueryParams
       (values_ (parameter @1 ty `as` #fromOnly)) (Only x)
+  Just (Only z) <- lift . withConnection connectionString $
+    firstRow =<< runQuery
+      (values_ (literal x `as` #fromOnly))
+  y === z
   norm x === y
   where
     propertyWithName prop =

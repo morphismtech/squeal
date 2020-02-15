@@ -167,7 +167,7 @@ let
     insertInto_ #tab (inline row)
 in printSQL (manipulation (Row 1 2))
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (1, 2)
+INSERT INTO "tab" ("col1", "col2") VALUES ((1 :: int4), (2 :: int4))
 
 returning insert:
 
