@@ -355,7 +355,7 @@ function
   -> FunctionDB db x y
 function = unsafeFunction . renderSQL
 
--- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: literal 'a')
+-- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: inline 'a')
 -- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, (E'a' :: char(1)))
 unsafeFunctionN :: SListI xs => ByteString -> xs ---> y
 unsafeFunctionN fun xs = UnsafeExpression $
