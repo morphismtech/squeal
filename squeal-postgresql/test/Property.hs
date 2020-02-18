@@ -36,6 +36,9 @@ roundtrips = Group "roundtrips"
   , roundtrip numeric genScientific
   , roundtrip float4 genFloat
   , roundtrip float8 genDouble
+  , roundtripOn normalizeAscii text genStringAscii
+  , roundtripOn normalizeUtf8 text genStringUnicode
+  -- , roundtripOn normalizeUtf8 text genStringAll
   , roundtripOn normalizeTimeOfDay time genTimeOfDay
   -- , roundtrip timetz genTimeWithZone
   , roundtripOn normalizeLocalTime timestamp genLocalTime
@@ -68,6 +71,10 @@ roundtrips = Group "roundtrips"
       , negate <$> genPosDouble
       , Gen.element [0,1/0,-1/0]
       ]
+    genStringAscii = Gen.string (Range.linear 0 100) Gen.ascii
+    -- genStringLatin1 = Gen.string (Range.linear 0 100) Gen.latin1
+    genStringUnicode = Gen.string (Range.linear 0 100) Gen.unicode
+    -- genStringAll = Gen.string (Range.linear 0 100) Gen.unicodeAll
     genRange gen = do
       lb <- gen
       ub <- Gen.filter (lb <) gen
@@ -174,3 +181,17 @@ normalizeLocalTime (LocalTime d t) = LocalTime d (normalizeTimeOfDay t)
 
 -- normalizeTimeWithZone :: (TimeOfDay, TimeZone) -> (TimeOfDay, TimeZone)
 -- normalizeTimeWithZone (t, z) = (normalizeTimeOfDay t, z)
+
+normalizeAscii :: String -> String
+normalizeAscii = (stripped =<<)
+  where
+    stripped = \case
+      '\NUL' -> ""
+      ch -> [ch]
+
+normalizeUtf8 :: String -> String
+normalizeUtf8 = (stripped =<<)
+  where
+    stripped = \case
+      '\NUL' -> ""
+      ch -> [ch]

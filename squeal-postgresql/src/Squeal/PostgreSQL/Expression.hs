@@ -64,6 +64,7 @@ import Data.ByteString (ByteString)
 import Data.Function ((&))
 import Data.Semigroup hiding (All)
 import Data.String
+import Data.Text.Encoding (encodeUtf8)
 import Generics.SOP hiding (All, from)
 import GHC.OverloadedLabels
 import GHC.TypeLits
@@ -447,7 +448,7 @@ instance PGIntersect ('PGrange ty)
 instance IsString
   (Expression lat with grp db params from (null 'PGtext)) where
     fromString str = UnsafeExpression $
-      "E\'" <> fromString (escape =<< str) <> "\'"
+      "E\'" <> encodeUtf8 (fromString (escape =<< str)) <> "\'"
 instance IsString
   (Expression lat with grp db params from (null 'PGtsvector)) where
     fromString str = UnsafeExpression . parenthesized . (<> " :: tsvector") $
