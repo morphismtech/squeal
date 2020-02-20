@@ -133,7 +133,7 @@ printSQL = liftIO . Char8.putStrLn . renderSQL
 -- | `escape` a character to prevent injection
 escape :: Char -> String
 escape = \case
-  '\NUL' -> "\\0"
+  '\NUL' -> ""
   '\'' -> "''"
   '"' -> "\\\""
   '\b' -> "\\b"

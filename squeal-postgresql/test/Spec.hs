@@ -89,7 +89,7 @@ data Person = Person { name :: Maybe String, age :: Maybe Int32 }
   deriving
     ( FromValue PGperson
     , ToParam DB PGperson
-    , Literal
+    , Inline
     ) via (Composite Person)
 
 type PGperson = 'PGcomposite
@@ -123,7 +123,7 @@ spec = before_ setupDB . after_ dropDB $ do
         "host=localhost port=5432 dbname=exampledb" 1 0.5 10
       let
         qry :: Query_ (Public '[]) () (Only Char)
-        qry = values_ (literal 'a' `as` #fromOnly)
+        qry = values_ (inline 'a' `as` #fromOnly)
         session = usingConnectionPool pool . transactionally_ $ do
           result <- runQuery qry
           Just (Only chr) <- firstRow result
@@ -168,7 +168,7 @@ spec = before_ setupDB . after_ dropDB $ do
         roundtrip = values_ (param @1 `as` #fromOnly)
 
         roundtrip_inline :: Person -> Query_ DB () (Only Person)
-        roundtrip_inline person = values_ (literal person `as` #fromOnly)
+        roundtrip_inline person = values_ (inline person `as` #fromOnly)
 
         roundtrip_array :: Query_ DB
           (Only (VarArray [Person])) (Only (VarArray [Person]))

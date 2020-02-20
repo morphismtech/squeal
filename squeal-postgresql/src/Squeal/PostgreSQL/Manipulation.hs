@@ -46,10 +46,11 @@ module Squeal.PostgreSQL.Manipulation
   , Optional (..)
   , QueryClause (..)
   , pattern Values_
-  , LiteralColumn (..)
-  , literalColumns
-  , inline
-  , inlineMany
+  , InlineColumn (..)
+  , pattern NotDefault
+  , inlineColumns
+  , inlineValues
+  , inlineValues_
   , ReturningClause (..)
   , pattern Returning_
   , ConflictClause (..)
@@ -70,7 +71,7 @@ import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Expression.Literal
+import Squeal.PostgreSQL.Expression.Inline
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
@@ -164,10 +165,10 @@ in-line parameterized insert:
 let
   manipulation :: Row Int32 Int32 -> Manipulation_ (Public Schema) () ()
   manipulation row =
-    insertInto_ #tab (inline row)
+    insertInto_ #tab (inlineValues_ row)
 in printSQL (manipulation (Row 1 2))
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (1, 2)
+INSERT INTO "tab" ("col1", "col2") VALUES ((1 :: int4), (2 :: int4))
 
 returning insert:
 
@@ -392,49 +393,54 @@ instance (forall x. RenderSQL (expr x)) => RenderSQL (Optional expr ty) where
     Default -> "DEFAULT"
     Set expr -> renderSQL expr
 
--- | Lifts `Literal` to a column entry
-class LiteralColumn field column where
-  -- | Haskell record field as a literal column
-  literalColumn
+-- | Lifts `Inline` to a column entry
+class InlineColumn field column where
+  -- | Haskell record field as a inline column
+  inlineColumn
     :: SOP.P field
     -> Aliased ( Optional
       ( Expression lat with grp db params from
       ) ) column
-instance (Literal hask, column ~ (def :=> NullPG hask), KnownSymbol alias)
-  => LiteralColumn (alias ::: hask) (alias ::: column) where
-    literalColumn (SOP.P hask) = Set (literal hask) `as` (Alias @alias)
-instance (KnownSymbol alias, column ~ ('Def :=> ty))
-  => LiteralColumn (alias ::: ()) (alias ::: column) where
-    literalColumn _ = Default `as` (Alias @alias)
+instance (Inline hask, column ~ (def :=> NullPG hask), KnownSymbol alias)
+  => InlineColumn (alias ::: hask) (alias ::: column) where
+    inlineColumn (SOP.P hask) = Set (inline hask) `as` (Alias @alias)
+instance (Inline hask, column ~ ('Def :=> NullPG hask), KnownSymbol alias)
+  => InlineColumn (alias ::: Optional SOP.I ('Def :=> hask)) (alias ::: column) where
+    inlineColumn (SOP.P optional) = case optional of
+      Default -> Default `as` (Alias @alias)
+      Set (SOP.I x) -> Set (inline x) `as` (Alias @alias)
 
--- | Use a Haskell record as a literal list of columns
-literalColumns
+pattern NotDefault :: ty -> Optional SOP.I (def :=> ty)
+pattern NotDefault x = Set (SOP.I x)
+
+-- | Use a Haskell record as a inline list of columns
+inlineColumns
   :: ( SOP.IsRecord hask xs
-     , SOP.AllZip LiteralColumn xs columns )
+     , SOP.AllZip InlineColumn xs columns )
   => hask -- ^ record
   -> NP (Aliased (Optional (
       Expression '[] with 'Ungrouped db params '[]
       ) ) ) columns
-literalColumns
-  = SOP.htrans (SOP.Proxy @LiteralColumn) literalColumn
+inlineColumns
+  = SOP.htrans (SOP.Proxy @InlineColumn) inlineColumn
   . SOP.toRecord
 
--- | `inline` a Haskell record in `insertInto`.
-inline
+-- | `inlineValues_` a Haskell record in `insertInto`.
+inlineValues_
   :: ( SOP.IsRecord hask xs
-     , SOP.AllZip LiteralColumn xs columns )
+     , SOP.AllZip InlineColumn xs columns )
   => hask -- ^ record
   -> QueryClause with db params columns
-inline = Values_ . literalColumns
+inlineValues_ = Values_ . inlineColumns
 
--- | `inlineMany` Haskell records in `insertInto`.
-inlineMany
+-- | `inlineValues` Haskell records in `insertInto`.
+inlineValues
   :: ( SOP.IsRecord hask xs
-     , SOP.AllZip LiteralColumn xs columns )
+     , SOP.AllZip InlineColumn xs columns )
   => hask -- ^ record
   -> [hask] -- ^ more
   -> QueryClause with db params columns
-inlineMany hask hasks = Values (literalColumns hask) (literalColumns <$> hasks)
+inlineValues hask hasks = Values (inlineColumns hask) (inlineColumns <$> hasks)
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily

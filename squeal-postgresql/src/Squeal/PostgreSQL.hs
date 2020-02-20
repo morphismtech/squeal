@@ -211,7 +211,7 @@ import Squeal.PostgreSQL.Expression.Array as X
 import Squeal.PostgreSQL.Expression.Comparison as X
 import Squeal.PostgreSQL.Expression.Composite as X
 import Squeal.PostgreSQL.Expression.Json as X
-import Squeal.PostgreSQL.Expression.Literal as X
+import Squeal.PostgreSQL.Expression.Inline as X
 import Squeal.PostgreSQL.Expression.Logic as X
 import Squeal.PostgreSQL.Expression.Math as X
 import Squeal.PostgreSQL.Expression.Null as X

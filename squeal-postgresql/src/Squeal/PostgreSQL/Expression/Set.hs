@@ -183,7 +183,7 @@ let
   step = interval_ 1 Months
 in renderSQL (generateSeriesTimestamp (start :* stop *: step))
 :}
-"generate_series(now(), (now() + (INTERVAL '10.0 years')), (INTERVAL '1.0 months'))"
+"generate_series(now(), (now() + (INTERVAL '10.000 years')), (INTERVAL '1.000 months'))"
 -}
 generateSeriesTimestamp
   :: ty `In` '[ 'PGtimestamp, 'PGtimestamptz]
