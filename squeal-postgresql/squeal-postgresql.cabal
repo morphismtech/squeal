@@ -43,6 +43,7 @@ library
     Squeal.PostgreSQL.Expression.Null
     Squeal.PostgreSQL.Expression.Parameter
     Squeal.PostgreSQL.Expression.Range
+    Squeal.PostgreSQL.Expression.Range2
     Squeal.PostgreSQL.Expression.Set
     Squeal.PostgreSQL.Expression.Sort
     Squeal.PostgreSQL.Expression.Subquery
@@ -54,9 +55,11 @@ library
     Squeal.PostgreSQL.List
     Squeal.PostgreSQL.Manipulation
     Squeal.PostgreSQL.PG
+    Squeal.PostgreSQL.PG2
     Squeal.PostgreSQL.PQ
     Squeal.PostgreSQL.PQ.Connection
     Squeal.PostgreSQL.PQ.Decode
+    Squeal.PostgreSQL.PQ.Decode2
     Squeal.PostgreSQL.PQ.Encode
     Squeal.PostgreSQL.PQ.Exception
     Squeal.PostgreSQL.PQ.Indexed
