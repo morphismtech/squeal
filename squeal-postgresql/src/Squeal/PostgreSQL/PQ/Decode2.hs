@@ -89,7 +89,7 @@ value = unsafeCoerce
 
 -- | A `FromValue` constraint gives a parser from the binary format of
 -- a PostgreSQL `PGType` into a Haskell `Type`.
-class IsPG hask => FromValue hask where
+class IsPG y => FromValue y where
   {- |
   >>> :set -XMultiParamTypeClasses -XGeneralizedNewtypeDeriving -XDerivingStrategies -XDerivingVia -XUndecidableInstances
   >>> import GHC.Generics as GHC
@@ -115,7 +115,7 @@ class IsPG hask => FromValue hask where
   :}
 
   -}
-  fromValue :: StateT Strict.ByteString (Except Strict.Text) hask
+  fromValue :: StateT Strict.ByteString (Except Strict.Text) y
 instance FromValue Bool where
   fromValue = devalue bool
 instance FromValue Int16 where
