@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Encode2
+Module: Squeal.PostgreSQL.PQ.Encode
 Description: Encoding of statement parameters
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech

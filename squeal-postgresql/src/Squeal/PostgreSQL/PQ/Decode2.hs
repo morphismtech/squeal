@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Decode2
+Module: Squeal.PostgreSQL.PQ.Decode
 Description: Decoding of result values
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech

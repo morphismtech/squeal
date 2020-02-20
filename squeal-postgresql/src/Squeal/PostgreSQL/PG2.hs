@@ -1,11 +1,11 @@
 {-|
-Module: Squeal.PostgreSQL.PG2
+Module: Squeal.PostgreSQL.PG
 Description: Embedding of Haskell types into Postgres's type system
 Copyright: (c) Eitan Chatav, 2010
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-`Squeal.PostgreSQL.PG2` provides type families for turning Haskell
+`Squeal.PostgreSQL.PG` provides type families for turning Haskell
 `Type`s into corresponding Postgres types.
 -}
 {-# LANGUAGE

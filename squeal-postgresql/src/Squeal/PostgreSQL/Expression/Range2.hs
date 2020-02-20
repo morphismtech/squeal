@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.Expression.Range2
+Module: Squeal.PostgreSQL.Expression.Range
 Description: Range types and functions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
