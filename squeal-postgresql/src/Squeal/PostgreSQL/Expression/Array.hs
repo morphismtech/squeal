@@ -63,7 +63,7 @@ array xs = UnsafeExpression $ "ARRAY" <>
 
 -- | Safely construct an empty array.
 -- >>> printSQL $ array0 text
--- (ARRAY[] :: text)
+-- (ARRAY[] :: text[])
 array0
   :: TypeExpression db ty
   -> Expression lat with grp db params from (null ('PGvararray ty))
