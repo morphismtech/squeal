@@ -52,7 +52,7 @@ notNull = UnsafeExpression . renderSQL
 --
 -- >>> printSQL $ coalesce [null_, true] false
 -- COALESCE(NULL, TRUE, FALSE)
-coalesce :: FunctionVar ('Null ty) (null ty) (null ty)
+coalesce :: FunctionVar ('Null ty) ('NotNull ty) ('NotNull ty)
 coalesce nullxs notNullx = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
     ((renderSQL <$> nullxs) <> [renderSQL notNullx]))

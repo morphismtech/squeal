@@ -79,6 +79,7 @@ module Squeal.PostgreSQL.Expression.Type
   , tsrange
   , tstzrange
   , daterange
+  , record
     -- * Column Type
   , ColumnTypeExpression (..)
   , nullable
@@ -329,6 +330,9 @@ tstzrange = UnsafeTypeExpression "tstzrange"
 -- | Range of date
 daterange :: TypeExpression db (null ('PGrange 'PGdate))
 daterange = UnsafeTypeExpression "daterange"
+-- | Anonymous composite record
+record :: TypeExpression db (null ('PGcomposite record))
+record = UnsafeTypeExpression "record"
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped db (ty :: PGType) where pgtype :: TypeExpression db (null ty)

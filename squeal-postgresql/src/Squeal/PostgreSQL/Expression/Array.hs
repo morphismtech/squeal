@@ -27,6 +27,7 @@ Array functions
 module Squeal.PostgreSQL.Expression.Array
   ( -- * Array Functions
     array
+  , array0
   , array1
   , array2
   , cardinality
@@ -42,6 +43,7 @@ import qualified Generics.SOP as SOP
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Set
+import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
@@ -49,7 +51,8 @@ import Squeal.PostgreSQL.Schema
 -- $setup
 -- >>> import Squeal.PostgreSQL
 
--- | >>> printSQL $ array [null_, false, true]
+-- | Construct an array.
+-- >>> printSQL $ array [null_, false, true]
 -- ARRAY[NULL, FALSE, TRUE]
 array
   :: [Expression lat with grp db params from ty]
@@ -57,6 +60,14 @@ array
   -> Expression lat with grp db params from (null ('PGvararray ty))
 array xs = UnsafeExpression $ "ARRAY" <>
   bracketed (commaSeparated (renderSQL <$> xs))
+
+-- | Safely construct an empty array.
+-- >>> printSQL $ array0 text
+-- (ARRAY[] :: text)
+array0
+  :: TypeExpression db ty
+  -> Expression lat with grp db params from (null ('PGvararray ty))
+array0 ty = array [] & astype (vararray ty)
 
 {- | Construct a fixed length array.
 
