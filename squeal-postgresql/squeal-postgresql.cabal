@@ -38,6 +38,7 @@ library
     Squeal.PostgreSQL.Expression.Composite
     Squeal.PostgreSQL.Expression.Json
     Squeal.PostgreSQL.Expression.Inline
+    Squeal.PostgreSQL.Expression.Inline2
     Squeal.PostgreSQL.Expression.Logic
     Squeal.PostgreSQL.Expression.Math
     Squeal.PostgreSQL.Expression.Null
