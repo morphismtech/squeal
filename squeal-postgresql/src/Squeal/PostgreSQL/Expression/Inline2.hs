@@ -32,6 +32,7 @@ module Squeal.PostgreSQL.Expression.Inline2
 
 import Data.Binary.Builder (toLazyByteString)
 import Data.ByteString.Lazy (toStrict)
+import Data.ByteString.Builder (doubleDec, floatDec)
 import Data.ByteString.Builder.Scientific (scientificBuilder)
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind (Type)
@@ -88,10 +89,10 @@ instance InPG Bool where
   inPG = \case
     True -> true
     False -> false
-instance JSON.ToJSON hask => InPG (Json hask) where
+instance JSON.ToJSON x => InPG (Json x) where
   inPG = inferredtype . UnsafeExpression
     . singleQuotedUtf8 . toStrict . JSON.encode . getJson
-instance JSON.ToJSON hask => InPG (Jsonb hask) where
+instance JSON.ToJSON x => InPG (Jsonb x) where
   inPG = inferredtype . UnsafeExpression
     . singleQuotedUtf8 . toStrict . JSON.encode . getJsonb
 instance InPG Char where
@@ -108,17 +109,19 @@ instance InPG Int64 where
       then UnsafeExpression "-9223372036854775807-1"
       else fromIntegral x
 instance InPG Float where
-  inPG x = inferredtype $
-    if | isNaN x -> UnsafeExpression $ singleQuotedUtf8 "NaN"
-       | isInfinite x && x > 0 -> UnsafeExpression $ singleQuotedUtf8 "Infinity"
-       | isInfinite x && x < 0 -> UnsafeExpression $ singleQuotedUtf8 "-Infinity"
-       | otherwise -> fromRational $ toRational x
+  inPG x = inferredtype . UnsafeExpression $
+    if (isNaN x || isInfinite x)
+    then singleQuotedUtf8 (decimal x)
+    else decimal x
+    where
+      decimal = toStrict . toLazyByteString . floatDec
 instance InPG Double where
-  inPG x = inferredtype $
-    if | isNaN x -> UnsafeExpression $ singleQuotedUtf8 "NaN"
-       | isInfinite x && x > 0 -> UnsafeExpression $ singleQuotedUtf8 "Infinity"
-       | isInfinite x && x < 0 -> UnsafeExpression $ singleQuotedUtf8 "-Infinity"
-       | otherwise -> fromRational $ toRational x
+  inPG x = inferredtype . UnsafeExpression $
+    if (isNaN x || isInfinite x)
+    then singleQuotedUtf8 (decimal x)
+    else decimal x
+    where
+      decimal = toStrict . toLazyByteString . doubleDec
 instance InPG Scientific where
   inPG
     = inferredtype
