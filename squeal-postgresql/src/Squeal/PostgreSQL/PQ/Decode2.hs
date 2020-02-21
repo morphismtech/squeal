@@ -36,8 +36,8 @@ module Squeal.PostgreSQL.PQ.Decode2
   , devalue
   , value
     -- * Decoding Classes
+  , FromPG (..)
   , FromValue (..)
-  , FromNullValue (..)
   , FromField (..)
   , FromFixArray (..)
   , StateT (..)
@@ -87,15 +87,15 @@ devalue = unsafeCoerce
 value :: StateT Strict.ByteString (Except Strict.Text) x -> Value x
 value = unsafeCoerce
 
--- | A `FromValue` constraint gives a parser from the binary format of
+-- | A `FromPG` constraint gives a parser from the binary format of
 -- a PostgreSQL `PGType` into a Haskell `Type`.
-class IsPG y => FromValue y where
+class IsPG y => FromPG y where
   {- |
   >>> :set -XMultiParamTypeClasses -XGeneralizedNewtypeDeriving -XDerivingStrategies -XDerivingVia -XUndecidableInstances
   >>> import GHC.Generics as GHC
   >>> :{
   newtype UserId = UserId { getId :: Int64 }
-    deriving newtype (IsPG, FromValue)
+    deriving newtype (IsPG, FromPG)
   :}
 
   >>> :{
@@ -104,112 +104,112 @@ class IsPG y => FromValue y where
     , imaginary :: Double
     } deriving stock GHC.Generic
       deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-      deriving (IsPG, FromValue) via (Composite Complex)
+      deriving (IsPG, FromPG) via (Composite Complex)
   :}
 
   >>> :{
   data Direction = North | South | East | West
     deriving stock GHC.Generic
     deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-    deriving (IsPG, FromValue) via (Enumerated Direction)
+    deriving (IsPG, FromPG) via (Enumerated Direction)
   :}
 
   -}
-  fromValue :: StateT Strict.ByteString (Except Strict.Text) y
-instance FromValue Bool where
-  fromValue = devalue bool
-instance FromValue Int16 where
-  fromValue = devalue int
-instance FromValue Int32 where
-  fromValue = devalue int
-instance FromValue Int64 where
-  fromValue = devalue int
-instance FromValue Oid where
-  fromValue = devalue $ Oid <$> int
-instance FromValue Float where
-  fromValue = devalue float4
-instance FromValue Double where
-  fromValue = devalue float8
-instance FromValue Scientific where
-  fromValue = devalue numeric
-instance FromValue Money where
-  fromValue = devalue $  Money <$> int
-instance FromValue UUID where
-  fromValue = devalue uuid
-instance FromValue (NetAddr IP) where
-  fromValue = devalue inet
-instance FromValue Char where
-  fromValue = devalue char
-instance FromValue Strict.Text where
-  fromValue = devalue text_strict
-instance FromValue Lazy.Text where
-  fromValue = devalue text_lazy
-instance FromValue String where
-  fromValue = devalue $ Strict.Text.unpack <$> text_strict
-instance FromValue Strict.ByteString where
-  fromValue = devalue bytea_strict
-instance FromValue Lazy.ByteString where
-  fromValue = devalue bytea_lazy
-instance FromValue Day where
-  fromValue = devalue date
-instance FromValue TimeOfDay where
-  fromValue = devalue time_int
-instance FromValue (TimeOfDay, TimeZone) where
-  fromValue = devalue timetz_int
-instance FromValue LocalTime where
-  fromValue = devalue timestamp_int
-instance FromValue UTCTime where
-  fromValue = devalue timestamptz_int
-instance FromValue DiffTime where
-  fromValue = devalue interval_int
-instance FromValue Aeson.Value where
-  fromValue = devalue json_ast
-instance Aeson.FromJSON x => FromValue (Json x) where
-  fromValue = devalue $ Json <$>
+  fromPG :: StateT Strict.ByteString (Except Strict.Text) y
+instance FromPG Bool where
+  fromPG = devalue bool
+instance FromPG Int16 where
+  fromPG = devalue int
+instance FromPG Int32 where
+  fromPG = devalue int
+instance FromPG Int64 where
+  fromPG = devalue int
+instance FromPG Oid where
+  fromPG = devalue $ Oid <$> int
+instance FromPG Float where
+  fromPG = devalue float4
+instance FromPG Double where
+  fromPG = devalue float8
+instance FromPG Scientific where
+  fromPG = devalue numeric
+instance FromPG Money where
+  fromPG = devalue $  Money <$> int
+instance FromPG UUID where
+  fromPG = devalue uuid
+instance FromPG (NetAddr IP) where
+  fromPG = devalue inet
+instance FromPG Char where
+  fromPG = devalue char
+instance FromPG Strict.Text where
+  fromPG = devalue text_strict
+instance FromPG Lazy.Text where
+  fromPG = devalue text_lazy
+instance FromPG String where
+  fromPG = devalue $ Strict.Text.unpack <$> text_strict
+instance FromPG Strict.ByteString where
+  fromPG = devalue bytea_strict
+instance FromPG Lazy.ByteString where
+  fromPG = devalue bytea_lazy
+instance FromPG Day where
+  fromPG = devalue date
+instance FromPG TimeOfDay where
+  fromPG = devalue time_int
+instance FromPG (TimeOfDay, TimeZone) where
+  fromPG = devalue timetz_int
+instance FromPG LocalTime where
+  fromPG = devalue timestamp_int
+instance FromPG UTCTime where
+  fromPG = devalue timestamptz_int
+instance FromPG DiffTime where
+  fromPG = devalue interval_int
+instance FromPG Aeson.Value where
+  fromPG = devalue json_ast
+instance Aeson.FromJSON x => FromPG (Json x) where
+  fromPG = devalue $ Json <$>
     json_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
-instance Aeson.FromJSON x => FromValue (Jsonb x) where
-  fromValue = devalue $ Jsonb <$>
+instance Aeson.FromJSON x => FromPG (Jsonb x) where
+  fromPG = devalue $ Jsonb <$>
     jsonb_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
-instance FromValue y
-  => FromValue (VarArray (Vector y)) where
-    fromValue =
+instance FromPG y
+  => FromPG (VarArray (Vector y)) where
+    fromPG =
       let
         rep n x = VarArray <$> Vector.replicateM n x
       in
         devalue . array $ dimensionArray rep
           (fromFixArray @'[] @('NotNull (PG y)))
-instance FromValue y
-  => FromValue (VarArray (Vector (Maybe y))) where
-    fromValue =
+instance FromPG y
+  => FromPG (VarArray (Vector (Maybe y))) where
+    fromPG =
       let
         rep n x = VarArray <$> Vector.replicateM n x
       in
         devalue . array $ dimensionArray rep
           (fromFixArray @'[] @('Null (PG y)))
-instance FromValue y
-  => FromValue (VarArray [y]) where
-    fromValue =
+instance FromPG y
+  => FromPG (VarArray [y]) where
+    fromPG =
       let
         rep n x = VarArray <$> replicateM n x
       in
         devalue . array $ dimensionArray rep
           (fromFixArray @'[] @('NotNull (PG y)))
-instance FromValue y
-  => FromValue (VarArray [Maybe y]) where
-    fromValue =
+instance FromPG y
+  => FromPG (VarArray [Maybe y]) where
+    fromPG =
       let
         rep n x = VarArray <$> replicateM n x
       in
         devalue . array $ dimensionArray rep
           (fromFixArray @'[] @('Null (PG y)))
-instance FromFixArray dims ty y => FromValue (FixArray y) where
-  fromValue = devalue $ FixArray <$> array (fromFixArray @dims @ty @y)
+instance FromFixArray dims ty y => FromPG (FixArray y) where
+  fromPG = devalue $ FixArray <$> array (fromFixArray @dims @ty @y)
 instance
   ( SOP.IsEnumType y
   , SOP.HasDatatypeInfo y
   , LabelsPG y ~ labels
-  ) => FromValue (Enumerated y) where
-    fromValue =
+  ) => FromPG (Enumerated y) where
+    fromPG =
       let
         greadConstructor
           :: SOP.All ((~) '[]) xss
@@ -233,8 +233,8 @@ instance
 instance
   ( SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
-  ) => FromValue (Composite y) where
-    fromValue =
+  ) => FromPG (Composite y) where
+    fromPG =
       let
         -- <number of fields: 4 bytes>
         -- [for each field]
@@ -257,8 +257,8 @@ instance
       in
         devalue $
           fmap Composite (fn (runDecodeRow (genericRow @row) <=< comp))
-instance FromValue y => FromValue (Range y) where
-  fromValue = devalue $ do
+instance FromPG y => FromPG (Range y) where
+  fromPG = devalue $ do
     flag <- byte
     if testBit flag 0 then return Empty else do
       lower <-
@@ -266,44 +266,44 @@ instance FromValue y => FromValue (Range y) where
           then return Infinite
           else do
             len <- sized 4 int
-            l <- sized len (value fromValue)
+            l <- sized len (value fromPG)
             return $ if testBit flag 1 then Closed l else Open l
       upper <-
         if testBit flag 4
           then return Infinite
           else do
             len <- sized 4 int
-            l <- sized len (value fromValue)
+            l <- sized len (value fromPG)
             return $ if testBit flag 2 then Closed l else Open l
       return $ NonEmpty lower upper
 
--- | A `FromNullValue` constraint lifts the `FromValue` parser
+-- | A `FromValue` constraint lifts the `FromPG` parser
 -- to a decoding of a @NullityType@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
--- `FromNullValue`, just use the provided instances.
-class FromNullValue (ty :: NullType) (y :: Type) where
-  fromNullValue :: Maybe Strict.ByteString -> Either Strict.Text y
-instance (FromValue y, pg ~ PG y) => FromNullValue ('NotNull pg) y where
-  fromNullValue = \case
+-- `FromValue`, just use the provided instances.
+class FromValue (ty :: NullType) (y :: Type) where
+  fromValue :: Maybe Strict.ByteString -> Either Strict.Text y
+instance (FromPG y, pg ~ PG y) => FromValue ('NotNull pg) y where
+  fromValue = \case
     Nothing -> throwError "fromField: saw NULL when expecting NOT NULL"
-    Just bytestring -> valueParser (value fromValue) bytestring
-instance (FromValue y, pg ~ PG y) => FromNullValue ('Null pg) (Maybe y) where
-  fromNullValue = \case
+    Just bytestring -> valueParser (value fromPG) bytestring
+instance (FromPG y, pg ~ PG y) => FromValue ('Null pg) (Maybe y) where
+  fromValue = \case
     Nothing -> return Nothing
-    Just bytestring -> fmap Just $ valueParser (value fromValue) bytestring
+    Just bytestring -> fmap Just $ valueParser (value fromPG) bytestring
 
--- | A `FromField` constraint lifts the `FromValue` parser
+-- | A `FromField` constraint lifts the `FromPG` parser
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromField`, just use the provided instances.
 class FromField (field :: (Symbol, NullType)) (y :: (Symbol, Type)) where
   fromField :: Maybe Strict.ByteString -> Either Strict.Text (SOP.P y)
-instance (FromValue y, field ~ (fld ::: 'NotNull (PG y)))
+instance (FromPG y, field ~ (fld ::: 'NotNull (PG y)))
   => FromField field (fld ::: y) where
-    fromField = fmap SOP.P . fromNullValue @('NotNull (PG y))
-instance (FromValue y, field ~ (fld ::: 'Null (PG y)))
+    fromField = fmap SOP.P . fromValue @('NotNull (PG y))
+instance (FromPG y, field ~ (fld ::: 'Null (PG y)))
   => FromField field (fld ::: Maybe y) where
-    fromField = fmap SOP.P . fromNullValue @('Null (PG y))
+    fromField = fmap SOP.P . fromValue @('Null (PG y))
 
 -- | A `FromFixArray` constraint gives a decoding to a Haskell `Type`
 -- from the binary format of a PostgreSQL fixed-length array.
@@ -311,10 +311,10 @@ instance (FromValue y, field ~ (fld ::: 'Null (PG y)))
 -- `FromFixArray`, just use the provided instances.
 class FromFixArray (dims :: [Nat]) (ty :: NullType) (y :: Type) where
   fromFixArray :: Array y
-instance (FromValue y, pg ~ PG y) => FromFixArray '[] ('NotNull pg) y where
-  fromFixArray = valueArray (value fromValue)
-instance (FromValue y, pg ~ PG y) => FromFixArray '[] ('Null pg) (Maybe y) where
-  fromFixArray = nullableValueArray (value fromValue)
+instance (FromPG y, pg ~ PG y) => FromFixArray '[] ('NotNull pg) y where
+  fromFixArray = valueArray (value fromPG)
+instance (FromPG y, pg ~ PG y) => FromFixArray '[] ('Null pg) (Maybe y) where
+  fromFixArray = nullableValueArray (value fromPG)
 instance
   ( SOP.IsProductType product ys
   , Length ys ~ dim
@@ -389,18 +389,18 @@ decodeRow
   :: (SOP.NP (SOP.K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
   -> DecodeRow row y
 decodeRow dec = DecodeRow . ReaderT $ liftEither . dec
-instance {-# OVERLAPPING #-} FromNullValue ty y
+instance {-# OVERLAPPING #-} FromValue ty y
   => IsLabel fld (DecodeRow (fld ::: ty ': row) y) where
     fromLabel = decodeRow $ \(SOP.K b SOP.:* _) ->
-      fromNullValue @ty b
+      fromValue @ty b
 instance {-# OVERLAPPABLE #-} IsLabel fld (DecodeRow row y)
   => IsLabel fld (DecodeRow (field ': row) y) where
     fromLabel = decodeRow $ \(_ SOP.:* bs) ->
       runDecodeRow (fromLabel @fld) bs
-instance {-# OVERLAPPING #-} FromNullValue ty (Maybe y)
+instance {-# OVERLAPPING #-} FromValue ty (Maybe y)
   => IsLabel fld (MaybeT (DecodeRow (fld ::: ty ': row)) y) where
     fromLabel = MaybeT . decodeRow $ \(SOP.K b SOP.:* _) ->
-      fromNullValue @ty b
+      fromValue @ty b
 instance {-# OVERLAPPABLE #-} IsLabel fld (MaybeT (DecodeRow row) y)
   => IsLabel fld (MaybeT (DecodeRow (field ': row)) y) where
     fromLabel = MaybeT . decodeRow $ \(_ SOP.:* bs) ->
