@@ -173,13 +173,13 @@ oidOfTypedef
 oidOfTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
-    Nothing -> throwIO ConnectionException
+    Nothing -> throwIO $ ConnectionException "LibPQ.execParams"
     Just result -> do
       valueMaybe <- LibPQ.getvalue result 0 0
       case valueMaybe of
-        Nothing -> throwIO ConnectionException
+        Nothing -> throwIO $ ConnectionException "LibPQ.getvalue"
         Just value -> case valueParser int value of
-          Left err -> throwIO $ ParseException $ "oid error: " <> err
+          Left err -> throwIO $ DecodingException "oidOfTypedef" err
           Right oid -> return $ LibPQ.Oid oid
   where
     q = ByteString.intercalate " "
@@ -200,13 +200,13 @@ oidOfArrayTypedef
 oidOfArrayTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
-    Nothing -> throwIO ConnectionException
+    Nothing -> throwIO $ ConnectionException "LibPQ.execParams"
     Just result -> do
       valueMaybe <- LibPQ.getvalue result 0 0
       case valueMaybe of
-        Nothing -> throwIO ConnectionException
+        Nothing -> throwIO $ ConnectionException "LibPQ.getvalue"
         Just value -> case valueParser int value of
-          Left err -> throwIO $ ParseException $ "oid array error: " <> err
+          Left err -> throwIO $ DecodingException "oidOfArray" err
           Right oid -> return $ LibPQ.Oid oid
   where
     q = ByteString.intercalate " "

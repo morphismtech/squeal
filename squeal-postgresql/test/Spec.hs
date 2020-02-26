@@ -27,6 +27,7 @@ import Data.Int (Int32)
 import Data.Text (Text)
 import Test.Hspec
 
+import qualified Data.ByteString.Char8 as Char8 (unlines)
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
@@ -98,8 +99,9 @@ spec = before_ setupDB . after_ dropDB $ do
       testUser = User "TestUser"
       newUser = manipulateParams_ insertUser
       insertUserTwice = newUser testUser >> newUser testUser
-      err23505 = PQException $ PQState FatalError (Just "23505")
-        (Just "ERROR:  duplicate key value violates unique constraint \"unique_names\"\nDETAIL:  Key (name)=(TestUser) already exists.\n")
+      err23505 = UniqueViolation $ Char8.unlines
+        [ "ERROR:  duplicate key value violates unique constraint \"unique_names\""
+        , "DETAIL:  Key (name)=(TestUser) already exists." ]
 
     it "should be thrown for constraint violation" $
       withConnection connectionString insertUserTwice

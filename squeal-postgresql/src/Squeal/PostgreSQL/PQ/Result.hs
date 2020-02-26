@@ -35,7 +35,7 @@ import Control.Exception (throw)
 import Control.Monad (when)
 import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import Data.Traversable (for)
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
@@ -66,14 +66,12 @@ getRow :: MonadIO io => LibPQ.Row -> Result y -> io y
 getRow r (Result decode result) = liftIO $ do
   numRows <- LibPQ.ntuples result
   numCols <- LibPQ.nfields result
-  when (numRows < r) $ throw $ ResultException $
-    "getRow: expected at least " <> pack (show r) <> "rows but only saw "
-    <> pack (show numRows)
+  when (numRows < r) $ throw $ RowsException "getRow" r numRows
   row' <- traverse (LibPQ.getvalue result r) [0 .. numCols - 1]
   case SOP.fromList row' of
-    Nothing -> throw $ ResultException "getRow: found unexpected length"
+    Nothing -> throw $ ColumnsException "getRow" numCols
     Just row -> case execDecodeRow decode row of
-      Left parseError -> throw $ ParseException $ "getRow: " <> parseError
+      Left parseError -> throw $ DecodingException "getRow" parseError
       Right y -> return y
 
 -- | Intended to be used for unfolding in streaming libraries, `nextRow`
@@ -91,9 +89,9 @@ nextRow total (Result decode result) r
     numCols <- LibPQ.nfields result
     row' <- traverse (LibPQ.getvalue result r) [0 .. numCols - 1]
     case SOP.fromList row' of
-      Nothing -> throw $ ResultException "nextRow: found unexpected length"
+      Nothing -> throw $ ColumnsException "nextRow" numCols
       Just row -> case execDecodeRow decode row of
-        Left parseError -> throw $ ParseException $ "nextRow: " <> parseError
+        Left parseError -> throw $ DecodingException "nextRow" parseError
         Right y -> return $ Just (r+1, y)
 
 -- | Get all rows from a `LibPQ.Result`.
@@ -104,9 +102,9 @@ getRows (Result decode result) = liftIO $ do
   for [0 .. numRows - 1] $ \ r -> do
     row' <- traverse (LibPQ.getvalue result r) [0 .. numCols - 1]
     case SOP.fromList row' of
-      Nothing -> throw $ ResultException "getRows: found unexpected length"
+      Nothing -> throw $ ColumnsException "getRows" numCols
       Just row -> case execDecodeRow decode row of
-        Left parseError -> throw $ ParseException $ "getRows: " <> parseError
+        Left parseError -> throw $ DecodingException "getRows" parseError
         Right y -> return y
 
 -- | Get the first row if possible from a `LibPQ.Result`.
@@ -117,9 +115,9 @@ firstRow (Result decode result) = liftIO $ do
   if numRows <= 0 then return Nothing else do
     row' <- traverse (LibPQ.getvalue result 0) [0 .. numCols - 1]
     case SOP.fromList row' of
-      Nothing -> throw $ ResultException "firstRow: found unexpected length"
+      Nothing -> throw $ ColumnsException "firstRow" numCols
       Just row -> case execDecodeRow decode row of
-        Left parseError -> throw $ ParseException $ "firstRow: " <> parseError
+        Left parseError -> throw $ DecodingException "firstRow" parseError
         Right y -> return $ Just y
 
 -- | Lifts actions on results from @LibPQ@.
@@ -148,12 +146,17 @@ okResult_ result = liftIO $ do
     LibPQ.CommandOk -> return ()
     LibPQ.TuplesOk -> return ()
     _ -> do
-      stateCode <- LibPQ.resultErrorField result LibPQ.DiagSqlstate
-      msg <- LibPQ.resultErrorMessage result
-      throw . PQException $ PQState status stateCode msg
+      stateCodeMaybe <- LibPQ.resultErrorField result LibPQ.DiagSqlstate
+      case stateCodeMaybe of
+        Nothing -> throw $ ConnectionException "LibPQ.resultErrorField"
+        Just stateCode -> do
+          msgMaybe <- LibPQ.resultErrorMessage result
+          case msgMaybe of
+            Nothing -> throw $ ConnectionException "LibPQ.resultErrorMessage"
+            Just msg -> throw . SQLException $ SQLState status stateCode msg
 
 -- | Check if a `LibPQ.Result`'s status is either `LibPQ.CommandOk`
--- or `LibPQ.TuplesOk` otherwise `throw` a `PQException`.
+-- or `LibPQ.TuplesOk` otherwise `throw` a `SQLException`.
 okResult :: MonadIO io => SOP.K LibPQ.Result row -> io ()
 okResult = okResult_ . SOP.unK
 
