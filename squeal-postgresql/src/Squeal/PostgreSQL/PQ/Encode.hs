@@ -39,7 +39,7 @@ module Squeal.PostgreSQL.PQ.Encode
   , ToPG (..)
   , ToParam (..)
   , ToField (..)
-  , ToFixArray (..)
+  , ToArray (..)
   ) where
 
 import ByteString.StrictBuilder
@@ -132,7 +132,7 @@ instance Aeson.ToJSON x => ToPG db (Json x) where
 instance Aeson.ToJSON x => ToPG db (Jsonb x) where
   toPG = pure . jsonb_bytes
     . Lazy.ByteString.toStrict . Aeson.encode . getJsonb
-instance (NullPG x ~ ty, ToFixArray db '[] ty x, OidOfNull db ty)
+instance (NullPG x ~ ty, ToArray db '[] ty x, OidOfNull db ty)
   => ToPG db (VarArray [x]) where
     toPG (VarArray arr) = do
       oid <- oidOfNull @db @ty
@@ -141,7 +141,7 @@ instance (NullPG x ~ ty, ToFixArray db '[] ty x, OidOfNull db ty)
         nulls = False
       payload <- dimArray foldM (arrayPayload @db @'[] @ty @x) arr
       return $ encodeArray 1 nulls oid dims payload
-instance (NullPG x ~ ty, ToFixArray db '[] ty x, OidOfNull db ty)
+instance (NullPG x ~ ty, ToArray db '[] ty x, OidOfNull db ty)
   => ToPG db (VarArray (Vector x)) where
     toPG (VarArray arr) = do
       oid <- oidOfNull @db @ty
@@ -150,25 +150,7 @@ instance (NullPG x ~ ty, ToFixArray db '[] ty x, OidOfNull db ty)
         nulls = False
       payload <- dimArray foldM (arrayPayload @db @'[] @ty @x) arr
       return $ encodeArray 1 nulls oid dims payload
--- instance (IsPG x, ToFixArray db '[] (Maybe x), OidOf db (PG x))
---   => ToPG db (VarArray 'Null [Maybe x]) where
---     toPG (VarArray arr) = do
---       oid <- oidOf @db @(PG x)
---       let
---         dims = [fromIntegral (length arr)]
---         nulls = True
---       payload <- dimArray foldM (arrayPayload @db @'[] @x) arr
---       return $ encodeArray 1 nulls oid dims payload
--- instance (IsPG x, ToFixArray db '[] (Maybe x), OidOf db (PG x))
---   => ToPG db (VarArray 'Null (Vector (Maybe x))) where
---     toPG (VarArray arr) = do
---       oid <- oidOf @db @(PG x)
---       let
---         dims = [fromIntegral (length arr)]
---         nulls = True
---       payload <- dimArray _foldM (arrayPayload @db @'[] @x) arr
---       return $ encodeArray 1 nulls oid dims payload
-instance (IsPG x, ToFixArray db dims ty x, OidOfNull db ty)
+instance (IsPG x, ToArray db dims ty x, OidOfNull db ty)
   => ToPG db (FixArray x) where
     toPG (FixArray arr) = do
       oid <- oidOfNull @db @ty
@@ -277,11 +259,11 @@ instance (fld0 ~ fld1, ToParam db ty x)
   => ToField db (fld0 ::: ty) (fld1 ::: x) where
     toField (SOP.P x) = SOP.K <$> toParam @db @ty x
 
--- | A `ToFixArray` constraint gives an encoding of a Haskell `Type`
+-- | A `ToArray` constraint gives an encoding of a Haskell `Type`
 -- into the binary format of a PostgreSQL fixed-length array.
 -- You should not define instances for
--- `ToFixArray`, just use the provided instances.
-class ToFixArray
+-- `ToArray`, just use the provided instances.
+class ToArray
   (db :: SchemasType)
   (dims :: [Nat])
   (ty :: NullType)
@@ -290,12 +272,12 @@ class ToFixArray
   arrayDims :: [Int32]
   arrayNulls :: Bool
 instance (ToPG db x, pg ~ PG x)
-  => ToFixArray db '[] ('NotNull pg) x where
+  => ToArray db '[] ('NotNull pg) x where
   arrayPayload = fmap sized . toPG @db @x
   arrayDims = []
   arrayNulls = False
 instance (ToPG db x, pg ~ PG x)
-  => ToFixArray db '[] ('Null pg) (Maybe x) where
+  => ToArray db '[] ('Null pg) (Maybe x) where
   arrayPayload = maybe (pure null4) (fmap sized . toPG @db @x)
   arrayDims = []
   arrayNulls = True
@@ -303,9 +285,9 @@ instance
   ( SOP.IsProductType tuple xs
   , Length xs ~ dim
   , SOP.All ((~) x) xs
-  , ToFixArray db dims ty x
+  , ToArray db dims ty x
   , KnownNat dim )
-  => ToFixArray db (dim ': dims) ty tuple where
+  => ToArray db (dim ': dims) ty tuple where
     arrayPayload
       = dimArray foldlNP (arrayPayload @db @dims @ty @x)
       . SOP.unZ . SOP.unSOP . SOP.from

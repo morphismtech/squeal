@@ -40,7 +40,7 @@ module Squeal.PostgreSQL.PQ.Decode
   , FromPG (..)
   , FromValue (..)
   , FromField (..)
-  , FromFixArray (..)
+  , FromArray (..)
   , StateT (..)
   , ExceptT (..)
   ) where
@@ -194,24 +194,24 @@ instance Aeson.FromJSON x => FromPG (Json x) where
 instance Aeson.FromJSON x => FromPG (Jsonb x) where
   fromPG = devalue $ Jsonb <$>
     jsonb_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
-instance (FromFixArray '[] ty y, ty ~ NullPG y)
+instance (FromArray '[] ty y, ty ~ NullPG y)
   => FromPG (VarArray (Vector y)) where
     fromPG =
       let
         rep n x = VarArray <$> Vector.replicateM n x
       in
         devalue . array $ dimensionArray rep
-          (fromFixArray @'[] @(NullPG y))
-instance (FromFixArray '[] ty y, ty ~ NullPG y)
+          (fromArray @'[] @(NullPG y))
+instance (FromArray '[] ty y, ty ~ NullPG y)
   => FromPG (VarArray [y]) where
     fromPG =
       let
         rep n x = VarArray <$> replicateM n x
       in
         devalue . array $ dimensionArray rep
-          (fromFixArray @'[] @(NullPG y))
-instance FromFixArray dims ty y => FromPG (FixArray y) where
-  fromPG = devalue $ FixArray <$> array (fromFixArray @dims @ty @y)
+          (fromArray @'[] @(NullPG y))
+instance FromArray dims ty y => FromPG (FixArray y) where
+  fromPG = devalue $ FixArray <$> array (fromArray @dims @ty @y)
 instance
   ( SOP.IsEnumType y
   , SOP.HasDatatypeInfo y
@@ -289,27 +289,27 @@ instance (FromValue ty y, fld0 ~ fld1)
   => FromField (fld0 ::: ty) (fld1 ::: y) where
     fromField = fmap SOP.P . fromValue @ty
 
--- | A `FromFixArray` constraint gives a decoding to a Haskell `Type`
+-- | A `FromArray` constraint gives a decoding to a Haskell `Type`
 -- from the binary format of a PostgreSQL fixed-length array.
 -- You should not define instances for
--- `FromFixArray`, just use the provided instances.
-class FromFixArray (dims :: [Nat]) (ty :: NullType) (y :: Type) where
-  fromFixArray :: Array y
-instance (FromPG y, pg ~ PG y) => FromFixArray '[] ('NotNull pg) y where
-  fromFixArray = valueArray (value fromPG)
-instance (FromPG y, pg ~ PG y) => FromFixArray '[] ('Null pg) (Maybe y) where
-  fromFixArray = nullableValueArray (value fromPG)
+-- `FromArray`, just use the provided instances.
+class FromArray (dims :: [Nat]) (ty :: NullType) (y :: Type) where
+  fromArray :: Array y
+instance (FromPG y, pg ~ PG y) => FromArray '[] ('NotNull pg) y where
+  fromArray = valueArray (value fromPG)
+instance (FromPG y, pg ~ PG y) => FromArray '[] ('Null pg) (Maybe y) where
+  fromArray = nullableValueArray (value fromPG)
 instance
   ( SOP.IsProductType product ys
   , Length ys ~ dim
   , SOP.All ((~) y) ys
-  , FromFixArray dims ty y )
-  => FromFixArray (dim ': dims) ty product where
-    fromFixArray =
+  , FromArray dims ty y )
+  => FromArray (dim ': dims) ty product where
+    fromArray =
       let
         rep _ = fmap (SOP.to . SOP.SOP . SOP.Z) . replicateMN
       in
-        dimensionArray rep (fromFixArray @dims @ty @y)
+        dimensionArray rep (fromArray @dims @ty @y)
 
 replicateMN
   :: forall x xs m. (SOP.All ((~) x) xs, Monad m, SOP.SListI xs)
