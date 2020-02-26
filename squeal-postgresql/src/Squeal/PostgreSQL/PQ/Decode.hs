@@ -33,6 +33,7 @@ module Squeal.PostgreSQL.PQ.Decode
   , decodeRow
   , runDecodeRow
   , genericRow
+  , enumValue
   , rowValue
   , devalue
   , value
@@ -57,6 +58,7 @@ import Data.Bits
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind
 import Data.Scientific (Scientific)
+import Data.Text (Text)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
 import Data.UUID.Types (UUID)
 import Data.Vector (Vector)
@@ -87,6 +89,9 @@ devalue = unsafeCoerce
 
 value :: StateT Strict.ByteString (Except Strict.Text) x -> Value x
 value = unsafeCoerce
+
+enumValue :: (Text -> Maybe y) -> Value y
+enumValue = enum
 
 rowValue :: SOP.SListI row => DecodeRow row y -> Value y
 rowValue decoder =
