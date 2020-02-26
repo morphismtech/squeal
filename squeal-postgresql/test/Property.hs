@@ -5,6 +5,7 @@
   , LambdaCase
   , OverloadedLabels
   , OverloadedStrings
+  , ScopedTypeVariables
   , TypeApplications
   , TypeOperators
 #-}
@@ -101,20 +102,22 @@ roundtrips = Group "roundtrips"
     --   , "CDT", "MST", "MDT", "PST", "PDT" ]
 
 roundtrip
-  :: ( OidOf db ty, ToParam db ty x, FromValue ty x
-     , Inline x, FromNullValue (NullPG x) x, NullTyped db (NullPG x)
+  :: forall db x
+   . ( ToPG db x, FromPG x, InPG x
+     , OidOf db (PG x), PGTyped db (PG x)
      , Show x, Eq x )
-  => TypeExpression db ('NotNull ty)
+  => TypeExpression db ('NotNull (PG x))
   -> Gen x
   -> (PropertyName, Property)
 roundtrip = roundtripOn id
 
 roundtripOn
-  :: ( OidOf db ty, ToParam db ty x, FromValue ty x
-     , Inline x, FromNullValue (NullPG x) x, NullTyped db (NullPG x)
+  :: forall db x
+   . ( ToPG db x, FromPG x, InPG x
+     , OidOf db (PG x), PGTyped db (PG x)
      , Show x, Eq x )
   => (x -> x)
-  -> TypeExpression db ('NotNull ty)
+  -> TypeExpression db ('NotNull (PG x))
   -> Gen x
   -> (PropertyName, Property)
 roundtripOn norm ty gen = propertyWithName $ do
@@ -124,7 +127,7 @@ roundtripOn norm ty gen = propertyWithName $ do
       (values_ (parameter @1 ty `as` #fromOnly)) (Only x)
   Just (Only z) <- lift . withConnection connectionString $
     firstRow =<< runQuery
-      (values_ (inline x `as` #fromOnly))
+      (values_ (inPG @x @'NotNull x `as` #fromOnly))
   y === z
   norm x === y
   where

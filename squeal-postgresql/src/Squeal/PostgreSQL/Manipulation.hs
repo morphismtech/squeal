@@ -401,14 +401,16 @@ class InlineColumn field column where
     -> Aliased ( Optional
       ( Expression lat with grp db params from
       ) ) column
-instance (Inline hask, column ~ (def :=> NullPG hask), KnownSymbol alias)
-  => InlineColumn (alias ::: hask) (alias ::: column) where
-    inlineColumn (SOP.P hask) = Set (inline hask) `as` (Alias @alias)
-instance (Inline hask, column ~ ('Def :=> NullPG hask), KnownSymbol alias)
-  => InlineColumn (alias ::: Optional SOP.I ('Def :=> hask)) (alias ::: column) where
+instance (KnownSymbol col, Inline x ty)
+  => InlineColumn (col ::: x) (col ::: 'NoDef :=> ty) where
+    inlineColumn (SOP.P x) = Set (inline x) `as` (Alias @col)
+instance (KnownSymbol col, Inline x ty)
+  => InlineColumn
+    (col ::: Optional SOP.I ('Def :=> x))
+    (col ::: 'Def :=> ty) where
     inlineColumn (SOP.P optional) = case optional of
-      Default -> Default `as` (Alias @alias)
-      Set (SOP.I x) -> Set (inline x) `as` (Alias @alias)
+      Default -> Default `as` (Alias @col)
+      Set (SOP.I x) -> Set (inline x) `as` (Alias @col)
 
 pattern NotDefault :: ty -> Optional SOP.I (def :=> ty)
 pattern NotDefault x = Set (SOP.I x)

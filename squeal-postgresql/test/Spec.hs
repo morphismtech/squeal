@@ -16,6 +16,7 @@
   , TypeSynonymInstances
   , TypeInType
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Main (main) where
@@ -44,7 +45,7 @@ type UsersColumns =
 
 type Schema =
   '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns)
-   , "person" ::: 'Typedef PGperson ]
+   , "person" ::: 'Typedef (PG Person) ]
 
 type DB = '[ "public" ::: Schema ]
 
@@ -86,15 +87,7 @@ connectionString = "host=localhost port=5432 dbname=exampledb"
 
 data Person = Person { name :: Maybe String, age :: Maybe Int32 }
   deriving (Eq, Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
-  deriving
-    ( FromValue PGperson
-    , ToParam DB PGperson
-    , Inline
-    ) via (Composite Person)
-
-type PGperson = 'PGcomposite
-  '["name" ::: 'Null 'PGtext, "age" ::: 'Null 'PGint4]
-type instance PG Person = PGperson
+  deriving (IsPG, InPG, FromPG, ToPG db) via (Composite Person)
 
 spec :: Spec
 spec = before_ setupDB . after_ dropDB $ do
@@ -171,19 +164,19 @@ spec = before_ setupDB . after_ dropDB $ do
         roundtrip_inline person = values_ (inline person `as` #fromOnly)
 
         roundtrip_array :: Query_ DB
-          (Only (VarArray [Person])) (Only (VarArray [Person]))
+          (Only (VarArray 'NotNull [Person])) (Only (VarArray 'NotNull [Person]))
         roundtrip_array = values_ (param @1 `as` #fromOnly)
 
         oneway :: Query_ DB () (Only Person)
         oneway = values_ (row ("Adam" `as` #name :* 6000 `as` #age) `as` #fromOnly)
 
-        oneway_array :: Query_ DB () (Only (VarArray [Person]))
+        oneway_array :: Query_ DB () (Only (VarArray 'NotNull [Person]))
         oneway_array = values_ $ array
           [ row ("Adam" `as` #name :* 6000 `as` #age)
           , row ("Lucy" `as` #name :* 2420000 `as` #age)
           ] `as` #fromOnly
 
-        unsafeQ :: Query_ DB () (Only (VarArray [Composite Person]))
+        unsafeQ :: Query_ DB () (Only (VarArray 'NotNull [Composite Person]))
         unsafeQ = UnsafeQuery "select array[row(\'Adam\', 6000)]"
 
         nothingQ :: Query_ DB () (Only Person)
@@ -191,6 +184,7 @@ spec = before_ setupDB . after_ dropDB $ do
 
         adam = Person (Just "Adam") (Just 6000)
         lucy = Person (Just "Lucy") (Just 2420000)
+        people :: VarArray 'NotNull [Person]
         people = VarArray [adam, lucy]
 
       out <- withConnection connectionString $
@@ -213,5 +207,5 @@ spec = before_ setupDB . after_ dropDB $ do
       out_array `shouldBe` Just (Only people)
       out2 `shouldBe` Just (Only adam)
       out2_array `shouldBe` Just (Only people)
-      unsafe_array `shouldBe` Just (Only (VarArray [Composite adam]))
+      unsafe_array `shouldBe` Just (Only (VarArray @'NotNull [Composite adam]))
       nothings `shouldBe` Just (Only (Person Nothing Nothing))

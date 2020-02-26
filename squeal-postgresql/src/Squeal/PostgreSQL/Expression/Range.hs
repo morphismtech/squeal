@@ -73,7 +73,7 @@ import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
 -- $setup
--- >>> import Squeal.PostgreSQL
+-- >>> import Squeal.PostgreSQL (tstzrange, numrange, int4range, now, printSQL)
 
 -- | Construct a `range`
 --
@@ -120,7 +120,8 @@ data Range x = Empty | NonEmpty (Bound x) (Bound x)
     , Functor, Foldable, Traversable )
   deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
 -- | `PGrange` @(@`PG` @hask)@
-type instance PG (Range hask) = 'PGrange (PG hask)
+instance IsPG hask => IsPG (Range hask) where
+  type PG (Range hask) = 'PGrange (PG hask)
 
 -- | Finite `Range` constructor
 (<=..<=), (<..<), (<=..<), (<..<=) :: x -> x -> Range x

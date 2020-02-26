@@ -91,7 +91,7 @@ instance RenderSQL (Statement db x y) where
 type GenericParams db params x xs =
   ( SOP.All (OidOfNull db) params
   , SOP.IsProductType x xs
-  , SOP.AllZip (ToNullParam db) params xs )
+  , SOP.AllZip (ToParam db) params xs )
 
 -- | A `GenericRow` constraint to ensure that
 -- a Haskell type is a record type,
