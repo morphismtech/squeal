@@ -245,7 +245,7 @@ instance
   ) => Inline (Composite x) where
     inline
       = row
-      . SOP.htrans (SOP.Proxy @InlineField) inlineParamField
+      . SOP.htrans (SOP.Proxy @InlineField) inlineField
       . SOP.toRecord
       . getComposite
 
@@ -257,9 +257,9 @@ instance (Inline x, pg ~ PG x) => InlineParam (Maybe x) ('Null pg) where
 class InlineField
   (field :: (Symbol, Type))
   (fieldpg :: (Symbol, NullType)) where
-    inlineParamField
+    inlineField
       :: SOP.P field
       -> Aliased (Expression lat with grp db params from) fieldpg
 instance (KnownSymbol alias, InlineParam x ty)
   => InlineField (alias ::: x) (alias ::: ty) where
-    inlineParamField (SOP.P x) = inlineParam x `as` Alias @alias
+    inlineField (SOP.P x) = inlineParam x `as` Alias @alias
