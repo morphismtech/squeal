@@ -70,16 +70,19 @@ module Squeal.PostgreSQL.Query
   , subquery
   , view
   , common
+  , cross
   , crossJoin
+  , inner
   , innerJoin
+  , leftOuter
   , leftOuterJoin
+  , rightOuter
   , rightOuterJoin
+  , fullOuter
   , fullOuterJoin
-  , crossJoinLateral
-  , innerJoinLateral
-  , leftOuterJoinLateral
-  , rightOuterJoinLateral
-  , fullOuterJoinLateral
+  , JoinItem (..)
+  , SetOf
+  , SetOfN
     -- * Grouping
   , By (..)
   , GroupByClause (..)
@@ -96,6 +99,7 @@ import Generics.SOP hiding (from)
 import GHC.TypeLits
 
 import qualified GHC.Generics as GHC
+import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
@@ -291,6 +295,22 @@ let
 in printSQL query
 :}
 SELECT "o"."price" AS "price", "c"."name" AS "customerName", "s"."name" AS "shipperName" FROM "orders" AS "o" INNER JOIN "customers" AS "c" ON ("o"."customer_id" = "c"."id") INNER JOIN "shippers" AS "s" ON ("o"."shipper_id" = "s"."id")
+
+>>> :{
+let
+  query :: Query_ (Public OrdersSchema) () Order
+  query = select_
+    ( #o ! #price `as` #price :*
+      #c ! #name `as` #customerName :*
+      #s ! #name `as` #shipperName )
+    ( from (table (#orders `as` #o)
+      & (inner.JoinLateral) (select Star (from (table #customers)) `as` #c)
+        (#o ! #customer_id .== #c ! #id)
+      & (inner.JoinLateral) (select Star (from (table #shippers)) `as` #s)
+        (#o ! #shipper_id .== #s ! #id)) )
+in printSQL query
+:}
+SELECT "o"."price" AS "price", "c"."name" AS "customerName", "s"."name" AS "shipperName" FROM "orders" AS "o" INNER JOIN LATERAL (SELECT * FROM "customers" AS "customers") AS "c" ON ("o"."customer_id" = "c"."id") INNER JOIN LATERAL (SELECT * FROM "shippers" AS "shippers") AS "s" ON ("o"."shipper_id" = "s"."id")
 
 self-join:
 
@@ -823,7 +843,12 @@ FROM clauses
 A `FromClause` can be a table name, or a derived table such
 as a subquery, a @JOIN@ construct, or complex combinations of these.
 -}
-newtype FromClause lat with db params from
+newtype FromClause
+  (lat :: FromType)
+  (with :: FromType)
+  (db :: SchemasType)
+  (params :: [NullType])
+  (from :: FromType)
   = UnsafeFromClause { renderFromClause :: ByteString }
   deriving (GHC.Generic,Show,Eq,Ord,NFData)
 instance RenderSQL (FromClause lat with db params from) where
@@ -864,6 +889,66 @@ instance Additional (FromClause lat with db params) where
   also right left = UnsafeFromClause $
     renderSQL left <> ", " <> renderSQL right
 
+type SetOf db ty set
+  =  forall lat with params
+  .  Expression lat with 'Ungrouped db params '[] ty
+     -- ^ input
+  -> FromClause lat with db params '[set]
+     -- ^ output
+
+type SetOfN db tys set
+  =  forall lat with params
+  .  NP (Expression lat with 'Ungrouped db params '[]) tys
+     -- ^ input
+  -> FromClause lat with db params '[set]
+     -- ^ output
+
+data JoinItem
+  (lat :: FromType)
+  (with :: FromType)
+  (db :: SchemasType)
+  (params :: [NullType])
+  (left :: FromType)
+  (right :: FromType) where
+    Join
+      :: FromClause lat with db params right
+      -> JoinItem lat with db params left right
+    JoinLateral
+      :: Aliased (Query (Join lat left) with db params) query
+      -> JoinItem lat with db params left '[query]
+    JoinFunction
+      :: SetOf db ty set
+      -> Expression lat with 'Ungrouped db params left ty
+      -> JoinItem lat with db params left '[set]
+    JoinFunctionN
+      :: SListI tys
+      => SetOfN db tys set
+      -> NP (Expression lat with 'Ungrouped db params left) tys
+      -> JoinItem lat with db params left '[set]
+instance RenderSQL (JoinItem lat with db params left right) where
+  renderSQL = \case
+    Join tab -> "JOIN" <+> renderSQL tab
+    JoinLateral qry -> "JOIN LATERAL" <+>
+      renderAliased (parenthesized . renderSQL) qry
+    JoinFunction fun x -> "JOIN" <+>
+      renderSQL (fun (UnsafeExpression (renderSQL x)))
+    JoinFunctionN fun xs -> "JOIN" <+>
+      renderSQL (fun (SOP.hmap (UnsafeExpression . renderSQL) xs))
+
+{- |
+@left & cross (Join right)@. For every possible combination of rows from
+@left@ and @right@ (i.e., a Cartesian product), the joined table will contain
+a row consisting of all columns in @left@ followed by all columns in @right@.
+If the tables have @n@ and @m@ rows respectively, the joined table will
+have @n * m@ rows.
+-}
+cross
+  :: JoinItem lat with db params left right
+  -> FromClause lat with db params left
+  -> FromClause lat with db params (Join left right)
+cross item tab = UnsafeFromClause $
+  renderSQL tab <+> "CROSS" <+> renderSQL item
+
 {- |
 @left & crossJoin right@. For every possible combination of rows from
 @left@ and @right@ (i.e., a Cartesian product), the joined table will contain
@@ -873,150 +958,111 @@ have @n * m@ rows.
 -}
 crossJoin
   :: FromClause lat with db params right
-  -- ^ right
   -> FromClause lat with db params left
-  -- ^ left
   -> FromClause lat with db params (Join left right)
-crossJoin right left = UnsafeFromClause $
-  renderSQL left <+> "CROSS JOIN" <+> renderSQL right
+crossJoin = cross . Join
 
-{- |Allows `crossJoin` to reference columns provided by
-preceding `from` items.-}
-crossJoinLateral
-  :: FromClause (Join lat left) with db params right
-  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
+{- | @left & inner (Join right) on@. The joined table is filtered by
+the @on@ condition.
+-}
+inner
+  :: JoinItem lat with db params left right
+  -> Condition lat with 'Ungrouped db params (Join left right)
   -> FromClause lat with db params left
-  -- ^ left
   -> FromClause lat with db params (Join left right)
-crossJoinLateral right left = UnsafeFromClause $
-  renderSQL left <+> "CROSS JOIN LATERAL" <+> renderSQL right
+inner item on tab = UnsafeFromClause $
+  renderSQL tab <+> "INNER" <+> renderSQL item <+> "ON" <+> renderSQL on
 
 {- | @left & innerJoin right on@. The joined table is filtered by
 the @on@ condition.
 -}
 innerJoin
   :: FromClause lat with db params right
-  -- ^ right
   -> Condition lat with 'Ungrouped db params (Join left right)
-  -- ^ @on@ condition
   -> FromClause lat with db params left
-  -- ^ left
   -> FromClause lat with db params (Join left right)
-innerJoin right on left = UnsafeFromClause $
-  renderSQL left <+> "INNER JOIN" <+> renderSQL right
-  <+> "ON" <+> renderSQL on
+innerJoin = inner . Join
 
-{- |Allows `innerJoin` to reference columns provided by
-preceding `from` items.-}
-innerJoinLateral
-  :: FromClause (Join lat left) with db params right
-  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
+{- | @left & leftOuter (Join right) on@. First, an inner join is performed.
+Then, for each row in @left@ that does not satisfy the @on@ condition with
+any row in @right@, a joined row is added with null values in columns of @right@.
+Thus, the joined table always has at least one row for each row in @left@.
+-}
+leftOuter
+  :: JoinItem lat with db params left right
   -> Condition lat with 'Ungrouped db params (Join left right)
-  -- ^ @on@ condition
   -> FromClause lat with db params left
-  -- ^ left
-  -> FromClause lat with db params (Join left right)
-innerJoinLateral right on left = UnsafeFromClause $
-  renderSQL left <+> "INNER JOIN LATERAL" <+> renderSQL right
-  <+> "ON" <+> renderSQL on
+  -> FromClause lat with db params (Join left (NullifyFrom right))
+leftOuter item on tab = UnsafeFromClause $
+  renderSQL tab <+> "LEFT OUTER" <+> renderSQL item <+> "ON" <+> renderSQL on
 
 {- | @left & leftOuterJoin right on@. First, an inner join is performed.
-    Then, for each row in @left@ that does not satisfy the @on@ condition with
-    any row in @right@, a joined row is added with null values in columns of @right@.
-    Thus, the joined table always has at least one row for each row in @left@.
+Then, for each row in @left@ that does not satisfy the @on@ condition with
+any row in @right@, a joined row is added with null values in columns of @right@.
+Thus, the joined table always has at least one row for each row in @left@.
 -}
 leftOuterJoin
   :: FromClause lat with db params right
-  -- ^ right
   -> Condition lat with 'Ungrouped db params (Join left right)
-  -- ^ @on@ condition
   -> FromClause lat with db params left
-  -- ^ left
   -> FromClause lat with db params (Join left (NullifyFrom right))
-leftOuterJoin right on left = UnsafeFromClause $
-  renderSQL left <+> "LEFT OUTER JOIN" <+> renderSQL right
-  <+> "ON" <+> renderSQL on
+leftOuterJoin = leftOuter . Join
 
-{- |Allows `leftOuterJoin` to reference columns provided by
-preceding `from` items.-}
-leftOuterJoinLateral
-  :: FromClause (Join lat left) with db params right
-  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
+{- | @left & rightOuter (Join right) on@. First, an inner join is performed.
+Then, for each row in @right@ that does not satisfy the @on@ condition with
+any row in @left@, a joined row is added with null values in columns of @left@.
+This is the converse of a left join: the result table will always
+have a row for each row in @right@.
+-}
+rightOuter
+  :: JoinItem lat with db params left right
   -> Condition lat with 'Ungrouped db params (Join left right)
-  -- ^ @on@ condition
   -> FromClause lat with db params left
-  -- ^ left
-  -> FromClause lat with db params (Join left (NullifyFrom right))
-leftOuterJoinLateral right on left = UnsafeFromClause $
-  renderSQL left <+> "LEFT OUTER JOIN LATERAL" <+> renderSQL right
-  <+> "ON" <+> renderSQL on
+  -> FromClause lat with db params (Join (NullifyFrom left) right)
+rightOuter item on tab = UnsafeFromClause $
+  renderSQL tab <+> "RIGHT OUTER" <+> renderSQL item <+> "ON" <+> renderSQL on
 
 {- | @left & rightOuterJoin right on@. First, an inner join is performed.
-    Then, for each row in @right@ that does not satisfy the @on@ condition with
-    any row in @left@, a joined row is added with null values in columns of @left@.
-    This is the converse of a left join: the result table will always
-    have a row for each row in @right@.
+Then, for each row in @right@ that does not satisfy the @on@ condition with
+any row in @left@, a joined row is added with null values in columns of @left@.
+This is the converse of a left join: the result table will always
+have a row for each row in @right@.
 -}
 rightOuterJoin
   :: FromClause lat with db params right
-  -- ^ right
   -> Condition lat with 'Ungrouped db params (Join left right)
-  -- ^ @on@ condition
   -> FromClause lat with db params left
-  -- ^ left
   -> FromClause lat with db params (Join (NullifyFrom left) right)
-rightOuterJoin right on left = UnsafeFromClause $
-  renderSQL left <+> "RIGHT OUTER JOIN" <+> renderSQL right
-  <+> "ON" <+> renderSQL on
+rightOuterJoin = rightOuter . Join
 
-{- |Allows `rightOuterJoin` to reference columns provided by
-preceding `from` items.-}
-rightOuterJoinLateral
-  :: FromClause (Join lat left) with db params right
-  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
+{- | @left & fullOuter (Join right) on@. First, an inner join is performed.
+Then, for each row in @left@ that does not satisfy the @on@ condition with
+any row in @right@, a joined row is added with null values in columns of @right@.
+Also, for each row of @right@ that does not satisfy the join condition
+with any row in @left@, a joined row with null values in the columns of @left@
+is added.
+-}
+fullOuter
+  :: JoinItem lat with db params left right
   -> Condition lat with 'Ungrouped db params (Join left right)
-  -- ^ @on@ condition
   -> FromClause lat with db params left
-  -- ^ left
-  -> FromClause lat with db params (Join (NullifyFrom left) right)
-rightOuterJoinLateral right on left = UnsafeFromClause $
-  renderSQL left <+> "RIGHT OUTER JOIN LATERAL" <+> renderSQL right
-  <+> "ON" <+> renderSQL on
+  -> FromClause lat with db params (NullifyFrom (Join left right))
+fullOuter item on tab = UnsafeFromClause $
+  renderSQL tab <+> "FULL OUTER" <+> renderSQL item <+> "ON" <+> renderSQL on
 
 {- | @left & fullOuterJoin right on@. First, an inner join is performed.
-    Then, for each row in @left@ that does not satisfy the @on@ condition with
-    any row in @right@, a joined row is added with null values in columns of @right@.
-    Also, for each row of @right@ that does not satisfy the join condition
-    with any row in @left@, a joined row with null values in the columns of @left@
-    is added.
+Then, for each row in @left@ that does not satisfy the @on@ condition with
+any row in @right@, a joined row is added with null values in columns of @right@.
+Also, for each row of @right@ that does not satisfy the join condition
+with any row in @left@, a joined row with null values in the columns of @left@
+is added.
 -}
 fullOuterJoin
   :: FromClause lat with db params right
-  -- ^ right
   -> Condition lat with 'Ungrouped db params (Join left right)
-  -- ^ @on@ condition
   -> FromClause lat with db params left
-  -- ^ left
-  -> FromClause lat with db params
-      (Join (NullifyFrom left) (NullifyFrom right))
-fullOuterJoin right on left = UnsafeFromClause $
-  renderSQL left <+> "FULL OUTER JOIN" <+> renderSQL right
-  <+> "ON" <+> renderSQL on
-
-{- |Allows `fullOuterJoin` to reference columns provided by
-preceding `from` items.-}
-fullOuterJoinLateral
-  :: FromClause (Join lat left) with db params right
-  -- ^ right `subquery` or `Squeal.PostgreSQL.Expression.Set.setFunction`
-  -> Condition lat with 'Ungrouped db params (Join left right)
-  -- ^ @on@ condition
-  -> FromClause lat with db params left
-  -- ^ left
-  -> FromClause lat with db params
-      (Join (NullifyFrom left) (NullifyFrom right))
-fullOuterJoinLateral right on left = UnsafeFromClause $
-  renderSQL left <+> "FULL OUTER JOIN LATERAL" <+> renderSQL right
-  <+> "ON" <+> renderSQL on
+  -> FromClause lat with db params (NullifyFrom (Join left right))
+fullOuterJoin = fullOuter . Join
 
 {-----------------------------------------
 Grouping
