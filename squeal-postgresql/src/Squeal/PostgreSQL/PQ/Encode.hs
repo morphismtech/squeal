@@ -138,7 +138,7 @@ instance (NullPG x ~ ty, ToArray db '[] ty x, OidOfNull db ty)
       oid <- oidOfNull @db @ty
       let
         dims = [fromIntegral (length arr)]
-        nulls = False
+        nulls = arrayNulls @db @'[] @ty @x
       payload <- dimArray foldM (arrayPayload @db @'[] @ty @x) arr
       return $ encodeArray 1 nulls oid dims payload
 instance (NullPG x ~ ty, ToArray db '[] ty x, OidOfNull db ty)
@@ -147,17 +147,17 @@ instance (NullPG x ~ ty, ToArray db '[] ty x, OidOfNull db ty)
       oid <- oidOfNull @db @ty
       let
         dims = [fromIntegral (length arr)]
-        nulls = False
+        nulls = arrayNulls @db @'[] @ty @x
       payload <- dimArray foldM (arrayPayload @db @'[] @ty @x) arr
       return $ encodeArray 1 nulls oid dims payload
-instance (IsPG x, ToArray db dims ty x, OidOfNull db ty)
+instance (ToArray db dims ty x, OidOfNull db ty)
   => ToPG db (FixArray x) where
     toPG (FixArray arr) = do
       oid <- oidOfNull @db @ty
       payload <- arrayPayload @db @dims @ty arr
       let
         dims = arrayDims @db @dims @ty @x
-        nulls = False
+        nulls = arrayNulls @db @dims @ty @x
         ndims = fromIntegral (length dims)
       return $ encodeArray ndims nulls oid dims payload
 instance
