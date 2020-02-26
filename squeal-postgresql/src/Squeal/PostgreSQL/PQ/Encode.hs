@@ -132,23 +132,23 @@ instance Aeson.ToJSON x => ToPG db (Json x) where
 instance Aeson.ToJSON x => ToPG db (Jsonb x) where
   toPG = pure . jsonb_bytes
     . Lazy.ByteString.toStrict . Aeson.encode . getJsonb
-instance (IsPG x, ToFixArray db '[] x, OidOf db (PG x))
-  => ToPG db (VarArray 'NotNull [x]) where
+instance (NullPG x ~ ty, ToFixArray db '[] ty x, OidOfNull db ty)
+  => ToPG db (VarArray [x]) where
     toPG (VarArray arr) = do
-      oid <- oidOf @db @(PG x)
+      oid <- oidOfNull @db @ty
       let
         dims = [fromIntegral (length arr)]
         nulls = False
-      payload <- dimArray foldM (arrayPayload @db @'[] @x) arr
+      payload <- dimArray foldM (arrayPayload @db @'[] @ty @x) arr
       return $ encodeArray 1 nulls oid dims payload
-instance (IsPG x, ToFixArray db '[] x, OidOf db (PG x))
-  => ToPG db (VarArray 'NotNull (Vector x)) where
+instance (NullPG x ~ ty, ToFixArray db '[] ty x, OidOfNull db ty)
+  => ToPG db (VarArray (Vector x)) where
     toPG (VarArray arr) = do
-      oid <- oidOf @db @(PG x)
+      oid <- oidOfNull @db @ty
       let
         dims = [fromIntegral (length arr)]
         nulls = False
-      payload <- dimArray foldM (arrayPayload @db @'[] @x) arr
+      payload <- dimArray foldM (arrayPayload @db @'[] @ty @x) arr
       return $ encodeArray 1 nulls oid dims payload
 -- instance (IsPG x, ToFixArray db '[] (Maybe x), OidOf db (PG x))
 --   => ToPG db (VarArray 'Null [Maybe x]) where
@@ -168,13 +168,13 @@ instance (IsPG x, ToFixArray db '[] x, OidOf db (PG x))
 --         nulls = True
 --       payload <- dimArray _foldM (arrayPayload @db @'[] @x) arr
 --       return $ encodeArray 1 nulls oid dims payload
-instance (IsPG x, ToFixArray db dims x, OidOf db (PG x))
+instance (IsPG x, ToFixArray db dims ty x, OidOfNull db ty)
   => ToPG db (FixArray x) where
     toPG (FixArray arr) = do
-      oid <- oidOf @db @(PG x)
-      payload <- arrayPayload @db @dims arr
+      oid <- oidOfNull @db @ty
+      payload <- arrayPayload @db @dims @ty arr
       let
-        dims = arrayDims @db @dims @x
+        dims = arrayDims @db @dims @ty @x
         nulls = False
         ndims = fromIntegral (length dims)
       return $ encodeArray ndims nulls oid dims payload
@@ -257,11 +257,11 @@ instance ToPG db x => ToPG db (Range x) where
 -- You should not define instances for `ToParam`,
 -- just use the provided instances.
 class ToParam (db :: SchemasType) (ty :: NullType) (x :: Type) where
-  toNullParam :: x -> ReaderT (SOP.K LibPQ.Connection db) IO (Maybe Encoding)
+  toParam :: x -> ReaderT (SOP.K LibPQ.Connection db) IO (Maybe Encoding)
 instance (ToPG db x, pg ~ PG x) => ToParam db ('NotNull pg) x where
-  toNullParam = fmap Just . toPG @db
+  toParam = fmap Just . toPG @db
 instance (ToPG db x, pg ~ PG x) => ToParam db ('Null pg) (Maybe x) where
-  toNullParam = maybe (pure Nothing) (fmap Just . toPG @db)
+  toParam = maybe (pure Nothing) (fmap Just . toPG @db)
 
 -- | A `ToField` constraint lifts the `ToPG` parser
 -- to an encoding of a @(Symbol, Type)@ to a @(Symbol, NullityType)@,
@@ -275,7 +275,7 @@ class ToField
     -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K (Maybe Encoding) field)
 instance (fld0 ~ fld1, ToParam db ty x)
   => ToField db (fld0 ::: ty) (fld1 ::: x) where
-    toField (SOP.P x) = SOP.K <$> toNullParam @db @ty x
+    toField (SOP.P x) = SOP.K <$> toParam @db @ty x
 
 -- | A `ToFixArray` constraint gives an encoding of a Haskell `Type`
 -- into the binary format of a PostgreSQL fixed-length array.
@@ -284,28 +284,35 @@ instance (fld0 ~ fld1, ToParam db ty x)
 class ToFixArray
   (db :: SchemasType)
   (dims :: [Nat])
+  (ty :: NullType)
   (x :: Type) where
   arrayPayload :: x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
   arrayDims :: [Int32]
-instance ToPG db x => ToFixArray db '[] x where
+  arrayNulls :: Bool
+instance (ToPG db x, pg ~ PG x)
+  => ToFixArray db '[] ('NotNull pg) x where
   arrayPayload = fmap sized . toPG @db @x
   arrayDims = []
-instance ToPG db x => ToFixArray db '[] (Maybe x) where
+  arrayNulls = False
+instance (ToPG db x, pg ~ PG x)
+  => ToFixArray db '[] ('Null pg) (Maybe x) where
   arrayPayload = maybe (pure null4) (fmap sized . toPG @db @x)
   arrayDims = []
+  arrayNulls = True
 instance
   ( SOP.IsProductType tuple xs
   , Length xs ~ dim
   , SOP.All ((~) x) xs
-  , ToFixArray db dims x
+  , ToFixArray db dims ty x
   , KnownNat dim )
-  => ToFixArray db (dim ': dims) tuple where
+  => ToFixArray db (dim ': dims) ty tuple where
     arrayPayload
-      = dimArray foldlNP (arrayPayload @db @dims @x)
+      = dimArray foldlNP (arrayPayload @db @dims @ty @x)
       . SOP.unZ . SOP.unSOP . SOP.from
     arrayDims
       = fromIntegral (natVal (SOP.Proxy @dim))
-      : arrayDims @db @dims @x
+      : arrayDims @db @dims @ty @x
+    arrayNulls = arrayNulls @db @dims @ty @x
 foldlNP
   :: (SOP.All ((~) x) xs, Monad m)
   => (z -> x -> m z) -> z -> NP SOP.I xs -> m z
@@ -376,7 +383,7 @@ genericParams = EncodeParams
     encodeNullParam
       :: forall ty y. ToParam db ty y
       => SOP.I y -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K (Maybe Encoding) ty)
-    encodeNullParam = fmap SOP.K . toNullParam @db @ty . SOP.unI
+    encodeNullParam = fmap SOP.K . toParam @db @ty . SOP.unI
 
 -- | Encode 0 parameters.
 nilParams :: EncodeParams db '[] x
@@ -403,7 +410,7 @@ K Nothing :* K (Just "foo") :* Nil
   -> EncodeParams db tys x -- ^ tail
   -> EncodeParams db (ty ': tys) x
 f .* EncodeParams params = EncodeParams $ \x ->
-  (:*) <$> (SOP.K <$> toNullParam @db @ty (f x)) <*> params x
+  (:*) <$> (SOP.K <$> toParam @db @ty (f x)) <*> params x
 infixr 5 .*
 
 {- | End a parameter encoding.
@@ -447,7 +454,7 @@ aParam
   :: forall db x. ToParam db (NullPG x) x
   => EncodeParams db '[NullPG x] x
 aParam = EncodeParams $
-  fmap (\param -> SOP.K param :* Nil) . toNullParam @db @(NullPG x)
+  fmap (\param -> SOP.K param :* Nil) . toParam @db @(NullPG x)
 
 {- | Append parameter encodings.
 

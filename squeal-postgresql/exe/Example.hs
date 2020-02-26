@@ -27,7 +27,7 @@ type Schema =
        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
-        , "vec" ::: 'NoDef :=> 'NotNull ('PGvararray ('NotNull 'PGint2))
+        , "vec" ::: 'NoDef :=> 'NotNull ('PGvararray ('Null 'PGint2))
         ])
    , "emails" ::: 'Table (
        '[  "pk_emails" ::: 'PrimaryKey '["id"]
@@ -63,7 +63,7 @@ setup =
 teardown :: Definition Schemas (Public '[])
 teardown = dropType #positive >>> dropTable #emails >>> dropTable #users
 
-insertUser :: Manipulation_ Schemas (Text, VarArray 'NotNull (Vector Int16)) (Only Int32)
+insertUser :: Manipulation_ Schemas (Text, VarArray (Vector (Maybe Int16))) (Only Int32)
 insertUser = insertInto #users
   (Values_ (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec))
   (OnConflict (OnConstraint #pk_users) DoNothing) (Returning_ (#id `as` #fromOnly))
@@ -83,16 +83,16 @@ data User
   = User
   { userName :: Text
   , userEmail :: Maybe Text
-  , userVec :: VarArray 'NotNull (Vector Int16)
+  , userVec :: VarArray (Vector (Maybe Int16))
   } deriving (Show, GHC.Generic)
 instance SOP.Generic User
 instance SOP.HasDatatypeInfo User
 
 users :: [User]
 users =
-  [ User "Alice" (Just "alice@gmail.com") (VarArray [1,2])
-  , User "Bob" Nothing (VarArray [-3])
-  , User "Carole" (Just "carole@hotmail.com") (VarArray [3,4,5])
+  [ User "Alice" (Just "alice@gmail.com") (VarArray [Just 1,Just 2,Nothing])
+  , User "Bob" Nothing (VarArray [Nothing,Just (-3)])
+  , User "Carole" (Just "carole@hotmail.com") (VarArray [Just 3,Nothing, Just 4])
   ]
 
 session :: (MonadIO pq, MonadPQ Schemas pq) => pq ()

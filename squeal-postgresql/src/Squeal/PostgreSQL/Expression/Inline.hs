@@ -202,17 +202,11 @@ instance Inline Money where
     <> "." <> fromString (show pennies)
     where
       (dollars,pennies) = cents moolah `divMod` 100
-instance InlineParam x ('NotNull (PG x))
-  => Inline (VarArray 'NotNull [x]) where
+instance InlineParam x (NullPG x)
+  => Inline (VarArray [x]) where
     inline (VarArray xs) = array (inlineParam <$> xs)
-instance InlineParam x ('NotNull (PG x))
-  => Inline (VarArray 'NotNull (Vector x)) where
-    inline (VarArray xs) = array (inlineParam <$> toList xs)
-instance InlineParam (Maybe x) ('Null (PG x))
-  => Inline (VarArray 'Null [Maybe x]) where
-    inline (VarArray xs) = array (inlineParam <$> xs)
-instance InlineParam (Maybe x) ('Null (PG x))
-  => Inline (VarArray 'Null (Vector (Maybe x))) where
+instance InlineParam x (NullPG x)
+  => Inline (VarArray (Vector x)) where
     inline (VarArray xs) = array (inlineParam <$> toList xs)
 instance Inline Oid where
   inline (Oid o) = inferredtype . UnsafeExpression . fromString $ show o

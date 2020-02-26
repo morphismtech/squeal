@@ -194,38 +194,22 @@ instance Aeson.FromJSON x => FromPG (Json x) where
 instance Aeson.FromJSON x => FromPG (Jsonb x) where
   fromPG = devalue $ Jsonb <$>
     jsonb_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
-instance FromPG y
-  => FromPG (VarArray 'NotNull (Vector y)) where
+instance (FromFixArray '[] ty y, ty ~ NullPG y)
+  => FromPG (VarArray (Vector y)) where
     fromPG =
       let
         rep n x = VarArray <$> Vector.replicateM n x
       in
         devalue . array $ dimensionArray rep
-          (fromFixArray @'[] @('NotNull (PG y)))
-instance FromPG y
-  => FromPG (VarArray 'Null (Vector (Maybe y))) where
-    fromPG =
-      let
-        rep n x = VarArray <$> Vector.replicateM n x
-      in
-        devalue . array $ dimensionArray rep
-          (fromFixArray @'[] @('Null (PG y)))
-instance FromPG y
-  => FromPG (VarArray 'NotNull [y]) where
+          (fromFixArray @'[] @(NullPG y))
+instance (FromFixArray '[] ty y, ty ~ NullPG y)
+  => FromPG (VarArray [y]) where
     fromPG =
       let
         rep n x = VarArray <$> replicateM n x
       in
         devalue . array $ dimensionArray rep
-          (fromFixArray @'[] @('NotNull (PG y)))
-instance FromPG y
-  => FromPG (VarArray 'Null [Maybe y]) where
-    fromPG =
-      let
-        rep n x = VarArray <$> replicateM n x
-      in
-        devalue . array $ dimensionArray rep
-          (fromFixArray @'[] @('Null (PG y)))
+          (fromFixArray @'[] @(NullPG y))
 instance FromFixArray dims ty y => FromPG (FixArray y) where
   fromPG = devalue $ FixArray <$> array (fromFixArray @dims @ty @y)
 instance

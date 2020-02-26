@@ -361,22 +361,18 @@ instance IsPG (Enumerated hask) where
 {- | The `VarArray` newtype is an indication that the Haskell
 type it's applied to should be stored as a `PGvararray`.
 
->>> :kind! PG (VarArray 'NotNull (Vector Double))
-PG (VarArray 'NotNull (Vector Double)) :: PGType
+>>> :kind! PG (VarArray (Vector Double))
+PG (VarArray (Vector Double)) :: PGType
 = 'PGvararray ('NotNull 'PGfloat8)
 -}
-newtype VarArray (null :: PGType -> NullType) arr
+newtype VarArray arr
   = VarArray {getVarArray :: arr}
   deriving stock (Eq, Ord, Show, Read, GHC.Generic)
   deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
-instance IsPG x => IsPG (VarArray 'NotNull (Vector x)) where
-  type PG (VarArray 'NotNull (Vector x)) = 'PGvararray ('NotNull (PG x))
-instance IsPG x => IsPG (VarArray 'NotNull [x]) where
-  type PG (VarArray 'NotNull [x]) = 'PGvararray ('NotNull (PG x))
-instance IsPG x => IsPG (VarArray 'Null (Vector (Maybe x))) where
-  type PG (VarArray 'Null (Vector (Maybe x))) = 'PGvararray ('Null (PG x))
-instance IsPG x => IsPG (VarArray 'Null [Maybe x]) where
-  type PG (VarArray 'Null [Maybe x]) = 'PGvararray ('Null (PG x))
+instance IsPG (VarArray (Vector x)) where
+  type PG (VarArray (Vector x)) = 'PGvararray (NullPG x)
+instance IsPG (VarArray [x]) where
+  type PG (VarArray [x]) = 'PGvararray (NullPG x)
 
 {- | The `FixArray` newtype is an indication that the Haskell
 type it's applied to should be stored as a `PGfixarray`.
