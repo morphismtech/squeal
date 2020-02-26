@@ -103,7 +103,7 @@ roundtrips = Group "roundtrips"
 
 roundtrip
   :: forall db x
-   . ( ToPG db x, FromPG x, InPG x
+   . ( ToPG db x, FromPG x, Inline x
      , OidOf db (PG x), PGTyped db (PG x)
      , Show x, Eq x )
   => TypeExpression db ('NotNull (PG x))
@@ -113,7 +113,7 @@ roundtrip = roundtripOn id
 
 roundtripOn
   :: forall db x
-   . ( ToPG db x, FromPG x, InPG x
+   . ( ToPG db x, FromPG x, Inline x
      , OidOf db (PG x), PGTyped db (PG x)
      , Show x, Eq x )
   => (x -> x)
@@ -127,7 +127,7 @@ roundtripOn norm ty gen = propertyWithName $ do
       (values_ (parameter @1 ty `as` #fromOnly)) (Only x)
   Just (Only z) <- lift . withConnection connectionString $
     firstRow =<< runQuery
-      (values_ (inPG @x @'NotNull x `as` #fromOnly))
+      (values_ (inline @x @'NotNull x `as` #fromOnly))
   y === z
   norm x === y
   where

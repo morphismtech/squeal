@@ -401,16 +401,16 @@ class InlineColumn field column where
     -> Aliased ( Optional
       ( Expression lat with grp db params from
       ) ) column
-instance (KnownSymbol col, Inline x ty)
+instance (KnownSymbol col, InlineParam x ty)
   => InlineColumn (col ::: x) (col ::: 'NoDef :=> ty) where
-    inlineColumn (SOP.P x) = Set (inline x) `as` (Alias @col)
-instance (KnownSymbol col, Inline x ty)
+    inlineColumn (SOP.P x) = Set (inlineParam x) `as` (Alias @col)
+instance (KnownSymbol col, InlineParam x ty)
   => InlineColumn
     (col ::: Optional SOP.I ('Def :=> x))
     (col ::: 'Def :=> ty) where
     inlineColumn (SOP.P optional) = case optional of
       Default -> Default `as` (Alias @col)
-      Set (SOP.I x) -> Set (inline x) `as` (Alias @col)
+      Set (SOP.I x) -> Set (inlineParam x) `as` (Alias @col)
 
 pattern NotDefault :: ty -> Optional SOP.I (def :=> ty)
 pattern NotDefault x = Set (SOP.I x)

@@ -87,7 +87,7 @@ connectionString = "host=localhost port=5432 dbname=exampledb"
 
 data Person = Person { name :: Maybe String, age :: Maybe Int32 }
   deriving (Eq, Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
-  deriving (IsPG, InPG, FromPG, ToPG db) via (Composite Person)
+  deriving (IsPG, FromPG, ToPG db, Inline) via (Composite Person)
 
 spec :: Spec
 spec = before_ setupDB . after_ dropDB $ do

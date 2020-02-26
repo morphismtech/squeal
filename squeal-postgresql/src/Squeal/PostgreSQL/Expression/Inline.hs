@@ -1,11 +1,11 @@
 {-|
-Module: Squeal.PostgreSQL.Expression.InPG
-Description: InPG expressions
+Module: Squeal.PostgreSQL.Expression.Inline
+Description: Inline expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-InPG expressions
+Inline expressions
 -}
 
 {-# LANGUAGE
@@ -25,9 +25,9 @@ InPG expressions
 #-}
 
 module Squeal.PostgreSQL.Expression.Inline
-  ( -- * InPG
-    InPG (..)
-  , Inline (..)
+  ( -- * Inline
+    Inline (..)
+  , InlineParam (..)
   , InlineField (..)
   ) where
 
@@ -70,76 +70,76 @@ import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
 {- |
-The `InPG` class allows embedding a Haskell value directly
-as an `Expression` using `inPG`.
+The `Inline` class allows embedding a Haskell value directly
+as an `Expression` using `inline`.
 
->>> printSQL (inPG 'a')
+>>> printSQL (inline 'a')
 (E'a' :: char(1))
 
->>> printSQL (inPG (1 :: Double))
+>>> printSQL (inline (1 :: Double))
 (1.0 :: float8)
 
->>> printSQL (inPG (Json ([1, 2] :: [Double])))
+>>> printSQL (inline (Json ([1, 2] :: [Double])))
 ('[1.0,2.0]' :: json)
 
->>> printSQL (inPG (Enumerated GT))
+>>> printSQL (inline (Enumerated GT))
 'GT'
 -}
-class InPG x where inPG :: x -> Expr (null (PG x))
-instance InPG Bool where
-  inPG = \case
+class Inline x where inline :: x -> Expr (null (PG x))
+instance Inline Bool where
+  inline = \case
     True -> true
     False -> false
-instance JSON.ToJSON x => InPG (Json x) where
-  inPG = inferredtype . UnsafeExpression
+instance JSON.ToJSON x => Inline (Json x) where
+  inline = inferredtype . UnsafeExpression
     . singleQuotedUtf8 . toStrict . JSON.encode . getJson
-instance JSON.ToJSON x => InPG (Jsonb x) where
-  inPG = inferredtype . UnsafeExpression
+instance JSON.ToJSON x => Inline (Jsonb x) where
+  inline = inferredtype . UnsafeExpression
     . singleQuotedUtf8 . toStrict . JSON.encode . getJsonb
-instance InPG Char where
-  inPG chr = inferredtype . UnsafeExpression $
+instance Inline Char where
+  inline chr = inferredtype . UnsafeExpression $
     "E\'" <> fromString (escape chr) <> "\'"
-instance InPG String where inPG = inferredtype . fromString
-instance InPG Int16 where inPG = inferredtype . fromIntegral
-instance InPG Int32 where inPG = inferredtype . fromIntegral
-instance InPG Int64 where
-  inPG x = inferredtype $
+instance Inline String where inline = inferredtype . fromString
+instance Inline Int16 where inline = inferredtype . fromIntegral
+instance Inline Int32 where inline = inferredtype . fromIntegral
+instance Inline Int64 where
+  inline x = inferredtype $
     if x == minBound
       -- For some reason Postgres throws an error with (-9223372036854775808::int8)
       -- even though its a valid lowest value for int8
       then UnsafeExpression "-9223372036854775807-1"
       else fromIntegral x
-instance InPG Float where
-  inPG x = inferredtype . UnsafeExpression $
+instance Inline Float where
+  inline x = inferredtype . UnsafeExpression $
     if (isNaN x || isInfinite x)
     then singleQuotedUtf8 (decimal x)
     else decimal x
     where
       decimal = toStrict . toLazyByteString . floatDec
-instance InPG Double where
-  inPG x = inferredtype . UnsafeExpression $
+instance Inline Double where
+  inline x = inferredtype . UnsafeExpression $
     if (isNaN x || isInfinite x)
     then singleQuotedUtf8 (decimal x)
     else decimal x
     where
       decimal = toStrict . toLazyByteString . doubleDec
-instance InPG Scientific where
-  inPG
+instance Inline Scientific where
+  inline
     = inferredtype
     . UnsafeExpression
     . toStrict
     . toLazyByteString
     . scientificBuilder
-instance InPG Text where inPG = inferredtype . fromString . Text.unpack
-instance InPG Lazy.Text where inPG = inferredtype . fromString . Lazy.Text.unpack
-instance (KnownNat n, 1 <= n) => InPG (VarChar n) where
-  inPG str = inferredtype . UnsafeExpression $
+instance Inline Text where inline = inferredtype . fromString . Text.unpack
+instance Inline Lazy.Text where inline = inferredtype . fromString . Lazy.Text.unpack
+instance (KnownNat n, 1 <= n) => Inline (VarChar n) where
+  inline str = inferredtype . UnsafeExpression $
       "E\'" <> fromString (escape =<< (Text.unpack . getVarChar) str) <> "\'"
-instance (KnownNat n, 1 <= n) => InPG (FixChar n) where
-  inPG str = inferredtype . UnsafeExpression $
+instance (KnownNat n, 1 <= n) => Inline (FixChar n) where
+  inline str = inferredtype . UnsafeExpression $
       "E\'" <> fromString (escape =<< (Text.unpack . getFixChar) str) <> "\'"
-instance InPG DiffTime where
-  inPG dt =
+instance Inline DiffTime where
+  inline dt =
     let
       picosecs = diffTimeToPicoseconds dt
       (secs,leftover) = picosecs `quotRem` 1000000000000
@@ -148,79 +148,79 @@ instance InPG DiffTime where
       inferredtype $
         interval_ (fromIntegral secs) Seconds
         +! interval_ (fromIntegral microsecs) Microseconds
-instance InPG Day where
-  inPG day =
+instance Inline Day where
+  inline day =
     let (y,m,d) = toGregorian day
     in inferredtype $ makeDate (fromInteger y :* fromIntegral m *: fromIntegral d)
-instance InPG UTCTime where
-  inPG
+instance Inline UTCTime where
+  inline
     = inferredtype
     . UnsafeExpression
     . singleQuotedUtf8
     . fromString
     . formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S%z"
-instance InPG (TimeOfDay, TimeZone) where
-  inPG (hms, tz)
+instance Inline (TimeOfDay, TimeZone) where
+  inline (hms, tz)
     = inferredtype
     . UnsafeExpression
     . singleQuotedUtf8
     . fromString
     $ formatTime defaultTimeLocale "%H:%M:%S" hms
       <> formatTime defaultTimeLocale "%z" tz
-instance InPG TimeOfDay where
-  inPG (TimeOfDay hr mn sc) = inferredtype $ makeTime
+instance Inline TimeOfDay where
+  inline (TimeOfDay hr mn sc) = inferredtype $ makeTime
     (fromIntegral hr :* fromIntegral mn *: fromRational (toRational sc))
-instance InPG LocalTime where
-  inPG (LocalTime day t) =
+instance Inline LocalTime where
+  inline (LocalTime day t) =
     let
       (y,m,d) = toGregorian day
       TimeOfDay hr mn sc = t
     in inferredtype $ makeTimestamp
       ( fromInteger y :* fromIntegral m :* fromIntegral d
         :* fromIntegral hr :* fromIntegral mn *: fromRational (toRational sc) )
-instance InPG (Range Int32) where
-  inPG = range int4range . fmap inPG
-instance InPG (Range Int64) where
-  inPG = range int8range . fmap inPG
-instance InPG (Range Scientific) where
-  inPG = range numrange . fmap inPG
-instance InPG (Range LocalTime) where
-  inPG = range tsrange . fmap inPG
-instance InPG (Range UTCTime) where
-  inPG = range tstzrange . fmap inPG
-instance InPG (Range Day) where
-  inPG = range daterange . fmap inPG
-instance InPG UUID where
-  inPG
+instance Inline (Range Int32) where
+  inline = range int4range . fmap inline
+instance Inline (Range Int64) where
+  inline = range int8range . fmap inline
+instance Inline (Range Scientific) where
+  inline = range numrange . fmap inline
+instance Inline (Range LocalTime) where
+  inline = range tsrange . fmap inline
+instance Inline (Range UTCTime) where
+  inline = range tstzrange . fmap inline
+instance Inline (Range Day) where
+  inline = range daterange . fmap inline
+instance Inline UUID where
+  inline
     = inferredtype
     . UnsafeExpression
     . singleQuotedUtf8
     . toASCIIBytes
-instance InPG Money where
-  inPG moolah = inferredtype . UnsafeExpression $
+instance Inline Money where
+  inline moolah = inferredtype . UnsafeExpression $
     fromString (show dollars)
     <> "." <> fromString (show pennies)
     where
       (dollars,pennies) = cents moolah `divMod` 100
-instance Inline x ('NotNull (PG x))
-  => InPG (VarArray 'NotNull [x]) where
-    inPG (VarArray xs) = array (inline <$> xs)
-instance Inline x ('NotNull (PG x))
-  => InPG (VarArray 'NotNull (Vector x)) where
-    inPG (VarArray xs) = array (inline <$> toList xs)
-instance Inline (Maybe x) ('Null (PG x))
-  => InPG (VarArray 'Null [Maybe x]) where
-    inPG (VarArray xs) = array (inline <$> xs)
-instance Inline (Maybe x) ('Null (PG x))
-  => InPG (VarArray 'Null (Vector (Maybe x))) where
-    inPG (VarArray xs) = array (inline <$> toList xs)
-instance InPG Oid where
-  inPG (Oid o) = inferredtype . UnsafeExpression . fromString $ show o
+instance InlineParam x ('NotNull (PG x))
+  => Inline (VarArray 'NotNull [x]) where
+    inline (VarArray xs) = array (inlineParam <$> xs)
+instance InlineParam x ('NotNull (PG x))
+  => Inline (VarArray 'NotNull (Vector x)) where
+    inline (VarArray xs) = array (inlineParam <$> toList xs)
+instance InlineParam (Maybe x) ('Null (PG x))
+  => Inline (VarArray 'Null [Maybe x]) where
+    inline (VarArray xs) = array (inlineParam <$> xs)
+instance InlineParam (Maybe x) ('Null (PG x))
+  => Inline (VarArray 'Null (Vector (Maybe x))) where
+    inline (VarArray xs) = array (inlineParam <$> toList xs)
+instance Inline Oid where
+  inline (Oid o) = inferredtype . UnsafeExpression . fromString $ show o
 instance
   ( SOP.IsEnumType x
   , SOP.HasDatatypeInfo x
-  ) => InPG (Enumerated x) where
-    inPG =
+  ) => Inline (Enumerated x) where
+    inline =
       let
         gshowConstructor
           :: NP SOP.ConstructorInfo xss
@@ -242,24 +242,24 @@ instance
 instance
   ( SOP.IsRecord x xs
   , SOP.AllZip InlineField xs (RowPG x)
-  ) => InPG (Composite x) where
-    inPG
+  ) => Inline (Composite x) where
+    inline
       = row
-      . SOP.htrans (SOP.Proxy @InlineField) inlineField
+      . SOP.htrans (SOP.Proxy @InlineField) inlineParamField
       . SOP.toRecord
       . getComposite
 
-class Inline x ty where inline :: x -> Expr ty
-instance (InPG x, pg ~ PG x) => Inline x ('NotNull pg) where inline = inPG
-instance (InPG x, pg ~ PG x) => Inline (Maybe x) ('Null pg) where
-  inline = maybe null_ inPG
+class InlineParam x ty where inlineParam :: x -> Expr ty
+instance (Inline x, pg ~ PG x) => InlineParam x ('NotNull pg) where inlineParam = inline
+instance (Inline x, pg ~ PG x) => InlineParam (Maybe x) ('Null pg) where
+  inlineParam = maybe null_ inline
 
 class InlineField
   (field :: (Symbol, Type))
   (fieldpg :: (Symbol, NullType)) where
-    inlineField
+    inlineParamField
       :: SOP.P field
       -> Aliased (Expression lat with grp db params from) fieldpg
-instance (KnownSymbol alias, Inline x ty)
+instance (KnownSymbol alias, InlineParam x ty)
   => InlineField (alias ::: x) (alias ::: ty) where
-    inlineField (SOP.P x) = inline x `as` Alias @alias
+    inlineParamField (SOP.P x) = inlineParam x `as` Alias @alias
