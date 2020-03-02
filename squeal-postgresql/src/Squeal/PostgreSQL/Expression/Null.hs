@@ -18,6 +18,7 @@ module Squeal.PostgreSQL.Expression.Null
   ( -- * Null
     null_
   , notNull
+  , unsafeNotNull
   , coalesce
   , fromNull
   , isNull
@@ -48,11 +49,18 @@ null_ = UnsafeExpression "NULL"
 notNull :: 'NotNull ty --> 'Null ty
 notNull = UnsafeExpression . renderSQL
 
+-- | Analagous to `fromJust` inverse to `notNull`,
+-- useful when you know an `Expression` is `NotNull`,
+-- because, for instance, you've filtered out @NULL@
+-- values in a column.
+unsafeNotNull :: 'Null ty --> 'NotNull ty
+unsafeNotNull = UnsafeExpression . renderSQL
+
 -- | return the leftmost value which is not NULL
 --
 -- >>> printSQL $ coalesce [null_, true] false
 -- COALESCE(NULL, TRUE, FALSE)
-coalesce :: FunctionVar ('Null ty) ('NotNull ty) ('NotNull ty)
+coalesce :: FunctionVar ('Null ty) (null ty) (null ty)
 coalesce nullxs notNullx = UnsafeExpression $
   "COALESCE" <> parenthesized (commaSeparated
     ((renderSQL <$> nullxs) <> [renderSQL notNullx]))
