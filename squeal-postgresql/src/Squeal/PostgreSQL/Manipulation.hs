@@ -44,6 +44,7 @@ module Squeal.PostgreSQL.Manipulation
   , deleteFrom_
     -- * Clauses
   , Optional (..)
+  , mapOptional
   , QueryClause (..)
   , pattern Values_
   , InlineColumn (..)
@@ -391,7 +392,15 @@ data Optional expr ty where
 instance (forall x. RenderSQL (expr x)) => RenderSQL (Optional expr ty) where
   renderSQL = \case
     Default -> "DEFAULT"
-    Set expr -> renderSQL expr
+    Set x -> renderSQL x
+
+mapOptional
+  :: (expr x -> expr y)
+  -> Optional expr (def :=> x)
+  -> Optional expr (def :=> y)
+mapOptional f = \case
+  Default -> Default
+  Set x -> Set (f x)
 
 -- | Lifts `Inline` to a column entry
 class InlineColumn field column where

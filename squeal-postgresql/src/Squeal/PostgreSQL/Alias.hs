@@ -41,6 +41,7 @@ module Squeal.PostgreSQL.Alias
   , Aliased (As)
   , Aliasable (as)
   , renderAliased
+  , mapAliased
   , Has
   , HasUnique
   , HasAll
@@ -167,6 +168,12 @@ renderAliased
   -> ByteString
 renderAliased render (expression `As` alias) =
   render expression <> " AS " <> renderSQL alias
+
+mapAliased
+  :: (expr x -> expr y)
+  -> Aliased expr (alias ::: x)
+  -> Aliased expr (alias ::: y)
+mapAliased f (x `As` alias) = f x `As` alias
 
 -- | @HasUnique alias fields field@ is a constraint that proves that
 -- @fields@ is a singleton of @alias ::: field@.
