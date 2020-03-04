@@ -11,6 +11,7 @@ Window functions and definitions
 {-# LANGUAGE
     DataKinds
   , DeriveGeneric
+  , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
@@ -153,7 +154,8 @@ newtype WindowFunction
   (from :: FromType)
   (ty :: NullType)
     = UnsafeWindowFunction { renderWindowFunction :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,NFData)
+    deriving stock (GHC.Generic,Show,Eq,Ord)
+    deriving newtype (NFData)
 
 instance RenderSQL (WindowFunction lat with grp db params from ty) where
   renderSQL = renderWindowFunction

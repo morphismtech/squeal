@@ -12,6 +12,7 @@ Type expressions.
     AllowAmbiguousTypes
   , DataKinds
   , DeriveGeneric
+  , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
@@ -166,7 +167,8 @@ type expressions
 -- `Squeal.PostgreSQL.Definition.createTable` commands.
 newtype TypeExpression (db :: SchemasType) (ty :: NullType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
-  deriving (GHC.Generic,Show,Eq,Ord,NFData)
+  deriving stock (GHC.Generic,Show,Eq,Ord)
+  deriving newtype (NFData)
 instance RenderSQL (TypeExpression db ty) where
   renderSQL = renderTypeExpression
 
@@ -408,7 +410,8 @@ instance (KnownSymbol alias, NullTyped db ty)
 -- `Squeal.PostgreSQL.Definition.createTable` commands.
 newtype ColumnTypeExpression (db :: SchemasType) (ty :: ColumnType)
   = UnsafeColumnTypeExpression { renderColumnTypeExpression :: ByteString }
-  deriving (GHC.Generic,Show,Eq,Ord,NFData)
+  deriving stock (GHC.Generic,Show,Eq,Ord)
+  deriving newtype (NFData)
 instance RenderSQL (ColumnTypeExpression db ty) where
   renderSQL = renderColumnTypeExpression
 

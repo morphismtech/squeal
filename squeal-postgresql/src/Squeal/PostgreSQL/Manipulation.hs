@@ -10,6 +10,7 @@ Squeal data manipulation language.
 
 {-# LANGUAGE
     DeriveGeneric
+  , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
@@ -103,7 +104,8 @@ newtype Manipulation
   (params :: [NullType])
   (columns :: RowType)
     = UnsafeManipulation { renderManipulation :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,NFData)
+    deriving stock (GHC.Generic,Show,Eq,Ord)
+    deriving newtype (NFData)
 instance RenderSQL (Manipulation with db params columns) where
   renderSQL = renderManipulation
 instance With Manipulation where

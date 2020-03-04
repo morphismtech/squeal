@@ -11,6 +11,7 @@ Squeal queries.
 {-# LANGUAGE
     ConstraintKinds
   , DeriveGeneric
+  , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
@@ -137,7 +138,8 @@ newtype Query
   (params :: [NullType])
   (row :: RowType)
     = UnsafeQuery { renderQuery :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,NFData)
+    deriving stock (GHC.Generic,Show,Eq,Ord)
+    deriving newtype (NFData)
 instance RenderSQL (Query lat with db params row) where renderSQL = renderQuery
 
 {- |
@@ -850,7 +852,8 @@ newtype FromClause
   (params :: [NullType])
   (from :: FromType)
   = UnsafeFromClause { renderFromClause :: ByteString }
-  deriving (GHC.Generic,Show,Eq,Ord,NFData)
+  deriving stock (GHC.Generic,Show,Eq,Ord)
+  deriving newtype (NFData)
 instance RenderSQL (FromClause lat with db params from) where
   renderSQL = renderFromClause
 
@@ -1106,7 +1109,8 @@ instance (Has rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
 -- | A `GroupByClause` indicates the `Grouping` of a `TableExpression`.
 newtype GroupByClause grp from = UnsafeGroupByClause
   { renderGroupByClause :: ByteString }
-  deriving (GHC.Generic,Show,Eq,Ord,NFData)
+  deriving stock (GHC.Generic,Show,Eq,Ord)
+  deriving newtype (NFData)
 instance RenderSQL (GroupByClause grp from) where
   renderSQL = renderGroupByClause
 noGroups :: GroupByClause 'Ungrouped from

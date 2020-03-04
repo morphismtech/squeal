@@ -33,7 +33,7 @@ module Squeal.PostgreSQL.Expression.Inline
 
 import Data.Binary.Builder (toLazyByteString)
 import Data.ByteString.Lazy (toStrict)
-import Data.ByteString.Builder (doubleDec, floatDec)
+import Data.ByteString.Builder (doubleDec, floatDec, int16Dec, int32Dec, int64Dec)
 import Data.ByteString.Builder.Scientific (scientificBuilder)
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind (Type)
@@ -100,25 +100,42 @@ instance Inline Char where
   inline chr = inferredtype . UnsafeExpression $
     "E\'" <> fromString (escape chr) <> "\'"
 instance Inline String where inline = inferredtype . fromString
-instance Inline Int16 where inline = inferredtype . fromIntegral
-instance Inline Int32 where inline = inferredtype . fromIntegral
+instance Inline Int16 where
+  inline
+    = inferredtype
+    . UnsafeExpression
+    . toStrict
+    . toLazyByteString
+    . int16Dec
+instance Inline Int32 where
+  inline
+    = inferredtype
+    . UnsafeExpression
+    . toStrict
+    . toLazyByteString
+    . int32Dec
 instance Inline Int64 where
-  inline x = inferredtype $
+  inline x =
     if x == minBound
-      -- For some reason Postgres throws an error with (-9223372036854775808::int8)
-      -- even though its a valid lowest value for int8
-      then UnsafeExpression "-9223372036854775807-1"
-      else fromIntegral x
+    -- For some reason Postgres throws an error with
+    -- (-9223372036854775808 :: int8)
+    -- even though it's a valid lowest value for int8
+    then inline (x+1) - 1
+    else inferredtype
+    . UnsafeExpression
+    . toStrict
+    . toLazyByteString
+    $ int64Dec x
 instance Inline Float where
   inline x = inferredtype . UnsafeExpression $
-    if (isNaN x || isInfinite x)
+    if isNaN x || isInfinite x
     then singleQuotedUtf8 (decimal x)
     else decimal x
     where
       decimal = toStrict . toLazyByteString . floatDec
 instance Inline Double where
   inline x = inferredtype . UnsafeExpression $
-    if (isNaN x || isInfinite x)
+    if isNaN x || isInfinite x
     then singleQuotedUtf8 (decimal x)
     else decimal x
     where
