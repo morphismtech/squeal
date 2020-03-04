@@ -33,6 +33,7 @@ module Squeal.PostgreSQL.Render
   , doubleQuoted
   , singleQuotedText
   , singleQuotedUtf8
+  , escapeQuoted
   , renderCommaSeparated
   , renderCommaSeparatedConstraint
   , renderCommaSeparatedMaybe
@@ -82,6 +83,9 @@ singleQuotedText str =
 -- | Add single quotes around a `ByteString` and escape single quotes within it.
 singleQuotedUtf8 :: ByteString -> ByteString
 singleQuotedUtf8 = singleQuotedText . Text.decodeUtf8
+
+escapeQuoted :: ByteString -> ByteString
+escapeQuoted x = "E\'" <> x <> "\'"
 
 -- | Comma separate the renderings of a heterogeneous list.
 renderCommaSeparated

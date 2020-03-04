@@ -40,6 +40,7 @@ import Data.Kind (Type)
 import Data.Scientific (Scientific)
 import Data.String
 import Data.Text (Text)
+import Data.Text.Encoding (encodeUtf8)
 import Data.Time.Clock (DiffTime, diffTimeToPicoseconds, UTCTime)
 import Data.Time.Format (formatTime, defaultTimeLocale)
 import Data.Time.Calendar (Day, toGregorian)
@@ -99,7 +100,7 @@ instance JSON.ToJSON x => Inline (Jsonb x) where
 instance Inline Char where
   inline chr = inferredtype . UnsafeExpression $
     "E\'" <> fromString (escape chr) <> "\'"
-instance Inline String where inline = inferredtype . fromString
+instance Inline String where inline = fromString
 instance Inline Int16 where
   inline
     = inferredtype
@@ -147,14 +148,26 @@ instance Inline Scientific where
     . toStrict
     . toLazyByteString
     . scientificBuilder
-instance Inline Text where inline = inferredtype . fromString . Text.unpack
-instance Inline Lazy.Text where inline = inferredtype . fromString . Lazy.Text.unpack
+instance Inline Text where inline = fromString . Text.unpack
+instance Inline Lazy.Text where inline = fromString . Lazy.Text.unpack
 instance (KnownNat n, 1 <= n) => Inline (VarChar n) where
-  inline str = inferredtype . UnsafeExpression $
-      "E\'" <> fromString (escape =<< (Text.unpack . getVarChar) str) <> "\'"
+  inline vchr =
+    let
+      str = escape =<< Text.unpack (getVarChar vchr)
+    in inferredtype
+    . UnsafeExpression
+    . escapeQuoted
+    . encodeUtf8
+    $ fromString str
 instance (KnownNat n, 1 <= n) => Inline (FixChar n) where
-  inline str = inferredtype . UnsafeExpression $
-      "E\'" <> fromString (escape =<< (Text.unpack . getFixChar) str) <> "\'"
+  inline fchr =
+    let
+      str = escape =<< Text.unpack (getFixChar fchr)
+    in inferredtype
+    . UnsafeExpression
+    . escapeQuoted
+    . encodeUtf8
+    $ fromString str
 instance Inline DiffTime where
   inline dt =
     let

@@ -617,16 +617,31 @@ instance PGIntersect ('PGrange ty)
 
 instance IsString
   (Expression lat with grp db params from (null 'PGtext)) where
-    fromString str = UnsafeExpression . parenthesized . (<> " :: text") $
-      "E\'" <> encodeUtf8 (fromString (escape =<< str)) <> "\'"
+    fromString str
+      = UnsafeExpression
+      . parenthesized
+      . (<> " :: text")
+      . escapeQuoted
+      . encodeUtf8
+      $ fromString (escape =<< str)
 instance IsString
   (Expression lat with grp db params from (null 'PGtsvector)) where
-    fromString str = UnsafeExpression . parenthesized . (<> " :: tsvector") $
-      "E\'" <> fromString (escape =<< str) <> "\'"
+    fromString str
+      = UnsafeExpression
+      . parenthesized
+      . (<> " :: tsvector")
+      . escapeQuoted
+      . encodeUtf8
+      $ fromString (escape =<< str)
 instance IsString
   (Expression lat with grp db params from (null 'PGtsquery)) where
-    fromString str = UnsafeExpression . parenthesized . (<> " :: tsquery") $
-      "E\'" <> fromString (escape =<< str) <> "\'"
+    fromString str
+      = UnsafeExpression
+      . parenthesized
+      . (<> " :: tsquery")
+      . escapeQuoted
+      . encodeUtf8
+      $ fromString (escape =<< str)
 
 instance Semigroup
   (Expression lat with grp db params from (null ('PGvararray ty))) where
