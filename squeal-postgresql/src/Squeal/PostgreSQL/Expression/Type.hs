@@ -138,7 +138,7 @@ cast ty x = UnsafeExpression $ parenthesized $
 -- | A safe version of `cast` which just matches a value with its type.
 --
 -- >>> printSQL (1 & astype int)
--- (1 :: int)
+-- ((1 :: int4) :: int)
 astype
   :: TypeExpression db ty
   -- ^ type to specify as

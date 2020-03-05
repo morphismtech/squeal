@@ -30,17 +30,17 @@ import Squeal.PostgreSQL.Schema
 -- >>> import Squeal.PostgreSQL
 
 -- | >>> printSQL $ lower "ARRRGGG"
--- lower(E'ARRRGGG')
+-- lower((E'ARRRGGG' :: text))
 lower :: null 'PGtext --> null 'PGtext
 lower = unsafeFunction "lower"
 
 -- | >>> printSQL $ upper "eeee"
--- upper(E'eeee')
+-- upper((E'eeee' :: text))
 upper :: null 'PGtext --> null 'PGtext
 upper = unsafeFunction "upper"
 
 -- | >>> printSQL $ charLength "four"
--- char_length(E'four')
+-- char_length((E'four' :: text))
 charLength :: null 'PGtext --> null 'PGint4
 charLength = unsafeFunction "char_length"
 
@@ -52,7 +52,7 @@ charLength = unsafeFunction "char_length"
 -- matches any sequence of zero or more characters.
 --
 -- >>> printSQL $ "abc" `like` "a%"
--- (E'abc' LIKE E'a%')
+-- ((E'abc' :: text) LIKE (E'a%' :: text))
 like :: Operator (null 'PGtext) (null 'PGtext) ('Null 'PGbool)
 like = unsafeBinaryOp "LIKE"
 
@@ -60,6 +60,6 @@ like = unsafeBinaryOp "LIKE"
 -- match case-insensitive according to the active locale.
 --
 -- >>> printSQL $ "abc" `ilike` "a%"
--- (E'abc' ILIKE E'a%')
+-- ((E'abc' :: text) ILIKE (E'a%' :: text))
 ilike :: Operator (null 'PGtext) (null 'PGtext) ('Null 'PGbool)
 ilike = unsafeBinaryOp "ILIKE"

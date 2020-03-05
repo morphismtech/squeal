@@ -379,7 +379,7 @@ let
 in
   printSQL (fn (1 *: true))
 :}
-"fn"(1, TRUE)
+"fn"((1 :: int4), TRUE)
 -}
 functionN
   :: ( Has sch db schema

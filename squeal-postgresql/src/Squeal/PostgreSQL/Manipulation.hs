@@ -145,7 +145,7 @@ let
     insertInto_ #tab (Values_ (Set 2 `as` #col1 :* Default `as` #col2))
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (2, DEFAULT)
+INSERT INTO "tab" ("col1", "col2") VALUES ((2 :: int4), DEFAULT)
 
 out-of-line parameterized insert:
 

@@ -125,7 +125,7 @@ let
 in
   printSQL (fn (true *: "hi"))
 :}
-"fn"(TRUE, E'hi')
+"fn"(TRUE, (E'hi' :: text))
 -}
 setFunctionN
   :: ( Has sch db schema
@@ -140,8 +140,8 @@ setFunctionN fun = unsafeSetFunctionN (renderSQL fun)
 Generate a series of values,
 from @start@ to @stop@ with a step size of one
 
->>> renderSQL (generateSeries @'PGint4 (1 *: 10))
-"generate_series(1, 10)"
+>>> printSQL (generateSeries @'PGint4 (1 *: 10))
+generate_series((1 :: int4), (10 :: int4))
 -}
 generateSeries
   :: ty `In` '[ 'PGint4, 'PGint8, 'PGnumeric]
@@ -155,8 +155,8 @@ generateSeries = unsafeSetFunctionN "generate_series"
 Generate a series of values,
 from @start@ to @stop@ with a step size of @step@
 
->>> renderSQL (generateSeriesStep @'PGint8 (2 :* 100 *: 2))
-"generate_series(2, 100, 2)"
+>>> printSQL (generateSeriesStep @'PGint8 (2 :* 100 *: 2))
+generate_series((2 :: int8), (100 :: int8), (2 :: int8))
 -}
 generateSeriesStep
   :: ty `In` '[ 'PGint4, 'PGint8, 'PGnumeric]
@@ -175,9 +175,9 @@ let
   start = now
   stop = now !+ interval_ 10 Years
   step = interval_ 1 Months
-in renderSQL (generateSeriesTimestamp (start :* stop *: step))
+in printSQL (generateSeriesTimestamp (start :* stop *: step))
 :}
-"generate_series(now(), (now() + (INTERVAL '10.000 years')), (INTERVAL '1.000 months'))"
+generate_series(now(), (now() + (INTERVAL '10.000 years')), (INTERVAL '1.000 months'))
 -}
 generateSeriesTimestamp
   :: ty `In` '[ 'PGtimestamp, 'PGtimestamptz]

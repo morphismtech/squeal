@@ -37,7 +37,7 @@ import Squeal.PostgreSQL.Schema
 --   expression = atan2_ (pi *: 2)
 -- in printSQL expression
 -- :}
--- atan2(pi(), 2)
+-- atan2(pi(), (2.0 :: float4))
 atan2_ :: float `In` PGFloating => '[ null float, null float] ---> null float
 atan2_ = unsafeFunctionN "atan2"
 
@@ -50,7 +50,7 @@ atan2_ = unsafeFunctionN "atan2"
 --   expression = 5 `quot_` 2
 -- in printSQL expression
 -- :}
--- (5 / 2)
+-- ((5 :: int2) / (2 :: int2))
 quot_
   :: int `In` PGIntegral
   => Operator (null int) (null int) (null int)
@@ -64,7 +64,7 @@ quot_ = unsafeBinaryOp "/"
 --   expression = 5 `rem_` 2
 -- in printSQL expression
 -- :}
--- (5 % 2)
+-- ((5 :: int2) % (2 :: int2))
 rem_
   :: int `In` PGIntegral
   => Operator (null int) (null int) (null int)

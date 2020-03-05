@@ -88,7 +88,7 @@ now = UnsafeExpression "now()"
 Create date from year, month and day fields
 
 >>> printSQL (makeDate (1984 :* 7 *: 3))
-make_date(1984, 7, 3)
+make_date((1984 :: int4), (7 :: int4), (3 :: int4))
 -}
 makeDate :: '[ null 'PGint4, null 'PGint4, null 'PGint4 ] ---> null 'PGdate
 makeDate = unsafeFunctionN "make_date"
@@ -97,7 +97,7 @@ makeDate = unsafeFunctionN "make_date"
 Create time from hour, minute and seconds fields
 
 >>> printSQL (makeTime (8 :* 15 *: 23.5))
-make_time(8, 15, 23.5)
+make_time((8 :: int4), (15 :: int4), (23.5 :: float8))
 -}
 makeTime :: '[ null 'PGint4, null 'PGint4, null 'PGfloat8 ] ---> null 'PGtime
 makeTime = unsafeFunctionN "make_time"
@@ -106,7 +106,7 @@ makeTime = unsafeFunctionN "make_time"
 Create timestamp from year, month, day, hour, minute and seconds fields
 
 >>> printSQL (makeTimestamp (2013 :* 7 :* 15 :* 8 :* 15 *: 23.5))
-make_timestamp(2013, 7, 15, 8, 15, 23.5)
+make_timestamp((2013 :: int4), (7 :: int4), (15 :: int4), (8 :: int4), (15 :: int4), (23.5 :: float8))
 -}
 makeTimestamp ::
   '[ null 'PGint4, null 'PGint4, null 'PGint4
@@ -119,7 +119,7 @@ year, month, day, hour, minute and seconds fields;
 the current time zone is used
 
 >>> printSQL (makeTimestamptz (2013 :* 7 :* 15 :* 8 :* 15 *: 23.5))
-make_timestamptz(2013, 7, 15, 8, 15, 23.5)
+make_timestamptz((2013 :: int4), (7 :: int4), (15 :: int4), (8 :: int4), (15 :: int4), (23.5 :: float8))
 -}
 makeTimestamptz ::
   '[ null 'PGint4, null 'PGint4, null 'PGint4
@@ -132,25 +132,25 @@ Affine space operations on time types.
 class TimeOp time diff | time -> diff where
   {-|
   >>> printSQL (makeDate (1984 :* 7 *: 3) !+ 365)
-  (make_date(1984, 7, 3) + 365)
+  (make_date((1984 :: int4), (7 :: int4), (3 :: int4)) + (365 :: int4))
   -}
   (!+) :: Operator (null time) (null diff) (null time)
   (!+) = unsafeBinaryOp "+"
   {-|
   >>> printSQL (365 +! makeDate (1984 :* 7 *: 3))
-  (365 + make_date(1984, 7, 3))
+  ((365 :: int4) + make_date((1984 :: int4), (7 :: int4), (3 :: int4)))
   -}
   (+!) :: Operator (null diff) (null time) (null time)
   (+!) = unsafeBinaryOp "+"
   {-|
   >>> printSQL (makeDate (1984 :* 7 *: 3) !- 365)
-  (make_date(1984, 7, 3) - 365)
+  (make_date((1984 :: int4), (7 :: int4), (3 :: int4)) - (365 :: int4))
   -}
   (!-) :: Operator (null time) (null diff) (null time)
   (!-) = unsafeBinaryOp "-"
   {-|
   >>> printSQL (makeDate (1984 :* 7 *: 3) !-! currentDate)
-  (make_date(1984, 7, 3) - CURRENT_DATE)
+  (make_date((1984 :: int4), (7 :: int4), (3 :: int4)) - CURRENT_DATE)
   -}
   (!-!) :: Operator (null time) (null time) (null diff)
   (!-!) = unsafeBinaryOp "-"

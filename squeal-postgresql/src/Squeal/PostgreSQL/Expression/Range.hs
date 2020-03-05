@@ -80,7 +80,7 @@ import Squeal.PostgreSQL.Schema
 -- >>> printSQL $ range tstzrange (atLeast now)
 -- tstzrange(now(), NULL, '[)')
 -- >>> printSQL $ range numrange (0 <=..< 2*pi)
--- numrange(0, (2 * pi()), '[)')
+-- numrange((0.0 :: numeric), ((2.0 :: numeric) * pi()), '[)')
 -- >>> printSQL $ range int4range Empty
 -- ('empty' :: int4range)
 range
