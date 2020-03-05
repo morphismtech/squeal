@@ -183,7 +183,7 @@ let
       OnConflictDoRaise (Returning (#col1 `as` #fromOnly))
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (2, 3) RETURNING "col1" AS "fromOnly"
+INSERT INTO "tab" ("col1", "col2") VALUES ((2 :: int4), (3 :: int4)) RETURNING "col1" AS "fromOnly"
 
 upsert:
 
@@ -201,7 +201,7 @@ let
       (Returning_ Nil)
 in printSQL manipulation
 :}
-INSERT INTO "customers" ("name", "email") VALUES (E'John Smith', E'john@smith.com') ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || (E'; ' || "customers"."email"))
+INSERT INTO "customers" ("name", "email") VALUES ((E'John Smith' :: text), (E'john@smith.com' :: text)) ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || ((E'; ' :: text) || "customers"."email"))
 
 query insert:
 
@@ -221,7 +221,7 @@ let
   manipulation = update_ #tab (Set 2 `as` #col1) (#col1 ./= #col2)
 in printSQL manipulation
 :}
-UPDATE "tab" SET "col1" = 2 WHERE ("col1" <> "col2")
+UPDATE "tab" SET "col1" = (2 :: int4) WHERE ("col1" <> "col2")
 
 delete:
 

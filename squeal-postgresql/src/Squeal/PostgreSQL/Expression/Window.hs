@@ -244,7 +244,7 @@ cumeDist = UnsafeWindowFunction "cume_dist()"
 dividing the partition as equally as possible
 
 >>> printSQL $ ntile 5
-ntile(5)
+ntile((5 :: int4))
 -}
 ntile :: WinFun1 ('NotNull 'PGint4) ('NotNull 'PGint4)
 ntile = unsafeWindowFunction1 "ntile"

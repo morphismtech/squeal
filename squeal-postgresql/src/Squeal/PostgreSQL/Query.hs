@@ -189,7 +189,7 @@ let
         & where_ (#col2 .> 0) )
 in printSQL query
 :}
-SELECT ("col1" + "col2") AS "col1", "col1" AS "col2" FROM "tab" AS "tab" WHERE (("col1" > "col2") AND ("col2" > 0))
+SELECT ("col1" + "col2") AS "col1", "col1" AS "col2" FROM "tab" AS "tab" WHERE (("col1" > "col2") AND ("col2" > (0 :: int4)))
 
 subquery:
 
@@ -233,7 +233,7 @@ let
       & having (sum_ (Distinct #col2) .> 1) )
 in printSQL query
 :}
-SELECT COALESCE(sum(ALL "col2"), 0) AS "col1", "col1" AS "col2" FROM "tab" AS "table1" GROUP BY "col1" HAVING (sum(DISTINCT "col2") > 1)
+SELECT COALESCE(sum(ALL "col2"), (0 :: int8)) AS "col1", "col1" AS "col2" FROM "tab" AS "table1" GROUP BY "col1" HAVING (sum(DISTINCT "col2") > (1 :: int8))
 
 sorted query:
 
@@ -336,7 +336,7 @@ let
     ["false" `as` #col1 :* false `as` #col2]
 in printSQL query
 :}
-SELECT * FROM (VALUES (E'true', TRUE), (E'false', FALSE)) AS t ("col1", "col2")
+SELECT * FROM (VALUES ((E'true' :: text), TRUE), ((E'false' :: text), FALSE)) AS t ("col1", "col2")
 
 set operations:
 
@@ -660,7 +660,7 @@ selectDistinctOn_ distincts = selectDistinctOn distincts . List
 -- >>> type Row = '["a" ::: 'NotNull 'PGint4, "b" ::: 'NotNull 'PGtext]
 -- >>> let query = values (1 `as` #a :* "one" `as` #b) [] :: Query lat with db '[] Row
 -- >>> printSQL query
--- SELECT * FROM (VALUES (1, E'one')) AS t ("a", "b")
+-- SELECT * FROM (VALUES ((1 :: int4), (E'one' :: text))) AS t ("a", "b")
 values
   :: SListI cols
   => NP (Aliased (Expression lat with 'Ungrouped db params '[] )) cols
@@ -1203,7 +1203,7 @@ instance With (Query lat) where
       ( select_ (fromNull 0 (sum_ (All #n)) `as` #getSum) (from (common #t) & groupBy Nil))
   in printSQL query
 :}
-WITH RECURSIVE "t" AS ((SELECT * FROM (VALUES ((1 :: int))) AS t ("n")) UNION ALL (SELECT ("n" + 1) AS "n" FROM "t" AS "t" WHERE ("n" < 100))) SELECT COALESCE(sum(ALL "n"), 0) AS "getSum" FROM "t" AS "t"
+WITH RECURSIVE "t" AS ((SELECT * FROM (VALUES (((1 :: int4) :: int))) AS t ("n")) UNION ALL (SELECT ("n" + (1 :: int4)) AS "n" FROM "t" AS "t" WHERE ("n" < (100 :: int4)))) SELECT COALESCE(sum(ALL "n"), (0 :: int8)) AS "getSum" FROM "t" AS "t"
 -}
 withRecursive
   :: Aliased (Query lat (recursive ': with) db params) recursive

@@ -71,7 +71,7 @@ infixr 2 .||
 --   expression = caseWhenThenElse [(true, 1), (false, 2)] 3
 -- in printSQL expression
 -- :}
--- CASE WHEN TRUE THEN 1 WHEN FALSE THEN 2 ELSE 3 END
+-- CASE WHEN TRUE THEN (1 :: int2) WHEN FALSE THEN (2 :: int2) ELSE (3 :: int2) END
 caseWhenThenElse
   :: [ ( Condition lat with grp db params from
        , Expression lat with grp db params from ty
@@ -99,7 +99,7 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
 --   expression = ifThenElse true 1 0
 -- in printSQL expression
 -- :}
--- CASE WHEN TRUE THEN 1 ELSE 0 END
+-- CASE WHEN TRUE THEN (1 :: int2) ELSE (0 :: int2) END
 ifThenElse
   :: Condition lat with grp db params from
   -> Expression lat with grp db params from ty -- ^ then

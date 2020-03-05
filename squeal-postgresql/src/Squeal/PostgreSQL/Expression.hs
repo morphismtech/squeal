@@ -354,7 +354,7 @@ let
 in
   printSQL (fn 1)
 :}
-"fn"(1)
+"fn"((1 :: int4))
 -}
 function
   :: (Has sch db schema, Has fun schema ('Function ('[x] :=> 'Returns y)))
