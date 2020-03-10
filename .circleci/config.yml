@@ -3,13 +3,12 @@ jobs:
   build:
     docker:
       - image: haskell:8.6.5
-        environment:
-          LANG: en_US.UTF-8
       - image: circleci/postgres:latest
         environment:
           POSTGRES_USER: root
           POSTGRES_DB: exampledb
           POSTGRES_PASSWORD: password
+          LANG: en_US.UTF-8
     steps:
       - checkout
       - restore_cache:
