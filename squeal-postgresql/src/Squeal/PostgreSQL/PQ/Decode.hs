@@ -33,10 +33,8 @@ module Squeal.PostgreSQL.PQ.Decode
   , decodeRow
   , runDecodeRow
   , genericRow
-  , enumValue
   , rowValue
   , devalue
-  , value
     -- * Decoding Classes
   , FromPG (..)
   , FromValue (..)
@@ -58,7 +56,6 @@ import Data.Bits
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind
 import Data.Scientific (Scientific)
-import Data.Text (Text)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
 import Data.UUID.Types (UUID)
 import Data.Vector (Vector)
@@ -89,28 +86,6 @@ devalue = unsafeCoerce
 
 value :: StateT Strict.ByteString (Except Strict.Text) x -> Value x
 value = unsafeCoerce
-
-enumValue :: (Text -> Maybe y) -> Value y
-enumValue = enum
-
-enumeratedValue
-  :: (PG y ~ 'PGenum labels, SOP.All KnownSymbol labels)
-  => NP (SOP.K y) labels
-  -> StateT Strict.ByteString (Except Strict.Text) y
-enumeratedValue labels = devalue $
-  let
-    readLabel
-      :: SOP.All KnownSymbol labels
-      => NP (SOP.K y) labels
-      -> String
-      -> Maybe y
-    readLabel Nil _ = Nothing
-    readLabel ((SOP.K y :: SOP.K y label) :* ys) name =
-      if name == symbolVal (SOP.Proxy @label)
-        then Just y
-        else readLabel ys name
-  in
-    enum $ readLabel labels . Strict.Text.unpack
 
 rowValue
   :: (PG y ~ 'PGcomposite row, SOP.SListI row)
