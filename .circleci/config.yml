@@ -16,8 +16,7 @@ jobs:
       - run: apt-get update && apt-get install -y libpq-dev xz-utils make
       - run: stack upgrade && stack update
       - run: stack build --fast
-      - run: export LANG=en_US.UTF-8
-      - run: stack test
+      - run: LANG=en_US.UTF-8 stack test
       - run: stack haddock
       - save_cache:
           key: dependency-cache
