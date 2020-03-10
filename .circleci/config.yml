@@ -1,6 +1,8 @@
 version: 2
 jobs:
   build:
+    environment:
+      LANG: en_US.UTF-8
     docker:
       - image: haskell:8.6.5
       - image: circleci/postgres:latest
@@ -8,7 +10,6 @@ jobs:
           POSTGRES_USER: root
           POSTGRES_DB: exampledb
           POSTGRES_PASSWORD: password
-          LANG: en_US.UTF-8
     steps:
       - checkout
       - restore_cache:
