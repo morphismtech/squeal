@@ -84,9 +84,27 @@ import Squeal.PostgreSQL.PG
 devalue :: Value x -> StateT Strict.ByteString (Except Strict.Text) x
 devalue = unsafeCoerce
 
-value :: StateT Strict.ByteString (Except Strict.Text) x -> Value x
-value = unsafeCoerce
+revalue :: StateT Strict.ByteString (Except Strict.Text) x -> Value x
+revalue = unsafeCoerce
 
+{- |
+>>> :set -XTypeFamilies
+>>> :{
+data Complex = Complex
+  { real :: Double
+  , imaginary :: Double
+  }
+instance IsPG Complex where
+  type PG Complex = 'PGcomposite '[
+    "re" ::: 'NotNull 'PGfloat8,
+    "im" ::: 'NotNull 'PGfloat8]
+instance FromPG Complex where
+  fromPG = rowValue $ do
+    re <- #re
+    im <- #im
+    return Complex {real = re, imaginary = im}
+:}
+-}
 rowValue
   :: (PG y ~ 'PGcomposite row, SOP.SListI row)
   => DecodeRow row y
@@ -255,14 +273,14 @@ instance FromPG y => FromPG (Range y) where
           then return Infinite
           else do
             len <- sized 4 int
-            l <- sized len (value fromPG)
+            l <- sized len (revalue fromPG)
             return $ if testBit flag 1 then Closed l else Open l
       upper <-
         if testBit flag 4
           then return Infinite
           else do
             len <- sized 4 int
-            l <- sized len (value fromPG)
+            l <- sized len (revalue fromPG)
             return $ if testBit flag 2 then Closed l else Open l
       return $ NonEmpty lower upper
 
@@ -275,11 +293,11 @@ class FromValue (ty :: NullType) (y :: Type) where
 instance (FromPG y, pg ~ PG y) => FromValue ('NotNull pg) y where
   fromValue = \case
     Nothing -> throwError "fromField: saw NULL when expecting NOT NULL"
-    Just bytestring -> valueParser (value fromPG) bytestring
+    Just bytestring -> valueParser (revalue fromPG) bytestring
 instance (FromPG y, pg ~ PG y) => FromValue ('Null pg) (Maybe y) where
   fromValue = \case
     Nothing -> return Nothing
-    Just bytestring -> fmap Just $ valueParser (value fromPG) bytestring
+    Just bytestring -> fmap Just $ valueParser (revalue fromPG) bytestring
 
 -- | A `FromField` constraint lifts the `FromPG` parser
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
@@ -298,9 +316,9 @@ instance (FromValue ty y, fld0 ~ fld1)
 class FromArray (dims :: [Nat]) (ty :: NullType) (y :: Type) where
   fromArray :: Array y
 instance (FromPG y, pg ~ PG y) => FromArray '[] ('NotNull pg) y where
-  fromArray = valueArray (value fromPG)
+  fromArray = valueArray (revalue fromPG)
 instance (FromPG y, pg ~ PG y) => FromArray '[] ('Null pg) (Maybe y) where
-  fromArray = nullableValueArray (value fromPG)
+  fromArray = nullableValueArray (revalue fromPG)
 instance
   ( SOP.IsProductType product ys
   , Length ys ~ dim
