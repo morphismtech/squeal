@@ -311,22 +311,12 @@ instance ty0 ~ ty1 => SamePGType
 
 -- | `AllNotNull` is a constraint that proves a `ColumnsType` has no @NULL@s.
 type family AllNotNull (columns :: ColumnsType) :: Constraint where
-  AllNotNull (_ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
-  AllNotNull (_ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
-  AllNotNull (_ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
-  AllNotNull (_ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
-  AllNotNull (_ ::: _ :=> 'NotNull _ ': _ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
   AllNotNull (_ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
   AllNotNull '[] = ()
 
 -- | `NotAllNull` is a constraint that proves a `ColumnsType` has some
 -- @NOT NULL@.
 type family NotAllNull (columns :: ColumnsType) :: Constraint where
-  NotAllNull (_ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> 'NotNull _ ': _) = ()
-  NotAllNull (_ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> 'NotNull _ ': _) = ()
-  NotAllNull (_ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> 'NotNull _ ': _) = ()
-  NotAllNull (_ ::: _ :=> _ _ ': _ ::: _ :=> _ _ ': _ ::: _ :=> 'NotNull _ ': _) = ()
-  NotAllNull (_ ::: _ :=> _ _ ': _ ::: _ :=> 'NotNull _ ': _) = ()
   NotAllNull (_ ::: _ :=> 'NotNull _ ': _) = ()
   NotAllNull (_ ::: _ :=> 'Null _ ': columns) = NotAllNull columns
 
@@ -337,16 +327,6 @@ type family NullifyType (ty :: NullType) :: NullType where
 
 -- | `NullifyRow` is an idempotent that nullifies a `RowType`.
 type family NullifyRow (columns :: RowType) :: RowType where
-  NullifyRow (column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': column3 ::: ty3 ': column4 ::: ty4 ': column5 ::: ty5 ': columns) =
-    column ::: NullifyType ty ': column1 ::: NullifyType ty1 ': column2 ::: NullifyType ty2 ': column3 ::: NullifyType ty3 ': column4 ::: NullifyType ty4 ': column5 ::: NullifyType ty5 ': NullifyRow columns
-  NullifyRow (column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': column3 ::: ty3 ': column4 ::: ty4 ': columns) =
-    column ::: NullifyType ty ': column1 ::: NullifyType ty1 ': column2 ::: NullifyType ty2 ': column3 ::: NullifyType ty3 ': column4 ::: NullifyType ty4 ': NullifyRow columns
-  NullifyRow (column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': column3 ::: ty3 ': columns) =
-    column ::: NullifyType ty ': column1 ::: NullifyType ty1 ': column2 ::: NullifyType ty2 ': column3 ::: NullifyType ty3 ': NullifyRow columns
-  NullifyRow (column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': columns) =
-    column ::: NullifyType ty ': column1 ::: NullifyType ty1 ': column2 ::: NullifyType ty2 ': NullifyRow columns
-  NullifyRow (column ::: ty ': column1 ::: ty1 ': columns) =
-    column ::: NullifyType ty ': column1 ::: NullifyType ty1 ': NullifyRow columns
   NullifyRow (column ::: ty ': columns) =
     column ::: NullifyType ty ': NullifyRow columns
   NullifyRow '[] = '[]
@@ -355,16 +335,6 @@ type family NullifyRow (columns :: RowType) :: RowType where
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
 type family NullifyFrom (tables :: FromType) :: FromType where
-  NullifyFrom (table ::: columns ': table1 ::: columns1 ': table2 ::: columns2 ': table3 ::: columns3 ': table4 ::: columns4 ': table5 ::: columns5 ': tables) =
-    table ::: NullifyRow columns ': table1 ::: NullifyRow columns1 ': table2 ::: NullifyRow columns2 ': table3 ::: NullifyRow columns3 ': table4 ::: NullifyRow columns5 ': table5 ::: NullifyRow columns4 ': NullifyFrom tables
-  NullifyFrom (table ::: columns ': table1 ::: columns1 ': table2 ::: columns2 ': table3 ::: columns3 ': table4 ::: columns4 ': tables) =
-    table ::: NullifyRow columns ': table1 ::: NullifyRow columns1 ': table2 ::: NullifyRow columns2 ': table3 ::: NullifyRow columns3 ': table4 ::: NullifyRow columns4 ': NullifyFrom tables
-  NullifyFrom (table ::: columns ': table1 ::: columns1 ': table2 ::: columns2 ': table3 ::: columns3 ': tables) =
-    table ::: NullifyRow columns ': table1 ::: NullifyRow columns1 ': table2 ::: NullifyRow columns2 ': table3 ::: NullifyRow columns3 ': NullifyFrom tables
-  NullifyFrom (table ::: columns ': table1 ::: columns1 ': table2 ::: columns2 ': tables) =
-    table ::: NullifyRow columns ': table1 ::: NullifyRow columns1 ': table2 ::: NullifyRow columns2 ': NullifyFrom tables
-  NullifyFrom (table ::: columns ': table1 ::: columns1 ': tables) =
-    table ::: NullifyRow columns ': table1 ::: NullifyRow columns1 ': NullifyFrom tables
   NullifyFrom (table ::: columns ': tables) =
     table ::: NullifyRow columns ': NullifyFrom tables
   NullifyFrom '[] = '[]
