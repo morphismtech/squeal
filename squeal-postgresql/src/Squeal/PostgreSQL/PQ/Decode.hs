@@ -93,8 +93,30 @@ value = unsafeCoerce
 enumValue :: (Text -> Maybe y) -> Value y
 enumValue = enum
 
-rowValue :: SOP.SListI row => DecodeRow row y -> Value y
-rowValue decoder =
+enumeratedValue
+  :: (PG y ~ 'PGenum labels, SOP.All KnownSymbol labels)
+  => NP (SOP.K y) labels
+  -> StateT Strict.ByteString (Except Strict.Text) y
+enumeratedValue labels = devalue $
+  let
+    readLabel
+      :: SOP.All KnownSymbol labels
+      => NP (SOP.K y) labels
+      -> String
+      -> Maybe y
+    readLabel Nil _ = Nothing
+    readLabel ((SOP.K y :: SOP.K y label) :* ys) name =
+      if name == symbolVal (SOP.Proxy @label)
+        then Just y
+        else readLabel ys name
+  in
+    enum $ readLabel labels . Strict.Text.unpack
+
+rowValue
+  :: (PG y ~ 'PGcomposite row, SOP.SListI row)
+  => DecodeRow row y
+  -> StateT Strict.ByteString (Except Strict.Text) y
+rowValue decoder = devalue $
   let
     -- <number of fields: 4 bytes>
     -- [for each field]
@@ -248,7 +270,7 @@ instance
   , SOP.AllZip FromField row ys
   , RowPG y ~ row
   ) => FromPG (Composite y) where
-    fromPG = devalue (fmap Composite (rowValue @row genericRow))
+    fromPG = rowValue (Composite <$> genericRow)
 instance FromPG y => FromPG (Range y) where
   fromPG = devalue $ do
     flag <- byte
