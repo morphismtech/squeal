@@ -16,7 +16,9 @@ jobs:
       - run: apt-get update && apt-get install -y libpq-dev xz-utils make
       - run: stack upgrade && stack update
       - run: stack build --fast
-      - run: sudo update-locale LANG=en_US.UTF-8
+      - run: export LANGUAGE=en_US.UTF-8
+      - run: export LC_ALL=en_US.UTF-8
+      - run: export LC_CTYPE=UTF-8
       - run: export LANG=en_US.UTF-8
       - run: stack test
       - run: stack haddock
