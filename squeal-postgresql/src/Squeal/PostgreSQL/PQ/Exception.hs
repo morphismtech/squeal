@@ -17,6 +17,7 @@ module Squeal.PostgreSQL.PQ.Exception
   ( SquealException (..)
   , pattern UniqueViolation
   , pattern CheckViolation
+  , pattern SerializationFailure
   , SQLState (..)
   , LibPQ.ExecStatus (..)
   , catchSqueal
@@ -59,9 +60,14 @@ data SquealException
 instance Exception SquealException
 
 pattern UniqueViolation :: ByteString -> SquealException
-pattern UniqueViolation msg = SQLException (SQLState LibPQ.FatalError "23505" msg)
+pattern UniqueViolation msg =
+  SQLException (SQLState LibPQ.FatalError "23505" msg)
 pattern CheckViolation :: ByteString -> SquealException
-pattern CheckViolation msg = SQLException (SQLState LibPQ.FatalError "23514" msg)
+pattern CheckViolation msg =
+  SQLException (SQLState LibPQ.FatalError "23514" msg)
+pattern SerializationFailure :: ByteString -> SquealException
+pattern SerializationFailure msg =
+  SQLException (SQLState LibPQ.FatalError "40001" msg)
 
 -- | Catch `SquealException`s.
 catchSqueal

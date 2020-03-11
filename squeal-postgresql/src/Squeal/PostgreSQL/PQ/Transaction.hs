@@ -89,7 +89,7 @@ transactionallyRetry mode tx = mask $ \restore ->
     loop attempt = do
       manipulate_ $ begin mode
       attempt >>= \case
-        Left (SQLException (SQLState _ "40001" _)) -> do
+        Left (SerializationFailure _) -> do
           manipulate_ rollback
           loop attempt
         Left err -> do
