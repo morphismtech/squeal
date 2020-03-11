@@ -5,3 +5,4 @@ packages:
 extra-deps:
 - github: morphismtech/free-categories
   commit: 33b5d9e0345ff59c5be3bdb7257c70b1977e5c67
+- with-utf8-1.0.0.0

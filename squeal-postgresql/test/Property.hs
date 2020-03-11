@@ -19,14 +19,15 @@ import Data.Scientific (fromFloatDigits)
 import Data.Fixed (Fixed(MkFixed), Micro, Pico)
 import Data.String (IsString(fromString))
 import Data.Time
-import Squeal.PostgreSQL hiding (check)
 import Hedgehog hiding (Range)
+import Main.Utf8
+import Squeal.PostgreSQL hiding (check)
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Main as Main
 import qualified Hedgehog.Range as Range
 
 main :: IO ()
-main = Main.defaultMain [checkSequential roundtrips]
+main = withUtf8 $ Main.defaultMain [checkSequential roundtrips]
 
 roundtrips :: Group
 roundtrips = Group "roundtrips"
