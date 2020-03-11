@@ -123,7 +123,7 @@ instance IndexedMonadTransPQ PQ where
   define (UnsafeDefinition q) = PQ $ \ (K conn) -> do
     resultMaybe <- liftIO $ LibPQ.exec conn q
     case resultMaybe of
-      Nothing -> throwIO ConnectionException
+      Nothing -> throwIO $ ConnectionException "LibPQ.exec"
       Just result -> K <$> okResult_ result
 
 instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
@@ -145,7 +145,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
       resultMaybe <- liftIO $
         LibPQ.execParams conn (q <> ";") formattedParams LibPQ.Binary
       case resultMaybe of
-        Nothing -> throwIO ConnectionException
+        Nothing -> throwIO $ ConnectionException "LibPQ.execParams"
         Just result -> do
           okResult_ result
           return $ K (Result decode result)
@@ -163,7 +163,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
       oids <- hcollapse <$> hsequence' oidsOfParams
       prepResultMaybe <- LibPQ.prepare conn temp (q <> ";") (Just oids)
       case prepResultMaybe of
-        Nothing -> throwIO ConnectionException
+        Nothing -> throwIO $ ConnectionException "LibPQ.prepare"
         Just prepResult -> okResult_ prepResult
       results <- for list $ \ params -> do
         encodedParams <- runReaderT (runEncodeParams encode params) kconn
@@ -176,13 +176,13 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
         resultMaybe <-
           LibPQ.execPrepared conn temp formattedParams LibPQ.Binary
         case resultMaybe of
-          Nothing -> throwIO ConnectionException
+          Nothing -> throwIO $ ConnectionException "LibPQ.execPrepared"
           Just result -> do
             okResult_ result
             return $ Result decode result
       deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
       case deallocResultMaybe of
-        Nothing -> throwIO ConnectionException
+        Nothing -> throwIO $ ConnectionException "LibPQ.exec"
         Just deallocResult -> okResult_ deallocResult
       return (K results)
   executePrepared (Query encode decode q) list =
@@ -199,7 +199,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
       oids <- hcollapse <$> hsequence' oidsOfParams
       prepResultMaybe <- LibPQ.prepare conn temp (q <> ";") (Just oids)
       case prepResultMaybe of
-        Nothing -> throwIO ConnectionException
+        Nothing -> throwIO $ ConnectionException "LibPQ.prepare"
         Just prepResult -> okResult_ prepResult
       for_ list $ \ params -> do
         encodedParams <- runReaderT (runEncodeParams encode params) kconn
@@ -212,11 +212,11 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
         resultMaybe <-
           LibPQ.execPrepared conn temp formattedParams LibPQ.Binary
         case resultMaybe of
-          Nothing -> throwIO ConnectionException
+          Nothing -> throwIO $ ConnectionException "LibPQ.execPrepared"
           Just result -> okResult_ result
       deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
       case deallocResultMaybe of
-        Nothing -> throwIO ConnectionException
+        Nothing -> throwIO $ ConnectionException "LibPQ.exec"
         Just deallocResult -> okResult_ deallocResult
       return (K ())
   executePrepared_ (Query encode decode q) list =
@@ -285,6 +285,11 @@ okResult_ result = liftIO $ do
     LibPQ.CommandOk -> return ()
     LibPQ.TuplesOk -> return ()
     _ -> do
-      stateCode <- LibPQ.resultErrorField result LibPQ.DiagSqlstate
-      msg <- LibPQ.resultErrorMessage result
-      throwIO . PQException $ PQState status stateCode msg
+      stateCodeMaybe <- LibPQ.resultErrorField result LibPQ.DiagSqlstate
+      case stateCodeMaybe of
+        Nothing -> throwIO $ ConnectionException "LibPQ.resultErrorField"
+        Just stateCode -> do
+          msgMaybe <- LibPQ.resultErrorMessage result
+          case msgMaybe of
+            Nothing -> throwIO $ ConnectionException "LibPQ.resultErrorMessage"
+            Just msg -> throwIO . SQLException $ SQLState status stateCode msg

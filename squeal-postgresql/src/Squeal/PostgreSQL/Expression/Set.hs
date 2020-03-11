@@ -27,11 +27,9 @@ module Squeal.PostgreSQL.Expression.Set
   , generateSeriesTimestamp
   , SetFunction
   , unsafeSetFunction
-  , SetFunctionDB
   , setFunction
   , SetFunctionN
   , unsafeSetFunctionN
-  , SetFunctionNDB
   , setFunctionN
   ) where
 
@@ -53,26 +51,18 @@ import Squeal.PostgreSQL.Schema
 {- |
 A @RankNType@ for set returning functions with 1 argument.
 -}
-type SetFunction fun ty row
+type SetFunction ty set
   =  forall lat with db params
   .  Expression lat with 'Ungrouped db params '[] ty
-     -- ^ input
-  -> FromClause lat with db params '[fun ::: row]
-     -- ^ output
-
--- | Like `SetFunction` but depends on the schemas of the database
-type SetFunctionDB fun db ty row
-  =  forall lat with params
-  .  Expression lat with 'Ungrouped db params '[] ty
-     -- ^ input
-  -> FromClause lat with db params '[fun ::: row]
-     -- ^ output
+  -- ^ input
+  -> FromClause lat with db params '[set]
+  -- ^ output
 
 -- | Escape hatch for a set returning function of a single variable
 unsafeSetFunction
   :: forall fun ty row. KnownSymbol fun
   => ByteString
-  -> SetFunction fun ty row -- ^ set returning function
+  -> SetFunction ty (fun ::: row) -- ^ set returning function
 unsafeSetFunction fun x = UnsafeFromClause $
   fun <> parenthesized (renderSQL x)
 
@@ -82,7 +72,7 @@ unsafeSetFunction fun x = UnsafeFromClause $
 >>> type Schema = '["fn" ::: 'Function Fn]
 >>> :{
 let
-  fn :: SetFunctionDB "fn" (Public Schema) ('Null 'PGbool) '["ret" ::: 'NotNull 'PGnumeric]
+  fn :: SetOf (Public Schema) ('Null 'PGbool) ("fn" ::: '["ret" ::: 'NotNull 'PGnumeric])
   fn = setFunction #fn
 in
   printSQL (fn true)
@@ -93,33 +83,33 @@ setFunction
   :: ( Has sch db schema
      , Has fun schema ('Function ('[ty] :=> 'ReturnsTable row)) )
   => QualifiedAlias sch fun -- ^ function alias
-  -> SetFunctionDB fun db ty row
+  -> SetOf db ty (fun ::: row)
 setFunction fun = unsafeSetFunction (renderSQL fun)
 
 {- |
 A @RankNType@ for set returning functions with multiple argument.
 -}
-type SetFunctionN fun tys row
+type SetFunctionN tys set
   =  forall lat with db params
   .  NP (Expression lat with 'Ungrouped db params '[]) tys
      -- ^ inputs
-  -> FromClause lat with db params '[fun ::: row]
+  -> FromClause lat with db params '[set]
      -- ^ output
 
 {- | Escape hatch for a multivariable set returning function-}
 unsafeSetFunctionN
   :: forall fun tys row. (SOP.SListI tys, KnownSymbol fun)
   => ByteString
-  -> SetFunctionN fun tys row -- ^ set returning function
+  -> SetFunctionN tys (fun ::: row) -- ^ set returning function
 unsafeSetFunctionN fun xs = UnsafeFromClause $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
 -- | Like `SetFunctionN` but depends on the schemas of the database
-type SetFunctionNDB fun db tys row
+type SetFunctionNDB db tys set
   =  forall lat with params
   .  NP (Expression lat with 'Ungrouped db params '[]) tys
      -- ^ inputs
-  -> FromClause lat with db params '[fun ::: row]
+  -> FromClause lat with db params '[set]
      -- ^ output
 
 {- | Call a user defined multivariable set returning function
@@ -128,7 +118,9 @@ type SetFunctionNDB fun db tys row
 >>> type Schema = '["fn" ::: 'Function Fn]
 >>> :{
 let
-  fn :: SetFunctionNDB "fn" (Public Schema) '[ 'Null 'PGbool, 'Null 'PGtext] '["ret" ::: 'NotNull 'PGnumeric]
+  fn :: SetOfN (Public Schema)
+    '[ 'Null 'PGbool, 'Null 'PGtext]
+    ("fn" ::: '["ret" ::: 'NotNull 'PGnumeric])
   fn = setFunctionN #fn
 in
   printSQL (fn (true *: "hi"))
@@ -140,7 +132,7 @@ setFunctionN
      , Has fun schema ('Function (tys :=> 'ReturnsTable row))
      , SOP.SListI tys )
   => QualifiedAlias sch fun -- ^ function alias
-  -> SetFunctionNDB fun db tys row
+  -> SetFunctionNDB db tys (fun ::: row)
 setFunctionN fun = unsafeSetFunctionN (renderSQL fun)
 
 {- | @generateSeries (start :* stop)@
@@ -153,8 +145,9 @@ from @start@ to @stop@ with a step size of one
 -}
 generateSeries
   :: ty `In` '[ 'PGint4, 'PGint8, 'PGnumeric]
-  => SetFunctionN "generate_series" '[ null ty, null ty]
-    '["generate_series" ::: null ty] -- ^ set returning function
+  => SetFunctionN '[ null ty, null ty]
+    ("generate_series" ::: '["generate_series" ::: null ty])
+    -- ^ set returning function
 generateSeries = unsafeSetFunctionN "generate_series"
 
 {- | @generateSeriesStep (start :* stop *: step)@
@@ -167,8 +160,9 @@ from @start@ to @stop@ with a step size of @step@
 -}
 generateSeriesStep
   :: ty `In` '[ 'PGint4, 'PGint8, 'PGnumeric]
-  => SetFunctionN "generate_series" '[null ty, null ty, null ty]
-    '["generate_series" ::: null ty] -- ^ set returning function
+  => SetFunctionN '[null ty, null ty, null ty]
+    ("generate_series" ::: '["generate_series" ::: null ty])
+    -- ^ set returning function
 generateSeriesStep = unsafeSetFunctionN "generate_series"
 
 {- | @generateSeriesTimestamp (start :* stop *: step)@
@@ -187,6 +181,7 @@ in renderSQL (generateSeriesTimestamp (start :* stop *: step))
 -}
 generateSeriesTimestamp
   :: ty `In` '[ 'PGtimestamp, 'PGtimestamptz]
-  => SetFunctionN "generate_series" '[null ty, null ty, null 'PGinterval]
-    '["generate_series" ::: null ty] -- ^ set returning function
+  => SetFunctionN '[null ty, null ty, null 'PGinterval]
+    ("generate_series"  ::: '["generate_series" ::: null ty])
+    -- ^ set returning function
 generateSeriesTimestamp = unsafeSetFunctionN "generate_series"
