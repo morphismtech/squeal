@@ -22,13 +22,15 @@ Set returning functions
 
 module Squeal.PostgreSQL.Expression.Set
   ( -- * Set Function
-    generateSeries
+    SetFunction
+  , SetFunctionN
+  , SetOf
+  , SetOfN
+  , generateSeries
   , generateSeriesStep
   , generateSeriesTimestamp
-  , SetFunction
   , unsafeSetFunction
   , setFunction
-  , SetFunctionN
   , unsafeSetFunctionN
   , setFunctionN
   ) where
@@ -104,11 +106,23 @@ unsafeSetFunctionN
 unsafeSetFunctionN fun xs = UnsafeFromClause $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
--- | Like `SetFunctionN` but depends on the schemas of the database
-type SetFunctionNDB db tys set
+{- |
+Like `SetFunction` but depends on the schemas of the database
+-}
+type SetOf db ty set
+  =  forall lat with params
+  .  Expression lat with 'Ungrouped db params '[] ty
+     -- ^ input
+  -> FromClause lat with db params '[set]
+     -- ^ output
+
+{- |
+Like `SetFunctionN` but depends on the schemas of the database
+-}
+type SetOfN db tys set
   =  forall lat with params
   .  NP (Expression lat with 'Ungrouped db params '[]) tys
-     -- ^ inputs
+     -- ^ input
   -> FromClause lat with db params '[set]
      -- ^ output
 
@@ -132,7 +146,7 @@ setFunctionN
      , Has fun schema ('Function (tys :=> 'ReturnsTable row))
      , SOP.SListI tys )
   => QualifiedAlias sch fun -- ^ function alias
-  -> SetFunctionNDB db tys (fun ::: row)
+  -> SetOfN db tys (fun ::: row)
 setFunctionN fun = unsafeSetFunctionN (renderSQL fun)
 
 {- | @generateSeries (start :* stop)@

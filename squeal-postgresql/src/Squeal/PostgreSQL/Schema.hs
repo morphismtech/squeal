@@ -53,7 +53,7 @@ module Squeal.PostgreSQL.Schema
   , Public
     -- * Constraint
   , (:=>)
-  , ColumnConstraint (..)
+  , Optionality (..)
   , TableConstraint (..)
   , TableConstraints
   , Uniquely
@@ -167,17 +167,17 @@ data NullType
 
 -- | The constraint  operator, `:=>` is a type level pair
 -- between a "constraint" and some type, for use in pairing
--- a `ColumnConstraint` with a `NullType` to produce a `ColumnType`
+-- a `Optionality` with a `NullType` to produce a `ColumnType`
 -- or a `TableConstraints` and a `ColumnsType` to produce a `TableType`.
 type (:=>) constraint ty = '(constraint,ty)
 infixr 7 :=>
 
--- | `ColumnConstraint` encodes the availability of @DEFAULT@ for inserts and updates.
+-- | `Optionality` encodes the availability of @DEFAULT@ for inserts and updates.
 -- A column can be assigned a default value.
 -- A data `Squeal.PostgreSQL.Manipulations.Manipulation` command can also
 -- request explicitly that a column be set to its default value,
 -- without having to know what that value is.
-data ColumnConstraint
+data Optionality
   = Def -- ^ @DEFAULT@ is available for inserts and updates
   | NoDef -- ^ @DEFAULT@ is unavailable for inserts and updates
 
@@ -188,7 +188,7 @@ data ColumnConstraint
 -- >>> import GHC.TypeLits
 -- >>> type family IdColumn :: ColumnType where IdColumn = 'Def :=> 'NotNull 'PGint4
 -- >>> type family EmailColumn :: ColumnType where EmailColumn = 'NoDef :=> 'Null 'PGtext
-type ColumnType = (ColumnConstraint,NullType)
+type ColumnType = (Optionality,NullType)
 
 -- | `ColumnsType` is a row of `ColumnType`s.
 --

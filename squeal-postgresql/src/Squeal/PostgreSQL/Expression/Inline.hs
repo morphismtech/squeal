@@ -10,6 +10,7 @@ Inline expressions
 
 {-# LANGUAGE
     DataKinds
+  , FlexibleContexts
   , FlexibleInstances
   , LambdaCase
   , MultiParamTypeClasses
@@ -29,6 +30,9 @@ module Squeal.PostgreSQL.Expression.Inline
     Inline (..)
   , InlineParam (..)
   , InlineField (..)
+  , inlineFields
+  , InlineColumn (..)
+  , inlineColumns
   ) where
 
 import Data.Binary.Builder (toLazyByteString)
@@ -40,13 +44,13 @@ import Data.Kind (Type)
 import Data.Scientific (Scientific)
 import Data.String
 import Data.Text (Text)
-import Data.Text.Encoding (encodeUtf8)
 import Data.Time.Clock (DiffTime, diffTimeToPicoseconds, UTCTime)
 import Data.Time.Format (formatTime, defaultTimeLocale)
 import Data.Time.Calendar (Day, toGregorian)
 import Data.Time.LocalTime (LocalTime(LocalTime), TimeOfDay(TimeOfDay), TimeZone)
 import Data.UUID.Types (UUID, toASCIIBytes)
 import Data.Vector (Vector, toList)
+import Database.PostgreSQL.LibPQ (Oid(Oid))
 import GHC.TypeLits
 
 import qualified Data.Aeson as JSON
@@ -59,6 +63,7 @@ import qualified Generics.SOP.Record as SOP
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Array
+import Squeal.PostgreSQL.Expression.Default
 import Squeal.PostgreSQL.Expression.Composite
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Null
@@ -151,23 +156,17 @@ instance Inline Scientific where
 instance Inline Text where inline = fromString . Text.unpack
 instance Inline Lazy.Text where inline = fromString . Lazy.Text.unpack
 instance (KnownNat n, 1 <= n) => Inline (VarChar n) where
-  inline vchr =
-    let
-      str = escape =<< Text.unpack (getVarChar vchr)
-    in inferredtype
+  inline
+    = inferredtype
     . UnsafeExpression
-    . escapeQuoted
-    . encodeUtf8
-    $ fromString str
+    . escapeQuotedText
+    . getVarChar
 instance (KnownNat n, 1 <= n) => Inline (FixChar n) where
-  inline fchr =
-    let
-      str = escape =<< Text.unpack (getFixChar fchr)
-    in inferredtype
+  inline
+    = inferredtype
     . UnsafeExpression
-    . escapeQuoted
-    . encodeUtf8
-    $ fromString str
+    . escapeQuotedText
+    . getFixChar
 instance Inline DiffTime where
   inline dt =
     let
@@ -273,11 +272,13 @@ instance
       . SOP.toRecord
       . getComposite
 
+-- | Lifts `Inline` to `NullType`s.
 class InlineParam x ty where inlineParam :: x -> Expr ty
 instance (Inline x, pg ~ PG x) => InlineParam x ('NotNull pg) where inlineParam = inline
 instance (Inline x, pg ~ PG x) => InlineParam (Maybe x) ('Null pg) where
   inlineParam = maybe null_ inline
 
+-- | Lifts `Inline` to fields.
 class InlineField
   (field :: (Symbol, Type))
   (fieldpg :: (Symbol, NullType)) where
@@ -287,3 +288,47 @@ class InlineField
 instance (KnownSymbol alias, InlineParam x ty)
   => InlineField (alias ::: x) (alias ::: ty) where
     inlineField (SOP.P x) = inlineParam x `as` Alias @alias
+
+-- | Use a Haskell record as a inline a row of expressions.
+inlineFields
+  :: ( SOP.IsRecord hask fields
+     , SOP.AllZip InlineField fields row )
+  => hask -- ^ record
+  -> NP (Aliased (Expression '[] with 'Ungrouped db params '[])) row
+inlineFields
+  = SOP.htrans (SOP.Proxy @InlineField) inlineField
+  . SOP.toRecord
+
+
+-- | Lifts `Inline` to a column entry
+class InlineColumn
+  (field :: (Symbol, Type))
+  (column :: (Symbol, ColumnType)) where
+  -- | Haskell record field as a inline column
+  inlineColumn
+    :: SOP.P field
+    -> Aliased ( Optional
+      ( Expression lat with grp db params from
+      ) ) column
+instance (KnownSymbol col, InlineParam x ty)
+  => InlineColumn (col ::: x) (col ::: 'NoDef :=> ty) where
+    inlineColumn (SOP.P x) = Set (inlineParam x) `as` (Alias @col)
+instance (KnownSymbol col, InlineParam x ty)
+  => InlineColumn
+    (col ::: Optional SOP.I ('Def :=> x))
+    (col ::: 'Def :=> ty) where
+    inlineColumn (SOP.P optional) = case optional of
+      Default -> Default `as` (Alias @col)
+      Set (SOP.I x) -> Set (inlineParam x) `as` (Alias @col)
+
+-- | Use a Haskell record as a inline list of columns
+inlineColumns
+  :: ( SOP.IsRecord hask xs
+     , SOP.AllZip InlineColumn xs columns )
+  => hask -- ^ record
+  -> NP (Aliased (Optional (
+      Expression '[] with 'Ungrouped db params '[]
+      ) ) ) columns
+inlineColumns
+  = SOP.htrans (SOP.Proxy @InlineColumn) inlineColumn
+  . SOP.toRecord

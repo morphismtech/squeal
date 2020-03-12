@@ -33,7 +33,8 @@ module Squeal.PostgreSQL.Render
   , doubleQuoted
   , singleQuotedText
   , singleQuotedUtf8
-  , escapeQuoted
+  , escapeQuotedString
+  , escapeQuotedText
   , renderCommaSeparated
   , renderCommaSeparatedConstraint
   , renderCommaSeparatedMaybe
@@ -84,8 +85,14 @@ singleQuotedText str =
 singleQuotedUtf8 :: ByteString -> ByteString
 singleQuotedUtf8 = singleQuotedText . Text.decodeUtf8
 
-escapeQuoted :: ByteString -> ByteString
-escapeQuoted x = "E\'" <> x <> "\'"
+-- | Escape quote a string.
+escapeQuotedString :: String -> ByteString
+escapeQuotedString x = "E\'" <> Char8.pack (escape =<< x) <> "\'"
+
+-- | Escape quote a string.
+escapeQuotedText :: Text -> ByteString
+escapeQuotedText x =
+  "E\'" <> Text.encodeUtf8 (Text.concatMap (fromString . escape) x) <> "\'"
 
 -- | Comma separate the renderings of a heterogeneous list.
 renderCommaSeparated

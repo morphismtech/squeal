@@ -49,7 +49,7 @@ null_ = UnsafeExpression "NULL"
 notNull :: 'NotNull ty --> 'Null ty
 notNull = UnsafeExpression . renderSQL
 
--- | Analagous to `fromJust` inverse to `notNull`,
+-- | Analagous to `Data.Maybe.fromJust` inverse to `notNull`,
 -- useful when you know an `Expression` is `NotNull`,
 -- because, for instance, you've filtered out @NULL@
 -- values in a column.

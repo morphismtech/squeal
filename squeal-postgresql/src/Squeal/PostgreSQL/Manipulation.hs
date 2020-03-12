@@ -48,9 +48,6 @@ module Squeal.PostgreSQL.Manipulation
   , mapOptional
   , QueryClause (..)
   , pattern Values_
-  , InlineColumn (..)
-  , pattern NotDefault
-  , inlineColumns
   , inlineValues
   , inlineValues_
   , ReturningClause (..)
@@ -65,7 +62,6 @@ import Control.DeepSeq
 import Data.ByteString hiding (foldr)
 import Data.Kind (Type)
 import Data.Quiver.Functor
-import GHC.TypeLits
 
 import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
@@ -73,6 +69,7 @@ import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
+import Squeal.PostgreSQL.Expression.Default
 import Squeal.PostgreSQL.Expression.Inline
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.List
@@ -382,61 +379,6 @@ pattern Values_
   -- ^ row of values
   -> QueryClause with db params columns
 pattern Values_ vals = Values vals []
-
--- | `Optional` is either `Default` or a value, parameterized by an appropriate
--- `ColumnConstraint`.
-data Optional expr ty where
-  -- | Use the `Default` value for a column.
-  Default :: Optional expr ('Def :=> ty)
-  -- | `Set` a value for a column.
-  Set :: expr ty -> Optional expr (def :=> ty)
-
-instance (forall x. RenderSQL (expr x)) => RenderSQL (Optional expr ty) where
-  renderSQL = \case
-    Default -> "DEFAULT"
-    Set x -> renderSQL x
-
-mapOptional
-  :: (expr x -> expr y)
-  -> Optional expr (def :=> x)
-  -> Optional expr (def :=> y)
-mapOptional f = \case
-  Default -> Default
-  Set x -> Set (f x)
-
--- | Lifts `Inline` to a column entry
-class InlineColumn field column where
-  -- | Haskell record field as a inline column
-  inlineColumn
-    :: SOP.P field
-    -> Aliased ( Optional
-      ( Expression lat with grp db params from
-      ) ) column
-instance (KnownSymbol col, InlineParam x ty)
-  => InlineColumn (col ::: x) (col ::: 'NoDef :=> ty) where
-    inlineColumn (SOP.P x) = Set (inlineParam x) `as` (Alias @col)
-instance (KnownSymbol col, InlineParam x ty)
-  => InlineColumn
-    (col ::: Optional SOP.I ('Def :=> x))
-    (col ::: 'Def :=> ty) where
-    inlineColumn (SOP.P optional) = case optional of
-      Default -> Default `as` (Alias @col)
-      Set (SOP.I x) -> Set (inlineParam x) `as` (Alias @col)
-
-pattern NotDefault :: ty -> Optional SOP.I (def :=> ty)
-pattern NotDefault x = Set (SOP.I x)
-
--- | Use a Haskell record as a inline list of columns
-inlineColumns
-  :: ( SOP.IsRecord hask xs
-     , SOP.AllZip InlineColumn xs columns )
-  => hask -- ^ record
-  -> NP (Aliased (Optional (
-      Expression '[] with 'Ungrouped db params '[]
-      ) ) ) columns
-inlineColumns
-  = SOP.htrans (SOP.Proxy @InlineColumn) inlineColumn
-  . SOP.toRecord
 
 -- | `inlineValues_` a Haskell record in `insertInto`.
 inlineValues_

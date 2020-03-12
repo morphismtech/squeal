@@ -169,6 +169,7 @@ renderAliased
 renderAliased render (expression `As` alias) =
   render expression <> " AS " <> renderSQL alias
 
+-- | Map a function over an `Aliased` expression.
 mapAliased
   :: (expr x -> expr y)
   -> Aliased expr (alias ::: x)

@@ -36,6 +36,7 @@ library
     Squeal.PostgreSQL.Expression.Array
     Squeal.PostgreSQL.Expression.Comparison
     Squeal.PostgreSQL.Expression.Composite
+    Squeal.PostgreSQL.Expression.Default
     Squeal.PostgreSQL.Expression.Json
     Squeal.PostgreSQL.Expression.Inline
     Squeal.PostgreSQL.Expression.Logic

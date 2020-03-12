@@ -28,15 +28,16 @@ Decoding of result values
 #-}
 
 module Squeal.PostgreSQL.PQ.Decode
-  ( -- * Decode Rows
-    DecodeRow (..)
+  ( -- * Decode Types
+    FromPG (..)
+  , devalue
+  , rowValue
+    -- * Decode Rows
+  , DecodeRow (..)
   , decodeRow
   , runDecodeRow
   , genericRow
-  , rowValue
-  , devalue
     -- * Decoding Classes
-  , FromPG (..)
   , FromValue (..)
   , FromField (..)
   , FromArray (..)
@@ -59,6 +60,7 @@ import Data.Scientific (Scientific)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
 import Data.UUID.Types (UUID)
 import Data.Vector (Vector)
+import Database.PostgreSQL.LibPQ (Oid(Oid))
 import GHC.OverloadedLabels
 import GHC.TypeLits
 import Network.IP.Addr (NetAddr, IP)
@@ -81,6 +83,8 @@ import Squeal.PostgreSQL.Schema
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
 
+-- | Converts a `Value` type from @postgresql-binary@ for use in
+-- the `fromPG` method of `FromPG`.
 devalue :: Value x -> StateT Strict.ByteString (Except Strict.Text) x
 devalue = unsafeCoerce
 

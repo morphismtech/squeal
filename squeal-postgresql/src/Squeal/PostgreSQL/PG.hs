@@ -48,7 +48,7 @@ module Squeal.PostgreSQL.PG
   , Enumerated (..)
   , VarArray (..)
   , FixArray (..)
-  , LibPQ.Oid (..)
+  -- , LibPQ.Oid (..)
   , VarChar, varChar, getVarChar
   , FixChar, fixChar, getFixChar
   , Only (..)

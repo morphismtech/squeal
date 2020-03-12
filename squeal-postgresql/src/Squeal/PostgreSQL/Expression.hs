@@ -69,7 +69,6 @@ import Data.ByteString.Lazy (toStrict)
 import Data.Function ((&))
 import Data.Semigroup hiding (All)
 import Data.String
-import Data.Text.Encoding (encodeUtf8)
 import Generics.SOP hiding (All, from)
 import GHC.OverloadedLabels
 import GHC.TypeLits
@@ -617,31 +616,25 @@ instance PGIntersect ('PGrange ty)
 
 instance IsString
   (Expression lat with grp db params from (null 'PGtext)) where
-    fromString str
+    fromString
       = UnsafeExpression
       . parenthesized
       . (<> " :: text")
-      . escapeQuoted
-      . encodeUtf8
-      $ fromString (escape =<< str)
+      . escapeQuotedString
 instance IsString
   (Expression lat with grp db params from (null 'PGtsvector)) where
-    fromString str
+    fromString
       = UnsafeExpression
       . parenthesized
       . (<> " :: tsvector")
-      . escapeQuoted
-      . encodeUtf8
-      $ fromString (escape =<< str)
+      . escapeQuotedString
 instance IsString
   (Expression lat with grp db params from (null 'PGtsquery)) where
-    fromString str
+    fromString
       = UnsafeExpression
       . parenthesized
       . (<> " :: tsquery")
-      . escapeQuoted
-      . encodeUtf8
-      $ fromString (escape =<< str)
+      . escapeQuotedString
 
 instance Semigroup
   (Expression lat with grp db params from (null ('PGvararray ty))) where
