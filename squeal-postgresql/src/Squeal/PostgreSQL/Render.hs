@@ -87,7 +87,7 @@ singleQuotedUtf8 = singleQuotedText . Text.decodeUtf8
 
 -- | Escape quote a string.
 escapeQuotedString :: String -> ByteString
-escapeQuotedString x = "E\'" <> Char8.pack (escape =<< x) <> "\'"
+escapeQuotedString x = "E\'" <> Text.encodeUtf8 (fromString (escape =<< x)) <> "\'"
 
 -- | Escape quote a string.
 escapeQuotedText :: Text -> ByteString
