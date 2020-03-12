@@ -167,7 +167,7 @@ data NullType
 
 -- | The constraint  operator, `:=>` is a type level pair
 -- between a "constraint" and some type, for use in pairing
--- a `Optionality` with a `NullType` to produce a `ColumnType`
+-- an `Optionality` with a `NullType` to produce a `ColumnType`
 -- or a `TableConstraints` and a `ColumnsType` to produce a `TableType`.
 type (:=>) constraint ty = '(constraint,ty)
 infixr 7 :=>
