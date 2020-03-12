@@ -474,42 +474,42 @@ is a list of `Expression`s. A `Selection` could be a list of
 `WindowFunction`s `Over` `WindowDefinition`. `Additional` `Selection`s can
 be selected with `Also`.
 -}
-data Selection lat with grp db params from row where
+data Selection grp lat with db params from row where
   Star
     :: HasUnique tab from row
-    => Selection lat with 'Ungrouped db params from row
+    => Selection 'Ungrouped lat with db params from row
     -- ^ `HasUnique` table in the `FromClause`
   DotStar
     :: Has tab from row
     => Alias tab
        -- ^ `Has` table with `Alias`
-    -> Selection lat with 'Ungrouped db params from row
+    -> Selection 'Ungrouped lat with db params from row
   List
     :: SListI row
-    => NP (Aliased (Expression lat with grp db params from)) row
+    => NP (Aliased (Expression grp lat with db params from)) row
        -- ^ `NP` list of `Aliased` `Expression`s
-    -> Selection lat with grp db params from row
+    -> Selection grp lat with db params from row
   Over
     :: SListI row
-    => NP (Aliased (WindowFunction lat with grp db params from)) row
+    => NP (Aliased (WindowFunction grp lat with db params from)) row
        -- ^ `NP` list of `Aliased` `WindowFunction`s
-    -> WindowDefinition lat with grp db params from
-    -> Selection lat with grp db params from row
+    -> WindowDefinition grp lat with db params from
+    -> Selection grp lat with db params from row
   Also
-    :: Selection lat with grp db params from right
+    :: Selection grp lat with db params from right
        -- ^ `Additional` `Selection`
-    -> Selection lat with grp db params from left
-    -> Selection lat with grp db params from (Join left right)
-instance Additional (Selection lat with grp db params from) where
+    -> Selection grp lat with db params from left
+    -> Selection grp lat with db params from (Join left right)
+instance Additional (Selection grp lat with db params from) where
   also = Also
 instance (KnownSymbol col, row ~ '[col ::: ty])
   => Aliasable col
-    (Expression lat with grp db params from ty)
-    (Selection lat with grp db params from row) where
+    (Expression grp lat with db params from ty)
+    (Selection grp lat with db params from row) where
       expr `as` col = List (expr `as` col)
 instance (Has tab (Join lat from) row0, Has col row0 ty, row1 ~ '[col ::: ty])
   => IsQualified tab col
-    (Selection lat with 'Ungrouped db params from row1) where
+    (Selection 'Ungrouped lat with db params from row1) where
       tab ! col = tab ! col `as` col
 instance
   ( Has tab (Join lat from) row0
@@ -517,11 +517,11 @@ instance
   , row1 ~ '[col ::: ty]
   , GroupedBy tab col bys )
   => IsQualified tab col
-    (Selection lat with ('Grouped bys) db params from row1) where
+    (Selection ('Grouped bys) lat with db params from row1) where
       tab ! col = tab ! col `as` col
 instance (HasUnique tab (Join lat from) row0, Has col row0 ty, row1 ~ '[col ::: ty])
   => IsLabel col
-    (Selection lat with 'Ungrouped db params from row1) where
+    (Selection 'Ungrouped lat with db params from row1) where
       fromLabel = fromLabel @col `as` Alias
 instance
   ( HasUnique tab (Join lat from) row0
@@ -529,10 +529,10 @@ instance
   , row1 ~ '[col ::: ty]
   , GroupedBy tab col bys )
   => IsLabel col
-    (Selection lat with ('Grouped bys) db params from row1) where
+    (Selection ('Grouped bys) lat with db params from row1) where
       fromLabel = fromLabel @col `as` Alias
 
-instance RenderSQL (Selection lat with grp db params from row) where
+instance RenderSQL (Selection grp lat with db params from row) where
   renderSQL = \case
     List list -> renderCommaSeparated (renderAliased renderSQL) list
     Star -> "*"
@@ -541,7 +541,7 @@ instance RenderSQL (Selection lat with grp db params from row) where
     Over winFns winDef ->
       let
         renderOver
-          :: Aliased (WindowFunction lat with grp db params from) field
+          :: Aliased (WindowFunction grp lat with db params from) field
           -> ByteString
         renderOver (winFn `As` col) = renderSQL winFn
           <+> "OVER" <+> parenthesized (renderSQL winDef)
@@ -550,7 +550,7 @@ instance RenderSQL (Selection lat with grp db params from row) where
         renderCommaSeparated renderOver winFns
 
 instance IsString
-  (Selection lat with grp db params from '["fromOnly" ::: 'NotNull 'PGtext]) where
+  (Selection grp lat with db params from '["fromOnly" ::: 'NotNull 'PGtext]) where
     fromString str = fromString str `as` Alias
 
 -- | the `TableExpression` in the `select` command constructs an intermediate
@@ -560,9 +560,9 @@ instance IsString
 -- the intermediate table are actually output.
 select
   :: (SListI row, row ~ (x ': xs))
-  => Selection lat with grp db params from row
+  => Selection grp lat with db params from row
   -- ^ selection
-  -> TableExpression lat with grp db params from
+  -> TableExpression grp lat with db params from
   -- ^ intermediate virtual table
   -> Query lat with db params row
 select selection tabexpr = UnsafeQuery $
@@ -574,9 +574,9 @@ select selection tabexpr = UnsafeQuery $
 -- of a general `Selection`.
 select_
   :: (SListI row, row ~ (x ': xs))
-  => NP (Aliased (Expression lat with grp db params from)) row
+  => NP (Aliased (Expression grp lat with db params from)) row
   -- ^ select list
-  -> TableExpression lat with grp db params from
+  -> TableExpression grp lat with db params from
   -- ^ intermediate virtual table
   -> Query lat with db params row
 select_ = select . List
@@ -585,9 +585,9 @@ select_ = select . List
 -- be subject to the elimination of duplicate rows using `selectDistinct`.
 selectDistinct
   :: (SListI columns, columns ~ (col ': cols))
-  => Selection lat with grp db params from columns
+  => Selection grp lat with db params from columns
   -- ^ selection
-  -> TableExpression lat with grp db params from
+  -> TableExpression grp lat with db params from
   -- ^ intermediate virtual table
   -> Query lat with db params columns
 selectDistinct selection tabexpr = UnsafeQuery $
@@ -599,9 +599,9 @@ selectDistinct selection tabexpr = UnsafeQuery $
 -- of a general `Selection`.
 selectDistinct_
   :: (SListI columns, columns ~ (col ': cols))
-  => NP (Aliased (Expression lat with grp db params from)) columns
+  => NP (Aliased (Expression grp lat with db params from)) columns
   -- ^ select list
-  -> TableExpression lat with grp db params from
+  -> TableExpression grp lat with db params from
   -- ^ intermediate virtual table
   -> Query lat with db params columns
 selectDistinct_ = selectDistinct . List
@@ -621,11 +621,11 @@ will prepend the The DISTINCT ON expressions to the ORDER BY clause.
 -}
 selectDistinctOn
   :: (SListI columns, columns ~ (col ': cols))
-  => [SortExpression lat with grp db params from]
+  => [SortExpression grp lat with db params from]
   -- ^ DISTINCT ON expression(s) and prepended to ORDER BY clause
-  -> Selection lat with grp db params from columns
+  -> Selection grp lat with db params from columns
   -- ^ selection
-  -> TableExpression lat with grp db params from
+  -> TableExpression grp lat with db params from
   -- ^ intermediate virtual table
   -> Query lat with db params columns
 selectDistinctOn distincts selection tab = UnsafeQuery $
@@ -646,11 +646,11 @@ selectDistinctOn distincts selection tab = UnsafeQuery $
 -- of a general `Selection`.
 selectDistinctOn_
   :: (SListI columns, columns ~ (col ': cols))
-  => [SortExpression lat with grp db params from]
+  => [SortExpression grp lat with db params from]
   -- ^ distinct on and return the first row in ordering
-  -> NP (Aliased (Expression lat with grp db params from)) columns
+  -> NP (Aliased (Expression grp lat with db params from)) columns
   -- ^ selection
-  -> TableExpression lat with grp db params from
+  -> TableExpression grp lat with db params from
   -- ^ intermediate virtual table
   -> Query lat with db params columns
 selectDistinctOn_ distincts = selectDistinctOn distincts . List
@@ -666,8 +666,8 @@ selectDistinctOn_ distincts = selectDistinctOn distincts . List
 -- SELECT * FROM (VALUES ((1 :: int4), (E'one' :: text))) AS t ("a", "b")
 values
   :: SListI cols
-  => NP (Aliased (Expression lat with 'Ungrouped db params '[] )) cols
-  -> [NP (Aliased (Expression lat with 'Ungrouped db params '[] )) cols]
+  => NP (Aliased (Expression 'Ungrouped lat with db params '[] )) cols
+  -> [NP (Aliased (Expression 'Ungrouped lat with db params '[] )) cols]
   -- ^ When more than one row is specified, all the rows must
   -- must have the same number of elements
   -> Query lat with db params cols
@@ -681,7 +681,7 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
   <+> parenthesized (renderCommaSeparated renderAliasPart rw)
   where
     renderAliasPart, renderValuePart
-      :: Aliased (Expression lat with 'Ungrouped db params '[] ) ty -> ByteString
+      :: Aliased (Expression 'Ungrouped lat with db params '[] ) ty -> ByteString
     renderAliasPart (_ `As` name) = renderSQL name
     renderValuePart (value `As` _) = renderSQL value
 
@@ -689,7 +689,7 @@ values rw rws = UnsafeQuery $ "SELECT * FROM"
 -- specified by value expressions.
 values_
   :: SListI cols
-  => NP (Aliased (Expression lat with 'Ungrouped db params '[] )) cols
+  => NP (Aliased (Expression 'Ungrouped lat with db params '[] )) cols
   -- ^ one row of values
   -> Query lat with db params cols
 values_ rw = values rw []
@@ -705,9 +705,9 @@ Table Expressions
 -- to a table on disk, a so-called base table, but more complex expressions
 -- can be used to modify or combine base tables in various ways.
 data TableExpression
+  (grp :: Grouping)
   (lat :: FromType)
   (with :: FromType)
-  (grp :: Grouping)
   (db :: SchemasType)
   (params :: [NullType])
   (from :: FromType)
@@ -715,7 +715,7 @@ data TableExpression
     { fromClause :: FromClause lat with db params from
     -- ^ A table reference that can be a table name, or a derived table such
     -- as a subquery, a @JOIN@ construct, or complex combinations of these.
-    , whereClause :: [Condition lat with 'Ungrouped db params from]
+    , whereClause :: [Condition 'Ungrouped lat with db params from]
     -- ^ optional search coditions, combined with `.&&`. After the processing
     -- of the `fromClause` is done, each row of the derived virtual table
     -- is checked against the search condition. If the result of the
@@ -731,13 +731,13 @@ data TableExpression
     -- set of rows having common values into one group row that represents all
     -- rows in the group. This is done to eliminate redundancy in the output
     -- and/or compute aggregates that apply to these groups.
-    , havingClause :: HavingClause lat with grp db params from
+    , havingClause :: HavingClause grp lat with db params from
     -- ^ If a table has been grouped using `groupBy`, but only certain groups
     -- are of interest, the `havingClause` can be used, much like a
     -- `whereClause`, to eliminate groups from the result. Expressions in the
     -- `havingClause` can refer both to grouped expressions and to ungrouped
     -- expressions (which necessarily involve an aggregate function).
-    , orderByClause :: [SortExpression lat with grp db params from]
+    , orderByClause :: [SortExpression grp lat with db params from]
     -- ^ The `orderByClause` is for optional sorting. When more than one
     -- `SortExpression` is specified, the later (right) values are used to sort
     -- rows that are equal according to the earlier (left) values.
@@ -754,7 +754,7 @@ data TableExpression
     } deriving (GHC.Generic)
 
 -- | Render a `TableExpression`
-instance RenderSQL (TableExpression lat with grp db params from) where
+instance RenderSQL (TableExpression grp lat with db params from) where
   renderSQL
     (TableExpression frm' whs' grps' hvs' srts' lims' offs') = mconcat
       [ "FROM ", renderSQL frm'
@@ -783,15 +783,15 @@ instance RenderSQL (TableExpression lat with grp db params from) where
 -- to match the left-to-right sequencing of their placement in SQL.
 from
   :: FromClause lat with db params from -- ^ table reference
-  -> TableExpression lat with 'Ungrouped db params from
+  -> TableExpression 'Ungrouped lat with db params from
 from tab = TableExpression tab [] noGroups NoHaving [] [] []
 
 -- | A `where_` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `whereClause`.
 where_
-  :: Condition lat with 'Ungrouped db params from -- ^ filtering condition
-  -> TableExpression lat with grp db params from
-  -> TableExpression lat with grp db params from
+  :: Condition 'Ungrouped lat with db params from -- ^ filtering condition
+  -> TableExpression grp lat with db params from
+  -> TableExpression grp lat with db params from
 where_ wh rels = rels {whereClause = wh : whereClause rels}
 
 -- | A `groupBy` is a transformation of `TableExpression`s which switches
@@ -800,8 +800,8 @@ where_ wh rels = rels {whereClause = wh : whereClause rels}
 groupBy
   :: SListI bys
   => NP (By from) bys -- ^ grouped columns
-  -> TableExpression lat with 'Ungrouped db params from
-  -> TableExpression lat with ('Grouped bys) db params from
+  -> TableExpression 'Ungrouped lat with db params from
+  -> TableExpression ('Grouped bys) lat with db params from
 groupBy bys rels = TableExpression
   { fromClause = fromClause rels
   , whereClause = whereClause rels
@@ -815,9 +815,9 @@ groupBy bys rels = TableExpression
 -- | A `having` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `havingClause`.
 having
-  :: Condition lat with ('Grouped bys) db params from -- ^ having condition
-  -> TableExpression lat with ('Grouped bys) db params from
-  -> TableExpression lat with ('Grouped bys) db params from
+  :: Condition ('Grouped bys) lat with db params from -- ^ having condition
+  -> TableExpression ('Grouped bys) lat with db params from
+  -> TableExpression ('Grouped bys) lat with db params from
 having hv rels = rels
   { havingClause = case havingClause rels of Having hvs -> Having (hv:hvs) }
 
@@ -828,16 +828,16 @@ instance OrderBy TableExpression where
 -- `limitClause`.
 limit
   :: Word64 -- ^ limit parameter
-  -> TableExpression lat with grp db params from
-  -> TableExpression lat with grp db params from
+  -> TableExpression grp lat with db params from
+  -> TableExpression grp lat with db params from
 limit lim rels = rels {limitClause = lim : limitClause rels}
 
 -- | An `offset` is an endomorphism of `TableExpression`s which adds to the
 -- `offsetClause`.
 offset
   :: Word64 -- ^ offset parameter
-  -> TableExpression lat with grp db params from
-  -> TableExpression lat with grp db params from
+  -> TableExpression grp lat with db params from
+  -> TableExpression grp lat with db params from
 offset off rels = rels {offsetClause = off : offsetClause rels}
 
 {-----------------------------------------
@@ -925,8 +925,8 @@ data JoinItem
     -- This allows them to reference columns provided
     -- by preceding `FromClause` items.
     JoinFunction
-      :: (Expression lat with 'Ungrouped db params '[] ty -> FromClause lat with db params from)
-      -> Expression lat with 'Ungrouped db params left ty
+      :: (Expression 'Ungrouped lat with db params '[] ty -> FromClause lat with db params from)
+      -> Expression 'Ungrouped lat with db params left ty
       -> JoinItem lat with db params left from
     -- | Set returning multi-argument functions
     -- can be preceded by `JoinFunction`.
@@ -934,8 +934,8 @@ data JoinItem
     -- by preceding `FromClause` items.
     JoinFunctionN
       :: SListI tys
-      => (NP (Expression lat with 'Ungrouped db params '[]) tys -> FromClause lat with db params from)
-      -> NP (Expression lat with 'Ungrouped db params left) tys
+      => (NP (Expression 'Ungrouped lat with db params '[]) tys -> FromClause lat with db params from)
+      -> NP (Expression 'Ungrouped lat with db params left) tys
       -> JoinItem lat with db params left from
 instance RenderSQL (JoinItem lat with db params left right) where
   renderSQL = \case
@@ -989,7 +989,7 @@ the @on@ condition.
 -}
 inner
   :: JoinItem lat with db params left right -- ^ right
-  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> Condition 'Ungrouped lat with db params (Join left right) -- ^ @ON@ condition
   -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join left right)
 inner item on tab = UnsafeFromClause $
@@ -1000,7 +1000,7 @@ the @on@ condition.
 -}
 innerJoin
   :: FromClause lat with db params right -- ^ right
-  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> Condition 'Ungrouped lat with db params (Join left right) -- ^ @ON@ condition
   -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join left right)
 innerJoin = inner . Join
@@ -1011,7 +1011,7 @@ by preceding `FromClause` items.
 -}
 innerJoinLateral
   :: Aliased (Query (Join lat left) with db params) query -- ^ right subquery
-  -> Condition lat with 'Ungrouped db params (Join left '[query]) -- ^ @ON@ condition
+  -> Condition 'Ungrouped lat with db params (Join left '[query]) -- ^ @ON@ condition
   -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join left '[query])
 innerJoinLateral = inner . JoinLateral
@@ -1023,7 +1023,7 @@ Thus, the joined table always has at least one row for each row in @left@.
 -}
 leftOuter
   :: JoinItem lat with db params left right -- ^ right
-  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> Condition 'Ungrouped lat with db params (Join left right) -- ^ @ON@ condition
   -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join left (NullifyFrom right))
 leftOuter item on tab = UnsafeFromClause $
@@ -1036,7 +1036,7 @@ Thus, the joined table always has at least one row for each row in @left@.
 -}
 leftOuterJoin
   :: FromClause lat with db params right -- ^ right
-  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> Condition 'Ungrouped lat with db params (Join left right) -- ^ @ON@ condition
   -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join left (NullifyFrom right))
 leftOuterJoin = leftOuter . Join
@@ -1047,7 +1047,7 @@ by preceding `FromClause` items.
 -}
 leftOuterJoinLateral
   :: Aliased (Query (Join lat left) with db params) query -- ^ right subquery
-  -> Condition lat with 'Ungrouped db params (Join left '[query]) -- ^ @ON@ condition
+  -> Condition 'Ungrouped lat with db params (Join left '[query]) -- ^ @ON@ condition
   -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join left (NullifyFrom '[query]))
 leftOuterJoinLateral = leftOuter . JoinLateral
@@ -1060,7 +1060,7 @@ have a row for each row in @right@.
 -}
 rightOuter
   :: JoinItem lat with db params left right -- ^ right
-  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> Condition 'Ungrouped lat with db params (Join left right) -- ^ @ON@ condition
   -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join (NullifyFrom left) right)
 rightOuter item on tab = UnsafeFromClause $
@@ -1074,7 +1074,7 @@ have a row for each row in @right@.
 -}
 rightOuterJoin
   :: FromClause lat with db params right -- ^ right
-  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> Condition 'Ungrouped lat with db params (Join left right) -- ^ @ON@ condition
   -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join (NullifyFrom left) right)
 rightOuterJoin = rightOuter . Join
@@ -1085,7 +1085,7 @@ by preceding `FromClause` items.
 -}
 rightOuterJoinLateral
   :: Aliased (Query (Join lat left) with db params) query -- ^ right subquery
-  -> Condition lat with 'Ungrouped db params (Join left '[query]) -- ^ @ON@ condition
+  -> Condition 'Ungrouped lat with db params (Join left '[query]) -- ^ @ON@ condition
   -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join (NullifyFrom left) '[query])
 rightOuterJoinLateral = rightOuter . JoinLateral
@@ -1099,7 +1099,7 @@ is added.
 -}
 fullOuter
   :: JoinItem lat with db params left right -- ^ right
-  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> Condition 'Ungrouped lat with db params (Join left right) -- ^ @ON@ condition
   -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (NullifyFrom (Join left right))
 fullOuter item on tab = UnsafeFromClause $
@@ -1114,7 +1114,7 @@ is added.
 -}
 fullOuterJoin
   :: FromClause lat with db params right -- ^ right
-  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> Condition 'Ungrouped lat with db params (Join left right) -- ^ @ON@ condition
   -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (NullifyFrom (Join left right))
 fullOuterJoin = fullOuter . Join
@@ -1125,7 +1125,7 @@ by preceding `FromClause` items.
 -}
 fullOuterJoinLateral
   :: Aliased (Query (Join lat left) with db params) query -- ^ right subquery
-  -> Condition lat with 'Ungrouped db params (Join left '[query]) -- ^ @ON@ condition
+  -> Condition 'Ungrouped lat with db params (Join left '[query]) -- ^ @ON@ condition
   -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (NullifyFrom (Join left '[query]))
 fullOuterJoinLateral = fullOuter . JoinLateral
@@ -1190,17 +1190,17 @@ group bys = UnsafeGroupByClause $ case bys of
 -- An `Ungrouped` `TableExpression` may only use `NoHaving` while a `Grouped`
 -- `TableExpression` must use `Having` whose conditions are combined with
 -- `.&&`.
-data HavingClause lat with grp db params from where
-  NoHaving :: HavingClause lat with 'Ungrouped db params from
+data HavingClause grp lat with db params from where
+  NoHaving :: HavingClause 'Ungrouped lat with db params from
   Having
-    :: [Condition lat with ('Grouped bys) db params from]
-    -> HavingClause lat with ('Grouped bys) db params from
-deriving instance Show (HavingClause lat with grp db params from)
-deriving instance Eq (HavingClause lat with grp db params from)
-deriving instance Ord (HavingClause lat with grp db params from)
+    :: [Condition ('Grouped bys) lat with db params from]
+    -> HavingClause ('Grouped bys) lat with db params from
+deriving instance Show (HavingClause grp lat with db params from)
+deriving instance Eq (HavingClause grp lat with db params from)
+deriving instance Ord (HavingClause grp lat with db params from)
 
 -- | Render a `HavingClause`.
-instance RenderSQL (HavingClause lat with grp db params from) where
+instance RenderSQL (HavingClause grp lat with db params from) where
   renderSQL = \case
     NoHaving -> ""
     Having [] -> ""

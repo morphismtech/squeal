@@ -55,7 +55,7 @@ A @RankNType@ for set returning functions with 1 argument.
 -}
 type SetFunction ty set
   =  forall lat with db params
-  .  Expression lat with 'Ungrouped db params '[] ty
+  .  Expression 'Ungrouped lat with db params '[] ty
   -- ^ input
   -> FromClause lat with db params '[set]
   -- ^ output
@@ -93,7 +93,7 @@ A @RankNType@ for set returning functions with multiple argument.
 -}
 type SetFunctionN tys set
   =  forall lat with db params
-  .  NP (Expression lat with 'Ungrouped db params '[]) tys
+  .  NP (Expression 'Ungrouped lat with db params '[]) tys
      -- ^ inputs
   -> FromClause lat with db params '[set]
      -- ^ output
@@ -111,7 +111,7 @@ Like `SetFunction` but depends on the schemas of the database
 -}
 type SetOf db ty set
   =  forall lat with params
-  .  Expression lat with 'Ungrouped db params '[] ty
+  .  Expression 'Ungrouped lat with db params '[] ty
      -- ^ input
   -> FromClause lat with db params '[set]
      -- ^ output
@@ -121,7 +121,7 @@ Like `SetFunctionN` but depends on the schemas of the database
 -}
 type SetOfN db tys set
   =  forall lat with params
-  .  NP (Expression lat with 'Ungrouped db params '[]) tys
+  .  NP (Expression 'Ungrouped lat with db params '[]) tys
      -- ^ input
   -> FromClause lat with db params '[set]
      -- ^ output

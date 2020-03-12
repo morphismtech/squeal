@@ -429,7 +429,7 @@ newtype AlterColumn (db :: SchemasType) (ty0 :: ColumnType) (ty1 :: ColumnType) 
 -- :}
 -- ALTER TABLE "tab" ALTER COLUMN "col" SET DEFAULT (5 :: int4);
 setDefault
-  :: Expression '[] '[] 'Ungrouped db '[] '[] ty -- ^ default value to set
+  :: Expression 'Ungrouped '[] '[] db '[] '[] ty -- ^ default value to set
   -> AlterColumn db (constraint :=> ty) ('Def :=> ty)
 setDefault expression = UnsafeAlterColumn $
   "SET DEFAULT" <+> renderExpression expression

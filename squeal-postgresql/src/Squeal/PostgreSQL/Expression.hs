@@ -116,9 +116,9 @@ The type parameters of `Expression` are
 * @ty :: @ `NullType`, the type of the `Expression`.
 -}
 newtype Expression
+  (grp :: Grouping)
   (lat :: FromType)
   (with :: FromType)
-  (grp :: Grouping)
   (db :: SchemasType)
   (params :: [NullType])
   (from :: FromType)
@@ -126,7 +126,7 @@ newtype Expression
     = UnsafeExpression { renderExpression :: ByteString }
     deriving stock (GHC.Generic,Show,Eq,Ord)
     deriving newtype (NFData)
-instance RenderSQL (Expression lat with grp db params from ty) where
+instance RenderSQL (Expression grp lat with db params from ty) where
   renderSQL = renderExpression
 
 -- | An `Expr` is a closed `Expression`.
@@ -136,28 +136,28 @@ instance RenderSQL (Expression lat with grp db params from ty) where
 -- or alias references. It can be used as
 -- a simple piece of more complex `Expression`s.
 type Expr x
-  = forall lat with grp db params from
-  . Expression lat with grp db params from x
+  = forall grp lat with db params from
+  . Expression grp lat with db params from x
     -- ^ cannot reference aliases
 
 -- | A @RankNType@ for binary operators.
 type Operator x1 x2 y
-  =  forall lat with grp db params from
-  .  Expression lat with grp db params from x1
+  =  forall grp lat with db params from
+  .  Expression grp lat with db params from x1
      -- ^ left input
-  -> Expression lat with grp db params from x2
+  -> Expression grp lat with db params from x2
      -- ^ right input
-  -> Expression lat with grp db params from y
+  -> Expression grp lat with db params from y
      -- ^ output
 
 -- | Like `Operator` but depends on the schemas of the database
 type OperatorDB db x1 x2 y
-  =  forall lat with grp params from
-  .  Expression lat with grp db params from x1
+  =  forall grp lat with params from
+  .  Expression grp lat with db params from x1
      -- ^ left input
-  -> Expression lat with grp db params from x2
+  -> Expression grp lat with db params from x2
      -- ^ right input
-  -> Expression lat with grp db params from y
+  -> Expression grp lat with db params from y
      -- ^ output
 
 -- | A @RankNType@ for functions with a single argument.
@@ -166,18 +166,18 @@ type OperatorDB db x1 x2 y
 -- indeed a subcategory as it is closed under the usual
 -- `Prelude..` and `Prelude.id`.
 type (-->) x y
-  =  forall lat with grp db params from
-  .  Expression lat with grp db params from x
+  =  forall grp lat with db params from
+  .  Expression grp lat with db params from x
      -- ^ input
-  -> Expression lat with grp db params from y
+  -> Expression grp lat with db params from y
      -- ^ output
 
 -- | Like `-->` but depends on the schemas of the database
 type FunctionDB db x y
-  =  forall lat with grp params from
-  .  Expression lat with grp db params from x
+  =  forall grp lat with params from
+  .  Expression grp lat with db params from x
      -- ^ input
-  -> Expression lat with grp db params from y
+  -> Expression grp lat with db params from y
      -- ^ output
 
 {- | A @RankNType@ for functions with a fixed-length list of heterogeneous arguments.
@@ -187,30 +187,30 @@ Use the `*:` operator to end your argument lists, like so.
 fun(TRUE, FALSE, LOCALTIME, TRUE)
 -}
 type (--->) xs y
-  =  forall lat with grp db params from
-  .  NP (Expression lat with grp db params from) xs
+  =  forall grp lat with db params from
+  .  NP (Expression grp lat with db params from) xs
      -- ^ inputs
-  -> Expression lat with grp db params from y
+  -> Expression grp lat with db params from y
      -- ^ output
 
 -- | Like `--->` but depends on the schemas of the database
 type FunctionNDB db xs y
-  =  forall lat with grp params from
-  .  NP (Expression lat with grp db params from) xs
+  =  forall grp lat with params from
+  .  NP (Expression grp lat with db params from) xs
      -- ^ inputs
-  -> Expression lat with grp db params from y
+  -> Expression grp lat with db params from y
      -- ^ output
 
 {- | A @RankNType@ for functions with a variable-length list of
 homogeneous arguments and at least 1 more argument.
 -}
 type FunctionVar x0 x1 y
-  =  forall lat with grp db params from
-  .  [Expression lat with grp db params from x0]
+  =  forall grp lat with db params from
+  .  [Expression grp lat with db params from x0]
      -- ^ inputs
-  -> Expression lat with grp db params from x1
+  -> Expression grp lat with db params from x1
      -- ^ must have at least 1 input
-  -> Expression lat with grp db params from y
+  -> Expression grp lat with db params from y
      -- ^ output
 
 {- | >>> printSQL (unsafeFunctionVar "greatest" [true, null_] false)
@@ -221,34 +221,34 @@ unsafeFunctionVar fun xs x = UnsafeExpression $ fun <> parenthesized
   (commaSeparated (renderSQL <$> xs) <> ", " <> renderSQL x)
 
 instance (HasUnique tab (Join lat from) row, Has col row ty)
-  => IsLabel col (Expression lat with 'Ungrouped db params from ty) where
+  => IsLabel col (Expression 'Ungrouped lat with db params from ty) where
     fromLabel = UnsafeExpression $ renderSQL (Alias @col)
 instance (HasUnique tab (Join lat from) row, Has col row ty, tys ~ '[ty])
-  => IsLabel col (NP (Expression lat with 'Ungrouped db params from) tys) where
+  => IsLabel col (NP (Expression 'Ungrouped lat with db params from) tys) where
     fromLabel = fromLabel @col :* Nil
 instance (HasUnique tab (Join lat from) row, Has col row ty, column ~ (col ::: ty))
   => IsLabel col
-    (Aliased (Expression lat with 'Ungrouped db params from) column) where
+    (Aliased (Expression 'Ungrouped lat with db params from) column) where
     fromLabel = fromLabel @col `As` Alias
 instance (HasUnique tab (Join lat from) row, Has col row ty, columns ~ '[col ::: ty])
   => IsLabel col
-    (NP (Aliased (Expression lat with 'Ungrouped db params from)) columns) where
+    (NP (Aliased (Expression 'Ungrouped lat with db params from)) columns) where
     fromLabel = fromLabel @col :* Nil
 
 instance (Has tab (Join lat from) row, Has col row ty)
-  => IsQualified tab col (Expression lat with 'Ungrouped db params from ty) where
+  => IsQualified tab col (Expression 'Ungrouped lat with db params from ty) where
     tab ! col = UnsafeExpression $
       renderSQL tab <> "." <> renderSQL col
 instance (Has tab (Join lat from) row, Has col row ty, tys ~ '[ty])
-  => IsQualified tab col (NP (Expression lat with 'Ungrouped db params from) tys) where
+  => IsQualified tab col (NP (Expression 'Ungrouped lat with db params from) tys) where
     tab ! col = tab ! col :* Nil
 instance (Has tab (Join lat from) row, Has col row ty, column ~ (col ::: ty))
   => IsQualified tab col
-    (Aliased (Expression lat with 'Ungrouped db params from) column) where
+    (Aliased (Expression 'Ungrouped lat with db params from) column) where
     tab ! col = tab ! col `As` col
 instance (Has tab (Join lat from) row, Has col row ty, columns ~ '[col ::: ty])
   => IsQualified tab col
-    (NP (Aliased (Expression lat with 'Ungrouped db params from)) columns) where
+    (NP (Aliased (Expression 'Ungrouped lat with db params from)) columns) where
     tab ! col = tab ! col :* Nil
 
 instance
@@ -256,7 +256,7 @@ instance
   , Has col row ty
   , GroupedBy tab col bys
   ) => IsLabel col
-    (Expression lat with ('Grouped bys) db params from ty) where
+    (Expression ('Grouped bys) lat with db params from ty) where
       fromLabel = UnsafeExpression $ renderSQL (Alias @col)
 instance
   ( HasUnique tab (Join lat from) row
@@ -264,7 +264,7 @@ instance
   , GroupedBy tab col bys
   , tys ~ '[ty]
   ) => IsLabel col
-    (NP (Expression lat with ('Grouped bys) db params from) tys) where
+    (NP (Expression ('Grouped bys) lat with db params from) tys) where
       fromLabel = fromLabel @col :* Nil
 instance
   ( HasUnique tab (Join lat from) row
@@ -272,7 +272,7 @@ instance
   , GroupedBy tab col bys
   , column ~ (col ::: ty)
   ) => IsLabel col
-    (Aliased (Expression lat with ('Grouped bys) db params from) column) where
+    (Aliased (Expression ('Grouped bys) lat with db params from) column) where
       fromLabel = fromLabel @col `As` Alias
 instance
   ( HasUnique tab (Join lat from) row
@@ -280,7 +280,7 @@ instance
   , GroupedBy tab col bys
   , columns ~ '[col ::: ty]
   ) => IsLabel col
-    (NP (Aliased (Expression lat with ('Grouped bys) db params from)) columns) where
+    (NP (Aliased (Expression ('Grouped bys) lat with db params from)) columns) where
       fromLabel = fromLabel @col :* Nil
 
 instance
@@ -288,7 +288,7 @@ instance
   , Has col row ty
   , GroupedBy tab col bys
   ) => IsQualified tab col
-    (Expression lat with ('Grouped bys) db params from ty) where
+    (Expression ('Grouped bys) lat with db params from ty) where
       tab ! col = UnsafeExpression $
         renderSQL tab <> "." <> renderSQL col
 instance
@@ -297,7 +297,7 @@ instance
   , GroupedBy tab col bys
   , tys ~ '[ty]
   ) => IsQualified tab col
-    (NP (Expression lat with ('Grouped bys) db params from) tys) where
+    (NP (Expression ('Grouped bys) lat with db params from) tys) where
       tab ! col = tab ! col :* Nil
 instance
   ( Has tab (Join lat from) row
@@ -305,7 +305,7 @@ instance
   , GroupedBy tab col bys
   , column ~ (col ::: ty)
   ) => IsQualified tab col
-    (Aliased (Expression lat with ('Grouped bys) db params from) column) where
+    (Aliased (Expression ('Grouped bys) lat with db params from) column) where
       tab ! col = tab ! col `As` col
 instance
   ( Has tab (Join lat from) row
@@ -313,11 +313,11 @@ instance
   , GroupedBy tab col bys
   , columns ~ '[col ::: ty]
   ) => IsQualified tab col
-    (NP (Aliased (Expression lat with ('Grouped bys) db params from)) columns) where
+    (NP (Aliased (Expression ('Grouped bys) lat with db params from)) columns) where
       tab ! col = tab ! col :* Nil
 
 instance (KnownSymbol label, label `In` labels) => IsPGlabel label
-  (Expression lat with grp db params from (null ('PGenum labels))) where
+  (Expression grp lat with db params from (null ('PGenum labels))) where
   label = UnsafeExpression $ renderSQL (PGlabel @label)
 
 -- | >>> printSQL $ unsafeBinaryOp "OR" true false
@@ -389,7 +389,7 @@ functionN
 functionN = unsafeFunctionN . renderSQL
 
 instance
-  Num (Expression lat with grp db params from (null 'PGint2)) where
+  Num (Expression grp lat with db params from (null 'PGint2)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
     (*) = unsafeBinaryOp "*"
@@ -404,7 +404,7 @@ instance
       . int16Dec
       . fromInteger
 instance
-  Num (Expression lat with grp db params from (null 'PGint4)) where
+  Num (Expression grp lat with db params from (null 'PGint4)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
     (*) = unsafeBinaryOp "*"
@@ -419,7 +419,7 @@ instance
       . int32Dec
       . fromInteger
 instance
-  Num (Expression lat with grp db params from (null 'PGint8)) where
+  Num (Expression grp lat with db params from (null 'PGint8)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
     (*) = unsafeBinaryOp "*"
@@ -441,7 +441,7 @@ instance
         . toLazyByteString
         $ int64Dec y
 instance
-  Num (Expression lat with grp db params from (null 'PGfloat4)) where
+  Num (Expression grp lat with db params from (null 'PGfloat4)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
     (*) = unsafeBinaryOp "*"
@@ -459,7 +459,7 @@ instance
         then singleQuotedUtf8 (decimal y)
         else decimal y
 instance
-  Num (Expression lat with grp db params from (null 'PGfloat8)) where
+  Num (Expression grp lat with db params from (null 'PGfloat8)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
     (*) = unsafeBinaryOp "*"
@@ -477,7 +477,7 @@ instance
         then singleQuotedUtf8 (decimal y)
         else decimal y
 instance
-  Num (Expression lat with grp db params from (null 'PGnumeric)) where
+  Num (Expression grp lat with db params from (null 'PGnumeric)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
     (*) = unsafeBinaryOp "*"
@@ -493,7 +493,7 @@ instance
       . fromInteger
 
 instance Fractional
-  (Expression lat with grp db params from (null 'PGfloat4)) where
+  (Expression grp lat with db params from (null 'PGfloat4)) where
     (/) = unsafeBinaryOp "/"
     fromRational x
       = UnsafeExpression
@@ -507,7 +507,7 @@ instance Fractional
         then singleQuotedUtf8 (decimal y)
         else decimal y
 instance Fractional
-  (Expression lat with grp db params from (null 'PGfloat8)) where
+  (Expression grp lat with db params from (null 'PGfloat8)) where
     (/) = unsafeBinaryOp "/"
     fromRational x
       = UnsafeExpression
@@ -521,7 +521,7 @@ instance Fractional
         then singleQuotedUtf8 (decimal y)
         else decimal y
 instance Fractional
-  (Expression lat with grp db params from (null 'PGnumeric)) where
+  (Expression grp lat with db params from (null 'PGnumeric)) where
     (/) = unsafeBinaryOp "/"
     fromRational
       = UnsafeExpression
@@ -533,7 +533,7 @@ instance Fractional
       . fromRational
 
 instance Floating
-  (Expression lat with grp db params from (null 'PGfloat4)) where
+  (Expression grp lat with db params from (null 'PGfloat4)) where
     pi = UnsafeExpression "pi()"
     exp = unsafeFunction "exp"
     log = unsafeFunction "ln"
@@ -554,7 +554,7 @@ instance Floating
     acosh x = log (x + sqrt (x*x - 1))
     atanh x = log ((1 + x) / (1 - x)) / 2
 instance Floating
-  (Expression lat with grp db params from (null 'PGfloat8)) where
+  (Expression grp lat with db params from (null 'PGfloat8)) where
     pi = UnsafeExpression "pi()"
     exp = unsafeFunction "exp"
     log = unsafeFunction "ln"
@@ -575,7 +575,7 @@ instance Floating
     acosh x = log (x + sqrt (x*x - 1))
     atanh x = log ((1 + x) / (1 - x)) / 2
 instance Floating
-  (Expression lat with grp db params from (null 'PGnumeric)) where
+  (Expression grp lat with db params from (null 'PGnumeric)) where
     pi = UnsafeExpression "pi()"
     exp = unsafeFunction "exp"
     log = unsafeFunction "ln"
@@ -615,21 +615,21 @@ instance PGIntersect ('PGvararray ty)
 instance PGIntersect ('PGrange ty)
 
 instance IsString
-  (Expression lat with grp db params from (null 'PGtext)) where
+  (Expression grp lat with db params from (null 'PGtext)) where
     fromString
       = UnsafeExpression
       . parenthesized
       . (<> " :: text")
       . escapeQuotedString
 instance IsString
-  (Expression lat with grp db params from (null 'PGtsvector)) where
+  (Expression grp lat with db params from (null 'PGtsvector)) where
     fromString
       = UnsafeExpression
       . parenthesized
       . (<> " :: tsvector")
       . escapeQuotedString
 instance IsString
-  (Expression lat with grp db params from (null 'PGtsquery)) where
+  (Expression grp lat with db params from (null 'PGtsquery)) where
     fromString
       = UnsafeExpression
       . parenthesized
@@ -637,23 +637,23 @@ instance IsString
       . escapeQuotedString
 
 instance Semigroup
-  (Expression lat with grp db params from (null ('PGvararray ty))) where
+  (Expression grp lat with db params from (null ('PGvararray ty))) where
     (<>) = unsafeBinaryOp "||"
 instance Semigroup
-  (Expression lat with grp db params from (null 'PGjsonb)) where
+  (Expression grp lat with db params from (null 'PGjsonb)) where
     (<>) = unsafeBinaryOp "||"
 instance Semigroup
-  (Expression lat with grp db params from (null 'PGtext)) where
+  (Expression grp lat with db params from (null 'PGtext)) where
     (<>) = unsafeBinaryOp "||"
 instance Semigroup
-  (Expression lat with grp db params from (null 'PGtsvector)) where
+  (Expression grp lat with db params from (null 'PGtsvector)) where
     (<>) = unsafeBinaryOp "||"
 
 instance Monoid
-  (Expression lat with grp db params from (null 'PGtext)) where
+  (Expression grp lat with db params from (null 'PGtext)) where
     mempty = fromString ""
     mappend = (<>)
 instance Monoid
-  (Expression lat with grp db params from (null 'PGtsvector)) where
+  (Expression grp lat with db params from (null 'PGtsvector)) where
     mempty = fromString ""
     mappend = (<>)

@@ -323,16 +323,16 @@ insertInto_ tab qry =
 data QueryClause with db params columns where
   Values
     :: SOP.SListI columns
-    => NP (Aliased (Optional (Expression '[] with 'Ungrouped db params '[]))) columns
+    => NP (Aliased (Optional (Expression  'Ungrouped '[] with db params '[]))) columns
     -- ^ row of values
-    -> [NP (Aliased (Optional (Expression '[] with 'Ungrouped db params '[]))) columns]
+    -> [NP (Aliased (Optional (Expression  'Ungrouped '[] with db params '[]))) columns]
     -- ^ additional rows of values
     -> QueryClause with db params columns
   Select
     :: SOP.SListI columns
-    => NP (Aliased (Optional (Expression '[] with grp db params from))) columns
+    => NP (Aliased (Optional (Expression grp '[] with db params from))) columns
     -- ^ row of values
-    -> TableExpression '[] with grp db params from
+    -> TableExpression grp '[] with db params from
     -- ^ from a table expression
     -> QueryClause with db params columns
   Subquery
@@ -357,7 +357,7 @@ instance RenderSQL (QueryClause with db params columns) where
     Subquery qry -> renderQuery qry
     where
       renderSQLPartMaybe, renderValuePartMaybe
-        :: Aliased (Optional (Expression '[] with grp db params from)) column
+        :: Aliased (Optional (Expression grp '[] with db params from)) column
         -> Maybe ByteString
       renderSQLPartMaybe = \case
         Default `As` _ -> Nothing
@@ -366,7 +366,7 @@ instance RenderSQL (QueryClause with db params columns) where
         Default `As` _ -> Nothing
         Set value `As` _ -> Just $ renderExpression value
       renderSQLPart, renderValuePart
-        :: Aliased (Optional (Expression '[] with grp db params from)) column
+        :: Aliased (Optional (Expression grp '[] with db params from)) column
         -> ByteString
       renderSQLPart (_ `As` name) = renderSQL name
       renderValuePart (value `As` _) = renderSQL value
@@ -375,7 +375,7 @@ instance RenderSQL (QueryClause with db params columns) where
 -- whose `ColumnsType` must match the tables'.
 pattern Values_
   :: SOP.SListI columns
-  => NP (Aliased (Optional (Expression '[] with 'Ungrouped db params '[]))) columns
+  => NP (Aliased (Optional (Expression  'Ungrouped '[] with db params '[]))) columns
   -- ^ row of values
   -> QueryClause with db params columns
 pattern Values_ vals = Values vals []
@@ -408,7 +408,7 @@ inlineValues hask hasks = Values (inlineColumns hask) (inlineColumns <$> hasks)
 -- in the row. Use `Returning` `Nil` in the common case where no return
 -- values are desired.
 newtype ReturningClause with db params from row =
-  Returning (Selection '[] with 'Ungrouped db params from row)
+  Returning (Selection  'Ungrouped '[] with db params from row)
 
 instance RenderSQL (ReturningClause with db params from row) where
   renderSQL = \case
@@ -418,7 +418,7 @@ instance RenderSQL (ReturningClause with db params from row) where
 -- | `Returning` a `List`
 pattern Returning_
   :: SOP.SListI row
-  => NP (Aliased (Expression '[] with 'Ungrouped db params from)) row
+  => NP (Aliased (Expression  'Ungrouped '[] with db params from)) row
   -- ^ row of values
   -> ReturningClause with db params from row
 pattern Returning_ list = Returning (List list)
@@ -462,8 +462,8 @@ data ConflictAction tab with db params table where
     :: ( row ~ TableToRow table
        , from ~ '[tab ::: row, "excluded" ::: row]
        , Updatable table updates )
-    => NP (Aliased (Optional (Expression '[] with 'Ungrouped db params from))) updates
-    -> [Condition '[] with 'Ungrouped db params from]
+    => NP (Aliased (Optional (Expression  'Ungrouped '[] with db params from))) updates
+    -> [Condition  'Ungrouped '[] with db params from]
        -- ^ WHERE `Condition`s
     -> ConflictAction tab with db params table
 
@@ -508,9 +508,9 @@ update
      , Updatable table updates
      , SOP.SListI row )
   => QualifiedAlias sch tab -- ^ table to update
-  -> NP (Aliased (Optional (Expression '[] '[] 'Ungrouped db params '[tab ::: TableToRow table]))) updates
+  -> NP (Aliased (Optional (Expression 'Ungrouped '[] '[] db params '[tab ::: TableToRow table]))) updates
   -- ^ modified values to replace old values
-  -> Condition '[] with 'Ungrouped db params '[tab ::: TableToRow table]
+  -> Condition  'Ungrouped '[] with db params '[tab ::: TableToRow table]
   -- ^ condition under which to perform update on a row
   -> ReturningClause with db params '[tab ::: TableToRow table] row -- ^ results to return
   -> Manipulation with db params row
@@ -528,9 +528,9 @@ update_
      , Has tab schema ('Table table)
      , Updatable table updates )
   => QualifiedAlias sch tab -- ^ table to update
-  -> NP (Aliased (Optional (Expression '[] '[] 'Ungrouped db params '[tab ::: TableToRow table]))) updates
+  -> NP (Aliased (Optional (Expression 'Ungrouped '[] '[] db params '[tab ::: TableToRow table]))) updates
   -- ^ modified values to replace old values
-  -> Condition '[] with 'Ungrouped db params '[tab ::: TableToRow table]
+  -> Condition  'Ungrouped '[] with db params '[tab ::: TableToRow table]
   -- ^ condition under which to perform update on a row
   -> Manipulation with db params '[]
 update_ tab columns wh = update tab columns wh (Returning_ Nil)
@@ -562,7 +562,7 @@ deleteFrom
      , Has tab schema ('Table table) )
   => QualifiedAlias sch tab -- ^ table to delete from
   -> UsingClause with db params from
-  -> Condition '[] with 'Ungrouped db params (tab ::: TableToRow table ': from)
+  -> Condition  'Ungrouped '[] with db params (tab ::: TableToRow table ': from)
   -- ^ condition under which to delete a row
   -> ReturningClause with db params '[tab ::: TableToRow table] row
   -- ^ results to return
@@ -581,7 +581,7 @@ deleteFrom_
   :: ( Has sch db schema
      , Has tab schema ('Table table) )
   => QualifiedAlias sch tab -- ^ table to delete from
-  -> Condition '[] with 'Ungrouped db params '[tab ::: TableToRow table]
+  -> Condition  'Ungrouped '[] with db params '[tab ::: TableToRow table]
   -- ^ condition under which to delete a row
   -> Manipulation with db params '[]
 deleteFrom_ tab wh = deleteFrom tab NoUsing wh (Returning_ Nil)

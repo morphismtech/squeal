@@ -121,7 +121,7 @@ createOrReplaceFunction fun args ret fundef = UnsafeDefinition $
 
 -- | Use a parameterized `Expression` as a function body
 languageSqlExpr
-  :: Expression '[] '[] 'Ungrouped db args '[] ret
+  :: Expression 'Ungrouped '[] '[] db args '[] ret
   -- ^ function body
   -> FunctionDefinition db args ('Returns ret)
 languageSqlExpr expr = UnsafeFunctionDefinition $

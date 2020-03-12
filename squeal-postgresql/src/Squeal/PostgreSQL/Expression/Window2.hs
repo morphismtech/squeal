@@ -23,7 +23,7 @@ Window functions and definitions
   , KindSignatures
 #-}
 
-module Squeal.PostgreSQL.Expression.Window
+module Squeal.PostgreSQL.Expression.Window2
   ( -- * Window Definition
     WindowDefinition (..)
   , partitionBy

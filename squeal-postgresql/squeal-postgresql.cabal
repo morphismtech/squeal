@@ -33,6 +33,7 @@ library
     Squeal.PostgreSQL.Definition.View
     Squeal.PostgreSQL.Expression
     Squeal.PostgreSQL.Expression.Aggregate
+    Squeal.PostgreSQL.Expression.Aggregate2
     Squeal.PostgreSQL.Expression.Array
     Squeal.PostgreSQL.Expression.Comparison
     Squeal.PostgreSQL.Expression.Composite
@@ -52,6 +53,7 @@ library
     Squeal.PostgreSQL.Expression.Time
     Squeal.PostgreSQL.Expression.Type
     Squeal.PostgreSQL.Expression.Window
+    Squeal.PostgreSQL.Expression.Window2
     Squeal.PostgreSQL.List
     Squeal.PostgreSQL.Manipulation
     Squeal.PostgreSQL.PG

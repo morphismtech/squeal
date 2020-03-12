@@ -17,13 +17,15 @@ Aggregate functions
   , LambdaCase
   , MultiParamTypeClasses
   , OverloadedStrings
+  , PatternSynonyms
   , PolyKinds
+  , StandaloneDeriving
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.Expression.Aggregate
+module Squeal.PostgreSQL.Expression.Aggregate2
   ( -- * Aggregate
     Aggregate (..)
     -- * Distinction
@@ -43,6 +45,8 @@ import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
+import Squeal.PostgreSQL.Expression.Logic
+import Squeal.PostgreSQL.Expression.Sort
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
@@ -357,25 +361,55 @@ class Aggregate expr1 exprN aggr
     -> aggr ('Null (PGAvg ty))
 
 {- |
-`Distinction`s are used for the input of `Aggregate` `Expression`s.
+`AggregateArg`s are used for the input of `Aggregate` `Expression`s.
 `All` invokes the aggregate once for each input row.
 `Distinct` invokes the aggregate once for each distinct value of the expression
-(or distinct set of values, for multiple expressions) found in the input
+(or distinct set of values, for multiple expressions) found in the input.
 -}
-data Distinction (expr :: kind -> Type) (ty :: kind)
-  = All (expr ty)
-  | Distinct (expr ty)
-  deriving (GHC.Generic,Show,Eq,Ord)
-instance NFData (Distinction (Expression grp lat with db params from) ty)
-instance RenderSQL (Distinction (Expression grp lat with db params from) ty) where
-  renderSQL = \case
-    All x -> "ALL" <+> renderSQL x
-    Distinct x -> "DISTINCT" <+> renderSQL x
-instance SOP.SListI tys => RenderSQL
-  (Distinction (NP (Expression grp lat with db params from)) tys) where
-    renderSQL = \case
-      All xs -> "ALL" <+> renderCommaSeparated renderSQL xs
-      Distinct xs -> "DISTINCT" <+> renderCommaSeparated renderSQL xs
+data AggregateArg xs grp lat with db params from
+  = AggregateAll
+  { aggregateArgs :: NP (Expression grp lat with db params from) xs
+  , aggregateOrder :: [SortExpression grp lat with db params from]
+  , aggregateFilter :: [Condition grp lat with db params from] }
+  | AggregateDistinct
+  { aggregateArgs :: NP (Expression grp lat with db params from) xs
+  , aggregateOrder :: [SortExpression grp lat with db params from]
+  , aggregateFilter :: [Condition grp lat with db params from] }
+
+instance OrderBy (AggregateArg xs) where
+  orderBy sorts1 = \case
+    AggregateAll xs sorts0 whs -> AggregateAll xs (sorts0 ++ sorts1) whs
+    AggregateDistinct xs sorts0 whs -> AggregateDistinct xs (sorts0 ++ sorts1) whs
+
+pattern All1
+  :: Expression grp lat with db params from x
+  -> AggregateArg '[x] grp lat with db params from
+pattern All1 x = Alls (x :* Nil)
+
+pattern Alls
+  :: NP (Expression grp lat with db params from) xs
+  -> AggregateArg xs grp lat with db params from
+pattern Alls xs = AggregateAll xs [] []
+
+pattern Distinct1
+  :: Expression grp lat with db params from x
+  -> AggregateArg '[x] grp lat with db params from
+pattern Distinct1 x = Distincts (x :* Nil)
+
+pattern Distincts
+  :: NP (Expression grp lat with db params from) xs
+  -> AggregateArg xs grp lat with db params from
+pattern Distincts xs = AggregateDistinct xs [] []
+
+class FilterWhere arg where
+  filterWhere
+    :: Condition grp lat with db params from
+    -> arg xs grp lat with db params from
+    -> arg xs grp lat with db params from
+instance FilterWhere AggregateArg where
+  filterWhere wh = \case
+    AggregateAll xs sorts whs -> AggregateAll xs sorts (wh : whs)
+    AggregateDistinct xs sorts whs -> AggregateDistinct xs sorts (wh : whs)
 
 instance Aggregate
   (Distinction (Expression 'Ungrouped lat with db params from))

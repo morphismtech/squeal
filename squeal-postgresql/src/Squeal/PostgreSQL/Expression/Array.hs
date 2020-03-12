@@ -55,9 +55,9 @@ import Squeal.PostgreSQL.Schema
 -- >>> printSQL $ array [null_, false, true]
 -- ARRAY[NULL, FALSE, TRUE]
 array
-  :: [Expression lat with grp db params from ty]
+  :: [Expression grp lat with db params from ty]
   -- ^ array elements
-  -> Expression lat with grp db params from (null ('PGvararray ty))
+  -> Expression grp lat with db params from (null ('PGvararray ty))
 array xs = UnsafeExpression $ "ARRAY" <>
   bracketed (commaSeparated (renderSQL <$> xs))
 
@@ -66,7 +66,7 @@ array xs = UnsafeExpression $ "ARRAY" <>
 -- (ARRAY[] :: text[])
 array0
   :: TypeExpression db ty
-  -> Expression lat with grp db params from (null ('PGvararray ty))
+  -> Expression grp lat with db params from (null ('PGvararray ty))
 array0 ty = array [] & astype (vararray ty)
 
 {- | Construct a fixed length array.
@@ -87,9 +87,9 @@ array1 (null_ :* false *: true)
 -}
 array1
   :: (n ~ Length tys, SOP.All ((~) ty) tys)
-  => NP (Expression lat with grp db params from) tys
+  => NP (Expression grp lat with db params from) tys
     -- ^ array elements
-  -> Expression lat with grp db params from (null ('PGfixarray '[n] ty))
+  -> Expression grp lat with db params from (null ('PGfixarray '[n] ty))
 array1 xs = UnsafeExpression $ "ARRAY" <>
   bracketed (renderCommaSeparated renderSQL xs)
 
@@ -115,9 +115,9 @@ array2
       , Length tyss ~ n1
       , SOP.All ((~) ty) tys
       , Length tys ~ n2 )
-  => NP (NP (Expression lat with grp db params from)) tyss
+  => NP (NP (Expression grp lat with db params from)) tyss
   -- ^ matrix elements
-  -> Expression lat with grp db params from (null ('PGfixarray '[n1,n2] ty))
+  -> Expression grp lat with db params from (null ('PGfixarray '[n1,n2] ty))
 array2 xss = UnsafeExpression $ "ARRAY" <>
   bracketed (renderCommaSeparatedConstraint @SOP.SListI (bracketed . renderCommaSeparated renderSQL) xss)
 

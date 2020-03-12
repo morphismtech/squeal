@@ -85,7 +85,7 @@ createIndex
   => Alias ix -- ^ index alias
   -> QualifiedAlias sch tab -- ^ table alias
   -> IndexMethod method -- ^ index method
-  -> [SortExpression '[] '[] 'Ungrouped db '[] '[tab ::: TableToRow table]]
+  -> [SortExpression 'Ungrouped '[] '[] db '[] '[tab ::: TableToRow table]]
   -- ^ sorted columns
   -> Definition db (Alter sch (Create ix ('Index method) schema) db)
 createIndex ix tab method cols = UnsafeDefinition $
@@ -112,7 +112,7 @@ createIndexIfNotExists
   => Alias ix -- ^ index alias
   -> QualifiedAlias sch tab -- ^ table alias
   -> IndexMethod method -- ^ index method
-  -> [SortExpression '[] '[] 'Ungrouped db '[] '[tab ::: TableToRow table]]
+  -> [SortExpression 'Ungrouped '[] '[] db '[] '[tab ::: TableToRow table]]
   -- ^ sorted columns
   -> Definition db (Alter sch (CreateIfNotExists ix ('Index method) schema) db)
 createIndexIfNotExists ix tab method cols = UnsafeDefinition $

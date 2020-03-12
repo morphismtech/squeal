@@ -129,9 +129,9 @@ import Squeal.PostgreSQL.Schema
 cast
   :: TypeExpression db ty1
   -- ^ type to cast as
-  -> Expression lat with grp db params from ty0
+  -> Expression grp lat with db params from ty0
   -- ^ value to convert
-  -> Expression lat with grp db params from ty1
+  -> Expression grp lat with db params from ty1
 cast ty x = UnsafeExpression $ parenthesized $
   renderSQL x <+> "::" <+> renderSQL ty
 
@@ -142,9 +142,9 @@ cast ty x = UnsafeExpression $ parenthesized $
 astype
   :: TypeExpression db ty
   -- ^ type to specify as
-  -> Expression lat with grp db params from ty
+  -> Expression grp lat with db params from ty
   -- ^ value
-  -> Expression lat with grp db params from ty
+  -> Expression grp lat with db params from ty
 astype = cast
 
 -- | `inferredtype` will add a type annotation to an `Expression`
@@ -436,7 +436,7 @@ notNullable ty = UnsafeColumnTypeExpression $ renderSQL ty <+> "NOT NULL"
 -- | used in `Squeal.PostgreSQL.Definition.createTable`
 -- commands as a column constraint to give a default
 default_
-  :: Expression '[] '[] 'Ungrouped db '[] '[] ty
+  :: Expression 'Ungrouped '[] '[] db '[] '[] ty
   -- ^ default value
   -> ColumnTypeExpression db ('NoDef :=> ty)
   -- ^ column type

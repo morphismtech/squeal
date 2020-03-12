@@ -35,8 +35,8 @@ import Squeal.PostgreSQL.Schema
 -- | A `Condition` is an `Expression`, which can evaluate
 -- to `true`, `false` or `Squeal.PostgreSQL.Null.null_`. This is because SQL uses
 -- a three valued logic.
-type Condition lat with grp db params from =
-  Expression lat with grp db params from ('Null 'PGbool)
+type Condition grp lat with db params from =
+  Expression grp lat with db params from ('Null 'PGbool)
 
 -- | >>> printSQL true
 -- TRUE
@@ -67,19 +67,19 @@ infixr 2 .||
 
 -- | >>> :{
 -- let
---   expression :: Expression lat with grp db params from (null 'PGint2)
+--   expression :: Expression grp lat with db params from (null 'PGint2)
 --   expression = caseWhenThenElse [(true, 1), (false, 2)] 3
 -- in printSQL expression
 -- :}
 -- CASE WHEN TRUE THEN (1 :: int2) WHEN FALSE THEN (2 :: int2) ELSE (3 :: int2) END
 caseWhenThenElse
-  :: [ ( Condition lat with grp db params from
-       , Expression lat with grp db params from ty
+  :: [ ( Condition grp lat with db params from
+       , Expression grp lat with db params from ty
      ) ]
   -- ^ whens and thens
-  -> Expression lat with grp db params from ty
+  -> Expression grp lat with db params from ty
   -- ^ else
-  -> Expression lat with grp db params from ty
+  -> Expression grp lat with db params from ty
 caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
   [ "CASE"
   , mconcat
@@ -95,14 +95,14 @@ caseWhenThenElse whenThens else_ = UnsafeExpression $ mconcat
 
 -- | >>> :{
 -- let
---   expression :: Expression lat with grp db params from (null 'PGint2)
+--   expression :: Expression grp lat with db params from (null 'PGint2)
 --   expression = ifThenElse true 1 0
 -- in printSQL expression
 -- :}
 -- CASE WHEN TRUE THEN (1 :: int2) ELSE (0 :: int2) END
 ifThenElse
-  :: Condition lat with grp db params from
-  -> Expression lat with grp db params from ty -- ^ then
-  -> Expression lat with grp db params from ty -- ^ else
-  -> Expression lat with grp db params from ty
+  :: Condition grp lat with db params from
+  -> Expression grp lat with db params from ty -- ^ then
+  -> Expression grp lat with db params from ty -- ^ else
+  -> Expression grp lat with db params from ty
 ifThenElse if_ then_ else_ = caseWhenThenElse [(if_,then_)] else_

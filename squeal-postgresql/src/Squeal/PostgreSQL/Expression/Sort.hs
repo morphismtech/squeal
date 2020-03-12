@@ -38,33 +38,33 @@ import Squeal.PostgreSQL.Schema
 -- `AscNullsLast`, `DescNullsFirst` and `DescNullsLast` options are used to
 -- determine whether nulls appear before or after non-null values in the sort
 -- ordering of a `Null` result column.
-data SortExpression lat with grp db params from where
+data SortExpression grp lat with db params from where
   Asc
-    :: Expression lat with grp db params from ('NotNull ty)
+    :: Expression grp lat with db params from ('NotNull ty)
     -- ^ sort by
-    -> SortExpression lat with grp db params from
+    -> SortExpression grp lat with db params from
   Desc
-    :: Expression lat with grp db params from ('NotNull ty)
+    :: Expression grp lat with db params from ('NotNull ty)
     -- ^ sort by
-    -> SortExpression lat with grp db params from
+    -> SortExpression grp lat with db params from
   AscNullsFirst
-    :: Expression lat with grp db params from  ('Null ty)
+    :: Expression grp lat with db params from  ('Null ty)
     -- ^ sort by
-    -> SortExpression lat with grp db params from
+    -> SortExpression grp lat with db params from
   AscNullsLast
-    :: Expression lat with grp db params from  ('Null ty)
+    :: Expression grp lat with db params from  ('Null ty)
     -- ^ sort by
-    -> SortExpression lat with grp db params from
+    -> SortExpression grp lat with db params from
   DescNullsFirst
-    :: Expression lat with grp db params from  ('Null ty)
+    :: Expression grp lat with db params from  ('Null ty)
     -- ^ sort by
-    -> SortExpression lat with grp db params from
+    -> SortExpression grp lat with db params from
   DescNullsLast
-    :: Expression lat with grp db params from  ('Null ty)
+    :: Expression grp lat with db params from  ('Null ty)
     -- ^ sort by
-    -> SortExpression lat with grp db params from
-deriving instance Show (SortExpression lat with grp db params from)
-instance RenderSQL (SortExpression lat with grp db params from) where
+    -> SortExpression grp lat with db params from
+deriving instance Show (SortExpression grp lat with db params from)
+instance RenderSQL (SortExpression grp lat with db params from) where
   renderSQL = \case
     Asc expression -> renderSQL expression <+> "ASC"
     Desc expression -> renderSQL expression <+> "DESC"
@@ -74,7 +74,7 @@ instance RenderSQL (SortExpression lat with grp db params from) where
       <+> "DESC NULLS FIRST"
     AscNullsLast expression -> renderSQL expression <+> "ASC NULLS LAST"
     DescNullsLast expression -> renderSQL expression <+> "DESC NULLS LAST"
-instance RenderSQL [SortExpression lat with grp db params from] where
+instance RenderSQL [SortExpression grp lat with db params from] where
   renderSQL = \case
     [] -> ""
     srts -> " ORDER BY"
@@ -93,7 +93,7 @@ using `orderBy` within `Squeal.PostgreSQL.Query.Over`.
 -}
 class OrderBy expr where
   orderBy
-    :: [SortExpression lat with grp db params from]
+    :: [SortExpression grp lat with db params from]
       -- ^ sorts
-    -> expr lat with grp db params from
-    -> expr lat with grp db params from
+    -> expr grp lat with db params from
+    -> expr grp lat with db params from
