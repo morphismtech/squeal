@@ -33,8 +33,8 @@ import Generics.SOP
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
--- | `Optional` is either `Default` or a value, parameterized by an appropriate
--- `Optionality`.
+-- | `Optional` is either `Default` or `Set`ting of a value,
+-- parameterized by an appropriate `Optionality`.
 data Optional (expr :: k -> Type) (ty :: (Optionality, k)) where
   -- | Use the `Default` value for a column.
   Default :: Optional expr ('Def :=> ty)
