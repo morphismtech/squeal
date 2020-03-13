@@ -31,8 +31,10 @@ module Squeal.PostgreSQL.Expression.Aggregate
   , AggregateArg (..)
   , pattern All
   , pattern Alls
+  , allNotNull
   , pattern Distinct
   , pattern Distincts
+  , distinctNotNull
   , FilterWhere (..)
     -- * Aggregate Types
   , PGSum
@@ -47,6 +49,7 @@ import qualified Generics.SOP as SOP
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Logic
+import Squeal.PostgreSQL.Expression.Null
 import Squeal.PostgreSQL.Expression.Sort
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Render
@@ -420,6 +423,11 @@ pattern Alls
   -> AggregateArg xs lat with db params from
 pattern Alls xs = AggregateAll xs [] []
 
+allNotNull
+  :: Expression 'Ungrouped lat with db params from ('Null x)
+  -> AggregateArg '[ 'NotNull x] lat with db params from
+allNotNull x = All (unsafeNotNull x) & filterWhere (isNotNull x)
+
 pattern Distinct
   :: Expression 'Ungrouped lat with db params from x
   -> AggregateArg '[x] lat with db params from
@@ -429,6 +437,11 @@ pattern Distincts
   :: NP (Expression 'Ungrouped lat with db params from) xs
   -> AggregateArg xs lat with db params from
 pattern Distincts xs = AggregateDistinct xs [] []
+
+distinctNotNull
+  :: Expression 'Ungrouped lat with db params from ('Null x)
+  -> AggregateArg '[ 'NotNull x] lat with db params from
+distinctNotNull x = Distinct (unsafeNotNull x) & filterWhere (isNotNull x)
 
 class FilterWhere arg grp | arg -> grp where
   filterWhere
