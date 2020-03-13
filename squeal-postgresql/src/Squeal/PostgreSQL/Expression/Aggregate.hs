@@ -433,9 +433,8 @@ allNotNull
 allNotNull x = All (unsafeNotNull x) & filterWhere (not_ (isNull x))
 
 {- |
-`Distinct` invokes the aggregate once on a single
-argument for each distinct value of the expression
-(or distinct set of values, for multiple expressions) found in the input.
+`Distinct` invokes the aggregate once for each
+distinct value of the expression found in the input.
 -}
 pattern Distinct
   :: Expression 'Ungrouped lat with db params from x
@@ -443,9 +442,8 @@ pattern Distinct
 pattern Distinct x = Distincts (x :* Nil)
 
 {- |
-`Distinct` invokes the aggregate once on multiple
-arguments for each distinct value of the expression
-(or distinct set of values, for multiple expressions) found in the input.
+`Distincts` invokes the aggregate once for each
+distinct set of values, for multiple expressions, found in the input.
 -}
 pattern Distincts
   :: NP (Expression 'Ungrouped lat with db params from) xs
@@ -453,9 +451,8 @@ pattern Distincts
 pattern Distincts xs = AggregateDistinct xs [] []
 
 {- |
-`Distinct` invokes the aggregate once on multiple
-arguments for each distinct and not null value of the expression
-(or distinct set of values, for multiple expressions) found in the input.
+`distinctNotNull` invokes the aggregate once for each
+distinct, not null value of the expression found in the input.
 -}
 distinctNotNull
   :: Expression 'Ungrouped lat with db params from ('Null x)
