@@ -11,8 +11,10 @@ Sort expressions
 {-# LANGUAGE
     DataKinds
   , FlexibleInstances
+  , FunctionalDependencies
   , GADTs
   , LambdaCase
+  , MultiParamTypeClasses
   , OverloadedStrings
   , StandaloneDeriving
 #-}
@@ -91,9 +93,9 @@ they are returned in an implementation-dependent order.
 You can also control the order in which rows are processed by window functions
 using `orderBy` within `Squeal.PostgreSQL.Query.Over`.
 -}
-class OrderBy expr where
+class OrderBy expr grp | expr -> grp where
   orderBy
     :: [SortExpression grp lat with db params from]
       -- ^ sorts
-    -> expr grp lat with db params from
-    -> expr grp lat with db params from
+    -> expr lat with db params from
+    -> expr lat with db params from

@@ -820,7 +820,7 @@ having
 having hv rels = rels
   { havingClause = case havingClause rels of Having hvs -> Having (hv:hvs) }
 
-instance OrderBy TableExpression where
+instance OrderBy (TableExpression grp) grp where
   orderBy srts rels = rels {orderByClause = orderByClause rels ++ srts}
 
 -- | A `limit` is an endomorphism of `TableExpression`s which adds to the
