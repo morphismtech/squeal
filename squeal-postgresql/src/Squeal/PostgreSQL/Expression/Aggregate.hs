@@ -372,9 +372,6 @@ class Aggregate arg expr | expr -> arg where
 
 {- |
 `AggregateArg`s are used for the input of `Aggregate` `Expression`s.
-`All` invokes the aggregate once for each input row.
-`Distinct` invokes the aggregate once for each distinct value of the expression
-(or distinct set of values, for multiple expressions) found in the input.
 -}
 data AggregateArg
   (xs :: [NullType])
@@ -413,37 +410,66 @@ instance OrderBy (AggregateArg xs) 'Ungrouped where
     AggregateAll xs sorts0 whs -> AggregateAll xs (sorts0 ++ sorts1) whs
     AggregateDistinct xs sorts0 whs -> AggregateDistinct xs (sorts0 ++ sorts1) whs
 
+-- | `All` invokes the aggregate on a single
+-- argument once for each input row.
 pattern All
   :: Expression 'Ungrouped lat with db params from x
   -> AggregateArg '[x] lat with db params from
 pattern All x = Alls (x :* Nil)
 
+-- | `All` invokes the aggregate on multiple
+-- arguments once for each input row.
 pattern Alls
   :: NP (Expression 'Ungrouped lat with db params from) xs
   -> AggregateArg xs lat with db params from
 pattern Alls xs = AggregateAll xs [] []
 
+-- | `allNotNull` invokes the aggregate on a single
+-- argument once for each input row where the argument
+-- is not null
 allNotNull
   :: Expression 'Ungrouped lat with db params from ('Null x)
   -> AggregateArg '[ 'NotNull x] lat with db params from
 allNotNull x = All (unsafeNotNull x) & filterWhere (isNotNull x)
 
+{- |
+`Distinct` invokes the aggregate once on a single
+argument for each distinct value of the expression
+(or distinct set of values, for multiple expressions) found in the input.
+-}
 pattern Distinct
   :: Expression 'Ungrouped lat with db params from x
   -> AggregateArg '[x] lat with db params from
 pattern Distinct x = Distincts (x :* Nil)
 
+{- |
+`Distinct` invokes the aggregate once on multiple
+arguments for each distinct value of the expression
+(or distinct set of values, for multiple expressions) found in the input.
+-}
 pattern Distincts
   :: NP (Expression 'Ungrouped lat with db params from) xs
   -> AggregateArg xs lat with db params from
 pattern Distincts xs = AggregateDistinct xs [] []
 
+{- |
+`Distinct` invokes the aggregate once on multiple
+arguments for each distinct and not null value of the expression
+(or distinct set of values, for multiple expressions) found in the input.
+-}
 distinctNotNull
   :: Expression 'Ungrouped lat with db params from ('Null x)
   -> AggregateArg '[ 'NotNull x] lat with db params from
 distinctNotNull x = Distinct (unsafeNotNull x) & filterWhere (isNotNull x)
 
+-- | Permits filtering
+-- `Squeal.PostgreSQL.Expression.Window.WindowArg`s and `AggregateArg`s
 class FilterWhere arg grp | arg -> grp where
+  {- |
+  If `filterWhere` is specified, then only the input rows for which
+  the `Condition` evaluates to true are fed to the aggregate function;
+  other rows are discarded.
+  -}
   filterWhere
     :: Condition grp lat with db params from
     -> arg xs lat with db params from

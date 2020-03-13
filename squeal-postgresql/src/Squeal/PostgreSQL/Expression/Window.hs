@@ -159,6 +159,9 @@ newtype WindowFunction
     deriving stock (GHC.Generic,Show,Eq,Ord)
     deriving newtype (NFData)
 
+{- |
+`WindowArg`s are used for the input of `WindowFunction`s.
+-}
 data WindowArg
   (grp :: Grouping)
   (args :: [NullType])
@@ -186,11 +189,13 @@ instance SOP.SListI args
 instance FilterWhere (WindowArg grp) grp where
   filterWhere wh (WindowArg args filters) = WindowArg args (wh : filters)
 
+-- | `Window` invokes a `WindowFunction` on a single argument.
 pattern Window
   :: Expression grp lat with db params from arg
   -> WindowArg grp '[arg] lat with db params from
 pattern Window x = Windows (x :* Nil)
 
+-- | `Windows` invokes a `WindowFunction` on multiple argument.
 pattern Windows
   :: NP (Expression grp lat with db params from) args
   -> WindowArg grp args lat with db params from
