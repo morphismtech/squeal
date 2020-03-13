@@ -87,15 +87,22 @@ class Aggregate arg expr | expr -> arg where
   -- | >>> :{
   -- let
   --   expression :: Expression ('Grouped bys) '[] with db params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null 'PGnumeric)
-  --   expression = sum_ (Distinct #col)
+  --   expression = sum_ (Distinct #col & filterWhere (#col .< 100))
   -- in printSQL expression
   -- :}
-  -- sum(DISTINCT "col")
+  -- sum(DISTINCT "col") FILTER (WHERE ("col" < (100.0 :: numeric)))
   sum_
     :: arg '[null ty] lat with db params from
     -> expr lat with db params from ('Null (PGSum ty))
 
   -- | input values, including nulls, concatenated into an array
+  -- >>> :{
+  -- let
+  --   expression :: Expression ('Grouped bys) '[] with db params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null ('PGvararray ('Null 'PGnumeric)))
+  --   expression = arrayAgg (All #col & orderBy [AscNullsFirst #col] & filterWhere (#col .< 100))
+  -- in printSQL expression
+  -- :}
+  -- array_agg(ALL "col" ORDER BY "col" ASC NULLS FIRST) FILTER (WHERE ("col" < (100.0 :: numeric)))
   arrayAgg
     :: arg '[ty] lat with db params from
     -> expr lat with db params from ('Null ('PGvararray ty))
@@ -385,12 +392,12 @@ data AggregateArg
 instance SOP.SListI xs => RenderSQL (AggregateArg xs lat with db params from) where
   renderSQL = \case
     AggregateAll args sorts filters ->
-      parenthesized ("ALL" <+> renderCommaSeparated renderSQL args)
-      <> renderSQL sorts
+      parenthesized
+      ("ALL" <+> renderCommaSeparated renderSQL args<> renderSQL sorts)
       <> renderFilters filters
     AggregateDistinct args sorts filters ->
-      parenthesized ("DISTINCT" <+> renderCommaSeparated renderSQL args)
-      <> renderSQL sorts
+      parenthesized
+      ("DISTINCT" <+> renderCommaSeparated renderSQL args <> renderSQL sorts)
       <> renderFilters filters
     where
       renderFilter wh = "FILTER" <+> parenthesized ("WHERE" <+> wh)
@@ -423,7 +430,7 @@ pattern Distincts
   -> AggregateArg xs lat with db params from
 pattern Distincts xs = AggregateDistinct xs [] []
 
-class FilterWhere arg grp where
+class FilterWhere arg grp | arg -> grp where
   filterWhere
     :: Condition grp lat with db params from
     -> arg xs lat with db params from
