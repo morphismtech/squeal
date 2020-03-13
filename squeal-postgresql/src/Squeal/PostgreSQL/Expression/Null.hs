@@ -11,6 +11,7 @@ Null values and null handling functions
 {-# LANGUAGE
     DataKinds
   , OverloadedStrings
+  , RankNTypes
   , TypeOperators
 #-}
 
@@ -19,6 +20,7 @@ module Squeal.PostgreSQL.Expression.Null
     null_
   , notNull
   , unsafeNotNull
+  , monoNotNull
   , coalesce
   , fromNull
   , isNull
@@ -55,6 +57,14 @@ notNull = UnsafeExpression . renderSQL
 -- values in a column.
 unsafeNotNull :: 'Null ty --> 'NotNull ty
 unsafeNotNull = UnsafeExpression . renderSQL
+
+-- | Some expressions are null polymorphic which may raise
+-- inference issues. Use `monoNotNull` to fix their
+-- nullity as `NotNull`.
+monoNotNull
+  :: (forall null. Expression grp lat with db params from (null ty))
+  -> Expression grp lat with db params from ('NotNull ty)
+monoNotNull = id
 
 -- | return the leftmost value which is not NULL
 --

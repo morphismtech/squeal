@@ -430,7 +430,7 @@ pattern Alls xs = AggregateAll xs [] []
 allNotNull
   :: Expression 'Ungrouped lat with db params from ('Null x)
   -> AggregateArg '[ 'NotNull x] lat with db params from
-allNotNull x = All (unsafeNotNull x) & filterWhere (isNotNull x)
+allNotNull x = All (unsafeNotNull x) & filterWhere (not_ (isNull x))
 
 {- |
 `Distinct` invokes the aggregate once on a single
@@ -460,7 +460,7 @@ arguments for each distinct and not null value of the expression
 distinctNotNull
   :: Expression 'Ungrouped lat with db params from ('Null x)
   -> AggregateArg '[ 'NotNull x] lat with db params from
-distinctNotNull x = Distinct (unsafeNotNull x) & filterWhere (isNotNull x)
+distinctNotNull x = Distinct (unsafeNotNull x) & filterWhere (not_ (isNull x))
 
 -- | Permits filtering
 -- `Squeal.PostgreSQL.Expression.Window.WindowArg`s and `AggregateArg`s
