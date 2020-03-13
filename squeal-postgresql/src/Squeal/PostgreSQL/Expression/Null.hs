@@ -18,6 +18,7 @@ module Squeal.PostgreSQL.Expression.Null
   ( -- * Null
     null_
   , notNull
+  , unsafeNotNull
   , coalesce
   , fromNull
   , isNull
@@ -47,6 +48,13 @@ null_ = UnsafeExpression "NULL"
 -- TRUE
 notNull :: 'NotNull ty --> 'Null ty
 notNull = UnsafeExpression . renderSQL
+
+-- | Analagous to `Data.Maybe.fromJust` inverse to `notNull`,
+-- useful when you know an `Expression` is `NotNull`,
+-- because, for instance, you've filtered out @NULL@
+-- values in a column.
+unsafeNotNull :: 'Null ty --> 'NotNull ty
+unsafeNotNull = UnsafeExpression . renderSQL
 
 -- | return the leftmost value which is not NULL
 --

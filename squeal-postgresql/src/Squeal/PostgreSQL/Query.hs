@@ -11,6 +11,7 @@ Squeal queries.
 {-# LANGUAGE
     ConstraintKinds
   , DeriveGeneric
+  , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
@@ -72,17 +73,20 @@ module Squeal.PostgreSQL.Query
   , common
   , cross
   , crossJoin
+  , crossJoinLateral
   , inner
   , innerJoin
+  , innerJoinLateral
   , leftOuter
   , leftOuterJoin
+  , leftOuterJoinLateral
   , rightOuter
   , rightOuterJoin
+  , rightOuterJoinLateral
   , fullOuter
   , fullOuterJoin
+  , fullOuterJoinLateral
   , JoinItem (..)
-  , SetOf
-  , SetOfN
     -- * Grouping
   , By (..)
   , GroupByClause (..)
@@ -137,7 +141,8 @@ newtype Query
   (params :: [NullType])
   (row :: RowType)
     = UnsafeQuery { renderQuery :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,NFData)
+    deriving stock (GHC.Generic,Show,Eq,Ord)
+    deriving newtype (NFData)
 instance RenderSQL (Query lat with db params row) where renderSQL = renderQuery
 
 {- |
@@ -187,7 +192,7 @@ let
         & where_ (#col2 .> 0) )
 in printSQL query
 :}
-SELECT ("col1" + "col2") AS "col1", "col1" AS "col2" FROM "tab" AS "tab" WHERE (("col1" > "col2") AND ("col2" > 0))
+SELECT ("col1" + "col2") AS "col1", "col1" AS "col2" FROM "tab" AS "tab" WHERE (("col1" > "col2") AND ("col2" > (0 :: int4)))
 
 subquery:
 
@@ -231,7 +236,7 @@ let
       & having (sum_ (Distinct #col2) .> 1) )
 in printSQL query
 :}
-SELECT COALESCE(sum(ALL "col2"), 0) AS "col1", "col1" AS "col2" FROM "tab" AS "table1" GROUP BY "col1" HAVING (sum(DISTINCT "col2") > 1)
+SELECT COALESCE(sum(ALL "col2"), (0 :: int8)) AS "col1", "col1" AS "col2" FROM "tab" AS "table1" GROUP BY "col1" HAVING (sum(DISTINCT "col2") > (1 :: int8))
 
 sorted query:
 
@@ -334,7 +339,7 @@ let
     ["false" `as` #col1 :* false `as` #col2]
 in printSQL query
 :}
-SELECT * FROM (VALUES (E'true', TRUE), (E'false', FALSE)) AS t ("col1", "col2")
+SELECT * FROM (VALUES ((E'true' :: text), TRUE), ((E'false' :: text), FALSE)) AS t ("col1", "col2")
 
 set operations:
 
@@ -658,7 +663,7 @@ selectDistinctOn_ distincts = selectDistinctOn distincts . List
 -- >>> type Row = '["a" ::: 'NotNull 'PGint4, "b" ::: 'NotNull 'PGtext]
 -- >>> let query = values (1 `as` #a :* "one" `as` #b) [] :: Query lat with db '[] Row
 -- >>> printSQL query
--- SELECT * FROM (VALUES (1, E'one')) AS t ("a", "b")
+-- SELECT * FROM (VALUES ((1 :: int4), (E'one' :: text))) AS t ("a", "b")
 values
   :: SListI cols
   => NP (Aliased (Expression lat with 'Ungrouped db params '[] )) cols
@@ -850,7 +855,8 @@ newtype FromClause
   (params :: [NullType])
   (from :: FromType)
   = UnsafeFromClause { renderFromClause :: ByteString }
-  deriving (GHC.Generic,Show,Eq,Ord,NFData)
+  deriving stock (GHC.Generic,Show,Eq,Ord)
+  deriving newtype (NFData)
 instance RenderSQL (FromClause lat with db params from) where
   renderSQL = renderFromClause
 
@@ -889,20 +895,11 @@ instance Additional (FromClause lat with db params) where
   also right left = UnsafeFromClause $
     renderSQL left <> ", " <> renderSQL right
 
-type SetOf db ty set
-  =  forall lat with params
-  .  Expression lat with 'Ungrouped db params '[] ty
-     -- ^ input
-  -> FromClause lat with db params '[set]
-     -- ^ output
-
-type SetOfN db tys set
-  =  forall lat with params
-  .  NP (Expression lat with 'Ungrouped db params '[]) tys
-     -- ^ input
-  -> FromClause lat with db params '[set]
-     -- ^ output
-
+{- |
+A `JoinItem` is the right hand side of a `cross`,
+`inner`, `leftOuter`, `rightOuter`, `fullOuter` join of
+`FromClause`s.
+-}
 data JoinItem
   (lat :: FromType)
   (with :: FromType)
@@ -910,21 +907,36 @@ data JoinItem
   (params :: [NullType])
   (left :: FromType)
   (right :: FromType) where
+    -- | A standard `Squeal.PostgreSQL.Query.Join`.
+    -- It is not allowed to reference columns provided
+    -- by preceding `FromClause` items.
     Join
       :: FromClause lat with db params right
       -> JoinItem lat with db params left right
+    -- | Subqueries can be preceded by `JoinLateral`.
+    -- This allows them to reference columns provided
+    -- by preceding `FromClause` items.
+    -- `subquery` is evaluated independently and so
+    -- cannot cross-reference any other `FromClause` item.
     JoinLateral
       :: Aliased (Query (Join lat left) with db params) query
       -> JoinItem lat with db params left '[query]
+    -- | Set returning functions can be preceded by `JoinFunction`.
+    -- This allows them to reference columns provided
+    -- by preceding `FromClause` items.
     JoinFunction
-      :: SetOf db ty set
+      :: (Expression lat with 'Ungrouped db params '[] ty -> FromClause lat with db params from)
       -> Expression lat with 'Ungrouped db params left ty
-      -> JoinItem lat with db params left '[set]
+      -> JoinItem lat with db params left from
+    -- | Set returning multi-argument functions
+    -- can be preceded by `JoinFunction`.
+    -- This allows them to reference columns provided
+    -- by preceding `FromClause` items.
     JoinFunctionN
       :: SListI tys
-      => SetOfN db tys set
+      => (NP (Expression lat with 'Ungrouped db params '[]) tys -> FromClause lat with db params from)
       -> NP (Expression lat with 'Ungrouped db params left) tys
-      -> JoinItem lat with db params left '[set]
+      -> JoinItem lat with db params left from
 instance RenderSQL (JoinItem lat with db params left right) where
   renderSQL = \case
     Join tab -> "JOIN" <+> renderSQL tab
@@ -943,8 +955,8 @@ If the tables have @n@ and @m@ rows respectively, the joined table will
 have @n * m@ rows.
 -}
 cross
-  :: JoinItem lat with db params left right
-  -> FromClause lat with db params left
+  :: JoinItem lat with db params left right -- ^ right
+  -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join left right)
 cross item tab = UnsafeFromClause $
   renderSQL tab <+> "CROSS" <+> renderSQL item
@@ -957,18 +969,28 @@ If the tables have @n@ and @m@ rows respectively, the joined table will
 have @n * m@ rows.
 -}
 crossJoin
-  :: FromClause lat with db params right
-  -> FromClause lat with db params left
+  :: FromClause lat with db params right -- ^ right
+  -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join left right)
 crossJoin = cross . Join
+
+{- |
+Like `crossJoin` with a `subquery` but allowed to reference columns provided
+by preceding `FromClause` items.
+-}
+crossJoinLateral
+  :: Aliased (Query (Join lat left) with db params) query -- ^ right subquery
+  -> FromClause lat with db params left -- ^ left
+  -> FromClause lat with db params (Join left '[query])
+crossJoinLateral = cross . JoinLateral
 
 {- | @left & inner (Join right) on@. The joined table is filtered by
 the @on@ condition.
 -}
 inner
-  :: JoinItem lat with db params left right
-  -> Condition lat with 'Ungrouped db params (Join left right)
-  -> FromClause lat with db params left
+  :: JoinItem lat with db params left right -- ^ right
+  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join left right)
 inner item on tab = UnsafeFromClause $
   renderSQL tab <+> "INNER" <+> renderSQL item <+> "ON" <+> renderSQL on
@@ -977,11 +999,22 @@ inner item on tab = UnsafeFromClause $
 the @on@ condition.
 -}
 innerJoin
-  :: FromClause lat with db params right
-  -> Condition lat with 'Ungrouped db params (Join left right)
-  -> FromClause lat with db params left
+  :: FromClause lat with db params right -- ^ right
+  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join left right)
 innerJoin = inner . Join
+
+{- |
+Like `innerJoin` with a `subquery` but allowed to reference columns provided
+by preceding `FromClause` items.
+-}
+innerJoinLateral
+  :: Aliased (Query (Join lat left) with db params) query -- ^ right subquery
+  -> Condition lat with 'Ungrouped db params (Join left '[query]) -- ^ @ON@ condition
+  -> FromClause lat with db params left -- ^ left
+  -> FromClause lat with db params (Join left '[query])
+innerJoinLateral = inner . JoinLateral
 
 {- | @left & leftOuter (Join right) on@. First, an inner join is performed.
 Then, for each row in @left@ that does not satisfy the @on@ condition with
@@ -989,9 +1022,9 @@ any row in @right@, a joined row is added with null values in columns of @right@
 Thus, the joined table always has at least one row for each row in @left@.
 -}
 leftOuter
-  :: JoinItem lat with db params left right
-  -> Condition lat with 'Ungrouped db params (Join left right)
-  -> FromClause lat with db params left
+  :: JoinItem lat with db params left right -- ^ right
+  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join left (NullifyFrom right))
 leftOuter item on tab = UnsafeFromClause $
   renderSQL tab <+> "LEFT OUTER" <+> renderSQL item <+> "ON" <+> renderSQL on
@@ -1002,11 +1035,22 @@ any row in @right@, a joined row is added with null values in columns of @right@
 Thus, the joined table always has at least one row for each row in @left@.
 -}
 leftOuterJoin
-  :: FromClause lat with db params right
-  -> Condition lat with 'Ungrouped db params (Join left right)
-  -> FromClause lat with db params left
+  :: FromClause lat with db params right -- ^ right
+  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join left (NullifyFrom right))
 leftOuterJoin = leftOuter . Join
+
+{- |
+Like `leftOuterJoin` with a `subquery` but allowed to reference columns provided
+by preceding `FromClause` items.
+-}
+leftOuterJoinLateral
+  :: Aliased (Query (Join lat left) with db params) query -- ^ right subquery
+  -> Condition lat with 'Ungrouped db params (Join left '[query]) -- ^ @ON@ condition
+  -> FromClause lat with db params left -- ^ left
+  -> FromClause lat with db params (Join left (NullifyFrom '[query]))
+leftOuterJoinLateral = leftOuter . JoinLateral
 
 {- | @left & rightOuter (Join right) on@. First, an inner join is performed.
 Then, for each row in @right@ that does not satisfy the @on@ condition with
@@ -1015,9 +1059,9 @@ This is the converse of a left join: the result table will always
 have a row for each row in @right@.
 -}
 rightOuter
-  :: JoinItem lat with db params left right
-  -> Condition lat with 'Ungrouped db params (Join left right)
-  -> FromClause lat with db params left
+  :: JoinItem lat with db params left right -- ^ right
+  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join (NullifyFrom left) right)
 rightOuter item on tab = UnsafeFromClause $
   renderSQL tab <+> "RIGHT OUTER" <+> renderSQL item <+> "ON" <+> renderSQL on
@@ -1029,11 +1073,22 @@ This is the converse of a left join: the result table will always
 have a row for each row in @right@.
 -}
 rightOuterJoin
-  :: FromClause lat with db params right
-  -> Condition lat with 'Ungrouped db params (Join left right)
-  -> FromClause lat with db params left
+  :: FromClause lat with db params right -- ^ right
+  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (Join (NullifyFrom left) right)
 rightOuterJoin = rightOuter . Join
+
+{- |
+Like `rightOuterJoin` with a `subquery` but allowed to reference columns provided
+by preceding `FromClause` items.
+-}
+rightOuterJoinLateral
+  :: Aliased (Query (Join lat left) with db params) query -- ^ right subquery
+  -> Condition lat with 'Ungrouped db params (Join left '[query]) -- ^ @ON@ condition
+  -> FromClause lat with db params left -- ^ left
+  -> FromClause lat with db params (Join (NullifyFrom left) '[query])
+rightOuterJoinLateral = rightOuter . JoinLateral
 
 {- | @left & fullOuter (Join right) on@. First, an inner join is performed.
 Then, for each row in @left@ that does not satisfy the @on@ condition with
@@ -1043,9 +1098,9 @@ with any row in @left@, a joined row with null values in the columns of @left@
 is added.
 -}
 fullOuter
-  :: JoinItem lat with db params left right
-  -> Condition lat with 'Ungrouped db params (Join left right)
-  -> FromClause lat with db params left
+  :: JoinItem lat with db params left right -- ^ right
+  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (NullifyFrom (Join left right))
 fullOuter item on tab = UnsafeFromClause $
   renderSQL tab <+> "FULL OUTER" <+> renderSQL item <+> "ON" <+> renderSQL on
@@ -1058,11 +1113,22 @@ with any row in @left@, a joined row with null values in the columns of @left@
 is added.
 -}
 fullOuterJoin
-  :: FromClause lat with db params right
-  -> Condition lat with 'Ungrouped db params (Join left right)
-  -> FromClause lat with db params left
+  :: FromClause lat with db params right -- ^ right
+  -> Condition lat with 'Ungrouped db params (Join left right) -- ^ @ON@ condition
+  -> FromClause lat with db params left -- ^ left
   -> FromClause lat with db params (NullifyFrom (Join left right))
 fullOuterJoin = fullOuter . Join
+
+{- |
+Like `fullOuterJoin` with a `subquery` but allowed to reference columns provided
+by preceding `FromClause` items.
+-}
+fullOuterJoinLateral
+  :: Aliased (Query (Join lat left) with db params) query -- ^ right subquery
+  -> Condition lat with 'Ungrouped db params (Join left '[query]) -- ^ @ON@ condition
+  -> FromClause lat with db params left -- ^ left
+  -> FromClause lat with db params (NullifyFrom (Join left '[query]))
+fullOuterJoinLateral = fullOuter . JoinLateral
 
 {-----------------------------------------
 Grouping
@@ -1106,7 +1172,8 @@ instance (Has rel rels cols, Has col cols ty, bys ~ '[ '(rel, col)])
 -- | A `GroupByClause` indicates the `Grouping` of a `TableExpression`.
 newtype GroupByClause grp from = UnsafeGroupByClause
   { renderGroupByClause :: ByteString }
-  deriving (GHC.Generic,Show,Eq,Ord,NFData)
+  deriving stock (GHC.Generic,Show,Eq,Ord)
+  deriving newtype (NFData)
 instance RenderSQL (GroupByClause grp from) where
   renderSQL = renderGroupByClause
 noGroups :: GroupByClause 'Ungrouped from
@@ -1199,7 +1266,7 @@ instance With (Query lat) where
       ( select_ (fromNull 0 (sum_ (All #n)) `as` #getSum) (from (common #t) & groupBy Nil))
   in printSQL query
 :}
-WITH RECURSIVE "t" AS ((SELECT * FROM (VALUES ((1 :: int))) AS t ("n")) UNION ALL (SELECT ("n" + 1) AS "n" FROM "t" AS "t" WHERE ("n" < 100))) SELECT COALESCE(sum(ALL "n"), 0) AS "getSum" FROM "t" AS "t"
+WITH RECURSIVE "t" AS ((SELECT * FROM (VALUES (((1 :: int4) :: int))) AS t ("n")) UNION ALL (SELECT ("n" + (1 :: int4)) AS "n" FROM "t" AS "t" WHERE ("n" < (100 :: int4)))) SELECT COALESCE(sum(ALL "n"), (0 :: int8)) AS "getSum" FROM "t" AS "t"
 -}
 withRecursive
   :: Aliased (Query lat (recursive ': with) db params) recursive

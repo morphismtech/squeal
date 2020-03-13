@@ -16,6 +16,7 @@
   , TypeSynonymInstances
   , TypeInType
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Main (main) where
@@ -45,7 +46,7 @@ type UsersColumns =
 
 type Schema =
   '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns)
-   , "person" ::: 'Typedef PGperson ]
+   , "person" ::: 'Typedef (PG Person) ]
 
 type DB = '[ "public" ::: Schema ]
 
@@ -87,15 +88,7 @@ connectionString = "host=localhost port=5432 dbname=exampledb"
 
 data Person = Person { name :: Maybe String, age :: Maybe Int32 }
   deriving (Eq, Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
-  deriving
-    ( FromValue PGperson
-    , ToParam DB PGperson
-    , Literal
-    ) via (Composite Person)
-
-type PGperson = 'PGcomposite
-  '["name" ::: 'Null 'PGtext, "age" ::: 'Null 'PGint4]
-type instance PG Person = PGperson
+  deriving (IsPG, FromPG, ToPG db, Inline) via (Composite Person)
 
 spec :: Spec
 spec = before_ setupDB . after_ dropDB $ do
@@ -125,7 +118,7 @@ spec = before_ setupDB . after_ dropDB $ do
         "host=localhost port=5432 dbname=exampledb" 1 0.5 10
       let
         qry :: Query_ (Public '[]) () (Only Char)
-        qry = values_ (literal 'a' `as` #fromOnly)
+        qry = values_ (inline 'a' `as` #fromOnly)
         session = usingConnectionPool pool . transactionally_ $ do
           result <- runQuery qry
           Just (Only chr) <- firstRow result
@@ -170,7 +163,7 @@ spec = before_ setupDB . after_ dropDB $ do
         roundtrip = values_ (param @1 `as` #fromOnly)
 
         roundtrip_inline :: Person -> Query_ DB () (Only Person)
-        roundtrip_inline person = values_ (literal person `as` #fromOnly)
+        roundtrip_inline person = values_ (inline person `as` #fromOnly)
 
         roundtrip_array :: Query_ DB
           (Only (VarArray [Person])) (Only (VarArray [Person]))

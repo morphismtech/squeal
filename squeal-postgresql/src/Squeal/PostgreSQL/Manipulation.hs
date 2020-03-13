@@ -10,6 +10,7 @@ Squeal data manipulation language.
 
 {-# LANGUAGE
     DeriveGeneric
+  , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
@@ -44,12 +45,11 @@ module Squeal.PostgreSQL.Manipulation
   , deleteFrom_
     -- * Clauses
   , Optional (..)
+  , mapOptional
   , QueryClause (..)
   , pattern Values_
-  , LiteralColumn (..)
-  , literalColumns
-  , inline
-  , inlineMany
+  , inlineValues
+  , inlineValues_
   , ReturningClause (..)
   , pattern Returning_
   , ConflictClause (..)
@@ -62,7 +62,6 @@ import Control.DeepSeq
 import Data.ByteString hiding (foldr)
 import Data.Kind (Type)
 import Data.Quiver.Functor
-import GHC.TypeLits
 
 import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
@@ -70,7 +69,8 @@ import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Expression.Literal
+import Squeal.PostgreSQL.Expression.Default
+import Squeal.PostgreSQL.Expression.Inline
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
@@ -101,7 +101,8 @@ newtype Manipulation
   (params :: [NullType])
   (columns :: RowType)
     = UnsafeManipulation { renderManipulation :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,NFData)
+    deriving stock (GHC.Generic,Show,Eq,Ord)
+    deriving newtype (NFData)
 instance RenderSQL (Manipulation with db params columns) where
   renderSQL = renderManipulation
 instance With Manipulation where
@@ -141,7 +142,7 @@ let
     insertInto_ #tab (Values_ (Set 2 `as` #col1 :* Default `as` #col2))
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (2, DEFAULT)
+INSERT INTO "tab" ("col1", "col2") VALUES ((2 :: int4), DEFAULT)
 
 out-of-line parameterized insert:
 
@@ -164,10 +165,10 @@ in-line parameterized insert:
 let
   manipulation :: Row Int32 Int32 -> Manipulation_ (Public Schema) () ()
   manipulation row =
-    insertInto_ #tab (inline row)
+    insertInto_ #tab (inlineValues_ row)
 in printSQL (manipulation (Row 1 2))
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (1, 2)
+INSERT INTO "tab" ("col1", "col2") VALUES ((1 :: int4), (2 :: int4))
 
 returning insert:
 
@@ -179,7 +180,7 @@ let
       OnConflictDoRaise (Returning (#col1 `as` #fromOnly))
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (2, 3) RETURNING "col1" AS "fromOnly"
+INSERT INTO "tab" ("col1", "col2") VALUES ((2 :: int4), (3 :: int4)) RETURNING "col1" AS "fromOnly"
 
 upsert:
 
@@ -197,7 +198,7 @@ let
       (Returning_ Nil)
 in printSQL manipulation
 :}
-INSERT INTO "customers" ("name", "email") VALUES (E'John Smith', E'john@smith.com') ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || (E'; ' || "customers"."email"))
+INSERT INTO "customers" ("name", "email") VALUES ((E'John Smith' :: text), (E'john@smith.com' :: text)) ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || ((E'; ' :: text) || "customers"."email"))
 
 query insert:
 
@@ -217,7 +218,7 @@ let
   manipulation = update_ #tab (Set 2 `as` #col1) (#col1 ./= #col2)
 in printSQL manipulation
 :}
-UPDATE "tab" SET "col1" = 2 WHERE ("col1" <> "col2")
+UPDATE "tab" SET "col1" = (2 :: int4) WHERE ("col1" <> "col2")
 
 delete:
 
@@ -379,62 +380,22 @@ pattern Values_
   -> QueryClause with db params columns
 pattern Values_ vals = Values vals []
 
--- | `Optional` is either `Default` or a value, parameterized by an appropriate
--- `ColumnConstraint`.
-data Optional expr ty where
-  -- | Use the `Default` value for a column.
-  Default :: Optional expr ('Def :=> ty)
-  -- | `Set` a value for a column.
-  Set :: expr ty -> Optional expr (def :=> ty)
-
-instance (forall x. RenderSQL (expr x)) => RenderSQL (Optional expr ty) where
-  renderSQL = \case
-    Default -> "DEFAULT"
-    Set expr -> renderSQL expr
-
--- | Lifts `Literal` to a column entry
-class LiteralColumn field column where
-  -- | Haskell record field as a literal column
-  literalColumn
-    :: SOP.P field
-    -> Aliased ( Optional
-      ( Expression lat with grp db params from
-      ) ) column
-instance (Literal hask, column ~ (def :=> NullPG hask), KnownSymbol alias)
-  => LiteralColumn (alias ::: hask) (alias ::: column) where
-    literalColumn (SOP.P hask) = Set (literal hask) `as` (Alias @alias)
-instance (KnownSymbol alias, column ~ ('Def :=> ty))
-  => LiteralColumn (alias ::: ()) (alias ::: column) where
-    literalColumn _ = Default `as` (Alias @alias)
-
--- | Use a Haskell record as a literal list of columns
-literalColumns
+-- | `inlineValues_` a Haskell record in `insertInto`.
+inlineValues_
   :: ( SOP.IsRecord hask xs
-     , SOP.AllZip LiteralColumn xs columns )
-  => hask -- ^ record
-  -> NP (Aliased (Optional (
-      Expression '[] with 'Ungrouped db params '[]
-      ) ) ) columns
-literalColumns
-  = SOP.htrans (SOP.Proxy @LiteralColumn) literalColumn
-  . SOP.toRecord
-
--- | `inline` a Haskell record in `insertInto`.
-inline
-  :: ( SOP.IsRecord hask xs
-     , SOP.AllZip LiteralColumn xs columns )
+     , SOP.AllZip InlineColumn xs columns )
   => hask -- ^ record
   -> QueryClause with db params columns
-inline = Values_ . literalColumns
+inlineValues_ = Values_ . inlineColumns
 
--- | `inlineMany` Haskell records in `insertInto`.
-inlineMany
+-- | `inlineValues` Haskell records in `insertInto`.
+inlineValues
   :: ( SOP.IsRecord hask xs
-     , SOP.AllZip LiteralColumn xs columns )
+     , SOP.AllZip InlineColumn xs columns )
   => hask -- ^ record
   -> [hask] -- ^ more
   -> QueryClause with db params columns
-inlineMany hask hasks = Values (literalColumns hask) (literalColumns <$> hasks)
+inlineValues hask hasks = Values (inlineColumns hask) (inlineColumns <$> hasks)
 
 -- | A `ReturningClause` computes and return value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily

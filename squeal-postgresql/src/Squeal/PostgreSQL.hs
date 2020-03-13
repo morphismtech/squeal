@@ -54,7 +54,7 @@ a `TableConstraint` or a `ColumnType`. It is intended to connote Haskell's @::@
 operator.
 
 `:=>` is used to pair `TableConstraints` with a `ColumnsType`,
-yielding a `TableType`, or to pair a `ColumnConstraint` with a `NullType`,
+yielding a `TableType`, or to pair an `Optionality` with a `NullType`,
 yielding a `ColumnType`. It is intended to connote Haskell's @=>@ operator
 
 Next, we'll write `Definition`s to set up and tear down the schema. In
@@ -210,8 +210,9 @@ import Squeal.PostgreSQL.Expression.Aggregate as X
 import Squeal.PostgreSQL.Expression.Array as X
 import Squeal.PostgreSQL.Expression.Comparison as X
 import Squeal.PostgreSQL.Expression.Composite as X
+import Squeal.PostgreSQL.Expression.Default as X
 import Squeal.PostgreSQL.Expression.Json as X
-import Squeal.PostgreSQL.Expression.Literal as X
+import Squeal.PostgreSQL.Expression.Inline as X
 import Squeal.PostgreSQL.Expression.Logic as X
 import Squeal.PostgreSQL.Expression.Math as X
 import Squeal.PostgreSQL.Expression.Null as X

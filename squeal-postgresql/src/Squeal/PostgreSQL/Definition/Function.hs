@@ -73,7 +73,7 @@ let
     languageSqlExpr (param @1 * param @2 + 1)
 in printSQL definition
 :}
-CREATE FUNCTION "fn" (int4, int4) RETURNS int4 language sql as $$ SELECT * FROM (VALUES (((($1 :: int4) * ($2 :: int4)) + 1))) AS t ("ret") $$;
+CREATE FUNCTION "fn" (int4, int4) RETURNS int4 language sql as $$ SELECT * FROM (VALUES (((($1 :: int4) * ($2 :: int4)) + (1 :: int4)))) AS t ("ret") $$;
 -}
 createFunction
   :: ( Has sch db schema
@@ -103,7 +103,7 @@ let
       languageSqlExpr (param @1 @('Null 'PGint4) * param @2 @('Null 'PGint4) + 1)
 in printSQL definition
 :}
-CREATE OR REPLACE FUNCTION "fn" (int4, int4) RETURNS int4 language sql as $$ SELECT * FROM (VALUES (((($1 :: int4) * ($2 :: int4)) + 1))) AS t ("ret") $$;
+CREATE OR REPLACE FUNCTION "fn" (int4, int4) RETURNS int4 language sql as $$ SELECT * FROM (VALUES (((($1 :: int4) * ($2 :: int4)) + (1 :: int4)))) AS t ("ret") $$;
 -}
 createOrReplaceFunction
   :: ( Has sch db schema

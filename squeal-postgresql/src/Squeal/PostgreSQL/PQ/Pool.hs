@@ -18,7 +18,7 @@ Here's a simplified example:
 do
   let
     query :: Query_ (Public '[]) () (Only Char)
-    query = values_ (literal 'a' `as` #fromOnly)
+    query = values_ (inline 'a' `as` #fromOnly)
   pool <- createConnectionPool "host=localhost port=5432 dbname=exampledb" 1 0.5 10
   chr <- usingConnectionPool pool $ do
     result <- runQuery query

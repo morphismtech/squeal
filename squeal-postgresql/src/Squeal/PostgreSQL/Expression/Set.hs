@@ -22,13 +22,15 @@ Set returning functions
 
 module Squeal.PostgreSQL.Expression.Set
   ( -- * Set Function
-    generateSeries
+    SetFunction
+  , SetFunctionN
+  , SetOf
+  , SetOfN
+  , generateSeries
   , generateSeriesStep
   , generateSeriesTimestamp
-  , SetFunction
   , unsafeSetFunction
   , setFunction
-  , SetFunctionN
   , unsafeSetFunctionN
   , setFunctionN
   ) where
@@ -104,11 +106,23 @@ unsafeSetFunctionN
 unsafeSetFunctionN fun xs = UnsafeFromClause $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
 
--- | Like `SetFunctionN` but depends on the schemas of the database
-type SetFunctionNDB db tys set
+{- |
+Like `SetFunction` but depends on the schemas of the database
+-}
+type SetOf db ty set
+  =  forall lat with params
+  .  Expression lat with 'Ungrouped db params '[] ty
+     -- ^ input
+  -> FromClause lat with db params '[set]
+     -- ^ output
+
+{- |
+Like `SetFunctionN` but depends on the schemas of the database
+-}
+type SetOfN db tys set
   =  forall lat with params
   .  NP (Expression lat with 'Ungrouped db params '[]) tys
-     -- ^ inputs
+     -- ^ input
   -> FromClause lat with db params '[set]
      -- ^ output
 
@@ -125,14 +139,14 @@ let
 in
   printSQL (fn (true *: "hi"))
 :}
-"fn"(TRUE, E'hi')
+"fn"(TRUE, (E'hi' :: text))
 -}
 setFunctionN
   :: ( Has sch db schema
      , Has fun schema ('Function (tys :=> 'ReturnsTable row))
      , SOP.SListI tys )
   => QualifiedAlias sch fun -- ^ function alias
-  -> SetFunctionNDB db tys (fun ::: row)
+  -> SetOfN db tys (fun ::: row)
 setFunctionN fun = unsafeSetFunctionN (renderSQL fun)
 
 {- | @generateSeries (start :* stop)@
@@ -140,8 +154,8 @@ setFunctionN fun = unsafeSetFunctionN (renderSQL fun)
 Generate a series of values,
 from @start@ to @stop@ with a step size of one
 
->>> renderSQL (generateSeries @'PGint4 (1 *: 10))
-"generate_series(1, 10)"
+>>> printSQL (generateSeries @'PGint4 (1 *: 10))
+generate_series((1 :: int4), (10 :: int4))
 -}
 generateSeries
   :: ty `In` '[ 'PGint4, 'PGint8, 'PGnumeric]
@@ -155,8 +169,8 @@ generateSeries = unsafeSetFunctionN "generate_series"
 Generate a series of values,
 from @start@ to @stop@ with a step size of @step@
 
->>> renderSQL (generateSeriesStep @'PGint8 (2 :* 100 *: 2))
-"generate_series(2, 100, 2)"
+>>> printSQL (generateSeriesStep @'PGint8 (2 :* 100 *: 2))
+generate_series((2 :: int8), (100 :: int8), (2 :: int8))
 -}
 generateSeriesStep
   :: ty `In` '[ 'PGint4, 'PGint8, 'PGnumeric]
@@ -175,9 +189,9 @@ let
   start = now
   stop = now !+ interval_ 10 Years
   step = interval_ 1 Months
-in renderSQL (generateSeriesTimestamp (start :* stop *: step))
+in printSQL (generateSeriesTimestamp (start :* stop *: step))
 :}
-"generate_series(now(), (now() + (INTERVAL '10.0 years')), (INTERVAL '1.0 months'))"
+generate_series(now(), (now() + (INTERVAL '10.000 years')), (INTERVAL '1.000 months'))
 -}
 generateSeriesTimestamp
   :: ty `In` '[ 'PGtimestamp, 'PGtimestamptz]

@@ -53,7 +53,7 @@ import Squeal.PostgreSQL.Schema
 --
 -- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression lat with grp db params from ('NotNull Complex)
 -- >>> printSQL i
--- ROW(0, 1)
+-- ROW((0.0 :: float8), (1.0 :: float8))
 row
   :: SOP.SListI row
   => NP (Aliased (Expression lat with grp db params from)) row
@@ -79,7 +79,7 @@ rowStar tab = UnsafeExpression $ "ROW" <>
 --
 -- >>> let i = row (0 `as` #real :* 1 `as` #imaginary) :: Expression lat '[] grp (Public Schema) from params ('NotNull Complex)
 -- >>> printSQL $ i & field #complex #imaginary
--- (ROW(0, 1)::"complex")."imaginary"
+-- (ROW((0.0 :: float8), (1.0 :: float8))::"complex")."imaginary"
 field
   :: ( Has sch db schema
      , Has tydef schema ('Typedef ('PGcomposite row))

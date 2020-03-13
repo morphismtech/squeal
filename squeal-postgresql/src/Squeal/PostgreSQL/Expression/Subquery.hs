@@ -83,7 +83,7 @@ if any `true` result is obtained. The result is `false` if no true result is fou
 (including the case where the subquery returns no rows).
 
 >>> printSQL $ subAny "foo" like (values_ ("foobar" `as` #foo))
-(E'foo' LIKE ANY (SELECT * FROM (VALUES (E'foobar')) AS t ("foo")))
+((E'foo' :: text) LIKE ANY (SELECT * FROM (VALUES ((E'foobar' :: text))) AS t ("foo")))
 -}
 subAny
   :: Expression lat with grp db params from ty1 -- ^ expression

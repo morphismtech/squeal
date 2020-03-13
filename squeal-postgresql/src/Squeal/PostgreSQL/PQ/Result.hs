@@ -28,7 +28,6 @@ module Squeal.PostgreSQL.PQ.Result
   , okResult
   , resultErrorMessage
   , resultErrorCode
-  , LibPQ.ExecStatus (..)
   ) where
 
 import Control.Exception (throw)

@@ -12,6 +12,7 @@ Type expressions.
     AllowAmbiguousTypes
   , DataKinds
   , DeriveGeneric
+  , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
@@ -79,6 +80,7 @@ module Squeal.PostgreSQL.Expression.Type
   , tsrange
   , tstzrange
   , daterange
+  , record
     -- * Column Type
   , ColumnTypeExpression (..)
   , nullable
@@ -136,7 +138,7 @@ cast ty x = UnsafeExpression $ parenthesized $
 -- | A safe version of `cast` which just matches a value with its type.
 --
 -- >>> printSQL (1 & astype int)
--- (1 :: int)
+-- ((1 :: int4) :: int)
 astype
   :: TypeExpression db ty
   -- ^ type to specify as
@@ -165,7 +167,8 @@ type expressions
 -- `Squeal.PostgreSQL.Definition.createTable` commands.
 newtype TypeExpression (db :: SchemasType) (ty :: NullType)
   = UnsafeTypeExpression { renderTypeExpression :: ByteString }
-  deriving (GHC.Generic,Show,Eq,Ord,NFData)
+  deriving stock (GHC.Generic,Show,Eq,Ord)
+  deriving newtype (NFData)
 instance RenderSQL (TypeExpression db ty) where
   renderSQL = renderTypeExpression
 
@@ -329,6 +332,9 @@ tstzrange = UnsafeTypeExpression "tstzrange"
 -- | Range of date
 daterange :: TypeExpression db (null ('PGrange 'PGdate))
 daterange = UnsafeTypeExpression "daterange"
+-- | Anonymous composite record
+record :: TypeExpression db (null ('PGcomposite record))
+record = UnsafeTypeExpression "record"
 
 -- | `pgtype` is a demoted version of a `PGType`
 class PGTyped db (ty :: PGType) where pgtype :: TypeExpression db (null ty)
@@ -404,7 +410,8 @@ instance (KnownSymbol alias, NullTyped db ty)
 -- `Squeal.PostgreSQL.Definition.createTable` commands.
 newtype ColumnTypeExpression (db :: SchemasType) (ty :: ColumnType)
   = UnsafeColumnTypeExpression { renderColumnTypeExpression :: ByteString }
-  deriving (GHC.Generic,Show,Eq,Ord,NFData)
+  deriving stock (GHC.Generic,Show,Eq,Ord)
+  deriving newtype (NFData)
 instance RenderSQL (ColumnTypeExpression db ty) where
   renderSQL = renderColumnTypeExpression
 

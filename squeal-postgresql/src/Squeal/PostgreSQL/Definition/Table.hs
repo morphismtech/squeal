@@ -277,7 +277,7 @@ newtype AlterTable
 --   definition = alterTable #tab (addConstraint #positive (check #col (#col .> 0)))
 -- in printSQL definition
 -- :}
--- ALTER TABLE "tab" ADD CONSTRAINT "positive" CHECK (("col" > 0));
+-- ALTER TABLE "tab" ADD CONSTRAINT "positive" CHECK (("col" > (0 :: int4)));
 addConstraint
   :: ( KnownSymbol alias
      , Has sch db schema
@@ -326,7 +326,7 @@ class AddColumn ty where
   --   definition = alterTable #tab (addColumn #col2 (text & nullable & default_ "foo"))
   -- in printSQL definition
   -- :}
-  -- ALTER TABLE "tab" ADD COLUMN "col2" text NULL DEFAULT E'foo';
+  -- ALTER TABLE "tab" ADD COLUMN "col2" text NULL DEFAULT (E'foo' :: text);
   --
   -- >>> :{
   -- let
@@ -427,7 +427,7 @@ newtype AlterColumn (db :: SchemasType) (ty0 :: ColumnType) (ty1 :: ColumnType) 
 --   definition = alterTable #tab (alterColumn #col (setDefault 5))
 -- in printSQL definition
 -- :}
--- ALTER TABLE "tab" ALTER COLUMN "col" SET DEFAULT 5;
+-- ALTER TABLE "tab" ALTER COLUMN "col" SET DEFAULT (5 :: int4);
 setDefault
   :: Expression '[] '[] 'Ungrouped db '[] '[] ty -- ^ default value to set
   -> AlterColumn db (constraint :=> ty) ('Def :=> ty)

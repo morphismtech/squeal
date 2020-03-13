@@ -334,7 +334,7 @@ jsonbPretty = unsafeFunction "jsonb_pretty"
 
 {- | Expands the outermost JSON object into a set of key/value pairs.
 
->>> printSQL (select Star (from (jsonEach (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
+>>> printSQL (select Star (from (jsonEach (inline (Json (object ["a" .= "foo", "b" .= "bar"]))))))
 SELECT * FROM json_each(('{"a":"foo","b":"bar"}' :: json))
 -}
 jsonEach :: SetFunction (null 'PGjson)
@@ -343,7 +343,7 @@ jsonEach = unsafeSetFunction "json_each"
 
 {- | Expands the outermost binary JSON object into a set of key/value pairs.
 
->>> printSQL (select Star (from (jsonbEach (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
+>>> printSQL (select Star (from (jsonbEach (inline (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
 SELECT * FROM jsonb_each(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbEach
@@ -353,7 +353,7 @@ jsonbEach = unsafeSetFunction "jsonb_each"
 
 {- | Expands the outermost JSON object into a set of key/value pairs.
 
->>> printSQL (select Star (from (jsonEachText (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
+>>> printSQL (select Star (from (jsonEachText (inline (Json (object ["a" .= "foo", "b" .= "bar"]))))))
 SELECT * FROM json_each_text(('{"a":"foo","b":"bar"}' :: json))
 -}
 jsonEachText
@@ -363,7 +363,7 @@ jsonEachText = unsafeSetFunction "json_each_text"
 
 {- | Expands the outermost binary JSON object into a set of key/value pairs.
 
->>> printSQL (select Star (from (jsonbEachText (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
+>>> printSQL (select Star (from (jsonbEachText (inline (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
 SELECT * FROM jsonb_each_text(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbEachText
@@ -373,7 +373,7 @@ jsonbEachText = unsafeSetFunction "jsonb_each_text"
 
 {- | Returns set of keys in the outermost JSON object.
 
->>> printSQL (jsonObjectKeys (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))
+>>> printSQL (jsonObjectKeys (inline (Json (object ["a" .= "foo", "b" .= "bar"]))))
 json_object_keys(('{"a":"foo","b":"bar"}' :: json))
 -}
 jsonObjectKeys
@@ -383,7 +383,7 @@ jsonObjectKeys = unsafeSetFunction "json_object_keys"
 
 {- | Returns set of keys in the outermost JSON object.
 
->>> printSQL (jsonbObjectKeys (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))
+>>> printSQL (jsonbObjectKeys (inline (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))
 jsonb_object_keys(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbObjectKeys

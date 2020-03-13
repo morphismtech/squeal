@@ -11,6 +11,7 @@ Window functions and definitions
 {-# LANGUAGE
     DataKinds
   , DeriveGeneric
+  , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
   , GADTs
@@ -153,7 +154,8 @@ newtype WindowFunction
   (from :: FromType)
   (ty :: NullType)
     = UnsafeWindowFunction { renderWindowFunction :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,NFData)
+    deriving stock (GHC.Generic,Show,Eq,Ord)
+    deriving newtype (NFData)
 
 instance RenderSQL (WindowFunction lat with grp db params from ty) where
   renderSQL = renderWindowFunction
@@ -242,7 +244,7 @@ cumeDist = UnsafeWindowFunction "cume_dist()"
 dividing the partition as equally as possible
 
 >>> printSQL $ ntile 5
-ntile(5)
+ntile((5 :: int4))
 -}
 ntile :: WinFun1 ('NotNull 'PGint4) ('NotNull 'PGint4)
 ntile = unsafeWindowFunction1 "ntile"

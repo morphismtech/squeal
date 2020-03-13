@@ -179,7 +179,7 @@ let
   createPositive = createDomain #positive real (#value .> 0)
 in printSQL createPositive
 :}
-CREATE DOMAIN "positive" AS real CHECK (("value" > 0));
+CREATE DOMAIN "positive" AS real CHECK (("value" > (0.0 :: float4)));
 -}
 createDomain
   :: (Has sch db schema, KnownSymbol dom)

@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Encode
+Module: Squeal.PostgreSQL.PQ.Decode
 Description: Decoding of result values
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -28,18 +28,19 @@ Decoding of result values
 #-}
 
 module Squeal.PostgreSQL.PQ.Decode
-  ( -- * Decode Rows
-    DecodeRow (..)
+  ( -- * Decode Types
+    FromPG (..)
+  , devalue
+  , rowValue
+    -- * Decode Rows
+  , DecodeRow (..)
   , decodeRow
   , runDecodeRow
   , genericRow
-  , devalue
-  , value
     -- * Decoding Classes
   , FromValue (..)
-  , FromNullValue (..)
   , FromField (..)
-  , FromFixArray (..)
+  , FromArray (..)
   , StateT (..)
   , ExceptT (..)
   ) where
@@ -59,6 +60,7 @@ import Data.Scientific (Scientific)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
 import Data.UUID.Types (UUID)
 import Data.Vector (Vector)
+import Database.PostgreSQL.LibPQ (Oid(Oid))
 import GHC.OverloadedLabels
 import GHC.TypeLits
 import Network.IP.Addr (NetAddr, IP)
@@ -81,116 +83,165 @@ import Squeal.PostgreSQL.Schema
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.PG
 
+-- | Converts a `Value` type from @postgresql-binary@ for use in
+-- the `fromPG` method of `FromPG`.
 devalue :: Value x -> StateT Strict.ByteString (Except Strict.Text) x
 devalue = unsafeCoerce
 
-value :: StateT Strict.ByteString (Except Strict.Text) x -> Value x
-value = unsafeCoerce
+revalue :: StateT Strict.ByteString (Except Strict.Text) x -> Value x
+revalue = unsafeCoerce
 
--- | A `FromValue` constraint gives a parser from the binary format of
+{- |
+>>> :set -XTypeFamilies
+>>> :{
+data Complex = Complex
+  { real :: Double
+  , imaginary :: Double
+  }
+instance IsPG Complex where
+  type PG Complex = 'PGcomposite '[
+    "re" ::: 'NotNull 'PGfloat8,
+    "im" ::: 'NotNull 'PGfloat8]
+instance FromPG Complex where
+  fromPG = rowValue $ do
+    re <- #re
+    im <- #im
+    return Complex {real = re, imaginary = im}
+:}
+-}
+rowValue
+  :: (PG y ~ 'PGcomposite row, SOP.SListI row)
+  => DecodeRow row y
+  -> StateT Strict.ByteString (Except Strict.Text) y
+rowValue decoder = devalue $
+  let
+    -- <number of fields: 4 bytes>
+    -- [for each field]
+    --  <OID of field's type: sizeof(Oid) bytes>
+    --  [if value is NULL]
+    --    <-1: 4 bytes>
+    --  [else]
+    --    <length of value: 4 bytes>
+    --    <value: <length> bytes>
+    --  [end if]
+    -- [end for]
+    comp = valueParser $ do
+      unitOfSize 4
+      SOP.hsequence' $ SOP.hpure $ SOP.Comp $ do
+        unitOfSize 4
+        len :: Int32 <- sized 4 int
+        if len == -1
+          then return (SOP.K Nothing)
+          else SOP.K . Just <$> bytesOfSize (fromIntegral len)
+  in fn (runDecodeRow decoder <=< comp)
+
+-- | A `FromPG` constraint gives a parser from the binary format of
 -- a PostgreSQL `PGType` into a Haskell `Type`.
-class FromValue (pg :: PGType) (y :: Type) where
-  -- |
-  -- >>> :set -XMultiParamTypeClasses -XGeneralizedNewtypeDeriving -XDerivingStrategies
-  -- >>> newtype Id = Id { getId :: Int16 } deriving newtype (FromValue 'PGint2)
-  fromValue :: proxy pg -> StateT Strict.ByteString (Except Strict.Text) y
-instance FromValue 'PGbool Bool where
-  fromValue _ = devalue bool
-instance FromValue 'PGint2 Int16 where
-  fromValue _ = devalue int
-instance FromValue 'PGint4 Int32 where
-  fromValue _ = devalue int
-instance FromValue 'PGint8 Int64 where
-  fromValue _ = devalue int
-instance FromValue 'PGoid Oid where
-  fromValue _ = devalue $ Oid <$> int
-instance FromValue 'PGfloat4 Float where
-  fromValue _ = devalue float4
-instance FromValue 'PGfloat8 Double where
-  fromValue _ = devalue float8
-instance FromValue 'PGnumeric Scientific where
-  fromValue _ = devalue numeric
-instance FromValue 'PGmoney Money where
-  fromValue _ = devalue $  Money <$> int
-instance FromValue 'PGuuid UUID where
-  fromValue _ = devalue uuid
-instance FromValue 'PGinet (NetAddr IP) where
-  fromValue _ = devalue inet
-instance FromValue ('PGchar 1) Char where
-  fromValue _ = devalue char
-instance FromValue 'PGtext Strict.Text where
-  fromValue _ = devalue text_strict
-instance FromValue 'PGtext Lazy.Text where
-  fromValue _ = devalue text_lazy
-instance FromValue 'PGtext String where
-  fromValue _ = devalue $ Strict.Text.unpack <$> text_strict
-instance FromValue 'PGbytea Strict.ByteString where
-  fromValue _ = devalue bytea_strict
-instance FromValue 'PGbytea Lazy.ByteString where
-  fromValue _ = devalue bytea_lazy
-instance FromValue 'PGdate Day where
-  fromValue _ = devalue date
-instance FromValue 'PGtime TimeOfDay where
-  fromValue _ = devalue time_int
-instance FromValue 'PGtimetz (TimeOfDay, TimeZone) where
-  fromValue _ = devalue timetz_int
-instance FromValue 'PGtimestamp LocalTime where
-  fromValue _ = devalue timestamp_int
-instance FromValue 'PGtimestamptz UTCTime where
-  fromValue _ = devalue timestamptz_int
-instance FromValue 'PGinterval DiffTime where
-  fromValue _ = devalue interval_int
-instance FromValue 'PGjson Aeson.Value where
-  fromValue _ = devalue json_ast
-instance FromValue 'PGjsonb Aeson.Value where
-  fromValue _ = devalue jsonb_ast
-instance Aeson.FromJSON x => FromValue 'PGjson (Json x) where
-  fromValue _ = devalue $ Json <$>
+class IsPG y => FromPG y where
+  {- |
+  >>> :set -XMultiParamTypeClasses -XGeneralizedNewtypeDeriving -XDerivingStrategies -XDerivingVia -XUndecidableInstances
+  >>> import GHC.Generics as GHC
+  >>> :{
+  newtype UserId = UserId { getId :: Int64 }
+    deriving newtype (IsPG, FromPG)
+  :}
+
+  >>> :{
+  data Complex = Complex
+    { real :: Double
+    , imaginary :: Double
+    } deriving stock GHC.Generic
+      deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+      deriving (IsPG, FromPG) via (Composite Complex)
+  :}
+
+  >>> :{
+  data Direction = North | South | East | West
+    deriving stock GHC.Generic
+    deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+    deriving (IsPG, FromPG) via (Enumerated Direction)
+  :}
+
+  -}
+  fromPG :: StateT Strict.ByteString (Except Strict.Text) y
+instance FromPG Bool where
+  fromPG = devalue bool
+instance FromPG Int16 where
+  fromPG = devalue int
+instance FromPG Int32 where
+  fromPG = devalue int
+instance FromPG Int64 where
+  fromPG = devalue int
+instance FromPG Oid where
+  fromPG = devalue $ Oid <$> int
+instance FromPG Float where
+  fromPG = devalue float4
+instance FromPG Double where
+  fromPG = devalue float8
+instance FromPG Scientific where
+  fromPG = devalue numeric
+instance FromPG Money where
+  fromPG = devalue $  Money <$> int
+instance FromPG UUID where
+  fromPG = devalue uuid
+instance FromPG (NetAddr IP) where
+  fromPG = devalue inet
+instance FromPG Char where
+  fromPG = devalue char
+instance FromPG Strict.Text where
+  fromPG = devalue text_strict
+instance FromPG Lazy.Text where
+  fromPG = devalue text_lazy
+instance FromPG String where
+  fromPG = devalue $ Strict.Text.unpack <$> text_strict
+instance FromPG Strict.ByteString where
+  fromPG = devalue bytea_strict
+instance FromPG Lazy.ByteString where
+  fromPG = devalue bytea_lazy
+instance FromPG Day where
+  fromPG = devalue date
+instance FromPG TimeOfDay where
+  fromPG = devalue time_int
+instance FromPG (TimeOfDay, TimeZone) where
+  fromPG = devalue timetz_int
+instance FromPG LocalTime where
+  fromPG = devalue timestamp_int
+instance FromPG UTCTime where
+  fromPG = devalue timestamptz_int
+instance FromPG DiffTime where
+  fromPG = devalue interval_int
+instance FromPG Aeson.Value where
+  fromPG = devalue json_ast
+instance Aeson.FromJSON x => FromPG (Json x) where
+  fromPG = devalue $ Json <$>
     json_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
-instance Aeson.FromJSON x => FromValue 'PGjsonb (Jsonb x) where
-  fromValue _ = devalue $ Jsonb <$>
+instance Aeson.FromJSON x => FromPG (Jsonb x) where
+  fromPG = devalue $ Jsonb <$>
     jsonb_bytes (left Strict.Text.pack . Aeson.eitherDecodeStrict)
-instance FromValue pg y
-  => FromValue ('PGvararray ('NotNull pg)) (VarArray (Vector y)) where
-    fromValue _ =
+instance (FromArray '[] ty y, ty ~ NullPG y)
+  => FromPG (VarArray (Vector y)) where
+    fromPG =
       let
         rep n x = VarArray <$> Vector.replicateM n x
       in
         devalue . array $ dimensionArray rep
-          (fromFixArray @'[] @('NotNull pg))
-instance FromValue pg y
-  => FromValue ('PGvararray ('Null pg)) (VarArray (Vector (Maybe y))) where
-    fromValue _ =
-      let
-        rep n x = VarArray <$> Vector.replicateM n x
-      in
-        devalue . array $ dimensionArray rep
-          (fromFixArray @'[] @('Null pg))
-instance FromValue pg y
-  => FromValue ('PGvararray ('NotNull pg)) (VarArray [y]) where
-    fromValue _ =
+          (fromArray @'[] @(NullPG y))
+instance (FromArray '[] ty y, ty ~ NullPG y)
+  => FromPG (VarArray [y]) where
+    fromPG =
       let
         rep n x = VarArray <$> replicateM n x
       in
         devalue . array $ dimensionArray rep
-          (fromFixArray @'[] @('NotNull pg))
-instance FromValue pg y
-  => FromValue ('PGvararray ('Null pg)) (VarArray [Maybe y]) where
-    fromValue _ =
-      let
-        rep n x = VarArray <$> replicateM n x
-      in
-        devalue . array $ dimensionArray rep
-          (fromFixArray @'[] @('Null pg))
-instance FromFixArray dims ty y
-  => FromValue ('PGfixarray dims ty) (FixArray y) where
-    fromValue _ = devalue $ FixArray <$> array (fromFixArray @dims @ty @y)
+          (fromArray @'[] @(NullPG y))
+instance FromArray dims ty y => FromPG (FixArray y) where
+  fromPG = devalue $ FixArray <$> array (fromArray @dims @ty @y)
 instance
   ( SOP.IsEnumType y
   , SOP.HasDatatypeInfo y
   , LabelsPG y ~ labels
-  ) => FromValue ('PGenum labels) (Enumerated y) where
-    fromValue _ =
+  ) => FromPG (Enumerated y) where
+    fromPG =
       let
         greadConstructor
           :: SOP.All ((~) '[]) xss
@@ -214,32 +265,11 @@ instance
 instance
   ( SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
-  ) => FromValue ('PGcomposite row) (Composite y) where
-    fromValue _ =
-      let
-        -- <number of fields: 4 bytes>
-        -- [for each field]
-        --  <OID of field's type: sizeof(Oid) bytes>
-        --  [if value is NULL]
-        --    <-1: 4 bytes>
-        --  [else]
-        --    <length of value: 4 bytes>
-        --    <value: <length> bytes>
-        --  [end if]
-        -- [end for]
-        comp = valueParser $ do
-          unitOfSize 4
-          SOP.hsequence' $ SOP.hpure $ SOP.Comp $ do
-            unitOfSize 4
-            len :: Int32 <- sized 4 int
-            if len == -1
-              then return (SOP.K Nothing)
-              else SOP.K . Just <$> bytesOfSize (fromIntegral len)
-      in
-        devalue $
-          fmap Composite (fn (runDecodeRow (genericRow @row) <=< comp))
-instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
-  fromValue _ = devalue $ do
+  , RowPG y ~ row
+  ) => FromPG (Composite y) where
+    fromPG = rowValue (Composite <$> genericRow)
+instance FromPG y => FromPG (Range y) where
+  fromPG = devalue $ do
     flag <- byte
     if testBit flag 0 then return Empty else do
       lower <-
@@ -247,67 +277,63 @@ instance FromValue pg y => FromValue ('PGrange pg) (Range y) where
           then return Infinite
           else do
             len <- sized 4 int
-            l <- sized len (value $ fromValue (SOP.Proxy @pg))
+            l <- sized len (revalue fromPG)
             return $ if testBit flag 1 then Closed l else Open l
       upper <-
         if testBit flag 4
           then return Infinite
           else do
             len <- sized 4 int
-            l <- sized len (value $ fromValue (SOP.Proxy @pg))
+            l <- sized len (revalue fromPG)
             return $ if testBit flag 2 then Closed l else Open l
       return $ NonEmpty lower upper
 
--- | A `FromNullValue` constraint lifts the `FromValue` parser
+-- | A `FromValue` constraint lifts the `FromPG` parser
 -- to a decoding of a @NullityType@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
--- `FromNullValue`, just use the provided instances.
-class FromNullValue (ty :: NullType) (y :: Type) where
-  fromNullValue :: Maybe Strict.ByteString -> Either Strict.Text y
-instance FromValue pg y => FromNullValue ('NotNull pg) y where
-  fromNullValue = \case
+-- `FromValue`, just use the provided instances.
+class FromValue (ty :: NullType) (y :: Type) where
+  fromValue :: Maybe Strict.ByteString -> Either Strict.Text y
+instance (FromPG y, pg ~ PG y) => FromValue ('NotNull pg) y where
+  fromValue = \case
     Nothing -> throwError "fromField: saw NULL when expecting NOT NULL"
-    Just bytestring -> valueParser
-      (value $ fromValue (SOP.Proxy @pg)) bytestring
-instance FromValue pg y => FromNullValue ('Null pg) (Maybe y) where
-  fromNullValue = \case
+    Just bytestring -> valueParser (revalue fromPG) bytestring
+instance (FromPG y, pg ~ PG y) => FromValue ('Null pg) (Maybe y) where
+  fromValue = \case
     Nothing -> return Nothing
-    Just bytestring -> fmap Just $
-      valueParser (value $ fromValue (SOP.Proxy @pg)) bytestring
+    Just bytestring -> fmap Just $ valueParser (revalue fromPG) bytestring
 
--- | A `FromField` constraint lifts the `FromValue` parser
+-- | A `FromField` constraint lifts the `FromPG` parser
 -- to a decoding of a @(Symbol, NullityType)@ to a `Type`,
 -- decoding `Null`s to `Maybe`s. You should not define instances for
 -- `FromField`, just use the provided instances.
 class FromField (field :: (Symbol, NullType)) (y :: (Symbol, Type)) where
   fromField :: Maybe Strict.ByteString -> Either Strict.Text (SOP.P y)
-instance (fld0 ~ fld1, FromNullValue ty y)
+instance (FromValue ty y, fld0 ~ fld1)
   => FromField (fld0 ::: ty) (fld1 ::: y) where
-    fromField = fmap SOP.P . fromNullValue @ty
+    fromField = fmap SOP.P . fromValue @ty
 
--- | A `FromFixArray` constraint gives a decoding to a Haskell `Type`
+-- | A `FromArray` constraint gives a decoding to a Haskell `Type`
 -- from the binary format of a PostgreSQL fixed-length array.
 -- You should not define instances for
--- `FromFixArray`, just use the provided instances.
-class FromFixArray (dims :: [Nat]) (ty :: NullType) (y :: Type) where
-  fromFixArray :: Array y
-instance FromValue pg y => FromFixArray '[] ('NotNull pg) y where
-  fromFixArray = valueArray
-    (value $ fromValue (SOP.Proxy @pg))
-instance FromValue pg y => FromFixArray '[] ('Null pg) (Maybe y) where
-  fromFixArray = nullableValueArray
-    (value $ fromValue (SOP.Proxy @pg))
+-- `FromArray`, just use the provided instances.
+class FromArray (dims :: [Nat]) (ty :: NullType) (y :: Type) where
+  fromArray :: Array y
+instance (FromPG y, pg ~ PG y) => FromArray '[] ('NotNull pg) y where
+  fromArray = valueArray (revalue fromPG)
+instance (FromPG y, pg ~ PG y) => FromArray '[] ('Null pg) (Maybe y) where
+  fromArray = nullableValueArray (revalue fromPG)
 instance
   ( SOP.IsProductType product ys
   , Length ys ~ dim
   , SOP.All ((~) y) ys
-  , FromFixArray dims ty y )
-  => FromFixArray (dim ': dims) ty product where
-    fromFixArray =
+  , FromArray dims ty y )
+  => FromArray (dim ': dims) ty product where
+    fromArray =
       let
         rep _ = fmap (SOP.to . SOP.SOP . SOP.Z) . replicateMN
       in
-        dimensionArray rep (fromFixArray @dims @ty @y)
+        dimensionArray rep (fromArray @dims @ty @y)
 
 replicateMN
   :: forall x xs m. (SOP.All ((~) x) xs, Monad m, SOP.SListI xs)
@@ -371,18 +397,18 @@ decodeRow
   :: (SOP.NP (SOP.K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
   -> DecodeRow row y
 decodeRow dec = DecodeRow . ReaderT $ liftEither . dec
-instance {-# OVERLAPPING #-} FromNullValue ty y
+instance {-# OVERLAPPING #-} FromValue ty y
   => IsLabel fld (DecodeRow (fld ::: ty ': row) y) where
     fromLabel = decodeRow $ \(SOP.K b SOP.:* _) ->
-      fromNullValue @ty b
+      fromValue @ty b
 instance {-# OVERLAPPABLE #-} IsLabel fld (DecodeRow row y)
   => IsLabel fld (DecodeRow (field ': row) y) where
     fromLabel = decodeRow $ \(_ SOP.:* bs) ->
       runDecodeRow (fromLabel @fld) bs
-instance {-# OVERLAPPING #-} FromNullValue ty (Maybe y)
+instance {-# OVERLAPPING #-} FromValue ty (Maybe y)
   => IsLabel fld (MaybeT (DecodeRow (fld ::: ty ': row)) y) where
     fromLabel = MaybeT . decodeRow $ \(SOP.K b SOP.:* _) ->
-      fromNullValue @ty b
+      fromValue @ty b
 instance {-# OVERLAPPABLE #-} IsLabel fld (MaybeT (DecodeRow row) y)
   => IsLabel fld (MaybeT (DecodeRow (field ': row)) y) where
     fromLabel = MaybeT . decodeRow $ \(_ SOP.:* bs) ->

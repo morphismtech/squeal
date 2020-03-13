@@ -12,6 +12,7 @@ Squeal expressions are the atoms used to build statements.
     AllowAmbiguousTypes
   , ConstraintKinds
   , DeriveGeneric
+  , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
   , FunctionalDependencies
@@ -60,7 +61,11 @@ module Squeal.PostgreSQL.Expression
 
 import Control.Category
 import Control.DeepSeq
+import Data.Binary.Builder (toLazyByteString)
 import Data.ByteString (ByteString)
+import Data.ByteString.Builder (doubleDec, floatDec, int16Dec, int32Dec, int64Dec)
+import Data.ByteString.Builder.Scientific (scientificBuilder)
+import Data.ByteString.Lazy (toStrict)
 import Data.Function ((&))
 import Data.Semigroup hiding (All)
 import Data.String
@@ -119,7 +124,8 @@ newtype Expression
   (from :: FromType)
   (ty :: NullType)
     = UnsafeExpression { renderExpression :: ByteString }
-    deriving (GHC.Generic,Show,Eq,Ord,NFData)
+    deriving stock (GHC.Generic,Show,Eq,Ord)
+    deriving newtype (NFData)
 instance RenderSQL (Expression lat with grp db params from ty) where
   renderSQL = renderExpression
 
@@ -347,7 +353,7 @@ let
 in
   printSQL (fn 1)
 :}
-"fn"(1)
+"fn"((1 :: int4))
 -}
 function
   :: (Has sch db schema, Has fun schema ('Function ('[x] :=> 'Returns y)))
@@ -355,8 +361,8 @@ function
   -> FunctionDB db x y
 function = unsafeFunction . renderSQL
 
--- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: literal 'a')
--- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, E'a')
+-- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: inline 'a')
+-- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, (E'a' :: char(1)))
 unsafeFunctionN :: SListI xs => ByteString -> xs ---> y
 unsafeFunctionN fun xs = UnsafeExpression $
   fun <> parenthesized (renderCommaSeparated renderSQL xs)
@@ -372,7 +378,7 @@ let
 in
   printSQL (fn (1 *: true))
 :}
-"fn"(1, TRUE)
+"fn"((1 :: int4), TRUE)
 -}
 functionN
   :: ( Has sch db schema
@@ -382,8 +388,8 @@ functionN
   -> FunctionNDB db xs y
 functionN = unsafeFunctionN . renderSQL
 
-instance ty `In` PGNum
-  => Num (Expression lat with grp db params from (null ty)) where
+instance
+  Num (Expression lat with grp db params from (null 'PGint2)) where
     (+) = unsafeBinaryOp "+"
     (-) = unsafeBinaryOp "-"
     (*) = unsafeBinaryOp "*"
@@ -391,21 +397,185 @@ instance ty `In` PGNum
     signum = unsafeFunction "sign"
     fromInteger
       = UnsafeExpression
-      . fromString
-      . show
+      . parenthesized
+      . (<> " :: int2")
+      . toStrict
+      . toLazyByteString
+      . int16Dec
+      . fromInteger
+instance
+  Num (Expression lat with grp db params from (null 'PGint4)) where
+    (+) = unsafeBinaryOp "+"
+    (-) = unsafeBinaryOp "-"
+    (*) = unsafeBinaryOp "*"
+    abs = unsafeFunction "abs"
+    signum = unsafeFunction "sign"
+    fromInteger
+      = UnsafeExpression
+      . parenthesized
+      . (<> " :: int4")
+      . toStrict
+      . toLazyByteString
+      . int32Dec
+      . fromInteger
+instance
+  Num (Expression lat with grp db params from (null 'PGint8)) where
+    (+) = unsafeBinaryOp "+"
+    (-) = unsafeBinaryOp "-"
+    (*) = unsafeBinaryOp "*"
+    abs = unsafeFunction "abs"
+    signum = unsafeFunction "sign"
+    fromInteger x =
+      let
+        y = fromInteger x
+      in
+        if y == minBound
+        -- For some reason Postgres throws an error with
+        -- (-9223372036854775808 :: int8)
+        -- even though it's a valid lowest value for int8
+        then fromInteger (x+1) - 1
+        else UnsafeExpression
+        . parenthesized
+        . (<> " :: int8")
+        . toStrict
+        . toLazyByteString
+        $ int64Dec y
+instance
+  Num (Expression lat with grp db params from (null 'PGfloat4)) where
+    (+) = unsafeBinaryOp "+"
+    (-) = unsafeBinaryOp "-"
+    (*) = unsafeBinaryOp "*"
+    abs = unsafeFunction "abs"
+    signum = unsafeFunction "sign"
+    fromInteger x
+      = UnsafeExpression
+      . parenthesized
+      . (<> " :: float4") $
+      let
+        y = fromInteger x
+        decimal = toStrict . toLazyByteString . floatDec
+      in
+        if isNaN y || isInfinite y
+        then singleQuotedUtf8 (decimal y)
+        else decimal y
+instance
+  Num (Expression lat with grp db params from (null 'PGfloat8)) where
+    (+) = unsafeBinaryOp "+"
+    (-) = unsafeBinaryOp "-"
+    (*) = unsafeBinaryOp "*"
+    abs = unsafeFunction "abs"
+    signum = unsafeFunction "sign"
+    fromInteger x
+      = UnsafeExpression
+      . parenthesized
+      . (<> " :: float8") $
+      let
+        y = fromInteger x
+        decimal = toStrict . toLazyByteString . doubleDec
+      in
+        if isNaN y || isInfinite y
+        then singleQuotedUtf8 (decimal y)
+        else decimal y
+instance
+  Num (Expression lat with grp db params from (null 'PGnumeric)) where
+    (+) = unsafeBinaryOp "+"
+    (-) = unsafeBinaryOp "-"
+    (*) = unsafeBinaryOp "*"
+    abs = unsafeFunction "abs"
+    signum = unsafeFunction "sign"
+    fromInteger
+      = UnsafeExpression
+      . parenthesized
+      . (<> " :: numeric")
+      . toStrict
+      . toLazyByteString
+      . scientificBuilder
+      . fromInteger
 
-instance (ty `In` PGNum, ty `In` PGFloating) => Fractional
-  (Expression lat with grp db params from (null ty)) where
+instance Fractional
+  (Expression lat with grp db params from (null 'PGfloat4)) where
+    (/) = unsafeBinaryOp "/"
+    fromRational x
+      = UnsafeExpression
+      . parenthesized
+      . (<> " :: float4") $
+      let
+        y = fromRational x
+        decimal = toStrict . toLazyByteString . floatDec
+      in
+        if isNaN y || isInfinite y
+        then singleQuotedUtf8 (decimal y)
+        else decimal y
+instance Fractional
+  (Expression lat with grp db params from (null 'PGfloat8)) where
+    (/) = unsafeBinaryOp "/"
+    fromRational x
+      = UnsafeExpression
+      . parenthesized
+      . (<> " :: float8") $
+      let
+        y = fromRational x
+        decimal = toStrict . toLazyByteString . doubleDec
+      in
+        if isNaN y || isInfinite y
+        then singleQuotedUtf8 (decimal y)
+        else decimal y
+instance Fractional
+  (Expression lat with grp db params from (null 'PGnumeric)) where
     (/) = unsafeBinaryOp "/"
     fromRational
       = UnsafeExpression
-      . fromString
-      . ($ "")
-      . showFFloat Nothing
-      . fromRat @Double
+      . parenthesized
+      . (<> " :: numeric")
+      . toStrict
+      . toLazyByteString
+      . scientificBuilder
+      . fromRational
 
-instance (ty `In` PGNum, ty `In` PGFloating) => Floating
-  (Expression lat with grp db params from (null ty)) where
+instance Floating
+  (Expression lat with grp db params from (null 'PGfloat4)) where
+    pi = UnsafeExpression "pi()"
+    exp = unsafeFunction "exp"
+    log = unsafeFunction "ln"
+    sqrt = unsafeFunction "sqrt"
+    b ** x = UnsafeExpression $
+      "power(" <> renderSQL b <> ", " <> renderSQL x <> ")"
+    logBase b y = log y / log b
+    sin = unsafeFunction "sin"
+    cos = unsafeFunction "cos"
+    tan = unsafeFunction "tan"
+    asin = unsafeFunction "asin"
+    acos = unsafeFunction "acos"
+    atan = unsafeFunction "atan"
+    sinh x = (exp x - exp (-x)) / 2
+    cosh x = (exp x + exp (-x)) / 2
+    tanh x = sinh x / cosh x
+    asinh x = log (x + sqrt (x*x + 1))
+    acosh x = log (x + sqrt (x*x - 1))
+    atanh x = log ((1 + x) / (1 - x)) / 2
+instance Floating
+  (Expression lat with grp db params from (null 'PGfloat8)) where
+    pi = UnsafeExpression "pi()"
+    exp = unsafeFunction "exp"
+    log = unsafeFunction "ln"
+    sqrt = unsafeFunction "sqrt"
+    b ** x = UnsafeExpression $
+      "power(" <> renderSQL b <> ", " <> renderSQL x <> ")"
+    logBase b y = log y / log b
+    sin = unsafeFunction "sin"
+    cos = unsafeFunction "cos"
+    tan = unsafeFunction "tan"
+    asin = unsafeFunction "asin"
+    acos = unsafeFunction "acos"
+    atan = unsafeFunction "atan"
+    sinh x = (exp x - exp (-x)) / 2
+    cosh x = (exp x + exp (-x)) / 2
+    tanh x = sinh x / cosh x
+    asinh x = log (x + sqrt (x*x + 1))
+    acosh x = log (x + sqrt (x*x - 1))
+    atanh x = log ((1 + x) / (1 - x)) / 2
+instance Floating
+  (Expression lat with grp db params from (null 'PGnumeric)) where
     pi = UnsafeExpression "pi()"
     exp = unsafeFunction "exp"
     log = unsafeFunction "ln"
@@ -446,16 +616,25 @@ instance PGIntersect ('PGrange ty)
 
 instance IsString
   (Expression lat with grp db params from (null 'PGtext)) where
-    fromString str = UnsafeExpression $
-      "E\'" <> fromString (escape =<< str) <> "\'"
+    fromString
+      = UnsafeExpression
+      . parenthesized
+      . (<> " :: text")
+      . escapeQuotedString
 instance IsString
   (Expression lat with grp db params from (null 'PGtsvector)) where
-    fromString str = UnsafeExpression . parenthesized . (<> " :: tsvector") $
-      "E\'" <> fromString (escape =<< str) <> "\'"
+    fromString
+      = UnsafeExpression
+      . parenthesized
+      . (<> " :: tsvector")
+      . escapeQuotedString
 instance IsString
   (Expression lat with grp db params from (null 'PGtsquery)) where
-    fromString str = UnsafeExpression . parenthesized . (<> " :: tsquery") $
-      "E\'" <> fromString (escape =<< str) <> "\'"
+    fromString
+      = UnsafeExpression
+      . parenthesized
+      . (<> " :: tsquery")
+      . escapeQuotedString
 
 instance Semigroup
   (Expression lat with grp db params from (null ('PGvararray ty))) where
