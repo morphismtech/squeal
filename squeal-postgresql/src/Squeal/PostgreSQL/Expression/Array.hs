@@ -77,9 +77,9 @@ ARRAY[NULL, FALSE, TRUE]
 >>> :type array1 (null_ :* false *: true)
 array1 (null_ :* false *: true)
   :: Expression
+       grp
        lat
        with
-       grp
        db
        params
        from
@@ -101,9 +101,9 @@ ARRAY[[NULL, FALSE, TRUE], [FALSE, NULL, TRUE]]
 >>> :type array2 ((null_ :* false *: true) *: (false :* null_ *: true))
 array2 ((null_ :* false *: true) *: (false :* null_ *: true))
   :: Expression
+       grp
        lat
        with
-       grp
        db
        params
        from

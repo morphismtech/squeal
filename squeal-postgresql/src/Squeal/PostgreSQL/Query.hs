@@ -767,7 +767,6 @@ instance RenderSQL (TableExpression grp lat with db params from) where
       where
         renderWheres = \case
           [] -> ""
-          wh:[] -> " WHERE" <+> renderSQL wh
           wh:whs -> " WHERE" <+> renderSQL (foldr (.&&) wh whs)
         renderLimits = \case
           [] -> ""
