@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.Alias
+Module: Squeal.PostgreSQL.Type.Alias
 Description: Aliases
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -33,7 +33,7 @@ Squeal can reference aliases by prepending with a @#@.
   , UndecidableSuperClasses
 #-}
 
-module Squeal.PostgreSQL.Alias
+module Squeal.PostgreSQL.Type.Alias
   ( -- * Aliases
     (:::)
   , Alias (..)
@@ -63,7 +63,7 @@ import GHC.TypeLits
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
-import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Render
 
 -- $setup
@@ -222,8 +222,8 @@ instance IsQualified qualifier alias (Alias qualifier, Alias alias) where
   (!) = (,)
 
 {-| `QualifiedAlias`es enables multi-schema support by allowing a reference
-to a `Squeal.PostgreSQL.Schema.Table`, `Squeal.PostgreSQL.Schema.Typedef`
-or `Squeal.PostgreSQL.Schema.View` to be qualified by their schemas. By default,
+to a `Squeal.PostgreSQL.Type.Schema.Table`, `Squeal.PostgreSQL.Type.Schema.Typedef`
+or `Squeal.PostgreSQL.Type.Schema.View` to be qualified by their schemas. By default,
 a qualifier of @public@ is provided.
 
 >>> :{

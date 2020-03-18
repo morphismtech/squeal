@@ -51,11 +51,11 @@ import GHC.TypeLits
 
 import qualified GHC.Generics as GHC
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Expression.Sort
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

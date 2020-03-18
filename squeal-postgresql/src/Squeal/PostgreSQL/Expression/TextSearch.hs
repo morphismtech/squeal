@@ -41,8 +41,8 @@ module Squeal.PostgreSQL.Expression.TextSearch
   ) where
 
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.List
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.List
+import Squeal.PostgreSQL.Type.Schema
 
 -- | `Squeal.PostgreSQL.Expression.Type.tsvector` matches tsquery ?
 (@@) :: Operator (null 'PGtsvector) (null 'PGtsquery) ('Null 'PGbool)

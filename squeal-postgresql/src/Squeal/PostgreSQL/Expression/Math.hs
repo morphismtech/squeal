@@ -25,8 +25,8 @@ module Squeal.PostgreSQL.Expression.Math
   ) where
 
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.List
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.List
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

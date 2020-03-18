@@ -57,7 +57,7 @@ import Data.Time
 import UnliftIO (MonadUnliftIO (..))
 import UnliftIO.Pool (Pool, createPool, destroyAllResources, withResource)
 
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 import Squeal.PostgreSQL.PQ (PQ (..))
 import Squeal.PostgreSQL.PQ.Connection
 

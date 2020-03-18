@@ -24,7 +24,7 @@ module Squeal.PostgreSQL.Expression.Text
   ) where
 
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

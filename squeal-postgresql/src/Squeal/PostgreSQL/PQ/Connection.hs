@@ -27,7 +27,7 @@ module Squeal.PostgreSQL.PQ.Connection
 import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
 
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 import qualified Generics.SOP as SOP
 import qualified Database.PostgreSQL.LibPQ as LibPQ

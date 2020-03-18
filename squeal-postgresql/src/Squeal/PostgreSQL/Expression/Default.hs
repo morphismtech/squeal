@@ -31,7 +31,7 @@ import Data.Kind
 import Generics.SOP
 
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- | `Optional` is either `Default` or `Set`ting of a value,
 -- parameterized by an appropriate `Optionality`.

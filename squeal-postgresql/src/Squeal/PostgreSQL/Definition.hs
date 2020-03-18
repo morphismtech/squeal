@@ -47,7 +47,7 @@ import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

@@ -30,7 +30,7 @@ module Squeal.PostgreSQL.Expression.Logic
 
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- | A `Condition` is an `Expression`, which can evaluate
 -- to `true`, `false` or `Squeal.PostgreSQL.Null.null_`. This is because SQL uses

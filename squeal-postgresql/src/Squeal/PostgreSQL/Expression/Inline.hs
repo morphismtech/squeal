@@ -60,7 +60,7 @@ import qualified Data.Text.Lazy as Lazy.Text
 import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Array
 import Squeal.PostgreSQL.Expression.Default
@@ -70,10 +70,10 @@ import Squeal.PostgreSQL.Expression.Null
 import Squeal.PostgreSQL.Expression.Range
 import Squeal.PostgreSQL.Expression.Time
 import Squeal.PostgreSQL.Expression.Type
-import Squeal.PostgreSQL.List
-import Squeal.PostgreSQL.PG
+import Squeal.PostgreSQL.Type.List
+import Squeal.PostgreSQL.Type.PG
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 {- |
 The `Inline` class allows embedding a Haskell value directly

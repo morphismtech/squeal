@@ -77,11 +77,11 @@ import qualified Data.Vector as Vector
 import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression.Range
-import Squeal.PostgreSQL.Schema
-import Squeal.PostgreSQL.List
-import Squeal.PostgreSQL.PG
+import Squeal.PostgreSQL.Type.Schema
+import Squeal.PostgreSQL.Type.List
+import Squeal.PostgreSQL.Type.PG
 
 -- | Converts a `Value` type from @postgresql-binary@ for use in
 -- the `fromPG` method of `FromPG`.

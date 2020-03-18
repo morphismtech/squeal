@@ -35,7 +35,7 @@ import GHC.TypeLits
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

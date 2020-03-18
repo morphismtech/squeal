@@ -44,9 +44,9 @@ import qualified Data.ByteString as ByteString
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified Generics.SOP as SOP
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.PQ.Exception
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

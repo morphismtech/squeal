@@ -1,11 +1,11 @@
 {-|
-Module: Squeal.PostgreSQL.Schema
+Module: Squeal.PostgreSQL.Type.Schema
 Description: Embedding of PostgreSQL type and alias system
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-`Squeal.PostgreSQL.Schema` provides a type-level DSL for kinds of Postgres types,
+`Squeal.PostgreSQL.Type.Schema` provides a type-level DSL for kinds of Postgres types,
 tables, schema, constraints, aliases, enumerated labels, and groupings.
 It also defines useful type families to operate on these. Finally,
 it defines an embedding of Haskell types into Postgres types.
@@ -34,7 +34,7 @@ it defines an embedding of Haskell types into Postgres types.
   , UndecidableSuperClasses
 #-}
 
-module Squeal.PostgreSQL.Schema
+module Squeal.PostgreSQL.Type.Schema
   ( -- * Postgres Type
     PGType (..)
   , NullType (..)
@@ -110,8 +110,8 @@ import Generics.SOP
 import GHC.TypeLits
 import Prelude hiding (id, (.))
 
-import Squeal.PostgreSQL.Alias
-import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.Type.Alias
+import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Render
 
 -- $setup

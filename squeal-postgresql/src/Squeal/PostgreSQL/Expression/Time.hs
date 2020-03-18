@@ -47,7 +47,7 @@ import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

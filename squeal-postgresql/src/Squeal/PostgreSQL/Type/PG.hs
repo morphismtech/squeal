@@ -1,11 +1,11 @@
 {-|
-Module: Squeal.PostgreSQL.PG
+Module: Squeal.PostgreSQL.Type.PG
 Description: Embedding of Haskell types into Postgres's type system
 Copyright: (c) Eitan Chatav, 2010
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-`Squeal.PostgreSQL.PG` provides type families for turning Haskell
+`Squeal.PostgreSQL.Type.PG` provides type families for turning Haskell
 `Type`s into corresponding Postgres types.
 -}
 {-# LANGUAGE
@@ -34,7 +34,7 @@ Stability: experimental
   , UndecidableSuperClasses
 #-}
 
-module Squeal.PostgreSQL.PG
+module Squeal.PostgreSQL.Type.PG
   ( -- * PG
     IsPG (..)
   , NullPG
@@ -86,11 +86,12 @@ import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
 import qualified Generics.SOP.Type.Metadata as Type
 
-import Squeal.PostgreSQL.Alias
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type
+import Squeal.PostgreSQL.Type.Alias
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
--- >>> import Squeal.PostgreSQL.Schema
+-- >>> import Squeal.PostgreSQL
 -- >>> import Data.Text (Text)
 
 {- | The `PG` type family embeds a subset of Haskell types
@@ -155,6 +156,28 @@ instance IsPG Value where type PG Value = 'PGjson
 instance IsPG (VarChar n) where type PG (VarChar n) = 'PGvarchar n
 -- | `PGvarchar`
 instance IsPG (FixChar n) where type PG (FixChar n) = 'PGchar n
+
+-- | `PGmoney`
+instance IsPG Money where type PG Money = 'PGmoney
+-- | `PGjson`
+instance IsPG (Json hask) where type PG (Json hask) = 'PGjson
+-- | `PGjsonb`
+instance IsPG (Jsonb hask) where type PG (Jsonb hask) = 'PGjsonb
+-- | `PGcomposite` @(@`RowPG` @hask)@
+instance IsPG (Composite hask) where
+  type PG (Composite hask) = 'PGcomposite (RowPG hask)
+-- | `PGenum` @(@`LabelsPG` @hask)@
+instance IsPG (Enumerated hask) where
+  type PG (Enumerated hask) = 'PGenum (LabelsPG hask)
+-- | `PGvararray` @(@`NullPG` @x)@
+instance IsPG (VarArray (Vector x)) where
+  type PG (VarArray (Vector x)) = 'PGvararray (NullPG x)
+-- | `PGvararray` @(@`NullPG` @x)@
+instance IsPG (VarArray [x]) where
+  type PG (VarArray [x]) = 'PGvararray (NullPG x)
+-- | `PGfixarray` @(@`DimPG` @hask) (@`FixPG` @hask)@
+instance IsPG (FixArray hask) where
+  type PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
 
 {-| The `LabelsPG` type family calculates the constructors of a
 Haskell enum type.
@@ -309,117 +332,3 @@ type family FixPG (hask :: Type) :: NullType where
   FixPG (x,x,x,x,x,x,x,x,x,x) = FixPG x
   FixPG (x,x,x,x,x,x,x,x,x,x,x) = FixPG x
   FixPG x = NullPG x
-
-{- | The `Money` newtype stores a monetary value in terms
-of the number of cents, i.e. @$2,000.20@ would be expressed as
-@Money { cents = 200020 }@.
--}
-newtype Money = Money { cents :: Int64 }
-  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
-  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
--- | `PGmoney`
-instance IsPG Money where type PG Money = 'PGmoney
-
-{- | The `Json` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGjson`.
--}
-newtype Json hask = Json {getJson :: hask}
-  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
-  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
--- | `PGjson`
-instance IsPG (Json hask) where type PG (Json hask) = 'PGjson
-
-{- | The `Jsonb` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGjsonb`.
--}
-newtype Jsonb hask = Jsonb {getJsonb :: hask}
-  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
-  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
--- | `PGjsonb`
-instance IsPG (Jsonb hask) where type PG (Jsonb hask) = 'PGjsonb
-
-{- | The `Composite` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGcomposite`.
--}
-newtype Composite record = Composite {getComposite :: record}
-  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
-  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
--- | `PGcomposite` @(@`RowPG` @hask)@
-instance IsPG (Composite hask) where
-  type PG (Composite hask) = 'PGcomposite (RowPG hask)
-
-{- | The `Enumerated` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGenum`.
--}
-newtype Enumerated enum = Enumerated {getEnumerated :: enum}
-  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
-  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
--- | `PGenum` @(@`LabelsPG` @hask)@
-instance IsPG (Enumerated hask) where
-  type PG (Enumerated hask) = 'PGenum (LabelsPG hask)
-
-{- | The `VarArray` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGvararray`.
-
->>> :kind! PG (VarArray (Vector Double))
-PG (VarArray (Vector Double)) :: PGType
-= 'PGvararray ('NotNull 'PGfloat8)
--}
-newtype VarArray arr
-  = VarArray {getVarArray :: arr}
-  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
-  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
-instance IsPG (VarArray (Vector x)) where
-  type PG (VarArray (Vector x)) = 'PGvararray (NullPG x)
-instance IsPG (VarArray [x]) where
-  type PG (VarArray [x]) = 'PGvararray (NullPG x)
-
-{- | The `FixArray` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGfixarray`.
-
->>> :kind! PG (FixArray ((Double, Double), (Double, Double)))
-PG (FixArray ((Double, Double), (Double, Double))) :: PGType
-= 'PGfixarray '[2, 2] ('NotNull 'PGfloat8)
--}
-newtype FixArray arr = FixArray {getFixArray :: arr}
-  deriving stock (Eq, Ord, Show, Read, GHC.Generic)
-  deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
--- | `PGfixarray` @(@`DimPG` @hask) (@`FixPG` @hask)@
-instance IsPG (FixArray hask) where
-  type PG (FixArray hask) = 'PGfixarray (DimPG hask) (FixPG hask)
-
--- | `Only` is a 1-tuple type, useful for encoding or decoding a singleton
-newtype Only x = Only { fromOnly :: x }
-  deriving (Functor,Foldable,Traversable,Eq,Ord,Read,Show,GHC.Generic)
-instance SOP.Generic (Only x)
-instance SOP.HasDatatypeInfo (Only x)
-
--- | Variable-length text type with limit
-newtype VarChar (n :: Nat) = VarChar Strict.Text
-  deriving (Eq,Ord,Read,Show)
-
--- | Constructor for `VarChar`
-varChar :: forall  n . KnownNat n => Strict.Text -> Maybe (VarChar n)
-varChar t =
-  if Strict.Text.length t <= fromIntegral (natVal @n Proxy)
-  then Just $ VarChar t
-  else Nothing
-
--- | Access the `Strict.Text` of a `VarChar`
-getVarChar :: VarChar n -> Strict.Text
-getVarChar (VarChar t) = t
-
--- | Fixed-length, blank padded
-newtype FixChar (n :: Nat) = FixChar Strict.Text
-  deriving (Eq,Ord,Read,Show)
-
--- | Constructor for `FixChar`
-fixChar :: forall  n . KnownNat n => Strict.Text -> Maybe (FixChar n)
-fixChar t =
-  if Strict.Text.length t == fromIntegral (natVal @n Proxy)
-  then Just $ FixChar t
-  else Nothing
-
--- | Access the `Strict.Text` of a `FixChar`
-getFixChar :: FixChar n -> Strict.Text
-getFixChar (FixChar t) = t

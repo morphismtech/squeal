@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.List
+Module: Squeal.PostgreSQL.Type.List
 Description: List related types and functions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -27,7 +27,7 @@ lists and type aligned lists.
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.List
+module Squeal.PostgreSQL.Type.List
   ( -- * Heterogeneous List
     SOP.NP (..)
   , (*:)

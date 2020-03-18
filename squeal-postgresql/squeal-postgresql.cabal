@@ -22,7 +22,6 @@ library
   hs-source-dirs: src
   exposed-modules:
     Squeal.PostgreSQL
-    Squeal.PostgreSQL.Alias
     Squeal.PostgreSQL.Definition
     Squeal.PostgreSQL.Definition.Constraint
     Squeal.PostgreSQL.Definition.Function
@@ -52,9 +51,7 @@ library
     Squeal.PostgreSQL.Expression.Time
     Squeal.PostgreSQL.Expression.Type
     Squeal.PostgreSQL.Expression.Window
-    Squeal.PostgreSQL.List
     Squeal.PostgreSQL.Manipulation
-    Squeal.PostgreSQL.PG
     Squeal.PostgreSQL.PQ
     Squeal.PostgreSQL.PQ.Connection
     Squeal.PostgreSQL.PQ.Decode
@@ -70,7 +67,11 @@ library
     Squeal.PostgreSQL.PQ.Transaction
     Squeal.PostgreSQL.Render
     Squeal.PostgreSQL.Query
-    Squeal.PostgreSQL.Schema
+    Squeal.PostgreSQL.Type
+    Squeal.PostgreSQL.Type.Alias
+    Squeal.PostgreSQL.Type.List
+    Squeal.PostgreSQL.Type.PG
+    Squeal.PostgreSQL.Type.Schema
   default-language: Haskell2010
   ghc-options: -Wall
   build-depends:

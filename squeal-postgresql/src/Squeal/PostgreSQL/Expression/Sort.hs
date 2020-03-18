@@ -27,7 +27,7 @@ module Squeal.PostgreSQL.Expression.Sort
 
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- | `SortExpression`s are used by `orderBy` to optionally sort the results
 -- of a `Squeal.PostgreSQL.Query.Query`. `Asc` or `Desc`

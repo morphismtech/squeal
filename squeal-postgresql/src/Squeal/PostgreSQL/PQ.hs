@@ -65,7 +65,7 @@ import Squeal.PostgreSQL.PQ.Oid
 import Squeal.PostgreSQL.PQ.Monad
 import Squeal.PostgreSQL.PQ.Result
 import Squeal.PostgreSQL.PQ.Statement
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- | We keep track of the schema via an Atkey indexed state monad transformer,
 -- `PQ`.

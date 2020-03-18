@@ -183,7 +183,7 @@ import qualified Data.Text.IO as Text (putStrLn)
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Definition.Constraint
 import Squeal.PostgreSQL.Definition.Table
@@ -191,7 +191,7 @@ import Squeal.PostgreSQL.Expression.Comparison
 import Squeal.PostgreSQL.Expression.Parameter
 import Squeal.PostgreSQL.Expression.Time
 import Squeal.PostgreSQL.Expression.Type
-import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.PQ.Decode
@@ -202,7 +202,7 @@ import Squeal.PostgreSQL.PQ.Result
 import Squeal.PostgreSQL.PQ.Statement
 import Squeal.PostgreSQL.PQ.Transaction
 import Squeal.PostgreSQL.Query
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- | A `Migration` consists of a name and a migration definition.
 data Migration def db0 db1 = Migration
