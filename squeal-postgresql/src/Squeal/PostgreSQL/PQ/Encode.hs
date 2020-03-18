@@ -70,11 +70,12 @@ import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
 
-import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression.Range
+import Squeal.PostgreSQL.PQ.Oid
+import Squeal.PostgreSQL.Type
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Type.PG
-import Squeal.PostgreSQL.PQ.Oid
 import Squeal.PostgreSQL.Type.Schema
 
 -- $setup

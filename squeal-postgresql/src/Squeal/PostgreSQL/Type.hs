@@ -46,30 +46,17 @@ module Squeal.PostgreSQL.Type
   , Only (..)
   ) where
 
-import Data.Aeson (Value)
-import Data.Kind (Type)
 import Data.Proxy
-import Data.Int (Int16, Int32, Int64)
-import Data.Scientific (Scientific)
-import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime)
-import Data.Vector (Vector)
-import Data.UUID.Types (UUID)
+import Data.Int (Int64)
 import GHC.TypeLits
-import Network.IP.Addr (NetAddr, IP)
 
-import qualified Data.ByteString.Lazy as Lazy (ByteString)
-import qualified Data.ByteString as Strict (ByteString)
-import qualified Data.Text.Lazy as Lazy (Text)
 import qualified Data.Text as Strict (Text)
 import qualified Data.Text as Strict.Text
-import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
-import qualified Generics.SOP.Record as SOP
-import qualified Generics.SOP.Type.Metadata as Type
 
-import Squeal.PostgreSQL.Type.Alias
-import Squeal.PostgreSQL.Type.Schema
+-- $setup
+-- >>> import Squeal.PostgreSQL
 
 {- | The `Money` newtype stores a monetary value in terms
 of the number of cents, i.e. @$2,000.20@ would be expressed as
@@ -110,6 +97,7 @@ newtype Enumerated enum = Enumerated {getEnumerated :: enum}
 {- | The `VarArray` newtype is an indication that the Haskell
 type it's applied to should be stored as a `PGvararray`.
 
+>>> import Data.Vector
 >>> :kind! PG (VarArray (Vector Double))
 PG (VarArray (Vector Double)) :: PGType
 = 'PGvararray ('NotNull 'PGfloat8)

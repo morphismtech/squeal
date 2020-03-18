@@ -44,8 +44,6 @@ module Squeal.PostgreSQL.Manipulation
   , deleteFrom
   , deleteFrom_
     -- * Clauses
-  , Optional (..)
-  , mapOptional
   , QueryClause (..)
   , pattern Values_
   , inlineValues

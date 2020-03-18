@@ -196,7 +196,6 @@ module Squeal.PostgreSQL
   , printSQL
   ) where
 
-import Squeal.PostgreSQL.Type.Alias as X
 import Squeal.PostgreSQL.Definition as X
 import Squeal.PostgreSQL.Definition.Constraint as X
 import Squeal.PostgreSQL.Definition.Function as X
@@ -226,9 +225,7 @@ import Squeal.PostgreSQL.Expression.TextSearch as X
 import Squeal.PostgreSQL.Expression.Time as X
 import Squeal.PostgreSQL.Expression.Type as X
 import Squeal.PostgreSQL.Expression.Window as X
-import Squeal.PostgreSQL.Type.List as X
 import Squeal.PostgreSQL.Manipulation as X
-import Squeal.PostgreSQL.Type.PG as X
 import Squeal.PostgreSQL.PQ as X
 import Squeal.PostgreSQL.PQ.Connection as X
 import Squeal.PostgreSQL.PQ.Decode as X
@@ -244,4 +241,8 @@ import Squeal.PostgreSQL.PQ.Statement as X
 import Squeal.PostgreSQL.PQ.Transaction as X
 import Squeal.PostgreSQL.Query as X
 import Squeal.PostgreSQL.Render (RenderSQL(..), printSQL)
+import Squeal.PostgreSQL.Type as X
+import Squeal.PostgreSQL.Type.Alias as X
+import Squeal.PostgreSQL.Type.List as X
+import Squeal.PostgreSQL.Type.PG as X
 import Squeal.PostgreSQL.Type.Schema as X
