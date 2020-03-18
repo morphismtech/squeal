@@ -19,6 +19,7 @@ Window functions and definitions
   , LambdaCase
   , MultiParamTypeClasses
   , OverloadedStrings
+  , PatternSynonyms
   , RankNTypes
   , KindSignatures
 #-}
@@ -30,6 +31,9 @@ module Squeal.PostgreSQL.Expression.Window
     -- * Window Function
     -- ** Types
   , WindowFunction (..)
+  , WindowArg (..)
+  , pattern Window
+  , pattern Windows
   , WinFun0
   , WinFun1
   , WinFunN
@@ -50,7 +54,7 @@ module Squeal.PostgreSQL.Expression.Window
   ) where
 
 import Control.DeepSeq
-import Data.ByteString
+import Data.ByteString (ByteString)
 
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
@@ -58,60 +62,58 @@ import qualified Generics.SOP as SOP
 import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Aggregate
+import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Sort
 import Squeal.PostgreSQL.List
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Schema
 
-instance Aggregate
-  (Expression lat with grp db params from)
-  (NP (Expression lat with grp db params from))
-  (WindowFunction lat with grp db params from) where
-    countStar = UnsafeWindowFunction "count(*)"
-    count = unsafeWindowFunction1 "count"
-    sum_ = unsafeWindowFunction1 "sum"
-    arrayAgg = unsafeWindowFunction1 "array_agg"
-    jsonAgg = unsafeWindowFunction1 "json_agg"
-    jsonbAgg = unsafeWindowFunction1 "jsonb_agg"
-    bitAnd = unsafeWindowFunction1 "bit_and"
-    bitOr = unsafeWindowFunction1 "bit_or"
-    boolAnd = unsafeWindowFunction1 "bool_and"
-    boolOr = unsafeWindowFunction1 "bool_or"
-    every = unsafeWindowFunction1 "every"
-    max_ = unsafeWindowFunction1 "max"
-    min_ = unsafeWindowFunction1 "min"
-    avg = unsafeWindowFunction1 "avg"
-    corr = unsafeWindowFunctionN "corr"
-    covarPop = unsafeWindowFunctionN "covar_pop"
-    covarSamp = unsafeWindowFunctionN "covar_samp"
-    regrAvgX = unsafeWindowFunctionN "regr_avgx"
-    regrAvgY = unsafeWindowFunctionN "regr_avgy"
-    regrCount = unsafeWindowFunctionN "regr_count"
-    regrIntercept = unsafeWindowFunctionN "regr_intercept"
-    regrR2 = unsafeWindowFunctionN "regr_r2"
-    regrSlope = unsafeWindowFunctionN "regr_slope"
-    regrSxx = unsafeWindowFunctionN "regr_sxx"
-    regrSxy = unsafeWindowFunctionN "regr_sxy"
-    regrSyy = unsafeWindowFunctionN "regr_syy"
-    stddev = unsafeWindowFunction1 "stddev"
-    stddevPop = unsafeWindowFunction1 "stddev_pop"
-    stddevSamp = unsafeWindowFunction1 "stddev_samp"
-    variance = unsafeWindowFunction1 "variance"
-    varPop = unsafeWindowFunction1 "var_pop"
-    varSamp = unsafeWindowFunction1 "var_samp"
+instance Aggregate (WindowArg grp) (WindowFunction grp) where
+  countStar = UnsafeWindowFunction "count(*)"
+  count = unsafeWindowFunction1 "count"
+  sum_ = unsafeWindowFunction1 "sum"
+  arrayAgg = unsafeWindowFunction1 "array_agg"
+  jsonAgg = unsafeWindowFunction1 "json_agg"
+  jsonbAgg = unsafeWindowFunction1 "jsonb_agg"
+  bitAnd = unsafeWindowFunction1 "bit_and"
+  bitOr = unsafeWindowFunction1 "bit_or"
+  boolAnd = unsafeWindowFunction1 "bool_and"
+  boolOr = unsafeWindowFunction1 "bool_or"
+  every = unsafeWindowFunction1 "every"
+  max_ = unsafeWindowFunction1 "max"
+  min_ = unsafeWindowFunction1 "min"
+  avg = unsafeWindowFunction1 "avg"
+  corr = unsafeWindowFunctionN "corr"
+  covarPop = unsafeWindowFunctionN "covar_pop"
+  covarSamp = unsafeWindowFunctionN "covar_samp"
+  regrAvgX = unsafeWindowFunctionN "regr_avgx"
+  regrAvgY = unsafeWindowFunctionN "regr_avgy"
+  regrCount = unsafeWindowFunctionN "regr_count"
+  regrIntercept = unsafeWindowFunctionN "regr_intercept"
+  regrR2 = unsafeWindowFunctionN "regr_r2"
+  regrSlope = unsafeWindowFunctionN "regr_slope"
+  regrSxx = unsafeWindowFunctionN "regr_sxx"
+  regrSxy = unsafeWindowFunctionN "regr_sxy"
+  regrSyy = unsafeWindowFunctionN "regr_syy"
+  stddev = unsafeWindowFunction1 "stddev"
+  stddevPop = unsafeWindowFunction1 "stddev_pop"
+  stddevSamp = unsafeWindowFunction1 "stddev_samp"
+  variance = unsafeWindowFunction1 "variance"
+  varPop = unsafeWindowFunction1 "var_pop"
+  varSamp = unsafeWindowFunction1 "var_samp"
 
 -- | A `WindowDefinition` is a set of table rows that are somehow related
 -- to the current row
-data WindowDefinition lat with grp db params from where
+data WindowDefinition grp lat with db params from where
   WindowDefinition
     :: SOP.SListI bys
-    => NP (Expression lat with grp db params from) bys
+    => NP (Expression grp lat with db params from) bys
        -- ^ `partitionBy` clause
-    -> [SortExpression lat with grp db params from]
+    -> [SortExpression grp lat with db params from]
        -- ^ `Squeal.PostgreSQL.Expression.Sort.orderBy` clause
-    -> WindowDefinition lat with grp db params from
+    -> WindowDefinition grp lat with db params from
 
-instance OrderBy WindowDefinition where
+instance OrderBy (WindowDefinition grp) grp where
   orderBy sortsR (WindowDefinition parts sortsL)
     = WindowDefinition parts (sortsL ++ sortsR)
 
@@ -131,8 +133,8 @@ the same partition as the current row.
 -}
 partitionBy
   :: SOP.SListI bys
-  => NP (Expression lat with grp db params from) bys -- ^ partitions
-  -> WindowDefinition lat with grp db params from
+  => NP (Expression grp lat with db params from) bys -- ^ partitions
+  -> WindowDefinition grp lat with db params from
 partitionBy bys = WindowDefinition bys []
 
 {- |
@@ -146,9 +148,9 @@ Behind the scenes, the window function is able to access more than
 just the current row of the query result.
 -}
 newtype WindowFunction
+  (grp :: Grouping)
   (lat :: FromType)
   (with :: FromType)
-  (grp :: Grouping)
   (db :: SchemasType)
   (params :: [NullType])
   (from :: FromType)
@@ -157,25 +159,67 @@ newtype WindowFunction
     deriving stock (GHC.Generic,Show,Eq,Ord)
     deriving newtype (NFData)
 
-instance RenderSQL (WindowFunction lat with grp db params from ty) where
+{- |
+`WindowArg`s are used for the input of `WindowFunction`s.
+-}
+data WindowArg
+  (grp :: Grouping)
+  (args :: [NullType])
+  (lat :: FromType)
+  (with :: FromType)
+  (db :: SchemasType)
+  (params :: [NullType])
+  (from :: FromType)
+    = WindowArg
+    { windowArgs :: NP (Expression grp lat with db params from) args
+    , windowFilter :: [Condition grp lat with db params from]
+    } deriving stock (GHC.Generic)
+
+instance SOP.SListI args
+  => RenderSQL (WindowArg grp args lat with db params from) where
+    renderSQL (WindowArg args filters) =
+      parenthesized (renderCommaSeparated renderSQL args)
+      & renderFilters filters
+      where
+        renderFilter wh = "FILTER" <+> parenthesized ("WHERE" <+> wh)
+        renderFilters = \case
+          [] -> id
+          wh:whs -> (<+> renderFilter (renderSQL (foldr (.&&) wh whs)))
+
+instance FilterWhere (WindowArg grp) grp where
+  filterWhere wh (WindowArg args filters) = WindowArg args (wh : filters)
+
+-- | `Window` invokes a `WindowFunction` on a single argument.
+pattern Window
+  :: Expression grp lat with db params from arg
+  -> WindowArg grp '[arg] lat with db params from
+pattern Window x = Windows (x :* Nil)
+
+-- | `Windows` invokes a `WindowFunction` on multiple argument.
+pattern Windows
+  :: NP (Expression grp lat with db params from) args
+  -> WindowArg grp args lat with db params from
+pattern Windows xs = WindowArg xs []
+
+instance RenderSQL (WindowFunction grp lat with db params from ty) where
   renderSQL = renderWindowFunction
 
 {- |
 A @RankNType@ for window functions with no arguments.
 -}
 type WinFun0 x
-  = forall lat with grp db params from
-  . WindowFunction lat with grp db params from x
+  = forall grp lat with db params from
+  . WindowFunction grp lat with db params from x
     -- ^ cannot reference aliases
 
 {- |
 A @RankNType@ for window functions with 1 argument.
 -}
 type WinFun1 x y
-  =  forall lat with grp db params from
-  .  Expression lat with grp db params from x
+  =  forall grp lat with db params from
+  .  WindowArg grp '[x] lat with db params from
      -- ^ input
-  -> WindowFunction lat with grp db params from y
+  -> WindowFunction grp lat with db params from y
      -- ^ output
 
 {- | A @RankNType@ for window functions with a fixed-length
@@ -183,21 +227,20 @@ list of heterogeneous arguments.
 Use the `*:` operator to end your argument lists.
 -}
 type WinFunN xs y
-  =  forall lat with grp db params from
-  .  NP (Expression lat with grp db params from) xs
+  =  forall grp lat with db params from
+  .  WindowArg grp xs lat with db params from
      -- ^ inputs
-  -> WindowFunction lat with grp db params from y
+  -> WindowFunction grp lat with db params from y
      -- ^ output
 
 -- | escape hatch for defining window functions
 unsafeWindowFunction1 :: ByteString -> WinFun1 x y
 unsafeWindowFunction1 fun x
-  = UnsafeWindowFunction $ fun <> parenthesized (renderSQL x)
+  = UnsafeWindowFunction $ fun <> renderSQL x
 
 -- | escape hatch for defining multi-argument window functions
 unsafeWindowFunctionN :: SOP.SListI xs => ByteString -> WinFunN xs y
-unsafeWindowFunctionN fun xs = UnsafeWindowFunction $ fun <>
-  parenthesized (renderCommaSeparated renderSQL xs)
+unsafeWindowFunctionN fun xs = UnsafeWindowFunction $ fun <> renderSQL xs
 
 {- | rank of the current row with gaps; same as `rowNumber` of its first peer
 
@@ -243,7 +286,7 @@ cumeDist = UnsafeWindowFunction "cume_dist()"
 {- | integer ranging from 1 to the argument value,
 dividing the partition as equally as possible
 
->>> printSQL $ ntile 5
+>>> printSQL $ ntile (Window 5)
 ntile((5 :: int4))
 -}
 ntile :: WinFun1 ('NotNull 'PGint4) ('NotNull 'PGint4)

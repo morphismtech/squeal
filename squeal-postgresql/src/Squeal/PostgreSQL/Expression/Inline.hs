@@ -284,7 +284,7 @@ class InlineField
   (fieldpg :: (Symbol, NullType)) where
     inlineField
       :: SOP.P field
-      -> Aliased (Expression lat with grp db params from) fieldpg
+      -> Aliased (Expression grp lat with db params from) fieldpg
 instance (KnownSymbol alias, InlineParam x ty)
   => InlineField (alias ::: x) (alias ::: ty) where
     inlineField (SOP.P x) = inlineParam x `as` Alias @alias
@@ -294,7 +294,7 @@ inlineFields
   :: ( SOP.IsRecord hask fields
      , SOP.AllZip InlineField fields row )
   => hask -- ^ record
-  -> NP (Aliased (Expression '[] with 'Ungrouped db params '[])) row
+  -> NP (Aliased (Expression  'Ungrouped '[] with db params '[])) row
 inlineFields
   = SOP.htrans (SOP.Proxy @InlineField) inlineField
   . SOP.toRecord
@@ -307,9 +307,7 @@ class InlineColumn
   -- | Haskell record field as a inline column
   inlineColumn
     :: SOP.P field
-    -> Aliased ( Optional
-      ( Expression lat with grp db params from
-      ) ) column
+    -> Aliased (Optional (Expression grp lat with db params from)) column
 instance (KnownSymbol col, InlineParam x ty)
   => InlineColumn (col ::: x) (col ::: 'NoDef :=> ty) where
     inlineColumn (SOP.P x) = Set (inlineParam x) `as` (Alias @col)
@@ -326,9 +324,7 @@ inlineColumns
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip InlineColumn xs columns )
   => hask -- ^ record
-  -> NP (Aliased (Optional (
-      Expression '[] with 'Ungrouped db params '[]
-      ) ) ) columns
+  -> NP (Aliased (Optional (Expression 'Ungrouped '[] with db params '[]))) columns
 inlineColumns
   = SOP.htrans (SOP.Proxy @InlineColumn) inlineColumn
   . SOP.toRecord

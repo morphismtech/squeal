@@ -396,7 +396,7 @@ type JsonPopulateFunction fun json
   =  forall db row lat with params
   .  json `In` PGJsonType
   => TypeExpression db ('NotNull ('PGcomposite row)) -- ^ row type
-  -> Expression lat with 'Ungrouped db params '[] ('NotNull json)
+  -> Expression 'Ungrouped lat with db params '[] ('NotNull json)
       -- ^ json type
   -> FromClause lat with db params '[fun ::: row]
 
@@ -431,7 +431,7 @@ jsonbPopulateRecordSet = unsafePopulateFunction #jsonb_populate_record_set
 type JsonToRecordFunction json
   =  forall lat with db params tab row
   .  (SOP.SListI row, json `In` PGJsonType)
-  => Expression lat with 'Ungrouped db params '[] ('NotNull json)
+  => Expression 'Ungrouped lat with db params '[] ('NotNull json)
       -- ^ json type
   -> Aliased (NP (Aliased (TypeExpression db))) (tab ::: row)
       -- ^ row type

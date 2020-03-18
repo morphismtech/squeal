@@ -60,7 +60,7 @@ class KnownNat n => HasParameter
     -- ($1 :: int4)
     parameter
       :: TypeExpression db ty
-      -> Expression lat with grp db params from ty
+      -> Expression grp lat with db params from ty
     parameter ty = UnsafeExpression $ parenthesized $
       "$" <> renderNat @n <+> "::"
         <+> renderSQL ty
@@ -71,11 +71,11 @@ instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
 -- | `param` takes a `Nat` using type application and for basic types,
 -- infers a `TypeExpression`.
 --
--- >>> let expr = param @1 :: Expression lat with grp db '[ 'Null 'PGint4] from ('Null 'PGint4)
+-- >>> let expr = param @1 :: Expression grp lat with db '[ 'Null 'PGint4] from ('Null 'PGint4)
 -- >>> printSQL expr
 -- ($1 :: int4)
 param
   :: forall n ty lat with db params from grp
    . (NullTyped db ty, HasParameter n params ty)
-  => Expression lat with grp db params from ty -- ^ param
+  => Expression grp lat with db params from ty -- ^ param
 param = parameter @n (nulltype @db)

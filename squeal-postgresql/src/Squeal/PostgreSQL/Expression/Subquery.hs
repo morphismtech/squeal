@@ -50,7 +50,7 @@ at least one row is returned, not all the way to completion.
 exists
   :: Query (Join lat from) with db params row
   -- ^ subquery
-  -> Condition lat with grp db params from
+  -> Condition grp lat with db params from
 exists query = UnsafeExpression $ "EXISTS" <+> parenthesized (renderSQL query)
 
 {- |
@@ -68,10 +68,10 @@ and at least one comparison returns `Squeal.PostgreSQL.Expression.Null.null_`.
 (TRUE = ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo")))
 -}
 subAll
-  :: Expression lat with grp db params from ty1 -- ^ expression
+  :: Expression grp lat with db params from ty1 -- ^ expression
   -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
   -> Query (Join lat from) with db params '[col ::: ty2] -- ^ subquery
-  -> Condition lat with grp db params from
+  -> Condition grp lat with db params from
 subAll expr (?) qry = expr ?
   (UnsafeExpression $ "ALL" <+> parenthesized (renderSQL qry))
 
@@ -86,10 +86,10 @@ if any `true` result is obtained. The result is `false` if no true result is fou
 ((E'foo' :: text) LIKE ANY (SELECT * FROM (VALUES ((E'foobar' :: text))) AS t ("foo")))
 -}
 subAny
-  :: Expression lat with grp db params from ty1 -- ^ expression
+  :: Expression grp lat with db params from ty1 -- ^ expression
   -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
   -> Query (Join lat from) with db params '[col ::: ty2] -- ^ subquery
-  -> Condition lat with grp db params from
+  -> Condition grp lat with db params from
 subAny expr (?) qry = expr ?
   (UnsafeExpression $ "ANY" <+> parenthesized (renderSQL qry))
 
@@ -101,9 +101,9 @@ to any of the right-hand expressions.
 TRUE IN (TRUE, FALSE, NULL)
 -}
 in_
-  :: Expression lat with grp db params from ty -- ^ expression
-  -> [Expression lat with grp db params from ty]
-  -> Condition lat with grp db params from
+  :: Expression grp lat with db params from ty -- ^ expression
+  -> [Expression grp lat with db params from ty]
+  -> Condition grp lat with db params from
 expr `in_` exprs = UnsafeExpression $ renderSQL expr <+> "IN"
   <+> parenthesized (commaSeparated (renderSQL <$> exprs))
 
@@ -115,8 +115,8 @@ to any of the right-hand expressions.
 TRUE NOT IN (FALSE, NULL)
 -}
 notIn
-  :: Expression lat with grp db params from ty -- ^ expression
-  -> [Expression lat with grp db params from ty]
-  -> Condition lat with grp db params from
+  :: Expression grp lat with db params from ty -- ^ expression
+  -> [Expression grp lat with db params from ty]
+  -> Condition grp lat with db params from
 expr `notIn` exprs = UnsafeExpression $ renderSQL expr <+> "NOT IN"
   <+> parenthesized (commaSeparated (renderSQL <$> exprs))

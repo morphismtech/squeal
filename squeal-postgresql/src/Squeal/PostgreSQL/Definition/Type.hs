@@ -185,7 +185,7 @@ createDomain
   :: (Has sch db schema, KnownSymbol dom)
   => QualifiedAlias sch dom -- ^ domain alias
   -> (forall null. TypeExpression db (null ty)) -- ^ underlying type
-  -> (forall tab. Condition '[] '[] 'Ungrouped db '[] '[tab ::: '["value" ::: 'Null ty]])
+  -> (forall tab. Condition 'Ungrouped '[] '[] db '[] '[tab ::: '["value" ::: 'Null ty]])
     -- ^ constraint on type
   -> Definition db (Alter sch (Create dom ('Typedef ty) schema) db)
 createDomain dom ty condition =
