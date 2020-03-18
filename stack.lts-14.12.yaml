@@ -1,0 +1,4 @@
+resolver: lts-14.12
+packages:
+- free-categories-0.2.0.0
+- with-utf8-1.0.0.0
