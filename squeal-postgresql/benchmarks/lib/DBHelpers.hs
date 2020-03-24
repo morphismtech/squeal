@@ -49,8 +49,7 @@ runDbWithPool :: SquealPool -> PQ Schemas Schemas IO b -> IO b
 runDbWithPool pool session = do
   errOrResult <- runDbErr pool session
   case errOrResult of
-    Left err -> throwSqueal
-      $ ConnectionException "Running query with connection pool failed"
+    Left  err    -> throwSqueal err
     Right result -> return result
 
 -- | Helper
