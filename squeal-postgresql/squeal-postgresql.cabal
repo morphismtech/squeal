@@ -55,6 +55,13 @@ library
     Squeal.PostgreSQL.Manipulation.Delete
     Squeal.PostgreSQL.Manipulation.Insert
     Squeal.PostgreSQL.Manipulation.Update
+    Squeal.PostgreSQL.Render
+    Squeal.PostgreSQL.Query
+    Squeal.PostgreSQL.Query.From
+    Squeal.PostgreSQL.Query.Select
+    Squeal.PostgreSQL.Query.Table
+    Squeal.PostgreSQL.Query.Values
+    Squeal.PostgreSQL.Query.With
     Squeal.PostgreSQL.Session
     Squeal.PostgreSQL.Session.Connection
     Squeal.PostgreSQL.Session.Decode
@@ -68,8 +75,6 @@ library
     Squeal.PostgreSQL.Session.Result
     Squeal.PostgreSQL.Session.Statement
     Squeal.PostgreSQL.Session.Transaction
-    Squeal.PostgreSQL.Render
-    Squeal.PostgreSQL.Query
     Squeal.PostgreSQL.Type
     Squeal.PostgreSQL.Type.Alias
     Squeal.PostgreSQL.Type.List
