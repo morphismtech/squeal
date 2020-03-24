@@ -28,13 +28,22 @@ instance SOP.HasDatatypeInfo DeviceOS
 type PGDeviceOS = PG (Enumerated DeviceOS)
 type DeviceOSType = 'Typedef PGDeviceOS
 
--- SCHEMA
+-- For composite type
+data IPLocation = IPLocation
+  { countryShort :: String
+  , region       :: String
+  , city         :: String
+  }
+  deriving (Show, Read, Eq, Generic)
 
--- | Helper: Joining timestamps to every table from here
-type TimestampColumns = '[
-  "inserted_at" ::: 'NoDef :=> 'NotNull 'PGtimestamptz
-  , "updated_at" ::: 'NoDef :=> 'NotNull 'PGtimestamptz
-  ]
+instance SOP.Generic IPLocation
+instance SOP.HasDatatypeInfo IPLocation
+
+-- IPLocation Composite type
+type PGIPLocation = PG (Composite IPLocation)
+type IPLocationType = 'Typedef PGIPLocation
+
+-- SCHEMA
 
 -- Users
 
@@ -51,7 +60,7 @@ type UsersConstraints = '[
     , "email" ::: 'Unique '["email"]
     ]
 
-type UsersTable = 'Table (UsersConstraints :=> Join UsersColumns TimestampColumns)
+type UsersTable = 'Table (UsersConstraints :=> UsersColumns)
 
 -- User devices
 type UserDevicesColumns = '[
@@ -67,7 +76,7 @@ type UserDevicesConstraints = '[
   , "token" ::: 'Unique '["token"]
   ]
 
-type UserDevicesTable = 'Table (UserDevicesConstraints :=> Join UserDevicesColumns TimestampColumns)
+type UserDevicesTable = 'Table (UserDevicesConstraints :=> UserDevicesColumns)
 
 -- Schema
 -- Make sure to put types before tables, otherwise won't compile
@@ -75,6 +84,8 @@ type Schema = '[
   -- Enum types:
     "device_os" ::: DeviceOSType
   -- Composite types:
+  , "ip_location" ::: IPLocationType
+  -- Tables:
   , "users" ::: UsersTable
   , "user_devices" ::: UserDevicesTable
   ]

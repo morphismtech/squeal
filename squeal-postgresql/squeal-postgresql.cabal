@@ -148,7 +148,7 @@ benchmark benchmarks
   type: exitcode-stdio-1.0
   hs-source-dirs: benchmarks, benchmarks/lib
   main-is: Main.hs
-  other-modules: Schema, Queries
+  other-modules: Schema, Queries, DBSetup, DBHelpers
   default-language: Haskell2010
   ghc-options:
     -O2
@@ -165,12 +165,12 @@ benchmark benchmarks
     , mtl >= 2.2.2
     , scientific >= 0.3.5.3
     , squeal-postgresql
-    , time >= 1.8.0.2
     , with-utf8 >= 1.0
-    , criterion
+    , gauge
     , QuickCheck
     , quickcheck-instances
     , generic-random
+    , resource-pool
 
 executable example
   default-language: Haskell2010

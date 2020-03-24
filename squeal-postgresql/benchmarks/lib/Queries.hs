@@ -19,10 +19,6 @@ import           Data.Text                      ( Text )
 import           Data.Int                       ( Int16
                                                 , Int64
                                                 )
-import           Data.Time                      ( UTCTime(..)
-                                                , fromGregorian
-                                                , secondsToDiffTime
-                                                )
 import           Test.QuickCheck                ( Arbitrary(..)
                                                 , PrintableString(..)
                                                 , listOf
@@ -44,7 +40,6 @@ data InsertUser = InsertUser
   , userPassword  :: Text
   , userFirstName :: Maybe Text
   , userBirthyear :: Maybe Int16
-  , timeNow       :: UTCTime
   }
   deriving (Show, Generic)
 instance SOP.Generic InsertUser
@@ -53,15 +48,11 @@ instance SOP.HasDatatypeInfo InsertUser
 instance Arbitrary InsertUser where
   arbitrary = genericArbitrarySingle
 
-utcTime :: UTCTime
-utcTime = UTCTime (fromGregorian 2019 7 4) (secondsToDiffTime 5800)
-
 sampleInsertUser :: InsertUser
 sampleInsertUser = InsertUser { userEmail     = "mark@gmail.com"
                               , userPassword  = "MySecretPassword"
                               , userFirstName = Just "Mark"
                               , userBirthyear = Just 1980
-                              , timeNow       = utcTime
                               }
 
 data APIDBUser_ = APIDBUser_
@@ -77,17 +68,16 @@ instance SOP.HasDatatypeInfo APIDBUser_
 instance Arbitrary APIDBUser_ where
   arbitrary = genericArbitrarySingle
 
-data Row4 a b c d = Row4
+data Row3 a b c = Row4
   { col1 :: a
   , col2 :: b
   , col3 :: c
-  , col4 :: d
   }
   deriving stock Generic
   deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
 
 -- (UserId, Token, OS)
-type DeviceDetailsRow = Row4 UserId Text (Enumerated DeviceOS) UTCTime
+type DeviceDetailsRow = Row3 UserId Text (Enumerated DeviceOS)
 
 -- Queries
 
@@ -105,10 +95,6 @@ createUser = insertInto
     `as` #first_name
     :*   Set (param @4 & cast int2)
     `as` #birthyear
-    :*   Set (param @5)
-    `as` #inserted_at
-    :*   Set (param @5)
-    `as` #updated_at
     )
   )
   OnConflictDoRaise
@@ -149,10 +135,6 @@ insertDeviceDetails = insertInto
     `as` #token
     :*   Set (parameter @3 (typedef #device_os))
     `as` #os
-    :*   Set (param @4)
-    `as` #inserted_at
-    :*   Set (param @4)
-    `as` #updated_at
     )
   )
   OnConflictDoRaise
