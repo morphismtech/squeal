@@ -10,6 +10,7 @@
 {-# LANGUAGE DeriveAnyClass                #-}
 {-# LANGUAGE DerivingStrategies                #-}
 {-# LANGUAGE ScopedTypeVariables                #-}
+{-# LANGUAGE StandaloneDeriving              #-}
 
 module DBHelpers where
 
@@ -21,17 +22,23 @@ import           Control.Monad.Except           ( MonadIO
                                                 , throwError
                                                 )
 import           Control.Monad.IO.Class         ( liftIO )
-import           GHC.Generics
+import           GHC.Generics                   ( Generic
+                                                , Generic1
+                                                )
 import           Test.QuickCheck
 import           Squeal.PostgreSQL
 import qualified Squeal.PostgreSQL.PQ.Pool     as SPG
 import qualified Data.ByteString.Char8         as C
+import           Control.DeepSeq
 -- Project imports
 import           Schema                         ( Schemas )
 import           Queries                        ( InsertUser )
 import           DBSetup
 
-newtype SquealPool = SquealPool {getSquealPool :: SPG.Pool (K Connection Schemas)}
+newtype SquealPool = SquealPool {getSquealPool :: SPG.Pool (K Connection Schemas)} deriving (Generic)
+-- Below may be very wrong - it may screw up the whole connection pool using in tests
+instance NFData SquealPool where
+  rnf = rwhnf
 
 runDbErr
   :: SquealPool -> PQ Schemas Schemas IO b -> IO (Either SquealException b)

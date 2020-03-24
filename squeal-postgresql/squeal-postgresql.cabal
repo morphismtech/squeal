@@ -171,6 +171,7 @@ benchmark benchmarks
     , quickcheck-instances
     , generic-random
     , resource-pool
+    , deepseq
 
 executable example
   default-language: Haskell2010

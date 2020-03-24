@@ -13,8 +13,10 @@
 module Queries where
 
 import           Squeal.PostgreSQL
-import           GHC.Generics            hiding ( from )
+import           GHC.Generics                   ( Generic )
 import qualified Generics.SOP                  as SOP
+-- Need below for deriving instances
+import           Control.DeepSeq
 import           Data.Text                      ( Text )
 import           Data.Int                       ( Int16
                                                 , Int64
@@ -41,7 +43,7 @@ data InsertUser = InsertUser
   , userFirstName :: Maybe Text
   , userBirthyear :: Maybe Int16
   }
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic, NFData)
 instance SOP.Generic InsertUser
 instance SOP.HasDatatypeInfo InsertUser
 -- Arbitrary instances for producing values with quickcheck
@@ -61,7 +63,7 @@ data APIDBUser_ = APIDBUser_
   , first_name :: Maybe Text
   , birthyear  :: Maybe Int16
   }
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic, NFData)
 instance SOP.Generic APIDBUser_
 instance SOP.HasDatatypeInfo APIDBUser_
 -- Arbitrary instances for producing values with quickcheck
@@ -79,7 +81,12 @@ data Row3 a b c = Row4
 -- (UserId, Token, OS)
 type DeviceDetailsRow = Row3 UserId Text (Enumerated DeviceOS)
 
--- Queries
+-- -- Queries
+
+-- createUserSession :: InsertUser -> IO APIDBUser_
+createUserSession :: InsertUser -> PQ Schemas Schemas IO APIDBUser_
+createUserSession insertUser =
+  getRow 0 =<< manipulateParams createUser insertUser
 
 createUser :: Manipulation_ Schemas InsertUser APIDBUser_
 createUser = insertInto
