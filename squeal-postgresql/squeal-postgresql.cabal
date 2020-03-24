@@ -52,6 +52,9 @@ library
     Squeal.PostgreSQL.Expression.Type
     Squeal.PostgreSQL.Expression.Window
     Squeal.PostgreSQL.Manipulation
+    Squeal.PostgreSQL.Manipulation.Delete
+    Squeal.PostgreSQL.Manipulation.Insert
+    Squeal.PostgreSQL.Manipulation.Update
     Squeal.PostgreSQL.PQ
     Squeal.PostgreSQL.Session.Connection
     Squeal.PostgreSQL.Session.Decode

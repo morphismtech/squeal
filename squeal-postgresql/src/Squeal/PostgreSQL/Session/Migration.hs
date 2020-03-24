@@ -192,6 +192,8 @@ import Squeal.PostgreSQL.Expression.Parameter
 import Squeal.PostgreSQL.Expression.Time
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.Manipulation
+import Squeal.PostgreSQL.Manipulation.Delete
+import Squeal.PostgreSQL.Manipulation.Insert
 import Squeal.PostgreSQL.PQ
 import Squeal.PostgreSQL.Session.Decode
 import Squeal.PostgreSQL.Session.Encode

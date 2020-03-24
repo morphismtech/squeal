@@ -226,6 +226,9 @@ import Squeal.PostgreSQL.Expression.Time as X
 import Squeal.PostgreSQL.Expression.Type as X
 import Squeal.PostgreSQL.Expression.Window as X
 import Squeal.PostgreSQL.Manipulation as X
+import Squeal.PostgreSQL.Manipulation.Delete as X
+import Squeal.PostgreSQL.Manipulation.Insert as X
+import Squeal.PostgreSQL.Manipulation.Update as X
 import Squeal.PostgreSQL.PQ as X
 import Squeal.PostgreSQL.Session.Connection as X
 import Squeal.PostgreSQL.Session.Decode as X
