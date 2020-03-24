@@ -32,8 +32,6 @@ import           Test.QuickCheck.Instances      ( )
 -- Project imports
 import           Schema
 
-import           Debug.Trace
-
 -- Types
 
 type UserId = Int64
@@ -116,6 +114,9 @@ createUser = insertInto
     `as` #birthyear
     )
   )
+
+userDetailsSession :: UserId -> PQ Schemas Schemas IO APIDBUser_
+userDetailsSession uID = getRow 0 =<< runQueryParams userDetails (Only uID)
 
 userDetails :: Query_ Schemas (Only UserId) APIDBUser_
 userDetails = select_
