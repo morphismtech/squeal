@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Migration
+Module: Squeal.PostgreSQL.Session.Migration
 Description: Squeal migrations
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -149,7 +149,7 @@ by using a `Migration`s over the `Indexed` `PQ` `IO` category.
   , TypeOperators
 #-}
 
-module Squeal.PostgreSQL.PQ.Migration
+module Squeal.PostgreSQL.Session.Migration
   ( -- * Migration
     Migration (..)
   , Migratory (..)
@@ -193,13 +193,13 @@ import Squeal.PostgreSQL.Expression.Time
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.PQ
-import Squeal.PostgreSQL.PQ.Decode
-import Squeal.PostgreSQL.PQ.Encode
-import Squeal.PostgreSQL.PQ.Indexed
-import Squeal.PostgreSQL.PQ.Monad
-import Squeal.PostgreSQL.PQ.Result
-import Squeal.PostgreSQL.PQ.Statement
-import Squeal.PostgreSQL.PQ.Transaction
+import Squeal.PostgreSQL.Session.Decode
+import Squeal.PostgreSQL.Session.Encode
+import Squeal.PostgreSQL.Session.Indexed
+import Squeal.PostgreSQL.Session.Monad
+import Squeal.PostgreSQL.Session.Result
+import Squeal.PostgreSQL.Session.Statement
+import Squeal.PostgreSQL.Session.Transaction
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Type.List

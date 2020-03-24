@@ -42,9 +42,9 @@ import Squeal.PostgreSQL.Type.Schema
 
 {- | A `HasParameter` constraint is used to indicate a value that is
 supplied externally to a SQL statement.
-`Squeal.PostgreSQL.PQ.manipulateParams`,
-`Squeal.PostgreSQL.PQ.queryParams` and
-`Squeal.PostgreSQL.PQ.traversePrepared` support specifying data values
+`Squeal.PostgreSQL.Session.manipulateParams`,
+`Squeal.PostgreSQL.Session.queryParams` and
+`Squeal.PostgreSQL.Session.traversePrepared` support specifying data values
 separately from the SQL command string, in which case `param`s are used to
 refer to the out-of-line data values.
 -}

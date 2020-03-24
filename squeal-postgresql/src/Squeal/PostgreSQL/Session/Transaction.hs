@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Transaction
+Module: Squeal.PostgreSQL.Session.Transaction
 Description: Squeal transaction control language
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -16,7 +16,7 @@ Squeal transaction control language.
   , TypeInType
 #-}
 
-module Squeal.PostgreSQL.PQ.Transaction
+module Squeal.PostgreSQL.Session.Transaction
   ( -- * Transaction
     transactionally
   , transactionally_
@@ -39,8 +39,8 @@ import UnliftIO
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.PQ.Exception
-import Squeal.PostgreSQL.PQ.Monad
+import Squeal.PostgreSQL.Session.Exception
+import Squeal.PostgreSQL.Session.Monad
 
 {- | Run a computation `transactionally`;
 first `begin`,

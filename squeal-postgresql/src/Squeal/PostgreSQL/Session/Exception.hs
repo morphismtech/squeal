@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Exception
+Module: Squeal.PostgreSQL.Session.Exception
 Description: Squeal exceptions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -13,7 +13,7 @@ Squeal exceptions
   , PatternSynonyms
 #-}
 
-module Squeal.PostgreSQL.PQ.Exception
+module Squeal.PostgreSQL.Session.Exception
   ( SquealException (..)
   , pattern UniqueViolation
   , pattern CheckViolation

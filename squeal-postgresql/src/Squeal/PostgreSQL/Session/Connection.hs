@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Connection
+Module: Squeal.PostgreSQL.Session.Connection
 Description: Database connections
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -15,7 +15,7 @@ Database connections
   , TypeOperators
 #-}
 
-module Squeal.PostgreSQL.PQ.Connection
+module Squeal.PostgreSQL.Session.Connection
   ( LibPQ.Connection
   , connectdb
   , finish

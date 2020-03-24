@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Indexed
+Module: Squeal.PostgreSQL.Session.Indexed
 Description: Indexed Monad Transformers
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -24,7 +24,7 @@ class and a class extending it to run `Definition`s.
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.PQ.Indexed
+module Squeal.PostgreSQL.Session.Indexed
   ( IndexedMonadTrans (..)
   , Indexed (..)
   , IndexedMonadTransPQ (..)

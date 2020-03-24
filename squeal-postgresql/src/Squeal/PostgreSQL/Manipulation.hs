@@ -114,8 +114,8 @@ against which the query is type-checked, an input @params@ Haskell `Type`,
 and an ouput row Haskell `Type`.
 
 A top-level `Manipulation_` can be run
-using `Squeal.PostgreSQL.PQ.manipulateParams`, or if @params = ()@
-using `Squeal.PostgreSQL.PQ.manipulate`.
+using `Squeal.PostgreSQL.Session.manipulateParams`, or if @params = ()@
+using `Squeal.PostgreSQL.Session.manipulate`.
 
 Generally, @params@ will be a Haskell tuple or record whose entries
 may be referenced using positional

@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Oid
+Module: Squeal.PostgreSQL.Session.Oid
 Description: Object identifiers
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -25,7 +25,7 @@ statement parameters.
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.PQ.Oid
+module Squeal.PostgreSQL.Session.Oid
   ( -- * Oids
     LibPQ.Oid
   , OidOf (..)
@@ -45,7 +45,7 @@ import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Type.Alias
-import Squeal.PostgreSQL.PQ.Exception
+import Squeal.PostgreSQL.Session.Exception
 import Squeal.PostgreSQL.Type.Schema
 
 -- $setup

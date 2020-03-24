@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Encode
+Module: Squeal.PostgreSQL.Session.Encode
 Description: Encoding of statement parameters
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -26,7 +26,7 @@ Encoding of statement parameters
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.PQ.Encode
+module Squeal.PostgreSQL.Session.Encode
   ( -- * Encode Parameters
     EncodeParams (..)
   , genericParams
@@ -71,7 +71,7 @@ import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
 
 import Squeal.PostgreSQL.Expression.Range
-import Squeal.PostgreSQL.PQ.Oid
+import Squeal.PostgreSQL.Session.Oid
 import Squeal.PostgreSQL.Type
 import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Type.List

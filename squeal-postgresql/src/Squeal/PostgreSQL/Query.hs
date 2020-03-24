@@ -151,8 +151,8 @@ against which the query is type-checked, an input @parameters@ Haskell `Type`,
 and an ouput row Haskell `Type`.
 
 A top-level query can be run
-using `Squeal.PostgreSQL.PQ.runQueryParams`, or if @parameters = ()@
-using `Squeal.PostgreSQL.PQ.runQuery`.
+using `Squeal.PostgreSQL.Session.runQueryParams`, or if @parameters = ()@
+using `Squeal.PostgreSQL.Session.runQuery`.
 
 Generally, @parameters@ will be a Haskell tuple or record whose entries
 may be referenced using positional

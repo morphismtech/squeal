@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Statement2
+Module: Squeal.PostgreSQL.Session.Statement2
 Description: Statements
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -22,7 +22,7 @@ together with an `EncodeParams` and a `DecodeRow`.
   , RankNTypes
 #-}
 
-module Squeal.PostgreSQL.PQ.Statement
+module Squeal.PostgreSQL.Session.Statement
   ( Statement (..)
   , query
   , manipulation
@@ -37,15 +37,15 @@ import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
 
 import Squeal.PostgreSQL.Manipulation
-import Squeal.PostgreSQL.PQ.Decode
-import Squeal.PostgreSQL.PQ.Encode
-import Squeal.PostgreSQL.PQ.Oid
+import Squeal.PostgreSQL.Session.Decode
+import Squeal.PostgreSQL.Session.Encode
+import Squeal.PostgreSQL.Session.Oid
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Render
 
 -- | A `Statement` consists of a `Squeal.PostgreSQL.Statement.Manipulation`
--- or a `Squeal.PostgreSQL.PQ.Statement.Query` that can be run
--- in a `Squeal.PostgreSQL.PQ.Monad.MonadPQ`.
+-- or a `Squeal.PostgreSQL.Session.Statement.Query` that can be run
+-- in a `Squeal.PostgreSQL.Session.Monad.MonadPQ`.
 data Statement db x y where
   -- | Constructor for a data manipulation language statement
   Manipulation

@@ -1,11 +1,11 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Monad
+Module: Squeal.PostgreSQL.Session.Monad
 Description: MonadPQ
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Run `Squeal.PostgreSQL.PQ.Statement`s in the mtl-style
+Run `Squeal.PostgreSQL.Session.Statement`s in the mtl-style
 typeclass `MonadPQ`.
 -}
 {-# LANGUAGE
@@ -24,7 +24,7 @@ typeclass `MonadPQ`.
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.PQ.Monad where
+module Squeal.PostgreSQL.Session.Monad where
 
 import Control.Category (Category (..))
 import Control.Monad
@@ -35,9 +35,9 @@ import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
 
 import Squeal.PostgreSQL.Manipulation
-import Squeal.PostgreSQL.PQ.Decode
-import Squeal.PostgreSQL.PQ.Result
-import Squeal.PostgreSQL.PQ.Statement
+import Squeal.PostgreSQL.Session.Decode
+import Squeal.PostgreSQL.Session.Result
+import Squeal.PostgreSQL.Session.Statement
 import Squeal.PostgreSQL.Query
 
 -- For `MonadPQ` transformer instances

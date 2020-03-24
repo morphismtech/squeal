@@ -44,7 +44,7 @@ a
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.PQ.Pool
+module Squeal.PostgreSQL.Session.Pool
   ( -- * Pool
     Pool
   , createConnectionPool
@@ -59,7 +59,7 @@ import UnliftIO.Pool (Pool, createPool, destroyAllResources, withResource)
 
 import Squeal.PostgreSQL.Type.Schema
 import Squeal.PostgreSQL.PQ (PQ (..))
-import Squeal.PostgreSQL.PQ.Connection
+import Squeal.PostgreSQL.Session.Connection
 
 -- | Create a striped pool of connections.
 -- Although the garbage collector will destroy all idle connections when the pool is garbage collected it's recommended to manually `destroyAllResources` when you're done with the pool so that the connections are freed up as soon as possible.

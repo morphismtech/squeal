@@ -53,18 +53,18 @@ library
     Squeal.PostgreSQL.Expression.Window
     Squeal.PostgreSQL.Manipulation
     Squeal.PostgreSQL.PQ
-    Squeal.PostgreSQL.PQ.Connection
-    Squeal.PostgreSQL.PQ.Decode
-    Squeal.PostgreSQL.PQ.Encode
-    Squeal.PostgreSQL.PQ.Exception
-    Squeal.PostgreSQL.PQ.Indexed
-    Squeal.PostgreSQL.PQ.Migration
-    Squeal.PostgreSQL.PQ.Monad
-    Squeal.PostgreSQL.PQ.Oid
-    Squeal.PostgreSQL.PQ.Pool
-    Squeal.PostgreSQL.PQ.Result
-    Squeal.PostgreSQL.PQ.Statement
-    Squeal.PostgreSQL.PQ.Transaction
+    Squeal.PostgreSQL.Session.Connection
+    Squeal.PostgreSQL.Session.Decode
+    Squeal.PostgreSQL.Session.Encode
+    Squeal.PostgreSQL.Session.Exception
+    Squeal.PostgreSQL.Session.Indexed
+    Squeal.PostgreSQL.Session.Migration
+    Squeal.PostgreSQL.Session.Monad
+    Squeal.PostgreSQL.Session.Oid
+    Squeal.PostgreSQL.Session.Pool
+    Squeal.PostgreSQL.Session.Result
+    Squeal.PostgreSQL.Session.Statement
+    Squeal.PostgreSQL.Session.Transaction
     Squeal.PostgreSQL.Render
     Squeal.PostgreSQL.Query
     Squeal.PostgreSQL.Type

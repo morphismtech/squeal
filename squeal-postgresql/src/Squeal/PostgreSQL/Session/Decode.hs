@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ.Decode
+Module: Squeal.PostgreSQL.Session.Decode
 Description: Decoding of result values
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -27,7 +27,7 @@ Decoding of result values
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.PQ.Decode
+module Squeal.PostgreSQL.Session.Decode
   ( -- * Decode Types
     FromPG (..)
   , devalue

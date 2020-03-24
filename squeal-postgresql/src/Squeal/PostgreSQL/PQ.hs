@@ -57,14 +57,14 @@ import qualified PostgreSQL.Binary.Encoding as Encoding
 
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Manipulation
-import Squeal.PostgreSQL.PQ.Connection
-import Squeal.PostgreSQL.PQ.Encode
-import Squeal.PostgreSQL.PQ.Exception
-import Squeal.PostgreSQL.PQ.Indexed
-import Squeal.PostgreSQL.PQ.Oid
-import Squeal.PostgreSQL.PQ.Monad
-import Squeal.PostgreSQL.PQ.Result
-import Squeal.PostgreSQL.PQ.Statement
+import Squeal.PostgreSQL.Session.Connection
+import Squeal.PostgreSQL.Session.Encode
+import Squeal.PostgreSQL.Session.Exception
+import Squeal.PostgreSQL.Session.Indexed
+import Squeal.PostgreSQL.Session.Oid
+import Squeal.PostgreSQL.Session.Monad
+import Squeal.PostgreSQL.Session.Result
+import Squeal.PostgreSQL.Session.Statement
 import Squeal.PostgreSQL.Type.Schema
 
 -- | We keep track of the schema via an Atkey indexed state monad transformer,
