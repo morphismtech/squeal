@@ -16,12 +16,14 @@ module DBHelpers where
 
 import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString.Char8         as C
+import qualified Data.Text                     as T
 import           Control.Monad                  ( void )
 import           Data.Pool                      ( withResource )
 import           Control.Monad.Except           ( MonadIO
                                                 , throwError
                                                 )
 import           Control.Monad.IO.Class         ( liftIO )
+import           Control.Monad.Loops            ( iterateWhile )
 import           GHC.Generics                   ( Generic
                                                 , Generic1
                                                 )
@@ -32,11 +34,11 @@ import qualified Data.ByteString.Char8         as C
 import           Control.DeepSeq
 -- Project imports
 import           Schema                         ( Schemas )
-import           Queries                        ( InsertUser )
+import           Queries                        ( InsertUser(..) )
 import           DBSetup
 
 newtype SquealPool = SquealPool {getSquealPool :: SPG.Pool (K Connection Schemas)} deriving (Generic)
--- Below may be very wrong - it may screw up the whole connection pool using in tests
+-- Below may be wrong - it may screw up the whole connection pool using in tests
 instance NFData SquealPool where
   rnf = rwhnf
 
@@ -69,4 +71,6 @@ initDBWithPool = do
   return pool
 
 getRandomUser :: IO InsertUser
-getRandomUser = generate arbitrary
+getRandomUser = iterateWhile noEmptyEmail $ generate arbitrary
+ where
+  noEmptyEmail InsertUser { userEmail = userEmail } = T.length userEmail < 5

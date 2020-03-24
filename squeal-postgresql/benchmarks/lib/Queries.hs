@@ -32,6 +32,7 @@ import           Test.QuickCheck.Instances      ( )
 -- Project imports
 import           Schema
 
+import           Debug.Trace
 
 -- Types
 
@@ -83,7 +84,6 @@ type DeviceDetailsRow = Row3 UserId Text (Enumerated DeviceOS)
 
 -- -- Queries
 
--- createUserSession :: InsertUser -> IO APIDBUser_
 createUserSession :: InsertUser -> PQ Schemas Schemas IO APIDBUser_
 createUserSession insertUser =
   getRow 0 =<< manipulateParams createUser insertUser

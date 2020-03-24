@@ -172,6 +172,7 @@ benchmark benchmarks
     , generic-random
     , resource-pool
     , deepseq
+    , monad-loops
 
 executable example
   default-language: Haskell2010
