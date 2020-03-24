@@ -229,7 +229,7 @@ import Squeal.PostgreSQL.Manipulation as X
 import Squeal.PostgreSQL.Manipulation.Delete as X
 import Squeal.PostgreSQL.Manipulation.Insert as X
 import Squeal.PostgreSQL.Manipulation.Update as X
-import Squeal.PostgreSQL.PQ as X
+import Squeal.PostgreSQL.Session as X
 import Squeal.PostgreSQL.Session.Connection as X
 import Squeal.PostgreSQL.Session.Decode as X
 import Squeal.PostgreSQL.Session.Encode as X

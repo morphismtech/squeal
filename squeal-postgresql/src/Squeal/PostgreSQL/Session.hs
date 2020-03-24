@@ -1,5 +1,5 @@
 {-|
-Module: Squeal.PostgreSQL.PQ
+Module: Squeal.PostgreSQL.Session
 Description: PQ monad
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
@@ -29,7 +29,7 @@ application's monad transformer stack, giving it an instance of `MonadPQ`.
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.PQ
+module Squeal.PostgreSQL.Session
   ( PQ (PQ, unPQ)
   , runPQ
   , execPQ

@@ -58,7 +58,7 @@ import UnliftIO (MonadUnliftIO (..))
 import UnliftIO.Pool (Pool, createPool, destroyAllResources, withResource)
 
 import Squeal.PostgreSQL.Type.Schema
-import Squeal.PostgreSQL.PQ (PQ (..))
+import Squeal.PostgreSQL.Session (PQ (..))
 import Squeal.PostgreSQL.Session.Connection
 
 -- | Create a striped pool of connections.

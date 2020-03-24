@@ -44,14 +44,10 @@ import Data.Kind (Type)
 import Data.Quiver.Functor
 
 import qualified Generics.SOP as SOP
-import qualified Generics.SOP.Record as SOP
 import qualified GHC.Generics as GHC
 
 import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Expression.Default
-import Squeal.PostgreSQL.Expression.Inline
-import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Type.PG
 import Squeal.PostgreSQL.Render
