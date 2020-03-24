@@ -38,22 +38,13 @@ module Squeal.PostgreSQL.Query.From
   , subquery
   , view
   , common
-  , cross
-  , crossJoin
-  , crossJoinLateral
-  , inner
-  , innerJoin
-  , innerJoinLateral
-  , leftOuter
-  , leftOuterJoin
-  , leftOuterJoinLateral
-  , rightOuter
-  , rightOuterJoin
-  , rightOuterJoinLateral
-  , fullOuter
-  , fullOuterJoin
-  , fullOuterJoinLateral
+    -- * Join
   , JoinItem (..)
+  , cross, crossJoin, crossJoinLateral
+  , inner, innerJoin, innerJoinLateral
+  , leftOuter, leftOuterJoin, leftOuterJoinLateral
+  , rightOuter, rightOuterJoin, rightOuterJoinLateral
+  , fullOuter, fullOuterJoin, fullOuterJoinLateral
   ) where
 
 import Control.DeepSeq
