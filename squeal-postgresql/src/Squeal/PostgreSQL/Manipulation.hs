@@ -52,6 +52,8 @@ import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Type.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Query
+import Squeal.PostgreSQL.Query.Select
+import Squeal.PostgreSQL.Query.With
 import Squeal.PostgreSQL.Type.Schema
 
 -- $setup

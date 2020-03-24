@@ -43,7 +43,7 @@ import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Query
+import Squeal.PostgreSQL.Query.From
 import Squeal.PostgreSQL.Type.Schema
 
 -- $setup

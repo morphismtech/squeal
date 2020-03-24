@@ -229,6 +229,13 @@ import Squeal.PostgreSQL.Manipulation as X
 import Squeal.PostgreSQL.Manipulation.Delete as X
 import Squeal.PostgreSQL.Manipulation.Insert as X
 import Squeal.PostgreSQL.Manipulation.Update as X
+import Squeal.PostgreSQL.Query as X
+import Squeal.PostgreSQL.Query.From as X
+import Squeal.PostgreSQL.Query.Select as X
+import Squeal.PostgreSQL.Query.Table as X
+import Squeal.PostgreSQL.Query.Values as X
+import Squeal.PostgreSQL.Query.With as X
+import Squeal.PostgreSQL.Render (RenderSQL(..), printSQL)
 import Squeal.PostgreSQL.Session as X
 import Squeal.PostgreSQL.Session.Connection as X
 import Squeal.PostgreSQL.Session.Decode as X
@@ -242,8 +249,6 @@ import Squeal.PostgreSQL.Session.Pool as X
 import Squeal.PostgreSQL.Session.Result as X
 import Squeal.PostgreSQL.Session.Statement as X
 import Squeal.PostgreSQL.Session.Transaction as X
-import Squeal.PostgreSQL.Query as X
-import Squeal.PostgreSQL.Render (RenderSQL(..), printSQL)
 import Squeal.PostgreSQL.Type as X
 import Squeal.PostgreSQL.Type.Alias as X
 import Squeal.PostgreSQL.Type.List as X

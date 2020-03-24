@@ -44,7 +44,7 @@ import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Query
+import Squeal.PostgreSQL.Query.From
 import Squeal.PostgreSQL.Type.Schema
 
 -- $setup

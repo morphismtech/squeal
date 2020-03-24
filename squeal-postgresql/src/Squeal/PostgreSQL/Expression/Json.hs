@@ -84,7 +84,7 @@ import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Set
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.Type.List
-import Squeal.PostgreSQL.Query
+import Squeal.PostgreSQL.Query.From
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Type.Schema
 

@@ -202,7 +202,9 @@ import Squeal.PostgreSQL.Session.Monad
 import Squeal.PostgreSQL.Session.Result
 import Squeal.PostgreSQL.Session.Statement
 import Squeal.PostgreSQL.Session.Transaction
-import Squeal.PostgreSQL.Query
+import Squeal.PostgreSQL.Query.From
+import Squeal.PostgreSQL.Query.Select
+import Squeal.PostgreSQL.Query.Table
 import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Type.Schema
