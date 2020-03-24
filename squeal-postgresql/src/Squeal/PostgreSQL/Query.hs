@@ -67,9 +67,9 @@ a database is called a `Query`.
 
 The general `Query` type is parameterized by
 
-* @lat :: FromType@ - lateral scope for a correlated subquery,
-* @with :: FromType@ - scope for all `common` table expressions,
-* @db :: SchemasType@ - scope for all `table`s and `view`s,
+
+* @with :: FromType@ - scope for all `Squeal.PostgreSQL.Query.From.common` table expressions,
+* @db :: SchemasType@ - scope for all `Squeal.PostgreSQL.Query.From.table`s and `Squeal.PostgreSQL.Query.From.view`s,
 * @params :: [NullType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
 * @row :: RowType@ - return type of the `Query`.
 -}

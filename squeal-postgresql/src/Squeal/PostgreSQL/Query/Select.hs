@@ -74,7 +74,7 @@ data Selection grp lat with db params from row where
   Star
     :: HasUnique tab from row
     => Selection 'Ungrouped lat with db params from row
-    -- ^ `HasUnique` table in the `FromClause`
+    -- ^ `HasUnique` table in the `Squeal.PostgreSQL.Query.From.FromClause`
   DotStar
     :: Has tab from row
     => Alias tab

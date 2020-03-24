@@ -123,7 +123,9 @@ manipulateParams ::
   , GenericParams db params x xs
   , GenericRow row y ys
   ) => Manipulation '[] db params row
-    -- ^ `insertInto`, `update` or `deleteFrom`
+    -- ^ `Squeal.PostgreSQL.Manipulation.Insert.insertInto`,
+    -- `Squeal.PostgreSQL.Manipulation.Update.update`,
+    -- or `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom`, and friends
     -> x -> pq (Result y)
 manipulateParams = executeParams . manipulation
 
@@ -135,7 +137,9 @@ manipulateParams_ ::
   ( MonadPQ db pq
   , GenericParams db params x xs
   ) => Manipulation '[] db params '[]
-    -- ^ `insertInto`, `update` or `deleteFrom`
+    -- ^ `Squeal.PostgreSQL.Manipulation.Insert.insertInto_`,
+    -- `Squeal.PostgreSQL.Manipulation.Update.update_`,
+    -- or `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom_`, and friends
     -> x -> pq ()
 manipulateParams_ = executeParams_ . manipulation
 
@@ -168,7 +172,7 @@ runQueryParams ::
   , SOP.IsRecord y ys
   , SOP.AllZip FromField row ys
   ) => Query '[] '[] db params row
-    -- ^ `select` and friends
+    -- ^ `Squeal.PostgreSQL.Query.Select.select` and friends
     -> x -> pq (Result y)
 runQueryParams = executeParams . query
 
@@ -179,7 +183,7 @@ for a parameter-free statement.
 runQuery
   :: (MonadPQ db pq, SOP.IsRecord y ys, SOP.AllZip FromField row ys)
   => Query '[] '[] db '[] row
-  -- ^ `select` and friends
+  -- ^ `Squeal.PostgreSQL.Query.Select.select` and friends
   -> pq (Result y)
 runQuery = execute . query
 
@@ -195,7 +199,9 @@ traversePrepared
      , SOP.IsRecord y ys
      , SOP.AllZip FromField row ys )
   => Manipulation '[] db params row
-  -- ^ `insertInto`, `update`, or `deleteFrom`, and friends
+  -- ^ `Squeal.PostgreSQL.Manipulation.Insert.insertInto`,
+  -- `Squeal.PostgreSQL.Manipulation.Update.update`,
+  -- or `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom`, and friends
   -> list x -> pq (list (Result y))
 traversePrepared = executePrepared . manipulation
 
@@ -210,7 +216,9 @@ forPrepared
      , SOP.AllZip FromField row ys )
   => list x
   -> Manipulation '[] db params row
-  -- ^ `insertInto`, `update` or `deleteFrom`
+  -- ^ `Squeal.PostgreSQL.Manipulation.Insert.insertInto`,
+  -- `Squeal.PostgreSQL.Manipulation.Update.update`,
+  -- or `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom`, and friends
   -> pq (list (Result y))
 forPrepared = flip traversePrepared
 
@@ -225,7 +233,9 @@ traversePrepared_
      , GenericParams db params x xs
      , Foldable list )
   => Manipulation '[] db params '[]
-  -- ^ `insertInto`, `update` or `deleteFrom`
+  -- ^ `Squeal.PostgreSQL.Manipulation.Insert.insertInto_`,
+  -- `Squeal.PostgreSQL.Manipulation.Update.update_`,
+  -- or `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom_`, and friends
   -> list x -> pq ()
 traversePrepared_ = executePrepared_ . manipulation
 
@@ -238,7 +248,9 @@ forPrepared_
      , Foldable list )
   => list x
   -> Manipulation '[] db params '[]
-  -- ^ `insertInto`, `update` or `deleteFrom`
+  -- ^ `Squeal.PostgreSQL.Manipulation.Insert.insertInto_`,
+  -- `Squeal.PostgreSQL.Manipulation.Update.update_`,
+  -- or `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom_`, and friends
   -> pq ()
 forPrepared_ = flip traversePrepared_
 

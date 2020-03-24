@@ -68,8 +68,8 @@ A `Query` is also considered a `Manipulation` even though it does not modify dat
 
 The general `Manipulation` type is parameterized by
 
-* @with :: FromType@ - scope for all `common` table expressions,
-* @db :: SchemasType@ - scope for all `table`s and `view`s,
+* @with :: FromType@ - scope for all `Squeal.PostgreSQL.Query.From.common` table expressions,
+* @db :: SchemasType@ - scope for all `Squeal.PostgreSQL.Query.From.table`s and `Squeal.PostgreSQL.Query.From.view`s,
 * @params :: [NullType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
 * @row :: RowType@ - return type of the `Query`.
 -}
@@ -259,7 +259,8 @@ queryStatement q = UnsafeManipulation $ renderSQL q
 -- serial sequence number. However, any expression using the table's columns
 -- is allowed. Only rows that were successfully inserted or updated or
 -- deleted will be returned. For example, if a row was locked
--- but not updated because an `OnConflict` `DoUpdate` condition was not satisfied,
+-- but not updated because an `Squeal.PostgreSQL.Manipulation.Insert.OnConflict`
+-- `Squeal.PostgreSQL.Manipulation.Insert.DoUpdate` condition was not satisfied,
 -- the row will not be returned. `Returning` `Star` will return all columns
 -- in the row. Use `Returning` `Nil` in the common case where no return
 -- values are desired.

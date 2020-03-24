@@ -210,7 +210,7 @@ instance SOP.SListI (TableToColumns table)
 {- |
 `ConflictAction` specifies an alternative `OnConflict` action.
 It can be either `DoNothing`, or a `DoUpdate` clause specifying
-the exact details of the `update` action to be performed in case of a conflict.
+the exact details of the update action to be performed in case of a conflict.
 The `Set` and WHERE `Condition`s in `OnConflict` `DoUpdate` have access to the
 existing row using the table's name, and to rows proposed
 for insertion using the special @#excluded@ row.

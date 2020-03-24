@@ -67,35 +67,40 @@ newtype Money = Money { cents :: Int64 }
   deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 
 {- | The `Json` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGjson`.
+type it's applied to should be stored as a
+`Squeal.PostgreSQL.Type.Schema.PGjson`.
 -}
 newtype Json hask = Json {getJson :: hask}
   deriving stock (Eq, Ord, Show, Read, GHC.Generic)
   deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 
 {- | The `Jsonb` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGjsonb`.
+type it's applied to should be stored as a
+`Squeal.PostgreSQL.Type.Schema.PGjsonb`.
 -}
 newtype Jsonb hask = Jsonb {getJsonb :: hask}
   deriving stock (Eq, Ord, Show, Read, GHC.Generic)
   deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 
 {- | The `Composite` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGcomposite`.
+type it's applied to should be stored as a
+`Squeal.PostgreSQL.Type.Schema.PGcomposite`.
 -}
 newtype Composite record = Composite {getComposite :: record}
   deriving stock (Eq, Ord, Show, Read, GHC.Generic)
   deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 
 {- | The `Enumerated` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGenum`.
+type it's applied to should be stored as a
+`Squeal.PostgreSQL.Type.Schema.PGenum`.
 -}
 newtype Enumerated enum = Enumerated {getEnumerated :: enum}
   deriving stock (Eq, Ord, Show, Read, GHC.Generic)
   deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 
 {- | The `VarArray` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGvararray`.
+type it's applied to should be stored as a
+`Squeal.PostgreSQL.Type.Schema.PGvararray`.
 
 >>> import Data.Vector
 >>> :kind! PG (VarArray (Vector Double))
@@ -108,7 +113,8 @@ newtype VarArray arr
   deriving anyclass (SOP.HasDatatypeInfo, SOP.Generic)
 
 {- | The `FixArray` newtype is an indication that the Haskell
-type it's applied to should be stored as a `PGfixarray`.
+type it's applied to should be stored as a
+`Squeal.PostgreSQL.Type.Schema.PGfixarray`.
 
 >>> :kind! PG (FixArray ((Double, Double), (Double, Double)))
 PG (FixArray ((Double, Double), (Double, Double))) :: PGType

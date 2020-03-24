@@ -149,7 +149,8 @@ instance RenderSQL (TableExpression grp lat with db params from) where
 -- | A `from` generates a `TableExpression` from a table reference that can be
 -- a table name, or a derived table such as a subquery, a JOIN construct,
 -- or complex combinations of these. A `from` may be transformed by `where_`,
--- `groupBy`, `having`, `orderBy`, `limit` and `offset`, using the `&` operator
+-- `groupBy`, `having`, `orderBy`, `limit` and `offset`,
+-- using the `Data.Function.&` operator
 -- to match the left-to-right sequencing of their placement in SQL.
 from
   :: FromClause lat with db params from -- ^ table reference

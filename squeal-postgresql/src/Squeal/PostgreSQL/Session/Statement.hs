@@ -53,14 +53,18 @@ data Statement db x y where
     => EncodeParams db params x -- ^ encoding of parameters
     -> DecodeRow row y -- ^ decoding of returned rows
     -> Manipulation '[] db params row
-    -- ^ `insertInto`, `update`, `deleteFrom`, ...
+    -- ^ `Squeal.PostgreSQL.Manipulation.Insert.insertInto`,
+    -- `Squeal.PostgreSQL.Manipulation.Update.update`,
+    -- or `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom`, ...
     -> Statement db x y
   -- | Constructor for a structured query language statement
   Query
     :: (SOP.All (OidOfNull db) params, SOP.SListI row)
     => EncodeParams db params x -- ^ encoding of parameters
     -> DecodeRow row y -- ^ decoding of returned rows
-    -> Query '[] '[] db params row -- ^ `select`, `values`, ...
+    -> Query '[] '[] db params row
+    -- ^ `Squeal.PostgreSQL.Query.Select.select`,
+    -- `Squeal.PostgreSQL.Query.Values.values`, ...
     -> Statement db x y
 
 instance Profunctor (Statement db) where
@@ -105,7 +109,9 @@ type GenericRow row y ys =
 query ::
   ( GenericParams db params x xs
   , GenericRow row y ys
-  ) => Query '[] '[] db params row -- ^ `select`, `values`, ...
+  ) => Query '[] '[] db params row
+    -- ^ `Squeal.PostgreSQL.Query.Select.select`,
+    -- `Squeal.PostgreSQL.Query.Values.values`, ...
     -> Statement db x y
 query = Query genericParams genericRow
 
@@ -114,6 +120,8 @@ manipulation ::
   ( GenericParams db params x xs
   , GenericRow row y ys
   ) => Manipulation '[] db params row
-    -- ^ `insertInto`, `update`, `deleteFrom`, ...
+    -- ^ `Squeal.PostgreSQL.Manipulation.Insert.insertInto`,
+    -- `Squeal.PostgreSQL.Manipulation.Update.update`,
+    -- or `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom`, ...
     -> Statement db x y
 manipulation = Manipulation genericParams genericRow
