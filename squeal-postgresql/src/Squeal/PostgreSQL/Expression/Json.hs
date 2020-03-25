@@ -81,10 +81,10 @@ import GHC.TypeLits
 
 import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Expression.Set
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Query.From
+import Squeal.PostgreSQL.Query.From.Set
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Type.Schema
 
@@ -337,7 +337,7 @@ jsonbPretty = unsafeFunction "jsonb_pretty"
 >>> printSQL (select Star (from (jsonEach (inline (Json (object ["a" .= "foo", "b" .= "bar"]))))))
 SELECT * FROM json_each(('{"a":"foo","b":"bar"}' :: json))
 -}
-jsonEach :: SetFunction (null 'PGjson)
+jsonEach :: null 'PGjson -|->
   ("json_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson])
 jsonEach = unsafeSetFunction "json_each"
 
@@ -347,7 +347,7 @@ jsonEach = unsafeSetFunction "json_each"
 SELECT * FROM jsonb_each(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbEach
-  :: SetFunction (null 'PGjsonb)
+  :: null 'PGjsonb -|->
     ("jsonb_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson])
 jsonbEach = unsafeSetFunction "jsonb_each"
 
@@ -357,7 +357,7 @@ jsonbEach = unsafeSetFunction "jsonb_each"
 SELECT * FROM json_each_text(('{"a":"foo","b":"bar"}' :: json))
 -}
 jsonEachText
-  :: SetFunction (null 'PGjson)
+  :: null 'PGjson -|->
     ("json_each_text" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext])
 jsonEachText = unsafeSetFunction "json_each_text"
 
@@ -367,7 +367,7 @@ jsonEachText = unsafeSetFunction "json_each_text"
 SELECT * FROM jsonb_each_text(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbEachText
-  :: SetFunction (null 'PGjsonb)
+  :: null 'PGjsonb -|->
     ("jsonb_each_text" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext])
 jsonbEachText = unsafeSetFunction "jsonb_each_text"
 
@@ -377,7 +377,7 @@ jsonbEachText = unsafeSetFunction "jsonb_each_text"
 json_object_keys(('{"a":"foo","b":"bar"}' :: json))
 -}
 jsonObjectKeys
-  :: SetFunction (null 'PGjson)
+  :: null 'PGjson -|->
     ("json_object_keys" ::: '["json_object_keys" ::: 'NotNull 'PGtext])
 jsonObjectKeys = unsafeSetFunction "json_object_keys"
 
@@ -387,7 +387,7 @@ jsonObjectKeys = unsafeSetFunction "json_object_keys"
 jsonb_object_keys(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbObjectKeys
-  :: SetFunction (null 'PGjsonb)
+  :: null 'PGjsonb -|->
     ("jsonb_object_keys" ::: '["jsonb_object_keys" ::: 'NotNull 'PGtext])
 jsonbObjectKeys = unsafeSetFunction "jsonb_object_keys"
 

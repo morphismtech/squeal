@@ -37,7 +37,7 @@ module Squeal.PostgreSQL.Expression
   , Expr
     -- * Function
   , type (-->)
-  , FunctionDB
+  , Fun
   , unsafeFunction
   , function
   , unsafeLeftOp
@@ -52,7 +52,7 @@ module Squeal.PostgreSQL.Expression
   , FunctionVar
   , unsafeFunctionVar
   , type (--->)
-  , FunctionNDB
+  , FunN
   , unsafeFunctionN
   , functionN
     -- * Re-export
@@ -165,15 +165,10 @@ type OperatorDB db x1 x2 y
 -- This is a subtype of the usual Haskell function type `Prelude.->`,
 -- indeed a subcategory as it is closed under the usual
 -- `Prelude..` and `Prelude.id`.
-type (-->) x y
-  =  forall grp lat with db params from
-  .  Expression grp lat with db params from x
-     -- ^ input
-  -> Expression grp lat with db params from y
-     -- ^ output
+type (-->) x y = forall db. Fun db x y
 
 -- | Like `-->` but depends on the schemas of the database
-type FunctionDB db x y
+type Fun db x y
   =  forall grp lat with params from
   .  Expression grp lat with db params from x
      -- ^ input
@@ -186,15 +181,10 @@ Use the `*:` operator to end your argument lists, like so.
 >>> printSQL (unsafeFunctionN "fun" (true :* false :* localTime *: true))
 fun(TRUE, FALSE, LOCALTIME, TRUE)
 -}
-type (--->) xs y
-  =  forall grp lat with db params from
-  .  NP (Expression grp lat with db params from) xs
-     -- ^ inputs
-  -> Expression grp lat with db params from y
-     -- ^ output
+type (--->) xs y = forall db. FunN db xs y
 
 -- | Like `--->` but depends on the schemas of the database
-type FunctionNDB db xs y
+type FunN db xs y
   =  forall grp lat with params from
   .  NP (Expression grp lat with db params from) xs
      -- ^ inputs
@@ -348,7 +338,7 @@ unsafeFunction fun x = UnsafeExpression $
 >>> type Schema = '["fn" ::: 'Function Fn]
 >>> :{
 let
-  fn :: FunctionDB (Public Schema) ('Null 'PGint4) ('NotNull 'PGnumeric)
+  fn :: Fun (Public Schema) ('Null 'PGint4) ('NotNull 'PGnumeric)
   fn = function #fn
 in
   printSQL (fn 1)
@@ -358,7 +348,7 @@ in
 function
   :: (Has sch db schema, Has fun schema ('Function ('[x] :=> 'Returns y)))
   => QualifiedAlias sch fun -- ^ function name
-  -> FunctionDB db x y
+  -> Fun db x y
 function = unsafeFunction . renderSQL
 
 -- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: inline 'a')
@@ -373,7 +363,7 @@ unsafeFunctionN fun xs = UnsafeExpression $
 >>> type Schema = '["fn" ::: 'Function Fn]
 >>> :{
 let
-  fn :: FunctionNDB (Public Schema) '[ 'Null 'PGint4, 'Null 'PGbool] ('NotNull 'PGnumeric)
+  fn :: FunN (Public Schema) '[ 'Null 'PGint4, 'Null 'PGbool] ('NotNull 'PGnumeric)
   fn = functionN #fn
 in
   printSQL (fn (1 *: true))
@@ -385,7 +375,7 @@ functionN
      , Has fun schema ('Function (xs :=> 'Returns y))
      , SListI xs )
   => QualifiedAlias sch fun -- ^ function alias
-  -> FunctionNDB db xs y
+  -> FunN db xs y
 functionN = unsafeFunctionN . renderSQL
 
 instance

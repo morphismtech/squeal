@@ -217,7 +217,6 @@ import Squeal.PostgreSQL.Expression.Math as X
 import Squeal.PostgreSQL.Expression.Null as X
 import Squeal.PostgreSQL.Expression.Parameter as X
 import Squeal.PostgreSQL.Expression.Range as X
-import Squeal.PostgreSQL.Expression.Set as X
 import Squeal.PostgreSQL.Expression.Sort as X
 import Squeal.PostgreSQL.Expression.Subquery as X
 import Squeal.PostgreSQL.Expression.Text as X
@@ -231,6 +230,8 @@ import Squeal.PostgreSQL.Manipulation.Insert as X
 import Squeal.PostgreSQL.Manipulation.Update as X
 import Squeal.PostgreSQL.Query as X
 import Squeal.PostgreSQL.Query.From as X
+import Squeal.PostgreSQL.Query.From.Join as X
+import Squeal.PostgreSQL.Query.From.Set as X
 import Squeal.PostgreSQL.Query.Select as X
 import Squeal.PostgreSQL.Query.Table as X
 import Squeal.PostgreSQL.Query.Values as X

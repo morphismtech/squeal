@@ -40,12 +40,12 @@ import Data.Word (Word64)
 
 import qualified Generics.SOP as SOP
 
-import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Expression.Set
 import Squeal.PostgreSQL.Expression.Type
-import Squeal.PostgreSQL.Type.List
+import Squeal.PostgreSQL.Query.From.Set
 import Squeal.PostgreSQL.Render
+import Squeal.PostgreSQL.Type.Alias
+import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
@@ -135,5 +135,5 @@ index n expr = UnsafeExpression $
   parenthesized (renderSQL expr) <> "[" <> fromString (show n) <> "]"
 
 -- | Expand an array to a set of rows
-unnest :: SetFunction (null ('PGvararray ty)) ("unnest" ::: '["unnest" ::: ty])
+unnest :: null ('PGvararray ty) -|-> ("unnest" ::: '["unnest" ::: ty])
 unnest = unsafeSetFunction "unnest"
