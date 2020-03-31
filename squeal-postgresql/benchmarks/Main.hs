@@ -22,6 +22,8 @@ import           Gauge.Main.Options             ( defaultConfig
 import           GHC.Generics
 import qualified Generics.SOP                  as SOP
 import           Test.QuickCheck
+-- For CI
+import           Main.Utf8                      ( withUtf8 )
 -- For keeping a track of which question ID to query
 import           Data.Int                       ( Int64 )
 import           Data.IORef
@@ -91,7 +93,7 @@ main = do
             ]
         ]
 
-  defaultMain [queryRenderGroup, dbInsertsGroup, dbSelectsGroup]
+  withUtf8 $ defaultMain [queryRenderGroup, dbInsertsGroup, dbSelectsGroup]
 
 
 -- | Configure the benchmark to run only once (per IO action)
