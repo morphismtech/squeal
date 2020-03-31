@@ -12,16 +12,41 @@
 -- or otherwise 'stack bench' won't work.
 
 import           Squeal.PostgreSQL       hiding ( defaultMain )
-import           Criterion.Main
+import           Gauge.Main
+import           Gauge.Main.Options             ( defaultConfig
+                                                , Config(..)
+                                                , Verbosity(..)
+                                                , DisplayMode(..)
+                                                , Mode(..)
+                                                )
 import           GHC.Generics
 import qualified Generics.SOP                  as SOP
 import           Test.QuickCheck
+-- For CI
+import           Main.Utf8                      ( withUtf8 )
+-- For keeping a track of which question ID to query
+import           Data.Int                       ( Int64 )
+import           Data.IORef
 -- Project imports
 import           Schema
 import           Queries
+import           DBSetup                        ( teardownDB )
+import           DBHelpers                      ( initDBWithPool
+                                                , getRandomUser
+                                                , runDbWithPool
+                                                , SquealPool
+                                                )
 
-main = defaultMain
-  [ bgroup
+main :: IO ()
+main = do
+  -- A mutable hack here to keep track of
+  -- pulling a new user by ID from the db instead of the same id
+  currentId <- newIORef (1 :: UserId)
+
+  -- Define benchmarks
+  let
+    queryRenderGroup :: Benchmark
+    queryRenderGroup = bgroup
       "Render Queries"
       [ bench "createUser: weak head normal form" $ whnf renderSQL createUser
       , bench "createUser: normal form" $ nf renderSQL createUser
@@ -32,15 +57,60 @@ main = defaultMain
       , bench "insertDeviceDetails: normal form"
         $ nf renderSQL insertDeviceDetails
       ]
-  ]
 
-{- 
-To benchmark actual IO actions like supplying parameters to a query,
-we would generate samples via QuickCheck like this:
+    -- Queries against an actual DB
 
-```
-d :: [InsertUser] <- sample' arbitrary
-```
+    -- 1. Initialize Schema to DB
+    -- 2. Make connection pool and pass it to tests
+    -- 3. Generate users on the fly and add them to DB
+    -- 4. Tear the Schema down from the DB
 
-Then start testing those generated values with `manipulateParams`.
--}
+    dbInsertsGroup :: Benchmark
+    dbInsertsGroup =
+      envWithCleanup initDBWithPool (const teardownDB) $ \pool -> bgroup
+        "Run individual INSERTs against DB using a connection pool"
+        [ bgroup
+            "INSERT: add users to the table users"
+            [ bench "Run individual INSERT statement" $ makeRunOnce $ perRunEnv
+                getRandomUser
+                -- The actual action to benchmark
+                (\(user :: InsertUser) ->
+                  runDbWithPool pool $ createUserSession user
+                )
+            ]
+        ]
+
+    dbSelectsGroup :: Benchmark
+    dbSelectsGroup =
+      envWithCleanup initDBWithPool (const teardownDB) $ \pool -> bgroup
+        "Run individual SELECTs against DB using a connection pool"
+        [ bgroup
+            "SELECT: fetch users from the table users individually"
+            [ bench "Fetch a single user" $ makeRunOnce $ perRunEnv
+                (insertAndIncrement pool currentId)
+                (\(id_ :: UserId) -> runDbWithPool pool $ userDetailsSession id_
+                )
+            ]
+        ]
+
+  withUtf8 $ defaultMain [queryRenderGroup, dbInsertsGroup, dbSelectsGroup]
+
+
+-- | Configure the benchmark to run only once (per IO action)
+makeRunOnce :: Benchmarkable -> Benchmarkable
+makeRunOnce current = current { perRun = True }
+
+getAndIncrementId :: (IORef UserId) -> IO UserId
+getAndIncrementId currentId = do
+  current <- readIORef currentId
+  writeIORef currentId (current + 1)
+  return current
+
+-- | This INSERTs a row in the db so that there's always a row to query.
+-- Otherwise 'getRow 0' throws an exception.
+-- NOTE: will make benchmark time slower but does not affect results.
+insertAndIncrement :: SquealPool -> (IORef UserId) -> IO UserId
+insertAndIncrement pool currentId = do
+  user <- getRandomUser
+  _    <- runDbWithPool pool $ createUserSession user
+  getAndIncrementId currentId
