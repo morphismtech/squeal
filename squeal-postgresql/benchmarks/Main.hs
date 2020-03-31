@@ -15,6 +15,9 @@ import           Squeal.PostgreSQL       hiding ( defaultMain )
 import           Gauge.Main
 import           Gauge.Main.Options             ( defaultConfig
                                                 , Config(..)
+                                                , Verbosity(..)
+                                                , DisplayMode(..)
+                                                , Mode(..)
                                                 )
 import           GHC.Generics
 import qualified Generics.SOP                  as SOP
@@ -29,21 +32,15 @@ import           DBSetup                        ( teardownDB )
 import           DBHelpers                      ( initDBWithPool
                                                 , getRandomUser
                                                 , runDbWithPool
+                                                , SquealPool
                                                 )
-
--- Configure the number of iterations to 6000
--- If we don't set it fixed, the benchmark will try to query more
--- SELECTs than there are rows, causing exceptions. This is probably
--- because SELECTs are faster, and the default config prioritizes homogenous bench time
--- over iteration count
-config :: Config
-config = defaultConfig { iters = Just (6000 :: Int64) }
 
 main :: IO ()
 main = do
   -- A mutable hack here to keep track of
   -- pulling a new user by ID from the db instead of the same id
   currentId <- newIORef (1 :: UserId)
+
   -- Define benchmarks
   let
     queryRenderGroup :: Benchmark
@@ -58,51 +55,60 @@ main = do
       , bench "insertDeviceDetails: normal form"
         $ nf renderSQL insertDeviceDetails
       ]
+
+    -- Queries against an actual DB
+
     -- 1. Initialize Schema to DB
     -- 2. Make connection pool and pass it to tests
     -- 3. Generate users on the fly and add them to DB
     -- 4. Tear the Schema down from the DB
-    dbManipulationsGroup :: Benchmark
-    dbManipulationsGroup =
+
+    dbInsertsGroup :: Benchmark
+    dbInsertsGroup =
       envWithCleanup initDBWithPool (const teardownDB) $ \pool -> bgroup
-        "Run individual queries and manipulations against DB using a connection pool"
+        "Run individual INSERTs against DB using a connection pool"
         [ bgroup
-          "INSERT: add thousands of users to the table users"
-          [ bench "Run individual INSERT statement" $ makeRunOnce $ perRunEnv
-              getRandomUser
+            "INSERT: add users to the table users"
+            [ bench "Run individual INSERT statement" $ makeRunOnce $ perRunEnv
+                getRandomUser
                 -- The actual action to benchmark
-              (\(user :: InsertUser) ->
-                runDbWithPool pool $ createUserSession user
-              )
-          ]
-        , bgroup
-          "SELECT: fetch all users from the table users individually"
-          [ bench "Run individual SELECT statement" $ makeRunOnce $ perRunEnv
-              (getAndIncrementId currentId)
-              (\(id_ :: UserId) -> runDbWithPool pool $ userDetailsSession id_)
-          ]
+                (\(user :: InsertUser) ->
+                  runDbWithPool pool $ createUserSession user
+                )
+            ]
         ]
 
-    getAndIncrementId :: (IORef UserId) -> IO UserId
-    getAndIncrementId currentId = do
-      current <- readIORef currentId
-      writeIORef currentId (current + 1)
-      return current
-  -- run all benchmarks with modified config
-  defaultMainWith config [queryRenderGroup, dbManipulationsGroup]
+    dbSelectsGroup :: Benchmark
+    dbSelectsGroup =
+      envWithCleanup initDBWithPool (const teardownDB) $ \pool -> bgroup
+        "Run individual SELECTs against DB using a connection pool"
+        [ bgroup
+            "SELECT: fetch users from the table users individually"
+            [ bench "Fetch a single user" $ makeRunOnce $ perRunEnv
+                (insertAndIncrement pool currentId)
+                (\(id_ :: UserId) -> runDbWithPool pool $ userDetailsSession id_
+                )
+            ]
+        ]
+
+  defaultMain [queryRenderGroup, dbInsertsGroup, dbSelectsGroup]
 
 
 -- | Configure the benchmark to run only once (per IO action)
 makeRunOnce :: Benchmarkable -> Benchmarkable
 makeRunOnce current = current { perRun = True }
 
-{- 
-To benchmark actual IO actions like supplying parameters to a query,
-we would generate samples via QuickCheck like this:
+getAndIncrementId :: (IORef UserId) -> IO UserId
+getAndIncrementId currentId = do
+  current <- readIORef currentId
+  writeIORef currentId (current + 1)
+  return current
 
-```
-d :: [InsertUser] <- sample' arbitrary
-```
-
-Then start testing those generated values with `manipulateParams`.
--}
+-- | This INSERTs a row in the db so that there's always a row to query.
+-- Otherwise 'getRow 0' throws an exception.
+-- NOTE: will make benchmark time slower but does not affect results.
+insertAndIncrement :: SquealPool -> (IORef UserId) -> IO UserId
+insertAndIncrement pool currentId = do
+  user <- getRandomUser
+  _    <- runDbWithPool pool $ createUserSession user
+  getAndIncrementId currentId
