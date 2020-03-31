@@ -99,8 +99,7 @@ makeConnStr PGConfig { pgHost = host, pgPort = portNumber, pgDbname = dbName, pg
     <> show portNumber
 
 connectionString :: ByteString
-connectionString =
-  "host=localhost dbname=exampledb user=postgres password=postgres port=5432"
+connectionString = "host=localhost port=5432 dbname=exampledb"
 
 performDBAction :: Definition a b -> String -> IO ()
 performDBAction action message = do
