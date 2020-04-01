@@ -17,6 +17,7 @@ jobs:
       - run: stack upgrade && stack update
       - run: stack build --fast
       - run: stack test
+      - run: stack bench
       - run: stack haddock
       - save_cache:
           key: dependency-cache
