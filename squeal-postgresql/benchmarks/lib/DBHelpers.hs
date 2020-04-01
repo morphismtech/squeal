@@ -29,7 +29,6 @@ import           GHC.Generics                   ( Generic
                                                 )
 import           Test.QuickCheck
 import           Squeal.PostgreSQL
-import qualified Squeal.PostgreSQL.PQ.Pool     as SPG
 import qualified Data.ByteString.Char8         as C
 import           Control.DeepSeq
 -- Project imports
@@ -37,7 +36,7 @@ import           Schema                         ( Schemas )
 import           Queries                        ( InsertUser(..) )
 import           DBSetup
 
-newtype SquealPool = SquealPool {getSquealPool :: SPG.Pool (K Connection Schemas)} deriving (Generic)
+newtype SquealPool = SquealPool {getSquealPool :: Pool (K Connection Schemas)} deriving (Generic)
 -- Below may be wrong - it may screw up the whole connection pool using in tests
 instance NFData SquealPool where
   rnf = rwhnf
@@ -56,12 +55,11 @@ runDbWithPool pool session = do
 
 -- | Helper
 runUsingConnPool :: SquealPool -> PQ Schemas Schemas IO x -> IO x
-runUsingConnPool (SquealPool pool) (PQ session) =
-  unK <$> withResource pool session
+runUsingConnPool (SquealPool pool) = usingConnectionPool pool
 
 makePool :: C.ByteString -> IO SquealPool
 makePool connStr = do
-  pool <- SPG.createConnectionPool connStr 1 0.5 10
+  pool <- createConnectionPool connStr 1 0.5 10
   return $ SquealPool pool
 
 initDBWithPool :: IO SquealPool
