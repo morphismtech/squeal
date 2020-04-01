@@ -8,7 +8,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Schema where
+module Gauge.Schema where
 
 import           Squeal.PostgreSQL
 import           GHC.Generics

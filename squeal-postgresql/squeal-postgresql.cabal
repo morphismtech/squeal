@@ -153,11 +153,15 @@ test-suite spec
     , text >= 1.2.2.2
     , vector >= 0.12.0.1
 
-benchmark benchmarks
+benchmark gauge
   type: exitcode-stdio-1.0
-  hs-source-dirs: benchmarks, benchmarks/lib
-  main-is: Main.hs
-  other-modules: Schema, Queries, DBSetup, DBHelpers
+  hs-source-dirs: bench
+  main-is: Gauge.hs
+  other-modules:
+      Gauge.DBHelpers
+    , Gauge.DBSetup
+    , Gauge.Queries
+    , Gauge.Schema
   default-language: Haskell2010
   ghc-options:
     -O2

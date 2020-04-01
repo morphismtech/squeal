@@ -8,8 +8,8 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
--- Don't define 'module Main where' here
--- or otherwise 'stack bench' won't work.
+
+module Main where
 
 import           Squeal.PostgreSQL       hiding ( defaultMain )
 import           Gauge.Main
@@ -28,10 +28,10 @@ import           Main.Utf8                      ( withUtf8 )
 import           Data.Int                       ( Int64 )
 import           Data.IORef
 -- Project imports
-import           Schema
-import           Queries
-import           DBSetup                        ( teardownDB )
-import           DBHelpers                      ( initDBWithPool
+import           Gauge.Schema
+import           Gauge.Queries
+import           Gauge.DBSetup                  ( teardownDB )
+import           Gauge.DBHelpers                ( initDBWithPool
                                                 , getRandomUser
                                                 , runDbWithPool
                                                 , SquealPool

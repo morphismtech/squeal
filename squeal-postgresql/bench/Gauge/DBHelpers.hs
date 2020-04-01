@@ -12,7 +12,7 @@
 {-# LANGUAGE ScopedTypeVariables                #-}
 {-# LANGUAGE StandaloneDeriving              #-}
 
-module DBHelpers where
+module Gauge.DBHelpers where
 
 import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString.Char8         as C
@@ -32,9 +32,9 @@ import           Squeal.PostgreSQL
 import qualified Data.ByteString.Char8         as C
 import           Control.DeepSeq
 -- Project imports
-import           Schema                         ( Schemas )
-import           Queries                        ( InsertUser(..) )
-import           DBSetup
+import           Gauge.Schema                   ( Schemas )
+import           Gauge.Queries                  ( InsertUser(..) )
+import           Gauge.DBSetup
 
 newtype SquealPool = SquealPool {getSquealPool :: Pool (K Connection Schemas)} deriving (Generic)
 -- Below may be wrong - it may screw up the whole connection pool using in tests

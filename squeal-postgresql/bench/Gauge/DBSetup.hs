@@ -11,7 +11,7 @@
 {-# LANGUAGE DerivingStrategies                #-}
 {-# LANGUAGE ScopedTypeVariables                #-}
 
-module DBSetup where
+module Gauge.DBSetup where
 
 import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString.Char8         as C
@@ -20,11 +20,11 @@ import           GHC.Generics
 import           Test.QuickCheck
 import           Squeal.PostgreSQL
 -- Project imports
-import           Schema                         ( Schemas
+import           Gauge.Schema                   ( Schemas
                                                 , DeviceOS
                                                 , IPLocation
                                                 )
-import           Queries                        ( InsertUser )
+import           Gauge.Queries                  ( InsertUser )
 
 
 -- First create enums as they're needed in the Schema

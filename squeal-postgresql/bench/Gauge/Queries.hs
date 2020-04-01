@@ -10,7 +10,7 @@
 {-# LANGUAGE DeriveAnyClass                #-}
 {-# LANGUAGE DerivingStrategies                #-}
 
-module Queries where
+module Gauge.Queries where
 
 import           Squeal.PostgreSQL
 import           GHC.Generics                   ( Generic )
@@ -30,7 +30,7 @@ import           Generic.Random                 ( genericArbitrarySingle )
 -- Import Orphan instances
 import           Test.QuickCheck.Instances      ( )
 -- Project imports
-import           Schema
+import           Gauge.Schema
 
 -- Types
 
