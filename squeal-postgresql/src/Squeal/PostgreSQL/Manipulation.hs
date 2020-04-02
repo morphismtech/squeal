@@ -93,6 +93,13 @@ The top level `Manipulation_` type is parameterized by a @db@ `SchemasType`,
 against which the query is type-checked, an input @params@ Haskell `Type`,
 and an ouput row Haskell `Type`.
 
+`Manipulation_` is a type family which resolves into a `Manipulation`,
+so don't be fooled by the input params and output row Haskell `Type`s,
+which are converted into appropriate
+Postgres @[@`NullType`@]@ params and `RowType` rows.
+Use a top-level `Squeal.PostgreSQL.Session.Statement.Statement` to
+fix actual Haskell input params and output rows.
+
 A top-level `Manipulation_` can be run
 using `Squeal.PostgreSQL.Session.manipulateParams`, or if @params = ()@
 using `Squeal.PostgreSQL.Session.manipulate`.
@@ -124,29 +131,33 @@ INSERT INTO "tab" ("col1", "col2") VALUES ((2 :: int4), DEFAULT)
 
 out-of-line parameterized insert:
 
->>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Columns = '["col1" ::: 'Def :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  manipulation :: Manipulation_ (Public Schema) (Int32, Int32) ()
+  manipulation :: Manipulation_ (Public Schema) (Only Int32) ()
   manipulation =
-    insertInto_ #tab (Values_ (Set (param @1) `as` #col1 :* Set (param @2) `as` #col2))
+    insertInto_ #tab $ Values_
+      (Default `as` #col1 :* Set (param @1) `as` #col2)
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (($1 :: int4), ($2 :: int4))
+INSERT INTO "tab" ("col1", "col2") VALUES (DEFAULT, ($1 :: int4))
 
 in-line parameterized insert:
 
->>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Columns = '["col1" ::: 'Def :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  manipulation :: Row Int32 Int32 -> Manipulation_ (Public Schema) () ()
-  manipulation row =
-    insertInto_ #tab (inlineValues_ row)
-in printSQL (manipulation (Row 1 2))
+  manipulation
+    :: Manipulation_ (Public Schema) () ()
+  manipulation =
+    insertInto_ #tab $ inlineValues
+      (Row {col1 = Default                , col2 = 2 :: Int32})
+      [Row {col1 = NotDefault (3 :: Int32), col2 = 4 :: Int32}]
+in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES ((1 :: int4), (2 :: int4))
+INSERT INTO "tab" ("col1", "col2") VALUES (DEFAULT, (2 :: int4)), ((3 :: int4), (4 :: int4))
 
 returning insert:
 

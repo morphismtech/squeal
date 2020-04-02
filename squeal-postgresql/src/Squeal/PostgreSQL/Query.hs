@@ -86,14 +86,21 @@ instance RenderSQL (Query lat with db params row) where renderSQL = renderQuery
 
 {- |
 The top level `Query_` type is parameterized by a @db@ `SchemasType`,
-against which the query is type-checked, an input @parameters@ Haskell `Type`,
+against which the query is type-checked, an input @params@ Haskell `Type`,
 and an ouput row Haskell `Type`.
 
-A top-level query can be run
-using `Squeal.PostgreSQL.Session.runQueryParams`, or if @parameters = ()@
+`Query_` is a type family which resolves into a `Query`,
+so don't be fooled by the input params and output row Haskell `Type`s,
+which are converted into appropriate
+Postgres @[@`NullType`@]@ params and `RowType` rows.
+Use a top-level `Squeal.PostgreSQL.Session.Statement.Statement` to
+fix actual Haskell input params and output rows.
+
+A top-level `Query_` can be run
+using `Squeal.PostgreSQL.Session.runQueryParams`, or if @params = ()@
 using `Squeal.PostgreSQL.Session.runQuery`.
 
-Generally, @parameters@ will be a Haskell tuple or record whose entries
+Generally, @params@ will be a Haskell tuple or record whose entries
 may be referenced using positional
 `Squeal.PostgreSQL.Expression.Parameter.parameter`s and @row@ will be a
 Haskell record, whose entries will be targeted using overloaded labels.
@@ -332,7 +339,7 @@ SELECT "col1" AS "fromOnly" FROM "tab" AS "t1" WHERE EXISTS (SELECT * FROM "tab"
 -}
 type family Query_
   (db :: SchemasType)
-  (parameters :: Type)
+  (params :: Type)
   (row :: Type) where
     Query_ db params row =
       Query '[] '[] db (TuplePG params) (RowPG row)
