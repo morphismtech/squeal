@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Sort
-Description: Sort expressions
+Description: sort expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Sort expressions
+sort expressions
 -}
 
 {-# LANGUAGE
@@ -27,7 +27,7 @@ module Squeal.PostgreSQL.Expression.Sort
 
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- | `SortExpression`s are used by `orderBy` to optionally sort the results
 -- of a `Squeal.PostgreSQL.Query.Query`. `Asc` or `Desc`

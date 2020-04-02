@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Definition.Index
-Description: Create and drop index definitions
+Description: create and drop indexes
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Create and drop index definitions.
+create and drop indexes
 -}
 
 {-# LANGUAGE
@@ -51,11 +51,11 @@ import GHC.TypeLits
 
 import qualified GHC.Generics as GHC
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Expression.Sort
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

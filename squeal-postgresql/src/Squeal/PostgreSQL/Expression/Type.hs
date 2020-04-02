@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression
-Description: Type expressions
+Description: type expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Type expressions.
+type expressions
 -}
 
 {-# LANGUAGE
@@ -111,11 +111,11 @@ import qualified Data.ByteString as ByteString
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.PG
+import Squeal.PostgreSQL.Type.PG
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Definition.Type
-Description: Create and drop type definitions
+Description: create and drop types
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Create and drop type definitions.
+create and drop types
 -}
 
 {-# LANGUAGE
@@ -49,14 +49,15 @@ import Prelude hiding ((.), id)
 
 import qualified Generics.SOP as SOP
 
-import Squeal.PostgreSQL.Alias
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.Definition
-import Squeal.PostgreSQL.List
-import Squeal.PostgreSQL.PG
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type
+import Squeal.PostgreSQL.Type.Alias
+import Squeal.PostgreSQL.Type.List
+import Squeal.PostgreSQL.Type.PG
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Range
-Description: Range types and functions
+Description: range types and functions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Range types and functions
+range types and functions
 -}
 
 {-# LANGUAGE
@@ -68,9 +68,9 @@ import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Type hiding (bool)
-import Squeal.PostgreSQL.PG
+import Squeal.PostgreSQL.Type.PG
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL (tstzrange, numrange, int4range, now, printSQL)

@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.TextSearch
-Description: Text search expressions
+Description: text search functions and operators
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Text search functions and operators
+text search functions and operators
 -}
 
 {-# LANGUAGE
@@ -41,8 +41,8 @@ module Squeal.PostgreSQL.Expression.TextSearch
   ) where
 
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.List
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.List
+import Squeal.PostgreSQL.Type.Schema
 
 -- | `Squeal.PostgreSQL.Expression.Type.tsvector` matches tsquery ?
 (@@) :: Operator (null 'PGtsvector) (null 'PGtsquery) ('Null 'PGbool)

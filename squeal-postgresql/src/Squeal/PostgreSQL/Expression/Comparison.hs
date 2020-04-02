@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Comparison
-Description: Comparison expressions
+Description: comparison functions and operators
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Comparison functions and operators
+comparison functions and operators
 -}
 
 {-# LANGUAGE
@@ -48,7 +48,7 @@ import Data.ByteString
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

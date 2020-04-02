@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Time
-Description: Date/Time expressions
+Description: date/time functions and operators
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Date/Time functions and operators
+date/time functions and operators
 -}
 
 {-# LANGUAGE
@@ -47,7 +47,7 @@ import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL
