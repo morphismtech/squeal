@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Definition.View
-Description: Create and drop view definitions
+Description: create and drop views
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Create and drop view definitions.
+create and drop views
 -}
 
 {-# LANGUAGE

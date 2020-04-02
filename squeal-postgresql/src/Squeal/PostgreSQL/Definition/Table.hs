@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Definition.Table
-Description: Create, drop and alter table definitions
+Description: create, drop and alter tables
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Create, drop and alter table definitions.
+create, drop and alter tables
 -}
 
 {-# LANGUAGE

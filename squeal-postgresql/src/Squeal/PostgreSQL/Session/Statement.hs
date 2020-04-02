@@ -1,6 +1,6 @@
 {-|
-Module: Squeal.PostgreSQL.Session.Statement2
-Description: Statements
+Module: Squeal.PostgreSQL.Session.Statement
+Description: statements
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental

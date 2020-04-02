@@ -1,6 +1,6 @@
 {-|
 Module: Squeal.PostgreSQL.Type.PG
-Description: Embedding of Haskell types into Postgres's type system
+Description: embedding of Haskell types into Postgres type system
 Copyright: (c) Eitan Chatav, 2010
 Maintainer: eitan@morphism.tech
 Stability: experimental
@@ -87,9 +87,38 @@ as Postgres types. As an open type family, `PG` is extensible.
 PG LocalTime :: PGType
 = 'PGtimestamp
 
->>> newtype MyDouble = My Double
->>> :set -XTypeFamilies
->>> instance IsPG MyDouble where type PG MyDouble = 'PGfloat8
+The preferred way to generate `PG`s of your own type is through
+generalized newtype deriving or via deriving.
+
+>>> newtype UserId = UserId {getUserId :: UUID} deriving newtype IsPG
+
+>>> :kind! PG UserId
+PG UserId :: PGType
+= 'PGuuid
+
+>>> :{
+data Answer = Yes | No
+  deriving stock GHC.Generic
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+  deriving IsPG via Enumerated Answer
+:}
+
+>>> :kind! PG Answer
+PG Answer :: PGType
+= 'PGenum '["Yes", "No"]
+
+>>> :{
+data Complex = Complex {real :: Double, imaginary :: Double}
+  deriving stock GHC.Generic
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+  deriving IsPG via Composite Complex
+:}
+
+>>> :kind! PG Complex
+PG Complex :: PGType
+= 'PGcomposite
+    '["real" ::: 'NotNull 'PGfloat8,
+      "imaginary" ::: 'NotNull 'PGfloat8]
 -}
 class IsPG (hask :: Type) where type PG hask :: PGType
 -- | `PGbool`
@@ -197,14 +226,6 @@ type family RowPG (hask :: Type) :: RowType where
 
 -- | `RowOf` applies `NullPG` to the fields of a list.
 type family RowOf (record :: [(Symbol, Type)]) :: RowType where
-  RowOf (col ::: ty ': col1 ::: ty1 ': col2 ::: ty2 ': col3 ::: ty3 ': col4 ::: ty4 ': record) =
-    col ::: NullPG ty ': col1 ::: NullPG ty1 ': col2 ::: NullPG ty2 ': col3 ::: NullPG ty3 ': col4 ::: NullPG ty4 ': RowOf record
-  RowOf (col ::: ty ': col1 ::: ty1 ': col2 ::: ty2 ': col3 ::: ty3 ': record) =
-    col ::: NullPG ty ': col1 ::: NullPG ty1 ': col2 ::: NullPG ty2 ': col3 ::: NullPG ty3 ': RowOf record
-  RowOf (col ::: ty ': col1 ::: ty1 ': col2 ::: ty2 ': record) =
-    col ::: NullPG ty ': col1 ::: NullPG ty1 ': col2 ::: NullPG ty2 ': RowOf record
-  RowOf (col ::: ty ': col1 ::: ty1 ': record) =
-    col ::: NullPG ty ': col1::: NullPG ty1 ': RowOf record
   RowOf (col ::: ty ': record) = col ::: NullPG ty ': RowOf record
   RowOf '[] = '[]
 
@@ -233,15 +254,6 @@ type family TuplePG (hask :: Type) :: [NullType] where
 
 -- | `TupleOf` turns a list of Haskell `Type`s into a list of `NullType`s.
 type family TupleOf (tuple :: [Type]) :: [NullType] where
-  TupleOf (hask ': hask1 ': hask2 ': hask3 ': hask4 ': hask5 ': tuple) =
-    NullPG hask ': NullPG hask1 ': NullPG hask2 ': NullPG hask3 ': NullPG hask4 ': NullPG hask5 ': TupleOf tuple
-  TupleOf (hask ': hask1 ': hask2 ': hask3 ': hask4 ': tuple) =
-    NullPG hask ': NullPG hask1 ': NullPG hask2 ': NullPG hask3 ': NullPG hask4 ': TupleOf tuple
-  TupleOf (hask ': hask1 ': hask2 ': hask3 ': tuple) =
-    NullPG hask ': NullPG hask1 ': NullPG hask2 ': NullPG hask3 ': TupleOf tuple
-  TupleOf (hask ': hask1 ': hask2 ': tuple) =
-    NullPG hask ': NullPG hask1 ': NullPG hask2 ': TupleOf tuple
-  TupleOf (hask ': hask1 ': tuple) = NullPG hask ': NullPG hask1 ': TupleOf tuple
   TupleOf (hask ': tuple) = NullPG hask ': TupleOf tuple
   TupleOf '[] = '[]
 
@@ -292,7 +304,8 @@ type family ConstructorNamesOf (constructors :: [Type.ConstructorInfo])
     ConstructorNamesOf (constructor ': constructors) =
       ConstructorNameOf constructor ': ConstructorNamesOf constructors
 
--- | `DimPG` turns Haskell nested homogeneous tuples into a list of lengths.
+-- | `DimPG` turns Haskell nested homogeneous tuples into a list of lengths,
+-- up to a depth of 10 for each dimension.
 type family DimPG (hask :: Type) :: [Nat] where
   DimPG (x,x) = 2 ': DimPG x
   DimPG (x,x,x) = 3 ': DimPG x
@@ -305,7 +318,8 @@ type family DimPG (hask :: Type) :: [Nat] where
   DimPG (x,x,x,x,x,x,x,x,x,x) = 10 ': DimPG x
   DimPG x = '[]
 
--- | `FixPG` extracts `NullPG` of the base type of nested homogeneous tuples.
+-- | `FixPG` extracts `NullPG` of the base type of nested homogeneous tuples,
+-- up to a depth of 10 for each dimension.
 type family FixPG (hask :: Type) :: NullType where
   FixPG (x,x) = FixPG x
   FixPG (x,x,x) = FixPG x

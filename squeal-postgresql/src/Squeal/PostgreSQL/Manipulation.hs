@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Manipulation
-Description: Squeal data manipulation language
+Description: data manipulation language
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal data manipulation language.
+data manipulation language
 -}
 
 {-# LANGUAGE

@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Range
-Description: Range types and functions
+Description: range types and functions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Range types and functions
+range types and functions
 -}
 
 {-# LANGUAGE

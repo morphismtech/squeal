@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression
-Description: Type expressions
+Description: type expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Type expressions.
+type expressions
 -}
 
 {-# LANGUAGE

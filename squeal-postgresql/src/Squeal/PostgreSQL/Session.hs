@@ -1,6 +1,6 @@
 {-|
 Module: Squeal.PostgreSQL.Session
-Description: PQ monad
+Description: sessions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental

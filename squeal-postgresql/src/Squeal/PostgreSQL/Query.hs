@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Query
-Description: Squeal queries
+Description: structured query language
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal queries.
+structured query language
 -}
 
 {-# LANGUAGE

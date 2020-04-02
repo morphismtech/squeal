@@ -1,6 +1,6 @@
 {-|
 Module: Squeal.PostgreSQL.Type.Alias
-Description: Aliases
+Description: aliases
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
