@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Definition.Schema
-Description: Create and drop schema definitions
+Description: create and drop schemas
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Create and drop schema definitions.
+create and drop schemas
 -}
 
 {-# LANGUAGE
@@ -40,10 +40,10 @@ module Squeal.PostgreSQL.Definition.Schema
 
 import GHC.TypeLits
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

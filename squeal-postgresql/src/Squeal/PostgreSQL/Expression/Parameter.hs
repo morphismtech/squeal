@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Parameter
-Description: Parameters
+Description: out-of-line parameters
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Parameters, out-of-line data values
+out-of-line parameters
 -}
 
 {-# LANGUAGE
@@ -35,16 +35,16 @@ import GHC.TypeLits
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL
 
 {- | A `HasParameter` constraint is used to indicate a value that is
 supplied externally to a SQL statement.
-`Squeal.PostgreSQL.PQ.manipulateParams`,
-`Squeal.PostgreSQL.PQ.queryParams` and
-`Squeal.PostgreSQL.PQ.traversePrepared` support specifying data values
+`Squeal.PostgreSQL.Session.manipulateParams`,
+`Squeal.PostgreSQL.Session.queryParams` and
+`Squeal.PostgreSQL.Session.traversePrepared` support specifying data values
 separately from the SQL command string, in which case `param`s are used to
 refer to the out-of-line data values.
 -}

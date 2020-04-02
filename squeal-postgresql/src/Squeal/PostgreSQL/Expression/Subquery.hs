@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Subquery
-Description: Subquery expressions
+Description: subquery expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Subquery expressions
+subquery expressions
 -}
 
 {-# LANGUAGE
@@ -24,13 +24,13 @@ module Squeal.PostgreSQL.Expression.Subquery
   , subAny
   ) where
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Logic
-import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

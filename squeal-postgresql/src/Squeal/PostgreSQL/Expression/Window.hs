@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Window
-Description: Window functions
+Description: window functions, arguments and definitions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Window functions and definitions
+window functions, arguments and definitions
 -}
 
 {-# LANGUAGE
@@ -16,12 +16,13 @@ Window functions and definitions
   , FlexibleInstances
   , GADTs
   , GeneralizedNewtypeDeriving
+  , KindSignatures
   , LambdaCase
   , MultiParamTypeClasses
   , OverloadedStrings
   , PatternSynonyms
   , RankNTypes
-  , KindSignatures
+  , TypeOperators
 #-}
 
 module Squeal.PostgreSQL.Expression.Window
@@ -35,8 +36,8 @@ module Squeal.PostgreSQL.Expression.Window
   , pattern Window
   , pattern Windows
   , WinFun0
-  , WinFun1
-  , WinFunN
+  , type (-#->)
+  , type (--#->)
     -- ** Functions
   , rank
   , rowNumber
@@ -59,14 +60,14 @@ import Data.ByteString (ByteString)
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Aggregate
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Sort
-import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 instance Aggregate (WindowArg grp) (WindowFunction grp) where
   countStar = UnsafeWindowFunction "count(*)"
@@ -215,7 +216,7 @@ type WinFun0 x
 {- |
 A @RankNType@ for window functions with 1 argument.
 -}
-type WinFun1 x y
+type (-#->) x y
   =  forall grp lat with db params from
   .  WindowArg grp '[x] lat with db params from
      -- ^ input
@@ -226,7 +227,7 @@ type WinFun1 x y
 list of heterogeneous arguments.
 Use the `*:` operator to end your argument lists.
 -}
-type WinFunN xs y
+type (--#->) xs y
   =  forall grp lat with db params from
   .  WindowArg grp xs lat with db params from
      -- ^ inputs
@@ -234,12 +235,12 @@ type WinFunN xs y
      -- ^ output
 
 -- | escape hatch for defining window functions
-unsafeWindowFunction1 :: ByteString -> WinFun1 x y
+unsafeWindowFunction1 :: ByteString -> x -#-> y
 unsafeWindowFunction1 fun x
   = UnsafeWindowFunction $ fun <> renderSQL x
 
 -- | escape hatch for defining multi-argument window functions
-unsafeWindowFunctionN :: SOP.SListI xs => ByteString -> WinFunN xs y
+unsafeWindowFunctionN :: SOP.SListI xs => ByteString -> xs --#-> y
 unsafeWindowFunctionN fun xs = UnsafeWindowFunction $ fun <> renderSQL xs
 
 {- | rank of the current row with gaps; same as `rowNumber` of its first peer
@@ -289,7 +290,7 @@ dividing the partition as equally as possible
 >>> printSQL $ ntile (Window 5)
 ntile((5 :: int4))
 -}
-ntile :: WinFun1 ('NotNull 'PGint4) ('NotNull 'PGint4)
+ntile :: 'NotNull 'PGint4 -#-> 'NotNull 'PGint4
 ntile = unsafeWindowFunction1 "ntile"
 
 {- | returns value evaluated at the row that is offset rows before the current
@@ -297,7 +298,7 @@ row within the partition; if there is no such row, instead return default
 (which must be of the same type as value). Both offset and default are
 evaluated with respect to the current row.
 -}
-lag :: WinFunN '[ty, 'NotNull 'PGint4, ty] ty
+lag :: '[ty, 'NotNull 'PGint4, ty] --#-> ty
 lag = unsafeWindowFunctionN "lag"
 
 {- | returns value evaluated at the row that is offset rows after the current
@@ -305,23 +306,23 @@ row within the partition; if there is no such row, instead return default
 (which must be of the same type as value). Both offset and default are
 evaluated with respect to the current row.
 -}
-lead :: WinFunN '[ty, 'NotNull 'PGint4, ty] ty
+lead :: '[ty, 'NotNull 'PGint4, ty] --#-> ty
 lead = unsafeWindowFunctionN "lead"
 
 {- | returns value evaluated at the row that is the
 first row of the window frame
 -}
-firstValue :: WinFun1 ty ty
+firstValue :: ty -#-> ty
 firstValue = unsafeWindowFunction1 "first_value"
 
 {- | returns value evaluated at the row that is the
 last row of the window frame
 -}
-lastValue :: WinFun1 ty ty
+lastValue :: ty -#-> ty
 lastValue = unsafeWindowFunction1 "last_value"
 
 {- | returns value evaluated at the row that is the nth
 row of the window frame (counting from 1); null if no such row
 -}
-nthValue :: WinFunN '[null ty, 'NotNull 'PGint4] ('Null ty)
+nthValue :: '[null ty, 'NotNull 'PGint4] --#-> 'Null ty
 nthValue = unsafeWindowFunctionN "nth_value"

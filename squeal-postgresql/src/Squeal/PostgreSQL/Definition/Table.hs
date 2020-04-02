@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Definition.Table
-Description: Create, drop and alter table definitions
+Description: create, drop and alter tables
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Create, drop and alter table definitions.
+create, drop and alter tables
 -}
 
 {-# LANGUAGE
@@ -49,7 +49,6 @@ module Squeal.PostgreSQL.Definition.Table
   , AddColumn (..)
   , dropColumn
   , renameColumn
-    -- ** Alter Column
   , alterColumn
   , AlterColumn (..)
   , setDefault
@@ -66,14 +65,14 @@ import GHC.TypeLits
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Definition.Constraint
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Type
-import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

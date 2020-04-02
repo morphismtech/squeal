@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Text
-Description: Text expressions
+Description: text functions and operators
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-String functions and operators
+text functions and operators
 -}
 
 {-# LANGUAGE
@@ -24,7 +24,7 @@ module Squeal.PostgreSQL.Expression.Text
   ) where
 
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

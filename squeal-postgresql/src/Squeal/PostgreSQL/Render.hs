@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Render
-Description: Rendering helper functions
+Description: render functions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Rendering helper functions.
+render functions
 -}
 
 {-# LANGUAGE

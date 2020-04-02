@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Definition.View
-Description: Create and drop view definitions
+Description: create and drop views
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Create and drop view definitions.
+create and drop views
 -}
 
 {-# LANGUAGE
@@ -40,11 +40,11 @@ module Squeal.PostgreSQL.Definition.View
 
 import GHC.TypeLits
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

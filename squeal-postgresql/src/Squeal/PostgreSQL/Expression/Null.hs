@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Null
-Description: Null
+Description: null expressions and handlers
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Null values and null handling functions
+null expressions and handlers
 -}
 
 {-# LANGUAGE
@@ -32,7 +32,7 @@ module Squeal.PostgreSQL.Expression.Null
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL

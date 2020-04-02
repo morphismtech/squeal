@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Default
-Description: Default
+Description: optional expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Optional expressions that may be `Default` or not.
+optional expressions
 -}
 
 {-# LANGUAGE
@@ -31,7 +31,7 @@ import Data.Kind
 import Generics.SOP
 
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- | `Optional` is either `Default` or `Set`ting of a value,
 -- parameterized by an appropriate `Optionality`.
