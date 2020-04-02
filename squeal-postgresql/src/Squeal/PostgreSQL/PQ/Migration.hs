@@ -220,6 +220,7 @@ possibly rewind a `Path` of `Migration`s.
 class (Category def, Category run) => Migratory def run | def -> run where
   {- | Run a `Path` of `Migration`s.-}
   runMigrations :: Path (Migration def) db0 db1 -> run db0 db1
+-- | impure migrations
 instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
   runMigrations path = Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
@@ -232,8 +233,10 @@ instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
         unless (executed == 1) $ do
           _ <- unsafePQ . runIndexed $ migration step
           executeParams_ insertMigration (name step)
+-- | pure migrations
 instance Migratory Definition (Indexed PQ IO ()) where
   runMigrations = runMigrations . qmap (qmap ixDefine)
+-- | impure rewinds
 instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
   runMigrations path = OpQ . Indexed . unsafePQ . transactionally_ $ do
     define createMigrations
@@ -246,14 +249,17 @@ instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
         unless (executed == 0) $ do
           _ <- unsafePQ . runIndexed . getOpQ $ migration step
           executeParams_ deleteMigration (name step)
+-- | pure rewinds
 instance Migratory (OpQ Definition) (OpQ (Indexed PQ IO ())) where
   runMigrations = runMigrations . qmap (qmap (qmap ixDefine))
+-- | impure rewindable migrations
 instance Migratory
   (IsoQ (Indexed PQ IO ()))
   (IsoQ (Indexed PQ IO ())) where
     runMigrations path = IsoQ
       (runMigrations (qmap (qmap up) path))
       (getOpQ (runMigrations (qmap (qmap (OpQ . down)) path)))
+-- | pure rewindable migrations
 instance Migratory (IsoQ Definition) (IsoQ (Indexed PQ IO ())) where
   runMigrations = runMigrations . qmap (qmap (qmap ixDefine))
 
