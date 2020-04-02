@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Definition.Index
-Description: Create and drop index definitions
+Description: create and drop indexes
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Create and drop index definitions.
+create and drop indexes
 -}
 
 {-# LANGUAGE

@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Query.Select
-Description: Squeal select queries
+Description: select statements
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal select queries.
+select statements
 -}
 
 {-# LANGUAGE

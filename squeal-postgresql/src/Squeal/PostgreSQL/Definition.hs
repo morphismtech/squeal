@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Definition
-Description: Squeal data definition language
+Description: data definition language
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal data definition language.
+data definition language
 -}
 
 {-# LANGUAGE

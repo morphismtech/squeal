@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Session.Decode
-Description: Decoding of result values
+Description: decoding of result values
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Decoding of result values
+decoding of result values
 -}
 
 {-# LANGUAGE

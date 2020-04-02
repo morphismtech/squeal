@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Definition.Constraint
-Description: Table constraint expressions
+Description: constraint expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Table constraint expressions.
+constraint expressions
 -}
 
 {-# LANGUAGE

@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Aggregate
-Description: Aggregate functions
+Description: aggregate functions and arguments
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Aggregate functions
+aggregate functions and arguments
 -}
 
 {-# LANGUAGE

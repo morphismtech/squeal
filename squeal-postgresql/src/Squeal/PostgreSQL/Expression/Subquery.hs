@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Subquery
-Description: Subquery expressions
+Description: subquery expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Subquery expressions
+subquery expressions
 -}
 
 {-# LANGUAGE

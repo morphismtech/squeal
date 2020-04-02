@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Window
-Description: Window functions
+Description: window functions, arguments and definitions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Window functions and definitions
+window functions, arguments and definitions
 -}
 
 {-# LANGUAGE

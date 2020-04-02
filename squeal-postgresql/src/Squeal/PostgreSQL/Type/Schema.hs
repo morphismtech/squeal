@@ -1,14 +1,13 @@
 {-|
 Module: Squeal.PostgreSQL.Type.Schema
-Description: Embedding of PostgreSQL type and alias system
+Description: Postgres type system
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-`Squeal.PostgreSQL.Type.Schema` provides a type-level DSL for kinds of Postgres types,
-tables, schema, constraints, aliases, enumerated labels, and groupings.
-It also defines useful type families to operate on these. Finally,
-it defines an embedding of Haskell types into Postgres types.
+`Squeal.PostgreSQL.Type.Schema` provides a type-level DSL
+for kinds of Postgres types, tables, schema, constraints, and more.
+It also defines useful type families to operate on these.
 -}
 
 {-# LANGUAGE
@@ -266,16 +265,6 @@ type FromType = [(Symbol,RowType)]
 
 -- | `ColumnsToRow` removes column constraints.
 type family ColumnsToRow (columns :: ColumnsType) :: RowType where
-  ColumnsToRow (column ::: _ :=> ty ': column1 ::: _ :=> ty1 ': column2 ::: _ :=> ty2 ': column3 ::: _ :=> ty3 ': column4 ::: _ :=> ty4 ': column5 ::: _ :=> ty5 ': columns) =
-    column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': column3 ::: ty3 ': column4 ::: ty4 ': column5 ::: ty5 ': ColumnsToRow columns
-  ColumnsToRow (column ::: _ :=> ty ': column1 ::: _ :=> ty1 ': column2 ::: _ :=> ty2 ': column3 ::: _ :=> ty3 ': column4 ::: _ :=> ty4 ': columns) =
-    column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': column3 ::: ty3 ': column4 ::: ty4 ': ColumnsToRow columns
-  ColumnsToRow (column ::: _ :=> ty ': column1 ::: _ :=> ty1 ': column2 ::: _ :=> ty2 ': column3 ::: _ :=> ty3 ': columns) =
-    column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': column3 ::: ty3 ': ColumnsToRow columns
-  ColumnsToRow (column ::: _ :=> ty ': column1 ::: _ :=> ty1 ': column2 ::: _ :=> ty2 ': columns) =
-    column ::: ty ': column1 ::: ty1 ': column2 ::: ty2 ': ColumnsToRow columns
-  ColumnsToRow (column ::: _ :=> ty ': column1 ::: _ :=> ty1 ': columns) =
-    column ::: ty ': column1 ::: ty1 ': ColumnsToRow columns
   ColumnsToRow (column ::: _ :=> ty ': columns) =
     column ::: ty ': ColumnsToRow columns
   ColumnsToRow '[] = '[]

@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Session.Exception
-Description: Squeal exceptions
+Description: exceptions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal exceptions
+exceptions
 -}
 
 {-# LANGUAGE

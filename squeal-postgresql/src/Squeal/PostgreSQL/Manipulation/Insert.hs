@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Manipulation.Insert
-Description: Squeal insert statements
+Description: insert statements
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal insert statements.
+insert statements
 -}
 
 {-# LANGUAGE

@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Composite
-Description: Composite functions
+Description: composite functions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Composite functions
+composite functions
 -}
 
 {-# LANGUAGE

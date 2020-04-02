@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Delete
-Description: Squeal delete statements.
+Description: delete statements
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal delete statements.
+delete statements
 -}
 
 {-# LANGUAGE

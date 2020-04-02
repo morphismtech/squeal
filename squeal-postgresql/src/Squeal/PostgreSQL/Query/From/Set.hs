@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Query.From.Set
-Description: Set returning functions
+Description: set returning functions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Set returning functions
+set returning functions
 -}
 
 {-# LANGUAGE

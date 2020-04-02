@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Query.Table
-Description: Squeal intermediate table expressions.
+Description: intermediate table expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal intermediate table expressions.
+intermediate table expressions
 -}
 
 {-# LANGUAGE

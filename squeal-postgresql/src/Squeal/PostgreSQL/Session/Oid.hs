@@ -1,6 +1,6 @@
 {-|
 Module: Squeal.PostgreSQL.Session.Oid
-Description: Object identifiers
+Description: object identifiers
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental

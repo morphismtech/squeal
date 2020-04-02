@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Update
-Description: Squeal update statements.
+Description: update statements
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal update statements.
+update statements
 -}
 
 {-# LANGUAGE

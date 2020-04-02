@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Default
-Description: Default
+Description: optional expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Optional expressions that may be `Default` or not.
+optional expressions
 -}
 
 {-# LANGUAGE

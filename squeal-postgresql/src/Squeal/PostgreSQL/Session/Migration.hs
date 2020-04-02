@@ -1,6 +1,6 @@
 {-|
 Module: Squeal.PostgreSQL.Session.Migration
-Description: Squeal migrations
+Description: migrations
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental

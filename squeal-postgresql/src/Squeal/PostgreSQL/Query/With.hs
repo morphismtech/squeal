@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Query.With
-Description: Squeal with statements.
+Description: with statements
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal with statements.
+with statements
 -}
 
 {-# LANGUAGE

@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Array
-Description: Array functions
+Description: array functions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Array functions
+array functions
 -}
 
 {-# LANGUAGE

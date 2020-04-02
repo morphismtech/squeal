@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Json
-Description: Json and Jsonb functions and operators
+Description: json and jsonb functions and operators
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Json and Jsonb functions and operators
+json and jsonb functions and operators
 -}
 
 {-# LANGUAGE

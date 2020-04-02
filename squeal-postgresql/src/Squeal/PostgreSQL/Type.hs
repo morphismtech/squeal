@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Type
-Description: Haskell types that correspond with Postgres types
+Description: types
 Copyright: (c) Eitan Chatav, 2010
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Haskell types that correspond with Postgres types.
+types
 -}
 {-# LANGUAGE
     AllowAmbiguousTypes

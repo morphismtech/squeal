@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Sort
-Description: Sort expressions
+Description: sort expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Sort expressions
+sort expressions
 -}
 
 {-# LANGUAGE

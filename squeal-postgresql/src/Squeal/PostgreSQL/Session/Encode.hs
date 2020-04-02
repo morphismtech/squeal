@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Session.Encode
-Description: Encoding of statement parameters
+Description: encoding of statement parameters
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Encoding of statement parameters
+encoding of statement parameters
 -}
 
 {-# LANGUAGE

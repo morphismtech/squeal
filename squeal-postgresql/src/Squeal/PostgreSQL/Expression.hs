@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression
-Description: Squeal expressions
+Description: expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal expressions are the atoms used to build statements.
+Expressions are the atoms used to build statements.
 -}
 
 {-# LANGUAGE

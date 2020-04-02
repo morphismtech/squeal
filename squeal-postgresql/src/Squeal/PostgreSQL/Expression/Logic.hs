@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Logic
-Description: Logical expressions
+Description: logical expressions and operators
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Logical expressions and operators
+logical expressions and operators
 -}
 
 {-# LANGUAGE

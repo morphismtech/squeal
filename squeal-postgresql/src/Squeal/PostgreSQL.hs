@@ -1,6 +1,6 @@
 {-|
 Module: Squeal.PostgreSQL
-Description: Squeal export module
+Description: export module
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
@@ -105,25 +105,27 @@ DROP TABLE "users";
 We'll need a Haskell type for @User@s. We give the type `Generics.SOP.Generic` and
 `Generics.SOP.HasDatatypeInfo` instances so that we can encode and decode @User@s.
 
->>> data User = User { userName :: Text, userEmail :: Maybe Text } deriving (Show, GHC.Generic)
->>> instance SOP.Generic User
->>> instance SOP.HasDatatypeInfo User
+>>> :set -XDerivingStrategies -XDeriveAnyClass
+>>> :{
+data User = User { userName :: Text, userEmail :: Maybe Text }
+  deriving stock (Show, GHC.Generic)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+:}
 
-Next, we'll write `Manipulation_`s to insert @User@s into our two tables.
-A `Manipulation_` like `insertInto`, `update` or `deleteFrom`
-has three type parameters, the schemas it refers to, input parameters
-and an output row. When
+Next, we'll write `Statement`s to insert @User@s into our two tables.
+A `Statement` has three type parameters, the schemas it refers to,
+input parameters and an output row. When
 we insert into the users table, we will need a parameter for the @name@
 field but not for the @id@ field. Since it's serial, we can use a default
 value. However, since the emails table refers to the users table, we will
 need to retrieve the user id that the insert generates and insert it into
-the emails table. We can do this in a single `Manipulation_` by using a
-`with` statement.
+the emails table. We can do this in a single `Statement` by using a
+`with` `manipulation`.
 
 >>> :{
 let
-  insertUser :: Manipulation_ DB User ()
-  insertUser = with (u `as` #u) e
+  insertUser :: Statement DB User ()
+  insertUser = manipulation $ with (u `as` #u) e
     where
       u = insertInto #users
         (Values_ (Default `as` #id :* Set (param @1) `as` #name))
@@ -136,15 +138,14 @@ let
 >>> printSQL insertUser
 WITH "u" AS (INSERT INTO "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) RETURNING "id" AS "id", ($2 :: text) AS "email") INSERT INTO "emails" ("user_id", "email") SELECT "u"."id", "u"."email" FROM "u" AS "u"
 
-Next we write a `Query_` to retrieve users from the database. We're not
+Next we write a `Statement` to retrieve users from the database. We're not
 interested in the ids here, just the usernames and email addresses. We
-need to use an `innerJoin` to get the right result. A `Query_` is like a
-`Manipulation_` with the same kind of type parameters.
+need to use an `innerJoin` to get the right result.
 
 >>> :{
 let
-  getUsers :: Query_ DB () User
-  getUsers = select_
+  getUsers :: Statement DB () User
+  getUsers = query $ select_
     (#u ! #name `as` #userName :* #e ! #email `as` #userEmail)
     ( from (table (#users `as` #u)
       & innerJoin (table (#emails `as` #e))
@@ -178,8 +179,8 @@ transformer and when the schema doesn't change we can use `Monad` and
 let
   session :: PQ DB DB IO ()
   session = do
-    _ <- traversePrepared_ insertUser users
-    usersResult <- runQuery getUsers
+    executePrepared_ insertUser users
+    usersResult <- execute getUsers
     usersRows <- getRows usersResult
     liftIO $ print (usersRows :: [User])
 in

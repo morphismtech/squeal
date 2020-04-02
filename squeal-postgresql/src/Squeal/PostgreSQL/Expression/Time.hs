@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Time
-Description: Date/Time expressions
+Description: date/time functions and operators
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Date/Time functions and operators
+date/time functions and operators
 -}
 
 {-# LANGUAGE

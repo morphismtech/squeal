@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Parameter
-Description: Parameters
+Description: out-of-line parameters
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Parameters, out-of-line data values
+out-of-line parameters
 -}
 
 {-# LANGUAGE

@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Query.Values
-Description: Squeal value queries
+Description: values statements
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal value queries.
+values statements
 -}
 
 {-# LANGUAGE

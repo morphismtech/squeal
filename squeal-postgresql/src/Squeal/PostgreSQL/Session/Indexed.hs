@@ -1,6 +1,6 @@
 {-|
 Module: Squeal.PostgreSQL.Session.Indexed
-Description: Indexed Monad Transformers
+Description: indexed session monad
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental

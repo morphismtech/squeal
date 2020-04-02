@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Query.From
-Description: Squeal from clauses.
+Description: from clauses
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal from clauses.
+from clauses
 -}
 
 {-# LANGUAGE

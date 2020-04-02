@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Session.Connection
-Description: Database connections
+Description: database connections
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Database connections
+database connections
 -}
 
 {-# LANGUAGE

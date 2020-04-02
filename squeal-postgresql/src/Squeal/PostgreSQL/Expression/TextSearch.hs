@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.TextSearch
-Description: Text search expressions
+Description: text search functions and operators
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Text search functions and operators
+text search functions and operators
 -}
 
 {-# LANGUAGE
