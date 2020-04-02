@@ -49,7 +49,6 @@ module Squeal.PostgreSQL.Definition.Table
   , AddColumn (..)
   , dropColumn
   , renameColumn
-    -- ** Alter Column
   , alterColumn
   , AlterColumn (..)
   , setDefault
