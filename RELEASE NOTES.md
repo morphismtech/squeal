@@ -276,7 +276,7 @@ Squeal 0.6 adds support for domain types. It more carefully types
 synonyms were defined to easily match on a few common SQL errors.
 `VarChar` and `FixChar` types were added with smart constructors.
 Many bugs were fixed. Also, many more tests were added and
-a new benchmark suite. A lot more things were changes that I've
+a new benchmark suite. A lot more things were changed that I've
 probably forgotten about.
 
 ### Version 0.5.2
