@@ -1,5 +1,25 @@
 ## RELEASE NOTES
 
+### Version 0.6
+
+**Module hierarchy**
+
+**Statement Profunctors**
+
+**Migrations**
+
+**Aggregation**
+
+**Inlining**
+
+**Null handling**
+
+**Ranges**
+
+**Indexes and functions**
+
+**Other changes**
+
 ### Version 0.5
 
 Version 0.5 makes a number of large changes and additions to Squeal.
