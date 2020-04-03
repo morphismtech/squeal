@@ -206,7 +206,6 @@ Next we write a `Statement` to retrieve users from the database. We're not
 interested in the ids here, just the usernames and email addresses. We
 need to use an `innerJoin` to get the right result.
 
-
 >>> :{
 let
   getUsers :: Statement DB () User
