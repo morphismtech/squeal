@@ -20,6 +20,10 @@
 
 **Other changes**
 
+### Version 0.5.2
+
+Fixes a bug in pool API and implementation.
+
 ### Version 0.5
 
 Version 0.5 makes a number of large changes and additions to Squeal.
