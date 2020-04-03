@@ -75,24 +75,31 @@ Let's see an example!
 First, we need some language extensions because Squeal uses modern GHC
 features.
 
+```Haskell
 >>> :set -XDataKinds -XDeriveGeneric -XOverloadedLabels -XFlexibleContexts
 >>> :set -XOverloadedStrings -XTypeApplications -XTypeOperators -XGADTs
+```
 
 We'll need some imports.
 
+```Haskell
 >>> import Control.Monad.IO.Class (liftIO)
 >>> import Data.Int (Int32)
 >>> import Data.Text (Text)
 >>> import Squeal.PostgreSQL
+```
 
 We'll use generics to easily convert between Haskell and PostgreSQL values.
 
+```Haskell
 >>> import qualified Generics.SOP as SOP
 >>> import qualified GHC.Generics as GHC
+```
 
 The first step is to define the schema of our database. This is where
 we use `DataKinds` and `TypeOperators`.
 
+```Haskell
 >>> :{
 type UsersColumns =
   '[ "id"   :::   'Def :=> 'NotNull 'PGint4
@@ -110,6 +117,7 @@ type Schema =
    , "emails" ::: 'Table (EmailsConstraints :=> EmailsColumns) ]
 type DB = Public Schema
 :}
+```
 
 Notice the use of type operators.
 
@@ -128,6 +136,7 @@ before being run and the schema after. We can compose definitions using `>>>`.
 Here and in the rest of our commands we make use of overloaded
 labels to refer to named tables and columns in our schema.
 
+```Haskell
 >>> :{
 let
   setup :: Definition (Public '[]) DB
@@ -144,18 +153,24 @@ let
         foreignKey #user_id #users #id
           OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
 :}
+```
 
 We can easily see the generated SQL is unsurprising looking.
 
+```Haskell
 >>> printSQL setup
+```
+```SQL
 CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));
 CREATE TABLE "emails" ("id" serial, "user_id" int NOT NULL, "email" text NULL, CONSTRAINT "pk_emails" PRIMARY KEY ("id"), CONSTRAINT "fk_user_id" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
+```
 
 Notice that `setup` starts with an empty public schema `(Public '[])` and produces `DB`.
 In our `createTable` commands we included `TableConstraint`s to define
 primary and foreign keys, making them somewhat complex. Our `teardown`
 `Definition` is simpler.
 
+```Haskell
 >>> :{
 let
   teardown :: Definition DB (Public '[])
@@ -163,18 +178,23 @@ let
 :}
 
 >>> printSQL teardown
+```
+```SQL
 DROP TABLE "emails";
 DROP TABLE "users";
+```
 
 We'll need a Haskell type for `User`s. We give the type `Generics.SOP.Generic` and
 `Generics.SOP.HasDatatypeInfo` instances so that we can encode and decode `User`s.
 
+```Haskell
 >>> :set -XDerivingStrategies -XDeriveAnyClass
 >>> :{
 data User = User { userName :: Text, userEmail :: Maybe Text }
   deriving stock (Show, GHC.Generic)
   deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
 :}
+```
 
 Next, we'll write `Statement`s to insert `User`s into our two tables.
 A `Statement` has three type parameters, the schemas it refers to,
@@ -186,6 +206,7 @@ need to retrieve the user id that the insert generates and insert it into
 the emails table. We can do this in a single `Statement` by using a
 `with` `manipulation`.
 
+```Haskell
 >>> :{
 let
   insertUser :: Statement DB User ()
@@ -198,14 +219,20 @@ let
         (Default `as` #id :* Set (#u ! #id) `as` #user_id :* Set (#u ! #email) `as` #email)
         (from (common #u))
 :}
+```
 
+```Haskell
 >>> printSQL insertUser
+```
+```SQL
 WITH "u" AS (INSERT INTO "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) RETURNING "id" AS "id", ($2 :: text) AS "email") INSERT INTO "emails" ("user_id", "email") SELECT "u"."id", "u"."email" FROM "u" AS "u"
+```
 
 Next we write a `Statement` to retrieve users from the database. We're not
 interested in the ids here, just the usernames and email addresses. We
 need to use an `innerJoin` to get the right result.
 
+```Haskell
 >>> :{
 let
   getUsers :: Statement DB () User
@@ -215,12 +242,18 @@ let
       & innerJoin (table (#emails `as` #e))
         (#u ! #id .== #e ! #user_id)) )
 :}
+```
 
+```Haskell
 >>> printSQL getUsers
+```
+```SQL
 SELECT "u"."name" AS "userName", "e"."email" AS "userEmail" FROM "users" AS "u" INNER JOIN "emails" AS "e" ON ("u"."id" = "e"."user_id")
+```
 
 Let's create some users to add to the database.
 
+```Haskell
 >>> :{
 let
   users :: [User]
@@ -230,6 +263,7 @@ let
     , User "Carole" (Just "carole@hotmail.com")
     ]
 :}
+```
 
 Now we can put together all the pieces into a program. The program
 connects to the database, sets up the schema, inserts the user data
@@ -239,6 +273,7 @@ the changing schema information through by using the indexed `PQ` monad
 transformer and when the schema doesn't change we can use `Monad` and
 `MonadPQ` functionality.
 
+```Haskell
 >>> :{
 let
   session :: PQ DB DB IO ()
