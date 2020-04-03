@@ -188,7 +188,7 @@ instance Inline UTCTime where
     . UnsafeExpression
     . singleQuotedUtf8
     . fromString
-    . formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S%z"
+    . formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S%Q%z"
 instance Inline (TimeOfDay, TimeZone) where
   inline (hms, tz)
     = inferredtype

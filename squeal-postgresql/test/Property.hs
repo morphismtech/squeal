@@ -89,8 +89,12 @@ roundtrips = Group "roundtrips"
       m <- Gen.int (Range.constant 1 12)
       d <- Gen.int (Range.constant 1 28)
       return $ fromGregorian y m d
-    genDiffTime = secondsToDiffTime . toInteger <$>
-      Gen.int (Range.constant 0 86401)
+    genDiffTime = do
+      secs <- secondsToDiffTime . toInteger <$>
+        Gen.int (Range.constant 0 86401)
+      picos <- picosecondsToDiffTime . (* 1000000) . toInteger <$>
+        Gen.int (Range.constant 0 (1000000 - 1))
+      return $ secs + picos
     genUTCTime = UTCTime <$> genDay <*> genDiffTime
     genTimeOfDay = do
       h <- Gen.int (Range.constant 0 23)

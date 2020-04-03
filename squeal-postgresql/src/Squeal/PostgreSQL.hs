@@ -182,7 +182,7 @@ let
     executePrepared_ insertUser users
     usersResult <- execute getUsers
     usersRows <- getRows usersResult
-    liftIO $ print (usersRows :: [User])
+    liftIO $ print usersRows
 in
   withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
