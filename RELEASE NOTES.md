@@ -197,7 +197,7 @@ PG Foo :: PGType
 
 One thing to notice about `ToParam db` is that it has an
 extra parameter `db` that the other classes don't have. That's
-because for some types, such as arrays and composites; you
+because for some types, such as arrays and composites, you
 need to know the OID of the element types in order to unambiguously
 encode those types. And if the element types are user defined,
 then they have to be looked up in the database. The extra parameter
