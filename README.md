@@ -41,7 +41,7 @@ composable and cover a large portion of SQL.
   for executing as well as preparing queries and manipulations
   and [Atkey](https://bentnib.org/paramnotions-jfp.pdf) indexed monad transformer
   for executing definitions.
-* linear, invertible migrations
+* linear, pure or impure, one-way or rewindable migrations
 * connection pools
 * transactions
 * views
@@ -51,6 +51,10 @@ composable and cover a large portion of SQL.
 * correlated subqueries
 * window functions
 * text search
+* time functions
+* ranges
+* indexes
+* inlining
 
 ## installation
 
