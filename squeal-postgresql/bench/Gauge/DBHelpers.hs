@@ -18,7 +18,6 @@ import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString.Char8         as C
 import qualified Data.Text                     as T
 import           Control.Monad                  ( void )
-import           Data.Pool                      ( withResource )
 import           Control.Monad.Except           ( MonadIO
                                                 , throwError
                                                 )
