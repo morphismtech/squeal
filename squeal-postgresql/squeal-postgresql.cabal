@@ -1,5 +1,5 @@
 name: squeal-postgresql
-version: 0.5.1.0
+version: 0.6.0.0
 synopsis: Squeal PostgreSQL Library
 description: Squeal is a type-safe embedding of PostgreSQL in Haskell
 homepage: https://github.com/morphismtech/squeal
@@ -144,8 +144,8 @@ test-suite spec
   ghc-options: -Wall
   main-is: Spec.hs
   build-depends:
-      base >= 4.10.0.0
-    , async >= 2.2.2
+      async >= 2.2.2
+    , base >= 4.10.0.0
     , bytestring >= 0.10.8.2
     , generics-sop >= 0.3.1.0
     , hspec >= 2.4.8
@@ -173,20 +173,18 @@ benchmark gauge
   build-depends:
       base >= 4.10.0.0
     , bytestring >= 0.10.8.2
-    , text >= 1.2.2.2
+    , deepseq >= 1.4.3.0
+    , gauge >= 0.2.5
+    , generic-random >= 1.2.0.0
     , generics-sop >= 0.3.1.0
-    , hedgehog >= 1.0
+    , monad-loops >= 0.4.3
     , mtl >= 2.2.2
+    , QuickCheck >= 2.13.2
+    , quickcheck-instances >= 0.3.22
     , scientific >= 0.3.5.3
     , squeal-postgresql
+    , text >= 1.2.2.2
     , with-utf8 >= 1.0
-    , gauge
-    , QuickCheck
-    , quickcheck-instances
-    , generic-random
-    , resource-pool
-    , deepseq
-    , monad-loops
 
 executable example
   default-language: Haskell2010
