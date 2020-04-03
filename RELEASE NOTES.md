@@ -4,7 +4,14 @@
 
 Version 0.6 makes a number of large changes and additions to Squeal.
 I want to thank folks who contributed issues and pull requests;
-Raveline, rimmington, ilyakooo0, chshersh, reygoch, and more.
+ilyakooo0, tuomohopia, league, Raveline, Sciencei, mwotton, and more.
+
+I particularly would like to thank my employer SimSpace and colleagues.
+We are actively using Squeal at SimSpace which has pushed its development.
+
+My colleague Mark Wotton has also created a project
+[squealgen](https://github.com/mwotton/squealgen) to generate
+a Squeal schema directly from the database which is awesome.
 
 **Module hierarchy**
 
@@ -267,9 +274,10 @@ Squeal 0.6 adds support for domain types. It more carefully types
 `CREATE _ IF NOT EXISTS` and `DROP _ IF EXISTS` definitions. The
 `Exception` type was refactored to remove `Maybe`s and new pattern
 synonyms were defined to easily match on a few common SQL errors.
-Many bugs were fixed. A lot more things were changes that I've
-probably forgotten about. Also, many more tests were added and
-a new benchmark suite.
+`VarChar` and `FixChar` types were added with smart constructors.
+Many bugs were fixed. Also, many more tests were added and
+a new benchmark suite. A lot more things were changes that I've
+probably forgotten about.
 
 ### Version 0.5.2
 
