@@ -127,8 +127,9 @@ building on the use of `postgresql-binary` for encoding and decoding.
 
 Many Haskell types have corresponding Postgres types like `Double`
 corresponds to `float8`. Squeal makes this an open relationship with the
-`PG` type family. Squeal 0.6 makes it easy to derive `PG` of your
-Haskell types, though you might have to turn on `-XUndecidableInstances`.
+`PG` type family. Squeal 0.6 makes it easy to generate `PG` of your
+Haskell types, though you might have to turn on `-XUndecidableInstances`,
+by deriving an `IsPG` instance.
 In addition to having a corresponding Postgres type,
 to fully embed your Haskell type you want instances of `ToPG db` to
 encode your type as an out-of-line parameter, `FromPG` to
@@ -274,6 +275,7 @@ filtered `NULL` out of a column.
 
 Lots of other things changed. `Literal` and `literal` are now called
 `Inline` and `inline`. `ColumnConstraint` is called `Optionality`.
+`NullityType`s are called `NullTypes`.
 Squeal 0.6 adds support for domain types. It more carefully types
 `CREATE _ IF NOT EXISTS` and `DROP _ IF EXISTS` definitions. The
 `Exception` type was refactored to remove `Maybe`s and new pattern
