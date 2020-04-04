@@ -119,6 +119,10 @@ is a `Monad` and has `IsLabel` instances. Since `Statement`s bundle
 both together, they form `Profunctor`s, where you can `lmap` over
 parameters and `rmap` over rows.
 
+The `Statement` `Profunctor` is heavily influenced by
+the `Statement` `Profunctor` from Nikita Volkov's excellent `hasql` library,
+building on the use of `postgresql-binary` for encoding and decoding.
+
 **Deriving**
 
 Many Haskell types have corresponding Postgres types like `Double`
