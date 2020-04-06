@@ -64,7 +64,7 @@ returned row.
 Both of these issues are solved with the new `Statement` type. Let's
 see its definition.
 
-```
+```Haskell
 data Statement db x y where
   Manipulation
     :: (SOP.All (OidOfNull db) params, SOP.SListI row)
