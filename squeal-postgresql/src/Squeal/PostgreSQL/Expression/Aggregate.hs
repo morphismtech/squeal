@@ -85,6 +85,7 @@ class Aggregate arg expr | expr -> arg where
   -- count(ALL "col")
   count
     :: arg '[ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('NotNull 'PGint8)
 
   -- | >>> :{
@@ -96,9 +97,11 @@ class Aggregate arg expr | expr -> arg where
   -- sum(DISTINCT "col") FILTER (WHERE ("col" < (100.0 :: numeric)))
   sum_
     :: arg '[null ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null (PGSum ty))
 
   -- | input values, including nulls, concatenated into an array
+  --
   -- >>> :{
   -- let
   --   expression :: Expression ('Grouped bys) '[] with db params '[tab ::: '["col" ::: 'Null 'PGnumeric]] ('Null ('PGvararray ('Null 'PGnumeric)))
@@ -108,16 +111,19 @@ class Aggregate arg expr | expr -> arg where
   -- array_agg(ALL "col" ORDER BY "col" ASC NULLS FIRST) FILTER (WHERE ("col" < (100.0 :: numeric)))
   arrayAgg
     :: arg '[ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null ('PGvararray ty))
 
   -- | aggregates values as a JSON array
   jsonAgg
     :: arg '[ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null 'PGjson)
 
   -- | aggregates values as a JSON array
   jsonbAgg
     :: arg '[ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null 'PGjsonb)
 
   {- |
@@ -134,6 +140,7 @@ class Aggregate arg expr | expr -> arg where
   bitAnd
     :: int `In` PGIntegral
     => arg '[null int] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null int)
 
   {- |
@@ -150,6 +157,7 @@ class Aggregate arg expr | expr -> arg where
   bitOr
     :: int `In` PGIntegral
     => arg '[null int] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null int)
 
   {- |
@@ -165,6 +173,7 @@ class Aggregate arg expr | expr -> arg where
   -}
   boolAnd
     :: arg '[null 'PGbool] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null 'PGbool)
 
   {- |
@@ -180,6 +189,7 @@ class Aggregate arg expr | expr -> arg where
   -}
   boolOr
     :: arg '[null 'PGbool] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null 'PGbool)
 
   {- |
@@ -195,21 +205,25 @@ class Aggregate arg expr | expr -> arg where
   -}
   every
     :: arg '[null 'PGbool] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null 'PGbool)
 
   {- |maximum value of expression across all input values-}
   max_
     :: arg '[null ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null ty)
 
   -- | minimum value of expression across all input values
   min_
     :: arg '[null ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null ty)
 
   -- | the average (arithmetic mean) of all input values
   avg
     :: arg '[null ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null (PGAvg ty))
 
   {- | correlation coefficient
@@ -224,6 +238,7 @@ class Aggregate arg expr | expr -> arg where
   -}
   corr
     :: arg '[null 'PGfloat8, null 'PGfloat8] lat with db params from
+    -- ^ arguments
     -> expr lat with db params from ('Null 'PGfloat8)
 
   {- | population covariance
@@ -238,6 +253,7 @@ class Aggregate arg expr | expr -> arg where
   -}
   covarPop
     :: arg '[null 'PGfloat8, null 'PGfloat8] lat with db params from
+    -- ^ arguments
     -> expr lat with db params from ('Null 'PGfloat8)
 
   {- | sample covariance
@@ -252,6 +268,7 @@ class Aggregate arg expr | expr -> arg where
   -}
   covarSamp
     :: arg '[null 'PGfloat8, null 'PGfloat8] lat with db params from
+    -- ^ arguments
     -> expr lat with db params from ('Null 'PGfloat8)
 
   {- | average of the independent variable (sum(X)/N)
@@ -266,6 +283,7 @@ class Aggregate arg expr | expr -> arg where
   -}
   regrAvgX
     :: arg '[null 'PGfloat8, null 'PGfloat8] lat with db params from
+    -- ^ arguments
     -> expr lat with db params from ('Null 'PGfloat8)
 
   {- | average of the dependent variable (sum(Y)/N)
@@ -280,6 +298,7 @@ class Aggregate arg expr | expr -> arg where
   -}
   regrAvgY
     :: arg '[null 'PGfloat8, null 'PGfloat8] lat with db params from
+    -- ^ arguments
     -> expr lat with db params from ('Null 'PGfloat8)
 
   {- | number of input rows in which both expressions are nonnull
@@ -294,9 +313,11 @@ class Aggregate arg expr | expr -> arg where
   -}
   regrCount
     :: arg '[null 'PGfloat8, null 'PGfloat8] lat with db params from
+    -- ^ arguments
     -> expr lat with db params from ('Null 'PGint8)
 
   {- | y-intercept of the least-squares-fit linear equation determined by the (X, Y) pairs
+
   >>> :{
   let
     expression :: Expression ('Grouped g) '[] c s p '[t ::: '["x" ::: 'NotNull 'PGfloat8, "y" ::: 'NotNull 'PGfloat8]] ('Null 'PGfloat8)
@@ -307,67 +328,79 @@ class Aggregate arg expr | expr -> arg where
   -}
   regrIntercept
     :: arg '[null 'PGfloat8, null 'PGfloat8] lat with db params from
+    -- ^ arguments
     -> expr lat with db params from ('Null 'PGfloat8)
 
   -- | @regr_r2(Y, X)@, square of the correlation coefficient
   regrR2
     :: arg '[null 'PGfloat8, null 'PGfloat8] lat with db params from
+    -- ^ arguments
     -> expr lat with db params from ('Null 'PGfloat8)
 
   -- | @regr_slope(Y, X)@, slope of the least-squares-fit linear equation
   -- determined by the (X, Y) pairs
   regrSlope
     :: arg '[null 'PGfloat8, null 'PGfloat8] lat with db params from
+    -- ^ arguments
     -> expr lat with db params from ('Null 'PGfloat8)
 
   -- | @regr_sxx(Y, X)@, sum(X^2) - sum(X)^2/N
   -- (“sum of squares” of the independent variable)
   regrSxx
     :: arg '[null 'PGfloat8, null 'PGfloat8] lat with db params from
+    -- ^ arguments
     -> expr lat with db params from ('Null 'PGfloat8)
 
   -- | @regr_sxy(Y, X)@, sum(X*Y) - sum(X) * sum(Y)/N
   -- (“sum of products” of independent times dependent variable)
   regrSxy
     :: arg '[null 'PGfloat8, null 'PGfloat8] lat with db params from
+    -- ^ arguments
     -> expr lat with db params from ('Null 'PGfloat8)
 
   -- | @regr_syy(Y, X)@, sum(Y^2) - sum(Y)^2/N
   -- (“sum of squares” of the dependent variable)
   regrSyy
     :: arg '[null 'PGfloat8, null 'PGfloat8] lat with db params from
+    -- ^ arguments
     -> expr lat with db params from ('Null 'PGfloat8)
 
   -- | historical alias for `stddevSamp`
   stddev
     :: arg '[null ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null (PGAvg ty))
 
   -- | population standard deviation of the input values
   stddevPop
     :: arg '[null ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null (PGAvg ty))
 
   -- | sample standard deviation of the input values
   stddevSamp
     :: arg '[null ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null (PGAvg ty))
 
   -- | historical alias for `varSamp`
   variance
     :: arg '[null ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null (PGAvg ty))
 
   -- | population variance of the input values
   -- (square of the population standard deviation)
   varPop
     :: arg '[null ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null (PGAvg ty))
 
   -- | sample variance of the input values
   -- (square of the sample standard deviation)
   varSamp
     :: arg '[null ty] lat with db params from
+    -- ^ argument
     -> expr lat with db params from ('Null (PGAvg ty))
 
 {- |
