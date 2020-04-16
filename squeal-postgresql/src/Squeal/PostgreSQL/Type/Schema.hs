@@ -1,15 +1,15 @@
 {-|
-Module: Squeal.PostgreSQL.Schema
-Description: Embedding of PostgreSQL type and alias system
+Module: Squeal.PostgreSQL.Type.Schema
+Description: Postgres type system
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-`Squeal.PostgreSQL.Schema` provides a type-level DSL for kinds of Postgres types,
-tables, schema, constraints, aliases, enumerated labels, and groupings.
-It also defines useful type families to operate on these. Finally,
-it defines an embedding of Haskell types into Postgres types.
+`Squeal.PostgreSQL.Type.Schema` provides a type-level DSL
+for kinds of Postgres types, tables, schema, constraints, and more.
+It also defines useful type families to operate on these.
 -}
+
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
@@ -33,39 +33,47 @@ it defines an embedding of Haskell types into Postgres types.
   , UndecidableSuperClasses
 #-}
 
-module Squeal.PostgreSQL.Schema
-  ( -- * Postgres Types
+module Squeal.PostgreSQL.Type.Schema
+  ( -- * Postgres Type
     PGType (..)
-  , NullityType (..)
+  , NullType (..)
   , RowType
   , FromType
-    -- * Schema Types
+    -- * Schema Type
   , ColumnType
   , ColumnsType
   , TableType
   , SchemumType (..)
+  , IndexType (..)
+  , FunctionType
+  , ReturnsType (..)
   , SchemaType
   , SchemasType
   , Public
-    -- * Constraints
+    -- * Constraint
   , (:=>)
-  , ColumnConstraint (..)
+  , Optionality (..)
   , TableConstraint (..)
   , TableConstraints
   , Uniquely
-    -- * Enumerated Labels
+    -- * Enumerated Label
   , IsPGlabel (..)
   , PGlabel (..)
-    -- * Data Definitions
+    -- * Data Definition
   , Create
+  , CreateIfNotExists
+  , CreateOrReplace
   , Drop
+  , DropSchemum
+  , DropIfExists
+  , DropSchemumIfExists
   , Alter
+  , AlterIfExists
   , Rename
+  , RenameIfExists
   , ConstraintInvolves
   , DropIfConstraintsInvolve
-  , IsNotElem
-  , AllUnique
-    -- * Type Classifications
+    -- * Type Classification
   , PGNum
   , PGIntegral
   , PGFloating
@@ -75,14 +83,22 @@ module Squeal.PostgreSQL.Schema
   , SamePGType
   , AllNotNull
   , NotAllNull
-    -- * Nullifications
+    -- * Nullification
   , NullifyType
   , NullifyRow
   , NullifyFrom
-    -- * Table Conversions
+    -- * Table Conversion
   , TableToColumns
   , ColumnsToRow
   , TableToRow
+    -- * Updatable
+  , Updatable
+  , AllUnique
+  , IsNotElem
+    -- * User Types
+  , UserType
+  , UserTypeName
+  , UserTypeNamespace
   ) where
 
 import Control.Category
@@ -93,8 +109,8 @@ import Generics.SOP
 import GHC.TypeLits
 import Prelude hiding (id, (.))
 
-import Squeal.PostgreSQL.Alias
-import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.Type.Alias
+import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Render
 
 -- $setup
@@ -127,38 +143,40 @@ data PGType
   | PGinet -- ^ IPv4 or IPv6 host address
   | PGjson -- ^	textual JSON data
   | PGjsonb -- ^ binary JSON data, decomposed
-  | PGvararray NullityType -- ^ variable length array
-  | PGfixarray [Nat] NullityType -- ^ fixed length array
+  | PGvararray NullType -- ^ variable length array
+  | PGfixarray [Nat] NullType -- ^ fixed length array
   | PGenum [Symbol] -- ^ enumerated (enum) types are data types that comprise a static, ordered set of values.
   | PGcomposite RowType -- ^ a composite type represents the structure of a row or record; it is essentially just a list of field names and their data types.
   | PGtsvector -- ^ A tsvector value is a sorted list of distinct lexemes, which are words that have been normalized to merge different variants of the same word.
-  | PGtsquery -- ^ A tsquery value stores lexemes that are to be searched for
+  | PGtsquery -- ^ A tsquery value stores lexemes that are to be searched for.
+  | PGoid -- Object identifiers (OIDs) are used internally by PostgreSQL as primary keys for various system tables.
+  | PGrange PGType -- ^ Range types are data types representing a range of values of some element type (called the range's subtype).
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
--- | `NullityType` encodes the potential presence or definite absence of a
+-- | `NullType` encodes the potential presence or definite absence of a
 -- @NULL@ allowing operations which are sensitive to such to be well typed.
 --
 -- >>> :kind 'Null 'PGint4
--- 'Null 'PGint4 :: NullityType
+-- 'Null 'PGint4 :: NullType
 -- >>> :kind 'NotNull ('PGvarchar 50)
--- 'NotNull ('PGvarchar 50) :: NullityType
-data NullityType
+-- 'NotNull ('PGvarchar 50) :: NullType
+data NullType
   = Null PGType -- ^ @NULL@ may be present
   | NotNull PGType -- ^ @NULL@ is absent
 
 -- | The constraint  operator, `:=>` is a type level pair
 -- between a "constraint" and some type, for use in pairing
--- a `ColumnConstraint` with a `NullityType` to produce a `ColumnType`
+-- an `Optionality` with a `NullType` to produce a `ColumnType`
 -- or a `TableConstraints` and a `ColumnsType` to produce a `TableType`.
 type (:=>) constraint ty = '(constraint,ty)
 infixr 7 :=>
 
--- | `ColumnConstraint` encodes the availability of @DEFAULT@ for inserts and updates.
+-- | `Optionality` encodes the availability of @DEFAULT@ for inserts and updates.
 -- A column can be assigned a default value.
 -- A data `Squeal.PostgreSQL.Manipulations.Manipulation` command can also
 -- request explicitly that a column be set to its default value,
 -- without having to know what that value is.
-data ColumnConstraint
+data Optionality
   = Def -- ^ @DEFAULT@ is available for inserts and updates
   | NoDef -- ^ @DEFAULT@ is unavailable for inserts and updates
 
@@ -169,7 +187,7 @@ data ColumnConstraint
 -- >>> import GHC.TypeLits
 -- >>> type family IdColumn :: ColumnType where IdColumn = 'Def :=> 'NotNull 'PGint4
 -- >>> type family EmailColumn :: ColumnType where EmailColumn = 'NoDef :=> 'Null 'PGtext
-type ColumnType = (ColumnConstraint,NullityType)
+type ColumnType = (Optionality,NullType)
 
 -- | `ColumnsType` is a row of `ColumnType`s.
 --
@@ -225,7 +243,7 @@ type family Uniquely
 -- :}
 type TableType = (TableConstraints,ColumnsType)
 
-{- | A `RowType` is a row of `NullityType`. They correspond to Haskell
+{- | A `RowType` is a row of `NullType`. They correspond to Haskell
 record types by means of `Squeal.PostgreSQL.Binary.RowPG` and are used in many places.
 
 >>> :{
@@ -237,7 +255,7 @@ type family PersonRow :: RowType where
      ]
 :}
 -}
-type RowType = [(Symbol,NullityType)]
+type RowType = [(Symbol,NullType)]
 
 {- | `FromType` is a row of `RowType`s. It can be thought of as
 a product, or horizontal gluing and is used in `Squeal.PostgreSQL.Query.FromClause`s
@@ -247,9 +265,9 @@ type FromType = [(Symbol,RowType)]
 
 -- | `ColumnsToRow` removes column constraints.
 type family ColumnsToRow (columns :: ColumnsType) :: RowType where
-  ColumnsToRow '[] = '[]
-  ColumnsToRow (column ::: constraint :=> ty ': columns) =
+  ColumnsToRow (column ::: _ :=> ty ': columns) =
     column ::: ty ': ColumnsToRow columns
+  ColumnsToRow '[] = '[]
 
 -- | `TableToColumns` removes table constraints.
 type family TableToColumns (table :: TableType) :: ColumnsType where
@@ -270,45 +288,45 @@ type PGFloating = '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 type PGIntegral = '[ 'PGint2, 'PGint4, 'PGint8]
 
 -- | `PGTypeOf` forgets about @NULL@ and any column constraints.
-type family PGTypeOf (ty :: NullityType) :: PGType where
-  PGTypeOf (nullity pg) = pg
+type family PGTypeOf (ty :: NullType) :: PGType where
+  PGTypeOf (null pg) = pg
 
 -- | Equality constraint on the underlying `PGType` of two columns.
 class SamePGType
   (ty0 :: (Symbol,ColumnType)) (ty1 :: (Symbol,ColumnType)) where
 instance ty0 ~ ty1 => SamePGType
-  (alias0 ::: def0 :=> nullity0 ty0)
-  (alias1 ::: def1 :=> nullity1 ty1)
+  (alias0 ::: def0 :=> null0 ty0)
+  (alias1 ::: def1 :=> null1 ty1)
 
 -- | `AllNotNull` is a constraint that proves a `ColumnsType` has no @NULL@s.
 type family AllNotNull (columns :: ColumnsType) :: Constraint where
+  AllNotNull (_ ::: _ :=> 'NotNull _ ': columns) = AllNotNull columns
   AllNotNull '[] = ()
-  AllNotNull (column ::: def :=> 'NotNull ty ': columns) = AllNotNull columns
 
 -- | `NotAllNull` is a constraint that proves a `ColumnsType` has some
 -- @NOT NULL@.
 type family NotAllNull (columns :: ColumnsType) :: Constraint where
-  NotAllNull (column ::: def :=> 'NotNull ty ': columns) = ()
-  NotAllNull (column ::: def :=> 'Null ty ': columns) = NotAllNull columns
+  NotAllNull (_ ::: _ :=> 'NotNull _ ': _) = ()
+  NotAllNull (_ ::: _ :=> 'Null _ ': columns) = NotAllNull columns
 
--- | `NullifyType` is an idempotent that nullifies a `NullityType`.
-type family NullifyType (ty :: NullityType) :: NullityType where
+-- | `NullifyType` is an idempotent that nullifies a `NullType`.
+type family NullifyType (ty :: NullType) :: NullType where
   NullifyType ('Null ty) = 'Null ty
   NullifyType ('NotNull ty) = 'Null ty
 
 -- | `NullifyRow` is an idempotent that nullifies a `RowType`.
 type family NullifyRow (columns :: RowType) :: RowType where
-  NullifyRow '[] = '[]
   NullifyRow (column ::: ty ': columns) =
     column ::: NullifyType ty ': NullifyRow columns
+  NullifyRow '[] = '[]
 
 -- | `NullifyFrom` is an idempotent that nullifies a `FromType`
 -- used to nullify the left or right hand side of an outer join
 -- in a `Squeal.PostgreSQL.Query.FromClause`.
 type family NullifyFrom (tables :: FromType) :: FromType where
-  NullifyFrom '[] = '[]
   NullifyFrom (table ::: columns ': tables) =
     table ::: NullifyRow columns ': NullifyFrom tables
+  NullifyFrom '[] = '[]
 
 -- | @Create alias x xs@ adds @alias ::: x@ to the end of @xs@ and is used in
 -- `Squeal.PostgreSQL.Definition.createTable` statements and in @ALTER TABLE@
@@ -318,29 +336,108 @@ type family Create alias x xs where
   Create alias x (alias ::: y ': xs) = TypeError
     ('Text "Create: alias "
     ':<>: 'ShowType alias
-    ':<>: 'Text "already in use")
+    ':<>: 'Text "already exists")
   Create alias y (x ': xs) = x ': Create alias y xs
+
+{-| Similar to `Create` but no error on pre-existence-}
+type family CreateIfNotExists alias x xs where
+  CreateIfNotExists alias x '[] = '[alias ::: x]
+  CreateIfNotExists alias x (alias ::: y ': xs) = alias ::: y ': xs
+  CreateIfNotExists alias y (x ': xs) = x ': CreateIfNotExists alias y xs
+
+{-| Similar to `Create` but used to replace values
+with the same type.-}
+type family CreateOrReplace alias x xs where
+  CreateOrReplace alias x '[] = '[alias ::: x]
+  CreateOrReplace alias x (alias ::: x ': xs) = alias ::: x ': xs
+  CreateOrReplace alias x (alias ::: y ': xs) = TypeError
+    ('Text "CreateOrReplace: expected type "
+    ':<>: 'ShowType x
+    ':<>: 'Text " but alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text " has type "
+    ':<>: 'ShowType y)
+  CreateOrReplace alias y (x ': xs) = x ': CreateOrReplace alias y xs
 
 -- | @Drop alias xs@ removes the type associated with @alias@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.dropTable` statements
 -- and in @ALTER TABLE@ `Squeal.PostgreSQL.Definition.dropColumn` statements.
 type family Drop alias xs where
-  Drop alias ((alias ::: x) ': xs) = xs
+  Drop alias '[] = TypeError
+    ('Text "Drop: alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text " does not exist" )
+  Drop alias (alias ::: x ': xs) = xs
   Drop alias (x ': xs) = x ': Drop alias xs
+
+-- | Drop a particular flavor of schemum type
+type family DropSchemum alias sch xs where
+  DropSchemum alias sch '[] = TypeError
+    ('Text "DropSchemum: alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text " does not exist" )
+  DropSchemum alias sch (alias ::: sch x ': xs) = xs
+  DropSchemum alias sch0 (alias ::: sch1 x ': xs) = TypeError
+    ('Text "DropSchemum: expected schemum "
+    ':<>: 'ShowType sch0
+    ':<>: 'Text " but alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text " has schemum "
+    ':<>: 'ShowType sch1)
+  DropSchemum alias sch (x ': xs) = x ': DropSchemum alias sch xs
+
+-- | Similar to `Drop` but no error on non-existence
+type family DropIfExists alias xs where
+  DropIfExists alias '[] = '[]
+  DropIfExists alias (alias ::: x ': xs) = xs
+  DropIfExists alias (x ': xs) = x ': DropIfExists alias xs
+
+-- | Similar to `DropSchemum` but no error on non-existence
+type family DropSchemumIfExists alias sch xs where
+  DropSchemumIfExists alias sch '[] = '[]
+  DropSchemumIfExists alias sch (alias ::: sch x ': xs) = xs
+  DropSchemumIfExists alias sch0 (alias ::: sch1 x ': xs) = TypeError
+    ('Text "DropSchemumIfExists: expected schemum "
+    ':<>: 'ShowType sch1
+    ':<>: 'Text " but alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text " has schemum "
+    ':<>: 'ShowType sch0)
+  DropSchemumIfExists alias sch (x ': xs) = x ': DropSchemumIfExists alias sch xs
 
 -- | @Alter alias x xs@ replaces the type associated with an @alias@ in @xs@
 -- with the type @x@ and is used in `Squeal.PostgreSQL.Definition.alterTable`
 -- and `Squeal.PostgreSQL.Definition.alterColumn`.
 type family Alter alias x xs where
+  Alter alias x '[] = TypeError
+    ('Text "Alter: alias "
+    ':<>: 'ShowType alias
+    ':<>: 'Text " does not exist" )
   Alter alias x1 (alias ::: x0 ': xs) = alias ::: x1 ': xs
   Alter alias x1 (x0 ': xs) = x0 ': Alter alias x1 xs
+
+-- | Similar to `Alter` but no error on non-existence
+type family AlterIfExists alias x xs where
+  AlterIfExists alias x '[] = '[]
+  AlterIfExists alias x1 (alias ::: x0 ': xs) = alias ::: x1 ': xs
+  AlterIfExists alias x1 (x0 ': xs) = x0 ': AlterIfExists alias x1 xs
 
 -- | @Rename alias0 alias1 xs@ replaces the alias @alias0@ by @alias1@ in @xs@
 -- and is used in `Squeal.PostgreSQL.Definition.alterTableRename` and
 -- `Squeal.PostgreSQL.Definition.renameColumn`.
 type family Rename alias0 alias1 xs where
+  Rename alias0 alias1 '[] = TypeError
+    ('Text "Rename: alias "
+    ':<>: 'ShowType alias0
+    ':<>: 'Text " does not exist" )
   Rename alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
   Rename alias0 alias1 (x ': xs) = x ': Rename alias0 alias1 xs
+
+-- | Similar to `Rename` but no error on non-existence
+type family RenameIfExists alias0 alias1 xs where
+  RenameIfExists alias x '[] = '[]
+  RenameIfExists alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
+  RenameIfExists alias0 alias1 (x ': xs) = x ': RenameIfExists alias0 alias1 xs
 
 -- | Check if a `TableConstraint` involves a column
 type family ConstraintInvolves column constraint where
@@ -364,6 +461,44 @@ data SchemumType
   = Table TableType
   | View RowType
   | Typedef PGType
+  | Index IndexType
+  | Function FunctionType
+  | UnsafeSchemum Symbol
+
+-- | Use `:=>` to pair the parameter types with the return
+-- type of a function.
+type FunctionType = ([NullType], ReturnsType)
+
+{- |
+PostgreSQL provides several index types:
+B-tree, Hash, GiST, SP-GiST, GIN and BRIN.
+Each index type uses a different algorithm
+that is best suited to different types of queries.
+-}
+data IndexType
+  = Btree
+  -- ^ B-trees can handle equality and range queries on data
+  -- that can be sorted into some ordering.
+  | Hash
+  -- ^ Hash indexes can only handle simple equality comparisons.
+  | Gist
+  -- ^ GiST indexes are not a single kind of index,
+  -- but rather an infrastructure within which many different
+  -- indexing strategies can be implemented.
+  | Spgist
+  -- ^ SP-GiST indexes, like GiST indexes,
+  -- offer an infrastructure that supports various kinds of searches.
+  | Gin
+  -- ^ GIN indexes are “inverted indexes” which are appropriate for
+  -- data values that contain multiple component values, such as arrays.
+  | Brin
+  -- ^ BRIN indexes (a shorthand for Block Range INdexes) store summaries
+  -- about the values stored in consecutive physical block ranges of a table.
+
+{- | Return type of a function-}
+data ReturnsType
+  = Returns NullType -- ^ function
+  | ReturnsTable RowType -- ^ set returning function
 
 {- | The schema of a database consists of a list of aliased,
 user-defined `SchemumType`s.
@@ -447,3 +582,31 @@ instance (TypeError (      'Text "Cannot assign to "
 class AllUnique (xs :: [(Symbol, a)]) where
 instance AllUnique '[] where
 instance (IsNotElem x (Elem x xs), AllUnique xs) => AllUnique (x ': xs) where
+
+-- | Updatable lists of columns
+type Updatable table columns =
+  ( All (HasIn (TableToColumns table)) columns
+  , AllUnique columns
+  , SListI (TableToColumns table) )
+
+-- | Calculate the name of a user defined type.
+type family UserTypeName (schema :: SchemaType) (ty :: PGType) where
+  UserTypeName '[] ty = 'Nothing
+  UserTypeName (td ::: 'Typedef ty ': _) ty = 'Just td
+  UserTypeName (_ ': schema) ty = UserTypeName schema ty
+
+-- | Helper to calculate the schema of a user defined type.
+type family UserTypeNamespace
+  (sch :: Symbol)
+  (td :: Maybe Symbol)
+  (schemas :: SchemasType)
+  (ty :: PGType) where
+    UserTypeNamespace sch 'Nothing schemas ty = UserType schemas ty
+    UserTypeNamespace sch ('Just td) schemas ty = '(sch, td)
+
+-- | Calculate the schema and name of a user defined type.
+type family UserType (db :: SchemasType) (ty :: PGType) where
+  UserType '[] ty = TypeError
+    ('Text "No such user type: " ':<>: 'ShowType ty)
+  UserType (sch ::: schema ': schemas) ty =
+    UserTypeNamespace sch (UserTypeName schema ty) schemas ty

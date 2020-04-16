@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Comparison
-Description: Comparison expressions
+Description: comparison functions and operators
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Comparison functions and operators
+comparison functions and operators
 -}
 
 {-# LANGUAGE
@@ -16,19 +16,23 @@ Comparison functions and operators
 #-}
 
 module Squeal.PostgreSQL.Expression.Comparison
-  ( (.==)
+  ( -- * Comparison Operators
+    (.==)
   , (./=)
   , (.>=)
   , (.<)
   , (.<=)
   , (.>)
+    -- * Comparison Functions
   , greatest
   , least
+    -- * Between
   , BetweenExpr
   , between
   , notBetween
   , betweenSymmetric
   , notBetweenSymmetric
+    -- * Null Comparison
   , isDistinctFrom
   , isNotDistinctFrom
   , isTrue
@@ -44,7 +48,7 @@ import Data.ByteString
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL
@@ -88,7 +92,7 @@ infix 4 .<=
 (.>) = unsafeBinaryOp ">"
 infix 4 .>
 
--- | >>> let expr = greatest [param @1] currentTimestamp :: Expression outer commons grp schemas '[ 'NotNull 'PGtimestamptz] from ('NotNull 'PGtimestamptz)
+-- | >>> let expr = greatest [param @1] currentTimestamp :: Expression grp lat with db '[ 'NotNull 'PGtimestamptz] from ('NotNull 'PGtimestamptz)
 -- >>> printSQL expr
 -- GREATEST(($1 :: timestamp with time zone), CURRENT_TIMESTAMP)
 greatest :: FunctionVar ty ty ty
@@ -103,11 +107,11 @@ least = unsafeFunctionVar "LEAST"
 A @RankNType@ for comparison expressions like `between`.
 -}
 type BetweenExpr
-  =  forall outer commons grp schemas params from ty
-  .  Expression outer commons grp schemas params from ty
-  -> ( Expression outer commons grp schemas params from ty
-     , Expression outer commons grp schemas params from ty ) -- ^ bounds
-  -> Condition outer commons grp schemas params from
+  =  forall grp lat with db params from ty
+  .  Expression grp lat with db params from ty
+  -> ( Expression grp lat with db params from ty
+     , Expression grp lat with db params from ty ) -- ^ bounds
+  -> Condition grp lat with db params from
 
 unsafeBetweenExpr :: ByteString -> BetweenExpr
 unsafeBetweenExpr fun a (x,y) = UnsafeExpression $
@@ -162,45 +166,45 @@ isNotDistinctFrom = unsafeBinaryOp "IS NOT DISTINCT FROM"
 >>> printSQL $ true & isTrue
 (TRUE IS TRUE)
 -}
-isTrue :: null0 'PGbool :--> null1 'PGbool
-isTrue = unsafeUnaryOpR "IS TRUE"
+isTrue :: null0 'PGbool --> null1 'PGbool
+isTrue = unsafeRightOp "IS TRUE"
 
 {- | is false or unknown
 
 >>> printSQL $ true & isNotTrue
 (TRUE IS NOT TRUE)
 -}
-isNotTrue :: null0 'PGbool :--> null1 'PGbool
-isNotTrue = unsafeUnaryOpR "IS NOT TRUE"
+isNotTrue :: null0 'PGbool --> null1 'PGbool
+isNotTrue = unsafeRightOp "IS NOT TRUE"
 
 {- | is false
 
 >>> printSQL $ true & isFalse
 (TRUE IS FALSE)
 -}
-isFalse :: null0 'PGbool :--> null1 'PGbool
-isFalse = unsafeUnaryOpR "IS FALSE"
+isFalse :: null0 'PGbool --> null1 'PGbool
+isFalse = unsafeRightOp "IS FALSE"
 
 {- | is true or unknown
 
 >>> printSQL $ true & isNotFalse
 (TRUE IS NOT FALSE)
 -}
-isNotFalse :: null0 'PGbool :--> null1 'PGbool
-isNotFalse = unsafeUnaryOpR "IS NOT FALSE"
+isNotFalse :: null0 'PGbool --> null1 'PGbool
+isNotFalse = unsafeRightOp "IS NOT FALSE"
 
 {- | is unknown
 
 >>> printSQL $ true & isUnknown
 (TRUE IS UNKNOWN)
 -}
-isUnknown :: null0 'PGbool :--> null1 'PGbool
-isUnknown = unsafeUnaryOpR "IS UNKNOWN"
+isUnknown :: null0 'PGbool --> null1 'PGbool
+isUnknown = unsafeRightOp "IS UNKNOWN"
 
 {- | is true or false
 
 >>> printSQL $ true & isNotUnknown
 (TRUE IS NOT UNKNOWN)
 -}
-isNotUnknown :: null0 'PGbool :--> null1 'PGbool
-isNotUnknown = unsafeUnaryOpR "IS NOT UNKNOWN"
+isNotUnknown :: null0 'PGbool --> null1 'PGbool
+isNotUnknown = unsafeRightOp "IS NOT UNKNOWN"

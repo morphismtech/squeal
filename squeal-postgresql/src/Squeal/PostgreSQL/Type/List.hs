@@ -1,6 +1,6 @@
 {-|
-Module: Squeal.PostgreSQL.List
-Description: List related types and functions
+Module: Squeal.PostgreSQL.Type.List
+Description: list related types and functions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
@@ -27,30 +27,29 @@ lists and type aligned lists.
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.List
-  ( SOP.NP (..)
+module Squeal.PostgreSQL.Type.List
+  ( -- * Heterogeneous List
+    SOP.NP (..)
   , (*:)
+  , one
   , Join
   , disjoin
   , Additional (..)
-  , AlignedList (..)
-  , single
-  , extractList
-  , mapAligned
+    -- * Path
+  , Path (..)
+    -- * Type Level List
   , Elem
   , In
   , Length
   ) where
 
-import Control.Category
+import Control.Category.Free
 import Data.Function ((&))
 import Data.Kind
 import Data.Type.Bool
 import GHC.TypeLits
 
 import Generics.SOP as SOP
-
-import Squeal.PostgreSQL.Render
 
 -- | `Join` is simply promoted `++` and is used in @JOIN@s in
 -- `Squeal.PostgreSQL.Query.FromClause`s.
@@ -60,9 +59,9 @@ type family Join xs ys where
 
 -- | `disjoin` is a utility function for splitting an `NP` list into pieces.
 disjoin
- :: forall xs ys expr. SListI xs
- => NP expr (Join xs ys)
- -> (NP expr xs, NP expr ys)
+  :: forall xs ys expr. SListI xs
+  => NP expr (Join xs ys)
+  -> (NP expr xs, NP expr ys)
 disjoin = case sList @xs of
   SNil -> \ys -> (Nil, ys)
   SCons -> \(x :* xsys) ->
@@ -78,57 +77,31 @@ instance Additional (NP expr) where
     Nil -> ys
     x :* xs -> x :* (xs & also ys)
 
--- | An `AlignedList` is a type-aligned list or free category.
-data AlignedList p x0 x1 where
-  Done :: AlignedList p x x
-  (:>>) :: p x0 x1 -> AlignedList p x1 x2 -> AlignedList p x0 x2
-infixr 7 :>>
-instance Category (AlignedList p) where
-  id = Done
-  (.) list = \case
-    Done -> list
-    step :>> steps -> step :>> (steps >>> list)
-instance (forall t0 t1. RenderSQL (p t0 t1))
-  => RenderSQL (AlignedList p x0 x1) where
-    renderSQL = \case
-      Done -> ""
-      step :>> Done -> renderSQL step
-      step :>> steps -> renderSQL step <> ", " <> renderSQL steps
-
--- | `extractList` turns an `AlignedList` into a standard list.
-extractList :: (forall a0 a1. p a0 a1 -> b) -> AlignedList p x0 x1 -> [b]
-extractList f = \case
-  Done -> []
-  step :>> steps -> (f step):extractList f steps
-
--- | `mapAligned` applies a function to each element of an `AlignedList`.
-mapAligned
-  :: (forall z0 z1. p z0 z1 -> q z0 z1)
-  -> AlignedList p x0 x1
-  -> AlignedList q x0 x1
-mapAligned f = \case
-  Done -> Done
-  x :>> xs -> f x :>> mapAligned f xs
-
--- | A `single` step.
-single :: p x0 x1 -> AlignedList p x0 x1
-single step = step :>> Done
-
--- | A useful operator for ending an `NP` list of length at least 2 without `Nil`.
+-- | A useful operator for ending an `NP` list of length
+-- at least 2 without `Nil`
 (*:) :: f x -> f y -> NP f '[x,y]
 x *: y = x :* y :* Nil
-infixl 9 *:
+infixl 8 *:
+
+-- | A list of length `one`.
+one :: f x -> NP f '[x]
+one f = f :* Nil
 
 -- | @Elem@ is a promoted `Data.List.elem`.
 type family Elem x xs where
   Elem x '[] = 'False
-  Elem x (x ': xs) = 'True
+  Elem x (x ': _) = 'True
+  Elem x (_ ': x ': _) = 'True
+  Elem x (_ ': _ ': x ': _) = 'True
+  Elem x (_ ': _ ': _ ': x ': _) = 'True
+  Elem x (_ ': _ ': _ ': _ ': x ': _) = 'True
+  Elem x (_ ': _ ': _ ': _ ': _ ': x ': _) = 'True
   Elem x (_ ': xs) = Elem x xs
 
 -- | @In x xs@ is a constraint that proves that @x@ is in @xs@.
 type family In x xs :: Constraint where
   In x xs = If (Elem x xs) (() :: Constraint)
-    (TypeError ('ShowType x ':<>: 'Text "is not in " ':<>: 'ShowType xs))
+    (TypeError ('ShowType x ':<>: 'Text " is not in " ':<>: 'ShowType xs))
 
 {- | Calculate the `Length` of a type level list
 
@@ -137,5 +110,9 @@ Length '[Char,String,Bool,Double] :: Nat
 = 4
 -}
 type family Length (xs :: [k]) :: Nat where
-  Length (x : xs) = 1 + Length xs
+  Length (_ ': _ ': _ ': _ ': _ : xs) = 5 + Length xs
+  Length (_ ': _ ': _ ': _ : xs) = 4 + Length xs
+  Length (_ ': _ ': _ : xs) = 3 + Length xs
+  Length (_ ': _ : xs) = 2 + Length xs
+  Length (_ : xs) = 1 + Length xs
   Length '[] = 0

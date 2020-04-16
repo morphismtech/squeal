@@ -1,29 +1,33 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Sort
-Description: Sort expressions
+Description: sort expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Sort expressions
+sort expressions
 -}
 
 {-# LANGUAGE
     DataKinds
+  , FlexibleInstances
+  , FunctionalDependencies
   , GADTs
   , LambdaCase
+  , MultiParamTypeClasses
   , OverloadedStrings
   , StandaloneDeriving
 #-}
 
 module Squeal.PostgreSQL.Expression.Sort
-  ( SortExpression (..)
+  ( -- * Sort
+    SortExpression (..)
   , OrderBy (..)
   ) where
 
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- | `SortExpression`s are used by `orderBy` to optionally sort the results
 -- of a `Squeal.PostgreSQL.Query.Query`. `Asc` or `Desc`
@@ -36,27 +40,33 @@ import Squeal.PostgreSQL.Schema
 -- `AscNullsLast`, `DescNullsFirst` and `DescNullsLast` options are used to
 -- determine whether nulls appear before or after non-null values in the sort
 -- ordering of a `Null` result column.
-data SortExpression outer commons grp schemas params from where
+data SortExpression grp lat with db params from where
   Asc
-    :: Expression outer commons grp schemas params from ('NotNull ty)
-    -> SortExpression outer commons grp schemas params from
+    :: Expression grp lat with db params from ('NotNull ty)
+    -- ^ sort by
+    -> SortExpression grp lat with db params from
   Desc
-    :: Expression outer commons grp schemas params from ('NotNull ty)
-    -> SortExpression outer commons grp schemas params from
+    :: Expression grp lat with db params from ('NotNull ty)
+    -- ^ sort by
+    -> SortExpression grp lat with db params from
   AscNullsFirst
-    :: Expression outer commons grp schemas params from  ('Null ty)
-    -> SortExpression outer commons grp schemas params from
+    :: Expression grp lat with db params from  ('Null ty)
+    -- ^ sort by
+    -> SortExpression grp lat with db params from
   AscNullsLast
-    :: Expression outer commons grp schemas params from  ('Null ty)
-    -> SortExpression outer commons grp schemas params from
+    :: Expression grp lat with db params from  ('Null ty)
+    -- ^ sort by
+    -> SortExpression grp lat with db params from
   DescNullsFirst
-    :: Expression outer commons grp schemas params from  ('Null ty)
-    -> SortExpression outer commons grp schemas params from
+    :: Expression grp lat with db params from  ('Null ty)
+    -- ^ sort by
+    -> SortExpression grp lat with db params from
   DescNullsLast
-    :: Expression outer commons grp schemas params from  ('Null ty)
-    -> SortExpression outer commons grp schemas params from
-deriving instance Show (SortExpression outer commons grp schemas params from)
-instance RenderSQL (SortExpression outer commons grp schemas params from) where
+    :: Expression grp lat with db params from  ('Null ty)
+    -- ^ sort by
+    -> SortExpression grp lat with db params from
+deriving instance Show (SortExpression grp lat with db params from)
+instance RenderSQL (SortExpression grp lat with db params from) where
   renderSQL = \case
     Asc expression -> renderSQL expression <+> "ASC"
     Desc expression -> renderSQL expression <+> "DESC"
@@ -66,6 +76,11 @@ instance RenderSQL (SortExpression outer commons grp schemas params from) where
       <+> "DESC NULLS FIRST"
     AscNullsLast expression -> renderSQL expression <+> "ASC NULLS LAST"
     DescNullsLast expression -> renderSQL expression <+> "DESC NULLS LAST"
+instance RenderSQL [SortExpression grp lat with db params from] where
+  renderSQL = \case
+    [] -> ""
+    srts -> " ORDER BY"
+      <+> commaSeparated (renderSQL <$> srts)
 
 {- |
 The `orderBy` clause causes the result rows of a `Squeal.PostgreSQL.Query.TableExpression`
@@ -78,8 +93,9 @@ they are returned in an implementation-dependent order.
 You can also control the order in which rows are processed by window functions
 using `orderBy` within `Squeal.PostgreSQL.Query.Over`.
 -}
-class OrderBy expr where
+class OrderBy expr grp | expr -> grp where
   orderBy
-    :: [SortExpression outer commons grp schemas params from]
-    -> expr outer commons grp schemas params from
-    -> expr outer commons grp schemas params from
+    :: [SortExpression grp lat with db params from]
+      -- ^ sorts
+    -> expr lat with db params from
+    -> expr lat with db params from

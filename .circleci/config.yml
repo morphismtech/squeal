@@ -7,6 +7,7 @@ jobs:
         environment:
           POSTGRES_USER: root
           POSTGRES_DB: exampledb
+          POSTGRES_PASSWORD: password
     steps:
       - checkout
       - restore_cache:
@@ -16,6 +17,7 @@ jobs:
       - run: stack upgrade && stack update
       - run: stack build --fast
       - run: stack test
+      - run: stack bench
       - run: stack haddock
       - save_cache:
           key: dependency-cache

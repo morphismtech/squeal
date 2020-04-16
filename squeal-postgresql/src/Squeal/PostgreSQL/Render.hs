@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Render
-Description: Rendering helper functions
-Copyright: (c) Eitan Chatav, 2017
+Description: render functions
+Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Rendering helper functions.
+render functions
 -}
 
 {-# LANGUAGE
@@ -33,6 +33,8 @@ module Squeal.PostgreSQL.Render
   , doubleQuoted
   , singleQuotedText
   , singleQuotedUtf8
+  , escapeQuotedString
+  , escapeQuotedText
   , renderCommaSeparated
   , renderCommaSeparatedConstraint
   , renderCommaSeparatedMaybe
@@ -43,7 +45,6 @@ module Squeal.PostgreSQL.Render
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.ByteString (ByteString)
 import Data.Maybe (catMaybes)
-import Data.Monoid ((<>))
 import Data.Text (Text)
 import Generics.SOP
 import GHC.Exts
@@ -83,6 +84,15 @@ singleQuotedText str =
 -- | Add single quotes around a `ByteString` and escape single quotes within it.
 singleQuotedUtf8 :: ByteString -> ByteString
 singleQuotedUtf8 = singleQuotedText . Text.decodeUtf8
+
+-- | Escape quote a string.
+escapeQuotedString :: String -> ByteString
+escapeQuotedString x = "E\'" <> Text.encodeUtf8 (fromString (escape =<< x)) <> "\'"
+
+-- | Escape quote a string.
+escapeQuotedText :: Text -> ByteString
+escapeQuotedText x =
+  "E\'" <> Text.encodeUtf8 (Text.concatMap (fromString . escape) x) <> "\'"
 
 -- | Comma separate the renderings of a heterogeneous list.
 renderCommaSeparated
@@ -134,7 +144,7 @@ printSQL = liftIO . Char8.putStrLn . renderSQL
 -- | `escape` a character to prevent injection
 escape :: Char -> String
 escape = \case
-  '\NUL' -> "\\0"
+  '\NUL' -> ""
   '\'' -> "''"
   '"' -> "\\\""
   '\b' -> "\\b"

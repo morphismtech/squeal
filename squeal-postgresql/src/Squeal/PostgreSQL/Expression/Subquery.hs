@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Subquery
-Description: Subquery expressions
+Description: subquery expressions
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Subquery expressions
+subquery expressions
 -}
 
 {-# LANGUAGE
@@ -16,20 +16,21 @@ Subquery expressions
 #-}
 
 module Squeal.PostgreSQL.Expression.Subquery
-  ( exists
+  ( -- * Subquery
+    exists
   , in_
   , notIn
   , subAll
   , subAny
   ) where
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Logic
-import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
 -- >>> import Squeal.PostgreSQL
@@ -47,8 +48,9 @@ The subquery will generally only be executed long enough to determine whether
 at least one row is returned, not all the way to completion.
 -}
 exists
-  :: Query (Join outer from) commons schemas params row
-  -> Condition outer commons grp schemas params from
+  :: Query (Join lat from) with db params row
+  -- ^ subquery
+  -> Expression grp lat with db params from (null 'PGbool)
 exists query = UnsafeExpression $ "EXISTS" <+> parenthesized (renderSQL query)
 
 {- |
@@ -66,10 +68,10 @@ and at least one comparison returns `Squeal.PostgreSQL.Expression.Null.null_`.
 (TRUE = ALL (SELECT * FROM (VALUES (TRUE)) AS t ("foo")))
 -}
 subAll
-  :: Expression outer commons grp schemas params from ty1 -- ^ expression
+  :: Expression grp lat with db params from ty1 -- ^ expression
   -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
-  -> Query (Join outer from) commons schemas params '[col ::: ty2] -- ^ subquery
-  -> Condition outer commons grp schemas params from
+  -> Query (Join lat from) with db params '[col ::: ty2] -- ^ subquery
+  -> Condition grp lat with db params from
 subAll expr (?) qry = expr ?
   (UnsafeExpression $ "ALL" <+> parenthesized (renderSQL qry))
 
@@ -81,13 +83,13 @@ if any `true` result is obtained. The result is `false` if no true result is fou
 (including the case where the subquery returns no rows).
 
 >>> printSQL $ subAny "foo" like (values_ ("foobar" `as` #foo))
-(E'foo' LIKE ANY (SELECT * FROM (VALUES (E'foobar')) AS t ("foo")))
+((E'foo' :: text) LIKE ANY (SELECT * FROM (VALUES ((E'foobar' :: text))) AS t ("foo")))
 -}
 subAny
-  :: Expression outer commons grp schemas params from ty1 -- ^ expression
+  :: Expression grp lat with db params from ty1 -- ^ expression
   -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
-  -> Query (Join outer from) commons schemas params '[col ::: ty2] -- ^ subquery
-  -> Condition outer commons grp schemas params from
+  -> Query (Join lat from) with db params '[col ::: ty2] -- ^ subquery
+  -> Condition grp lat with db params from
 subAny expr (?) qry = expr ?
   (UnsafeExpression $ "ANY" <+> parenthesized (renderSQL qry))
 
@@ -99,9 +101,9 @@ to any of the right-hand expressions.
 TRUE IN (TRUE, FALSE, NULL)
 -}
 in_
-  :: Expression outer commons grp schemas params from ty -- ^ expression
-  -> [Expression outer commons grp schemas params from ty]
-  -> Condition outer commons grp schemas params from
+  :: Expression grp lat with db params from ty -- ^ expression
+  -> [Expression grp lat with db params from ty]
+  -> Expression grp lat with db params from (null 'PGbool)
 expr `in_` exprs = UnsafeExpression $ renderSQL expr <+> "IN"
   <+> parenthesized (commaSeparated (renderSQL <$> exprs))
 
@@ -113,8 +115,8 @@ to any of the right-hand expressions.
 TRUE NOT IN (FALSE, NULL)
 -}
 notIn
-  :: Expression outer commons grp schemas params from ty -- ^ expression
-  -> [Expression outer commons grp schemas params from ty]
-  -> Condition outer commons grp schemas params from
+  :: Expression grp lat with db params from ty -- ^ expression
+  -> [Expression grp lat with db params from ty]
+  -> Expression grp lat with db params from (null 'PGbool)
 expr `notIn` exprs = UnsafeExpression $ renderSQL expr <+> "NOT IN"
   <+> parenthesized (commaSeparated (renderSQL <$> exprs))

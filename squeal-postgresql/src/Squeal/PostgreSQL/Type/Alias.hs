@@ -1,6 +1,6 @@
 {-|
-Module: Squeal.PostgreSQL.Alias
-Description: Aliases
+Module: Squeal.PostgreSQL.Type.Alias
+Description: aliases
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
@@ -33,17 +33,20 @@ Squeal can reference aliases by prepending with a @#@.
   , UndecidableSuperClasses
 #-}
 
-module Squeal.PostgreSQL.Alias
-  ( (:::)
+module Squeal.PostgreSQL.Type.Alias
+  ( -- * Aliases
+    (:::)
   , Alias (..)
   , IsLabel (..)
   , Aliased (As)
   , Aliasable (as)
   , renderAliased
+  , mapAliased
   , Has
   , HasUnique
   , HasAll
   , HasIn
+    -- * Qualified Aliases
   , QualifiedAlias (..)
   , IsQualified (..)
     -- * Grouping
@@ -60,7 +63,7 @@ import GHC.TypeLits
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
-import Squeal.PostgreSQL.List
+import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Render
 
 -- $setup
@@ -73,7 +76,7 @@ infixr 6 :::
 
 
 -- | `Grouping` is an auxiliary namespace, created by
--- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.group`), and used
+-- @GROUP BY@ clauses (`Squeal.PostgreSQL.Query.groupBy`), and used
 -- for typesafe aggregation
 data Grouping
   = Ungrouped -- ^ no aggregation permitted
@@ -166,6 +169,13 @@ renderAliased
 renderAliased render (expression `As` alias) =
   render expression <> " AS " <> renderSQL alias
 
+-- | Map a function over an `Aliased` expression.
+mapAliased
+  :: (expr x -> expr y)
+  -> Aliased expr (alias ::: x)
+  -> Aliased expr (alias ::: y)
+mapAliased f (x `As` alias) = f x `As` alias
+
 -- | @HasUnique alias fields field@ is a constraint that proves that
 -- @fields@ is a singleton of @alias ::: field@.
 type HasUnique alias fields field = fields ~ '[alias ::: field]
@@ -176,8 +186,8 @@ type HasUnique alias fields field = fields ~ '[alias ::: field]
 class KnownSymbol alias =>
   Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
   | alias fields -> field where
-instance {-# OVERLAPPING #-} KnownSymbol alias
-  => Has alias (alias ::: field ': fields) field
+instance {-# OVERLAPPING #-} (KnownSymbol alias, field0 ~ field1)
+  => Has alias (alias ::: field0 ': fields) field1
 instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
   => Has alias (field' ': fields) field
 
@@ -205,14 +215,15 @@ instance {-# OVERLAPPABLE #-}
 -- | Analagous to `IsLabel`, the constraint
 -- `IsQualified` defines `!` for a column alias qualified
 -- by a table alias.
-class IsQualified table column expression where
-  (!) :: Alias table -> Alias column -> expression
+class IsQualified qualifier alias expression where
+  (!) :: Alias qualifier -> Alias alias -> expression
   infixl 9 !
-instance IsQualified table column (Alias table, Alias column) where (!) = (,)
+instance IsQualified qualifier alias (Alias qualifier, Alias alias) where
+  (!) = (,)
 
 {-| `QualifiedAlias`es enables multi-schema support by allowing a reference
-to a `Squeal.PostgreSQL.Schema.Table`, `Squeal.PostgreSQL.Schema.Typedef`
-or `Squeal.PostgreSQL.Schema.View` to be qualified by their schemas. By default,
+to a `Squeal.PostgreSQL.Type.Schema.Table`, `Squeal.PostgreSQL.Type.Schema.Typedef`
+or `Squeal.PostgreSQL.Type.Schema.View` to be qualified by their schemas. By default,
 a qualifier of @public@ is provided.
 
 >>> :{
@@ -229,12 +240,12 @@ in printSQL alias1 >> printSQL alias2
 data QualifiedAlias (qualifier :: Symbol) (alias :: Symbol) = QualifiedAlias
   deriving (Eq,GHC.Generic,Ord,Show,NFData)
 instance (q ~ q', a ~ a') => IsQualified q a (QualifiedAlias q' a') where
-  _!_ = QualifiedAlias
+  _ ! _ = QualifiedAlias
 instance (q' ~ "public", a ~ a') => IsLabel a (QualifiedAlias q' a') where
   fromLabel = QualifiedAlias
 instance (q0 ~ q1, a0 ~ a1, a1 ~ a2, KnownSymbol a2) =>
   IsQualified q0 a0 (Aliased (QualifiedAlias q1) (a1 ::: a2)) where
-    _!_ = QualifiedAlias `As` Alias
+    _ ! _ = QualifiedAlias `As` Alias
 instance (q ~ "public", a0 ~ a1, a1 ~ a2, KnownSymbol a2) =>
   IsLabel a0 (Aliased (QualifiedAlias q) (a1 ::: a2)) where
     fromLabel = QualifiedAlias `As` Alias

@@ -1,5 +1,294 @@
 ## RELEASE NOTES
 
+### Version 0.6
+
+Version 0.6 makes a number of large changes and additions to Squeal.
+I want to thank folks who contributed issues and pull requests;
+ilyakooo0, tuomohopia, league, Raveline, Sciencei, mwotton, and more.
+
+I particularly would like to thank my employer SimSpace and colleagues.
+We are actively using Squeal at SimSpace which has pushed its development.
+
+My colleague Mark Wotton has also created a project
+[squealgen](https://github.com/mwotton/squealgen) to generate
+a Squeal schema directly from the database which is awesome.
+
+**Module hierarchy**
+
+Squeal had been growing some rather large modules, whereas I prefer
+sub-thousand line modules. Accordingly, I split up the module
+hierarchy further. This means there's 60 modules which looks a little
+overwhelming, but I think it makes it easier to locate functionality.
+It also makes working in a single module less overwhelming.
+All relevant functionality is still being exported by `Squeal.PostgreSQL`.
+
+**Statement Profunctors**
+
+Squeal's top level queries and manipulations left something to be desired.
+Because `Query_` and `Manipulation_` were type families, they could be
+a bit confusing to use. For instance,
+
+```Haskell
+>>> :{
+selectUser :: Query_ DB UserId User
+selectUser = select_
+  (#id `as` #userId :* #name `as` #userName)
+  (from (table #users) & where_ (#id .== param @1))
+:}
+>>> :t selectUser
+selectUser
+  :: Query
+       '[]
+       '[]
+       '["public" ::: '["users" ::: 'Table ('[] :=> UsersColumns)]]
+       '[ 'NotNull 'PGint4]
+       '["userId" ::: 'NotNull 'PGint4, "userName" ::: 'NotNull 'PGtext]
+```
+
+So the `UserId` and `User` types are completely replaced by corresponding
+Postgres types. This means that the query can be run, for instance,
+with any parameter that is a generic singleton container of `Int32`.
+We've lost apparent type safety. You could accidentally run `selectUser`
+with a `WidgetId` parameter instead of a `UserId` and it could typecheck.
+
+That's because `Query` is a pure SQL construct, with no knowledge for
+how to encode or decode Haskell values.
+
+Another annoyance of `Query_` and `Manipulation_` is that they _must_
+be applied to Haskell types which exactly match their corresponding
+Postgres types. So, in practice, you often end up with one-off
+data type definitions just to have a type that exactly matches,
+having the same field names, and the same ordering, etc. as the
+returned row.
+
+Both of these issues are solved with the new `Statement` type. Let's
+see its definition.
+
+```Haskell
+data Statement db x y where
+  Manipulation
+    :: (SOP.All (OidOfNull db) params, SOP.SListI row)
+    => EncodeParams db params x
+    -> DecodeRow row y
+    -> Manipulation '[] db params row
+    -> Statement db x y
+  Query
+    :: (SOP.All (OidOfNull db) params, SOP.SListI row)
+    => EncodeParams db params x
+    -> DecodeRow row y
+    -> Query '[] '[] db params row
+    -> Statement db x y
+```
+
+You can see that a `Statement` bundles either a `Query` or a `Manipulation`
+together with a way to `EncodeParams` and a way to `DecodeRow`. This
+ties the statement to actual Haskell types. Going back to the example,
+
+```Haskell
+>>> :{
+selectUser :: Statement DB UserId User
+selectUser = query $ select_
+  (#id `as` #userId :* #name `as` #userName)
+  (from (table #users) & where_ (#id .== param @1))
+:}
+```
+
+Now we really do have the type safety of only being able to `executeParams`
+`selectUser` with a `UserId` parameter. Here we've used the smart
+constructor `query` which automatically uses the generic instances of
+`UserId` and `User` to construct a way to `EncodeParams` and a way to
+`DecodeRow`. We can use the `Query` constructor to do custom encodings
+and decodings.
+
+```Haskell
+>>> :{
+selectUser :: Statement DB UserId (UserId, Text)
+selectUser = Query enc dec sql where
+  enc = contramap getUserId aParam
+  dec = do
+    uid <- #id
+    uname <- #name
+    return (uid, uname)
+  sql = select Star (from (table #users) & where_ (#id .== param @1))
+:}
+```
+
+`EncodeParams` and `DecodeRow` both have convenient APIs. `EncodeParams`
+is `Contravariant` and can be composed with combinators. `DecodeRow`
+is a `Monad` and has `IsLabel` instances. Since `Statement`s bundle
+both together, they form `Profunctor`s, where you can `lmap` over
+parameters and `rmap` over rows.
+
+The `Statement` `Profunctor` is heavily influenced by
+the `Statement` `Profunctor` from Nikita Volkov's excellent `hasql` library,
+building on the use of `postgresql-binary` for encoding and decoding.
+
+**Deriving**
+
+Many Haskell types have corresponding Postgres types like `Double`
+corresponds to `float8`. Squeal makes this an open relationship with the
+`PG` type family. Squeal 0.6 makes it easy to generate `PG` of your
+Haskell types, though you might have to turn on `-XUndecidableInstances`,
+by deriving an `IsPG` instance.
+In addition to having a corresponding Postgres type,
+to fully embed your Haskell type you want instances of `ToPG db` to
+encode your type as an out-of-line parameter, `FromPG` to
+decode your type from a result value, and `Inline` to inline
+values of your type directly in SQL statements.
+
+```Haskell
+>>> :{
+newtype CustomerId = CustomerId {getCustomerId :: Int32}
+  deriving newtype (IsPG, ToPG db, FromPG, Inline)
+:}
+
+>>> :kind! PG CustomerId
+PG CustomerId :: PGType
+= 'PGint4
+```
+
+You can even embed your Haskell records and enum types using
+deriving via.
+
+```Haskell
+>>> :{
+data Complex = Complex {real :: Double, imaginary :: Double}
+  deriving stock (GHC.Generic)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+  deriving (IsPG, ToPG db, FromPG, Inline) via Composite Complex
+:}
+
+>>> :kind! PG Complex
+PG Complex :: PGType
+= 'PGcomposite
+    '["real" ::: 'NotNull 'PGfloat8,
+      "imaginary" ::: 'NotNull 'PGfloat8]
+
+>>> printSQL (inline (Complex 0 1))
+ROW((0.0 :: float8), (1.0 :: float8))
+
+>>> :{
+data Answer = Yes | No
+  deriving stock (GHC.Generic)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+  deriving (IsPG, ToPG db, FromPG, Inline) via Enumerated Answer
+:}
+
+>>> :kind! PG Answer
+PG Answer :: PGType
+= 'PGenum '["Yes", "No"]
+
+>>> printSQL (inline Yes)
+'Yes'
+```
+
+You can also embed your types encoded as `Json` or `Jsonb`.
+
+```Haskell
+>>> :{
+data Foo = Bar Int | Baz Char Text
+  deriving stock (GHC.Generic)
+  deriving anyclass (ToJSON, FromJSON)
+  deriving (IsPG, ToPG db, FromPG, Inline) via Jsonb Foo
+:}
+
+>>> :kind! PG Foo
+PG Foo :: PGType
+= 'PGjsonb
+
+>>> printSQL (inline (Baz 'a' "aaa"))
+('{"tag":"Baz","contents":["a","aaa"]}' :: jsonb)
+```
+
+One thing to notice about `ToParam db` is that it has an
+extra parameter `db` that the other classes don't have. That's
+because for some types, such as arrays and composites, you
+need to know the OID of the element types in order to unambiguously
+encode those types. And if the element types are user defined,
+then they have to be looked up in the database. The extra parameter
+lets us look through the schema for a matching type, and then
+look up that type's OID.
+
+**Migrations**
+
+Previously Squeal migrations could be either pure, involving only
+data definitions, or impure, allowing arbitrary `IO`. But, they
+had to be rewindable; that is, every migration step had to have
+an inverse. Squeal 0.6 generalizes to allow both invertible and
+one-way migrations. The core datatype for migrations, the free
+category `Path` has been moved to its own package `free-categories`.
+
+**Aggregation**
+
+Squeal 0.6 enables filtering and ordering for aggregate
+arguments and filtering for window function arguments.
+
+```Haskell
+arrayAgg (All #col & orderBy [AscNullsFirst #col] & filterWhere (#col .< 100))
+```
+
+To upgrade existing code, if you have an aggregate with multiple arguments,
+use `Alls` instead of `All` or `Distincts` instead of `Distinct`
+and if you have a window function, apply either `Window` or `Windows`
+to its argument(s). Additionally, convenient functions `allNotNull` and
+`distinctNotNull` safely filter out `NULL`.
+
+**Ranges**
+
+Squeal 0.6 adds both Haskell and corresponding Postgres range types.
+
+```Haskell
+data Bound x
+  = Infinite -- ^ unbounded
+  | Closed x -- ^ inclusive
+  | Open x -- ^ exclusive
+
+data Range x = Empty | NonEmpty (Bound x) (Bound x)
+
+(<=..<=), (<..<), (<=..<), (<..<=) :: x -> x -> Range x
+moreThan, atLeast, lessThan, atMost :: x -> Range x
+singleton :: x -> Range x
+whole :: Range x
+```
+
+**Indexes and functions**
+
+Squeal 0.6 adds support for creating and dropping user defined
+indexes and functions to your schema, which can then be used
+in statements.
+
+**Lateral joins**
+
+Squeal 0.6 adds support for lateral joins, which may reference previous
+items.
+
+**Null handling**
+
+Some null handling functions were added such as `monoNotNull`
+and `unsafeNotNull`. Because Squeal is aggressively `NULL` polymorphic,
+sometimes inference errors can occur. You can apply `monoNotNull`
+to fix something to be not `NULL`. You can apply `unsafeNotNull`
+when you know that something can't be `NULL`, for instance if you've
+filtered `NULL` out of a column.
+
+**Other changes**
+
+Lots of other things changed. `Literal` and `literal` are now called
+`Inline` and `inline`. `ColumnConstraint` is called `Optionality`.
+`NullityType`s are called `NullTypes`.
+Squeal 0.6 adds support for domain types. It more carefully types
+`CREATE _ IF NOT EXISTS` and `DROP _ IF EXISTS` definitions. The
+`Exception` type was refactored to remove `Maybe`s and new pattern
+synonyms were defined to easily match on a few common SQL errors.
+`VarChar` and `FixChar` types were added with smart constructors.
+Many bugs were fixed. Also, many more tests were added and
+a new benchmark suite. A lot more things were changed that I've
+probably forgotten about.
+
+### Version 0.5.2
+
+Fixes a bug in pool API and implementation.
+
 ### Version 0.5
 
 Version 0.5 makes a number of large changes and additions to Squeal.
@@ -138,11 +427,11 @@ type Expr x
   . Expression outer commons grp schemas params from x
 ```
 
-There is also a function type `(:-->)`, which is a subtype of the usual Haskell function
+There is also a function type `(-->)`, which is a subtype of the usual Haskell function
 type `(->)`.
 
 ```Haskell
-type (:-->) x y
+type (-->) x y
   =  forall outer commons grp schemas params from
   .  Expression outer commons grp schemas params from x
   -> Expression outer commons grp schemas params from y

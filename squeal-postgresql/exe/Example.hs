@@ -13,7 +13,6 @@ module Main (main, main2) where
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int16, Int32)
-import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Vector (Vector)
 
@@ -38,6 +37,7 @@ type Schema =
         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
         , "email" ::: 'NoDef :=> 'Null 'PGtext
         ])
+   , "positive" ::: 'Typedef 'PGfloat4
    ]
 
 type Schemas = Public Schema
@@ -52,14 +52,16 @@ setup =
   >>>
   createTable #emails
     ( serial `as` #id :*
-      (int & notNullable) `as` #user_id :*
-      (text & nullable) `as` #email )
+      columntypeFrom @Int32 `as` #user_id :*
+      columntypeFrom @(Maybe Text) `as` #email )
     ( primaryKey #id `as` #pk_emails :*
       foreignKey #user_id #users #id
         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
+    >>>
+    createDomain #positive real (#value .> 0 .&& (#value & isNotNull))
 
 teardown :: Definition Schemas (Public '[])
-teardown = dropTable #emails >>> dropTable #users
+teardown = dropType #positive >>> dropTable #emails >>> dropTable #users
 
 insertUser :: Manipulation_ Schemas (Text, VarArray (Vector (Maybe Int16))) (Only Int32)
 insertUser = insertInto #users
@@ -77,23 +79,27 @@ getUsers = select_
     & innerJoin (table (#emails `as` #e))
       (#u ! #id .== #e ! #user_id)) )
 
-data User = User { userName :: Text, userEmail :: Maybe Text, userVec :: VarArray (Vector (Maybe Int16)) }
-  deriving (Show, GHC.Generic)
+data User
+  = User
+  { userName :: Text
+  , userEmail :: Maybe Text
+  , userVec :: VarArray (Vector (Maybe Int16))
+  } deriving (Show, GHC.Generic)
 instance SOP.Generic User
 instance SOP.HasDatatypeInfo User
 
 users :: [User]
 users =
-  [ User "Alice" (Just "alice@gmail.com") (VarArray [Nothing, Just 1])
-  , User "Bob" Nothing (VarArray [Just 2, Nothing])
-  , User "Carole" (Just "carole@hotmail.com") (VarArray [Just 3])
+  [ User "Alice" (Just "alice@gmail.com") (VarArray [Just 1,Just 2,Nothing])
+  , User "Bob" Nothing (VarArray [Nothing,Just (-3)])
+  , User "Carole" (Just "carole@hotmail.com") (VarArray [Just 3,Nothing, Just 4])
   ]
 
 session :: (MonadIO pq, MonadPQ Schemas pq) => pq ()
 session = do
   liftIO $ Char8.putStrLn "manipulating"
   idResults <- traversePrepared insertUser ([(userName user, userVec user) | user <- users])
-  ids <- traverse (fmap fromOnly . getRow 0) idResults
+  ids <- traverse (fmap fromOnly . getRow 0) (idResults :: [Result (Only Int32)])
   traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
   liftIO $ Char8.putStrLn "querying"
   usersResult <- runQuery getUsers

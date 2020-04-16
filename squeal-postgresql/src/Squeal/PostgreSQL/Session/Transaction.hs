@@ -1,11 +1,11 @@
 {-|
-Module: Squeal.PostgreSQL.Transaction
-Description: Squeal transaction control language
+Module: Squeal.PostgreSQL.Session.Transaction
+Description: transaction control language
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Squeal transaction control language.
+transaction control language
 -}
 
 {-# LANGUAGE
@@ -16,7 +16,7 @@ Squeal transaction control language.
   , TypeInType
 #-}
 
-module Squeal.PostgreSQL.Transaction
+module Squeal.PostgreSQL.Session.Transaction
   ( -- * Transaction
     transactionally
   , transactionally_
@@ -39,7 +39,8 @@ import UnliftIO
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.PQ
+import Squeal.PostgreSQL.Session.Exception
+import Squeal.PostgreSQL.Session.Monad
 
 {- | Run a computation `transactionally`;
 first `begin`,
@@ -48,7 +49,7 @@ then run the computation,
 otherwise `commit` and `return` the result.
 -}
 transactionally
-  :: (MonadUnliftIO tx, MonadPQ schemas tx)
+  :: (MonadUnliftIO tx, MonadPQ db tx)
   => TransactionMode
   -> tx x -- ^ run inside a transaction
   -> tx x
@@ -60,7 +61,7 @@ transactionally mode tx = mask $ \restore -> do
 
 -- | Run a computation `transactionally_`, in `defaultMode`.
 transactionally_
-  :: (MonadUnliftIO tx, MonadPQ schemas tx)
+  :: (MonadUnliftIO tx, MonadPQ db tx)
   => tx x -- ^ run inside a transaction
   -> tx x
 transactionally_ = transactionally defaultMode
@@ -75,7 +76,7 @@ transactionally_ = transactionally defaultMode
   - otherwise `commit` and `return` the result.
 -}
 transactionallyRetry
-  :: (MonadUnliftIO tx, MonadPQ schemas tx)
+  :: (MonadUnliftIO tx, MonadPQ db tx)
   => TransactionMode
   -> tx x -- ^ run inside a transaction
   -> tx x
@@ -88,7 +89,7 @@ transactionallyRetry mode tx = mask $ \restore ->
     loop attempt = do
       manipulate_ $ begin mode
       attempt >>= \case
-        Left (PQException (PQState _ (Just "40001") _)) -> do
+        Left (SerializationFailure _) -> do
           manipulate_ rollback
           loop attempt
         Left err -> do
@@ -100,7 +101,7 @@ transactionallyRetry mode tx = mask $ \restore ->
 Like `transactionally` but always `rollback`, useful in testing.
 -}
 ephemerally
-  :: (MonadUnliftIO tx, MonadPQ schemas tx)
+  :: (MonadUnliftIO tx, MonadPQ db tx)
   => TransactionMode
   -> tx x -- ^ run inside an ephemeral transaction
   -> tx x
@@ -112,21 +113,21 @@ ephemerally mode tx = mask $ \restore -> do
 
 {- | Run a computation `ephemerally` in `defaultMode`. -}
 ephemerally_
-  :: (MonadUnliftIO tx, MonadPQ schemas tx)
+  :: (MonadUnliftIO tx, MonadPQ db tx)
   => tx x -- ^ run inside an ephemeral transaction
   -> tx x
 ephemerally_ = ephemerally defaultMode
 
 -- | @BEGIN@ a transaction.
-begin :: TransactionMode -> Manipulation_ schemas () ()
+begin :: TransactionMode -> Manipulation_ db () ()
 begin mode = UnsafeManipulation $ "BEGIN" <+> renderSQL mode
 
 -- | @COMMIT@ a transaction.
-commit :: Manipulation_ schemas () ()
+commit :: Manipulation_ db () ()
 commit = UnsafeManipulation "COMMIT"
 
 -- | @ROLLBACK@ a transaction.
-rollback :: Manipulation_ schemas () ()
+rollback :: Manipulation_ db () ()
 rollback = UnsafeManipulation "ROLLBACK"
 
 -- | The available transaction characteristics are the transaction `IsolationLevel`,

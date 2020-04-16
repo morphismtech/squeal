@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Expression.Json
-Description: Json and Jsonb functions and operators
+Description: json and jsonb functions and operators
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-Json and Jsonb functions and operators
+json and jsonb functions and operators
 -}
 
 {-# LANGUAGE
@@ -25,18 +25,18 @@ Json and Jsonb functions and operators
 #-}
 
 module Squeal.PostgreSQL.Expression.Json
-  ( -- * Json and Jsonb operators
+  ( -- * Json and Jsonb Operators
     (.->)
   , (.->>)
   , (.#>)
   , (.#>>)
-    -- * Jsonb operators
+    -- * Jsonb Operators
   , (.?)
   , (.?|)
   , (.?&)
   , (.-.)
   , (#-.)
-    -- * Json and Jsonb functions
+    -- * Json and Jsonb Functions
   , toJson
   , toJsonb
   , arrayToJson
@@ -57,7 +57,7 @@ module Squeal.PostgreSQL.Expression.Json
   , jsonbSet
   , jsonbInsert
   , jsonbPretty
-    -- * Json and Jsonb set returning functions
+    -- * Json and Jsonb Set Functions
   , jsonEach
   , jsonbEach
   , jsonEachText
@@ -79,14 +79,14 @@ module Squeal.PostgreSQL.Expression.Json
 import Data.ByteString (ByteString)
 import GHC.TypeLits
 
-import Squeal.PostgreSQL.Alias
+import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Expression.SetOf
 import Squeal.PostgreSQL.Expression.Type
-import Squeal.PostgreSQL.List
-import Squeal.PostgreSQL.Query
+import Squeal.PostgreSQL.Type.List
+import Squeal.PostgreSQL.Query.From
+import Squeal.PostgreSQL.Query.From.Set
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Schema
+import Squeal.PostgreSQL.Type.Schema
 
 import qualified Generics.SOP as SOP
 
@@ -188,7 +188,7 @@ Table 9.45: JSON creation functions
 -- otherwise, a scalar value is produced. For any scalar type other than a
 -- number, a Boolean, or a null value, the text representation will be used, in
 -- such a fashion that it is a valid json value.
-toJson :: null ty :--> null 'PGjson
+toJson :: null ty --> null 'PGjson
 toJson = unsafeFunction "to_json"
 
 -- | Returns the value as jsonb. Arrays and composites are converted
@@ -197,26 +197,26 @@ toJson = unsafeFunction "to_json"
 -- otherwise, a scalar value is produced. For any scalar type other than a
 -- number, a Boolean, or a null value, the text representation will be used, in
 -- such a fashion that it is a valid jsonb value.
-toJsonb :: null ty :--> null 'PGjsonb
+toJsonb :: null ty --> null 'PGjsonb
 toJsonb = unsafeFunction "to_jsonb"
 
 -- | Returns the array as a JSON array. A PostgreSQL multidimensional array
 -- becomes a JSON array of arrays.
-arrayToJson :: null ('PGvararray ty) :--> null 'PGjson
+arrayToJson :: null ('PGvararray ty) --> null 'PGjson
 arrayToJson = unsafeFunction "array_to_json"
 
 -- | Returns the row as a JSON object.
-rowToJson :: null ('PGcomposite ty) :--> null 'PGjson
+rowToJson :: null ('PGcomposite ty) --> null 'PGjson
 rowToJson = unsafeFunction "row_to_json"
 
 -- | Builds a possibly-heterogeneously-typed JSON array out of a variadic
 -- argument list.
-jsonBuildArray :: SOP.SListI tuple => FunctionN tuple (null 'PGjson)
+jsonBuildArray :: SOP.SListI tuple => tuple ---> null 'PGjson
 jsonBuildArray = unsafeFunctionN "json_build_array"
 
 -- | Builds a possibly-heterogeneously-typed (binary) JSON array out of a
 -- variadic argument list.
-jsonbBuildArray :: SOP.SListI tuple => FunctionN tuple (null 'PGjsonb)
+jsonbBuildArray :: SOP.SListI tuple => tuple ---> null 'PGjsonb
 jsonbBuildArray = unsafeFunctionN "jsonb_build_array"
 
 -- | Builds a possibly-heterogeneously-typed JSON object out of a variadic
@@ -224,10 +224,10 @@ jsonbBuildArray = unsafeFunctionN "jsonb_build_array"
 -- and values.
 class SOP.SListI tys => JsonBuildObject tys where
 
-  jsonBuildObject :: FunctionN tys (null 'PGjson)
+  jsonBuildObject :: tys ---> null 'PGjson
   jsonBuildObject = unsafeFunctionN "json_build_object"
 
-  jsonbBuildObject :: FunctionN tys (null 'PGjsonb)
+  jsonbBuildObject :: tys ---> null 'PGjsonb
   jsonbBuildObject = unsafeFunctionN "jsonb_build_object"
 
 instance JsonBuildObject '[]
@@ -240,7 +240,7 @@ instance (JsonBuildObject tys, key `In` PGJsonKey)
 -- which are taken as a key/value pair.
 jsonObject
   ::   null ('PGfixarray '[n,2] ('NotNull 'PGtext))
-  :--> null 'PGjson
+  --> null 'PGjson
 jsonObject = unsafeFunction "json_object"
 
 -- | Builds a binary JSON object out of a text array.
@@ -249,24 +249,24 @@ jsonObject = unsafeFunction "json_object"
 -- which are taken as a key/value pair.
 jsonbObject
   ::   null ('PGfixarray '[n,2] ('NotNull 'PGtext))
-  :--> null 'PGjsonb
+  --> null 'PGjsonb
 jsonbObject = unsafeFunction "jsonb_object"
 
 -- | This is an alternate form of 'jsonObject' that takes two arrays; one for
 -- keys and one for values, that are zipped pairwise to create a JSON object.
-jsonZipObject :: FunctionN
+jsonZipObject ::
   '[ null ('PGvararray ('NotNull 'PGtext))
    , null ('PGvararray ('NotNull 'PGtext)) ]
-   ( null 'PGjson )
+   ---> null 'PGjson
 jsonZipObject = unsafeFunctionN "json_object"
 
 -- | This is an alternate form of 'jsonbObject' that takes two arrays; one for
 -- keys and one for values, that are zipped pairwise to create a binary JSON
 -- object.
-jsonbZipObject :: FunctionN
+jsonbZipObject ::
   '[ null ('PGvararray ('NotNull 'PGtext))
    , null ('PGvararray ('NotNull 'PGtext)) ]
-   ( null 'PGjsonb )
+   ---> null 'PGjsonb
 jsonbZipObject = unsafeFunctionN "jsonb_object"
 
 {-----------------------------------------
@@ -274,31 +274,31 @@ Table 9.46: JSON processing functions
 -----------------------------------------}
 
 -- | Returns the number of elements in the outermost JSON array.
-jsonArrayLength :: null 'PGjson :--> null 'PGint4
+jsonArrayLength :: null 'PGjson --> null 'PGint4
 jsonArrayLength = unsafeFunction "json_array_length"
 
 -- | Returns the number of elements in the outermost binary JSON array.
-jsonbArrayLength :: null 'PGjsonb :--> null 'PGint4
+jsonbArrayLength :: null 'PGjsonb --> null 'PGint4
 jsonbArrayLength = unsafeFunction "jsonb_array_length"
 
 -- | Returns the type of the outermost JSON value as a text string. Possible
 -- types are object, array, string, number, boolean, and null.
-jsonTypeof :: null 'PGjson :--> null 'PGtext
+jsonTypeof :: null 'PGjson --> null 'PGtext
 jsonTypeof = unsafeFunction "json_typeof"
 
 -- | Returns the type of the outermost binary JSON value as a text string.
 -- Possible types are object, array, string, number, boolean, and null.
-jsonbTypeof :: null 'PGjsonb :--> null 'PGtext
+jsonbTypeof :: null 'PGjsonb --> null 'PGtext
 jsonbTypeof = unsafeFunction "jsonb_typeof"
 
 -- | Returns its argument with all object fields that have null values omitted.
 -- Other null values are untouched.
-jsonStripNulls :: null 'PGjson :--> null 'PGjson
+jsonStripNulls :: null 'PGjson --> null 'PGjson
 jsonStripNulls = unsafeFunction "json_strip_nulls"
 
 -- | Returns its argument with all object fields that have null values omitted.
 -- Other null values are untouched.
-jsonbStripNulls :: null 'PGjsonb :--> null 'PGjsonb
+jsonbStripNulls :: null 'PGjsonb --> null 'PGjsonb
 jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
 
 -- | @ jsonbSet target path new_value create_missing @
@@ -309,12 +309,9 @@ jsonbStripNulls = unsafeFunction "jsonb_strip_nulls"
 -- item designated by path does not exist. As with the path orientated
 -- operators, negative integers that appear in path count from the end of JSON
 -- arrays.
-jsonbSet
-  :: FunctionN
-      '[ null 'PGjsonb
-       , null ('PGvararray ('NotNull 'PGtext))
-       , null 'PGjsonb
-       , null 'PGbool ] (null 'PGjsonb)
+jsonbSet ::
+  '[ null 'PGjsonb, null ('PGvararray ('NotNull 'PGtext))
+   , null 'PGjsonb, null 'PGbool ] ---> null 'PGjsonb
 jsonbSet = unsafeFunctionN "jsonbSet"
 
 -- | @ jsonbInsert target path new_value insert_after @
@@ -326,86 +323,82 @@ jsonbSet = unsafeFunctionN "jsonbSet"
 -- path is in JSONB object, @new_value@ will be inserted only if target does not
 -- exist. As with the path orientated operators, negative integers that appear
 -- in path count from the end of JSON arrays.
-jsonbInsert
-  :: FunctionN
-      '[ null 'PGjsonb
-       , null ('PGvararray ('NotNull 'PGtext))
-       , null 'PGjsonb
-       , null 'PGbool ] (null 'PGjsonb)
+jsonbInsert ::
+  '[ null 'PGjsonb, null ('PGvararray ('NotNull 'PGtext))
+   , null 'PGjsonb, null 'PGbool ] ---> null 'PGjsonb
 jsonbInsert = unsafeFunctionN "jsonb_insert"
 
 -- | Returns its argument as indented JSON text.
-jsonbPretty :: null 'PGjsonb :--> null 'PGtext
+jsonbPretty :: null 'PGjsonb --> null 'PGtext
 jsonbPretty = unsafeFunction "jsonb_pretty"
-
 
 {- | Expands the outermost JSON object into a set of key/value pairs.
 
->>> printSQL (select Star (from (jsonEach (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
+>>> printSQL (select Star (from (jsonEach (inline (Json (object ["a" .= "foo", "b" .= "bar"]))))))
 SELECT * FROM json_each(('{"a":"foo","b":"bar"}' :: json))
 -}
-jsonEach :: SetOfFunction "json_each" (null 'PGjson)
-  '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]
-jsonEach = unsafeSetOfFunction
+jsonEach :: null 'PGjson -|->
+  ("json_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson])
+jsonEach = unsafeSetFunction "json_each"
 
 {- | Expands the outermost binary JSON object into a set of key/value pairs.
 
->>> printSQL (select Star (from (jsonbEach (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
+>>> printSQL (select Star (from (jsonbEach (inline (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
 SELECT * FROM jsonb_each(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbEach
-  :: SetOfFunction "jsonb_each" (nullity 'PGjsonb)
-    '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson]
-jsonbEach = unsafeSetOfFunction
+  :: null 'PGjsonb -|->
+    ("jsonb_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson])
+jsonbEach = unsafeSetFunction "jsonb_each"
 
 {- | Expands the outermost JSON object into a set of key/value pairs.
 
->>> printSQL (select Star (from (jsonEachText (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))))
+>>> printSQL (select Star (from (jsonEachText (inline (Json (object ["a" .= "foo", "b" .= "bar"]))))))
 SELECT * FROM json_each_text(('{"a":"foo","b":"bar"}' :: json))
 -}
 jsonEachText
-  :: SetOfFunction "json_each_text" (null 'PGjson)
-    '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
-jsonEachText = unsafeSetOfFunction
+  :: null 'PGjson -|->
+    ("json_each_text" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext])
+jsonEachText = unsafeSetFunction "json_each_text"
 
 {- | Expands the outermost binary JSON object into a set of key/value pairs.
 
->>> printSQL (select Star (from (jsonbEachText (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
+>>> printSQL (select Star (from (jsonbEachText (inline (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
 SELECT * FROM jsonb_each_text(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbEachText
-  :: SetOfFunction "jsonb_each_text" (null 'PGjsonb)
-    '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext]
-jsonbEachText = unsafeSetOfFunction
+  :: null 'PGjsonb -|->
+    ("jsonb_each_text" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext])
+jsonbEachText = unsafeSetFunction "jsonb_each_text"
 
 {- | Returns set of keys in the outermost JSON object.
 
->>> printSQL (jsonObjectKeys (literal (Json (object ["a" .= "foo", "b" .= "bar"]))))
+>>> printSQL (jsonObjectKeys (inline (Json (object ["a" .= "foo", "b" .= "bar"]))))
 json_object_keys(('{"a":"foo","b":"bar"}' :: json))
 -}
 jsonObjectKeys
-  :: SetOfFunction "json_object_keys" (nullity 'PGjson)
-    '["json_object_keys" ::: 'NotNull 'PGtext]
-jsonObjectKeys = unsafeSetOfFunction
+  :: null 'PGjson -|->
+    ("json_object_keys" ::: '["json_object_keys" ::: 'NotNull 'PGtext])
+jsonObjectKeys = unsafeSetFunction "json_object_keys"
 
 {- | Returns set of keys in the outermost JSON object.
 
->>> printSQL (jsonbObjectKeys (literal (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))
+>>> printSQL (jsonbObjectKeys (inline (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))
 jsonb_object_keys(('{"a":"foo","b":"bar"}' :: jsonb))
 -}
 jsonbObjectKeys
-  :: SetOfFunction "jsonb_object_keys" (null 'PGjsonb)
-    '["jsonb_object_keys" ::: 'NotNull 'PGtext]
-jsonbObjectKeys = unsafeSetOfFunction
+  :: null 'PGjsonb -|->
+    ("jsonb_object_keys" ::: '["jsonb_object_keys" ::: 'NotNull 'PGtext])
+jsonbObjectKeys = unsafeSetFunction "jsonb_object_keys"
 
 -- | Build rows from Json types.
 type JsonPopulateFunction fun json
-  =  forall schemas row outer commons params
+  =  forall db row lat with params
   .  json `In` PGJsonType
-  => TypeExpression schemas ('NotNull ('PGcomposite row)) -- ^ row type
-  -> Expression outer commons 'Ungrouped schemas params '[] ('NotNull json)
+  => TypeExpression db ('NotNull ('PGcomposite row)) -- ^ row type
+  -> Expression 'Ungrouped lat with db params '[] ('NotNull json)
       -- ^ json type
-  -> FromClause outer commons schemas params '[fun ::: row]
+  -> FromClause lat with db params '[fun ::: row]
 
 unsafePopulateFunction
   :: forall fun ty
@@ -436,20 +429,20 @@ jsonbPopulateRecordSet = unsafePopulateFunction #jsonb_populate_record_set
 
 -- | Build rows from Json types.
 type JsonToRecordFunction json
-  =  forall outer commons schemas params tab row
+  =  forall lat with db params tab row
   .  (SOP.SListI row, json `In` PGJsonType)
-  => Expression outer commons 'Ungrouped schemas params '[] ('NotNull json)
+  => Expression 'Ungrouped lat with db params '[] ('NotNull json)
       -- ^ json type
-  -> Aliased (NP (Aliased (TypeExpression schemas))) (tab ::: row)
+  -> Aliased (NP (Aliased (TypeExpression db))) (tab ::: row)
       -- ^ row type
-  -> FromClause outer commons schemas params '[tab ::: row]
+  -> FromClause lat with db params '[tab ::: row]
 
 unsafeRecordFunction :: ByteString -> JsonToRecordFunction json
 unsafeRecordFunction fun expr (types `As` tab) = UnsafeFromClause $
   fun <> parenthesized (renderSQL expr) <+> "AS" <+> renderSQL tab
     <> parenthesized (renderCommaSeparated renderTy types)
     where
-      renderTy :: Aliased (TypeExpression schemas) ty -> ByteString
+      renderTy :: Aliased (TypeExpression db) ty -> ByteString
       renderTy (ty `As` alias) = renderSQL alias <+> renderSQL ty
 
 -- | Builds an arbitrary record from a JSON object.

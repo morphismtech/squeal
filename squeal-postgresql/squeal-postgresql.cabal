@@ -1,5 +1,5 @@
 name: squeal-postgresql
-version: 0.5.1.0
+version: 0.6.0.0
 synopsis: Squeal PostgreSQL Library
 description: Squeal is a type-safe embedding of PostgreSQL in Haskell
 homepage: https://github.com/morphismtech/squeal
@@ -22,20 +22,27 @@ library
   hs-source-dirs: src
   exposed-modules:
     Squeal.PostgreSQL
-    Squeal.PostgreSQL.Alias
-    Squeal.PostgreSQL.Binary
     Squeal.PostgreSQL.Definition
+    Squeal.PostgreSQL.Definition.Constraint
+    Squeal.PostgreSQL.Definition.Function
+    Squeal.PostgreSQL.Definition.Index
+    Squeal.PostgreSQL.Definition.Table
+    Squeal.PostgreSQL.Definition.Type
+    Squeal.PostgreSQL.Definition.Schema
+    Squeal.PostgreSQL.Definition.View
     Squeal.PostgreSQL.Expression
     Squeal.PostgreSQL.Expression.Aggregate
-    Squeal.PostgreSQL.Expression.Collection
+    Squeal.PostgreSQL.Expression.Array
     Squeal.PostgreSQL.Expression.Comparison
+    Squeal.PostgreSQL.Expression.Composite
+    Squeal.PostgreSQL.Expression.Default
     Squeal.PostgreSQL.Expression.Json
-    Squeal.PostgreSQL.Expression.Literal
+    Squeal.PostgreSQL.Expression.Inline
     Squeal.PostgreSQL.Expression.Logic
     Squeal.PostgreSQL.Expression.Math
     Squeal.PostgreSQL.Expression.Null
     Squeal.PostgreSQL.Expression.Parameter
-    Squeal.PostgreSQL.Expression.SetOf
+    Squeal.PostgreSQL.Expression.Range
     Squeal.PostgreSQL.Expression.Sort
     Squeal.PostgreSQL.Expression.Subquery
     Squeal.PostgreSQL.Expression.Text
@@ -43,31 +50,55 @@ library
     Squeal.PostgreSQL.Expression.Time
     Squeal.PostgreSQL.Expression.Type
     Squeal.PostgreSQL.Expression.Window
-    Squeal.PostgreSQL.List
     Squeal.PostgreSQL.Manipulation
-    Squeal.PostgreSQL.Migration
-    Squeal.PostgreSQL.Pool
-    Squeal.PostgreSQL.PG
-    Squeal.PostgreSQL.PQ
+    Squeal.PostgreSQL.Manipulation.Delete
+    Squeal.PostgreSQL.Manipulation.Insert
+    Squeal.PostgreSQL.Manipulation.Update
     Squeal.PostgreSQL.Render
     Squeal.PostgreSQL.Query
-    Squeal.PostgreSQL.Schema
-    Squeal.PostgreSQL.Transaction
+    Squeal.PostgreSQL.Query.From
+    Squeal.PostgreSQL.Query.From.Join
+    Squeal.PostgreSQL.Query.From.Set
+    Squeal.PostgreSQL.Query.Select
+    Squeal.PostgreSQL.Query.Table
+    Squeal.PostgreSQL.Query.Values
+    Squeal.PostgreSQL.Query.With
+    Squeal.PostgreSQL.Session
+    Squeal.PostgreSQL.Session.Connection
+    Squeal.PostgreSQL.Session.Decode
+    Squeal.PostgreSQL.Session.Encode
+    Squeal.PostgreSQL.Session.Exception
+    Squeal.PostgreSQL.Session.Indexed
+    Squeal.PostgreSQL.Session.Migration
+    Squeal.PostgreSQL.Session.Monad
+    Squeal.PostgreSQL.Session.Oid
+    Squeal.PostgreSQL.Session.Pool
+    Squeal.PostgreSQL.Session.Result
+    Squeal.PostgreSQL.Session.Statement
+    Squeal.PostgreSQL.Session.Transaction
+    Squeal.PostgreSQL.Type
+    Squeal.PostgreSQL.Type.Alias
+    Squeal.PostgreSQL.Type.List
+    Squeal.PostgreSQL.Type.PG
+    Squeal.PostgreSQL.Type.Schema
   default-language: Haskell2010
   ghc-options: -Wall
   build-depends:
       aeson >= 1.2.4.0
     , base >= 4.11.1.0 && < 5.0
+    , binary >= 0.8.6.0
     , binary-parser >= 0.5.5
     , bytestring >= 0.10.8.2
     , bytestring-strict-builder >= 0.4.5
     , deepseq >= 1.4.3.0
-    , generics-sop >= 0.3.2.0 && < 0.5.0.0
+    , free-categories >= 0.2.0.0
+    , generics-sop >= 0.3.2.0
     , mmorph >= 1.1.1
     , mtl >= 2.2.2
     , network-ip >= 0.3.0.2
     , postgresql-binary >= 0.12.1
     , postgresql-libpq >= 0.9.4.1
+    , profunctors >= 5.3
     , records-sop >= 0.1.0.0
     , resource-pool >= 0.2.3.2
     , scientific >= 0.3.5.3
@@ -79,34 +110,83 @@ library
     , uuid-types >= 1.0.3
     , vector >= 0.12.0.1
 
-test-suite squeal-postgresql-doctest
+test-suite doctest
   default-language: Haskell2010
   type: exitcode-stdio-1.0
   hs-source-dirs: test
   ghc-options: -Wall
-  main-is: DocTest.hs
+  main-is: Doc.hs
   build-depends:
       base >= 4.10.0.0
     , doctest >= 0.11.4
+    , squeal-postgresql
 
-test-suite squeal-postgresql-specs
+test-suite properties
   default-language: Haskell2010
   type: exitcode-stdio-1.0
-  hs-source-dirs: test/Specs
+  hs-source-dirs: test
   ghc-options: -Wall
-  main-is: Specs.hs
-  other-modules: ExceptionHandling
+  main-is: Property.hs
   build-depends:
       base >= 4.10.0.0
     , bytestring >= 0.10.8.2
+    , hedgehog >= 1.0
+    , mtl >= 2.2.2
+    , scientific >= 0.3.5.3
+    , squeal-postgresql
+    , time >= 1.8.0.2
+    , with-utf8 >= 1.0
+
+test-suite spec
+  default-language: Haskell2010
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  ghc-options: -Wall
+  main-is: Spec.hs
+  build-depends:
+      async >= 2.2.2
+    , base >= 4.10.0.0
+    , bytestring >= 0.10.8.2
     , generics-sop >= 0.3.1.0
     , hspec >= 2.4.8
+    , mtl >= 2.2.2
     , squeal-postgresql
     , text >= 1.2.2.2
-    , transformers >= 0.5.2.0
     , vector >= 0.12.0.1
 
-executable squeal-postgresql-example
+benchmark gauge
+  type: exitcode-stdio-1.0
+  hs-source-dirs: bench
+  main-is: Gauge.hs
+  other-modules:
+      Gauge.DBHelpers
+    , Gauge.DBSetup
+    , Gauge.Queries
+    , Gauge.Schema
+  default-language: Haskell2010
+  ghc-options:
+    -O2
+    -threaded
+    "-with-rtsopts=-N"
+    -rtsopts
+    -funbox-strict-fields
+  build-depends:
+      base >= 4.10.0.0
+    , bytestring >= 0.10.8.2
+    , deepseq >= 1.4.3.0
+    , gauge >= 0.2.5
+    , generic-random >= 1.2.0.0
+    , generics-sop >= 0.3.1.0
+    , monad-loops >= 0.4.3
+    , mtl >= 2.2.2
+    , QuickCheck >= 2.13.2
+    , quickcheck-instances >= 0.3.22
+    , scientific >= 0.3.5.3
+    , squeal-postgresql
+    , text >= 1.2.2.2
+    , with-utf8 >= 1.0
+
+executable example
   default-language: Haskell2010
   hs-source-dirs: exe
   ghc-options: -Wall
