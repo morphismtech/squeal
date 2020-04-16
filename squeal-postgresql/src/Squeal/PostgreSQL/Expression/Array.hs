@@ -52,6 +52,7 @@ import Squeal.PostgreSQL.Type.Schema
 -- >>> import Squeal.PostgreSQL
 
 -- | Construct an array.
+--
 -- >>> printSQL $ array [null_, false, true]
 -- ARRAY[NULL, FALSE, TRUE]
 array
@@ -62,6 +63,7 @@ array xs = UnsafeExpression $ "ARRAY" <>
   bracketed (commaSeparated (renderSQL <$> xs))
 
 -- | Safely construct an empty array.
+--
 -- >>> printSQL $ array0 text
 -- (ARRAY[] :: text[])
 array0
@@ -135,5 +137,8 @@ index n expr = UnsafeExpression $
   parenthesized (renderSQL expr) <> "[" <> fromString (show n) <> "]"
 
 -- | Expand an array to a set of rows
+--
+-- >>> printSQL $ unnest (array [null_, false, true])
+-- unnest(ARRAY[NULL, FALSE, TRUE])
 unnest :: null ('PGvararray ty) -|-> ("unnest" ::: '["unnest" ::: ty])
 unnest = unsafeSetFunction "unnest"
