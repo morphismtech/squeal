@@ -198,6 +198,7 @@ module Squeal.PostgreSQL
   ) where
 
 import Squeal.PostgreSQL.Definition as X
+import Squeal.PostgreSQL.Definition.Comment as X
 import Squeal.PostgreSQL.Definition.Constraint as X
 import Squeal.PostgreSQL.Definition.Function as X
 import Squeal.PostgreSQL.Definition.Index as X

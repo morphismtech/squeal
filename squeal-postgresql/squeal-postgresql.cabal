@@ -23,6 +23,7 @@ library
   exposed-modules:
     Squeal.PostgreSQL
     Squeal.PostgreSQL.Definition
+    Squeal.PostgreSQL.Definition.Comment
     Squeal.PostgreSQL.Definition.Constraint
     Squeal.PostgreSQL.Definition.Function
     Squeal.PostgreSQL.Definition.Index
