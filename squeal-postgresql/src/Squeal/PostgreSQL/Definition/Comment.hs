@@ -35,6 +35,7 @@ module Squeal.PostgreSQL.Definition.Comment
   , commentOnView
   , commentOnFunction
   , commentOnIndex
+  , commentOnColumn
   ) where
 
 import Squeal.PostgreSQL.Definition
@@ -103,3 +104,18 @@ commentOnFunction
   -> Definition db db
 commentOnFunction alias comm = UnsafeDefinition $
   "COMMENT ON FUNCTION" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <+> ";"
+
+commentOnColumn
+  :: ( KnownSymbol sch
+     , KnownSymbol tab
+     , KnownSymbol col
+     , Has sch db schema
+     , Has tab schema ('Table '(cons, cols))
+     , Has col cols '(def, nulltyp)
+     )
+  => QualifiedAlias sch tab
+  -> Alias col 
+  -> Text
+  -> Definition db db
+commentOnColumn table col comm = UnsafeDefinition $
+  "COMMENT ON COLUMN" <+> renderSQL table <> "." <> renderSQL col <+> "IS" <+> singleQuotedText comm <+> ";"
