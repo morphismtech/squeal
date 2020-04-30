@@ -36,6 +36,7 @@ module Squeal.PostgreSQL.Definition.Comment
   , commentOnFunction
   , commentOnIndex
   , commentOnColumn
+  , commentOnSchema
   ) where
 
 import Squeal.PostgreSQL.Definition
@@ -45,6 +46,14 @@ import Squeal.PostgreSQL.Type.Schema
 import GHC.TypeLits (KnownSymbol)
 import Data.Text (Text)
 
+{-----------------------------------------
+COMMENT statements
+-----------------------------------------}
+
+{- |
+When a user views a table in the database (i.e. with \d+ <table>), it is useful
+to be able to read a description of the table.
+-}
 commentOnTable
   :: ( KnownSymbol sch
      , KnownSymbol tab
@@ -55,8 +64,12 @@ commentOnTable
   -> Text
   -> Definition db db
 commentOnTable alias comm = UnsafeDefinition $
-  "COMMENT ON TABLE" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <+> ";"
+  "COMMENT ON TABLE" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <> ";"
 
+{- |
+When a user views a type in the database (i.e with \dT <type>), it is useful to
+be able to read a description of the type.
+-}
 commentOnType
   :: ( KnownSymbol sch
      , KnownSymbol typ
@@ -67,8 +80,12 @@ commentOnType
   -> Text
   -> Definition db db
 commentOnType alias comm = UnsafeDefinition $
-  "COMMENT ON TYPE" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <+> ";"
+  "COMMENT ON TYPE" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <> ";"
 
+{- |
+When a user views a view in the database (i.e. with \dv <view>), it is useful
+to be able to read a description of the view.
+-}
 commentOnView
   :: ( KnownSymbol sch
      , KnownSymbol vie
@@ -79,8 +96,12 @@ commentOnView
   -> Text
   -> Definition db db
 commentOnView alias comm = UnsafeDefinition $
-  "COMMENT ON VIEW" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <+> ";"
+  "COMMENT ON VIEW" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <> ";"
 
+{- |
+When a user views an index in the database (i.e. with \di+ <index>), it is
+useful to be able to read a description of the index.
+-}
 commentOnIndex
   :: ( KnownSymbol sch
      , KnownSymbol ind
@@ -91,8 +112,12 @@ commentOnIndex
   -> Text
   -> Definition db db
 commentOnIndex alias comm = UnsafeDefinition $
-  "COMMENT ON INDEX" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <+> ";"
+  "COMMENT ON INDEX" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <> ";"
 
+{- |
+When a user views a function in the database (i.e. with \df+ <function>), it is
+useful to be able to read a description of the function.
+-}
 commentOnFunction
   :: ( KnownSymbol sch
      , KnownSymbol fun
@@ -103,8 +128,12 @@ commentOnFunction
   -> Text
   -> Definition db db
 commentOnFunction alias comm = UnsafeDefinition $
-  "COMMENT ON FUNCTION" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <+> ";"
+  "COMMENT ON FUNCTION" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <> ";"
 
+{- |
+When a user views a table in the database (i.e. with \d+ <table>), it is useful
+to be able to view descriptions of the columns in that table.
+-}
 commentOnColumn
   :: ( KnownSymbol sch
      , KnownSymbol tab
@@ -118,4 +147,18 @@ commentOnColumn
   -> Text
   -> Definition db db
 commentOnColumn table col comm = UnsafeDefinition $
-  "COMMENT ON COLUMN" <+> renderSQL table <> "." <> renderSQL col <+> "IS" <+> singleQuotedText comm <+> ";"
+  "COMMENT ON COLUMN" <+> renderSQL table <> "." <> renderSQL col <+> "IS" <+> singleQuotedText comm <> ";"
+
+{- |
+When a user views a schema in the database (i.e. with \dn+ <schema>), it is
+useful to be able to read a description.
+-}
+commentOnSchema
+  :: ( KnownSymbol sch
+     , Has sch db schema
+     )
+  => Alias sch
+  -> Text
+  -> Definition db db
+commentOnSchema schema comm = UnsafeDefinition $
+  "COMMENT ON SCHEMA" <+> renderSQL schema <> "IS" <+> singleQuotedText comm <> ";"
