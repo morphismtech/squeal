@@ -38,9 +38,11 @@ module Squeal.PostgreSQL.Session
   ) where
 
 import Control.Category
+import Control.Monad.Base (MonadBase(..))
 import Control.Monad.Except
 import Control.Monad.Morph
 import Control.Monad.Reader
+import Control.Monad.Trans.Control (MonadBaseControl(..))
 import UnliftIO (MonadUnliftIO (..), bracket,  throwIO)
 import Data.ByteString (ByteString)
 import Data.Foldable
@@ -260,6 +262,25 @@ instance (MonadUnliftIO m, db0 ~ db1)
   withRunInIO inner = PQ $ \conn ->
     withRunInIO $ \(run :: (forall x . m x -> IO x)) ->
       K <$> inner (\pq -> run $ unK <$> unPQ pq conn)
+
+instance (MonadBase b m)
+  => MonadBase b (PQ schema schema m) where
+  liftBase = lift . liftBase
+
+-- | A snapshot of the state of a `PQ` computation, used in MonadBaseControl Instance
+type PQRun schema =
+  forall m x. Monad m => PQ schema schema m x -> m (K x schema)
+
+instance (MonadBaseControl b m, schema0 ~ schema1)
+  => MonadBaseControl b (PQ schema0 schema1 m) where
+  type StM (PQ schema0 schema1 m) x = StM m (K x schema0)
+  restoreM = PQ . const . restoreM
+  liftBaseWith f =
+    pqliftWith $ \ run -> liftBaseWith $ \ runInBase -> f $ runInBase . run
+    where
+      pqliftWith :: Functor m => (PQRun schema -> m a) -> PQ schema schema m a
+      pqliftWith g = PQ $ \ conn ->
+        fmap K (g $ \ pq -> unPQ pq conn)
 
 instance (Monad m, Semigroup r, db0 ~ db1) => Semigroup (PQ db0 db1 m r) where
   f <> g = pqAp (fmap (<>) f) g

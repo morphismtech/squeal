@@ -95,6 +95,7 @@ library
     , free-categories >= 0.2.0.0
     , generics-sop >= 0.3.2.0
     , mmorph >= 1.1.1
+    , monad-control >= 1.0.2.3
     , mtl >= 2.2.2
     , network-ip >= 0.3.0.2
     , postgresql-binary >= 0.12.1
@@ -106,6 +107,7 @@ library
     , text >= 1.2.3.0
     , time >= 1.8.0.2
     , transformers >= 0.5.2.0
+    , transformers-base >= 0.4.5.2
     , unliftio >= 0.2.10
     , unliftio-pool >= 0.2.1.0
     , uuid-types >= 1.0.3
