@@ -359,6 +359,7 @@ instance PGTyped db 'PGtime where pgtype = time
 instance PGTyped db 'PGtimetz where pgtype = timeWithTimeZone
 instance PGTyped db 'PGinterval where pgtype = interval
 instance PGTyped db 'PGuuid where pgtype = uuid
+instance PGTyped db 'PGinet where pgtype = inet
 instance PGTyped db 'PGjson where pgtype = json
 instance PGTyped db 'PGjsonb where pgtype = jsonb
 instance PGTyped db pg => PGTyped db ('PGvararray (null pg)) where
