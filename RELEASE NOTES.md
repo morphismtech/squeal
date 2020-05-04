@@ -1404,7 +1404,7 @@ It's also used for table constraints which are new in `0.2`.
 ```haskell
 "emails" :::
     '[ "pk_emails"  ::: 'PrimaryKey '["id"]
-     , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+     , "fk_user_id" ::: 'ForeignKey '["user_id"] "public" "users" '["id"]
      ] :=>
     '[ "id"      :::   'Def :=> 'NotNull 'PGint4
      , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4

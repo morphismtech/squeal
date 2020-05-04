@@ -26,7 +26,7 @@ type UsersTable =
 >>> :{
 type EmailsTable =
   '[ "pk_emails" ::: 'PrimaryKey '["id"]
-   , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+   , "fk_user_id" ::: 'ForeignKey '["user_id"] "public" "users" '["id"]
    ] :=>
   '[ "id" ::: 'Def :=> 'NotNull 'PGint4
    , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
