@@ -210,7 +210,7 @@ data TableConstraint
   = Check [Symbol]
   | Unique [Symbol]
   | PrimaryKey [Symbol]
-  | ForeignKey [Symbol] Symbol [Symbol]
+  | ForeignKey [Symbol] Symbol Symbol [Symbol]
 
 {- | A `TableConstraints` is a row of `TableConstraint`s.
 
@@ -444,7 +444,7 @@ type family ConstraintInvolves column constraint where
   ConstraintInvolves column ('Check columns) = column `Elem` columns
   ConstraintInvolves column ('Unique columns) = column `Elem` columns
   ConstraintInvolves column ('PrimaryKey columns) = column `Elem` columns
-  ConstraintInvolves column ('ForeignKey columns tab refcolumns)
+  ConstraintInvolves column ('ForeignKey columns sch tab refcolumns)
     = column `Elem` columns
 
 -- | Drop all `TableConstraint`s that involve a column
@@ -513,7 +513,7 @@ type family Schema :: SchemaType where
         ])
     , "emails" ::: 'Table (
         '[ "pk_emails"  ::: 'PrimaryKey '["id"]
-        , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+        , "fk_user_id" ::: 'ForeignKey '["user_id"] "public" "users" '["id"]
         ] :=>
         '[ "id"      :::   'Def :=> 'NotNull 'PGint4
         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
