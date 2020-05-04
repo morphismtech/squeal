@@ -20,3 +20,4 @@ cabal.project.local
 .DS_Store
 stack.yaml.lock
 tags
+.*.swp
