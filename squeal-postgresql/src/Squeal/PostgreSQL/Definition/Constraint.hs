@@ -260,14 +260,17 @@ in printSQL setup
 CREATE TABLE "employees" ("id" serial, "name" text NOT NULL, "employer_id" integer NULL, CONSTRAINT "employees_pk" PRIMARY KEY ("id"), CONSTRAINT "employees_employer_fk" FOREIGN KEY ("employer_id") REFERENCES "employees" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 -}
 foreignKey
-  :: (ForeignKeyed db sch schema child parent
+  :: (ForeignKeyed db
+        sch0 sch1
+        schema0 schema1
+        child parent
         table reftable
         columns refcolumns
         constraints cols
         reftys tys )
   => NP Alias columns
   -- ^ column or columns in the table
-  -> Alias parent
+  -> QualifiedAlias sch0 parent
   -- ^ reference table
   -> NP Alias refcolumns
   -- ^ reference column or columns in the reference table
@@ -275,7 +278,7 @@ foreignKey
   -- ^ what to do when reference is deleted
   -> OnUpdateClause
   -- ^ what to do when reference is updated
-  -> TableConstraintExpression sch child db
+  -> TableConstraintExpression sch1 child db
       ('ForeignKey columns parent refcolumns)
 foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
   "FOREIGN KEY" <+> parenthesized (renderSQL keys)
@@ -286,16 +289,17 @@ foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
 
 -- | A constraint synonym between types involved in a foreign key constraint.
 type ForeignKeyed db
-  sch
-  schema
+  sch0 sch1
+  schema0 schema1
   child parent
   table reftable
   columns refcolumns
   constraints cols
   reftys tys =
-    ( Has sch db schema
-    , Has child schema ('Table table)
-    , Has parent schema ('Table reftable)
+    ( Has sch0 db schema0
+    , Has sch1 db schema1
+    , Has parent schema0 ('Table reftable)
+    , Has child schema1 ('Table table)
     , HasAll columns (TableToColumns table) tys
     , reftable ~ (constraints :=> cols)
     , HasAll refcolumns cols reftys
