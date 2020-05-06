@@ -49,6 +49,7 @@ import BinaryParser
 import Control.Applicative
 import Control.Arrow
 import Control.Monad
+import Control.Monad.Fail
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
@@ -57,6 +58,7 @@ import Data.Bits
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind
 import Data.Scientific (Scientific)
+import Data.String (fromString)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
 import Data.UUID.Types (UUID)
 import Data.Vector (Vector)
@@ -385,6 +387,8 @@ newtype DecodeRow (row :: RowType) (y :: Type) = DecodeRow
     , Monad
     , MonadPlus
     , MonadError Strict.Text )
+instance MonadFail (DecodeRow row) where
+  fail = throwError . fromString
 
 -- | Run a `DecodeRow`.
 runDecodeRow
