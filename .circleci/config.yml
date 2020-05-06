@@ -15,6 +15,7 @@ jobs:
             - dependency-cache
       - run: apt-get update && apt-get install -y libpq-dev xz-utils make
       - run: stack upgrade && stack update
+      - run: stack setup
       - run: stack build --fast
       - run: stack test
       - run: stack bench
