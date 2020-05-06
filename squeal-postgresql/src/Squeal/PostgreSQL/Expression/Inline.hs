@@ -45,9 +45,9 @@ import Data.Scientific (Scientific)
 import Data.String
 import Data.Text (Text)
 import Data.Time.Clock (DiffTime, diffTimeToPicoseconds, UTCTime)
-import Data.Time.Format (formatTime, defaultTimeLocale)
-import Data.Time.Calendar (Day, toGregorian)
-import Data.Time.LocalTime (LocalTime(LocalTime), TimeOfDay(TimeOfDay), TimeZone)
+import Data.Time.Format.ISO8601 (formatShow, timeOfDayAndOffsetFormat, FormatExtension(ExtendedFormat), iso8601Show)
+import Data.Time.Calendar (Day)
+import Data.Time.LocalTime (LocalTime, TimeOfDay, TimeZone)
 import Data.UUID.Types (UUID, toASCIIBytes)
 import Data.Vector (Vector, toList)
 import Database.PostgreSQL.LibPQ (Oid(Oid))
@@ -179,35 +179,40 @@ instance Inline DiffTime where
         interval_ (fromIntegral secs) Seconds
         +! interval_ (fromIntegral microsecs) Microseconds
 instance Inline Day where
-  inline day =
-    let (y,m,d) = toGregorian day
-    in inferredtype $ makeDate (fromInteger y :* fromIntegral m *: fromIntegral d)
+  inline
+    = inferredtype
+    . UnsafeExpression
+    . singleQuotedUtf8
+    . fromString
+    . iso8601Show
 instance Inline UTCTime where
   inline
     = inferredtype
     . UnsafeExpression
     . singleQuotedUtf8
     . fromString
-    . formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S%Q%z"
+    . iso8601Show
 instance Inline (TimeOfDay, TimeZone) where
-  inline (hms, tz)
+  inline
     = inferredtype
     . UnsafeExpression
     . singleQuotedUtf8
     . fromString
-    $ formatTime defaultTimeLocale "%H:%M:%S" hms
-      <> formatTime defaultTimeLocale "%z" tz
+    . formatShow (timeOfDayAndOffsetFormat ExtendedFormat)
 instance Inline TimeOfDay where
-  inline (TimeOfDay hr mn sc) = inferredtype $ makeTime
-    (fromIntegral hr :* fromIntegral mn *: fromRational (toRational sc))
+  inline
+    = inferredtype
+    . UnsafeExpression
+    . singleQuotedUtf8
+    . fromString
+    . iso8601Show 
 instance Inline LocalTime where
-  inline (LocalTime day t) =
-    let
-      (y,m,d) = toGregorian day
-      TimeOfDay hr mn sc = t
-    in inferredtype $ makeTimestamp
-      ( fromInteger y :* fromIntegral m :* fromIntegral d
-        :* fromIntegral hr :* fromIntegral mn *: fromRational (toRational sc) )
+  inline
+    = inferredtype
+    . UnsafeExpression
+    . singleQuotedUtf8
+    . fromString
+    . iso8601Show
 instance Inline (Range Int32) where
   inline = range int4range . fmap inline
 instance Inline (Range Int64) where
