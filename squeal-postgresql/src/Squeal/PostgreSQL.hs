@@ -202,6 +202,7 @@ import Squeal.PostgreSQL.Definition.Comment as X
 import Squeal.PostgreSQL.Definition.Constraint as X
 import Squeal.PostgreSQL.Definition.Function as X
 import Squeal.PostgreSQL.Definition.Index as X
+import Squeal.PostgreSQL.Definition.Procedure as X
 import Squeal.PostgreSQL.Definition.Schema as X
 import Squeal.PostgreSQL.Definition.Table as X
 import Squeal.PostgreSQL.Definition.Type as X
@@ -227,6 +228,7 @@ import Squeal.PostgreSQL.Expression.Time as X
 import Squeal.PostgreSQL.Expression.Type as X
 import Squeal.PostgreSQL.Expression.Window as X
 import Squeal.PostgreSQL.Manipulation as X
+import Squeal.PostgreSQL.Manipulation.Call as X
 import Squeal.PostgreSQL.Manipulation.Delete as X
 import Squeal.PostgreSQL.Manipulation.Insert as X
 import Squeal.PostgreSQL.Manipulation.Update as X

@@ -9,7 +9,6 @@ types
 -}
 {-# LANGUAGE
     AllowAmbiguousTypes
-  , CPP
   , DeriveAnyClass
   , DeriveFoldable
   , DeriveFunctor
