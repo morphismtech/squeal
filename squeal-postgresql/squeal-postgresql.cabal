@@ -29,6 +29,7 @@ library
     Squeal.PostgreSQL.Definition.Index
     Squeal.PostgreSQL.Definition.Table
     Squeal.PostgreSQL.Definition.Type
+    Squeal.PostgreSQL.Definition.Procedure
     Squeal.PostgreSQL.Definition.Schema
     Squeal.PostgreSQL.Definition.View
     Squeal.PostgreSQL.Expression
@@ -52,6 +53,7 @@ library
     Squeal.PostgreSQL.Expression.Type
     Squeal.PostgreSQL.Expression.Window
     Squeal.PostgreSQL.Manipulation
+    Squeal.PostgreSQL.Manipulation.Call
     Squeal.PostgreSQL.Manipulation.Delete
     Squeal.PostgreSQL.Manipulation.Insert
     Squeal.PostgreSQL.Manipulation.Update

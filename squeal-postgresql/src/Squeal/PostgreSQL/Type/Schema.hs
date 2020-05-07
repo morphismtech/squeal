@@ -463,11 +463,14 @@ data SchemumType
   | Typedef PGType
   | Index IndexType
   | Function FunctionType
+  | Procedure ProcedureType
   | UnsafeSchemum Symbol
 
 -- | Use `:=>` to pair the parameter types with the return
 -- type of a function.
 type FunctionType = ([NullType], ReturnsType)
+
+type ProcedureType = [NullType]
 
 {- |
 PostgreSQL provides several index types:
