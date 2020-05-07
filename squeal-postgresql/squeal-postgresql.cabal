@@ -93,7 +93,7 @@ library
     , bytestring-strict-builder >= 0.4.5
     , deepseq >= 1.4.3.0
     , free-categories >= 0.2.0.0
-    , generics-sop >= 0.3.2.0
+    , generics-sop >= 0.5.0.0
     , mmorph >= 1.1.1
     , monad-control >= 1.0.2.3
     , mtl >= 2.2.2
@@ -150,7 +150,7 @@ test-suite spec
       async >= 2.2.2
     , base >= 4.10.0.0
     , bytestring >= 0.10.8.2
-    , generics-sop >= 0.3.1.0
+    , generics-sop >= 0.5.0.0
     , hspec >= 2.4.8
     , mtl >= 2.2.2
     , squeal-postgresql
@@ -179,7 +179,7 @@ benchmark gauge
     , deepseq >= 1.4.3.0
     , gauge >= 0.2.5
     , generic-random >= 1.2.0.0
-    , generics-sop >= 0.3.1.0
+    , generics-sop >= 0.5.0.0
     , monad-loops >= 0.4.3
     , mtl >= 2.2.2
     , QuickCheck >= 2.13.2
@@ -197,7 +197,7 @@ executable example
   build-depends:
       base >= 4.10.0.0 && < 5.0
     , bytestring >= 0.10.8.2
-    , generics-sop >= 0.3.1.0
+    , generics-sop >= 0.5.0.0
     , mtl >= 2.2.1
     , squeal-postgresql
     , text >= 1.2.2.2
