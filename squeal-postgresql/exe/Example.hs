@@ -65,11 +65,13 @@ setup =
   >>>
   createSchema #org
   >>>
-  createTable (#user ! #users)
+  createTable (#user ! #jokers)
     ( serial `as` #id :*
       (text & notNullable) `as` #name :*
       (vararray int2 & notNullable) `as` #vec )
     ( primaryKey #id `as` #pk_users )
+  >>>
+  alterTableRename (#user ! #jokers) #users
   >>>
   createTable (#user ! #emails)
     ( serial `as` #id :*

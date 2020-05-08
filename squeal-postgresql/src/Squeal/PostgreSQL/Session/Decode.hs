@@ -49,7 +49,6 @@ import BinaryParser
 import Control.Applicative
 import Control.Arrow
 import Control.Monad
-import Control.Monad.Fail
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State

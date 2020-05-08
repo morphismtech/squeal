@@ -43,8 +43,6 @@ import Generics.SOP (SListI)
 
 import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Expression.Default
-import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Render
