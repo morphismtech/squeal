@@ -200,6 +200,16 @@ instance FromPG Strict.ByteString where
   fromPG = devalue bytea_strict
 instance FromPG Lazy.ByteString where
   fromPG = devalue bytea_lazy
+instance KnownNat n => FromPG (VarChar n) where
+  fromPG = devalue $ text_strict >>= \t ->
+    case varChar t of
+      Nothing -> throwError $ Strict.Text.pack ("source for varchar too long: " <> show (Strict.Text.length t))
+      Just x -> pure x
+instance KnownNat n => FromPG (FixChar n) where
+  fromPG = devalue $ text_strict >>= \t ->
+    case fixChar t of
+      Nothing -> throwError $ Strict.Text.pack ("source for fixchar too long: " <> show (Strict.Text.length t))
+      Just x -> pure x
 instance FromPG Day where
   fromPG = devalue date
 instance FromPG TimeOfDay where

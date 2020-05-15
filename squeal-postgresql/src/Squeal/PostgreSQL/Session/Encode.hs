@@ -120,6 +120,8 @@ instance ToPG db String where
   toPG = pure . text_strict . Strict.Text.pack
 instance ToPG db Strict.ByteString where toPG = pure . bytea_strict
 instance ToPG db Lazy.ByteString where toPG = pure . bytea_lazy
+instance ToPG db (VarChar n) where toPG = pure . text_strict . getVarChar
+instance ToPG db (FixChar n) where toPG = pure . text_strict . getFixChar
 instance ToPG db Day where toPG = pure . date
 instance ToPG db TimeOfDay where toPG = pure . time_int
 instance ToPG db (TimeOfDay, TimeZone) where toPG = pure . timetz_int
