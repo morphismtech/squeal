@@ -32,6 +32,8 @@ module Squeal.PostgreSQL.Expression.Array
   , array2
   , cardinality
   , index
+  , index1
+  , index2
   , unnest
   , arrAny
   , arrAll
@@ -39,6 +41,7 @@ module Squeal.PostgreSQL.Expression.Array
 
 import Data.String
 import Data.Word (Word64)
+import GHC.TypeNats
 
 import qualified Generics.SOP as SOP
 
@@ -136,8 +139,33 @@ cardinality = unsafeFunction "cardinality"
 index
   :: Word64 -- ^ index
   -> null ('PGvararray ty) --> NullifyType ty
-index n expr = UnsafeExpression $
-  parenthesized (renderSQL expr) <> "[" <> fromString (show n) <> "]"
+index i arr = UnsafeExpression $
+  parenthesized (renderSQL arr) <> "[" <> fromString (show i) <> "]"
+
+-- | Typesafe indexing of fixed length arrays.
+-- >>> printSQL $ array1 (true *: false) & index1 @1
+-- (ARRAY[TRUE, FALSE])[1]
+index1
+  :: forall i n ty
+   . (1 <= i, i <= n, KnownNat i)
+  => 'NotNull ('PGfixarray '[n] ty) --> ty
+index1 arr = UnsafeExpression $
+  parenthesized (renderSQL arr)
+  <> "[" <> fromString (show (natVal (SOP.Proxy @i))) <> "]"
+
+-- | Typesafe indexing of fixed size matrices.
+-- >>> printSQL $ array2 ((true *: false) *: (false *: true)) & index2 @1 @2
+-- (ARRAY[[TRUE, FALSE], [FALSE, TRUE]])[1][2]
+index2
+  :: forall i j m n ty
+   . ( 1 <= i, i <= m, KnownNat i
+     , 1 <= j, j <= n, KnownNat j
+     )
+  => 'NotNull ('PGfixarray '[m,n] ty) --> ty
+index2 arr = UnsafeExpression $
+  parenthesized (renderSQL arr)
+  <> "[" <> fromString (show (natVal (SOP.Proxy @i))) <> "]"
+  <> "[" <> fromString (show (natVal (SOP.Proxy @j))) <> "]"
 
 -- | Expand an array to a set of rows
 --
