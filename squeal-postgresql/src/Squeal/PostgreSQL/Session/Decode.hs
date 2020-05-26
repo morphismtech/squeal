@@ -204,10 +204,10 @@ instance KnownNat n => FromPG (VarChar n) where
   fromPG = devalue $ text_strict >>= \t ->
     case varChar t of
       Nothing -> throwError $ Strict.Text.pack $ concat
-        [ "Source for VarChar has wrong length; "
-        , "expected length "
+        [ "Source for VarChar has wrong length"
+        , "; expected length "
         , show (natVal (SOP.Proxy @n))
-        , "actual length "
+        , ", actual length "
         , show (Strict.Text.length t)
         , "."
         ]
@@ -216,10 +216,10 @@ instance KnownNat n => FromPG (FixChar n) where
   fromPG = devalue $ text_strict >>= \t ->
     case fixChar t of
       Nothing -> throwError $ Strict.Text.pack $ concat
-        [ "Source for FixChar has wrong length; "
-        , "expected length "
+        [ "Source for FixChar has wrong length"
+        , "; expected length "
         , show (natVal (SOP.Proxy @n))
-        , "actual length "
+        , ", actual length "
         , show (Strict.Text.length t)
         , "."
         ]
