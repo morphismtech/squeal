@@ -33,6 +33,8 @@ module Squeal.PostgreSQL.Expression.Array
   , cardinality
   , index
   , unnest
+  , arrAny
+  , arrAll
   ) where
 
 import Data.String
@@ -41,6 +43,7 @@ import Data.Word (Word64)
 import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Expression
+import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.Query.From.Set
 import Squeal.PostgreSQL.Render
@@ -142,3 +145,64 @@ index n expr = UnsafeExpression $
 -- unnest(ARRAY[NULL, FALSE, TRUE])
 unnest :: null ('PGvararray ty) -|-> ("unnest" ::: '["unnest" ::: ty])
 unnest = unsafeSetFunction "unnest"
+
+{- |
+The right-hand side is a parenthesized expression,
+which must yield an array value. The left-hand expression
+is evaluated and compared to each element of the array using
+the given operator, which must yield a Boolean result.
+The result of ALL is “true” if all comparisons yield true
+(including the case where the array has zero elements).
+The result is “false” if any false result is found.
+
+If the array expression yields a null array,
+the result of ALL will be null. If the left-hand expression yields null,
+the result of ALL is ordinarily null
+(though a non-strict comparison operator
+could possibly yield a different result).
+Also, if the right-hand array contains any null
+elements and no false comparison result is obtained,
+the result of ALL will be null, not true
+(again, assuming a strict comparison operator).
+This is in accordance with SQL's normal rules for Boolean
+combinations of null values.
+
+>>> printSQL $ arrAll true (.==) (array [true, false, null_])
+(TRUE = ALL (ARRAY[TRUE, FALSE, NULL]))
+>>> printSQL $ arrAll "hi" like (array ["bi","hi","high","hello"])
+((E'hi' :: text) LIKE ALL (ARRAY[(E'bi' :: text), (E'hi' :: text), (E'high' :: text), (E'hello' :: text)]))
+-}
+arrAll
+  :: Expression grp lat with db params from ty1 -- ^ expression
+  -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
+  -> Expression grp lat with db params from ('NotNull ('PGvararray ty2)) -- ^ array
+  -> Condition grp lat with db params from
+arrAll x (?) xs = x ? (UnsafeExpression $ "ALL" <+> parenthesized (renderSQL xs))
+
+{- |
+The right-hand side is a parenthesized expression, which must yield an array
+value. The left-hand expression is evaluated and compared to each element of
+the array using the given operator, which must yield a Boolean result. The
+result of ANY is “true” if any true result is obtained. The result is
+“false” if no true result is found (including the case where the array
+has zero elements).
+
+If the array expression yields a null array, the result of ANY will
+be null. If the left-hand expression yields null, the result of ANY is
+ordinarily null (though a non-strict comparison operator could possibly
+yield a different result). Also, if the right-hand array contains any
+null elements and no true comparison result is obtained, the result of
+ANY will be null, not false (again, assuming a strict comparison operator).
+This is in accordance with SQL's normal rules for Boolean combinations of null values.
+
+>>> printSQL $ arrAny true (.==) (array [true, false, null_])
+(TRUE = ANY (ARRAY[TRUE, FALSE, NULL]))
+>>> printSQL $ arrAny "hi" like (array ["bi","hi","high","hello"])
+((E'hi' :: text) LIKE ANY (ARRAY[(E'bi' :: text), (E'hi' :: text), (E'high' :: text), (E'hello' :: text)]))
+-}
+arrAny
+  :: Expression grp lat with db params from ty1 -- ^ expression
+  -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
+  -> Expression grp lat with db params from ('NotNull ('PGvararray ty2)) -- ^ array
+  -> Condition grp lat with db params from
+arrAny x (?) xs = x ? (UnsafeExpression $ "ANY" <+> parenthesized (renderSQL xs))
