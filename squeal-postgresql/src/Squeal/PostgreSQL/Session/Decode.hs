@@ -203,12 +203,26 @@ instance FromPG Lazy.ByteString where
 instance KnownNat n => FromPG (VarChar n) where
   fromPG = devalue $ text_strict >>= \t ->
     case varChar t of
-      Nothing -> throwError $ Strict.Text.pack ("source for varchar too long: " <> show (Strict.Text.length t))
+      Nothing -> throwError $ Strict.Text.pack $ concat
+        [ "Source for VarChar has wrong length"
+        , "; expected length "
+        , show (natVal (SOP.Proxy @n))
+        , ", actual length "
+        , show (Strict.Text.length t)
+        , "."
+        ]
       Just x -> pure x
 instance KnownNat n => FromPG (FixChar n) where
   fromPG = devalue $ text_strict >>= \t ->
     case fixChar t of
-      Nothing -> throwError $ Strict.Text.pack ("source for fixchar too long: " <> show (Strict.Text.length t))
+      Nothing -> throwError $ Strict.Text.pack $ concat
+        [ "Source for FixChar has wrong length"
+        , "; expected length "
+        , show (natVal (SOP.Proxy @n))
+        , ", actual length "
+        , show (Strict.Text.length t)
+        , "."
+        ]
       Just x -> pure x
 instance FromPG Day where
   fromPG = devalue date
