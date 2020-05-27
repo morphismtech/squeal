@@ -37,6 +37,7 @@ module Squeal.PostgreSQL.Session.Decode
   , decodeRow
   , runDecodeRow
   , genericRow
+  , zipRows
     -- * Decoding Classes
   , FromValue (..)
   , FromField (..)
@@ -419,6 +420,32 @@ runDecodeRow
   -> SOP.NP (SOP.K (Maybe Strict.ByteString)) row
   -> Either Strict.Text y
 runDecodeRow = fmap runExcept . runReaderT . unDecodeRow
+
+{- | Zip two row decoders with a combining function.
+
+>>> :{
+let
+  decodeL :: DecodeRow '["fst" ::: 'NotNull 'PGint2] Int16
+  decodeL = #fst
+  decodeR :: DecodeRow '["snd" ::: 'NotNull ('PGchar 1)] Char
+  decodeR = #snd
+  decode :: DecodeRow
+    '["fst" ::: 'NotNull 'PGint2, "snd" ::: 'NotNull ('PGchar 1)]
+    (Int16, Char)
+  decode = zipRows (,) decodeL decodeR
+in runDecodeRow decode (SOP.K (Just "\NUL\SOH") :* SOP.K (Just "a") :* Nil)
+:}
+Right (1,'a')
+-}
+zipRows
+  :: SOP.SListI left
+  => (l -> r -> z)
+  -> DecodeRow left l
+  -> DecodeRow right r
+  -> DecodeRow (Join left right) z
+zipRows f decL decR = decodeRow $ \row ->
+  case disjoin row of
+    (rowL, rowR) -> f <$> runDecodeRow decL rowL <*> runDecodeRow decR rowR
 
 -- | Smart constructor for a `DecodeRow`.
 decodeRow
