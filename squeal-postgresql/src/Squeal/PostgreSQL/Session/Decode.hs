@@ -424,6 +424,7 @@ runDecodeRow = fmap runExcept . runReaderT . unDecodeRow
 
 {- | Append two row decoders with a combining function.
 
+>>> import GHC.Generics as GHC
 >>> :{
 data L = L {fst :: Int16, snd :: Char}
   deriving stock (GHC.Generic, Show)
