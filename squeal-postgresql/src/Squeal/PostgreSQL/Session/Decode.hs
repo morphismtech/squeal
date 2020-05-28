@@ -37,6 +37,8 @@ module Squeal.PostgreSQL.Session.Decode
   , decodeRow
   , runDecodeRow
   , genericRow
+  , appendRows
+  , consRow
     -- * Decoding Classes
   , FromValue (..)
   , FromField (..)
@@ -419,6 +421,67 @@ runDecodeRow
   -> SOP.NP (SOP.K (Maybe Strict.ByteString)) row
   -> Either Strict.Text y
 runDecodeRow = fmap runExcept . runReaderT . unDecodeRow
+
+{- | Append two row decoders with a combining function.
+
+>>> import GHC.Generics as GHC
+>>> :{
+data L = L {fst :: Int16, snd :: Char}
+  deriving stock (GHC.Generic, Show)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+data R = R {thrd :: Bool, frth :: Bool}
+  deriving stock (GHC.Generic, Show)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+type Row = '[
+  "fst" ::: 'NotNull 'PGint2,
+  "snd" ::: 'NotNull ('PGchar 1),
+  "thrd" ::: 'NotNull 'PGbool,
+  "frth" ::: 'NotNull 'PGbool]
+:}
+
+:{
+let
+  decode :: DecodeRow Row (L,R)
+  decode = appendRows (,) genericRow genericRow
+  row4 =
+    SOP.K (Just "\NUL\SOH") :*
+    SOP.K (Just "a") :*
+    SOP.K (Just "\NUL") :*
+    SOP.K (Just "\NUL") :* Nil
+in runDecodeRow decode row4
+:}
+Right (L {fst = 1, snd = 'a'},R {thrd = False, frth = False})
+-}
+appendRows
+  :: SOP.SListI left
+  => (l -> r -> z) -- ^ combining function
+  -> DecodeRow left l -- ^ left decoder
+  -> DecodeRow right r -- ^ right decoder
+  -> DecodeRow (Join left right) z
+appendRows f decL decR = decodeRow $ \row -> case disjoin row of
+  (rowL, rowR) -> f <$> runDecodeRow decL rowL <*> runDecodeRow decR rowR
+
+{- | Cons a column and a row decoder with a combining function.
+
+>>> :{
+let
+  decode :: DecodeRow
+    '["fst" ::: 'NotNull 'PGtext, "snd" ::: 'NotNull 'PGint2, "thrd" ::: 'NotNull ('PGchar 1)]
+    (String, (Int16, Char))
+  decode = consRow (,) #fst (consRow (,) #snd #thrd)
+in runDecodeRow decode (SOP.K (Just "hi") :* SOP.K (Just "\NUL\SOH") :* SOP.K (Just "a") :* Nil)
+:}
+Right ("hi",(1,'a'))
+-}
+consRow
+  :: FromValue head h
+  => (h -> t -> z) -- ^ combining function
+  -> Alias col -- ^ alias of head
+  -> DecodeRow tail t -- ^ tail decoder
+  -> DecodeRow (col ::: head ': tail) z
+consRow f _ dec = decodeRow $ \case
+  (SOP.K h :: SOP.K (Maybe Strict.ByteString) (col ::: head)) :* t
+    -> f <$> fromValue @head h <*> runDecodeRow dec t
 
 -- | Smart constructor for a `DecodeRow`.
 decodeRow
