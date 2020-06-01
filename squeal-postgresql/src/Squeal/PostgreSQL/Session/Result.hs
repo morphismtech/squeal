@@ -11,6 +11,7 @@ Get values from a `Result`.
 {-# LANGUAGE
     FlexibleContexts
   , GADTs
+  , LambdaCase
   , OverloadedStrings
   , ScopedTypeVariables
   , TypeApplications
@@ -22,21 +23,29 @@ module Squeal.PostgreSQL.Session.Result
   , firstRow
   , getRows
   , nextRow
+  , cmdStatus
+  , cmdTuples
   , ntuples
   , nfields
   , resultStatus
   , okResult
   , resultErrorMessage
   , resultErrorCode
+  , liftResult
   ) where
 
 import Control.Exception (throw)
-import Control.Monad (when)
+import Control.Monad (when, (<=<))
 import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
 import Data.Text (Text)
 import Data.Traversable (for)
+import Text.Read (readMaybe)
+import UnliftIO (throwIO)
 
+import qualified Data.ByteString as ByteString
+import qualified Data.ByteString.Char8 as Char8
+import qualified Data.Text.Encoding as Text
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified Generics.SOP as SOP
 
@@ -137,6 +146,38 @@ nfields = liftResult LibPQ.nfields
 -- | Returns the result status of the command.
 resultStatus :: MonadIO io => Result y -> io LibPQ.ExecStatus
 resultStatus = liftResult LibPQ.resultStatus
+
+{- |
+Returns the command status tag from the SQL command
+that generated the `Result`.
+Commonly this is just the name of the command,
+but it might include additional data such as the number of rows processed.
+-}
+cmdStatus :: MonadIO io => Result y -> io Text
+cmdStatus = liftResult (getCmdStatus <=< LibPQ.cmdStatus)
+  where
+    getCmdStatus = \case
+      Nothing -> throwIO $ ConnectionException "cmdStatus"
+      Just bytes -> return $ Text.decodeUtf8 bytes
+
+{- |
+Returns the number of rows affected by the SQL command.
+This function returns `Just` the number of
+rows affected by the SQL statement that generated the `Result`.
+This function can only be used following the execution of a
+SELECT, CREATE TABLE AS, INSERT, UPDATE, DELETE, MOVE, FETCH,
+or COPY statement,or an EXECUTE of a prepared query that
+contains an INSERT, UPDATE, or DELETE statement.
+If the command that generated the PGresult was anything else,
+`cmdTuples` returns `Nothing`.
+-}
+cmdTuples :: MonadIO io => Result y -> io (Maybe LibPQ.Row)
+cmdTuples = liftResult (getCmdTuples <=< LibPQ.cmdTuples)
+  where
+    getCmdTuples = \case
+      Nothing -> throwIO $ ConnectionException "cmdStatus"
+      Just bytes -> return $
+        if ByteString.null bytes then Nothing else fromInteger <$> readMaybe (Char8.unpack bytes)
 
 okResult_ :: MonadIO io => LibPQ.Result -> io ()
 okResult_ result = liftIO $ do
