@@ -94,6 +94,7 @@ library
     , bytestring >= 0.10.10.0
     , bytestring-strict-builder >= 0.4.5.3
     , deepseq >= 1.4.4.0
+    , exceptions >= 0.10.3
     , free-categories >= 0.2.0.0
     , generics-sop >= 0.5.1.0
     , mmorph >= 1.1.3

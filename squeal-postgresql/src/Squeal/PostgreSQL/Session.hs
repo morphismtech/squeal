@@ -39,6 +39,7 @@ module Squeal.PostgreSQL.Session
 
 import Control.Category
 import Control.Monad.Base (MonadBase(..))
+import Control.Monad.Catch (MonadCatch(..), MonadThrow(..), MonadMask(..))
 import Control.Monad.Except
 import Control.Monad.Morph
 import Control.Monad.Reader
@@ -281,6 +282,29 @@ instance (MonadBaseControl b m, schema0 ~ schema1)
       pqliftWith :: Functor m => (PQRun schema -> m a) -> PQ schema schema m a
       pqliftWith g = PQ $ \ conn ->
         fmap K (g $ \ pq -> unPQ pq conn)
+
+instance (MonadThrow m, db0 ~ db1)
+  => MonadThrow (PQ db0 db1 m) where
+  throwM = lift . throwM
+
+instance (MonadCatch m, db0 ~ db1)
+  => MonadCatch (PQ db0 db1 m) where
+  catch (PQ m) f = PQ $ \k -> m k `catch` \e -> unPQ (f e) k
+
+instance (MonadMask m, db0 ~ db1)
+  => MonadMask (PQ db0 db1 m) where
+  mask a = PQ $ \e -> mask $ \u -> unPQ (a $ q u) e
+    where q u (PQ b) = PQ (u . b)
+
+  uninterruptibleMask a =
+    PQ $ \k -> uninterruptibleMask $ \u -> unPQ (a $ q u) k
+      where q u (PQ b) = PQ (u . b)
+
+  generalBracket acquire release use = PQ $ \k ->
+    K <$> generalBracket
+      (unK <$> unPQ acquire k)
+      (\resource exitCase -> unK <$> unPQ (release resource exitCase) k)
+      (\resource -> unK <$> unPQ (use resource) k)
 
 instance (Monad m, Semigroup r, db0 ~ db1) => Semigroup (PQ db0 db1 m r) where
   f <> g = pqAp (fmap (<>) f) g
