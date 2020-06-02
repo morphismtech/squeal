@@ -157,7 +157,7 @@ cmdStatus :: MonadIO io => Result y -> io Text
 cmdStatus = liftResult (getCmdStatus <=< LibPQ.cmdStatus)
   where
     getCmdStatus = \case
-      Nothing -> throwIO $ ConnectionException "cmdStatus"
+      Nothing -> throwIO $ ConnectionException "LibPQ.cmdStatus"
       Just bytes -> return $ Text.decodeUtf8 bytes
 
 {- |
@@ -175,9 +175,11 @@ cmdTuples :: MonadIO io => Result y -> io (Maybe LibPQ.Row)
 cmdTuples = liftResult (getCmdTuples <=< LibPQ.cmdTuples)
   where
     getCmdTuples = \case
-      Nothing -> throwIO $ ConnectionException "cmdStatus"
+      Nothing -> throwIO $ ConnectionException "LibPQ.cmdTuples"
       Just bytes -> return $
-        if ByteString.null bytes then Nothing else fromInteger <$> readMaybe (Char8.unpack bytes)
+        if ByteString.null bytes
+        then Nothing
+        else fromInteger <$> readMaybe (Char8.unpack bytes)
 
 okResult_ :: MonadIO io => LibPQ.Result -> io ()
 okResult_ result = liftIO $ do
