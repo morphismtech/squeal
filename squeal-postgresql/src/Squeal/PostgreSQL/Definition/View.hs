@@ -145,7 +145,7 @@ dropViewIfExists vw = UnsafeDefinition $
 --      def = alterViewRename #foo #bar
 --  in printSQL def
 -- :}
--- ALTER TYPE "foo" RENAME TO "bar";
+-- ALTER VIEW "foo" RENAME TO "bar";
 alterViewRename
   :: ( Has sch db schema
      , KnownSymbol ty1
@@ -154,7 +154,7 @@ alterViewRename
   -> Alias ty1 -- ^ what to rename it
   -> Definition db (Alter sch (Rename ty0 ty1 schema) db )
 alterViewRename vw0 vw1 = UnsafeDefinition $
-  "ALTER TYPE" <+> renderSQL vw0
+  "ALTER VIEW" <+> renderSQL vw0
   <+> "RENAME TO" <+> renderSQL vw1 <> ";"
 
 {- | This form moves the view into another schema.
