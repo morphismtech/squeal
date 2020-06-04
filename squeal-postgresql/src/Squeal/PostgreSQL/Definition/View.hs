@@ -36,6 +36,9 @@ module Squeal.PostgreSQL.Definition.View
     -- * Drop
   , dropView
   , dropViewIfExists
+    -- * Alter
+  , alterViewRename
+  , alterViewSetSchema
   ) where
 
 import GHC.TypeLits
@@ -133,3 +136,47 @@ dropViewIfExists
   -> Definition db (Alter sch (DropIfExists vw schema) db)
 dropViewIfExists vw = UnsafeDefinition $
   "DROP VIEW IF EXISTS" <+> renderSQL vw <> ";"
+
+-- | `alterViewRename` changes the name of a view from the schema.
+--
+-- >>> type DB = '[ "public" ::: '[ "foo" ::: 'View '[] ] ]
+-- >>> :{
+--  let def :: Definition DB '["public" ::: '["bar" ::: 'View '[] ] ]
+--      def = alterViewRename #foo #bar
+--  in printSQL def
+-- :}
+-- ALTER TYPE "foo" RENAME TO "bar";
+alterViewRename
+  :: ( Has sch db schema
+     , KnownSymbol ty1
+     , Has ty0 schema ('View vw))
+  => QualifiedAlias sch ty0 -- ^ view to rename
+  -> Alias ty1 -- ^ what to rename it
+  -> Definition db (Alter sch (Rename ty0 ty1 schema) db )
+alterViewRename vw0 vw1 = UnsafeDefinition $
+  "ALTER TYPE" <+> renderSQL vw0
+  <+> "RENAME TO" <+> renderSQL vw1 <> ";"
+
+{- | This form moves the view into another schema.
+
+>>> type DB0 = '[ "sch0" ::: '[ "vw" ::: 'View '[] ], "sch1" ::: '[] ]
+>>> type DB1 = '[ "sch0" ::: '[], "sch1" ::: '[ "vw" ::: 'View '[] ] ]
+>>> :{
+let def :: Definition DB0 DB1
+    def = alterViewSetSchema (#sch0 ! #vw) #sch1
+in printSQL def
+:}
+ALTER VIEW "sch0"."vw" SET SCHEMA "sch1";
+-}
+alterViewSetSchema
+  :: ( Has sch0 db schema0
+     , Has vw schema0 ('View view)
+     , Has sch1 db schema1 )
+  => QualifiedAlias sch0 vw -- ^ view to move
+  -> Alias sch1 -- ^ where to move it
+  -> Definition db
+    ( Alter sch1
+      (Create vw ('View view) schema1)
+      (Alter sch0 (DropSchemum vw 'View schema0) db))
+alterViewSetSchema ty sch = UnsafeDefinition $
+  "ALTER VIEW" <+> renderSQL ty <+> "SET SCHEMA" <+> renderSQL sch <> ";"

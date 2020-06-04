@@ -40,6 +40,9 @@ module Squeal.PostgreSQL.Definition.Type
     -- * Drop
   , dropType
   , dropTypeIfExists
+    -- * Alter
+  , alterTypeRename
+  , alterTypeSetSchema
   ) where
 
 import Data.ByteString
@@ -245,3 +248,47 @@ dropTypeIfExists
   -> Definition db (Alter sch (DropSchemumIfExists td 'Typedef schema) db)
 dropTypeIfExists tydef = UnsafeDefinition $
   "DROP TYPE IF EXISTS" <+> renderSQL tydef <> ";"
+
+-- | `alterTypeRename` changes the name of a type from the schema.
+--
+-- >>> type DB = '[ "public" ::: '[ "foo" ::: 'Typedef 'PGbool ] ]
+-- >>> :{
+--  let def :: Definition DB '["public" ::: '["bar" ::: 'Typedef 'PGbool ] ]
+--      def = alterTypeRename #foo #bar
+--  in printSQL def
+-- :}
+-- ALTER TYPE "foo" RENAME TO "bar";
+alterTypeRename
+  :: ( Has sch db schema
+     , KnownSymbol ty1
+     , Has ty0 schema ('Typedef ty))
+  => QualifiedAlias sch ty0 -- ^ type to rename
+  -> Alias ty1 -- ^ what to rename it
+  -> Definition db (Alter sch (Rename ty0 ty1 schema) db )
+alterTypeRename ty0 ty1 = UnsafeDefinition $
+  "ALTER TYPE" <+> renderSQL ty0
+  <+> "RENAME TO" <+> renderSQL ty1 <> ";"
+
+{- | This form moves the type into another schema.
+
+>>> type DB0 = '[ "sch0" ::: '[ "ty" ::: 'Typedef 'PGfloat8 ], "sch1" ::: '[] ]
+>>> type DB1 = '[ "sch0" ::: '[], "sch1" ::: '[ "ty" ::: 'Typedef 'PGfloat8 ] ]
+>>> :{
+let def :: Definition DB0 DB1
+    def = alterTypeSetSchema (#sch0 ! #ty) #sch1
+in printSQL def
+:}
+ALTER TYPE "sch0"."ty" SET SCHEMA "sch1";
+-}
+alterTypeSetSchema
+  :: ( Has sch0 db schema0
+     , Has ty schema0 ('Typedef td)
+     , Has sch1 db schema1 )
+  => QualifiedAlias sch0 ty -- ^ type to move
+  -> Alias sch1 -- ^ where to move it
+  -> Definition db
+    ( Alter sch1
+      (Create ty ('Typedef td) schema1)
+      (Alter sch0 (DropSchemum ty 'Typedef schema0) db))
+alterTypeSetSchema ty sch = UnsafeDefinition $
+  "ALTER TYPE" <+> renderSQL ty <+> "SET SCHEMA" <+> renderSQL sch <> ";"
