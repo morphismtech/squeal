@@ -482,7 +482,8 @@ type PgLargeobjectMetadataTable = PgLargeobjectMetadataConstraints :=> PgLargeob
 
 type PgNamespaceColumns = '["nspname" ::: 'NoDef :=> 'NotNull PGname
   ,"nspowner" ::: 'NoDef :=> 'NotNull PGoid
-  ,"nspacl" ::: 'NoDef :=> 'Null (PGvararray (NotNull PGaclitem))]
+  ,"nspacl" ::: 'NoDef :=> 'Null (PGvararray (NotNull PGaclitem))
+  ,"oid" ::: 'NoDef :=> 'NotNull PGoid]
 type PgNamespaceConstraints = '[]
 type PgNamespaceTable = PgNamespaceConstraints :=> PgNamespaceColumns
 
@@ -756,7 +757,8 @@ type PgTypeColumns = '["typname" ::: 'NoDef :=> 'NotNull PGname
   ,"typcollation" ::: 'NoDef :=> 'NotNull PGoid
   ,"typdefaultbin" ::: 'NoDef :=> 'Null PGpg_node_tree
   ,"typdefault" ::: 'NoDef :=> 'Null PGtext
-  ,"typacl" ::: 'NoDef :=> 'Null (PGvararray (NotNull PGaclitem))]
+  ,"typacl" ::: 'NoDef :=> 'Null (PGvararray (NotNull PGaclitem))
+  ,"oid" ::: 'NoDef :=> 'NotNull PGoid]
 type PgTypeConstraints = '[]
 type PgTypeTable = PgTypeConstraints :=> PgTypeColumns
 
