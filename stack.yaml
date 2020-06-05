@@ -1,3 +1,4 @@
 resolver: stack.lts-15.6.yaml
 packages:
 - squeal-postgresql
+- squeal-postgresql-catalog
