@@ -174,9 +174,6 @@ alterViewSetSchema
      , Has sch1 db schema1 )
   => QualifiedAlias sch0 vw -- ^ view to move
   -> Alias sch1 -- ^ where to move it
-  -> Definition db
-    ( Alter sch1
-      (Create vw ('View view) schema1)
-      (Alter sch0 (DropSchemum vw 'View schema0) db))
+  -> Definition db (SetSchema sch0 sch1 schema0 schema1 vw 'View view db)
 alterViewSetSchema ty sch = UnsafeDefinition $
   "ALTER VIEW" <+> renderSQL ty <+> "SET SCHEMA" <+> renderSQL sch <> ";"

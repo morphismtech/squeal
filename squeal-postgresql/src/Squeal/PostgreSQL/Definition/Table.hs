@@ -291,10 +291,7 @@ alterTableSetSchema
      , Has sch1 db schema1 )
   => QualifiedAlias sch0 tab -- ^ table to move
   -> Alias sch1 -- ^ where to move it
-  -> Definition db
-    ( Alter sch1
-      (Create tab ('Table table) schema1)
-      (Alter sch0 (DropSchemum tab 'Table schema0) db))
+  -> Definition db (SetSchema sch0 sch1 schema0 schema1 tab 'Table table db)
 alterTableSetSchema tab sch = UnsafeDefinition $
   "ALTER TABLE" <+> renderSQL tab <+> "SET SCHEMA" <+> renderSQL sch <> ";"
 

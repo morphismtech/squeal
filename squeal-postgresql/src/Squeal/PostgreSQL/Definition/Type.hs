@@ -286,9 +286,6 @@ alterTypeSetSchema
      , Has sch1 db schema1 )
   => QualifiedAlias sch0 ty -- ^ type to move
   -> Alias sch1 -- ^ where to move it
-  -> Definition db
-    ( Alter sch1
-      (Create ty ('Typedef td) schema1)
-      (Alter sch0 (DropSchemum ty 'Typedef schema0) db))
+  -> Definition db (SetSchema sch0 sch1 schema0 schema1 ty 'Typedef td db)
 alterTypeSetSchema ty sch = UnsafeDefinition $
   "ALTER TYPE" <+> renderSQL ty <+> "SET SCHEMA" <+> renderSQL sch <> ";"
