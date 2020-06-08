@@ -2,3 +2,4 @@ resolver: lts-15.4
 packages:
 - free-categories-0.2.0.0
 - with-utf8-1.0.0.0
+- postgresql-libpq-notify-0.1.0.0
