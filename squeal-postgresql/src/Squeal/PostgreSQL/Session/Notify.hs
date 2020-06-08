@@ -11,13 +11,6 @@ See https://www.postgresql.org/docs/current/sql-notify.html
 for more information.
 -}
 
-{-# LANGUAGE
-    DataKinds
-  , PolyKinds
-  , RankNTypes
-  , TypeOperators
-#-}
-
 module Squeal.PostgreSQL.Session.Notify
   ( getNotification
   , getNotificationWithConfig
