@@ -74,7 +74,6 @@ library
     Squeal.PostgreSQL.Session.Indexed
     Squeal.PostgreSQL.Session.Migration
     Squeal.PostgreSQL.Session.Monad
-    Squeal.PostgreSQL.Session.Notify
     Squeal.PostgreSQL.Session.Oid
     Squeal.PostgreSQL.Session.Pool
     Squeal.PostgreSQL.Session.Result
@@ -104,7 +103,6 @@ library
     , network-ip >= 0.3.0.3
     , postgresql-binary >= 0.12.2
     , postgresql-libpq >= 0.9.4.2
-    , postgresql-libpq-notify >= 0.1.0.0
     , profunctors >= 5.5.2
     , records-sop >= 0.1.0.3
     , resource-pool >= 0.2.3.2
