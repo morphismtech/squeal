@@ -56,6 +56,7 @@ data SquealException
   -- ^ unexpected number of columns
   | RowsException Text LibPQ.Row LibPQ.Row
   -- ^ too few rows, expected at least and actual number of rows
+  | NotificationException IOError
   deriving (Eq, Show)
 instance Exception SquealException
 
