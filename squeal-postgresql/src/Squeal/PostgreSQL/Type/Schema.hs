@@ -71,6 +71,7 @@ module Squeal.PostgreSQL.Type.Schema
   , AlterIfExists
   , Rename
   , RenameIfExists
+  , SetSchema
   , ConstraintInvolves
   , DropIfConstraintsInvolve
     -- * Type Classification
@@ -438,6 +439,12 @@ type family RenameIfExists alias0 alias1 xs where
   RenameIfExists alias x '[] = '[]
   RenameIfExists alias0 alias1 ((alias0 ::: x0) ': xs) = (alias1 ::: x0) ': xs
   RenameIfExists alias0 alias1 (x ': xs) = x ': RenameIfExists alias0 alias1 xs
+
+-- | Move an object from one schema to another
+type family SetSchema sch0 sch1 schema0 schema1 obj srt ty db where
+  SetSchema sch0 sch1 schema0 schema1 obj srt ty db = Alter sch1
+    (Create obj (srt ty) schema1)
+    (Alter sch0 (DropSchemum obj srt schema0) db)
 
 -- | Check if a `TableConstraint` involves a column
 type family ConstraintInvolves column constraint where

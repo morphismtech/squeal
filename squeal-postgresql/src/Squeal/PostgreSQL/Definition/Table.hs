@@ -41,6 +41,7 @@ module Squeal.PostgreSQL.Definition.Table
   , alterTableIfExists
   , alterTableRename
   , alterTableIfExistsRename
+  , alterTableSetSchema
   , AlterTable (..)
     -- ** Constraints
   , addConstraint
@@ -272,6 +273,27 @@ alterTableIfExistsRename
 alterTableIfExistsRename tab0 tab1 = UnsafeDefinition $
   "ALTER TABLE IF EXISTS" <+> renderSQL tab0
   <+> "RENAME TO" <+> renderSQL tab1 <> ";"
+
+{- | This form moves the table into another schema.
+
+>>> type DB0 = '[ "sch0" ::: '[ "tab" ::: 'Table ('[] :=> '[]) ], "sch1" ::: '[] ]
+>>> type DB1 = '[ "sch0" ::: '[], "sch1" ::: '[ "tab" ::: 'Table ('[] :=> '[]) ] ]
+>>> :{
+let def :: Definition DB0 DB1
+    def = alterTableSetSchema (#sch0 ! #tab) #sch1
+in printSQL def
+:}
+ALTER TABLE "sch0"."tab" SET SCHEMA "sch1";
+-}
+alterTableSetSchema
+  :: ( Has sch0 db schema0
+     , Has tab schema0 ('Table table)
+     , Has sch1 db schema1 )
+  => QualifiedAlias sch0 tab -- ^ table to move
+  -> Alias sch1 -- ^ where to move it
+  -> Definition db (SetSchema sch0 sch1 schema0 schema1 tab 'Table table db)
+alterTableSetSchema tab sch = UnsafeDefinition $
+  "ALTER TABLE" <+> renderSQL tab <+> "SET SCHEMA" <+> renderSQL sch <> ";"
 
 -- | An `AlterTable` describes the alteration to perform on the columns
 -- of a table.
