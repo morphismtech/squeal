@@ -31,7 +31,7 @@ type UserSchema =
         ])
    , "emails" ::: 'Table (
        '[  "pk_emails" ::: 'PrimaryKey '["id"]
-        , "fk_user_id" ::: 'ForeignKey '["user_id"] "user" "users" '["id"]
+        , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
         ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
@@ -48,8 +48,8 @@ type OrgSchema =
          , "name" ::: 'NoDef :=> 'NotNull 'PGtext
          ])
    , "members" ::: 'Table (
-        '[ "fk_member" ::: 'ForeignKey '["member"] "user" "users" '["id"]
-         , "fk_organization" ::: 'ForeignKey '["organization"] "org" "organizations" '["id"] ] :=>
+        '[ "fk_member" ::: 'ForeignKey '["member"] "user.users" '["id"]
+         , "fk_organization" ::: 'ForeignKey '["organization"] "organizations" '["id"] ] :=>
         '[ "member" ::: 'NoDef :=> 'NotNull 'PGint4
          , "organization" ::: 'NoDef :=> 'NotNull 'PGint4 ])
    ]

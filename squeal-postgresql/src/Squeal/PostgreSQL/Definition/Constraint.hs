@@ -200,7 +200,7 @@ type Schema =
         ])
    , "emails" ::: 'Table (
        '[  "pk_emails" ::: 'PrimaryKey '["id"]
-        , "fk_user_id" ::: 'ForeignKey '["user_id"] "public" "users" '["id"]
+        , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
         ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
@@ -235,7 +235,7 @@ A `foreignKey` can even be a table self-reference.
 type Schema =
   '[ "employees" ::: 'Table (
        '[ "employees_pk"          ::: 'PrimaryKey '["id"]
-        , "employees_employer_fk" ::: 'ForeignKey '["employer_id"] "public" "employees" '["id"]
+        , "employees_employer_fk" ::: 'ForeignKey '["employer_id"] "employees" '["id"]
         ] :=>
        '[ "id"          :::   'Def :=> 'NotNull 'PGint4
         , "name"        ::: 'NoDef :=> 'NotNull 'PGtext
@@ -279,7 +279,7 @@ foreignKey
   -> OnUpdateClause
   -- ^ what to do when reference is updated
   -> TableConstraintExpression sch1 child db
-      ('ForeignKey columns sch0 parent refcolumns)
+      ('ForeignKey columns (References sch0 parent sch1) refcolumns)
 foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
   "FOREIGN KEY" <+> parenthesized (renderSQL keys)
   <+> "REFERENCES" <+> renderSQL parent

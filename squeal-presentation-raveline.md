@@ -108,7 +108,7 @@ type ParliamentaryGroup =
 ```haskell
 type MemberOfParliament =
     '[ "pk_mp" ::: 'PrimaryKey '["mp_id"]
-    , "fk_mp_groupp" ::: 'ForeignKey '["mp_group"] "public" "groupp" '["groupp_id"]
+    , "fk_mp_groupp" ::: 'ForeignKey '["mp_group"] "groupp" '["groupp_id"]
     ] :=> MpCols
 ```
 

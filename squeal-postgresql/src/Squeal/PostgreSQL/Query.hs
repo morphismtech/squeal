@@ -207,8 +207,8 @@ type OrdersColumns =
 >>> :{
 type OrdersConstraints =
   '["pk_orders" ::: PrimaryKey '["id"]
-  ,"fk_customers" ::: ForeignKey '["customer_id"] "public" "customers" '["id"]
-  ,"fk_shippers" ::: ForeignKey '["shipper_id"] "public" "shippers" '["id"] ]
+   ,"fk_customers" ::: ForeignKey '["customer_id"] "customers" '["id"]
+   ,"fk_shippers" ::: ForeignKey '["shipper_id"] "shippers" '["id"] ]
 :}
 
 >>> type NamesColumns = '["id" ::: 'NoDef :=> 'NotNull 'PGint4, "name" ::: 'NoDef :=> 'NotNull 'PGtext]

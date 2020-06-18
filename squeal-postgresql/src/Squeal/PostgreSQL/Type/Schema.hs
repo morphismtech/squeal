@@ -55,6 +55,7 @@ module Squeal.PostgreSQL.Type.Schema
   , Optionality (..)
   , TableConstraint (..)
   , TableConstraints
+  , References
   , Uniquely
     -- * Enumerated Label
   , IsPGlabel (..)
@@ -211,7 +212,11 @@ data TableConstraint
   = Check [Symbol]
   | Unique [Symbol]
   | PrimaryKey [Symbol]
-  | ForeignKey [Symbol] Symbol Symbol [Symbol]
+  | ForeignKey [Symbol] Symbol [Symbol]
+
+type family References (sch :: Symbol) (tab :: Symbol) (sch0 :: Symbol) where
+  References sch tab sch = tab
+  References sch tab _   = sch `AppendSymbol` "." `AppendSymbol` tab
 
 {- | A `TableConstraints` is a row of `TableConstraint`s.
 
@@ -451,7 +456,7 @@ type family ConstraintInvolves column constraint where
   ConstraintInvolves column ('Check columns) = column `Elem` columns
   ConstraintInvolves column ('Unique columns) = column `Elem` columns
   ConstraintInvolves column ('PrimaryKey columns) = column `Elem` columns
-  ConstraintInvolves column ('ForeignKey columns sch tab refcolumns)
+  ConstraintInvolves column ('ForeignKey columns tab refcolumns)
     = column `Elem` columns
 
 -- | Drop all `TableConstraint`s that involve a column
@@ -523,7 +528,7 @@ type family Schema :: SchemaType where
         ])
     , "emails" ::: 'Table (
         '[ "pk_emails"  ::: 'PrimaryKey '["id"]
-        , "fk_user_id" ::: 'ForeignKey '["user_id"] "public" "users" '["id"]
+        , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
         ] :=>
         '[ "id"      :::   'Def :=> 'NotNull 'PGint4
         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4

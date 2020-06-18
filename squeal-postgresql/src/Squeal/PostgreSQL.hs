@@ -40,7 +40,7 @@ type EmailsColumns =
    , "email" ::: 'NoDef :=> 'Null 'PGtext ]
 type EmailsConstraints =
   '[ "pk_emails"  ::: 'PrimaryKey '["id"]
-   , "fk_user_id" ::: 'ForeignKey '["user_id"] "public" "users" '["id"] ]
+   , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"] ]
 type Schema =
   '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns)
    , "emails" ::: 'Table (EmailsConstraints :=> EmailsColumns) ]
