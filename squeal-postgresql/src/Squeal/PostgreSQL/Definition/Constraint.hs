@@ -260,26 +260,25 @@ in printSQL setup
 CREATE TABLE "employees" ("id" serial, "name" text NOT NULL, "employer_id" integer NULL, CONSTRAINT "employees_pk" PRIMARY KEY ("id"), CONSTRAINT "employees_employer_fk" FOREIGN KEY ("employer_id") REFERENCES "employees" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 -}
 foreignKey
-  :: (ForeignKeyed db 
+  :: ( ForeignKeyed db
         sch0 sch1
-        schema0 schema1 
-        child parent
-        table reftable
-        columns refcolumns
-        constraints cols
-        reftys tys )
-  => NP Alias columns
+        schema0 schema1
+        tab0 tab1
+        table0 table1
+        columns0 columns1
+        tys0 tys1 )
+  => NP Alias columns1
   -- ^ column or columns in the table
-  -> QualifiedAlias sch0 parent
+  -> QualifiedAlias sch0 tab0
   -- ^ reference table
-  -> NP Alias refcolumns
+  -> NP Alias columns0
   -- ^ reference column or columns in the reference table
   -> OnDeleteClause
   -- ^ what to do when reference is deleted
   -> OnUpdateClause
   -- ^ what to do when reference is updated
-  -> TableConstraintExpression sch1 child db
-      ('ForeignKey columns (References sch0 parent sch1) refcolumns)
+  -> TableConstraintExpression sch1 tab1 db
+      ('ForeignKey columns1 (References sch0 tab0 sch1) columns0)
 foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
   "FOREIGN KEY" <+> parenthesized (renderSQL keys)
   <+> "REFERENCES" <+> renderSQL parent
@@ -291,20 +290,19 @@ foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
 type ForeignKeyed db
   sch0 sch1
   schema0 schema1
-  child parent
-  table reftable
-  columns refcolumns
-  constraints cols
-  reftys tys =
+  tab0 tab1
+  table0 table1
+  columns0 columns1
+  tys0 tys1 =
     ( Has sch0 db schema0
     , Has sch1 db schema1
-    , Has parent schema0 ('Table reftable)
-    , Has child schema1 ('Table table)
-    , HasAll columns (TableToColumns table) tys
-    , reftable ~ (constraints :=> cols)
-    , HasAll refcolumns cols reftys
-    , SOP.AllZip SamePGType tys reftys
-    , Uniquely refcolumns constraints )
+    , Has tab0 schema0 ('Table table0)
+    , Has tab1 schema1 ('Table table1)
+    , HasAll columns0 (TableToColumns table0) tys1
+    , HasAll columns1 (TableToColumns table1) tys0
+    , SOP.AllZip SamePGType tys0 tys1
+    , Uniquely columns0 (TableToConstraints table0)
+    )
 
 -- | `OnDeleteClause` indicates what to do with rows that reference a deleted row.
 data OnDeleteClause

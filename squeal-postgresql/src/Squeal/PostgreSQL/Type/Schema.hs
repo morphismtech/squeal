@@ -91,6 +91,7 @@ module Squeal.PostgreSQL.Type.Schema
   , NullifyFrom
     -- * Table Conversion
   , TableToColumns
+  , TableToConstraints
   , ColumnsToRow
   , TableToRow
     -- * Updatable
@@ -214,6 +215,7 @@ data TableConstraint
   | PrimaryKey [Symbol]
   | ForeignKey [Symbol] Symbol [Symbol]
 
+-- | A type family which calculates an intra- or cross-schema table reference name.
 type family References (sch :: Symbol) (tab :: Symbol) (sch0 :: Symbol) where
   References sch tab sch = tab
   References sch tab _   = sch `AppendSymbol` "." `AppendSymbol` tab
@@ -278,6 +280,10 @@ type family ColumnsToRow (columns :: ColumnsType) :: RowType where
 -- | `TableToColumns` removes table constraints.
 type family TableToColumns (table :: TableType) :: ColumnsType where
   TableToColumns (constraints :=> columns) = columns
+
+-- | `TableToConstraints` removes table columns.
+type family TableToConstraints (table :: TableType) :: TableConstraints where
+  TableToConstraints (constraints :=> columns) = constraints
 
 -- | Convert a table to a row type.
 type family TableToRow (table :: TableType) :: RowType where
