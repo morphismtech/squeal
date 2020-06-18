@@ -187,8 +187,9 @@ type HasUnique alias fields field = fields ~ '[alias ::: field]
 type Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
   = HasErr fields alias fields field
 
-{- | @HasErr err alias fields field@ hosts an @err@,
-the original @fields@ in `Has`, if it fails to find an instance because
+{- | `HasErr` @err alias fields field@ hosts an @err@,
+the original @fields@ in `Has` @alias fields field@,
+if it fails to find an instance because
 @fields@ does not have @alias@.
 -}
 class KnownSymbol alias =>
