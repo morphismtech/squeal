@@ -258,6 +258,39 @@ let
 in printSQL setup
 :}
 CREATE TABLE "employees" ("id" serial, "name" text NOT NULL, "employer_id" integer NULL, CONSTRAINT "employees_pk" PRIMARY KEY ("id"), CONSTRAINT "employees_employer_fk" FOREIGN KEY ("employer_id") REFERENCES "employees" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
+
+A `foreignKey` can also be cross-schema.
+
+>>> :{
+type Pk = '["pk" ::: 'PrimaryKey '["id"]]
+type Fk = '["fk" ::: 'ForeignKey '["id"] "here.foo" '["id"]]
+type Cols = '["id" ::: 'NoDef :=> 'NotNull 'PGint4]
+type DB =
+  '[ "here" ::: '["foo" ::: 'Table (Pk :=> Cols)]
+   , "there" ::: '["bar" ::: 'Table (Fk :=> Cols)]
+   ]
+:}
+
+>>> :{
+let
+  setup :: Definition '[] DB
+  setup =
+    createSchema #here >>>
+    createTable (#here ! #foo)
+      (notNullable int4 `as` #id)
+      (primaryKey #id `as` #pk) >>>
+    createSchema #there >>>
+    createTable (#there ! #bar)
+      (notNullable int4 `as` #id)
+      (foreignKey #id (#here ! #foo) #id
+        OnDeleteCascade OnUpdateCascade `as` #fk)
+in printSQL setup
+:}
+CREATE SCHEMA "here";
+CREATE TABLE "here"."foo" ("id" int4 NOT NULL, CONSTRAINT "pk" PRIMARY KEY ("id"));
+CREATE SCHEMA "there";
+CREATE TABLE "there"."bar" ("id" int4 NOT NULL, CONSTRAINT "fk" FOREIGN KEY ("id") REFERENCES "here"."foo" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
+
 -}
 foreignKey
   :: ( ForeignKeyed db
