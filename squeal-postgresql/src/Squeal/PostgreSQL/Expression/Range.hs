@@ -152,7 +152,7 @@ whole = NonEmpty Infinite Infinite
 
 -- | contains range
 (@>.) :: Operator (null ('PGrange ty)) ('NotNull ty) ('Null 'PGbool)
-(@>.) = unsafeBinaryOp "<@"
+(@>.) = unsafeBinaryOp "@>"
 
 -- | strictly left of,
 -- return false when an empty range is involved
