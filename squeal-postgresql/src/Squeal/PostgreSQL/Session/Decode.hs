@@ -553,15 +553,15 @@ enumValue
   :: (SOP.All KnownSymbol labels, PG y ~ 'PGenum labels)
   => NP (SOP.K y) labels
   -> StateT Strict.ByteString (Except Strict.Text) y
-enumValue labels = devalue (enum (enumLabels labels))
+enumValue = devalue . enum . labels
   where
-  enumLabels
+  labels
     :: SOP.All KnownSymbol labels
     => NP (SOP.K y) labels
     -> Text -> Maybe y
-  enumLabels = \case
+  labels = \case
     Nil -> \_ -> Nothing
     ((y :: SOP.K y label) :* ys) -> \ str ->
       if str == fromString (symbolVal (SOP.Proxy @label))
       then Just (SOP.unK y)
-      else enumLabels ys str
+      else labels ys str
