@@ -564,6 +564,8 @@ instance label ~ label1
   => IsPGlabel label (PGlabel label1) where label = PGlabel
 instance labels ~ '[label]
   => IsPGlabel label (NP PGlabel labels) where label = PGlabel :* Nil
+instance IsPGlabel label (y -> K y label) where label = K
+instance IsPGlabel label (y -> NP (K y) '[label]) where label y = K y :* Nil
 -- | A `PGlabel` unit type with an `IsPGlabel` instance
 data PGlabel (label :: Symbol) = PGlabel
 instance KnownSymbol label => RenderSQL (PGlabel label) where
