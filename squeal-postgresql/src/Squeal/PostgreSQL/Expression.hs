@@ -141,7 +141,7 @@ type Expr x
     -- ^ cannot reference aliases
 
 -- | A @RankNType@ for binary operators.
-type Operator x1 x2 y =  forall db. OperatorDB db x1 x2 y
+type Operator x1 x2 y = forall db. OperatorDB db x1 x2 y
 
 -- | Like `Operator` but depends on the schemas of the database
 type OperatorDB db x1 x2 y
