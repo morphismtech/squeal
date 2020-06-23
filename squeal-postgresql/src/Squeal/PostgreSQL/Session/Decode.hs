@@ -32,6 +32,7 @@ module Squeal.PostgreSQL.Session.Decode
     FromPG (..)
   , devalue
   , rowValue
+  , enumValue
     -- * Decode Rows
   , DecodeRow (..)
   , decodeRow
@@ -60,6 +61,7 @@ import Data.Int (Int16, Int32, Int64)
 import Data.Kind
 import Data.Scientific (Scientific)
 import Data.String (fromString)
+import Data.Text (Text)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
 import Data.UUID.Types (UUID)
 import Data.Vector (Vector)
@@ -533,3 +535,33 @@ runField
   => SOP.K (Maybe Strict.ByteString) ty
   -> Except Strict.Text (SOP.P y)
 runField = liftEither . fromField @ty . SOP.unK
+
+{- |
+>>> :{
+data Dir = North | East | South | West
+instance IsPG Dir where
+  type PG Dir = 'PGenum '["north", "south", "east", "west"]
+instance FromPG Dir where
+  fromPG = enumValue $
+    label @"north" North :*
+    label @"south" South :*
+    label @"east" East :*
+    label @"west" West
+:}
+-}
+enumValue
+  :: (SOP.All KnownSymbol labels, PG y ~ 'PGenum labels)
+  => NP (SOP.K y) labels
+  -> StateT Strict.ByteString (Except Strict.Text) y
+enumValue = devalue . enum . labels
+  where
+  labels
+    :: SOP.All KnownSymbol labels
+    => NP (SOP.K y) labels
+    -> Text -> Maybe y
+  labels = \case
+    Nil -> \_ -> Nothing
+    ((y :: SOP.K y label) :* ys) -> \ str ->
+      if str == fromString (symbolVal (SOP.Proxy @label))
+      then Just (SOP.unK y)
+      else labels ys str
