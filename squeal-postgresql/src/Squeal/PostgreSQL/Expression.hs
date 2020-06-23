@@ -141,14 +141,7 @@ type Expr x
     -- ^ cannot reference aliases
 
 -- | A @RankNType@ for binary operators.
-type Operator x1 x2 y
-  =  forall grp lat with db params from
-  .  Expression grp lat with db params from x1
-     -- ^ left input
-  -> Expression grp lat with db params from x2
-     -- ^ right input
-  -> Expression grp lat with db params from y
-     -- ^ output
+type Operator x1 x2 y =  forall db. OperatorDB db x1 x2 y
 
 -- | Like `Operator` but depends on the schemas of the database
 type OperatorDB db x1 x2 y
