@@ -79,7 +79,7 @@ setup =
       columntypeFrom @(Maybe Text) `as` #email )
     ( primaryKey #id `as` #pk_emails :*
       foreignKey #user_id (#user ! #users) #id
-        OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
+        (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_user_id )
   >>>
   createTable (#org ! #organizations)
     ( serial `as` #id :*
@@ -90,9 +90,9 @@ setup =
     ( notNullable int4 `as` #member :*
       notNullable int4 `as` #organization )
     ( foreignKey #member (#user ! #users) #id
-        OnDeleteCascade OnUpdateCascade `as` #fk_member :*
+        (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_member :*
       foreignKey #organization (#org ! #organizations) #id
-        OnDeleteCascade OnUpdateCascade `as` #fk_organization )
+        (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_organization )
       
 teardown :: Definition Schemas (Public '[])
 teardown = dropType #positive >>> dropSchemaCascade #user >>> dropSchemaCascade #org

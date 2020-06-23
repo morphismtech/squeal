@@ -59,7 +59,7 @@ setup =
           )
           (    primaryKey #id
           `as` #pk_user_devices
-          :*   foreignKey #user_id #users #id OnDeleteCascade OnUpdateCascade
+          :*   foreignKey #user_id #users #id (OnDelete Cascade) (OnUpdate Cascade)
           `as` #fk_user_id
           :*   unique #token
           `as` #token
