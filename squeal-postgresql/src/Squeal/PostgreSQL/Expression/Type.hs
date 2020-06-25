@@ -100,6 +100,8 @@ module Squeal.PostgreSQL.Expression.Type
   , ColumnTyped (..)
   , columntypeFrom
   , FieldTyped (..)
+  , Attributed (..)
+  , attributes
   ) where
 
 import Control.DeepSeq
@@ -504,3 +506,15 @@ columntypeFrom
   :: forall hask db. (ColumnTyped db (ColumnPG hask))
   => ColumnTypeExpression db (ColumnPG hask)
 columntypeFrom = columntype @db @(ColumnPG hask)
+
+class Attributed db (attribute :: (Symbol, ColumnType)) where
+  attribute :: Aliased (ColumnTypeExpression db) attribute
+instance (ColumnTyped db column, KnownSymbol alias)
+  => Attributed db (alias ::: column) where
+    attribute = columntype `as` (Alias @alias)
+
+attributes
+  :: forall db columns
+   . SOP.All (Attributed db) columns
+  => SOP.NP (Aliased (ColumnTypeExpression db)) columns
+attributes = SOP.hcpure (SOP.Proxy @(Attributed db)) attribute
