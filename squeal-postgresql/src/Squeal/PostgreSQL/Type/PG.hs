@@ -254,7 +254,7 @@ ColumnPG (Optional SOP.I ('Def :=> Double)) :: (Optionality,
 = 'Def :=> 'NotNull 'PGfloat8
 -}
 type family ColumnPG (hask :: Type) :: ColumnType where
-  ColumnPG (Optional SOP.I ('Def :=> hask)) = 'Def :=> NullPG hask
+  ColumnPG (Optional SOP.I (def :=> hask)) = def :=> NullPG hask
   ColumnPG hask = 'NoDef :=> NullPG hask
 
 {- | `TuplePG` turns a Haskell tuple type (including record types) into
