@@ -501,6 +501,6 @@ instance NullTyped db ('NotNull ty)
 -- >>> printSQL $ columntypeFrom @Double
 -- float8 NOT NULL
 columntypeFrom
-  :: forall hask db. (ColumnTyped db ('NoDef :=> NullPG hask))
-  => ColumnTypeExpression db ('NoDef :=> NullPG hask)
-columntypeFrom = columntype @db @('NoDef :=> NullPG hask)
+  :: forall hask db. (ColumnTyped db (ColumnPG hask))
+  => ColumnTypeExpression db (ColumnPG hask)
+columntypeFrom = columntype @db @(ColumnPG hask)

@@ -37,6 +37,7 @@ module Squeal.PostgreSQL.Type.PG
   ( -- * PG
     IsPG (..)
   , NullPG
+  , ColumnPG
   , TuplePG
   , RowPG
     -- * Type families
@@ -70,6 +71,7 @@ import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
 import qualified Generics.SOP.Type.Metadata as Type
 
+import Squeal.PostgreSQL.Expression.Default
 import Squeal.PostgreSQL.Type
 import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Type.Schema
@@ -240,6 +242,20 @@ NullPG (Maybe Double) :: NullType
 type family NullPG (hask :: Type) :: NullType where
   NullPG (Maybe hask) = 'Null (PG hask)
   NullPG hask = 'NotNull (PG hask)
+
+{- | `ColumnPG` turns a Haskell type into a `ColumnType`.
+
+>>> :kind! ColumnPG Double
+ColumnPG Double :: (Optionality, NullType)
+= 'NoDef :=> 'NotNull 'PGfloat8
+>>> :kind! ColumnPG (Optional SOP.I ('Def :=> Double))
+ColumnPG (Optional SOP.I ('Def :=> Double)) :: (Optionality,
+                                                NullType)
+= 'Def :=> 'NotNull 'PGfloat8
+-}
+type family ColumnPG (hask :: Type) :: ColumnType where
+  ColumnPG (Optional SOP.I ('Def :=> hask)) = 'Def :=> NullPG hask
+  ColumnPG hask = 'NoDef :=> NullPG hask
 
 {- | `TuplePG` turns a Haskell tuple type (including record types) into
 the corresponding list of `NullType`s.
