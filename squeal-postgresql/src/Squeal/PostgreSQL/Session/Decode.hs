@@ -441,7 +441,7 @@ type Row = '[
   "frth" ::: 'NotNull 'PGbool]
 :}
 
-:{
+>>> :{
 let
   decode :: DecodeRow Row (L,R)
   decode = appendRows (,) genericRow genericRow
