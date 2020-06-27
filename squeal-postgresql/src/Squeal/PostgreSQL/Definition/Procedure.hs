@@ -71,7 +71,7 @@ let
              $ [deleteFrom_ #things (#id .== param @1)]
 in printSQL definition
 :}
-CREATE PROCEDURE "proc" (int4) language sql as $$ DELETE FROM "things" WHERE ("id" = ($1 :: int4)); $$;
+CREATE PROCEDURE "proc" (int4) language sql as $$ DELETE FROM "things" AS "things" WHERE ("id" = ($1 :: int4)); $$;
 -}
 createProcedure
   :: ( Has sch db schema
@@ -100,7 +100,7 @@ let
              $ [deleteFrom_ #things (#id .== param @1)]
 in printSQL definition
 :}
-CREATE OR REPLACE PROCEDURE "proc" (int4) language sql as $$ DELETE FROM "things" WHERE ("id" = ($1 :: int4)); $$;
+CREATE OR REPLACE PROCEDURE "proc" (int4) language sql as $$ DELETE FROM "things" AS "things" WHERE ("id" = ($1 :: int4)); $$;
 -}
 createOrReplaceProcedure
   :: ( Has sch db schema

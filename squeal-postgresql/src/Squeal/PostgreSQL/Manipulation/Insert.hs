@@ -76,10 +76,10 @@ Even if you know only some column values, a complete row must be created.
 -}
 insertInto
   :: ( Has sch db schema
-     , Has tab schema ('Table table)
+     , Has tab0 schema ('Table table)
      , SOP.SListI (TableToColumns table)
      , SOP.SListI row )
-  => QualifiedAlias sch tab
+  => Aliased (QualifiedAlias sch) (tab ::: tab0)
   -- ^ table
   -> QueryClause with db params (TableToColumns table)
   -- ^ what to insert
@@ -88,8 +88,9 @@ insertInto
   -> ReturningClause with db params '[tab ::: TableToRow table] row
   -- ^ what to return
   -> Manipulation with db params row
-insertInto tab qry conflict ret = UnsafeManipulation $
-  "INSERT" <+> "INTO" <+> renderSQL tab
+insertInto (tab0 `As` tab) qry conflict ret = UnsafeManipulation $
+  "INSERT" <+> "INTO"
+  <+> renderSQL tab0 <+> "AS" <+> renderSQL tab
   <+> renderSQL qry
   <> renderSQL conflict
   <> renderSQL ret
@@ -97,9 +98,9 @@ insertInto tab qry conflict ret = UnsafeManipulation $
 -- | Like `insertInto` but with `OnConflictDoRaise` and no `ReturningClause`.
 insertInto_
   :: ( Has sch db schema
-     , Has tab schema ('Table table)
+     , Has tab0 schema ('Table table)
      , SOP.SListI (TableToColumns table) )
-  => QualifiedAlias sch tab
+  => Aliased (QualifiedAlias sch) (tab ::: tab0)
   -- ^ table
   -> QueryClause with db params (TableToColumns table)
   -- ^ what to insert

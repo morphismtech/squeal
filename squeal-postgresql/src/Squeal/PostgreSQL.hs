@@ -136,7 +136,7 @@ let
 :}
 
 >>> printSQL insertUser
-WITH "u" AS (INSERT INTO "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) RETURNING "id" AS "id", ($2 :: text) AS "email") INSERT INTO "emails" ("user_id", "email") SELECT "u"."id", "u"."email" FROM "u" AS "u"
+WITH "u" AS (INSERT INTO "users" AS "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) RETURNING "id" AS "id", ($2 :: text) AS "email") INSERT INTO "emails" AS "emails" ("user_id", "email") SELECT "u"."id", "u"."email" FROM "u" AS "u"
 
 Next we write a `Statement` to retrieve users from the database. We're not
 interested in the ids here, just the usernames and email addresses. We
