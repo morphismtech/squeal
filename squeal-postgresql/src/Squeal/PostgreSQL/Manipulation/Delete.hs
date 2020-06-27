@@ -33,7 +33,6 @@ module Squeal.PostgreSQL.Manipulation.Delete
   ( -- * Delete
     deleteFrom
   , deleteFrom_
-  , UsingClause (..)
   ) where
 
 import qualified Generics.SOP as SOP
@@ -43,7 +42,6 @@ import Squeal.PostgreSQL.Expression.Logic
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Query.From
 import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
@@ -52,22 +50,6 @@ import Squeal.PostgreSQL.Type.Schema
 {-----------------------------------------
 DELETE statements
 -----------------------------------------}
-
--- | Specify additional tables with `Using`
--- an `also` list of table expressions, allowing columns
--- from other tables to appear in the WHERE condition.
--- This is similar to the list of tables that can be specified
--- in the FROM Clause of a SELECT statement;
--- for example, an alias for the table name can be specified.
--- Do not repeat the target table in the `Using` list,
--- unless you wish to set up a self-join.
--- `NoUsing` if no additional tables are to be used.
-data UsingClause with db params from where
-  NoUsing :: UsingClause with db params '[]
-  Using
-    :: FromClause '[] with db params from
-    -- ^ what to use
-    -> UsingClause with db params from
 
 -- | Delete rows from a table.
 deleteFrom
