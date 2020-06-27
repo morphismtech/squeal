@@ -36,6 +36,7 @@ module Squeal.PostgreSQL.Manipulation
   , queryStatement
   , ReturningClause (..)
   , pattern Returning_
+  , UsingClause (..)
   ) where
 
 import Control.DeepSeq
@@ -52,6 +53,7 @@ import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Type.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Query
+import Squeal.PostgreSQL.Query.From
 import Squeal.PostgreSQL.Query.Select
 import Squeal.PostgreSQL.Query.With
 import Squeal.PostgreSQL.Type.Schema
@@ -290,3 +292,19 @@ pattern Returning_
   -- ^ row of values
   -> ReturningClause with db params from row
 pattern Returning_ list = Returning (List list)
+
+-- | Specify additional tables with `Using`
+-- an `also` list of table expressions, allowing columns
+-- from other tables to appear in the WHERE condition.
+-- This is similar to the list of tables that can be specified
+-- in the FROM Clause of a SELECT statement;
+-- for example, an alias for the table name can be specified.
+-- Do not repeat the target table in the `Using` list,
+-- unless you wish to set up a self-join.
+-- `NoUsing` if no additional tables are to be used.
+data UsingClause with db params from where
+  NoUsing :: UsingClause with db params '[]
+  Using
+    :: FromClause '[] with db params from
+    -- ^ what to use
+    -> UsingClause with db params from

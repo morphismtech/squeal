@@ -69,17 +69,29 @@ update
      , Updatable table updates
      , SOP.SListI row )
   => QualifiedAlias sch tab -- ^ table to update
-  -> NP (Aliased (Optional (Expression 'Ungrouped '[] '[] db params '[tab ::: TableToRow table]))) updates
-  -- ^ modified values to replace old values
+  -> NP
+    ( Aliased
+      ( Optional
+        ( Expression 'Ungrouped '[] '[] db params (tab ::: TableToRow table ': from)
+        )
+      )
+    ) updates
+  -- ^ update expressions, modified values to replace old values
+  -> UsingClause with db params from
+  -- ^ FROM A table expression allowing columns from other tables to appear
+  -- in the WHERE condition and update expressions.
   -> Condition  'Ungrouped '[] with db params '[tab ::: TableToRow table]
-  -- ^ condition under which to perform update on a row
+  -- ^ WHERE condition under which to perform update on a row
   -> ReturningClause with db params '[tab ::: TableToRow table] row -- ^ results to return
   -> Manipulation with db params row
-update tab columns wh returning = UnsafeManipulation $
+update tab columns using wh returning = UnsafeManipulation $
   "UPDATE"
   <+> renderSQL tab
   <+> "SET"
   <+> renderCommaSeparated renderUpdate columns
+  <> case using of
+    NoUsing -> ""
+    Using tables -> " FROM" <+> renderSQL tables
   <+> "WHERE" <+> renderSQL wh
   <> renderSQL returning
 
@@ -94,4 +106,4 @@ update_
   -> Condition  'Ungrouped '[] with db params '[tab ::: TableToRow table]
   -- ^ condition under which to perform update on a row
   -> Manipulation with db params '[]
-update_ tab columns wh = update tab columns wh (Returning_ Nil)
+update_ tab columns wh = update tab columns NoUsing wh (Returning_ Nil)
