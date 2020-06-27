@@ -103,24 +103,24 @@ instance (KnownSymbol col, row ~ '[col ::: ty])
     (Expression grp lat with db params from ty)
     (Selection grp lat with db params from row) where
       expr `as` col = List (expr `as` col)
-instance (Has tab (Join lat from) row0, Has col row0 ty, row1 ~ '[col ::: ty])
+instance (Has tab (Join from lat) row0, Has col row0 ty, row1 ~ '[col ::: ty])
   => IsQualified tab col
     (Selection 'Ungrouped lat with db params from row1) where
       tab ! col = tab ! col `as` col
 instance
-  ( Has tab (Join lat from) row0
+  ( Has tab (Join from lat) row0
   , Has col row0 ty
   , row1 ~ '[col ::: ty]
   , GroupedBy tab col bys )
   => IsQualified tab col
     (Selection ('Grouped bys) lat with db params from row1) where
       tab ! col = tab ! col `as` col
-instance (HasUnique tab (Join lat from) row0, Has col row0 ty, row1 ~ '[col ::: ty])
+instance (HasUnique tab (Join from lat) row0, Has col row0 ty, row1 ~ '[col ::: ty])
   => IsLabel col
     (Selection 'Ungrouped lat with db params from row1) where
       fromLabel = fromLabel @col `as` Alias
 instance
-  ( HasUnique tab (Join lat from) row0
+  ( HasUnique tab (Join from lat) row0
   , Has col row0 ty
   , row1 ~ '[col ::: ty]
   , GroupedBy tab col bys )
