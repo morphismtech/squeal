@@ -129,7 +129,7 @@ let
     insertInto_ #tab (Values_ (Set 2 `as` #col1 :* Default `as` #col2))
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES ((2 :: int4), DEFAULT)
+INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES ((2 :: int4), DEFAULT)
 
 out-of-line parameterized insert:
 
@@ -143,7 +143,7 @@ let
       (Default `as` #col1 :* Set (param @1) `as` #col2)
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (DEFAULT, ($1 :: int4))
+INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES (DEFAULT, ($1 :: int4))
 
 in-line parameterized insert:
 
@@ -159,7 +159,7 @@ let
       [Row {col1 = NotDefault (3 :: Int32), col2 = 4 :: Int32}]
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES (DEFAULT, (2 :: int4)), ((3 :: int4), (4 :: int4))
+INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES (DEFAULT, (2 :: int4)), ((3 :: int4), (4 :: int4))
 
 returning insert:
 
@@ -171,7 +171,7 @@ let
       OnConflictDoRaise (Returning (#col1 `as` #fromOnly))
 in printSQL manipulation
 :}
-INSERT INTO "tab" ("col1", "col2") VALUES ((2 :: int4), (3 :: int4)) RETURNING "col1" AS "fromOnly"
+INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES ((2 :: int4), (3 :: int4)) RETURNING "col1" AS "fromOnly"
 
 upsert:
 
@@ -189,7 +189,7 @@ let
       (Returning_ Nil)
 in printSQL manipulation
 :}
-INSERT INTO "customers" ("name", "email") VALUES ((E'John Smith' :: text), (E'john@smith.com' :: text)) ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || ((E'; ' :: text) || "customers"."email"))
+INSERT INTO "customers" AS "customers" ("name", "email") VALUES ((E'John Smith' :: text), (E'john@smith.com' :: text)) ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || ((E'; ' :: text) || "customers"."email"))
 
 query insert:
 
@@ -199,7 +199,7 @@ let
   manipulation = insertInto_ #tab (Subquery (select Star (from (table #tab))))
 in printSQL manipulation
 :}
-INSERT INTO "tab" SELECT * FROM "tab" AS "tab"
+INSERT INTO "tab" AS "tab" SELECT * FROM "tab" AS "tab"
 
 update:
 
@@ -209,7 +209,7 @@ let
   manipulation = update_ #tab (Set 2 `as` #col1) (#col1 ./= #col2)
 in printSQL manipulation
 :}
-UPDATE "tab" SET "col1" = (2 :: int4) WHERE ("col1" <> "col2")
+UPDATE "tab" AS "tab" SET "col1" = (2 :: int4) WHERE ("col1" <> "col2")
 
 delete:
 
@@ -219,7 +219,7 @@ let
   manipulation = deleteFrom #tab NoUsing (#col1 .== #col2) (Returning Star)
 in printSQL manipulation
 :}
-DELETE FROM "tab" WHERE ("col1" = "col2") RETURNING *
+DELETE FROM "tab" AS "tab" WHERE ("col1" = "col2") RETURNING *
 
 delete and using clause:
 
@@ -240,7 +240,7 @@ let
     (Returning_ Nil)
 in printSQL manipulation
 :}
-DELETE FROM "tab" USING "other_tab" AS "other_tab", "third_tab" AS "third_tab" WHERE (("tab"."col2" = "other_tab"."col2") AND ("tab"."col2" = "third_tab"."col2"))
+DELETE FROM "tab" AS "tab" USING "other_tab" AS "other_tab", "third_tab" AS "third_tab" WHERE (("tab"."col2" = "other_tab"."col2") AND ("tab"."col2" = "third_tab"."col2"))
 
 with manipulation:
 
@@ -254,7 +254,7 @@ let
     (insertInto_ #products_deleted (Subquery (select Star (from (common #del)))))
 in printSQL manipulation
 :}
-WITH "del" AS (DELETE FROM "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" SELECT * FROM "del" AS "del"
+WITH "del" AS (DELETE FROM "products" AS "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" AS "products_deleted" SELECT * FROM "del" AS "del"
 -}
 type family Manipulation_ (db :: SchemasType) (params :: Type) (row :: Type) where
   Manipulation_ db params row = Manipulation '[] db (TuplePG params) (RowPG row)

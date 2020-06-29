@@ -55,17 +55,17 @@ DELETE statements
 deleteFrom
   :: ( SOP.SListI row
      , Has sch db schema
-     , Has tab schema ('Table table) )
-  => QualifiedAlias sch tab -- ^ table to delete from
+     , Has tab0 schema ('Table table) )
+  => Aliased (QualifiedAlias sch) (tab ::: tab0) -- ^ table to delete from
   -> UsingClause with db params from
   -> Condition  'Ungrouped '[] with db params (tab ::: TableToRow table ': from)
   -- ^ condition under which to delete a row
   -> ReturningClause with db params '[tab ::: TableToRow table] row
   -- ^ results to return
   -> Manipulation with db params row
-deleteFrom tab using wh returning = UnsafeManipulation $
+deleteFrom (tab0 `As` tab) using wh returning = UnsafeManipulation $
   "DELETE FROM"
-  <+> renderSQL tab
+  <+> renderSQL tab0 <+> "AS" <+> renderSQL tab
   <> case using of
     NoUsing -> ""
     Using tables -> " USING" <+> renderSQL tables
@@ -75,8 +75,8 @@ deleteFrom tab using wh returning = UnsafeManipulation $
 -- | Delete rows returning `Nil`.
 deleteFrom_
   :: ( Has sch db schema
-     , Has tab schema ('Table table) )
-  => QualifiedAlias sch tab -- ^ table to delete from
+     , Has tab0 schema ('Table table) )
+  => Aliased (QualifiedAlias sch) (tab ::: tab0) -- ^ table to delete from
   -> Condition  'Ungrouped '[] with db params '[tab ::: TableToRow table]
   -- ^ condition under which to delete a row
   -> Manipulation with db params '[]
