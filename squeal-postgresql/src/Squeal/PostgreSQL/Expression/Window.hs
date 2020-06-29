@@ -118,7 +118,7 @@ instance OrderBy (WindowDefinition grp) grp where
   orderBy sortsR (WindowDefinition parts sortsL)
     = WindowDefinition parts (sortsL ++ sortsR)
 
-instance RenderSQL (WindowDefinition lat with db from grp params) where
+instance RenderSQL (WindowDefinition grp lat with db params from) where
   renderSQL (WindowDefinition part ord) =
     renderPartitionByClause part <> renderSQL ord
     where
