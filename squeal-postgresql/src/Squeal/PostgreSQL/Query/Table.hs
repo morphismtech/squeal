@@ -40,10 +40,15 @@ module Squeal.PostgreSQL.Query.Table
   , having
   , limit
   , offset
+  , lockRows
     -- * Grouping
   , By (..)
   , GroupByClause (..)
   , HavingClause (..)
+    -- * Row Locks
+  , LockingClause (..)
+  , LockStrength (..)
+  , Waiting (..)
   ) where
 
 import Control.DeepSeq
@@ -122,19 +127,21 @@ data TableExpression
     -- if nonempty. The offset count says to skip that many rows before
     -- beginning to return rows. The rows are skipped before the limit count
     -- is applied.
+    , lockingClauses :: [LockingClause from]
     } deriving (GHC.Generic)
 
 -- | Render a `TableExpression`
 instance RenderSQL (TableExpression grp lat with db params from) where
   renderSQL
-    (TableExpression frm' whs' grps' hvs' srts' lims' offs') = mconcat
+    (TableExpression frm' whs' grps' hvs' srts' lims' offs' lks') = mconcat
       [ "FROM ", renderSQL frm'
       , renderWheres whs'
       , renderSQL grps'
       , renderSQL hvs'
       , renderSQL srts'
       , renderLimits lims'
-      , renderOffsets offs' ]
+      , renderOffsets offs'
+      , renderLocks lks' ]
       where
         renderWheres = \case
           [] -> ""
@@ -145,6 +152,7 @@ instance RenderSQL (TableExpression grp lat with db params from) where
         renderOffsets = \case
           [] -> ""
           offs -> " OFFSET" <+> fromString (show (sum offs))
+        renderLocks = foldr (\l b -> b <+> renderSQL l) ""
 
 -- | A `from` generates a `TableExpression` from a table reference that can be
 -- a table name, or a derived table such as a subquery, a JOIN construct,
@@ -155,7 +163,7 @@ instance RenderSQL (TableExpression grp lat with db params from) where
 from
   :: FromClause lat with db params from -- ^ table reference
   -> TableExpression 'Ungrouped lat with db params from
-from tab = TableExpression tab [] noGroups NoHaving [] [] []
+from tab = TableExpression tab [] noGroups NoHaving [] [] [] []
 
 -- | A `where_` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `whereClause`.
@@ -181,6 +189,7 @@ groupBy bys rels = TableExpression
   , orderByClause = []
   , limitClause = limitClause rels
   , offsetClause = offsetClause rels
+  , lockingClauses = lockingClauses rels
   }
 
 -- | A `having` is an endomorphism of `TableExpression`s which adds a
@@ -210,6 +219,12 @@ offset
   -> TableExpression grp lat with db params from
   -> TableExpression grp lat with db params from
 offset off rels = rels {offsetClause = off : offsetClause rels}
+
+lockRows
+  :: LockingClause from
+  -> TableExpression grp lat with db params from
+  -> TableExpression grp lat with db params from
+lockRows lck tab = tab {lockingClauses = lck : lockingClauses tab}
 
 {-----------------------------------------
 Grouping
@@ -287,3 +302,35 @@ instance RenderSQL (HavingClause grp lat with db params from) where
     Having [] -> ""
     Having conditions ->
       " HAVING" <+> commaSeparated (renderSQL <$> conditions)
+
+data LockingClause from where
+  For
+    :: HasAll tabs from tables
+    => LockStrength
+    -> NP Alias tabs
+    -> Waiting
+    -> LockingClause from
+instance RenderSQL (LockingClause from) where
+  renderSQL (For str tabs wt) =
+    "FOR" <+> renderSQL str
+    <> case tabs of
+        Nil -> ""
+        _ -> " OF" <+> renderSQL tabs
+    <> renderSQL wt
+
+data LockStrength = Update | NoKeyUpdate | Share | KeyShare
+  deriving (Eq, Ord, Show, Read, Enum, GHC.Generic)
+instance RenderSQL LockStrength where
+  renderSQL = \case
+    Update -> "UPDATE"
+    NoKeyUpdate -> "NO KEY UPDATE"
+    Share -> "SHARE"
+    KeyShare -> "KEY SHARE"
+
+data Waiting = Wait | NoWait | SkipLocked
+  deriving (Eq, Ord, Show, Read, Enum, GHC.Generic)
+instance RenderSQL Waiting where
+  renderSQL = \case
+    Wait -> ""
+    NoWait -> " NOWAIT"
+    SkipLocked -> " SKIP LOCKED"
