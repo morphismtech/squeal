@@ -112,9 +112,9 @@ insertInto_ tab qry =
 data QueryClause with db params columns where
   Values
     :: SOP.SListI columns
-    => NP (Aliased (Optional (Expression  'Ungrouped '[] with db params '[]))) columns
+    => NP (Aliased (Optional (Expression 'Ungrouped '[] with db params from))) columns
     -- ^ row of values
-    -> [NP (Aliased (Optional (Expression  'Ungrouped '[] with db params '[]))) columns]
+    -> [NP (Aliased (Optional (Expression 'Ungrouped '[] with db params from))) columns]
     -- ^ additional rows of values
     -> QueryClause with db params columns
   Select
@@ -164,7 +164,7 @@ instance RenderSQL (QueryClause with db params columns) where
 -- whose `ColumnsType` must match the tables'.
 pattern Values_
   :: SOP.SListI columns
-  => NP (Aliased (Optional (Expression  'Ungrouped '[] with db params '[]))) columns
+  => NP (Aliased (Optional (Expression  'Ungrouped '[] with db params from))) columns
   -- ^ row of values
   -> QueryClause with db params columns
 pattern Values_ vals = Values vals []

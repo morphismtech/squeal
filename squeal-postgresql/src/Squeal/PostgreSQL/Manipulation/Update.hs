@@ -70,13 +70,7 @@ update
      , Updatable table updates
      , SOP.SListI row )
   => Aliased (QualifiedAlias sch) (tab ::: tab0) -- ^ table to update
-  -> NP
-    ( Aliased
-      ( Optional
-        ( Expression 'Ungrouped '[] '[] db params (tab ::: TableToRow table ': from)
-        )
-      )
-    ) updates
+  -> NP (Aliased (Optional (Expression 'Ungrouped '[] with db params (tab ::: TableToRow table ': from)))) updates
   -- ^ update expressions, modified values to replace old values
   -> UsingClause with db params from
   -- ^ FROM A table expression allowing columns from other tables to appear
@@ -103,7 +97,7 @@ update_
      , KnownSymbol tab
      , Updatable table updates )
   => Aliased (QualifiedAlias sch) (tab ::: tab0) -- ^ table to update
-  -> NP (Aliased (Optional (Expression 'Ungrouped '[] '[] db params '[tab ::: TableToRow table]))) updates
+  -> NP (Aliased (Optional (Expression 'Ungrouped '[] with db params '[tab ::: TableToRow table]))) updates
   -- ^ modified values to replace old values
   -> Condition  'Ungrouped '[] with db params '[tab ::: TableToRow table]
   -- ^ condition under which to perform update on a row
