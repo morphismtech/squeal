@@ -138,7 +138,7 @@ data TransactionMode = TransactionMode
   , deferrableMode :: DeferrableMode
   } deriving (Show, Eq)
 
--- | `TransactionMode` with a `ReadCommited` `IsolationLevel`,
+-- | `TransactionMode` with a `ReadCommitted` `IsolationLevel`,
 -- `ReadWrite` `AccessMode` and `NotDeferrable` `DeferrableMode`.
 defaultMode :: TransactionMode
 defaultMode = TransactionMode ReadCommitted ReadWrite NotDeferrable
