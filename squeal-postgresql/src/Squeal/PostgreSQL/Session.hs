@@ -43,7 +43,7 @@ import Control.Monad.Catch (MonadCatch(..), MonadThrow(..), MonadMask(..))
 import Control.Monad.Except
 import Control.Monad.Morph
 import Control.Monad.Reader
-import Control.Monad.Trans.Control (MonadBaseControl(..))
+import Control.Monad.Trans.Control (MonadBaseControl(..), MonadTransControl(..))
 import UnliftIO (MonadUnliftIO (..), bracket,  throwIO)
 import Data.ByteString (ByteString)
 import Data.Foldable
@@ -267,6 +267,11 @@ instance (MonadUnliftIO m, db0 ~ db1)
 instance (MonadBase b m)
   => MonadBase b (PQ schema schema m) where
   liftBase = lift . liftBase
+
+instance db0 ~ db1 => MonadTransControl (PQ db0 db1) where
+  type StT (PQ db0 db1) a = a
+  liftWith f = PQ $ \conn -> K <$> (f $ \pq -> unK <$> unPQ pq conn)
+  restoreT ma = PQ . const $ K <$> ma
 
 -- | A snapshot of the state of a `PQ` computation, used in MonadBaseControl Instance
 type PQRun schema =
