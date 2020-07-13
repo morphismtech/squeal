@@ -17,14 +17,12 @@ import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString.Char8         as C
 import           Control.Monad                  ( void )
 import           GHC.Generics
-import           Test.QuickCheck
 import           Squeal.PostgreSQL
 -- Project imports
 import           Gauge.Schema                   ( Schemas
                                                 , DeviceOS
                                                 , IPLocation
                                                 )
-import           Gauge.Queries                  ( InsertUser )
 
 
 -- First create enums as they're needed in the Schema
