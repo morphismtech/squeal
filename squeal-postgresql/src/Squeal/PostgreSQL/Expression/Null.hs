@@ -63,6 +63,7 @@ unsafeNotNull = UnsafeExpression . renderSQL
 -- nullity as `NotNull`.
 monoNotNull
   :: (forall null. Expression grp lat with db params from (null ty))
+  -- ^ null polymorphic
   -> Expression grp lat with db params from ('NotNull ty)
 monoNotNull = id
 

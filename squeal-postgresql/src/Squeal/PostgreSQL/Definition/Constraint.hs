@@ -322,6 +322,8 @@ instance NFData OnUpdateClause
 instance RenderSQL OnUpdateClause where
   renderSQL (OnUpdate action) = "ON UPDATE" <+> renderSQL action
 
+{- | When the data in the referenced columns is changed,
+certain actions are performed on the data in this table's columns.-}
 data ReferentialAction
   = NoAction
   {- ^ Produce an error indicating that the deletion or update

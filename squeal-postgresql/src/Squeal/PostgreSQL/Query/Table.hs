@@ -313,16 +313,16 @@ instance RenderSQL (HavingClause grp lat with db params from) where
     Having conditions ->
       " HAVING" <+> commaSeparated (renderSQL <$> conditions)
 
-{- !
+{- |
 If specific tables are named in a locking clause,
 then only rows coming from those tables are locked;
 any other tables used in the `Squeal.PostgreSQL.Query.Select.select` are simply read as usual.
 A locking clause with a `Nil` table list affects all tables used in the statement.
 If a locking clause is applied to a `view` or `subquery`,
 it affects all tables used in the `view` or `subquery`.
-However, these clauses do not apply to `with` queries referenced by the primary query.
-If you want row locking to occur within a `with` query,
-specify a `LockingClause` within the `with` query.
+However, these clauses do not apply to `Squeal.PostgreSQL.Query.With.with` queries referenced by the primary query.
+If you want row locking to occur within a `Squeal.PostgreSQL.Query.With.with` query,
+specify a `LockingClause` within the `Squeal.PostgreSQL.Query.With.with` query.
 -}
 data LockingClause from where
   For
