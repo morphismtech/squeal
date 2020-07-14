@@ -9,7 +9,7 @@
   , TypeOperators
 #-}
 
-module Main (main, main2) where
+module Main (main, main2, upsertUser) where
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int16, Int32)
@@ -112,6 +112,14 @@ getUsers = select_
   ( from (table ((#user ! #users) `as` #u)
     & innerJoin (table ((#user ! #emails) `as` #e))
       (#u ! #id .== #e ! #user_id)) )
+
+upsertUser :: Manipulation_ Schemas (Int32, String, VarArray [Maybe Int16]) ()
+upsertUser = insertInto (#user ! #users `as` #u)
+  (Values_ (Set (param @1) `as` #id :* setUser))
+  (OnConflict (OnConstraint #pk_users) (DoUpdate setUser [#u ! #id .== param @1]))
+  (Returning_ Nil)
+  where
+    setUser = Set (param @2) `as` #name :* Set (param @3) `as` #vec :* Nil
 
 data User
   = User
