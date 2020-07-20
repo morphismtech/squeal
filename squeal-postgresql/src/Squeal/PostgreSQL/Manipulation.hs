@@ -81,10 +81,10 @@ simple insert:
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  manipulation :: Manipulation with (Public Schema) '[] '[]
-  manipulation =
+  manp :: Manipulation with (Public Schema) '[] '[]
+  manp =
     insertInto_ #tab (Values_ (Set 2 `as` #col1 :* Default `as` #col2))
-in printSQL manipulation
+in printSQL manp
 :}
 INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES ((2 :: int4), DEFAULT)
 
@@ -94,11 +94,11 @@ out-of-line parameterized insert:
 >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  manipulation :: Manipulation with (Public Schema) '[ 'NotNull 'PGint4] '[]
-  manipulation =
+  manp :: Manipulation with (Public Schema) '[ 'NotNull 'PGint4] '[]
+  manp =
     insertInto_ #tab $ Values_
       (Default `as` #col1 :* Set (param @1) `as` #col2)
-in printSQL manipulation
+in printSQL manp
 :}
 INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES (DEFAULT, ($1 :: int4))
 
@@ -114,11 +114,11 @@ data Row = Row { col1 :: Optional SOP.I ('Def :=> Int32), col2 :: Int32 }
 
 >>> :{
 let
-  manipulation :: Row -> Row -> Manipulation with (Public Schema) '[] '[]
-  manipulation row1 row2 = insertInto_ #tab $ inlineValues row1 [row2]
+  manp :: Row -> Row -> Manipulation with (Public Schema) '[] '[]
+  manp row1 row2 = insertInto_ #tab $ inlineValues row1 [row2]
   row1 = Row {col1 = Default, col2 = 2 :: Int32}
   row2 = Row {col1 = NotDefault (3 :: Int32), col2 = 4 :: Int32}
-in printSQL (manipulation row1 row2)
+in printSQL (manp row1 row2)
 :}
 INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES (DEFAULT, (2 :: int4)), ((3 :: int4), (4 :: int4))
 
@@ -126,11 +126,11 @@ returning insert:
 
 >>> :{
 let
-  manipulation :: Manipulation with (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4]
-  manipulation =
+  manp :: Manipulation with (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4]
+  manp =
     insertInto #tab (Values_ (Set 2 `as` #col1 :* Set 3 `as` #col2))
       OnConflictDoRaise (Returning #col1)
-in printSQL manipulation
+in printSQL manp
 :}
 INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES ((2 :: int4), (3 :: int4)) RETURNING "col1" AS "col1"
 
@@ -141,14 +141,14 @@ upsert:
 >>> type CustomersSchema = '["customers" ::: 'Table (CustomersConstraints :=> CustomersColumns)]
 >>> :{
 let
-  manipulation :: Manipulation with (Public CustomersSchema) '[] '[]
-  manipulation =
+  manp :: Manipulation with (Public CustomersSchema) '[] '[]
+  manp =
     insertInto #customers
       (Values_ (Set "John Smith" `as` #name :* Set "john@smith.com" `as` #email))
       (OnConflict (OnConstraint #uq)
         (DoUpdate (Set (#excluded ! #email <> "; " <> #customers ! #email) `as` #email) []))
       (Returning_ Nil)
-in printSQL manipulation
+in printSQL manp
 :}
 INSERT INTO "customers" AS "customers" ("name", "email") VALUES ((E'John Smith' :: text), (E'john@smith.com' :: text)) ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || ((E'; ' :: text) || "customers"."email"))
 
@@ -156,9 +156,9 @@ query insert:
 
 >>> :{
 let
-  manipulation :: Manipulation with (Public Schema) '[] '[]
-  manipulation = insertInto_ #tab (Subquery (select Star (from (table #tab))))
-in printSQL manipulation
+  manp :: Manipulation with (Public Schema) '[] '[]
+  manp = insertInto_ #tab (Subquery (select Star (from (table #tab))))
+in printSQL manp
 :}
 INSERT INTO "tab" AS "tab" SELECT * FROM "tab" AS "tab"
 
@@ -166,9 +166,9 @@ update:
 
 >>> :{
 let
-  manipulation :: Manipulation with (Public Schema) '[] '[]
-  manipulation = update_ #tab (Set 2 `as` #col1) (#col1 ./= #col2)
-in printSQL manipulation
+  manp :: Manipulation with (Public Schema) '[] '[]
+  manp = update_ #tab (Set 2 `as` #col1) (#col1 ./= #col2)
+in printSQL manp
 :}
 UPDATE "tab" AS "tab" SET "col1" = (2 :: int4) WHERE ("col1" <> "col2")
 
@@ -176,9 +176,9 @@ delete:
 
 >>> :{
 let
-  manipulation :: Manipulation with (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
-  manipulation = deleteFrom #tab NoUsing (#col1 .== #col2) (Returning Star)
-in printSQL manipulation
+  manp :: Manipulation with (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  manp = deleteFrom #tab NoUsing (#col1 .== #col2) (Returning Star)
+in printSQL manp
 :}
 DELETE FROM "tab" AS "tab" WHERE ("col1" = "col2") RETURNING *
 
@@ -193,27 +193,27 @@ type Schema3 =
 
 >>> :{
 let
-  manipulation :: Manipulation with (Public Schema3) '[] '[]
-  manipulation =
+  manp :: Manipulation with (Public Schema3) '[] '[]
+  manp =
     deleteFrom #tab (Using (table #other_tab & also (table #third_tab)))
     ( (#tab ! #col2 .== #other_tab ! #col2)
     .&& (#tab ! #col2 .== #third_tab ! #col2) )
     (Returning_ Nil)
-in printSQL manipulation
+in printSQL manp
 :}
 DELETE FROM "tab" AS "tab" USING "other_tab" AS "other_tab", "third_tab" AS "third_tab" WHERE (("tab"."col2" = "other_tab"."col2") AND ("tab"."col2" = "third_tab"."col2"))
 
-with manipulation:
+with:
 
 >>> type ProductsColumns = '["product" ::: 'NoDef :=> 'NotNull 'PGtext, "date" ::: 'Def :=> 'NotNull 'PGdate]
 >>> type ProductsSchema = '["products" ::: 'Table ('[] :=> ProductsColumns), "products_deleted" ::: 'Table ('[] :=> ProductsColumns)]
 >>> :{
 let
-  manipulation :: Manipulation with (Public ProductsSchema) '[ 'NotNull 'PGdate] '[]
-  manipulation = with
+  manp :: Manipulation with (Public ProductsSchema) '[ 'NotNull 'PGdate] '[]
+  manp = with
     (deleteFrom #products NoUsing (#date .< param @1) (Returning Star) `as` #del)
     (insertInto_ #products_deleted (Subquery (select Star (from (common #del)))))
-in printSQL manipulation
+in printSQL manp
 :}
 WITH "del" AS (DELETE FROM "products" AS "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" AS "products_deleted" SELECT * FROM "del" AS "del"
 -}
