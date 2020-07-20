@@ -73,7 +73,7 @@ The general `Query` type is parameterized by
 * @params :: [NullType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
 * @row :: RowType@ - return type of the `Query`.
 
-Let's see some examples of queries.
+Let's see some `Query` examples.
 
 simple query:
 
