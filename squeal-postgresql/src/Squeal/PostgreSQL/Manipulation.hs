@@ -65,8 +65,11 @@ import Squeal.PostgreSQL.Type.Schema
 
 {- |
 A `Manipulation` is a statement which may modify data in the database,
-but does not alter its schemas. Examples are inserts, updates and deletes.
-A `Query` is also considered a `Manipulation` even though it does not modify data.
+but does not alter its schemas. Examples are
+`Squeal.PostgreSQL.Manipulation.Insert.insertInto`s,
+`Squeal.PostgreSQL.Manipulation.Update.update`s and
+`Squeal.PostgreSQL.Manipulation.Delete.deleteFrom`s.
+A `queryStatement` is also considered a `Manipulation` even though it does not modify data.
 
 The general `Manipulation` type is parameterized by
 
@@ -74,6 +77,8 @@ The general `Manipulation` type is parameterized by
 * @db :: SchemasType@ - scope for all `Squeal.PostgreSQL.Query.From.table`s and `Squeal.PostgreSQL.Query.From.view`s,
 * @params :: [NullType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
 * @row :: RowType@ - return type of the `Manipulation`.
+
+Let's see some examples of `Manipulation`s.
 
 simple insert:
 
@@ -234,7 +239,7 @@ instance With Manipulation where
 
 {- |
 The `Manipulation_` type is parameterized by a @db@ `SchemasType`,
-against which the query is type-checked, an input @params@ Haskell `Type`,
+against which it is type-checked, an input @params@ Haskell `Type`,
 and an ouput row Haskell `Type`.
 
 Generally, @params@ will be a Haskell tuple or record whose entries
@@ -294,7 +299,7 @@ queryStatement
   -> Manipulation with db params columns
 queryStatement q = UnsafeManipulation $ renderSQL q
 
--- | A `ReturningClause` computes and return value(s) based
+-- | A `ReturningClause` computes and returns value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
 -- useful for obtaining values that were supplied by defaults, such as a
 -- serial sequence number. However, any expression using the table's columns
@@ -303,7 +308,7 @@ queryStatement q = UnsafeManipulation $ renderSQL q
 -- but not updated because an `Squeal.PostgreSQL.Manipulation.Insert.OnConflict`
 -- `Squeal.PostgreSQL.Manipulation.Insert.DoUpdate` condition was not satisfied,
 -- the row will not be returned. `Returning` `Star` will return all columns
--- in the row. Use `Returning` `Nil` in the common case where no return
+-- in the row. Use `Returning_` `Nil` in the common case where no return
 -- values are desired.
 newtype ReturningClause with db params from row =
   Returning (Selection  'Ungrouped '[] with db params from row)
