@@ -31,8 +31,8 @@ data manipulation language
 
 module Squeal.PostgreSQL.Manipulation
   ( -- * Manipulation
-    Manipulation_
-  , Manipulation (..)
+    Manipulation (..)
+  , Manipulation_
   , queryStatement
   , ReturningClause (..)
   , pattern Returning_
@@ -73,7 +73,149 @@ The general `Manipulation` type is parameterized by
 * @with :: FromType@ - scope for all `Squeal.PostgreSQL.Query.From.common` table expressions,
 * @db :: SchemasType@ - scope for all `Squeal.PostgreSQL.Query.From.table`s and `Squeal.PostgreSQL.Query.From.view`s,
 * @params :: [NullType]@ - scope for all `Squeal.Expression.Parameter.parameter`s,
-* @row :: RowType@ - return type of the `Query`.
+* @row :: RowType@ - return type of the `Manipulation`.
+
+simple insert:
+
+>>> type Columns = '["col1" ::: 'NoDef :=> 'Null 'PGint4, "col2" ::: 'Def :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> :{
+let
+  manipulation :: Manipulation with (Public Schema) '[] '[]
+  manipulation =
+    insertInto_ #tab (Values_ (Set 2 `as` #col1 :* Default `as` #col2))
+in printSQL manipulation
+:}
+INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES ((2 :: int4), DEFAULT)
+
+out-of-line parameterized insert:
+
+>>> type Columns = '["col1" ::: 'Def :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> :{
+let
+  manipulation :: Manipulation with (Public Schema) '[ 'NotNull 'PGint4] '[]
+  manipulation =
+    insertInto_ #tab $ Values_
+      (Default `as` #col1 :* Set (param @1) `as` #col2)
+in printSQL manipulation
+:}
+INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES (DEFAULT, ($1 :: int4))
+
+in-line parameterized insert:
+
+>>> type Columns = '["col1" ::: 'Def :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> :{
+data Row = Row { col1 :: Optional SOP.I ('Def :=> Int32), col2 :: Int32 }
+  deriving stock (GHC.Generic)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+:}
+
+>>> :{
+let
+  manipulation :: Row -> Row -> Manipulation with (Public Schema) '[] '[]
+  manipulation row1 row2 = insertInto_ #tab $ inlineValues row1 [row2]
+  row1 = Row {col1 = Default, col2 = 2 :: Int32}
+  row2 = Row {col1 = NotDefault (3 :: Int32), col2 = 4 :: Int32}
+in printSQL (manipulation row1 row2)
+:}
+INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES (DEFAULT, (2 :: int4)), ((3 :: int4), (4 :: int4))
+
+returning insert:
+
+>>> :{
+let
+  manipulation :: Manipulation with (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4]
+  manipulation =
+    insertInto #tab (Values_ (Set 2 `as` #col1 :* Set 3 `as` #col2))
+      OnConflictDoRaise (Returning #col1)
+in printSQL manipulation
+:}
+INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES ((2 :: int4), (3 :: int4)) RETURNING "col1" AS "col1"
+
+upsert:
+
+>>> type CustomersColumns = '["name" ::: 'NoDef :=> 'NotNull 'PGtext, "email" ::: 'NoDef :=> 'NotNull 'PGtext]
+>>> type CustomersConstraints = '["uq" ::: 'Unique '["name"]]
+>>> type CustomersSchema = '["customers" ::: 'Table (CustomersConstraints :=> CustomersColumns)]
+>>> :{
+let
+  manipulation :: Manipulation with (Public CustomersSchema) '[] '[]
+  manipulation =
+    insertInto #customers
+      (Values_ (Set "John Smith" `as` #name :* Set "john@smith.com" `as` #email))
+      (OnConflict (OnConstraint #uq)
+        (DoUpdate (Set (#excluded ! #email <> "; " <> #customers ! #email) `as` #email) []))
+      (Returning_ Nil)
+in printSQL manipulation
+:}
+INSERT INTO "customers" AS "customers" ("name", "email") VALUES ((E'John Smith' :: text), (E'john@smith.com' :: text)) ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || ((E'; ' :: text) || "customers"."email"))
+
+query insert:
+
+>>> :{
+let
+  manipulation :: Manipulation with (Public Schema) '[] '[]
+  manipulation = insertInto_ #tab (Subquery (select Star (from (table #tab))))
+in printSQL manipulation
+:}
+INSERT INTO "tab" AS "tab" SELECT * FROM "tab" AS "tab"
+
+update:
+
+>>> :{
+let
+  manipulation :: Manipulation with (Public Schema) '[] '[]
+  manipulation = update_ #tab (Set 2 `as` #col1) (#col1 ./= #col2)
+in printSQL manipulation
+:}
+UPDATE "tab" AS "tab" SET "col1" = (2 :: int4) WHERE ("col1" <> "col2")
+
+delete:
+
+>>> :{
+let
+  manipulation :: Manipulation with (Public Schema) '[] '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  manipulation = deleteFrom #tab NoUsing (#col1 .== #col2) (Returning Star)
+in printSQL manipulation
+:}
+DELETE FROM "tab" AS "tab" WHERE ("col1" = "col2") RETURNING *
+
+delete and using clause:
+
+>>> :{
+type Schema3 =
+  '[ "tab" ::: 'Table ('[] :=> Columns)
+   , "other_tab" ::: 'Table ('[] :=> Columns)
+   , "third_tab" ::: 'Table ('[] :=> Columns) ]
+:}
+
+>>> :{
+let
+  manipulation :: Manipulation with (Public Schema3) '[] '[]
+  manipulation =
+    deleteFrom #tab (Using (table #other_tab & also (table #third_tab)))
+    ( (#tab ! #col2 .== #other_tab ! #col2)
+    .&& (#tab ! #col2 .== #third_tab ! #col2) )
+    (Returning_ Nil)
+in printSQL manipulation
+:}
+DELETE FROM "tab" AS "tab" USING "other_tab" AS "other_tab", "third_tab" AS "third_tab" WHERE (("tab"."col2" = "other_tab"."col2") AND ("tab"."col2" = "third_tab"."col2"))
+
+with manipulation:
+
+>>> type ProductsColumns = '["product" ::: 'NoDef :=> 'NotNull 'PGtext, "date" ::: 'Def :=> 'NotNull 'PGdate]
+>>> type ProductsSchema = '["products" ::: 'Table ('[] :=> ProductsColumns), "products_deleted" ::: 'Table ('[] :=> ProductsColumns)]
+>>> :{
+let
+  manipulation :: Manipulation with (Public ProductsSchema) '[ 'NotNull 'PGdate] '[]
+  manipulation = with
+    (deleteFrom #products NoUsing (#date .< param @1) (Returning Star) `as` #del)
+    (insertInto_ #products_deleted (Subquery (select Star (from (common #del)))))
+in printSQL manipulation
+:}
+WITH "del" AS (DELETE FROM "products" AS "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" AS "products_deleted" SELECT * FROM "del" AS "del"
 -}
 newtype Manipulation
   (with :: FromType)
@@ -91,170 +233,56 @@ instance With Manipulation where
     "WITH" <+> commaSeparated (qtoList renderSQL ctes) <+> renderSQL manip
 
 {- |
-The top level `Manipulation_` type is parameterized by a @db@ `SchemasType`,
+The `Manipulation_` type is parameterized by a @db@ `SchemasType`,
 against which the query is type-checked, an input @params@ Haskell `Type`,
 and an ouput row Haskell `Type`.
-
-`Manipulation_` is a type family which resolves into a `Manipulation`,
-so don't be fooled by the input params and output row Haskell `Type`s,
-which are converted into appropriate
-Postgres @[@`NullType`@]@ params and `RowType` rows.
-Use a top-level `Squeal.PostgreSQL.Session.Statement.Statement` to
-fix actual Haskell input params and output rows.
-
-A top-level `Manipulation_` can be run
-using `Squeal.PostgreSQL.Session.manipulateParams`, or if @params = ()@
-using `Squeal.PostgreSQL.Session.manipulate`.
 
 Generally, @params@ will be a Haskell tuple or record whose entries
 may be referenced using positional
 `Squeal.PostgreSQL.Expression.Parameter.param`s and @row@ will be a
 Haskell record, whose entries will be targeted using overloaded labels.
 
+A `Manipulation_` can be run
+using `Squeal.PostgreSQL.Session.manipulateParams`, or if @params = ()@
+using `Squeal.PostgreSQL.Session.manipulate`.
+
+`Manipulation_` is a type family which resolves into a `Manipulation`,
+so don't be fooled by the input params and output row Haskell `Type`s,
+which are converted into appropriate
+Postgres @[@`NullType`@]@ params and `RowType` rows.
+Use a `Squeal.PostgreSQL.Session.Statement.manipulation` to
+fix actual Haskell input params and output rows.
+
 >>> :set -XDeriveAnyClass -XDerivingStrategies
+>>> type Columns = '["col1" ::: 'NoDef :=> 'Null 'PGint8, "col2" ::: 'Def :=> 'NotNull 'PGtext]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
-data Row a b = Row { col1 :: a, col2 :: b }
+data Row = Row { col1 :: Maybe Int64, col2 :: String }
   deriving stock (GHC.Generic)
   deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
 :}
 
-simple insert:
-
->>> type Columns = '["col1" ::: 'NoDef :=> 'Null 'PGint4, "col2" ::: 'Def :=> 'NotNull 'PGint4]
->>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
-  manipulation :: Manipulation_ (Public Schema) () ()
-  manipulation =
-    insertInto_ #tab (Values_ (Set 2 `as` #col1 :* Default `as` #col2))
-in printSQL manipulation
-:}
-INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES ((2 :: int4), DEFAULT)
-
-out-of-line parameterized insert:
-
->>> type Columns = '["col1" ::: 'Def :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
->>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
->>> :{
-let
-  manipulation :: Manipulation_ (Public Schema) (Only Int32) ()
-  manipulation =
-    insertInto_ #tab $ Values_
-      (Default `as` #col1 :* Set (param @1) `as` #col2)
-in printSQL manipulation
-:}
-INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES (DEFAULT, ($1 :: int4))
-
-in-line parameterized insert:
-
->>> type Columns = '["col1" ::: 'Def :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
->>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
->>> :{
-let
-  manipulation
-    :: Manipulation_ (Public Schema) () ()
-  manipulation =
-    insertInto_ #tab $ inlineValues
-      (Row {col1 = Default                , col2 = 2 :: Int32})
-      [Row {col1 = NotDefault (3 :: Int32), col2 = 4 :: Int32}]
-in printSQL manipulation
-:}
-INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES (DEFAULT, (2 :: int4)), ((3 :: int4), (4 :: int4))
-
-returning insert:
-
->>> :{
-let
-  manipulation :: Manipulation_ (Public Schema) () (Only Int32)
-  manipulation =
-    insertInto #tab (Values_ (Set 2 `as` #col1 :* Set 3 `as` #col2))
-      OnConflictDoRaise (Returning (#col1 `as` #fromOnly))
-in printSQL manipulation
-:}
-INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES ((2 :: int4), (3 :: int4)) RETURNING "col1" AS "fromOnly"
-
-upsert:
-
->>> type CustomersColumns = '["name" ::: 'NoDef :=> 'NotNull 'PGtext, "email" ::: 'NoDef :=> 'NotNull 'PGtext]
->>> type CustomersConstraints = '["uq" ::: 'Unique '["name"]]
->>> type CustomersSchema = '["customers" ::: 'Table (CustomersConstraints :=> CustomersColumns)]
->>> :{
-let
-  manipulation :: Manipulation_ (Public CustomersSchema) () ()
-  manipulation =
-    insertInto #customers
-      (Values_ (Set "John Smith" `as` #name :* Set "john@smith.com" `as` #email))
-      (OnConflict (OnConstraint #uq)
-        (DoUpdate (Set (#excluded ! #email <> "; " <> #customers ! #email) `as` #email) []))
-      (Returning_ Nil)
-in printSQL manipulation
-:}
-INSERT INTO "customers" AS "customers" ("name", "email") VALUES ((E'John Smith' :: text), (E'john@smith.com' :: text)) ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || ((E'; ' :: text) || "customers"."email"))
-
-query insert:
-
->>> :{
-let
-  manipulation :: Manipulation_ (Public Schema) () ()
-  manipulation = insertInto_ #tab (Subquery (select Star (from (table #tab))))
-in printSQL manipulation
-:}
-INSERT INTO "tab" AS "tab" SELECT * FROM "tab" AS "tab"
-
-update:
-
->>> :{
-let
-  manipulation :: Manipulation_ (Public Schema) () ()
-  manipulation = update_ #tab (Set 2 `as` #col1) (#col1 ./= #col2)
-in printSQL manipulation
-:}
-UPDATE "tab" AS "tab" SET "col1" = (2 :: int4) WHERE ("col1" <> "col2")
-
-delete:
-
->>> :{
-let
-  manipulation :: Manipulation_ (Public Schema) () (Row Int32 Int32)
-  manipulation = deleteFrom #tab NoUsing (#col1 .== #col2) (Returning Star)
-in printSQL manipulation
-:}
-DELETE FROM "tab" AS "tab" WHERE ("col1" = "col2") RETURNING *
-
-delete and using clause:
-
->>> :{
-type Schema3 =
-  '[ "tab" ::: 'Table ('[] :=> Columns)
-   , "other_tab" ::: 'Table ('[] :=> Columns)
-   , "third_tab" ::: 'Table ('[] :=> Columns) ]
+  manp :: Manipulation_ (Public Schema) (Int64, Int64) Row
+  manp = deleteFrom #tab NoUsing (#col1 .== param @1 + param @2) (Returning Star)
+  stmt :: Statement (Public Schema) (Int64, Int64) Row
+  stmt = manipulation manp
 :}
 
->>> :{
-let
-  manipulation :: Manipulation_ (Public Schema3) () ()
-  manipulation =
-    deleteFrom #tab (Using (table #other_tab & also (table #third_tab)))
-    ( (#tab ! #col2 .== #other_tab ! #col2)
-    .&& (#tab ! #col2 .== #third_tab ! #col2) )
-    (Returning_ Nil)
-in printSQL manipulation
-:}
-DELETE FROM "tab" AS "tab" USING "other_tab" AS "other_tab", "third_tab" AS "third_tab" WHERE (("tab"."col2" = "other_tab"."col2") AND ("tab"."col2" = "third_tab"."col2"))
-
-with manipulation:
-
->>> type ProductsColumns = '["product" ::: 'NoDef :=> 'NotNull 'PGtext, "date" ::: 'Def :=> 'NotNull 'PGdate]
->>> type ProductsSchema = '["products" ::: 'Table ('[] :=> ProductsColumns), "products_deleted" ::: 'Table ('[] :=> ProductsColumns)]
->>> :{
-let
-  manipulation :: Manipulation_ (Public ProductsSchema) (Only Day) ()
-  manipulation = with
-    (deleteFrom #products NoUsing (#date .< param @1) (Returning Star) `as` #del)
-    (insertInto_ #products_deleted (Subquery (select Star (from (common #del)))))
-in printSQL manipulation
-:}
-WITH "del" AS (DELETE FROM "products" AS "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" AS "products_deleted" SELECT * FROM "del" AS "del"
+>>> :type manp
+manp
+  :: Manipulation
+       '[]
+       '["public" ::: '["tab" ::: 'Table ('[] :=> Columns)]]
+       '[ 'NotNull 'PGint8, 'NotNull 'PGint8]
+       '["col1" ::: 'Null 'PGint8, "col2" ::: 'NotNull 'PGtext]
+>>> :type stmt
+stmt
+  :: Statement
+       '["public" ::: '["tab" ::: 'Table ('[] :=> Columns)]]
+       (Int64, Int64)
+       Row
 -}
 type family Manipulation_ (db :: SchemasType) (params :: Type) (row :: Type) where
   Manipulation_ db params row = Manipulation '[] db (TuplePG params) (RowPG row)
