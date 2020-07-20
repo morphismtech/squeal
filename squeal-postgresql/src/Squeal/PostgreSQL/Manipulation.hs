@@ -250,7 +250,7 @@ using `Squeal.PostgreSQL.Session.manipulate`.
 so don't be fooled by the input params and output row Haskell `Type`s,
 which are converted into appropriate
 Postgres @[@`NullType`@]@ params and `RowType` rows.
-Use a `Squeal.PostgreSQL.Session.Statement.manipulation` to
+Use `Squeal.PostgreSQL.Session.Statement.manipulation` to
 fix actual Haskell input params and output rows.
 
 >>> :set -XDeriveAnyClass -XDerivingStrategies
