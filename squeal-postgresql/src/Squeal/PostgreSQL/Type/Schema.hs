@@ -312,8 +312,7 @@ type family NotAllNull (columns :: ColumnsType) :: Constraint where
 
 -- | `NullifyType` is an idempotent that nullifies a `NullType`.
 type family NullifyType (ty :: NullType) :: NullType where
-  NullifyType ('Null ty) = 'Null ty
-  NullifyType ('NotNull ty) = 'Null ty
+  NullifyType (null ty) = 'Null ty
 
 -- | `NullifyRow` is an idempotent that nullifies a `RowType`.
 type family NullifyRow (columns :: RowType) :: RowType where
