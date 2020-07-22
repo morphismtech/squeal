@@ -77,7 +77,7 @@ Table Expressions
 -- | A `TableExpression` computes a table. The table expression contains
 -- a `fromClause` that is optionally followed by a `whereClause`,
 -- `groupByClause`, `havingClause`, `orderByClause`, `limitClause`
--- and `offsetClause`s. Trivial table expressions simply refer
+-- `offsetClause` and `lockingClauses`. Trivial table expressions simply refer
 -- to a table on disk, a so-called base table, but more complex expressions
 -- can be used to modify or combine base tables in various ways.
 data TableExpression
@@ -128,6 +128,7 @@ data TableExpression
     -- beginning to return rows. The rows are skipped before the limit count
     -- is applied.
     , lockingClauses :: [LockingClause from]
+    -- ^ `lockingClauses` can be added to a table expression with `lockRows`.
     } deriving (GHC.Generic)
 
 -- | Render a `TableExpression`
