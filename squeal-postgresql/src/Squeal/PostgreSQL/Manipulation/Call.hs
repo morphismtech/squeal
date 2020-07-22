@@ -67,10 +67,10 @@ unsafeCall pro x = UnsafeManipulation $
 >>> type Schema = '[ "p" ::: 'Procedure '[ 'NotNull 'PGint4 ] ]
 >>> :{
 let
-  p :: Expression 'Ungrouped '[] '[] (Public Schema) '[] '[] ('NotNull 'PGint4) -> Manipulation '[] (Public Schema) '[] '[]
-  p = call #p
+  p :: Manipulation '[] (Public Schema) '[] '[]
+  p = call #p 1
 in
-  printSQL (p 1)
+  printSQL p
 :}
 CALL "p"((1 :: int4))
 -}
@@ -97,15 +97,15 @@ unsafeCallN pro xs = UnsafeManipulation $
 
 {- | Call a user defined procedure.
 
->>> type Schema = '[ "p" ::: 'Procedure '[ 'NotNull 'PGint4, 'NotNull 'PGint4 ] ]
+>>> type Schema = '[ "p" ::: 'Procedure '[ 'NotNull 'PGint4, 'NotNull 'PGtext ] ]
 >>> :{
 let
-  p :: NP (Expression 'Ungrouped '[] '[] (Public Schema) '[] '[]) '[ 'NotNull 'PGint4, 'NotNull 'PGint4 ] -> Manipulation '[] (Public Schema) '[] '[]
-  p = callN #p
+  p :: Manipulation '[] (Public Schema) '[] '[]
+  p = callN #p (1 *: "hi")
 in
-  printSQL (p (1 *: 2))
+  printSQL p
 :}
-CALL "p"((1 :: int4), (2 :: int4))
+CALL "p"((1 :: int4), (E'hi' :: text))
 -}
 callN
   :: ( Has sch db schema
