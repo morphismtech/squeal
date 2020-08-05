@@ -240,7 +240,7 @@ in printSQL qry
 :}
 (SELECT * FROM "tab" AS "tab") UNION ALL (SELECT * FROM "tab" AS "tab")
 
-with:
+with query:
 
 >>> :{
 let

@@ -50,9 +50,42 @@ import Squeal.PostgreSQL.Type.Schema
 -- $setup
 -- >>> import Squeal.PostgreSQL
 
--- | `with` provides a way to write auxiliary statements for use in a larger query.
--- These statements, referred to as `CommonTableExpression`s, can be thought of as
--- defining temporary tables that exist just for one query.
+{- | `with` provides a way to write auxiliary statements for use in a larger query.
+These statements, referred to as `CommonTableExpression`s, can be thought of as
+defining temporary tables that exist just for one query.
+
+`with` can be used for a `Query`. Multiple `CommonTableExpression`s can be
+chained together with the `Path` constructor `:>>`, and each `CommonTableExpression`
+is constructed via overloaded `as`.
+
+>>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> :{
+let
+  qry :: Query lat with (Public Schema) params '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  qry = with (
+    select Star (from (table #tab)) `as` #cte1 :>>
+    select Star (from (common #cte1)) `as` #cte2
+    ) (select Star (from (common #cte2)))
+in printSQL qry
+:}
+WITH "cte1" AS (SELECT * FROM "tab" AS "tab"), "cte2" AS (SELECT * FROM "cte1" AS "cte1") SELECT * FROM "cte2" AS "cte2"
+
+You can use data-modifying statements in `with`. This allows you to perform several
+different operations in the same query. An example is:
+
+>>> type ProductsColumns = '["product" ::: 'NoDef :=> 'NotNull 'PGtext, "date" ::: 'Def :=> 'NotNull 'PGdate]
+>>> type ProductsSchema = '["products" ::: 'Table ('[] :=> ProductsColumns), "products_deleted" ::: 'Table ('[] :=> ProductsColumns)]
+>>> :{
+let
+  manp :: Manipulation with (Public ProductsSchema) '[ 'NotNull 'PGdate] '[]
+  manp = with
+    (deleteFrom #products NoUsing (#date .< param @1) (Returning Star) `as` #del)
+    (insertInto_ #products_deleted (Subquery (select Star (from (common #del)))))
+in printSQL manp
+:}
+WITH "del" AS (DELETE FROM "products" AS "products" WHERE ("date" < ($1 :: date)) RETURNING *) INSERT INTO "products_deleted" AS "products_deleted" SELECT * FROM "del" AS "del"
+-}
 class With statement where
   with
     :: Path (CommonTableExpression statement db params) with0 with1
@@ -65,21 +98,30 @@ instance With (Query lat) where
   with ctes query = UnsafeQuery $
     "WITH" <+> commaSeparated (qtoList renderSQL ctes) <+> renderSQL query
 
-{- |
+{- | A `withRecursive` `Query` can refer to its own output.
+A very simple example is this query to sum the integers from 1 through 100:
+
 >>> import Data.Monoid (Sum (..))
 >>> import Data.Int (Int64)
 >>> :{
   let
-    query :: Query_ schema () (Sum Int64)
-    query = withRecursive
-      ( values_ ((1 & astype int) `as` #n)
-        `unionAll`
-        select_ ((#n + 1) `as` #n)
-          (from (common #t) & where_ (#n .< 100)) `as` #t )
-      ( select_ (fromNull 0 (sum_ (All #n)) `as` #getSum) (from (common #t) & groupBy Nil))
-  in printSQL query
+    sum100 :: Statement db () (Sum Int64)
+    sum100 = query $
+      withRecursive
+        ( values_ ((1 & astype int) `as` #n)
+          `unionAll`
+          select_ ((#n + 1) `as` #n)
+            (from (common #t) & where_ (#n .< 100)) `as` #t )
+        ( select_
+            (fromNull 0 (sum_ (All #n)) `as` #getSum)
+            (from (common #t) & groupBy Nil) )
+  in printSQL sum100
 :}
 WITH RECURSIVE "t" AS ((SELECT * FROM (VALUES (((1 :: int4) :: int))) AS t ("n")) UNION ALL (SELECT ("n" + (1 :: int4)) AS "n" FROM "t" AS "t" WHERE ("n" < (100 :: int4)))) SELECT COALESCE(sum(ALL "n"), (0 :: int8)) AS "getSum" FROM "t" AS "t"
+
+The general form of a recursive WITH query is always a non-recursive term,
+then `union` (or `unionAll`), then a recursive term, where
+only the recursive term can contain a reference to the query's own output.
 -}
 withRecursive
   :: Aliased (Query lat (recursive ': with) db params) recursive
