@@ -52,6 +52,9 @@ import qualified Control.Monad.Trans.Writer.Strict as Strict
 import qualified Control.Monad.Trans.RWS.Lazy as Lazy
 import qualified Control.Monad.Trans.RWS.Strict as Strict
 
+-- $setup
+-- >>> import Squeal.PostgreSQL
+
 {- | `MonadPQ` is an @mtl@ style constraint, similar to
 `Control.Monad.State.Class.MonadState`, for using `Database.PostgreSQL.LibPQ`
 to run `Statement`s.
@@ -59,30 +62,108 @@ to run `Statement`s.
 class Monad pq => MonadPQ db pq | pq -> db where
 
   {- |
-  `executeParams` runs a `Statement`.
-  It calls `LibPQ.execParams` and doesn't afraid of anything.
+  `executeParams` runs a `Statement` which takes out-of-line `parameter`s.
+
+  >>> import Data.Int (Int32, Int64)
+  >>> import Data.Monoid (Sum(Sum))
+  >>> :{
+  let
+    sumOf :: Statement db (Int32, Int32) (Sum Int32)
+    sumOf = query $ values_ $
+      ( param @1 @('NotNull 'PGint4) +
+        param @2 @('NotNull 'PGint4)
+      ) `as` #getSum
+  in
+    withConnection "dbname=exampledb" $ do
+      result <- executeParams sumOf (2,2)
+      firstRow result
+  :}
+  Just (Sum {getSum = 4})
   -}
-  executeParams :: Statement db x y -> x -> pq (Result y)
+  executeParams
+    :: Statement db x y
+    -- ^ query or manipulation
+    -> x
+    -- ^ parameters
+    -> pq (Result y)
   default executeParams
     :: (MonadTrans t, MonadPQ db m, pq ~ t m)
-    => Statement db x y -> x -> pq (Result y)
+    => Statement db x y
+    -- ^ query or manipulation
+    -> x
+    -- ^ parameters
+    -> pq (Result y)
   executeParams statement params = lift $ executeParams statement params
 
   {- |
   `executeParams_` runs a returning-free `Statement`.
-  It calls `LibPQ.execParams` and doesn't afraid of anything.
+
+  >>> type Column = 'NoDef :=> 'NotNull 'PGint4
+  >>> type Columns = '["col1" ::: Column, "col2" ::: Column]
+  >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+  >>> type DB = Public Schema
+  >>> import Data.Int(Int32)
+  >>> :{
+  let
+    insertion :: Statement DB (Int32, Int32) ()
+    insertion = manipulation $ insertInto_ #tab $ Values_ $
+      Set (param @1 @('NotNull 'PGint4)) `as` #col1 :*
+      Set (param @2 @('NotNull 'PGint4)) `as` #col2
+    setup :: Definition (Public '[]) DB
+    setup = createTable #tab
+      ( notNullable int4 `as` #col1 :*
+        notNullable int4 `as` #col2
+      ) Nil
+    teardown :: Definition DB (Public '[])
+    teardown = dropTable #tab
+  in
+    withConnection "dbname=exampledb" $
+      define setup
+      & pqThen (executeParams_ insertion (2,2))
+      & pqThen (define teardown)
+  :}
+
   -}
-  executeParams_ :: Statement db x () -> x -> pq ()
+  executeParams_
+    :: Statement db x ()
+    -- ^ query or manipulation
+    -> x
+    -- ^ parameters
+    -> pq ()
   executeParams_ statement params = void $ executeParams statement params
 
-  {- |
-  `execute` runs a parameter-free `Statement`.
+  {- | `execute` runs a parameter-free `Statement`.
+
+  >>> import Data.Int(Int32)
+  >>> :{
+  let
+    two :: Expr ('NotNull 'PGint4)
+    two = 2
+    twoPlusTwo :: Statement db () (Only Int32)
+    twoPlusTwo = query $ values_ $ (two + two) `as` #fromOnly
+  in
+    withConnection "dbname=exampledb" $ do
+      result <- execute twoPlusTwo
+      firstRow result
+  :}
+  Just (Only {fromOnly = 4})
   -}
-  execute :: Statement db () y -> pq (Result y)
+  execute
+    :: Statement db () y
+    -- ^ query or manipulation
+    -> pq (Result y)
   execute statement = executeParams statement ()
 
-  {- |
-  `execute_` runs a parameter-free, returning-free `Statement`.
+  {- | `execute_` runs a parameter-free, returning-free `Statement`.
+
+  >>> :{
+  let
+    silence :: Statement db () ()
+    silence = manipulation $
+      UnsafeManipulation "Set client_min_messages TO WARNING"
+  in
+    withConnection "dbname=exampledb" $ execute_ silence
+  :}
   -}
   execute_ :: Statement db () () -> pq ()
   execute_ = void . execute
@@ -94,11 +175,19 @@ class Monad pq => MonadPQ db pq | pq -> db where
   -}
   executePrepared
     :: Traversable list
-    => Statement db x y -> list x -> pq (list (Result y))
+    => Statement db x y
+    -- ^ query or manipulation
+    -> list x
+    -- ^ list of parameters
+    -> pq (list (Result y))
   default executePrepared
     :: (MonadTrans t, MonadPQ db m, pq ~ t m)
     => Traversable list
-    => Statement db x y -> list x -> pq (list (Result y))
+    => Statement db x y
+    -- ^ query or manipulation
+    -> list x
+    -- ^ list of parameters
+    -> pq (list (Result y))
   executePrepared statement x = lift $ executePrepared statement x
 
   {- |
@@ -108,11 +197,19 @@ class Monad pq => MonadPQ db pq | pq -> db where
   -}
   executePrepared_
     :: Foldable list
-    => Statement db x () -> list x -> pq ()
+    => Statement db x ()
+    -- ^ query or manipulation
+    -> list x
+    -- ^ list of parameters
+    -> pq ()
   default executePrepared_
     :: (MonadTrans t, MonadPQ db m, pq ~ t m)
     => Foldable list
-    => Statement db x () -> list x -> pq ()
+    => Statement db x ()
+    -- ^ query or manipulation
+    -> list x
+    -- ^ list of parameters
+    -> pq ()
   executePrepared_ statement x = lift $ executePrepared_ statement x
 
 {- |
