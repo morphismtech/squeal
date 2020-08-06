@@ -74,7 +74,7 @@ class Monad pq => MonadPQ db pq | pq -> db where
         param @2 @('NotNull 'PGint4)
       ) `as` #getSum
   in
-    withConnection "dbname=exampledb" $ do
+    withConnection "host=localhost port=5432 dbname=exampledb" $ do
       result <- executeParams sumOf (2,2)
       firstRow result
   :}
@@ -117,7 +117,7 @@ class Monad pq => MonadPQ db pq | pq -> db where
     teardown :: Definition DB (Public '[])
     teardown = dropTable #tab
   in
-    withConnection "dbname=exampledb" $
+    withConnection "host=localhost port=5432 dbname=exampledb" $
       define setup
       & pqThen (executeParams_ insertion (2,2))
       & pqThen (define teardown)
@@ -141,7 +141,7 @@ class Monad pq => MonadPQ db pq | pq -> db where
     twoPlusTwo :: Statement db () (Only Int32)
     twoPlusTwo = query $ values_ $ (two + two) `as` #fromOnly
   in
-    withConnection "dbname=exampledb" $ do
+    withConnection "host=localhost port=5432 dbname=exampledb" $ do
       result <- execute twoPlusTwo
       firstRow result
   :}
@@ -161,7 +161,7 @@ class Monad pq => MonadPQ db pq | pq -> db where
     silence = manipulation $
       UnsafeManipulation "Set client_min_messages TO WARNING"
   in
-    withConnection "dbname=exampledb" $ execute_ silence
+    withConnection "host=localhost port=5432 dbname=exampledb" $ execute_ silence
   :}
   -}
   execute_ :: Statement db () () -> pq ()
@@ -182,7 +182,7 @@ class Monad pq => MonadPQ db pq | pq -> db where
         param @2 @('NotNull 'PGint4)
       ) `as` #getSum
   in
-    withConnection "dbname=exampledb" $ do
+    withConnection "host=localhost port=5432 dbname=exampledb" $ do
       results <- executePrepared sumOf [(2,2),(3,3),(4,4)]
       traverse firstRow results
   :}
@@ -229,7 +229,7 @@ class Monad pq => MonadPQ db pq | pq -> db where
     teardown :: Definition DB (Public '[])
     teardown = dropTable #tab
   in
-    withConnection "dbname=exampledb" $
+    withConnection "host=localhost port=5432 dbname=exampledb" $
       define setup
       & pqThen (executePrepared_ insertion [(2,2),(3,3),(4,4)])
       & pqThen (define teardown)
@@ -278,7 +278,7 @@ let
   teardown :: Definition DB (Public '[])
   teardown = dropTable #tab
 in
-  withConnection "dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
     & pqThen
       ( do
@@ -324,7 +324,7 @@ let
   teardown :: Definition DB (Public '[])
   teardown = dropTable #tab
 in
-  withConnection "dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
     & pqThen (manipulateParams_ insertion (2::Int32,2::Int32))
     & pqThen (define teardown)
@@ -365,7 +365,7 @@ let
   teardown :: Definition DB (Public '[])
   teardown = dropTable #tab
 in
-  withConnection "dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb" $
     define setup
     & pqThen
       ( do
@@ -392,7 +392,7 @@ let
   silence :: Manipulation_ db () ()
   silence = UnsafeManipulation "Set client_min_messages TO WARNING"
 in
-  withConnection "dbname=exampledb" $ manipulate_ silence
+  withConnection "host=localhost port=5432 dbname=exampledb" $ manipulate_ silence
 :}
 -}
 manipulate_
@@ -415,7 +415,7 @@ let
       param @2 @('NotNull 'PGint4)
     ) `as` #getSum
 in
-  withConnection "dbname=exampledb" $ do
+  withConnection "host=localhost port=5432 dbname=exampledb" $ do
     result <- runQueryParams sumOf (2::Int32,2::Int32)
     Just (Sum four) <- firstRow result
     liftIO $ print (four :: Int32)
@@ -444,7 +444,7 @@ let
   twoPlusTwo :: Query_ db () (Sum Int32)
   twoPlusTwo = values_ $ (2 + 2) `as` #getSum
 in
-  withConnection "dbname=exampledb" $ do
+  withConnection "host=localhost port=5432 dbname=exampledb" $ do
     result <- runQuery twoPlusTwo
     Just (Sum four) <- firstRow result
     liftIO $ print (four :: Int32)
