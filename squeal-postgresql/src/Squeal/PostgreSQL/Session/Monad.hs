@@ -122,7 +122,6 @@ class Monad pq => MonadPQ db pq | pq -> db where
       & pqThen (executeParams_ insertion (2,2))
       & pqThen (define teardown)
   :}
-
   -}
   executeParams_
     :: Statement db x ()
@@ -172,6 +171,22 @@ class Monad pq => MonadPQ db pq | pq -> db where
   `executePrepared` runs a `Statement` on a `Traversable`
   container by first preparing the statement, then running the prepared
   statement on each element.
+
+  >>> import Data.Int (Int32, Int64)
+  >>> import Data.Monoid (Sum(Sum))
+  >>> :{
+  let
+    sumOf :: Statement db (Int32, Int32) (Sum Int32)
+    sumOf = query $ values_ $
+      ( param @1 @('NotNull 'PGint4) +
+        param @2 @('NotNull 'PGint4)
+      ) `as` #getSum
+  in
+    withConnection "dbname=exampledb" $ do
+      results <- executePrepared sumOf [(2,2),(3,3),(4,4)]
+      traverse firstRow results
+  :}
+  [Just (Sum {getSum = 4}),Just (Sum {getSum = 6}),Just (Sum {getSum = 8})]
   -}
   executePrepared
     :: Traversable list
@@ -194,6 +209,31 @@ class Monad pq => MonadPQ db pq | pq -> db where
   `executePrepared_` runs a returning-free `Statement` on a `Foldable`
   container by first preparing the statement, then running the prepared
   statement on each element.
+
+  >>> type Column = 'NoDef :=> 'NotNull 'PGint4
+  >>> type Columns = '["col1" ::: Column, "col2" ::: Column]
+  >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+  >>> type DB = Public Schema
+  >>> import Data.Int(Int32)
+  >>> :{
+  let
+    insertion :: Statement DB (Int32, Int32) ()
+    insertion = manipulation $ insertInto_ #tab $ Values_ $
+      Set (param @1 @('NotNull 'PGint4)) `as` #col1 :*
+      Set (param @2 @('NotNull 'PGint4)) `as` #col2
+    setup :: Definition (Public '[]) DB
+    setup = createTable #tab
+      ( notNullable int4 `as` #col1 :*
+        notNullable int4 `as` #col2
+      ) Nil
+    teardown :: Definition DB (Public '[])
+    teardown = dropTable #tab
+  in
+    withConnection "dbname=exampledb" $
+      define setup
+      & pqThen (executePrepared_ insertion [(2,2),(3,3),(4,4)])
+      & pqThen (define teardown)
+  :}
   -}
   executePrepared_
     :: Foldable list
@@ -214,6 +254,41 @@ class Monad pq => MonadPQ db pq | pq -> db where
 
 {- |
 `manipulateParams` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`.
+
+>>> type Column = 'NoDef :=> 'NotNull 'PGint4
+>>> type Columns = '["col1" ::: Column, "col2" ::: Column]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> type DB = Public Schema
+>>> import Control.Monad.IO.Class
+>>> import Data.Int(Int32)
+>>> :{
+let
+  insertAdd :: Manipulation_ DB (Int32, Int32) (Only Int32)
+  insertAdd = insertInto #tab 
+    ( Values_ $
+        Set (param @1 @('NotNull 'PGint4)) `as` #col1 :*
+        Set (param @2 @('NotNull 'PGint4)) `as` #col2
+    ) OnConflictDoRaise
+    ( Returning_ ((#col1 + #col2) `as` #fromOnly) )
+  setup :: Definition (Public '[]) DB
+  setup = createTable #tab
+    ( notNullable int4 `as` #col1 :*
+      notNullable int4 `as` #col2
+    ) Nil
+  teardown :: Definition DB (Public '[])
+  teardown = dropTable #tab
+in
+  withConnection "dbname=exampledb" $
+    define setup
+    & pqThen
+      ( do
+          result <- manipulateParams insertAdd (2::Int32,2::Int32)
+          Just (Only answer) <- firstRow result
+          liftIO $ print (answer :: Int32)
+      )
+    & pqThen (define teardown)
+:}
+4
 -}
 manipulateParams ::
   ( MonadPQ db pq
@@ -229,6 +304,31 @@ manipulateParams = executeParams . manipulation
 {- |
 `manipulateParams_` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`,
 for a returning-free statement.
+
+>>> type Column = 'NoDef :=> 'NotNull 'PGint4
+>>> type Columns = '["col1" ::: Column, "col2" ::: Column]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> type DB = Public Schema
+>>> import Data.Int(Int32)
+>>> :{
+let
+  insertion :: Manipulation_ DB (Int32, Int32) ()
+  insertion = insertInto_ #tab $ Values_ $
+    Set (param @1 @('NotNull 'PGint4)) `as` #col1 :*
+    Set (param @2 @('NotNull 'PGint4)) `as` #col2
+  setup :: Definition (Public '[]) DB
+  setup = createTable #tab
+    ( notNullable int4 `as` #col1 :*
+      notNullable int4 `as` #col2
+    ) Nil
+  teardown :: Definition DB (Public '[])
+  teardown = dropTable #tab
+in
+  withConnection "dbname=exampledb" $
+    define setup
+    & pqThen (manipulateParams_ insertion (2::Int32,2::Int32))
+    & pqThen (define teardown)
+:}
 -}
 manipulateParams_ ::
   ( MonadPQ db pq
@@ -243,6 +343,39 @@ manipulateParams_ = executeParams_ . manipulation
 {- |
 `manipulate` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`,
 for a parameter-free statement.
+
+>>> type Column = 'NoDef :=> 'NotNull 'PGint4
+>>> type Columns = '["col1" ::: Column, "col2" ::: Column]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> type DB = Public Schema
+>>> import Control.Monad.IO.Class
+>>> import Data.Int(Int32)
+>>> :{
+let
+  insertTwoPlusTwo :: Manipulation_ DB () (Only Int32)
+  insertTwoPlusTwo = insertInto #tab 
+    (Values_ $ Set 2 `as` #col1 :* Set 2 `as` #col2)
+    OnConflictDoRaise
+    (Returning_ ((#col1 + #col2) `as` #fromOnly))
+  setup :: Definition (Public '[]) DB
+  setup = createTable #tab
+    ( notNullable int4 `as` #col1 :*
+      notNullable int4 `as` #col2
+    ) Nil
+  teardown :: Definition DB (Public '[])
+  teardown = dropTable #tab
+in
+  withConnection "dbname=exampledb" $
+    define setup
+    & pqThen
+      ( do
+          result <- manipulate insertTwoPlusTwo
+          Just (Only answer) <- firstRow result
+          liftIO $ print (answer :: Int32)
+      )
+    & pqThen (define teardown)
+:}
+4
 -}
 manipulate
   :: (MonadPQ db pq, GenericRow row y ys)
@@ -253,6 +386,14 @@ manipulate = execute . manipulation
 {- |
 `manipulate_` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`,
 for a returning-free, parameter-free statement.
+
+>>> :{
+let
+  silence :: Manipulation_ db () ()
+  silence = UnsafeManipulation "Set client_min_messages TO WARNING"
+in
+  withConnection "dbname=exampledb" $ manipulate_ silence
+:}
 -}
 manipulate_
   :: MonadPQ db pq
@@ -262,6 +403,24 @@ manipulate_ = execute_ . manipulation
 
 {- |
 `runQueryParams` runs a `Squeal.PostgreSQL.Query.Query`.
+
+>>> import Data.Int (Int32, Int64)
+>>> import Control.Monad.IO.Class
+>>> import Data.Monoid (Sum(Sum))
+>>> :{
+let
+  sumOf :: Query_ db (Int32, Int32) (Sum Int32)
+  sumOf = values_ $
+    ( param @1 @('NotNull 'PGint4) +
+      param @2 @('NotNull 'PGint4)
+    ) `as` #getSum
+in
+  withConnection "dbname=exampledb" $ do
+    result <- runQueryParams sumOf (2::Int32,2::Int32)
+    Just (Sum four) <- firstRow result
+    liftIO $ print (four :: Int32)
+:}
+4
 -}
 runQueryParams ::
   ( MonadPQ db pq
@@ -276,6 +435,21 @@ runQueryParams = executeParams . query
 {- |
 `runQuery` runs a `Squeal.PostgreSQL.Query.Query`,
 for a parameter-free statement.
+
+>>> import Data.Int (Int32, Int64)
+>>> import Control.Monad.IO.Class
+>>> import Data.Monoid (Sum(Sum))
+>>> :{
+let
+  twoPlusTwo :: Query_ db () (Sum Int32)
+  twoPlusTwo = values_ $ (2 + 2) `as` #getSum
+in
+  withConnection "dbname=exampledb" $ do
+    result <- runQuery twoPlusTwo
+    Just (Sum four) <- firstRow result
+    liftIO $ print (four :: Int32)
+:}
+4
 -}
 runQuery
   :: (MonadPQ db pq, SOP.IsRecord y ys, SOP.AllZip FromField row ys)
