@@ -9,7 +9,8 @@ insert statements
 -}
 
 {-# LANGUAGE
-    DeriveGeneric
+    AllowAmbiguousTypes
+  , DeriveGeneric
   , DerivingStrategies
   , FlexibleContexts
   , FlexibleInstances
@@ -33,17 +34,21 @@ module Squeal.PostgreSQL.Manipulation.Insert
   ( -- * Insert
     insertInto
   , insertInto_
+  , insertParamsInto
     -- * Clauses
   , QueryClause (..)
   , pattern Values_
   , inlineValues
   , inlineValues_
+  , ParamColumns (paramColumns)
+  , paramValues
   , ConflictClause (..)
   , ConflictTarget (..)
   , ConflictAction (..)
   ) where
 
 import Data.ByteString hiding (foldr)
+import GHC.TypeLits
 
 import qualified Generics.SOP as SOP
 import qualified Generics.SOP.Record as SOP
@@ -53,6 +58,8 @@ import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Default
 import Squeal.PostgreSQL.Expression.Inline
 import Squeal.PostgreSQL.Expression.Logic
+import Squeal.PostgreSQL.Expression.Parameter
+import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Render
@@ -136,6 +143,16 @@ insertInto_
 insertInto_ tab qry =
   insertInto tab qry OnConflictDoRaise (Returning_ Nil)
 
+insertParamsInto
+  :: ( Has sch db schema
+     , Has tab0 schema ('Table (cons :=> cols))
+     , SOP.SListI cols
+     , ParamColumns 0 db params cols
+     )
+  => Aliased (QualifiedAlias sch) (tab ::: tab0)
+  -> Manipulation with db params '[]
+insertParamsInto tab = insertInto_ tab paramValues
+
 -- | A `QueryClause` describes what to `insertInto` a table.
 data QueryClause with db params columns where
   Values
@@ -213,6 +230,31 @@ inlineValues
   -> [hask] -- ^ more
   -> QueryClause with db params columns
 inlineValues hask hasks = Values (inlineColumns hask) (inlineColumns <$> hasks)
+
+class ParamColumns n db params columns where
+  paramColumns :: NP (Aliased (Optional (Expression grp lat with db params from))) columns
+
+instance
+  ( Length params ~ n
+  ) => ParamColumns n db params '[] where
+    paramColumns = Nil 
+instance
+  ( HasParameter (n+1) params ty
+  , NullTyped db ty
+  , ParamColumns (n+1) db params columns
+  , KnownSymbol col
+  ) => ParamColumns n db params (col ::: 'NoDef :=> ty ': columns) where
+    paramColumns = Set (param @(n+1)) `as` (Alias @col) :* paramColumns @(n+1)
+instance
+  ( ParamColumns n db params columns
+  , KnownSymbol col
+  ) => ParamColumns n db params (col ::: 'Def :=> ty ': columns) where
+    paramColumns = Default `as` (Alias @col) :* paramColumns @n
+
+paramValues
+  :: (SOP.SListI columns, ParamColumns 0 db params columns)
+  => QueryClause with db params columns
+paramValues = Values_ (paramColumns @0)
 
 -- | A `ConflictClause` specifies an action to perform upon a constraint
 -- violation. `OnConflictDoRaise` will raise an error.

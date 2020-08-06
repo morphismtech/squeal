@@ -30,20 +30,13 @@ module Squeal.PostgreSQL.Expression.Parameter
   ( -- * Parameter
     HasParameter (parameter)
   , param
-  , ParamColumns (paramColumns)
-  , paramValues
   ) where
 
-import Generics.SOP
 import GHC.TypeLits
 
 import Squeal.PostgreSQL.Expression
-import Squeal.PostgreSQL.Expression.Default
 import Squeal.PostgreSQL.Expression.Type
-import Squeal.PostgreSQL.Manipulation.Insert
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Type.Alias
-import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
@@ -87,27 +80,3 @@ param
    . (NullTyped db ty, HasParameter n params ty)
   => Expression grp lat with db params from ty -- ^ param
 param = parameter @n (nulltype @db)
-
-class ParamColumns n db params columns where
-  paramColumns :: NP (Aliased (Optional (Expression grp lat with db params from))) columns
-instance
-  ( Length params ~ n
-  ) => ParamColumns n db params '[] where
-    paramColumns = Nil 
-instance
-  ( HasParameter (n+1) params ty
-  , NullTyped db ty
-  , ParamColumns (n+1) db params columns
-  , KnownSymbol col
-  ) => ParamColumns n db params (col ::: 'NoDef :=> ty ': columns) where
-    paramColumns = Set (param @(n+1)) `as` (Alias @col) :* paramColumns @(n+1)
-instance
-  ( ParamColumns n db params columns
-  , KnownSymbol col
-  ) => ParamColumns n db params (col ::: 'Def :=> ty ': columns) where
-    paramColumns = Default `as` (Alias @col) :* paramColumns @n
-
-paramValues
-  :: (SListI columns, ParamColumns 0 db params columns)
-  => QueryClause with db params columns
-paramValues = Values_ (paramColumns @0)
