@@ -462,6 +462,41 @@ runQuery = execute . query
 `traversePrepared` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`
 on a `Traversable` container by first preparing the statement,
 then running the prepared statement on each element.
+
+>>> type Column = 'NoDef :=> 'NotNull 'PGint4
+>>> type Columns = '["col1" ::: Column, "col2" ::: Column]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> type DB = Public Schema
+>>> import Control.Monad.IO.Class
+>>> import Data.Int(Int32)
+>>> :{
+let
+  insertAdd :: Manipulation_ DB (Int32, Int32) (Only Int32)
+  insertAdd = insertInto #tab 
+    ( Values_ $
+        Set (param @1 @('NotNull 'PGint4)) `as` #col1 :*
+        Set (param @2 @('NotNull 'PGint4)) `as` #col2
+    ) OnConflictDoRaise
+    ( Returning_ ((#col1 + #col2) `as` #fromOnly) )
+  setup :: Definition (Public '[]) DB
+  setup = createTable #tab
+    ( notNullable int4 `as` #col1 :*
+      notNullable int4 `as` #col2
+    ) Nil
+  teardown :: Definition DB (Public '[])
+  teardown = dropTable #tab
+in
+  withConnection "host=localhost port=5432 dbname=exampledb" $
+    define setup
+    & pqThen
+      ( do
+          results <- traversePrepared insertAdd [(2::Int32,2::Int32),(3,3),(4,4)]
+          answers <- traverse firstRow results
+          liftIO $ print [answer :: Int32 | Just (Only answer) <- answers]
+      )
+    & pqThen (define teardown)
+:}
+[4,6,8]
 -}
 traversePrepared
   :: ( MonadPQ db pq
@@ -478,6 +513,41 @@ traversePrepared = executePrepared . manipulation
 
 {- |
 `forPrepared` is a flipped `traversePrepared`
+
+>>> type Column = 'NoDef :=> 'NotNull 'PGint4
+>>> type Columns = '["col1" ::: Column, "col2" ::: Column]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> type DB = Public Schema
+>>> import Control.Monad.IO.Class
+>>> import Data.Int(Int32)
+>>> :{
+let
+  insertAdd :: Manipulation_ DB (Int32, Int32) (Only Int32)
+  insertAdd = insertInto #tab 
+    ( Values_ $
+        Set (param @1 @('NotNull 'PGint4)) `as` #col1 :*
+        Set (param @2 @('NotNull 'PGint4)) `as` #col2
+    ) OnConflictDoRaise
+    ( Returning_ ((#col1 + #col2) `as` #fromOnly) )
+  setup :: Definition (Public '[]) DB
+  setup = createTable #tab
+    ( notNullable int4 `as` #col1 :*
+      notNullable int4 `as` #col2
+    ) Nil
+  teardown :: Definition DB (Public '[])
+  teardown = dropTable #tab
+in
+  withConnection "host=localhost port=5432 dbname=exampledb" $
+    define setup
+    & pqThen
+      ( do
+          results <- forPrepared [(2::Int32,2::Int32),(3,3),(4,4)] insertAdd
+          answers <- traverse firstRow results
+          liftIO $ print [answer :: Int32 | Just (Only answer) <- answers]
+      )
+    & pqThen (define teardown)
+:}
+[4,6,8]
 -}
 forPrepared
   :: ( MonadPQ db pq
@@ -494,10 +564,35 @@ forPrepared
 forPrepared = flip traversePrepared
 
 {- |
-`traversePrepared` runs a returning-free
+`traversePrepared_` runs a returning-free
 `Squeal.PostgreSQL.Manipulation.Manipulation` on a `Foldable`
 container by first preparing the statement, then running the prepared
 statement on each element.
+
+>>> type Column = 'NoDef :=> 'NotNull 'PGint4
+>>> type Columns = '["col1" ::: Column, "col2" ::: Column]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> type DB = Public Schema
+>>> import Data.Int(Int32)
+>>> :{
+let
+  insertion :: Manipulation_ DB (Int32, Int32) ()
+  insertion = insertInto_ #tab $ Values_ $
+    Set (param @1 @('NotNull 'PGint4)) `as` #col1 :*
+    Set (param @2 @('NotNull 'PGint4)) `as` #col2
+  setup :: Definition (Public '[]) DB
+  setup = createTable #tab
+    ( notNullable int4 `as` #col1 :*
+      notNullable int4 `as` #col2
+    ) Nil
+  teardown :: Definition DB (Public '[])
+  teardown = dropTable #tab
+in
+  withConnection "host=localhost port=5432 dbname=exampledb" $
+    define setup
+    & pqThen (traversePrepared_ insertion [(2::Int32,2::Int32),(3,3),(4,4)])
+    & pqThen (define teardown)
+:}
 -}
 traversePrepared_
   :: ( MonadPQ db pq
@@ -512,6 +607,31 @@ traversePrepared_ = executePrepared_ . manipulation
 
 {- |
 `forPrepared_` is a flipped `traversePrepared_`
+
+>>> type Column = 'NoDef :=> 'NotNull 'PGint4
+>>> type Columns = '["col1" ::: Column, "col2" ::: Column]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> type DB = Public Schema
+>>> import Data.Int(Int32)
+>>> :{
+let
+  insertion :: Manipulation_ DB (Int32, Int32) ()
+  insertion = insertInto_ #tab $ Values_ $
+    Set (param @1 @('NotNull 'PGint4)) `as` #col1 :*
+    Set (param @2 @('NotNull 'PGint4)) `as` #col2
+  setup :: Definition (Public '[]) DB
+  setup = createTable #tab
+    ( notNullable int4 `as` #col1 :*
+      notNullable int4 `as` #col2
+    ) Nil
+  teardown :: Definition DB (Public '[])
+  teardown = dropTable #tab
+in
+  withConnection "host=localhost port=5432 dbname=exampledb" $
+    define setup
+    & pqThen (forPrepared_ [(2::Int32,2::Int32),(3,3),(4,4)] insertion)
+    & pqThen (define teardown)
+:}
 -}
 forPrepared_
   :: ( MonadPQ db pq
