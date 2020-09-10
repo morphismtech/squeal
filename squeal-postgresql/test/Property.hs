@@ -156,7 +156,7 @@ minPosFloat = x
     x = encodeFloat (b^n - 1) (l - n - 1)
 
 connectionString :: ByteString
-connectionString = "host=localhost port=5432 dbname=exampledb"
+connectionString = "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 
 normalizeIntRange :: (Enum int, Ord int) => Range int -> Range int
 normalizeIntRange = \case

@@ -54,7 +54,7 @@ import Squeal.PostgreSQL.Type.Schema
 -- | The `LibPQ.Oid` of a `PGType`
 --
 -- >>> :set -XTypeApplications
--- >>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
+-- >>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 -- >>> runReaderT (oidOf @'[] @'PGbool) conn
 -- Oid 16
 --

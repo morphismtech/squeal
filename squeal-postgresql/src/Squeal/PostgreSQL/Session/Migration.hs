@@ -84,7 +84,7 @@ Now run the migrations.
 
 >>> import Control.Monad.IO.Class
 >>> :{
-withConnection "host=localhost port=5432 dbname=exampledb" $
+withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
   manipulate_ (UnsafeManipulation "SET client_min_messages TO WARNING;")
     -- suppress notices
   & pqThen (liftIO (putStrLn "Migrate"))
@@ -97,7 +97,7 @@ Rollback
 
 We can also create a simple executable using `mainMigrateIso`.
 
->>> let main = mainMigrateIso "host=localhost port=5432 dbname=exampledb" migrations
+>>> let main = mainMigrateIso "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" migrations
 
 >>> withArgs [] main
 Invalid command: "". Use:

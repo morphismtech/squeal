@@ -152,7 +152,7 @@ main :: IO ()
 main = do
   Char8.putStrLn "squeal"
   connectionString <- pure
-    "host=localhost port=5432 dbname=exampledb"
+    "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
   Char8.putStrLn $ "connecting to " <> connectionString
   connection0 <- connectdb connectionString
   Char8.putStrLn "setting up schema"
@@ -164,7 +164,7 @@ main = do
 
 main2 :: IO ()
 main2 =
-  withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
     define setup
     & pqThen session
     & pqThen (define teardown)
