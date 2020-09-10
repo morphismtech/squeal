@@ -17,11 +17,11 @@ jobs:
 
     services:
       postgres:
-        image: postgres:12.4
+        image: postgres:latest
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: root
           POSTGRES_DB: exampledb
+          POSTGRES_PASSWORD: password
         ports:
           - 5432:5432
         # needed because the postgres container does not provide a healthcheck
@@ -37,10 +37,6 @@ jobs:
           # cabal-version: 'latest'. Omitted, but defalts to 'latest'
           enable-stack: true
           stack-version: 'latest'
-
-      - name: dependencies
-        run: |
-          sudo apt-get -y install libpq-dev
 
       - name: build
         run: stack build --fast
