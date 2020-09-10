@@ -22,6 +22,8 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: exampledb
+        ports:
+          - 5432:5432
         # needed because the postgres container does not provide a healthcheck
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
 
@@ -36,20 +38,21 @@ jobs:
           enable-stack: true
           stack-version: 'latest'
 
+      - name: dependencies
+        run: |
+          sudo apt-get -y install libpq-dev
+
       - name: build
-        run: stack build
+        run: stack build --fast
 
       - name: test
-        run: stack test
-        env:
-          # The hostname used to communicate with the PostgreSQL service container
-          POSTGRES_HOST: postgres
+        run: stack test --fast
 
       - name: benchmark
-        run: stack bench
+        run: stack bench --fast
       
       - name: documentation
-        run: stack haddock
+        run: stack haddock --fast
 
       - name: cache
         uses: actions/cache@v2
