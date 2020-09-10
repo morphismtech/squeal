@@ -41,6 +41,9 @@ jobs:
 
       - name: test
         run: stack test
+        env:
+          # The hostname used to communicate with the PostgreSQL service container
+          POSTGRES_HOST: postgres
 
       - name: benchmark
         run: stack bench
