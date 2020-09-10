@@ -94,7 +94,7 @@ dropDB = withConnection connectionString $
   silence & pqThen (define teardown)
 
 connectionString :: ByteString
-connectionString = "host=localhost port=5432 dbname=exampledb"
+connectionString = "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 
 data Person = Person { name :: Maybe String, age :: Maybe Int32 }
   deriving (Eq, Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
@@ -125,7 +125,7 @@ spec = before_ setupDB . after_ dropDB $ do
 
     it "should manage concurrent transactions" $ do
       pool <- createConnectionPool
-        "host=localhost port=5432 dbname=exampledb" 1 0.5 10
+        "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" 1 0.5 10
       let
         qry :: Query_ (Public '[]) () (Only Char)
         qry = values_ (inline 'a' `as` #fromOnly)
