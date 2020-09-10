@@ -17,13 +17,13 @@ jobs:
 
     services:
       postgres:
-        image: postgres:latest
+        image: postgres:11
         env:
-          POSTGRES_USER: root
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: exampledb
-          POSTGRES_PASSWORD: password
         ports:
-          - 5432:5432
+        - 5432:5432
         # needed because the postgres container does not provide a healthcheck
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
 
@@ -43,6 +43,12 @@ jobs:
 
       - name: test
         run: stack test --fast
+        env:
+          PG_USER: postgres
+          PG_HOST: localhost
+          PG_DATABASE: exampledb
+          PG_PASSWORD: postgres
+          PG_PORT: ${{ job.services.postgres.ports['5432'] }}
 
       - name: benchmark
         run: stack bench --fast
