@@ -55,7 +55,7 @@ To specify the schema you wish to connect with, use type application.
 >>> type DB = '["public" ::: '["tab" ::: 'Table ('[] :=> '["col" ::: 'NoDef :=> 'Null 'PGint2])]]
 >>> :set -XTypeApplications
 >>> :set -XOverloadedStrings
->>> conn <- connectdb @DB "host=localhost port=5432 dbname=exampledb"
+>>> conn <- connectdb @DB "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 
 Note that, for now, squeal doesn't offer any protection from connecting
 with the wrong schema!

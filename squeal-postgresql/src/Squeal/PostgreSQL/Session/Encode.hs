@@ -85,7 +85,7 @@ import Squeal.PostgreSQL.Type.Schema
 -- into the binary format of a PostgreSQL `PGType`.
 class IsPG x => ToPG (db :: SchemasType) (x :: Type) where
   -- | >>> :set -XTypeApplications -XDataKinds
-  -- >>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
+  -- >>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
   -- >>> runReaderT (toPG @'[] False) conn
   -- "\NUL"
   --
@@ -311,7 +311,7 @@ foldlNP f z = \case
 `EncodeParams` describes an encoding of a Haskell `Type`
 into a list of parameter `NullType`s.
 
->>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
+>>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 >>> :{
 let
   encode :: EncodeParams '[]
@@ -338,7 +338,7 @@ instance Contravariant (EncodeParams db tys) where
 >>> import qualified GHC.Generics as GHC
 >>> import qualified Generics.SOP as SOP
 >>> data Two = Two Int16 String deriving (GHC.Generic, SOP.Generic)
->>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
+>>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 >>> :{
 let
   encode :: EncodeParams '[] '[ 'NotNull 'PGint2, 'NotNull 'PGtext] Two
@@ -376,7 +376,7 @@ nilParams = EncodeParams $ \ _ -> pure Nil
 
 {- | Cons a parameter encoding.
 
->>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
+>>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 >>> :{
 let
   encode :: EncodeParams '[]
@@ -400,7 +400,7 @@ infixr 5 .*
 
 {- | End a parameter encoding.
 
->>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
+>>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 >>> :{
 let
   encode :: EncodeParams '[]
@@ -424,7 +424,7 @@ infixl 8 *.
 
 {- | Encode 1 parameter.
 
->>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
+>>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 >>> :{
 let
   encode :: EncodeParams '[] '[ 'NotNull 'PGint4] Int32
@@ -443,7 +443,7 @@ aParam = EncodeParams $
 
 {- | Append parameter encodings.
 
->>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb"
+>>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 >>> :{
 let
   encode :: EncodeParams '[]

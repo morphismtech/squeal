@@ -287,7 +287,7 @@ let
     usersRows <- getRows usersResult
     liftIO $ print usersRows
 in
-  withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
     define setup
     & pqThen session
     & pqThen (define teardown)
