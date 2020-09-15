@@ -1,6 +1,6 @@
 # squeal
 
-![squeal-icon](http://www.emoticonswallpapers.com/emotion/cute-big-pig/cute-pig-smiley-046.gif)
+![squeal-icon](squeal.gif)
 
 [![GitHub CI](https://github.com/morphismtech/squeal/workflows/CI/badge.svg)](https://github.com/morphismtech/squeal/actions)
 
