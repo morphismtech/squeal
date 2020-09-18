@@ -1,5 +1,9 @@
 {-# LANGUAGE
     DataKinds
+  , DeriveAnyClass
+  , DeriveGeneric
+  , DerivingStrategies
+  , DerivingVia
   , FlexibleContexts
   , GADTs
   , LambdaCase
@@ -8,6 +12,7 @@
   , ScopedTypeVariables
   , TypeApplications
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Main (main) where
@@ -22,12 +27,17 @@ import Data.Time
 import Hedgehog hiding (Range)
 import Main.Utf8
 import Squeal.PostgreSQL hiding (check)
+import qualified Generics.SOP as SOP
+import qualified GHC.Generics as GHC
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Main as Main
 import qualified Hedgehog.Range as Range
 
 main :: IO ()
-main = withUtf8 $ Main.defaultMain [checkSequential roundtrips]
+main = withUtf8 $ do
+  withConnection connectionString $ define createSchwarma
+  Main.defaultMain [checkSequential roundtrips]
+  withConnection connectionString $ define dropSchwarma
 
 roundtrips :: Group
 roundtrips = Group "roundtrips"
@@ -53,6 +63,8 @@ roundtrips = Group "roundtrips"
   , roundtripOn (fmap normalizeLocalTime) tsrange (genRange genLocalTime)
   , roundtrip tstzrange (genRange genUTCTime)
   , roundtripOn normalizeIntRange daterange (genRange genDay)
+  , roundtrip (typedef #schwarma) genSchwarma
+  , roundtrip (vararray (typedef #schwarma)) genSchwarmaArray
   ]
   where
     genInt16 = Gen.int16 Range.exponentialBounded
@@ -105,24 +117,26 @@ roundtrips = Group "roundtrips"
     -- genTimeZone = Gen.element $ map (read @TimeZone)
     --   [ "UTC", "UT", "GMT", "EST", "EDT", "CST"
     --   , "CDT", "MST", "MDT", "PST", "PDT" ]
+    genSchwarma = Gen.enumBounded @_ @Schwarma
+    genSchwarmaArray = VarArray <$> Gen.list (Range.constant 1 10) genSchwarma
 
 roundtrip
-  :: forall db x
-   . ( ToPG db x, FromPG x, Inline x
-     , OidOf db (PG x), PGTyped db (PG x)
+  :: forall x
+   . ( ToPG DB x, FromPG x, Inline x
+     , OidOf DB (PG x), PGTyped DB (PG x)
      , Show x, Eq x )
-  => TypeExpression db ('NotNull (PG x))
+  => TypeExpression DB ('NotNull (PG x))
   -> Gen x
   -> (PropertyName, Property)
 roundtrip = roundtripOn id
 
 roundtripOn
-  :: forall db x
-   . ( ToPG db x, FromPG x, Inline x
-     , OidOf db (PG x), PGTyped db (PG x)
+  :: forall x
+   . ( ToPG DB x, FromPG x, Inline x
+     , OidOf DB (PG x), PGTyped DB (PG x)
      , Show x, Eq x )
   => (x -> x)
-  -> TypeExpression db ('NotNull (PG x))
+  -> TypeExpression DB ('NotNull (PG x))
   -> Gen x
   -> (PropertyName, Property)
 roundtripOn norm ty gen = propertyWithName $ do
@@ -203,3 +217,16 @@ normalizeUtf8 = (stripped =<<)
     stripped = \case
       '\NUL' -> ""
       ch -> [ch]
+
+data Schwarma = Chicken | Lamb | Beef
+  deriving stock (Eq, Show, Bounded, Enum, GHC.Generic)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+  deriving (IsPG, FromPG, ToPG db, Inline) via Enumerated Schwarma
+
+type DB = '["public" ::: '["schwarma" ::: 'Typedef (PG Schwarma)]]
+
+createSchwarma :: Definition '["public" ::: '[]] DB
+createSchwarma = createTypeEnumFrom @Schwarma #schwarma
+
+dropSchwarma :: Definition DB '["public" ::: '[]]
+dropSchwarma = dropType #schwarma
