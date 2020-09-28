@@ -137,6 +137,7 @@ test-suite properties
       base >= 4.13.0.0 && < 5.0
     , bytestring >= 0.10.10.0
     , hedgehog >= 1.0.2
+    , generics-sop >= 0.5.1.0
     , mtl >= 2.2.2
     , scientific >= 0.3.6.2
     , squeal-postgresql
