@@ -62,7 +62,8 @@ to run `Statement`s.
 class Monad pq => MonadPQ db pq | pq -> db where
 
   {- |
-  `executeParams` runs a `Statement` which takes out-of-line `parameter`s.
+  `executeParams` runs a `Statement` which takes out-of-line
+  `Squeal.PostgreSQL.Expression.Parameter.parameter`s.
 
   >>> import Data.Int (Int32, Int64)
   >>> import Data.Monoid (Sum(Sum))

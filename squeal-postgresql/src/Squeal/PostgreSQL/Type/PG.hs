@@ -5,8 +5,8 @@ Copyright: (c) Eitan Chatav, 2010
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-`Squeal.PostgreSQL.Type.PG` provides type families for turning Haskell
-`Type`s into corresponding Postgres types.
+Provides type families for turning Haskell `Type`s
+into corresponding Postgres types.
 -}
 {-# LANGUAGE
     AllowAmbiguousTypes

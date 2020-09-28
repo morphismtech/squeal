@@ -5,8 +5,8 @@ Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-`Squeal.PostgreSQL.Type.Schema` provides a type-level DSL
-for kinds of Postgres types, tables, schema, constraints, and more.
+Provides a type-level DSL for kinds of Postgres types,
+tables, schema, constraints, and more.
 It also defines useful type families to operate on these.
 -}
 
@@ -78,7 +78,6 @@ module Squeal.PostgreSQL.Type.Schema
   , PGNum
   , PGIntegral
   , PGFloating
-  , PGTypeOf
   , PGJsonType
   , PGJsonKey
   , SamePGType
@@ -150,7 +149,7 @@ data PGType
   | PGcomposite RowType -- ^ a composite type represents the structure of a row or record; it is essentially just a list of field names and their data types.
   | PGtsvector -- ^ A tsvector value is a sorted list of distinct lexemes, which are words that have been normalized to merge different variants of the same word.
   | PGtsquery -- ^ A tsquery value stores lexemes that are to be searched for.
-  | PGoid -- Object identifiers (OIDs) are used internally by PostgreSQL as primary keys for various system tables.
+  | PGoid -- ^ Object identifiers (OIDs) are used internally by PostgreSQL as primary keys for various system tables.
   | PGrange PGType -- ^ Range types are data types representing a range of values of some element type (called the range's subtype).
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
@@ -244,7 +243,7 @@ type family Uniquely
 -- :}
 type TableType = (TableConstraints,ColumnsType)
 
-{- | A `RowType` is a row of `NullType`. They correspond to Haskell
+{- | A `RowType` is a row of `NullType`s. They correspond to Haskell
 record types by means of `Squeal.PostgreSQL.Binary.RowPG` and are used in many places.
 
 >>> :{
@@ -259,8 +258,8 @@ type family PersonRow :: RowType where
 type RowType = [(Symbol,NullType)]
 
 {- | `FromType` is a row of `RowType`s. It can be thought of as
-a product, or horizontal gluing and is used in `Squeal.PostgreSQL.Query.FromClause`s
-and `Squeal.PostgreSQL.Query.TableExpression`s.
+a product, or horizontal gluing and is used in `Squeal.PostgreSQL.Query.From.FromClause`s
+and `Squeal.PostgreSQL.Query.Table.TableExpression`s.
 -}
 type FromType = [(Symbol,RowType)]
 
@@ -287,10 +286,6 @@ type PGFloating = '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 
 -- | Integral Postgres types.
 type PGIntegral = '[ 'PGint2, 'PGint4, 'PGint8]
-
--- | `PGTypeOf` forgets about @NULL@ and any column constraints.
-type family PGTypeOf (ty :: NullType) :: PGType where
-  PGTypeOf (null pg) = pg
 
 -- | Equality constraint on the underlying `PGType` of two columns.
 class SamePGType
@@ -322,15 +317,15 @@ type family NullifyRow (columns :: RowType) :: RowType where
 
 -- | `NullifyFrom` is an idempotent that nullifies a `FromType`
 -- used to nullify the left or right hand side of an outer join
--- in a `Squeal.PostgreSQL.Query.FromClause`.
+-- in a `Squeal.PostgreSQL.Query.From.FromClause`.
 type family NullifyFrom (tables :: FromType) :: FromType where
   NullifyFrom (table ::: columns ': tables) =
     table ::: NullifyRow columns ': NullifyFrom tables
   NullifyFrom '[] = '[]
 
 -- | @Create alias x xs@ adds @alias ::: x@ to the end of @xs@ and is used in
--- `Squeal.PostgreSQL.Definition.createTable` statements and in @ALTER TABLE@
--- `Squeal.PostgreSQL.Definition.addColumn`.
+-- `Squeal.PostgreSQL.Definition.Table.createTable` statements and in @ALTER TABLE@
+-- `Squeal.PostgreSQL.Definition.Table.addColumn`.
 type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
   Create alias x (alias ::: y ': xs) = TypeError
@@ -461,7 +456,7 @@ type family DropIfConstraintsInvolve column constraints where
         (DropIfConstraintsInvolve column constraints)
         (alias ::: constraint ': DropIfConstraintsInvolve column constraints)
 
--- | A `SchemumType` is a user-defined type, either a `Table`,
+-- | A `SchemumType` is a user-created type, like a `Table`,
 -- `View` or `Typedef`.
 data SchemumType
   = Table TableType
@@ -472,8 +467,14 @@ data SchemumType
   | Procedure [NullType]
   | UnsafeSchemum Symbol
 
--- | Use `:=>` to pair the parameter types with the return
--- type of a function.
+{- | Use `:=>` to pair the parameter types with the return
+type of a function.
+
+>>> :{
+type family Fn :: FunctionType where
+  Fn = '[ 'NotNull 'PGint4] :=> 'Returns ('NotNull 'PGint4)
+:}
+-}
 type FunctionType = ([NullType], ReturnsType)
 
 {- |
@@ -507,7 +508,7 @@ data ReturnsType
   = Returns NullType -- ^ function
   | ReturnsTable RowType -- ^ set returning function
 
-{- | The schema of a database consists of a list of aliased,
+{- | A schema of a database consists of a list of aliased,
 user-defined `SchemumType`s.
 
 >>> :{
@@ -555,7 +556,7 @@ type family Public (schema :: SchemaType) :: SchemasType
 -- | `IsPGlabel` looks very much like the `IsLabel` class. Whereas
 -- the overloaded label, `fromLabel` is used for column references,
 -- `label`s are used for enum terms. A `label` is called with
--- type application like `label @"beef"`.
+-- type application like `label` @"beef".
 class IsPGlabel (label :: Symbol) expr where label :: expr
 instance label ~ label1
   => IsPGlabel label (PGlabel label1) where label = PGlabel
