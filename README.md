@@ -1,6 +1,6 @@
 # squeal
 
-![squeal-icon](squeal.gif)
+![squeal-icon](https://github.com/morphismtech/squeal/blob/dev/squeal.gif)
 
 [![GitHub CI](https://github.com/morphismtech/squeal/workflows/CI/badge.svg)](https://github.com/morphismtech/squeal/actions)
 
