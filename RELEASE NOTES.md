@@ -2,8 +2,9 @@
 
 ### Version 0.7
 
-Thanks to Samuel Schlesinger, Adam Wespiser, Cullin Poreski and Mark Wotton
-for tons of contributions. Version 0.7 of Squeal makes many changes.
+Thanks to Samuel Schlesinger, Adam Wespiser, Cullin Poreski,
+Matthew Doty and Mark Wotton for tons of contributions.
+Version 0.7 of Squeal makes many changes.
 
 **Inter-schema Foreign Key Bug**
 Unfortunately, there was a bug in inter-schema foreign keys in previous
