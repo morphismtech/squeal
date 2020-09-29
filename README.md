@@ -155,7 +155,7 @@ let
         (text & nullable) `as` #email )
       ( primaryKey #id `as` #pk_emails :*
         foreignKey #user_id #users #id
-          OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
+          (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_user_id )
 :}
 ```
 
