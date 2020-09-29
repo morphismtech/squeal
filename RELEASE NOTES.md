@@ -1,5 +1,142 @@
 ## RELEASE NOTES
 
+### Version 0.7
+
+Thanks to Samuel Schlesinger, Adam Wespiser, Cullin Poreski and Mark Wotton
+for tons of contributions. Version 0.7 of Squeal makes many changes.
+
+**Inter-schema Foreign Key Bug**
+Unfortunately, there was a bug in inter-schema foreign keys in previous
+versions of Squeal. Essentially, it was erroneously assumed that
+foreign keys always point to tables in the public schema. To remedy this
+the `ForeignKey` type has changed kind from
+
+```Haskell
+>>> :kind 'ForeignKey
+'ForeignKey :: [Symbol]
+               -> Symbol -> [Symbol] -> TableConstraint
+```
+
+to
+
+```Haskell
+>>> :kind 'ForeignKey
+'ForeignKey :: [Symbol]
+               -> Symbol -> Symbol -> [Symbol] -> TableConstraint
+```
+
+To upgrade your database schemas type, you will have to change, e.g.
+
+```Haskell
+'ForeignKey '["foo_id1", "foo_id2"] "foo" '["id1", "id2"]
+```
+
+to
+
+To fix your database schemas type, you will have to change, e.g.
+
+```Haskell
+'ForeignKey '["foo_id1", "foo_id2"] "public" "foo" '["id1", "id2"]
+```
+
+**Locking Clauses**
+
+You can now add row level locking clauses to your `select` queries
+
+**Polymorphic Lateral Contexts**
+
+Previously, lateral contexts which are used for lateral joins
+and subquery expressions had to have monomorphic lateral contexts,
+which greatly reduced composability of queries involving lateral
+joins. Squeal 0.7 fixes this limitation, making it possible to
+have polymorphic lateral context! When looking up a column heretofore,
+the relevant typeclasses would search through `Join lat from`.
+This is the "correct" ordering as far as the structure from
+left to right in the query, making lat consistently ordered as
+one goes through nested lateral joins or nested subquery expressions.
+However, it doesn't really matter how the lookup orders the columns.
+And if the lookup searches through Join from lat instead then thanks
+to good old Haskell lazy list appending, if a query only references
+columns in from then it will work no matter the lat.
+With a small proviso; if you leave lat polymorphic,
+then you must qualify all columns since there could be more than
+one table even if from has only one table in it.
+
+**Decoders**
+
+The `DecodeRow` `Monad` now has a `MonadFail` instance.
+
+New row decoder combinators have been added. The functions
+`appendRows` and `consRow` let you build row decoders up
+from pieces.
+
+Previously, Squeal made it easy to decode enum types to Haskell
+enum types (sum types with nullary constructors) so long as
+the Haskell type exactly matches the enum type. However, because
+of limitations in Haskell - constructors must be capitalized,
+name conflicts are often disambiguated with extra letters, etc -
+it's often the case that their constructors won't exactly match the
+Postgres enum type's labels. The new function `enumValue` allows
+to define typesafe custom enum decoders, similar to how `rowValue`
+allows to define typesafe custom composite decoders.
+
+```Haskell
+>>> :{
+data Dir = North | East | South | West
+instance IsPG Dir where
+  type PG Dir = 'PGenum '["north", "south", "east", "west"]
+instance FromPG Dir where
+  fromPG = enumValue $
+    label @"north" North :*
+    label @"south" South :*
+    label @"east" East :*
+    label @"west" West
+:}
+```
+
+**Definitions**
+
+New DDL statements have been added allowing to rename and
+reset the schema of different schemum objects. Also, new DDL statements
+have been added for adding comments to schemum objects.
+
+**cmdTuples and cmdStatus**
+
+The `cmdTuples` and `cmdStatus` functions from `LibPQ` are now
+included.
+
+**PQ Monad Instances**
+
+the `PQ` `Monad` has been given instances for `MonadCatch`,
+`MonadThrow`, `MonadMask`, `MonadBase`, `MonadBaseControl`, and
+`MonadTransControl`.
+
+**Referential Actions**
+
+A new type `ReferentialAction` has been factored out of
+`OnDeleteClause`s and `OnUpdateClause`s. And Missing actions,
+`SetNotNull` and `SetDefault` are now included.
+
+To upgrade, change from e.g. `OnDeleteCascade` to `OnDelete Cascade`.
+
+**Array functions**
+
+Squeal now offers typesafe indexing for fixed length arrays and matrices,
+with new functions `index1` and `index2`. And new functions `arrAny`
+and `arrAll` have been added to enable comparisons to any or all elements
+of a variable length array.
+
+**Manipulations**
+
+Tables being manipulated are now re-aliasable, and updates can reference
+"from" clauses, actually called `UsingClause`s in Squeal, similar to deletes.
+
+**Other changes**
+New tests and bugfixes have been added. More support for encoding and decoding
+of different types has been added. Time values now use `iso8601` formatting
+for inlining. Also, the GitHub repo has moved from using Circle CI to using
+GitHub Actions for continuous integration testing.
+
 ### Version 0.6
 
 Version 0.6 makes a number of large changes and additions to Squeal.
