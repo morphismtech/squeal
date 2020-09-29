@@ -6,8 +6,8 @@ Maintainer: eitan@morphism.tech
 Stability: experimental
 
 Using Squeal in your application will come down to defining
-the @db@ of your database and including @PQ db db@ in your
-application's monad transformer stack, giving it an instance of `MonadPQ`.
+the @DB :: @`SchemasType` of your database and including @PQ DB DB@ in your
+application's monad transformer stack, giving it an instance of `MonadPQ` @DB@.
 -}
 
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}

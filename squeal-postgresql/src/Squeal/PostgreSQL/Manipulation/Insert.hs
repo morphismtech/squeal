@@ -73,6 +73,22 @@ before a database can be of much use is to insert data. Data is
 conceptually inserted one row at a time. Of course you can also insert
 more than one row, but there is no way to insert less than one row.
 Even if you know only some column values, a complete row must be created.
+
+>>> type CustomersColumns = '["name" ::: 'NoDef :=> 'NotNull 'PGtext, "email" ::: 'NoDef :=> 'NotNull 'PGtext]
+>>> type CustomersConstraints = '["uq" ::: 'Unique '["name"]]
+>>> type CustomersSchema = '["customers" ::: 'Table (CustomersConstraints :=> CustomersColumns)]
+>>> :{
+let
+  manp :: Manipulation with (Public CustomersSchema) '[] '[]
+  manp =
+    insertInto #customers
+      (Values_ (Set "John Smith" `as` #name :* Set "john@smith.com" `as` #email))
+      (OnConflict (OnConstraint #uq)
+        (DoUpdate (Set (#excluded ! #email <> "; " <> #customers ! #email) `as` #email) []))
+      (Returning_ Nil)
+in printSQL manp
+:}
+INSERT INTO "customers" AS "customers" ("name", "email") VALUES ((E'John Smith' :: text), (E'john@smith.com' :: text)) ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || ((E'; ' :: text) || "customers"."email"))
 -}
 insertInto
   :: ( Has sch db schema
@@ -95,7 +111,19 @@ insertInto (tab0 `As` tab) qry conflict ret = UnsafeManipulation $
   <> renderSQL conflict
   <> renderSQL ret
 
--- | Like `insertInto` but with `OnConflictDoRaise` and no `ReturningClause`.
+{- | Like `insertInto` but with `OnConflictDoRaise` and no `ReturningClause`.
+
+>>> type Columns = '["col1" ::: 'NoDef :=> 'Null 'PGint4, "col2" ::: 'Def :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> :{
+let
+  manp :: Manipulation with (Public Schema) '[] '[]
+  manp =
+    insertInto_ #tab (Values_ (Set 2 `as` #col1 :* Default `as` #col2))
+in printSQL manp
+:}
+INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES ((2 :: int4), DEFAULT)
+-}
 insertInto_
   :: ( Has sch db schema
      , Has tab0 schema ('Table table)

@@ -295,7 +295,7 @@ instance (KnownSymbol alias, InlineParam x ty)
   => InlineField (alias ::: x) (alias ::: ty) where
     inlineField (SOP.P x) = inlineParam x `as` Alias @alias
 
--- | Use a Haskell record as a inline a row of expressions.
+-- | Inline a Haskell record as a row of expressions.
 inlineFields
   :: ( SOP.IsRecord hask fields
      , SOP.AllZip InlineField fields row )
@@ -325,7 +325,7 @@ instance (KnownSymbol col, InlineParam x ty)
       Default -> Default `as` (Alias @col)
       Set (SOP.I x) -> Set (inlineParam x) `as` (Alias @col)
 
--- | Use a Haskell record as a inline list of columns
+-- | Inline a Haskell record as a list of columns.
 inlineColumns
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip InlineColumn xs columns )

@@ -63,6 +63,7 @@ unsafeNotNull = UnsafeExpression . renderSQL
 -- nullity as `NotNull`.
 monoNotNull
   :: (forall null. Expression grp lat with db params from (null ty))
+  -- ^ null polymorphic
   -> Expression grp lat with db params from ('NotNull ty)
 monoNotNull = id
 
@@ -114,9 +115,8 @@ matchNull y f x = ifThenElse (isNull x) y
 {-| right inverse to `fromNull`, if its arguments are equal then
 `nullIf` gives @NULL@.
 
->>> :set -XTypeApplications -XDataKinds
->>> let expr = nullIf (false *: param @1) :: Expression grp lat with db '[ 'NotNull 'PGbool] from ('Null 'PGbool)
->>> printSQL expr
+>>> :set -XTypeApplications
+>>> printSQL (nullIf (false *: param @1))
 NULLIF(FALSE, ($1 :: bool))
 -}
 nullIf :: '[ 'NotNull ty, 'NotNull ty] ---> 'Null ty

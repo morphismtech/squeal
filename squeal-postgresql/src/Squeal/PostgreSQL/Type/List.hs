@@ -91,11 +91,6 @@ one f = f :* Nil
 type family Elem x xs where
   Elem x '[] = 'False
   Elem x (x ': _) = 'True
-  Elem x (_ ': x ': _) = 'True
-  Elem x (_ ': _ ': x ': _) = 'True
-  Elem x (_ ': _ ': _ ': x ': _) = 'True
-  Elem x (_ ': _ ': _ ': _ ': x ': _) = 'True
-  Elem x (_ ': _ ': _ ': _ ': _ ': x ': _) = 'True
   Elem x (_ ': xs) = Elem x xs
 
 -- | @In x xs@ is a constraint that proves that @x@ is in @xs@.
@@ -110,9 +105,5 @@ Length '[Char,String,Bool,Double] :: Nat
 = 4
 -}
 type family Length (xs :: [k]) :: Nat where
-  Length (_ ': _ ': _ ': _ ': _ : xs) = 5 + Length xs
-  Length (_ ': _ ': _ ': _ : xs) = 4 + Length xs
-  Length (_ ': _ ': _ : xs) = 3 + Length xs
-  Length (_ ': _ : xs) = 2 + Length xs
-  Length (_ : xs) = 1 + Length xs
   Length '[] = 0
+  Length (_ : xs) = 1 + Length xs

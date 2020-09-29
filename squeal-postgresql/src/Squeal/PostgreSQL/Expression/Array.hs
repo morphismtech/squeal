@@ -143,17 +143,20 @@ index i arr = UnsafeExpression $
   parenthesized (renderSQL arr) <> "[" <> fromString (show i) <> "]"
 
 -- | Typesafe indexing of fixed length arrays.
+--
 -- >>> printSQL $ array1 (true *: false) & index1 @1
 -- (ARRAY[TRUE, FALSE])[1]
 index1
   :: forall i n ty
    . (1 <= i, i <= n, KnownNat i)
   => 'NotNull ('PGfixarray '[n] ty) --> ty
+  -- ^ vector index
 index1 arr = UnsafeExpression $
   parenthesized (renderSQL arr)
   <> "[" <> fromString (show (natVal (SOP.Proxy @i))) <> "]"
 
 -- | Typesafe indexing of fixed size matrices.
+--
 -- >>> printSQL $ array2 ((true *: false) *: (false *: true)) & index2 @1 @2
 -- (ARRAY[[TRUE, FALSE], [FALSE, TRUE]])[1][2]
 index2
@@ -162,6 +165,7 @@ index2
      , 1 <= j, j <= n, KnownNat j
      )
   => 'NotNull ('PGfixarray '[m,n] ty) --> ty
+  -- ^ matrix index
 index2 arr = UnsafeExpression $
   parenthesized (renderSQL arr)
   <> "[" <> fromString (show (natVal (SOP.Proxy @i))) <> "]"

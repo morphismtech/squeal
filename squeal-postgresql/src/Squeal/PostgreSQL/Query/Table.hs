@@ -77,7 +77,7 @@ Table Expressions
 -- | A `TableExpression` computes a table. The table expression contains
 -- a `fromClause` that is optionally followed by a `whereClause`,
 -- `groupByClause`, `havingClause`, `orderByClause`, `limitClause`
--- and `offsetClause`s. Trivial table expressions simply refer
+-- `offsetClause` and `lockingClauses`. Trivial table expressions simply refer
 -- to a table on disk, a so-called base table, but more complex expressions
 -- can be used to modify or combine base tables in various ways.
 data TableExpression
@@ -128,6 +128,7 @@ data TableExpression
     -- beginning to return rows. The rows are skipped before the limit count
     -- is applied.
     , lockingClauses :: [LockingClause from]
+    -- ^ `lockingClauses` can be added to a table expression with `lockRows`.
     } deriving (GHC.Generic)
 
 -- | Render a `TableExpression`
@@ -313,16 +314,16 @@ instance RenderSQL (HavingClause grp lat with db params from) where
     Having conditions ->
       " HAVING" <+> commaSeparated (renderSQL <$> conditions)
 
-{- !
+{- |
 If specific tables are named in a locking clause,
 then only rows coming from those tables are locked;
 any other tables used in the `Squeal.PostgreSQL.Query.Select.select` are simply read as usual.
 A locking clause with a `Nil` table list affects all tables used in the statement.
 If a locking clause is applied to a `view` or `subquery`,
 it affects all tables used in the `view` or `subquery`.
-However, these clauses do not apply to `with` queries referenced by the primary query.
-If you want row locking to occur within a `with` query,
-specify a `LockingClause` within the `with` query.
+However, these clauses do not apply to `Squeal.PostgreSQL.Query.With.with` queries referenced by the primary query.
+If you want row locking to occur within a `Squeal.PostgreSQL.Query.With.with` query,
+specify a `LockingClause` within the `Squeal.PostgreSQL.Query.With.with` query.
 -}
 data LockingClause from where
   For
