@@ -158,14 +158,14 @@ class IsPG y => FromPG y where
     , imaginary :: Double
     } deriving stock GHC.Generic
       deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-      deriving (IsPG, FromPG) via (Composite Complex)
+      deriving (IsPG, FromPG) via Composite Complex
   :}
 
   >>> :{
   data Direction = North | South | East | West
     deriving stock GHC.Generic
     deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-    deriving (IsPG, FromPG) via (Enumerated Direction)
+    deriving (IsPG, FromPG) via Enumerated Direction
   :}
 
   -}

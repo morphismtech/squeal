@@ -14,6 +14,7 @@ out-of-line parameters
   , FlexibleContexts
   , FlexibleInstances
   , FunctionalDependencies
+  , GADTs
   , KindSignatures
   , MultiParamTypeClasses
   , OverloadedStrings
@@ -55,8 +56,7 @@ class KnownNat n => HasParameter
   | n params -> ty where
     -- | `parameter` takes a `Nat` using type application and a `TypeExpression`.
     --
-    -- >>> let expr = parameter @1 int4 :: Expression lat '[] grp db '[ 'Null 'PGint4] from ('Null 'PGint4)
-    -- >>> printSQL expr
+    -- >>> printSQL (parameter @1 int4)
     -- ($1 :: int4)
     parameter
       :: TypeExpression db ty
@@ -64,15 +64,15 @@ class KnownNat n => HasParameter
     parameter ty = UnsafeExpression $ parenthesized $
       "$" <> renderNat @n <+> "::"
         <+> renderSQL ty
-instance {-# OVERLAPPING #-} HasParameter 1 (ty1:tys) ty1
-instance {-# OVERLAPPABLE #-} (KnownNat n, HasParameter (n-1) params ty)
-  => HasParameter n (ty' : params) ty
+instance {-# OVERLAPPING #-} params ~ (x ': xs) => HasParameter 1 params x
+instance {-# OVERLAPPABLE #-}
+  (KnownNat n, HasParameter (n-1) xs x, params ~ (y ': xs))
+  => HasParameter n params x
 
 -- | `param` takes a `Nat` using type application and for basic types,
 -- infers a `TypeExpression`.
 --
--- >>> let expr = param @1 :: Expression grp lat with db '[ 'Null 'PGint4] from ('Null 'PGint4)
--- >>> printSQL expr
+-- >>> printSQL (param @1 @('Null 'PGint4))
 -- ($1 :: int4)
 param
   :: forall n ty lat with db params from grp

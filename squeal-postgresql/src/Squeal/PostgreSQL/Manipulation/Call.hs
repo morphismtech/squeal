@@ -5,7 +5,7 @@ Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-update statements
+call statements
 -}
 
 {-# LANGUAGE
@@ -51,13 +51,14 @@ import Squeal.PostgreSQL.Type.Schema
 -- $setup
 -- >>> import Squeal.PostgreSQL
 
-{-
->>> :{
-printSQL $ unsafeCall "p" true
-:}
+{- |
+>>> printSQL $ unsafeCall "p" true
 CALL p(TRUE)
 -}
-unsafeCall :: ByteString -> Expression grp lat with db params from x -> Manipulation with db params '[]
+unsafeCall
+  :: ByteString -- ^ procedure to call
+  -> Expression 'Ungrouped '[] with db params '[] x -- ^ arguments
+  -> Manipulation with db params '[]
 unsafeCall pro x = UnsafeManipulation $
   "CALL" <+> pro <> parenthesized (renderSQL x)
 
@@ -66,49 +67,51 @@ unsafeCall pro x = UnsafeManipulation $
 >>> type Schema = '[ "p" ::: 'Procedure '[ 'NotNull 'PGint4 ] ]
 >>> :{
 let
-  p :: Expression 'Ungrouped '[] '[] (Public Schema) '[] '[] ('NotNull 'PGint4) -> Manipulation '[] (Public Schema) '[] '[]
-  p = call #p
+  p :: Manipulation '[] (Public Schema) '[] '[]
+  p = call #p 1
 in
-  printSQL (p 1)
+  printSQL p
 :}
 CALL "p"((1 :: int4))
 -}
 call
   :: ( Has sch db schema
      , Has pro schema ('Procedure '[x]) )
-  => QualifiedAlias sch pro
-  -> Expression grp lat with db params from x
+  => QualifiedAlias sch pro -- ^ procedure to call
+  -> Expression 'Ungrouped '[] with db params '[] x -- ^ arguments
   -> Manipulation with db params '[]
 call = unsafeCall . renderSQL
 
 
-{-
->>> :{
-printSQL $ unsafeCallN "p" (true :* false)
-:}
+{- |
+>>> printSQL $ unsafeCallN "p" (true *: false)
 CALL p(TRUE, FALSE)
 -}
-unsafeCallN :: SListI xs => ByteString -> NP (Expression grp lat with db params from) xs -> Manipulation with db params '[]
+unsafeCallN
+  :: SListI xs
+  => ByteString -- ^ procedure to call
+  -> NP (Expression 'Ungrouped '[] with db params '[]) xs -- ^ arguments
+  -> Manipulation with db params '[]
 unsafeCallN pro xs = UnsafeManipulation $ 
   "CALL" <+> pro <> parenthesized (renderCommaSeparated renderSQL xs)
 
 {- | Call a user defined procedure.
 
->>> type Schema = '[ "p" ::: 'Procedure '[ 'NotNull 'PGint4, 'NotNull 'PGint4 ] ]
+>>> type Schema = '[ "p" ::: 'Procedure '[ 'NotNull 'PGint4, 'NotNull 'PGtext ] ]
 >>> :{
 let
-  p :: NP (Expression 'Ungrouped '[] '[] (Public Schema) '[] '[]) '[ 'NotNull 'PGint4, 'NotNull 'PGint4 ] -> Manipulation '[] (Public Schema) '[] '[]
-  p = callN #p
+  p :: Manipulation '[] (Public Schema) '[] '[]
+  p = callN #p (1 *: "hi")
 in
-  printSQL (p (1 *: 2))
+  printSQL p
 :}
-CALL "p"((1 :: int4), (2 :: int4))
+CALL "p"((1 :: int4), (E'hi' :: text))
 -}
 callN
   :: ( Has sch db schema
      , Has pro schema ('Procedure xs)
      , SListI xs )
-  => QualifiedAlias sch pro
-  -> NP (Expression grp lat with db params from) xs
+  => QualifiedAlias sch pro -- ^ procedure to call
+  -> NP (Expression 'Ungrouped '[] with db params '[]) xs -- ^ arguments
   -> Manipulation with db params '[]
 callN = unsafeCallN . renderSQL

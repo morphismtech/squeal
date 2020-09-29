@@ -92,7 +92,7 @@ infix 4 .<=
 (.>) = unsafeBinaryOp ">"
 infix 4 .>
 
--- | >>> let expr = greatest [param @1] currentTimestamp :: Expression grp lat with db '[ 'NotNull 'PGtimestamptz] from ('NotNull 'PGtimestamptz)
+-- | >>> let expr = greatest [param @1] currentTimestamp
 -- >>> printSQL expr
 -- GREATEST(($1 :: timestamp with time zone), CURRENT_TIMESTAMP)
 greatest :: FunctionVar ty ty ty

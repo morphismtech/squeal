@@ -211,8 +211,8 @@ import Squeal.PostgreSQL.Type.Schema
 
 -- | A `Migration` consists of a name and a migration definition.
 data Migration def db0 db1 = Migration
-  { migrationName :: Text -- ^ The `name` of a `Migration`.
-    -- Each `name` in a `Migration` should be unique.
+  { migrationName :: Text -- ^ The name of a `Migration`.
+    -- Each `migrationName` should be unique.
   , migrationDef :: def db0 db1 -- ^ The migration of a `Migration`.
   } deriving (GHC.Generic)
 instance QFunctor Migration where

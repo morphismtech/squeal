@@ -82,7 +82,11 @@ table
 table (tab `As` alias) = UnsafeFromClause $
   renderSQL tab <+> "AS" <+> renderSQL alias
 
--- | `subquery` derives a table from a `Query`.
+{- | `subquery` derives a table from a `Query`.
+The subquery may not reference columns provided by preceding `FromClause` items.
+Use `Squeal.PostgreSQL.Query.From.Join.JoinLateral`
+if the subquery must reference columns provided by preceding `FromClause` items.
+-}
 subquery
   :: Aliased (Query lat with db params) query
   -- ^ aliased `Query`
