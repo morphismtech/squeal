@@ -34,8 +34,6 @@ To upgrade your database schemas type, you will have to change, e.g.
 
 to
 
-To fix your database schemas type, you will have to change, e.g.
-
 ```Haskell
 'ForeignKey '["foo_id1", "foo_id2"] "public" "foo" '["id1", "id2"]
 ```
