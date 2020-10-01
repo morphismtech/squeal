@@ -99,6 +99,10 @@ New DDL statements have been added allowing to rename and
 reset the schema of different schemum objects. Also, new DDL statements
 have been added for adding comments to schemum objects.
 
+**Procedures**
+
+Squeal now supports procedure definitions and calls.
+
 **cmdTuples and cmdStatus**
 
 The `cmdTuples` and `cmdStatus` functions from `LibPQ` are now
