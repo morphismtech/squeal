@@ -59,6 +59,14 @@ insertUser :: Manipulation_ DB User ()
 insertUser = insertInto_ #users
   (Values_ (Default `as` #id :* Set (param @1) `as` #name))
 
+insertUsers :: Text -> [Text] -> Statement DB () ()
+insertUsers name1 names = manipulation $ insertInto_ #users $ Values
+  (Default `as` #id :* Set (inline name1) `as` #name)
+  [Default `as` #id :* Set (inline namei) `as` #name | namei <- names]
+
+deleteUser :: Text -> Statement DB () ()
+deleteUser name1 = manipulation $ deleteFrom_ #users (#name .== inline name1)
+
 setup :: Definition (Public '[]) DB
 setup =
   createTable #users
@@ -71,9 +79,11 @@ setup =
 teardown :: Definition DB (Public '[])
 teardown = dropType #person >>> dropTable #users
 
+silent :: Statement db () ()
+silent = manipulation $ UnsafeManipulation "Set client_min_messages TO WARNING"
+
 silence :: MonadPQ db pq => pq ()
-silence = manipulate_ $
-  UnsafeManipulation "SET client_min_messages TO WARNING;"
+silence = execute_ silent
 
 setupDB :: IO ()
 setupDB = withConnection connectionString $
@@ -84,7 +94,7 @@ dropDB = withConnection connectionString $
   silence & pqThen (define teardown)
 
 connectionString :: ByteString
-connectionString = "host=localhost port=5432 dbname=exampledb"
+connectionString = "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 
 data Person = Person { name :: Maybe String, age :: Maybe Int32 }
   deriving (Eq, Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
@@ -115,7 +125,7 @@ spec = before_ setupDB . after_ dropDB $ do
 
     it "should manage concurrent transactions" $ do
       pool <- createConnectionPool
-        "host=localhost port=5432 dbname=exampledb" 1 0.5 10
+        "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" 1 0.5 10
       let
         qry :: Query_ (Public '[]) () (Only Char)
         qry = values_ (inline 'a' `as` #fromOnly)
@@ -210,3 +220,30 @@ spec = before_ setupDB . after_ dropDB $ do
       out2_array `shouldBe` Just (Only people)
       unsafe_array `shouldBe` Just (Only (VarArray [Composite adam]))
       nothings `shouldBe` Just (Only (Person Nothing Nothing))
+
+  describe "cmdStatus and cmdTuples" $ do
+
+    let
+      statusAndTuples stmnt = withConnection connectionString $ do
+        result <- execute stmnt
+        status <- cmdStatus result
+        tuples <- cmdTuples result
+        return (status, tuples)
+
+    it "should tell you about the command and the number of rows effected" $ do
+
+      (status1, tuples1) <- statusAndTuples (insertUsers "Jonah" ["Isaiah"])
+      status1 `shouldBe` "INSERT 0 2"
+      tuples1 `shouldBe` Just 2
+
+      (status2, tuples2) <- statusAndTuples (deleteUser "Noah")
+      status2 `shouldBe` "DELETE 0"
+      tuples2 `shouldBe` Just 0
+
+      (status3, tuples3) <- statusAndTuples (deleteUser "Jonah")
+      status3 `shouldBe` "DELETE 1"
+      tuples3 `shouldBe` Just 1
+
+      (status4, tuples4) <- statusAndTuples silent
+      status4 `shouldBe` "SET"
+      tuples4 `shouldBe` Nothing

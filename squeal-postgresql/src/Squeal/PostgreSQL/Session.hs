@@ -6,8 +6,8 @@ Maintainer: eitan@morphism.tech
 Stability: experimental
 
 Using Squeal in your application will come down to defining
-the @db@ of your database and including @PQ db db@ in your
-application's monad transformer stack, giving it an instance of `MonadPQ`.
+the @DB :: @`SchemasType` of your database and including @PQ DB DB@ in your
+application's monad transformer stack, giving it an instance of `MonadPQ` @DB@.
 -}
 
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
@@ -38,9 +38,12 @@ module Squeal.PostgreSQL.Session
   ) where
 
 import Control.Category
+import Control.Monad.Base (MonadBase(..))
+import Control.Monad.Catch (MonadCatch(..), MonadThrow(..), MonadMask(..))
 import Control.Monad.Except
 import Control.Monad.Morph
 import Control.Monad.Reader
+import Control.Monad.Trans.Control (MonadBaseControl(..), MonadTransControl(..))
 import UnliftIO (MonadUnliftIO (..), bracket,  throwIO)
 import Data.ByteString (ByteString)
 import Data.Foldable
@@ -260,6 +263,53 @@ instance (MonadUnliftIO m, db0 ~ db1)
   withRunInIO inner = PQ $ \conn ->
     withRunInIO $ \(run :: (forall x . m x -> IO x)) ->
       K <$> inner (\pq -> run $ unK <$> unPQ pq conn)
+
+instance (MonadBase b m)
+  => MonadBase b (PQ schema schema m) where
+  liftBase = lift . liftBase
+
+instance db0 ~ db1 => MonadTransControl (PQ db0 db1) where
+  type StT (PQ db0 db1) a = a
+  liftWith f = PQ $ \conn -> K <$> (f $ \pq -> unK <$> unPQ pq conn)
+  restoreT ma = PQ . const $ K <$> ma
+
+-- | A snapshot of the state of a `PQ` computation, used in MonadBaseControl Instance
+type PQRun schema =
+  forall m x. Monad m => PQ schema schema m x -> m (K x schema)
+
+instance (MonadBaseControl b m, schema0 ~ schema1)
+  => MonadBaseControl b (PQ schema0 schema1 m) where
+  type StM (PQ schema0 schema1 m) x = StM m (K x schema0)
+  restoreM = PQ . const . restoreM
+  liftBaseWith f =
+    pqliftWith $ \ run -> liftBaseWith $ \ runInBase -> f $ runInBase . run
+    where
+      pqliftWith :: Functor m => (PQRun schema -> m a) -> PQ schema schema m a
+      pqliftWith g = PQ $ \ conn ->
+        fmap K (g $ \ pq -> unPQ pq conn)
+
+instance (MonadThrow m, db0 ~ db1)
+  => MonadThrow (PQ db0 db1 m) where
+  throwM = lift . throwM
+
+instance (MonadCatch m, db0 ~ db1)
+  => MonadCatch (PQ db0 db1 m) where
+  catch (PQ m) f = PQ $ \k -> m k `catch` \e -> unPQ (f e) k
+
+instance (MonadMask m, db0 ~ db1)
+  => MonadMask (PQ db0 db1 m) where
+  mask a = PQ $ \e -> mask $ \u -> unPQ (a $ q u) e
+    where q u (PQ b) = PQ (u . b)
+
+  uninterruptibleMask a =
+    PQ $ \k -> uninterruptibleMask $ \u -> unPQ (a $ q u) k
+      where q u (PQ b) = PQ (u . b)
+
+  generalBracket acquire release use = PQ $ \k ->
+    K <$> generalBracket
+      (unK <$> unPQ acquire k)
+      (\resource exitCase -> unK <$> unPQ (release resource exitCase) k)
+      (\resource -> unK <$> unPQ (use resource) k)
 
 instance (Monad m, Semigroup r, db0 ~ db1) => Semigroup (PQ db0 db1 m r) where
   f <> g = pqAp (fmap (<>) f) g

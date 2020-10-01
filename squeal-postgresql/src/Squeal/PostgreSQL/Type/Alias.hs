@@ -44,6 +44,7 @@ module Squeal.PostgreSQL.Type.Alias
   , mapAliased
   , Has
   , HasUnique
+  , HasErr
   , HasAll
   , HasIn
     -- * Qualified Aliases
@@ -183,13 +184,20 @@ type HasUnique alias fields field = fields ~ '[alias ::: field]
 -- | @Has alias fields field@ is a constraint that proves that
 -- @fields@ has a field of @alias ::: field@, inferring @field@
 -- from @alias@ and @fields@.
+type Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
+  = HasErr fields alias fields field
+
+{- | `HasErr` is like `Has` except it also retains the original
+list of fields being searched, so that error messages are more
+useful.
+-}
 class KnownSymbol alias =>
-  Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
+  HasErr err (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
   | alias fields -> field where
 instance {-# OVERLAPPING #-} (KnownSymbol alias, field0 ~ field1)
-  => Has alias (alias ::: field0 ': fields) field1
-instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
-  => Has alias (field' ': fields) field
+  => HasErr err alias (alias ::: field0 ': fields) field1
+instance {-# OVERLAPPABLE #-} (KnownSymbol alias, HasErr err alias fields field)
+  => HasErr err alias (field' ': fields) field
 
 {-| @HasIn fields (alias ::: field)@ is a constraint that proves that
 @fields@ has a field of @alias ::: field@. It is used in @UPDATE@s to

@@ -40,10 +40,15 @@ module Squeal.PostgreSQL.Query.Table
   , having
   , limit
   , offset
+  , lockRows
     -- * Grouping
   , By (..)
   , GroupByClause (..)
   , HavingClause (..)
+    -- * Row Locks
+  , LockingClause (..)
+  , LockStrength (..)
+  , Waiting (..)
   ) where
 
 import Control.DeepSeq
@@ -72,7 +77,7 @@ Table Expressions
 -- | A `TableExpression` computes a table. The table expression contains
 -- a `fromClause` that is optionally followed by a `whereClause`,
 -- `groupByClause`, `havingClause`, `orderByClause`, `limitClause`
--- and `offsetClause`s. Trivial table expressions simply refer
+-- `offsetClause` and `lockingClauses`. Trivial table expressions simply refer
 -- to a table on disk, a so-called base table, but more complex expressions
 -- can be used to modify or combine base tables in various ways.
 data TableExpression
@@ -122,19 +127,22 @@ data TableExpression
     -- if nonempty. The offset count says to skip that many rows before
     -- beginning to return rows. The rows are skipped before the limit count
     -- is applied.
+    , lockingClauses :: [LockingClause from]
+    -- ^ `lockingClauses` can be added to a table expression with `lockRows`.
     } deriving (GHC.Generic)
 
 -- | Render a `TableExpression`
 instance RenderSQL (TableExpression grp lat with db params from) where
   renderSQL
-    (TableExpression frm' whs' grps' hvs' srts' lims' offs') = mconcat
+    (TableExpression frm' whs' grps' hvs' srts' lims' offs' lks') = mconcat
       [ "FROM ", renderSQL frm'
       , renderWheres whs'
       , renderSQL grps'
       , renderSQL hvs'
       , renderSQL srts'
       , renderLimits lims'
-      , renderOffsets offs' ]
+      , renderOffsets offs'
+      , renderLocks lks' ]
       where
         renderWheres = \case
           [] -> ""
@@ -145,6 +153,7 @@ instance RenderSQL (TableExpression grp lat with db params from) where
         renderOffsets = \case
           [] -> ""
           offs -> " OFFSET" <+> fromString (show (sum offs))
+        renderLocks = foldr (\l b -> b <+> renderSQL l) ""
 
 -- | A `from` generates a `TableExpression` from a table reference that can be
 -- a table name, or a derived table such as a subquery, a JOIN construct,
@@ -155,7 +164,7 @@ instance RenderSQL (TableExpression grp lat with db params from) where
 from
   :: FromClause lat with db params from -- ^ table reference
   -> TableExpression 'Ungrouped lat with db params from
-from tab = TableExpression tab [] noGroups NoHaving [] [] []
+from tab = TableExpression tab [] noGroups NoHaving [] [] [] []
 
 -- | A `where_` is an endomorphism of `TableExpression`s which adds a
 -- search condition to the `whereClause`.
@@ -181,6 +190,7 @@ groupBy bys rels = TableExpression
   , orderByClause = []
   , limitClause = limitClause rels
   , offsetClause = offsetClause rels
+  , lockingClauses = lockingClauses rels
   }
 
 -- | A `having` is an endomorphism of `TableExpression`s which adds a
@@ -210,6 +220,22 @@ offset
   -> TableExpression grp lat with db params from
   -> TableExpression grp lat with db params from
 offset off rels = rels {offsetClause = off : offsetClause rels}
+
+{- | Add a `LockingClause` to a `TableExpression`.
+Multiple `LockingClause`s can be written if it is necessary
+to specify different locking behavior for different tables.
+If the same table is mentioned (or implicitly affected)
+by more than one locking clause, then it is processed
+as if it was only specified by the strongest one.
+Similarly, a table is processed as `NoWait` if that is specified
+in any of the clauses affecting it. Otherwise, it is processed
+as `SkipLocked` if that is specified in any of the clauses affecting it.
+-}
+lockRows
+  :: LockingClause from -- ^ row-level lock
+  -> TableExpression grp lat with db params from
+  -> TableExpression grp lat with db params from
+lockRows lck tab = tab {lockingClauses = lck : lockingClauses tab}
 
 {-----------------------------------------
 Grouping
@@ -287,3 +313,96 @@ instance RenderSQL (HavingClause grp lat with db params from) where
     Having [] -> ""
     Having conditions ->
       " HAVING" <+> commaSeparated (renderSQL <$> conditions)
+
+{- |
+If specific tables are named in a locking clause,
+then only rows coming from those tables are locked;
+any other tables used in the `Squeal.PostgreSQL.Query.Select.select` are simply read as usual.
+A locking clause with a `Nil` table list affects all tables used in the statement.
+If a locking clause is applied to a `view` or `subquery`,
+it affects all tables used in the `view` or `subquery`.
+However, these clauses do not apply to `Squeal.PostgreSQL.Query.With.with` queries referenced by the primary query.
+If you want row locking to occur within a `Squeal.PostgreSQL.Query.With.with` query,
+specify a `LockingClause` within the `Squeal.PostgreSQL.Query.With.with` query.
+-}
+data LockingClause from where
+  For
+    :: HasAll tabs from tables
+    => LockStrength -- ^ lock strength
+    -> NP Alias tabs -- ^ table list
+    -> Waiting -- ^ wait or not
+    -> LockingClause from
+instance RenderSQL (LockingClause from) where
+  renderSQL (For str tabs wt) =
+    "FOR" <+> renderSQL str
+    <> case tabs of
+        Nil -> ""
+        _ -> " OF" <+> renderSQL tabs
+    <> renderSQL wt
+
+{- |
+Row-level locks, which are listed as below with the contexts
+in which they are used automatically by PostgreSQL.
+Note that a transaction can hold conflicting locks on the same row,
+even in different subtransactions; but other than that,
+two transactions can never hold conflicting locks on the same row.
+Row-level locks do not affect data querying;
+they block only writers and lockers to the same row.
+Row-level locks are released at transaction end or during savepoint rollback.
+-}
+data LockStrength
+  = Update
+  {- ^ `For` `Update` causes the rows retrieved by the `Squeal.PostgreSQL.Query.Select.select` statement
+  to be locked as though for update. This prevents them from being locked,
+  modified or deleted by other transactions until the current transaction ends.
+  That is, other transactions that attempt `Squeal.PostgreSQL.Manipulation.Update.update`, `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom`,
+  `Squeal.PostgreSQL.Query.Select.select` `For` `Update`, `Squeal.PostgreSQL.Query.Select.select` `For` `NoKeyUpdate`,
+  `Squeal.PostgreSQL.Query.Select.select` `For` `Share` or `Squeal.PostgreSQL.Query.Select.select` `For` `KeyShare` of these rows will be blocked
+  until the current transaction ends; conversely, `Squeal.PostgreSQL.Query.Select.select` `For` `Update` will wait
+  for a concurrent transaction that has run any of those commands on the same row,
+  and will then lock and return the updated row (or no row, if the row was deleted).
+  Within a `Squeal.PostgreSQL.Session.Transaction.RepeatableRead` or `Squeal.PostgreSQL.Session.Transaction.Serializable` transaction, however, an error will be
+  thrown if a row to be locked has changed since the transaction started.
+
+  The `For` `Update` lock mode is also acquired by any `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom` a row,
+  and also by an `Update` that modifies the values on certain columns.
+  Currently, the set of columns considered for the `Squeal.PostgreSQL.Manipulation.Update.update` case are those
+  that have a unique index on them that can be used in a foreign key
+  (so partial indexes and expressional indexes are not considered),
+  but this may change in the future.-}
+  | NoKeyUpdate
+  {- | Behaves similarly to `For` `Update`, except that the lock acquired is weaker:
+  this lock will not block `Squeal.PostgreSQL.Query.Select.select` `For` `KeyShare` commands that attempt to acquire
+  a lock on the same rows. This lock mode is also acquired by any `Squeal.PostgreSQL.Manipulation.Update.update`
+  that does not acquire a `For` `Update` lock.-}
+  | Share
+  {- | Behaves similarly to `For` `Share`, except that the lock is weaker:
+  `Squeal.PostgreSQL.Query.Select.select` `For` `Update` is blocked, but not `Squeal.PostgreSQL.Query.Select.select` `For` `NoKeyUpdate`.
+  A key-shared lock blocks other transactions from performing
+  `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom` or any `Squeal.PostgreSQL.Manipulation.Update.update` that changes the key values,
+  but not other `Update`, and neither does it prevent `Squeal.PostgreSQL.Query.Select.select` `For` `NoKeyUpdate`,
+  `Squeal.PostgreSQL.Query.Select.select` `For` `Share`, or `Squeal.PostgreSQL.Query.Select.select` `For` `KeyShare`.-}
+  | KeyShare
+  deriving (Eq, Ord, Show, Read, Enum, GHC.Generic)
+instance RenderSQL LockStrength where
+  renderSQL = \case
+    Update -> "UPDATE"
+    NoKeyUpdate -> "NO KEY UPDATE"
+    Share -> "SHARE"
+    KeyShare -> "KEY SHARE"
+
+-- | To prevent the operation from `Waiting` for other transactions to commit,
+-- use either the `NoWait` or `SkipLocked` option.
+data Waiting
+  = Wait
+  -- ^ wait for other transactions to commit
+  | NoWait
+  -- ^ reports an error, rather than waiting
+  | SkipLocked
+  -- ^ any selected rows that cannot be immediately locked are skipped
+  deriving (Eq, Ord, Show, Read, Enum, GHC.Generic)
+instance RenderSQL Waiting where
+  renderSQL = \case
+    Wait -> ""
+    NoWait -> " NOWAIT"
+    SkipLocked -> " SKIP LOCKED"

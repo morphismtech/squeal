@@ -28,6 +28,7 @@ aggregate functions and arguments
 module Squeal.PostgreSQL.Expression.Aggregate
   ( -- * Aggregate
     Aggregate (..)
+    -- * Aggregate Arguments
   , AggregateArg (..)
   , pattern All
   , pattern Alls
@@ -416,11 +417,17 @@ data AggregateArg
   = AggregateAll
   { aggregateArgs :: NP (Expression 'Ungrouped lat with db params from) xs
   , aggregateOrder :: [SortExpression 'Ungrouped lat with db params from]
-  , aggregateFilter :: [Condition 'Ungrouped lat with db params from] }
+    -- ^ `orderBy`
+  , aggregateFilter :: [Condition 'Ungrouped lat with db params from]
+    -- ^ `filterWhere`
+  }
   | AggregateDistinct
   { aggregateArgs :: NP (Expression 'Ungrouped lat with db params from) xs
   , aggregateOrder :: [SortExpression 'Ungrouped lat with db params from]
-  , aggregateFilter :: [Condition 'Ungrouped lat with db params from] }
+    -- ^ `orderBy`
+  , aggregateFilter :: [Condition 'Ungrouped lat with db params from]
+    -- ^ `filterWhere`
+  }
 
 instance SOP.SListI xs => RenderSQL (AggregateArg xs lat with db params from) where
   renderSQL = \case
@@ -447,6 +454,7 @@ instance OrderBy (AggregateArg xs) 'Ungrouped where
 -- argument once for each input row.
 pattern All
   :: Expression 'Ungrouped lat with db params from x
+  -- ^ argument
   -> AggregateArg '[x] lat with db params from
 pattern All x = Alls (x :* Nil)
 
@@ -454,6 +462,7 @@ pattern All x = Alls (x :* Nil)
 -- arguments once for each input row.
 pattern Alls
   :: NP (Expression 'Ungrouped lat with db params from) xs
+  -- ^ arguments
   -> AggregateArg xs lat with db params from
 pattern Alls xs = AggregateAll xs [] []
 
@@ -462,6 +471,7 @@ pattern Alls xs = AggregateAll xs [] []
 -- is not null
 allNotNull
   :: Expression 'Ungrouped lat with db params from ('Null x)
+  -- ^ argument
   -> AggregateArg '[ 'NotNull x] lat with db params from
 allNotNull x = All (unsafeNotNull x) & filterWhere (not_ (isNull x))
 
@@ -471,6 +481,7 @@ distinct value of the expression found in the input.
 -}
 pattern Distinct
   :: Expression 'Ungrouped lat with db params from x
+  -- ^ argument
   -> AggregateArg '[x] lat with db params from
 pattern Distinct x = Distincts (x :* Nil)
 
@@ -480,6 +491,7 @@ distinct set of values, for multiple expressions, found in the input.
 -}
 pattern Distincts
   :: NP (Expression 'Ungrouped lat with db params from) xs
+  -- ^ arguments
   -> AggregateArg xs lat with db params from
 pattern Distincts xs = AggregateDistinct xs [] []
 
@@ -489,6 +501,7 @@ distinct, not null value of the expression found in the input.
 -}
 distinctNotNull
   :: Expression 'Ungrouped lat with db params from ('Null x)
+  -- ^ argument
   -> AggregateArg '[ 'NotNull x] lat with db params from
 distinctNotNull x = Distinct (unsafeNotNull x) & filterWhere (not_ (isNull x))
 
@@ -502,6 +515,7 @@ class FilterWhere arg grp | arg -> grp where
   -}
   filterWhere
     :: Condition grp lat with db params from
+    -- ^ include rows which evaluate to true
     -> arg xs lat with db params from
     -> arg xs lat with db params from
 instance FilterWhere AggregateArg 'Ungrouped where

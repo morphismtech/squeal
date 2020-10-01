@@ -72,7 +72,7 @@ type UserDevicesColumns = '[
 
 type UserDevicesConstraints = '[
   "pk_user_devices" ::: 'PrimaryKey '["id"]
-  , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+  , "fk_user_id" ::: 'ForeignKey '["user_id"] "public" "users" '["id"]
   , "token" ::: 'Unique '["token"]
   ]
 

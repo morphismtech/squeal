@@ -40,7 +40,7 @@ type EmailsColumns =
    , "email" ::: 'NoDef :=> 'Null 'PGtext ]
 type EmailsConstraints =
   '[ "pk_emails"  ::: 'PrimaryKey '["id"]
-   , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"] ]
+   , "fk_user_id" ::: 'ForeignKey '["user_id"] "public" "users" '["id"] ]
 type Schema =
   '[ "users" ::: 'Table (UsersConstraints :=> UsersColumns)
    , "emails" ::: 'Table (EmailsConstraints :=> EmailsColumns) ]
@@ -78,7 +78,7 @@ let
         (text & nullable) `as` #email )
       ( primaryKey #id `as` #pk_emails :*
         foreignKey #user_id #users #id
-          OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
+          (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_user_id )
 :}
 
 We can easily see the generated SQL is unsurprising looking.
@@ -136,7 +136,7 @@ let
 :}
 
 >>> printSQL insertUser
-WITH "u" AS (INSERT INTO "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) RETURNING "id" AS "id", ($2 :: text) AS "email") INSERT INTO "emails" ("user_id", "email") SELECT "u"."id", "u"."email" FROM "u" AS "u"
+WITH "u" AS (INSERT INTO "users" AS "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) RETURNING "id" AS "id", ($2 :: text) AS "email") INSERT INTO "emails" AS "emails" ("user_id", "email") SELECT "u"."id", "u"."email" FROM "u" AS "u"
 
 Next we write a `Statement` to retrieve users from the database. We're not
 interested in the ids here, just the usernames and email addresses. We
@@ -184,7 +184,7 @@ let
     usersRows <- getRows usersResult
     liftIO $ print usersRows
 in
-  withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
     define setup
     & pqThen session
     & pqThen (define teardown)
@@ -198,9 +198,11 @@ module Squeal.PostgreSQL
   ) where
 
 import Squeal.PostgreSQL.Definition as X
+import Squeal.PostgreSQL.Definition.Comment as X
 import Squeal.PostgreSQL.Definition.Constraint as X
 import Squeal.PostgreSQL.Definition.Function as X
 import Squeal.PostgreSQL.Definition.Index as X
+import Squeal.PostgreSQL.Definition.Procedure as X
 import Squeal.PostgreSQL.Definition.Schema as X
 import Squeal.PostgreSQL.Definition.Table as X
 import Squeal.PostgreSQL.Definition.Type as X
@@ -226,6 +228,7 @@ import Squeal.PostgreSQL.Expression.Time as X
 import Squeal.PostgreSQL.Expression.Type as X
 import Squeal.PostgreSQL.Expression.Window as X
 import Squeal.PostgreSQL.Manipulation as X
+import Squeal.PostgreSQL.Manipulation.Call as X
 import Squeal.PostgreSQL.Manipulation.Delete as X
 import Squeal.PostgreSQL.Manipulation.Insert as X
 import Squeal.PostgreSQL.Manipulation.Update as X

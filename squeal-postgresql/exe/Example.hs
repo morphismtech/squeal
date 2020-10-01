@@ -9,7 +9,7 @@
   , TypeOperators
 #-}
 
-module Main (main, main2) where
+module Main (main, main2, upsertUser) where
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int16, Int32)
@@ -22,7 +22,7 @@ import qualified Data.ByteString.Char8 as Char8
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 
-type Schema =
+type UserSchema =
   '[ "users" ::: 'Table (
        '[ "pk_users" ::: 'PrimaryKey '["id"] ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
@@ -31,53 +31,95 @@ type Schema =
         ])
    , "emails" ::: 'Table (
        '[  "pk_emails" ::: 'PrimaryKey '["id"]
-        , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+        , "fk_user_id" ::: 'ForeignKey '["user_id"] "user" "users" '["id"]
         ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
         , "email" ::: 'NoDef :=> 'Null 'PGtext
         ])
-   , "positive" ::: 'Typedef 'PGfloat4
    ]
 
-type Schemas = Public Schema
+type PublicSchema = '[ "positive" ::: 'Typedef 'PGfloat4 ]
+
+type OrgSchema =
+  '[ "organizations" ::: 'Table (
+        '[ "pk_organizations" ::: 'PrimaryKey '["id"] ] :=>
+        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
+         , "name" ::: 'NoDef :=> 'NotNull 'PGtext
+         ])
+   , "members" ::: 'Table (
+        '[ "fk_member" ::: 'ForeignKey '["member"] "user" "users" '["id"]
+         , "fk_organization" ::: 'ForeignKey '["organization"] "org" "organizations" '["id"] ] :=>
+        '[ "member" ::: 'NoDef :=> 'NotNull 'PGint4
+         , "organization" ::: 'NoDef :=> 'NotNull 'PGint4 ])
+   ]
+
+type Schemas 
+  = '[ "public" ::: PublicSchema, "user" ::: UserSchema, "org" ::: OrgSchema ]
 
 setup :: Definition (Public '[]) Schemas
 setup =
-  createTable #users
+  createDomain #positive real (#value .> 0 .&& (#value & isNotNull))
+  >>>
+  createSchema #user
+  >>>
+  createSchema #org
+  >>>
+  createTable (#user ! #jokers)
     ( serial `as` #id :*
       (text & notNullable) `as` #name :*
       (vararray int2 & notNullable) `as` #vec )
     ( primaryKey #id `as` #pk_users )
   >>>
-  createTable #emails
+  alterTableRename (#user ! #jokers) #users
+  >>>
+  createTable (#user ! #emails)
     ( serial `as` #id :*
       columntypeFrom @Int32 `as` #user_id :*
       columntypeFrom @(Maybe Text) `as` #email )
     ( primaryKey #id `as` #pk_emails :*
-      foreignKey #user_id #users #id
-        OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
-    >>>
-    createDomain #positive real (#value .> 0 .&& (#value & isNotNull))
-
+      foreignKey #user_id (#user ! #users) #id
+        (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_user_id )
+  >>>
+  createTable (#org ! #organizations)
+    ( serial `as` #id :*
+      (text & notNullable) `as` #name )
+    ( primaryKey #id `as` #pk_organizations )
+  >>>
+  createTable (#org ! #members)
+    ( notNullable int4 `as` #member :*
+      notNullable int4 `as` #organization )
+    ( foreignKey #member (#user ! #users) #id
+        (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_member :*
+      foreignKey #organization (#org ! #organizations) #id
+        (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_organization )
+      
 teardown :: Definition Schemas (Public '[])
-teardown = dropType #positive >>> dropTable #emails >>> dropTable #users
+teardown = dropType #positive >>> dropSchemaCascade #user >>> dropSchemaCascade #org
 
 insertUser :: Manipulation_ Schemas (Text, VarArray (Vector (Maybe Int16))) (Only Int32)
-insertUser = insertInto #users
+insertUser = insertInto (#user ! #users)
   (Values_ (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #vec))
   (OnConflict (OnConstraint #pk_users) DoNothing) (Returning_ (#id `as` #fromOnly))
 
 insertEmail :: Manipulation_ Schemas (Int32, Maybe Text) ()
-insertEmail = insertInto_ #emails
+insertEmail = insertInto_ (#user ! #emails)
   (Values_ (Default `as` #id :* Set (param @1) `as` #user_id :* Set (param @2) `as` #email))
 
 getUsers :: Query_ Schemas () User
 getUsers = select_
   (#u ! #name `as` #userName :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)
-  ( from (table (#users `as` #u)
-    & innerJoin (table (#emails `as` #e))
+  ( from (table ((#user ! #users) `as` #u)
+    & innerJoin (table ((#user ! #emails) `as` #e))
       (#u ! #id .== #e ! #user_id)) )
+
+upsertUser :: Manipulation_ Schemas (Int32, String, VarArray [Maybe Int16]) ()
+upsertUser = insertInto (#user ! #users `as` #u)
+  (Values_ (Set (param @1) `as` #id :* setUser))
+  (OnConflict (OnConstraint #pk_users) (DoUpdate setUser [#u ! #id .== param @1]))
+  (Returning_ Nil)
+  where
+    setUser = Set (param @2) `as` #name :* Set (param @3) `as` #vec :* Nil
 
 data User
   = User
@@ -110,7 +152,7 @@ main :: IO ()
 main = do
   Char8.putStrLn "squeal"
   connectionString <- pure
-    "host=localhost port=5432 dbname=exampledb"
+    "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
   Char8.putStrLn $ "connecting to " <> connectionString
   connection0 <- connectdb connectionString
   Char8.putStrLn "setting up schema"
@@ -122,7 +164,7 @@ main = do
 
 main2 :: IO ()
 main2 =
-  withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
     define setup
     & pqThen session
     & pqThen (define teardown)

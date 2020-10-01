@@ -26,7 +26,7 @@ type UsersTable =
 >>> :{
 type EmailsTable =
   '[ "pk_emails" ::: 'PrimaryKey '["id"]
-   , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+   , "fk_user_id" ::: 'ForeignKey '["user_id"] "public" "users" '["id"]
    ] :=>
   '[ "id" ::: 'Def :=> 'NotNull 'PGint4
    , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
@@ -71,7 +71,7 @@ let
             nullable text `as` #email )
           ( primaryKey #id `as` #pk_emails :*
             foreignKey #user_id #users #id
-              OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
+              (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_user_id )
     , down = dropTable #emails
     }
 :}
@@ -84,7 +84,7 @@ Now run the migrations.
 
 >>> import Control.Monad.IO.Class
 >>> :{
-withConnection "host=localhost port=5432 dbname=exampledb" $
+withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
   manipulate_ (UnsafeManipulation "SET client_min_messages TO WARNING;")
     -- suppress notices
   & pqThen (liftIO (putStrLn "Migrate"))
@@ -97,7 +97,7 @@ Rollback
 
 We can also create a simple executable using `mainMigrateIso`.
 
->>> let main = mainMigrateIso "host=localhost port=5432 dbname=exampledb" migrations
+>>> let main = mainMigrateIso "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" migrations
 
 >>> withArgs [] main
 Invalid command: "". Use:
@@ -211,9 +211,9 @@ import Squeal.PostgreSQL.Type.Schema
 
 -- | A `Migration` consists of a name and a migration definition.
 data Migration def db0 db1 = Migration
-  { name :: Text -- ^ The `name` of a `Migration`.
-    -- Each `name` in a `Migration` should be unique.
-  , migration :: def db0 db1 -- ^ The migration of a `Migration`.
+  { migrationName :: Text -- ^ The name of a `Migration`.
+    -- Each `migrationName` should be unique.
+  , migrationDef :: def db0 db1 -- ^ The migration of a `Migration`.
   } deriving (GHC.Generic)
 instance QFunctor Migration where
   qmap f (Migration n i) = Migration n (f i)
@@ -233,11 +233,11 @@ instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
     where
       upMigration step = do
         executed <- do
-          result <- executeParams selectMigration (name step)
+          result <- executeParams selectMigration (migrationName step)
           ntuples (result :: Result UTCTime)
         unless (executed == 1) $ do
-          _ <- unsafePQ . runIndexed $ migration step
-          executeParams_ insertMigration (name step)
+          _ <- unsafePQ . runIndexed $ migrationDef step
+          executeParams_ insertMigration (migrationName step)
 -- | pure migrations
 instance Migratory Definition (Indexed PQ IO ()) where
   runMigrations = runMigrations . qmap (qmap ixDefine)
@@ -249,11 +249,11 @@ instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
     where
       downMigration (OpQ step) = do
         executed <- do
-          result <- executeParams selectMigration (name step)
+          result <- executeParams selectMigration (migrationName step)
           ntuples (result :: Result UTCTime)
         unless (executed == 0) $ do
-          _ <- unsafePQ . runIndexed . getOpQ $ migration step
-          executeParams_ deleteMigration (name step)
+          _ <- unsafePQ . runIndexed . getOpQ $ migrationDef step
+          executeParams_ deleteMigration (migrationName step)
 -- | pure rewinds
 instance Migratory (OpQ Definition) (OpQ (Indexed PQ IO ())) where
   runMigrations = runMigrations . qmap (qmap (qmap ixDefine))
@@ -303,8 +303,8 @@ type MigrationsTable =
    ]
 
 data MigrationRow =
-  MigrationRow { migrationName :: Text
-               , migrationTime :: UTCTime }
+  MigrationRow { name :: Text
+               , executed_at :: UTCTime }
   deriving (GHC.Generic, Show)
 
 instance SOP.Generic MigrationRow
@@ -344,9 +344,7 @@ selectMigration = Query aParam #executed_at $
     & where_ (#name .== param @1)
 
 selectMigrations :: Statement MigrationsSchemas () MigrationRow
-selectMigrations = query $
-  select_ (#name `as` #migrationName :* #executed_at `as` #migrationTime)
-  (from (table #schema_migrations))
+selectMigrations = query $ select Star (from (table #schema_migrations))
 
 {- | `mainMigrate` creates a simple executable
 from a connection string and a `Path` of `Migration`s. -}
@@ -376,7 +374,7 @@ mainMigrate connectTo migrations = do
     migrateStatus :: PQ schema schema IO ()
     migrateStatus = unsafePQ $ do
       runNames <- getRunMigrationNames
-      let names = qtoList name migrations
+      let names = qtoList migrationName migrations
           unrunNames = names \\ runNames
       liftIO $ displayRunned runNames >> displayUnrunned unrunNames
 
@@ -420,7 +418,7 @@ mainMigrateIso connectTo migrations = performCommand =<< getArgs
     migrateStatus :: PQ schema schema IO ()
     migrateStatus = unsafePQ $ do
       runNames <- getRunMigrationNames
-      let names = qtoList name migrations
+      let names = qtoList migrationName migrations
           unrunNames = names \\ runNames
       liftIO $ displayRunned runNames >> displayUnrunned unrunNames
 
@@ -437,7 +435,7 @@ mainMigrateIso connectTo migrations = performCommand =<< getArgs
 
 getRunMigrationNames :: PQ db0 db0 IO [Text]
 getRunMigrationNames =
-  fmap migrationName <$>
+  fmap name <$>
     (unsafePQ (define createMigrations
     & pqThen (execute selectMigrations)) >>= getRows)
 

@@ -32,11 +32,14 @@ module Squeal.PostgreSQL.Session.Decode
     FromPG (..)
   , devalue
   , rowValue
+  , enumValue
     -- * Decode Rows
   , DecodeRow (..)
   , decodeRow
   , runDecodeRow
   , genericRow
+  , appendRows
+  , consRow
     -- * Decoding Classes
   , FromValue (..)
   , FromField (..)
@@ -57,6 +60,8 @@ import Data.Bits
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind
 import Data.Scientific (Scientific)
+import Data.String (fromString)
+import Data.Text (Text)
 import Data.Time (Day, TimeOfDay, TimeZone, LocalTime, UTCTime, DiffTime)
 import Data.UUID.Types (UUID)
 import Data.Vector (Vector)
@@ -153,14 +158,14 @@ class IsPG y => FromPG y where
     , imaginary :: Double
     } deriving stock GHC.Generic
       deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-      deriving (IsPG, FromPG) via (Composite Complex)
+      deriving (IsPG, FromPG) via Composite Complex
   :}
 
   >>> :{
   data Direction = North | South | East | West
     deriving stock GHC.Generic
     deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-    deriving (IsPG, FromPG) via (Enumerated Direction)
+    deriving (IsPG, FromPG) via Enumerated Direction
   :}
 
   -}
@@ -199,6 +204,30 @@ instance FromPG Strict.ByteString where
   fromPG = devalue bytea_strict
 instance FromPG Lazy.ByteString where
   fromPG = devalue bytea_lazy
+instance KnownNat n => FromPG (VarChar n) where
+  fromPG = devalue $ text_strict >>= \t ->
+    case varChar t of
+      Nothing -> throwError $ Strict.Text.pack $ concat
+        [ "Source for VarChar has wrong length"
+        , "; expected length "
+        , show (natVal (SOP.Proxy @n))
+        , ", actual length "
+        , show (Strict.Text.length t)
+        , "."
+        ]
+      Just x -> pure x
+instance KnownNat n => FromPG (FixChar n) where
+  fromPG = devalue $ text_strict >>= \t ->
+    case fixChar t of
+      Nothing -> throwError $ Strict.Text.pack $ concat
+        [ "Source for FixChar has wrong length"
+        , "; expected length "
+        , show (natVal (SOP.Proxy @n))
+        , ", actual length "
+        , show (Strict.Text.length t)
+        , "."
+        ]
+      Just x -> pure x
 instance FromPG Day where
   fromPG = devalue date
 instance FromPG TimeOfDay where
@@ -385,6 +414,8 @@ newtype DecodeRow (row :: RowType) (y :: Type) = DecodeRow
     , Monad
     , MonadPlus
     , MonadError Strict.Text )
+instance MonadFail (DecodeRow row) where
+  fail = throwError . fromString
 
 -- | Run a `DecodeRow`.
 runDecodeRow
@@ -392,6 +423,67 @@ runDecodeRow
   -> SOP.NP (SOP.K (Maybe Strict.ByteString)) row
   -> Either Strict.Text y
 runDecodeRow = fmap runExcept . runReaderT . unDecodeRow
+
+{- | Append two row decoders with a combining function.
+
+>>> import GHC.Generics as GHC
+>>> :{
+data L = L {fst :: Int16, snd :: Char}
+  deriving stock (GHC.Generic, Show)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+data R = R {thrd :: Bool, frth :: Bool}
+  deriving stock (GHC.Generic, Show)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+type Row = '[
+  "fst" ::: 'NotNull 'PGint2,
+  "snd" ::: 'NotNull ('PGchar 1),
+  "thrd" ::: 'NotNull 'PGbool,
+  "frth" ::: 'NotNull 'PGbool]
+:}
+
+>>> :{
+let
+  decode :: DecodeRow Row (L,R)
+  decode = appendRows (,) genericRow genericRow
+  row4 =
+    SOP.K (Just "\NUL\SOH") :*
+    SOP.K (Just "a") :*
+    SOP.K (Just "\NUL") :*
+    SOP.K (Just "\NUL") :* Nil
+in runDecodeRow decode row4
+:}
+Right (L {fst = 1, snd = 'a'},R {thrd = False, frth = False})
+-}
+appendRows
+  :: SOP.SListI left
+  => (l -> r -> z) -- ^ combining function
+  -> DecodeRow left l -- ^ left decoder
+  -> DecodeRow right r -- ^ right decoder
+  -> DecodeRow (Join left right) z
+appendRows f decL decR = decodeRow $ \row -> case disjoin row of
+  (rowL, rowR) -> f <$> runDecodeRow decL rowL <*> runDecodeRow decR rowR
+
+{- | Cons a column and a row decoder with a combining function.
+
+>>> :{
+let
+  decode :: DecodeRow
+    '["fst" ::: 'NotNull 'PGtext, "snd" ::: 'NotNull 'PGint2, "thrd" ::: 'NotNull ('PGchar 1)]
+    (String, (Int16, Char))
+  decode = consRow (,) #fst (consRow (,) #snd #thrd)
+in runDecodeRow decode (SOP.K (Just "hi") :* SOP.K (Just "\NUL\SOH") :* SOP.K (Just "a") :* Nil)
+:}
+Right ("hi",(1,'a'))
+-}
+consRow
+  :: FromValue head h
+  => (h -> t -> z) -- ^ combining function
+  -> Alias col -- ^ alias of head
+  -> DecodeRow tail t -- ^ tail decoder
+  -> DecodeRow (col ::: head ': tail) z
+consRow f _ dec = decodeRow $ \case
+  (SOP.K h :: SOP.K (Maybe Strict.ByteString) (col ::: head)) :* t
+    -> f <$> fromValue @head h <*> runDecodeRow dec t
 
 -- | Smart constructor for a `DecodeRow`.
 decodeRow
@@ -443,3 +535,33 @@ runField
   => SOP.K (Maybe Strict.ByteString) ty
   -> Except Strict.Text (SOP.P y)
 runField = liftEither . fromField @ty . SOP.unK
+
+{- |
+>>> :{
+data Dir = North | East | South | West
+instance IsPG Dir where
+  type PG Dir = 'PGenum '["north", "south", "east", "west"]
+instance FromPG Dir where
+  fromPG = enumValue $
+    label @"north" North :*
+    label @"south" South :*
+    label @"east" East :*
+    label @"west" West
+:}
+-}
+enumValue
+  :: (SOP.All KnownSymbol labels, PG y ~ 'PGenum labels)
+  => NP (SOP.K y) labels
+  -> StateT Strict.ByteString (Except Strict.Text) y
+enumValue = devalue . enum . labels
+  where
+  labels
+    :: SOP.All KnownSymbol labels
+    => NP (SOP.K y) labels
+    -> Text -> Maybe y
+  labels = \case
+    Nil -> \_ -> Nothing
+    ((y :: SOP.K y label) :* ys) -> \ str ->
+      if str == fromString (symbolVal (SOP.Proxy @label))
+      then Just (SOP.unK y)
+      else labels ys str

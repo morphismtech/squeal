@@ -40,6 +40,7 @@ module Squeal.PostgreSQL.Definition.Constraint
   , ForeignKeyed
   , OnDeleteClause (..)
   , OnUpdateClause (..)
+  , ReferentialAction (..)
   ) where
 
 import Control.DeepSeq
@@ -200,7 +201,7 @@ type Schema =
         ])
    , "emails" ::: 'Table (
        '[  "pk_emails" ::: 'PrimaryKey '["id"]
-        , "fk_user_id" ::: 'ForeignKey '["user_id"] "users" '["id"]
+        , "fk_user_id" ::: 'ForeignKey '["user_id"] "public" "users" '["id"]
         ] :=>
        '[ "id" ::: 'Def :=> 'NotNull 'PGint4
         , "user_id" ::: 'NoDef :=> 'NotNull 'PGint4
@@ -223,7 +224,7 @@ let
        (text & nullable) `as` #email )
      ( primaryKey #id `as` #pk_emails :*
        foreignKey #user_id #users #id
-         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
+         (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_user_id )
 in printSQL setup
 :}
 CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));
@@ -235,7 +236,7 @@ A `foreignKey` can even be a table self-reference.
 type Schema =
   '[ "employees" ::: 'Table (
        '[ "employees_pk"          ::: 'PrimaryKey '["id"]
-        , "employees_employer_fk" ::: 'ForeignKey '["employer_id"] "employees" '["id"]
+        , "employees_employer_fk" ::: 'ForeignKey '["employer_id"] "public" "employees" '["id"]
         ] :=>
        '[ "id"          :::   'Def :=> 'NotNull 'PGint4
         , "name"        ::: 'NoDef :=> 'NotNull 'PGtext
@@ -254,20 +255,23 @@ let
        (integer & nullable) `as` #employer_id )
      ( primaryKey #id `as` #employees_pk :*
        foreignKey #employer_id #employees #id
-         OnDeleteCascade OnUpdateCascade `as` #employees_employer_fk )
+         (OnDelete Cascade) (OnUpdate Cascade) `as` #employees_employer_fk )
 in printSQL setup
 :}
 CREATE TABLE "employees" ("id" serial, "name" text NOT NULL, "employer_id" integer NULL, CONSTRAINT "employees_pk" PRIMARY KEY ("id"), CONSTRAINT "employees_employer_fk" FOREIGN KEY ("employer_id") REFERENCES "employees" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 -}
 foreignKey
-  :: (ForeignKeyed db sch schema child parent
+  :: (ForeignKeyed db 
+        sch0 sch1
+        schema0 schema1 
+        child parent
         table reftable
         columns refcolumns
         constraints cols
         reftys tys )
   => NP Alias columns
   -- ^ column or columns in the table
-  -> Alias parent
+  -> QualifiedAlias sch0 parent
   -- ^ reference table
   -> NP Alias refcolumns
   -- ^ reference column or columns in the reference table
@@ -275,8 +279,8 @@ foreignKey
   -- ^ what to do when reference is deleted
   -> OnUpdateClause
   -- ^ what to do when reference is updated
-  -> TableConstraintExpression sch child db
-      ('ForeignKey columns parent refcolumns)
+  -> TableConstraintExpression sch1 child db
+      ('ForeignKey columns sch0 parent refcolumns)
 foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
   "FOREIGN KEY" <+> parenthesized (renderSQL keys)
   <+> "REFERENCES" <+> renderSQL parent
@@ -286,16 +290,17 @@ foreignKey keys parent refs ondel onupd = UnsafeTableConstraintExpression $
 
 -- | A constraint synonym between types involved in a foreign key constraint.
 type ForeignKeyed db
-  sch
-  schema
+  sch0 sch1
+  schema0 schema1
   child parent
   table reftable
   columns refcolumns
   constraints cols
   reftys tys =
-    ( Has sch db schema
-    , Has child schema ('Table table)
-    , Has parent schema ('Table reftable)
+    ( Has sch0 db schema0
+    , Has sch1 db schema1
+    , Has parent schema0 ('Table reftable)
+    , Has child schema1 ('Table table)
     , HasAll columns (TableToColumns table) tys
     , reftable ~ (constraints :=> cols)
     , HasAll refcolumns cols reftys
@@ -303,39 +308,44 @@ type ForeignKeyed db
     , Uniquely refcolumns constraints )
 
 -- | `OnDeleteClause` indicates what to do with rows that reference a deleted row.
-data OnDeleteClause
-  = OnDeleteNoAction
-    -- ^ if any referencing rows still exist when the constraint is checked,
-    -- an error is raised
-  | OnDeleteRestrict -- ^ prevents deletion of a referenced row
-  | OnDeleteCascade
-    -- ^ specifies that when a referenced row is deleted,
-    -- row(s) referencing it should be automatically deleted as well
+newtype OnDeleteClause = OnDelete ReferentialAction
   deriving (GHC.Generic,Show,Eq,Ord)
 instance NFData OnDeleteClause
--- | Render `OnDeleteClause`.
 instance RenderSQL OnDeleteClause where
-  renderSQL = \case
-    OnDeleteNoAction -> "ON DELETE NO ACTION"
-    OnDeleteRestrict -> "ON DELETE RESTRICT"
-    OnDeleteCascade -> "ON DELETE CASCADE"
+  renderSQL (OnDelete action) = "ON DELETE" <+> renderSQL action
 
 -- | Analagous to `OnDeleteClause` there is also `OnUpdateClause` which is invoked
 -- when a referenced column is changed (updated).
-data OnUpdateClause
-  = OnUpdateNoAction
-  -- ^ if any referencing rows has not changed when the constraint is checked,
-  -- an error is raised
-  | OnUpdateRestrict -- ^ prevents update of a referenced row
-  | OnUpdateCascade
-    -- ^ the updated values of the referenced column(s) should be copied
-    -- into the referencing row(s)
+newtype OnUpdateClause = OnUpdate ReferentialAction
   deriving (GHC.Generic,Show,Eq,Ord)
 instance NFData OnUpdateClause
-
--- | Render `OnUpdateClause`.
 instance RenderSQL OnUpdateClause where
+  renderSQL (OnUpdate action) = "ON UPDATE" <+> renderSQL action
+
+{- | When the data in the referenced columns is changed,
+certain actions are performed on the data in this table's columns.-}
+data ReferentialAction
+  = NoAction
+  {- ^ Produce an error indicating that the deletion or update
+  would create a foreign key constraint violation.
+  If the constraint is deferred, this error will be produced
+  at constraint check time if there still exist any referencing rows.-}
+  | Restrict
+  {- ^ Produce an error indicating that the deletion or update
+  would create a foreign key constraint violation.
+  This is the same as `NoAction` except that the check is not deferrable.-}
+  | Cascade
+  {- ^ Delete any rows referencing the deleted row,
+  or update the value of the referencing column
+  to the new value of the referenced column, respectively.-}
+  | SetNull {- ^ Set the referencing column(s) to null.-}
+  | SetDefault {- ^ Set the referencing column(s) to their default values.-}
+  deriving (GHC.Generic,Show,Eq,Ord)
+instance NFData ReferentialAction
+instance RenderSQL ReferentialAction where
   renderSQL = \case
-    OnUpdateNoAction -> "ON UPDATE NO ACTION"
-    OnUpdateRestrict -> "ON UPDATE RESTRICT"
-    OnUpdateCascade -> "ON UPDATE CASCADE"
+    NoAction -> "NO ACTION"
+    Restrict -> "RESTRICT"
+    Cascade -> "CASCADE"
+    SetNull -> "SET NULL"
+    SetDefault -> "SET DEFAULT"

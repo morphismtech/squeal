@@ -41,6 +41,7 @@ module Squeal.PostgreSQL.Definition.Table
   , alterTableIfExists
   , alterTableRename
   , alterTableIfExistsRename
+  , alterTableSetSchema
   , AlterTable (..)
     -- ** Constraints
   , addConstraint
@@ -235,26 +236,64 @@ alterTableIfExists tab alteration = UnsafeDefinition $
 
 -- | `alterTableRename` changes the name of a table from the schema.
 --
--- >>> printSQL $ alterTableRename #foo #bar
+-- >>> type Schemas = '[ "public" ::: '[ "foo" ::: 'Table ('[] :=> '[]) ] ]
+-- >>> :{
+--  let migration :: Definition Schemas '["public" ::: '["bar" ::: 'Table ('[] :=> '[]) ] ]
+--      migration = alterTableRename #foo #bar
+--  in printSQL migration
+-- :}
 -- ALTER TABLE "foo" RENAME TO "bar";
 alterTableRename
-  :: (KnownSymbol tab0, KnownSymbol tab1)
-  => Alias tab0 -- ^ table to rename
+  :: ( Has sch db schema
+     , KnownSymbol tab1
+     , Has tab0 schema ('Table table))
+  => QualifiedAlias sch tab0 -- ^ table to rename
   -> Alias tab1 -- ^ what to rename it
-  -> Definition schema (Rename tab0 tab1 schema)
+  -> Definition db (Alter sch (Rename tab0 tab1 schema) db )
 alterTableRename tab0 tab1 = UnsafeDefinition $
   "ALTER TABLE" <+> renderSQL tab0
   <+> "RENAME TO" <+> renderSQL tab1 <> ";"
 
--- | Rename a table if it exists.
+-- | `alterTableIfExistsRename` changes the name of a table from the schema if it exists.
+--
+-- >>> type Schemas = '[ "public" ::: '[ "foo" ::: 'Table ('[] :=> '[]) ] ]
+-- >>> :{
+--  let migration :: Definition Schemas Schemas
+--      migration = alterTableIfExistsRename #goo #gar
+--  in printSQL migration
+-- :}
+-- ALTER TABLE IF EXISTS "goo" RENAME TO "gar";
 alterTableIfExistsRename
-  :: (KnownSymbol tab0, KnownSymbol tab1)
-  => Alias tab0 -- ^ table to rename
+  :: ( Has sch db schema
+     , KnownSymbol tab0
+     , KnownSymbol tab1 )
+  => QualifiedAlias sch tab0 -- ^ table to rename
   -> Alias tab1 -- ^ what to rename it
-  -> Definition schema (RenameIfExists tab0 tab1 schema)
+  -> Definition db (Alter sch (RenameIfExists tab0 tab1 schema) db )
 alterTableIfExistsRename tab0 tab1 = UnsafeDefinition $
   "ALTER TABLE IF EXISTS" <+> renderSQL tab0
   <+> "RENAME TO" <+> renderSQL tab1 <> ";"
+
+{- | This form moves the table into another schema.
+
+>>> type DB0 = '[ "sch0" ::: '[ "tab" ::: 'Table ('[] :=> '[]) ], "sch1" ::: '[] ]
+>>> type DB1 = '[ "sch0" ::: '[], "sch1" ::: '[ "tab" ::: 'Table ('[] :=> '[]) ] ]
+>>> :{
+let def :: Definition DB0 DB1
+    def = alterTableSetSchema (#sch0 ! #tab) #sch1
+in printSQL def
+:}
+ALTER TABLE "sch0"."tab" SET SCHEMA "sch1";
+-}
+alterTableSetSchema
+  :: ( Has sch0 db schema0
+     , Has tab schema0 ('Table table)
+     , Has sch1 db schema1 )
+  => QualifiedAlias sch0 tab -- ^ table to move
+  -> Alias sch1 -- ^ where to move it
+  -> Definition db (SetSchema sch0 sch1 schema0 schema1 tab 'Table table db)
+alterTableSetSchema tab sch = UnsafeDefinition $
+  "ALTER TABLE" <+> renderSQL tab <+> "SET SCHEMA" <+> renderSQL sch <> ";"
 
 -- | An `AlterTable` describes the alteration to perform on the columns
 -- of a table.
