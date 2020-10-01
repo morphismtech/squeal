@@ -1,5 +1,5 @@
 name: squeal-postgresql
-version: 0.7.0.0
+version: 0.7.0.1
 synopsis: Squeal PostgreSQL Library
 description: Squeal is a type-safe embedding of PostgreSQL in Haskell
 homepage: https://github.com/morphismtech/squeal
@@ -88,7 +88,7 @@ library
   ghc-options: -Wall
   build-depends:
       aeson >= 1.4.7.1
-    , base >= 4.13.0.0 && < 5.0
+    , base >= 4.12.0.0 && < 5.0
     , binary >= 0.8.7.0
     , binary-parser >= 0.5.5
     , bytestring >= 0.10.10.0
@@ -123,7 +123,7 @@ test-suite doctest
   ghc-options: -Wall
   main-is: Doc.hs
   build-depends:
-      base >= 4.13.0.0 && < 5.0
+      base >= 4.12.0.0 && < 5.0
     , doctest >= 0.16.3
     , squeal-postgresql
 
@@ -134,7 +134,7 @@ test-suite properties
   ghc-options: -Wall
   main-is: Property.hs
   build-depends:
-      base >= 4.13.0.0 && < 5.0
+      base >= 4.12.0.0 && < 5.0
     , bytestring >= 0.10.10.0
     , hedgehog >= 1.0.2
     , generics-sop >= 0.5.1.0
@@ -152,7 +152,7 @@ test-suite spec
   main-is: Spec.hs
   build-depends:
       async >= 2.2.2
-    , base >= 4.13.0.0 && < 5.0
+    , base >= 4.12.0.0 && < 5.0
     , bytestring >= 0.10.10.0
     , generics-sop >= 0.5.1.0
     , hspec >= 2.7.1
@@ -178,7 +178,7 @@ benchmark gauge
     -rtsopts
     -funbox-strict-fields
   build-depends:
-      base >= 4.13.0.0 && < 5.0
+      base >= 4.12.0.0 && < 5.0
     , bytestring >= 0.10.10.0
     , deepseq >= 1.4.4.0
     , gauge >= 0.2.5
