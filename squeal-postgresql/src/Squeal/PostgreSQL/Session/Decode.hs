@@ -58,6 +58,7 @@ import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
 import Data.Bits
+import Data.Coerce (coerce)
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind
 import Data.Scientific (Scientific)
@@ -229,6 +230,8 @@ instance KnownNat n => FromPG (FixChar n) where
         , "."
         ]
       Just x -> pure x
+instance FromPG x => FromPG (Const x tag) where
+  fromPG = coerce $ fromPG @x
 instance FromPG Day where
   fromPG = devalue date
 instance FromPG TimeOfDay where
