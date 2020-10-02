@@ -50,6 +50,7 @@ import Data.ByteString as Strict (ByteString)
 import Data.ByteString.Lazy as Lazy (ByteString)
 import Data.Coerce (coerce)
 import Data.Functor.Const (Const(Const))
+import Data.Functor.Constant (Constant(Constant))
 import Data.Functor.Contravariant
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind
@@ -125,6 +126,8 @@ instance ToPG db Lazy.ByteString where toPG = pure . bytea_lazy
 instance ToPG db (VarChar n) where toPG = pure . text_strict . getVarChar
 instance ToPG db (FixChar n) where toPG = pure . text_strict . getFixChar
 instance ToPG db x => ToPG db (Const x tag) where toPG = toPG @db @x . coerce
+instance ToPG db x => ToPG db (SOP.K x tag) where toPG = toPG @db @x . coerce
+instance ToPG db x => ToPG db (Constant x tag) where toPG = toPG @db @x . coerce
 instance ToPG db Day where toPG = pure . date
 instance ToPG db TimeOfDay where toPG = pure . time_int
 instance ToPG db (TimeOfDay, TimeZone) where toPG = pure . timetz_int
