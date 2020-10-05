@@ -50,6 +50,7 @@ module Squeal.PostgreSQL.Type.Schema
   , SchemaType
   , SchemasType
   , Public
+  , SubDB
     -- * Constraint
   , (:=>)
   , Optionality (..)
@@ -439,6 +440,15 @@ type family SetSchema sch0 sch1 schema0 schema1 obj srt ty db where
   SetSchema sch0 sch1 schema0 schema1 obj srt ty db = Alter sch1
     (Create obj (srt ty) schema1)
     (Alter sch0 (DropSchemum obj srt schema0) db)
+
+type family SubDB (db0 :: SchemasType) (db1 :: SchemasType) :: Bool where
+  SubDB '[] db1 = 'True
+  SubDB (sch ': db0) '[] = 'False
+  SubDB (sch ::: schema0 ': db0) (sch ::: schema1 ': db1) =
+    If (Sublist schema0 schema1)
+      (SubDB db0 db1)
+      (SubDB (sch ::: schema0 ': db0) db1)
+  SubDB db0 (sch1 ': db1) = SubDB db0 db1
 
 -- | Check if a `TableConstraint` involves a column
 type family ConstraintInvolves column constraint where

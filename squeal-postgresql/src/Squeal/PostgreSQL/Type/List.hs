@@ -41,6 +41,7 @@ module Squeal.PostgreSQL.Type.List
   , Elem
   , In
   , Length
+  , Sublist
   ) where
 
 import Control.Category.Free
@@ -107,3 +108,9 @@ Length '[Char,String,Bool,Double] :: Nat
 type family Length (xs :: [k]) :: Nat where
   Length '[] = 0
   Length (_ : xs) = 1 + Length xs
+
+type family Sublist (xs :: [k]) (ys :: [k]) :: Bool where
+  Sublist '[] ys = 'True
+  Sublist (x ': xs) '[] = 'False
+  Sublist (x ': xs) (x ': ys) = Sublist xs ys
+  Sublist (x ': xs) (y ': ys) = Sublist (x ': xs) ys
