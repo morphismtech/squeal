@@ -10,6 +10,7 @@ decoding of result values
 
 {-# LANGUAGE
     AllowAmbiguousTypes
+  , CPP
   , DataKinds
   , DerivingStrategies
   , FlexibleContexts
@@ -52,7 +53,10 @@ import BinaryParser
 import Control.Applicative
 import Control.Arrow
 import Control.Monad
+#if MIN_VERSION_base(4,13,0)
+#else
 import Control.Monad.Fail
+#endif
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
