@@ -1,7 +1,12 @@
 {-# LANGUAGE
     DataKinds
+  , DeriveGeneric
+  , DerivingStrategies
   , FlexibleInstances
+  , GeneralizedNewtypeDeriving
+  , MultiParamTypeClasses
   , OverloadedStrings
+  , TypeFamilies
   , TypeOperators
   , TypeSynonymInstances
 #-}
@@ -10,12 +15,42 @@
 
 module Squeal.PostgreSQL.LTree where
 
+import Data.String
+import Data.Text
+import GHC.Generics
 import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Render
-import Data.String
+
+import qualified PostgreSQL.Binary.Decoding as Decoding
+import qualified PostgreSQL.Binary.Encoding as Encoding
 
 type PGltree = 'UnsafePGType "ltree"
 type PGlquery = 'UnsafePGType "lquery"
+type PGltxtquery = 'UnsafePGType "ltxtquery"
+
+createLTree :: Definition db db
+createLTree = UnsafeDefinition "CREATE EXTENSION ltree;"
+
+ltree :: TypeExpression db (null PGltree)
+ltree = UnsafeTypeExpression "ltree"
+
+lquery :: TypeExpression db (null PGlquery)
+lquery = UnsafeTypeExpression "lquery"
+
+ltxtquery :: TypeExpression db (null PGltxtquery)
+ltxtquery = UnsafeTypeExpression "ltxtquery"
+
+instance PGTyped db PGltree where pgtype = ltree
+instance PGTyped db PGlquery where pgtype = lquery
+instance PGTyped db PGltxtquery where pgtype = ltxtquery
+
+newtype LTree = LTree {getLTree :: Text}
+  deriving stock (Eq,Ord,Show,Read,Generic)
+  deriving newtype IsString
+instance IsPG LTree where type PG LTree = PGltree
+instance FromPG LTree where fromPG = LTree <$> devalue Decoding.text_strict
+instance ToPG db LTree where toPG = pure . Encoding.text_strict . getLTree
+instance Inline LTree where inline = fromString . unpack . getLTree
 
 instance PGSubset PGltree
 
@@ -112,3 +147,151 @@ ltree2text = unsafeFunction "ltree2text"
 
 lca :: null ('PGvararray ('NotNull PGltree)) --> null PGltree
 lca = unsafeFunction "lca"
+
+-- ltree @> ltree → boolean
+
+-- Is left argument an ancestor of right (or equal)?
+
+-- ltree <@ ltree → boolean
+
+-- Is left argument a descendant of right (or equal)?
+
+-- ltree ~ lquery → boolean
+
+-- lquery ~ ltree → boolean
+
+-- Does ltree match lquery?
+
+(.~?) :: Operator (null0 PGltree) (null1 PGlquery) ('Null 'PGbool)
+(.~?) = unsafeBinaryOp "~"
+
+(?~.) :: Operator (null1 PGlquery) (null0 PGltree) ('Null 'PGbool)
+(?~.) = unsafeBinaryOp "~"
+
+-- ltree ? lquery[] → boolean
+
+-- lquery[] ? ltree → boolean
+
+-- Does ltree match any lquery in array?
+
+(.~??) :: Operator
+  (null0 PGltree) (null1 ('PGvararray (null2 PGlquery))) ('Null 'PGbool)
+(.~??) = unsafeBinaryOp "?"
+
+(??~.) :: Operator
+  (null0 ('PGvararray (null1 PGlquery))) (null2 PGltree) ('Null 'PGbool)
+(??~.) = unsafeBinaryOp "?"
+
+-- ltree @ ltxtquery → boolean
+
+-- ltxtquery @ ltree → boolean
+
+-- Does ltree match ltxtquery?
+
+(.~@) :: Operator
+  (null0 PGltree) (null1 ('PGvararray (null2 PGltxtquery))) ('Null 'PGbool)
+(.~@) = unsafeBinaryOp "@"
+
+(@~.) :: Operator
+  (null0 ('PGvararray (null1 PGltxtquery))) (null2 PGltree) ('Null 'PGbool)
+(@~.) = unsafeBinaryOp "@"
+
+-- ltree || ltree → ltree
+
+-- Concatenates ltree paths.
+
+-- ltree || text → ltree
+
+-- text || ltree → ltree
+
+-- Converts text to ltree and concatenates.
+
+-- ltree[] @> ltree → boolean
+
+-- ltree <@ ltree[] → boolean
+
+-- Does array contain an ancestor of ltree?
+
+(..@>) :: Operator
+  (null0 ('PGvararray (null1 PGltree))) (null2 PGltree) ('Null 'PGbool)
+(..@>) = unsafeBinaryOp "@>"
+
+(<@..) :: Operator
+  (null0 PGltree) (null1 ('PGvararray (null2 PGltree))) ('Null 'PGbool)
+(<@..) = unsafeBinaryOp "<@"
+
+-- ltree[] <@ ltree → boolean
+
+-- ltree @> ltree[] → boolean
+
+-- Does array contain a descendant of ltree?
+
+(..<@) :: Operator
+  (null0 ('PGvararray (null1 PGltree))) (null2 PGltree) ('Null 'PGbool)
+(..<@) = unsafeBinaryOp "<@"
+
+(@>..) :: Operator
+  (null0 PGltree) (null1 ('PGvararray (null2 PGltree))) ('Null 'PGbool)
+(@>..) = unsafeBinaryOp "@>"
+
+-- ltree[] ~ lquery → boolean
+
+-- lquery ~ ltree[] → boolean
+
+-- Does array contain any path matching lquery?
+
+(..~?) :: Operator
+  (null0 (PGvararray (null1 PGltree)) (null2 PGlquery)) ('Null 'PGbool)
+(..~?) = unsafeBinaryOp "~"
+
+(?~..) :: Operator
+  (null0 PGlquery) (null1 (PGvararray (null2 PGltree))) ('Null 'PGbool)
+(?~..) = unsafeBinaryOp "~"
+
+-- ltree[] ? lquery[] → boolean
+
+-- lquery[] ? ltree[] → boolean
+
+-- Does ltree array contain any path matching any lquery?
+
+(..~??) :: Operator
+  (null0 (PGvararray (null1 PGltree)))
+  (null2 (PGvarray null3 PGlquery)))
+  ('Null 'PGbool)
+(..~??) = unsafeBinaryOp "?"
+
+(??~..) :: Operator
+  (null0 (PGvararray (null1 PGlquery)))
+  (null2 (PGvararray (null3 PGltree)))
+  ('Null 'PGbool)
+(??~..) = unsafeBinaryOp "?"
+
+-- ltree[] @ ltxtquery → boolean
+
+-- ltxtquery @ ltree[] → boolean
+
+-- Does array contain any path matching ltxtquery?
+
+(..~@) :: Operator
+  (null0 ('PGvararray (null1 PGltree))) (null2 PGlxtquery) ('Null 'PGbool)
+(..~@) = unsafeBinaryOp "@"
+
+(@~..) :: Operator
+  (null0 PGltxtquery) (null1 ('PGvararray (null2 PGltree))) ('Null 'PGbool)
+(@~..) = unsafeBinaryOp "@"
+
+-- ltree[] ?@> ltree → ltree
+
+-- Returns first array entry that is an ancestor of ltree, or NULL if none.
+
+-- ltree[] ?<@ ltree → ltree
+
+-- Returns first array entry that is a descendant of ltree, or NULL if none.
+
+-- ltree[] ?~ lquery → ltree
+
+-- Returns first array entry that matches lquery, or NULL if none.
+
+-- ltree[] ?@ ltxtquery → ltree
+
+-- Returns first array entry that matches ltxtquery, or NULL if none.
