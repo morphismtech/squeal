@@ -1,3 +1,4 @@
 resolver: lts-16.16
 packages:
 - squeal-postgresql
+- squeal-postgresql-ltree
