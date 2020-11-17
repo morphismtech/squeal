@@ -44,15 +44,13 @@ instance PGTyped db PGltree where pgtype = ltree
 instance PGTyped db PGlquery where pgtype = lquery
 instance PGTyped db PGltxtquery where pgtype = ltxtquery
 
-newtype LTree = LTree {getLTree :: Text}
+newtype LTree = UnsafeLTree {getLTree :: Text}
   deriving stock (Eq,Ord,Show,Read,Generic)
   deriving newtype IsString
 instance IsPG LTree where type PG LTree = PGltree
-instance FromPG LTree where fromPG = LTree <$> devalue Decoding.text_strict
+instance FromPG LTree where fromPG = UnsafeLTree <$> devalue Decoding.text_strict
 instance ToPG db LTree where toPG = pure . Encoding.text_strict . getLTree
 instance Inline LTree where inline = fromString . unpack . getLTree
-
-instance PGSubset PGltree
 
 instance IsString
   (Expression grp lat with db params from (null PGltree)) where
@@ -156,17 +154,19 @@ lca = unsafeFunction "lca"
 
 -- Is left argument a descendant of right (or equal)?
 
+instance PGSubset PGltree
+
 -- ltree ~ lquery → boolean
 
 -- lquery ~ ltree → boolean
 
 -- Does ltree match lquery?
 
-(.~?) :: Operator (null0 PGltree) (null1 PGlquery) ('Null 'PGbool)
-(.~?) = unsafeBinaryOp "~"
+(.~) :: Operator (null0 PGltree) (null1 PGlquery) ('Null 'PGbool)
+(.~) = unsafeBinaryOp "~"
 
-(?~.) :: Operator (null1 PGlquery) (null0 PGltree) ('Null 'PGbool)
-(?~.) = unsafeBinaryOp "~"
+(~.) :: Operator (null1 PGlquery) (null0 PGltree) ('Null 'PGbool)
+(~.) = unsafeBinaryOp "~"
 
 -- ltree ? lquery[] → boolean
 
@@ -174,13 +174,13 @@ lca = unsafeFunction "lca"
 
 -- Does ltree match any lquery in array?
 
-(.~??) :: Operator
+(.?) :: Operator
   (null0 PGltree) (null1 ('PGvararray (null2 PGlquery))) ('Null 'PGbool)
-(.~??) = unsafeBinaryOp "?"
+(.?) = unsafeBinaryOp "?"
 
-(??~.) :: Operator
+(?.) :: Operator
   (null0 ('PGvararray (null1 PGlquery))) (null2 PGltree) ('Null 'PGbool)
-(??~.) = unsafeBinaryOp "?"
+(?.) = unsafeBinaryOp "?"
 
 -- ltree @ ltxtquery → boolean
 
@@ -188,13 +188,11 @@ lca = unsafeFunction "lca"
 
 -- Does ltree match ltxtquery?
 
-(.~@) :: Operator
-  (null0 PGltree) (null1 ('PGvararray (null2 PGltxtquery))) ('Null 'PGbool)
-(.~@) = unsafeBinaryOp "@"
+(.@) :: Operator (null PGltree) (null PGltxtquery) ('Null 'PGbool)
+(.@) = unsafeBinaryOp "@"
 
-(@~.) :: Operator
-  (null0 ('PGvararray (null1 PGltxtquery))) (null2 PGltree) ('Null 'PGbool)
-(@~.) = unsafeBinaryOp "@"
+(@.) :: Operator (null  PGltxtquery) (null PGltree) ('Null 'PGbool)
+(@.) = unsafeBinaryOp "@"
 
 -- ltree || ltree → ltree
 
@@ -212,13 +210,13 @@ lca = unsafeFunction "lca"
 
 -- Does array contain an ancestor of ltree?
 
-(..@>) :: Operator
+(@>.) :: Operator
   (null0 ('PGvararray (null1 PGltree))) (null2 PGltree) ('Null 'PGbool)
-(..@>) = unsafeBinaryOp "@>"
+(@>.) = unsafeBinaryOp "@>"
 
-(<@..) :: Operator
+(.<@) :: Operator
   (null0 PGltree) (null1 ('PGvararray (null2 PGltree))) ('Null 'PGbool)
-(<@..) = unsafeBinaryOp "<@"
+(.<@) = unsafeBinaryOp "<@"
 
 -- ltree[] <@ ltree → boolean
 
@@ -226,13 +224,13 @@ lca = unsafeFunction "lca"
 
 -- Does array contain a descendant of ltree?
 
-(..<@) :: Operator
+(<@.) :: Operator
   (null0 ('PGvararray (null1 PGltree))) (null2 PGltree) ('Null 'PGbool)
-(..<@) = unsafeBinaryOp "<@"
+(<@.) = unsafeBinaryOp "<@"
 
-(@>..) :: Operator
+(.@>) :: Operator
   (null0 PGltree) (null1 ('PGvararray (null2 PGltree))) ('Null 'PGbool)
-(@>..) = unsafeBinaryOp "@>"
+(.@>) = unsafeBinaryOp "@>"
 
 -- ltree[] ~ lquery → boolean
 
@@ -240,13 +238,13 @@ lca = unsafeFunction "lca"
 
 -- Does array contain any path matching lquery?
 
-(..~?) :: Operator
-  (null0 (PGvararray (null1 PGltree)) (null2 PGlquery)) ('Null 'PGbool)
-(..~?) = unsafeBinaryOp "~"
+(..~) :: Operator
+  (null0 ('PGvararray (null1 PGltree))) (null2 PGlquery) ('Null 'PGbool)
+(..~) = unsafeBinaryOp "~"
 
-(?~..) :: Operator
-  (null0 PGlquery) (null1 (PGvararray (null2 PGltree))) ('Null 'PGbool)
-(?~..) = unsafeBinaryOp "~"
+(~..) :: Operator
+  (null0 PGlquery) (null1 ('PGvararray (null2 PGltree))) ('Null 'PGbool)
+(~..) = unsafeBinaryOp "~"
 
 -- ltree[] ? lquery[] → boolean
 
@@ -254,17 +252,17 @@ lca = unsafeFunction "lca"
 
 -- Does ltree array contain any path matching any lquery?
 
-(..~??) :: Operator
-  (null0 (PGvararray (null1 PGltree)))
-  (null2 (PGvarray null3 PGlquery)))
+(..?) :: Operator
+  (null0 ('PGvararray (null1 PGltree)))
+  (null2 ('PGvararray (null3 PGlquery)))
   ('Null 'PGbool)
-(..~??) = unsafeBinaryOp "?"
+(..?) = unsafeBinaryOp "?"
 
-(??~..) :: Operator
-  (null0 (PGvararray (null1 PGlquery)))
-  (null2 (PGvararray (null3 PGltree)))
+(?..) :: Operator
+  (null0 ('PGvararray (null1 PGlquery)))
+  (null2 ('PGvararray (null3 PGltree)))
   ('Null 'PGbool)
-(??~..) = unsafeBinaryOp "?"
+(?..) = unsafeBinaryOp "?"
 
 -- ltree[] @ ltxtquery → boolean
 
@@ -272,26 +270,42 @@ lca = unsafeFunction "lca"
 
 -- Does array contain any path matching ltxtquery?
 
-(..~@) :: Operator
-  (null0 ('PGvararray (null1 PGltree))) (null2 PGlxtquery) ('Null 'PGbool)
-(..~@) = unsafeBinaryOp "@"
+(..@) :: Operator
+  (null0 ('PGvararray (null1 PGltree))) (null2 PGltxtquery) ('Null 'PGbool)
+(..@) = unsafeBinaryOp "@"
 
-(@~..) :: Operator
+(@..) :: Operator
   (null0 PGltxtquery) (null1 ('PGvararray (null2 PGltree))) ('Null 'PGbool)
-(@~..) = unsafeBinaryOp "@"
+(@..) = unsafeBinaryOp "@"
 
 -- ltree[] ?@> ltree → ltree
 
 -- Returns first array entry that is an ancestor of ltree, or NULL if none.
 
+(?@>) :: Operator
+  (null ('PGvararray ('NotNull PGltree))) (null PGltree) ('Null PGltree)
+(?@>) = unsafeBinaryOp "?@>"
+
 -- ltree[] ?<@ ltree → ltree
 
 -- Returns first array entry that is a descendant of ltree, or NULL if none.
+
+(?<@) :: Operator
+  (null ('PGvararray ('NotNull PGltree))) (null PGltree) ('Null PGltree)
+(?<@) = unsafeBinaryOp "?<@"
 
 -- ltree[] ?~ lquery → ltree
 
 -- Returns first array entry that matches lquery, or NULL if none.
 
+(?~) :: Operator
+  (null ('PGvararray ('NotNull PGltree))) (null PGlquery) ('Null PGltree)
+(?~) = unsafeBinaryOp "?~"
+
 -- ltree[] ?@ ltxtquery → ltree
 
 -- Returns first array entry that matches ltxtquery, or NULL if none.
+
+(?@) :: Operator
+  (null ('PGvararray ('NotNull PGltree))) (null PGltxtquery) ('Null PGltree)
+(?@) = unsafeBinaryOp "?@"
