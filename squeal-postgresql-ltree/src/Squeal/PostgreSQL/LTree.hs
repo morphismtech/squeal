@@ -48,9 +48,32 @@ newtype LTree = UnsafeLTree {getLTree :: Text}
   deriving stock (Eq,Ord,Show,Read,Generic)
   deriving newtype IsString
 instance IsPG LTree where type PG LTree = PGltree
-instance FromPG LTree where fromPG = UnsafeLTree <$> devalue Decoding.text_strict
-instance ToPG db LTree where toPG = pure . Encoding.text_strict . getLTree
-instance Inline LTree where inline = fromString . unpack . getLTree
+instance FromPG LTree where
+  fromPG = UnsafeLTree <$> devalue Decoding.text_strict
+instance ToPG db LTree where
+  toPG = pure . Encoding.text_strict . getLTree
+instance Inline LTree where
+  inline = fromString . unpack . getLTree
+
+newtype LQuery = UnsafeLQuery {getLQuery :: Text}
+  deriving stock (Eq,Ord,Show,Read,Generic)
+  deriving newtype IsString
+instance IsPG LQuery where type PG LQuery = PGltree
+instance FromPG LQuery where
+  fromPG = UnsafeLQuery <$> devalue Decoding.text_strict
+instance ToPG db LQuery where toPG = pure . Encoding.text_strict . getLQuery
+instance Inline LQuery where inline = fromString . unpack . getLQuery
+
+newtype LTxtQuery = UnsafeLTxtQuery {getLTxtQuery :: Text}
+  deriving stock (Eq,Ord,Show,Read,Generic)
+  deriving newtype IsString
+instance IsPG LTxtQuery where type PG LTxtQuery = PGltree
+instance FromPG LTxtQuery where
+  fromPG = UnsafeLTxtQuery <$> devalue Decoding.text_strict
+instance ToPG db LTxtQuery where
+  toPG = pure . Encoding.text_strict . getLTxtQuery
+instance Inline LTxtQuery where
+  inline = fromString . unpack . getLTxtQuery
 
 instance IsString
   (Expression grp lat with db params from (null PGltree)) where
@@ -283,7 +306,7 @@ instance PGSubset PGltree
 -- Returns first array entry that is an ancestor of ltree, or NULL if none.
 
 (?@>) :: Operator
-  (null ('PGvararray ('NotNull PGltree))) (null PGltree) ('Null PGltree)
+  (null0 ('PGvararray ('NotNull PGltree))) (null1 PGltree) ('Null PGltree)
 (?@>) = unsafeBinaryOp "?@>"
 
 -- ltree[] ?<@ ltree → ltree
@@ -291,7 +314,7 @@ instance PGSubset PGltree
 -- Returns first array entry that is a descendant of ltree, or NULL if none.
 
 (?<@) :: Operator
-  (null ('PGvararray ('NotNull PGltree))) (null PGltree) ('Null PGltree)
+  (null0 ('PGvararray ('NotNull PGltree))) (null1 PGltree) ('Null PGltree)
 (?<@) = unsafeBinaryOp "?<@"
 
 -- ltree[] ?~ lquery → ltree
@@ -299,7 +322,7 @@ instance PGSubset PGltree
 -- Returns first array entry that matches lquery, or NULL if none.
 
 (?~) :: Operator
-  (null ('PGvararray ('NotNull PGltree))) (null PGlquery) ('Null PGltree)
+  (null0 ('PGvararray ('NotNull PGltree))) (null1 PGlquery) ('Null PGltree)
 (?~) = unsafeBinaryOp "?~"
 
 -- ltree[] ?@ ltxtquery → ltree
@@ -307,5 +330,5 @@ instance PGSubset PGltree
 -- Returns first array entry that matches ltxtquery, or NULL if none.
 
 (?@) :: Operator
-  (null ('PGvararray ('NotNull PGltree))) (null PGltxtquery) ('Null PGltree)
+  (null0 ('PGvararray ('NotNull PGltree))) (null1 PGltxtquery) ('Null PGltree)
 (?@) = unsafeBinaryOp "?@"
