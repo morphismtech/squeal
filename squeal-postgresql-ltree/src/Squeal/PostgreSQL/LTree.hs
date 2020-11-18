@@ -66,7 +66,7 @@ type PGltxtquery = 'UnsafePGType "ltxtquery"
 
 -- | Loads ltree extension into the current database.
 createLTree :: Definition db db
-createLTree = UnsafeDefinition "CREATE EXTENSION ltree;"
+createLTree = UnsafeDefinition "CREATE EXTENSION \"ltree\";"
 
 -- | Postgres ltree type expression
 ltree :: TypeExpression db (null PGltree)
