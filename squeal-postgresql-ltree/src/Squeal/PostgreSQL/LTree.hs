@@ -17,6 +17,7 @@ labels of data stored in a hierarchical tree-like structure.
   , GeneralizedNewtypeDeriving
   , MultiParamTypeClasses
   , OverloadedStrings
+  , PolyKinds
   , TypeFamilies
   , TypeOperators
   , TypeSynonymInstances
@@ -42,12 +43,17 @@ module Squeal.PostgreSQL.LTree
   , (?@>), (?<@), (?~), (?@)
   ) where
 
+import Control.Monad.Reader
+import Data.ByteString (ByteString)
 import Data.String
 import Data.Text
 import GHC.Generics
 import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Render
+import UnliftIO (throwIO)
 
+import qualified Database.PostgreSQL.LibPQ as LibPQ
+import qualified Generics.SOP as SOP
 import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
 
@@ -77,6 +83,37 @@ ltxtquery = UnsafeTypeExpression "ltxtquery"
 instance PGTyped db PGltree where pgtype = ltree
 instance PGTyped db PGlquery where pgtype = lquery
 instance PGTyped db PGltxtquery where pgtype = ltxtquery
+
+instance OidOf db PGltree where
+  oidOf = oidLookup "oid" "ltree"
+instance OidOf db PGlquery where
+  oidOf = oidLookup "oid" "lquery"
+instance OidOf db PGltxtquery where
+  oidOf = oidLookup "oid" "ltxtquery"
+instance OidOfArray db PGltree where
+  oidOfArray = oidLookup "typarray" "ltree"
+instance OidOfArray db PGlquery where
+  oidOfArray = oidLookup "typarray" "lquery"
+instance OidOfArray db PGltxtquery where
+  oidOfArray = oidLookup "typarray" "ltxtquery"
+
+oidLookup
+  :: ByteString
+  -> ByteString
+  -> ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
+oidLookup tyOrArr name = ReaderT $ \(SOP.K conn) -> do
+  resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
+  case resultMaybe of
+    Nothing -> throwIO $ ConnectionException "LibPQ.execParams"
+    Just result -> do
+      valueMaybe <- LibPQ.getvalue result 0 0
+      case valueMaybe of
+        Nothing -> throwIO $ ConnectionException "LibPQ.getvalue"
+        Just value -> case Decoding.valueParser Decoding.int value of
+          Left err -> throwIO $ DecodingException "oidOfTy" err
+          Right oid' -> return $ LibPQ.Oid oid'
+  where
+    q = "SELECT " <> tyOrArr <> " FROM pg_type WHERE typname = \'" <> name <> "\';"
 
 {- |
 A label is a sequence of alphanumeric characters and underscores

@@ -26,6 +26,11 @@ library
   ghc-options: -Wall -Werror
   build-depends:
       base >= 4.12.0.0 && < 5.0
+    , bytestring >= 0.10.10.0
+    , generics-sop >= 0.5.1.0
+    , mtl >= 2.2.2
     , postgresql-binary >= 0.12.2
+    , postgresql-libpq >= 0.9.4.2
     , squeal-postgresql >= 0.7.0.1
     , text >= 1.2.3.2
+    , unliftio >= 0.2.12.1
