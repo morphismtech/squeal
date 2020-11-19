@@ -290,7 +290,6 @@ instance IsString
 subltree :: '[null PGltree, null 'PGint4, null 'PGint4] ---> null PGltree
 subltree = unsafeFunctionN "subltree"
 
-
 -- | Returns subpath of ltree starting at position offset, with length len.
 -- If offset is negative, subpath starts that far from the end of the path.
 -- If len is negative, leaves that many labels off the end of the path.
@@ -328,7 +327,6 @@ ltree2text = unsafeFunction "ltree2text"
 -- | Computes longest common ancestor of paths in array.
 lca :: null ('PGvararray ('NotNull PGltree)) --> null PGltree
 lca = unsafeFunction "lca"
-
 
 {- |
 `(@>)` Is left argument an ancestor of right (or equal)?
