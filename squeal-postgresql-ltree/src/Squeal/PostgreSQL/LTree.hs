@@ -335,9 +335,7 @@ lca = unsafeFunction "lca"
 
 `(<@)` Is left argument a descendant of right (or equal)?
 -}
-instance PGSubset PGltree where
-  (@>) = unsafeBinaryOp "@>"
-  (<@) = unsafeBinaryOp "<@"
+instance PGSubset PGltree
 
 -- | Does ltree match lquery?
 (%~) :: Operator (null0 PGltree) (null1 PGlquery) ('Null 'PGbool)
