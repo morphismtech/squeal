@@ -19,7 +19,9 @@ aggregate functions and arguments
   , OverloadedStrings
   , PatternSynonyms
   , PolyKinds
+  , ScopedTypeVariables
   , StandaloneDeriving
+  , TypeApplications
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
@@ -428,6 +430,13 @@ data AggregateArg
   , aggregateFilter :: [Condition 'Ungrouped lat with db params from]
     -- ^ `filterWhere`
   }
+
+instance (HasUnique tab (Join from lat) row, Has col row ty)
+  => IsLabel col (AggregateArg '[ty] lat with db params from) where
+    fromLabel = All (fromLabel @col)
+instance (Has tab (Join from lat) row, Has col row ty)
+  => IsQualified tab col (AggregateArg '[ty] lat with db params from) where
+    tab ! col = All (tab ! col)
 
 instance SOP.SListI xs => RenderSQL (AggregateArg xs lat with db params from) where
   renderSQL = \case
