@@ -197,6 +197,8 @@ instance (forall c s p r. RenderSQL (statement c s p r)) => RenderSQL
 
 {- | Force separate calculation of the WITH query.
 
+>>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
   qry :: Query lat with (Public Schema) params '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
@@ -219,6 +221,8 @@ materialized stmt = CommonTableExpression stmt Materialized
 
 {- | Force the WITH query to be merged into the parent query.
 
+>>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
 >>> :{
 let
   qry :: Query lat with (Public Schema) params '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
