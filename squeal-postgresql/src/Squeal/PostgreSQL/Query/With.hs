@@ -36,6 +36,7 @@ module Squeal.PostgreSQL.Query.With
     With (..)
   , CommonTableExpression (..)
   , withRecursive
+  , Materialization (..)
   , materialized
   , notMaterialized
   ) where
@@ -212,9 +213,9 @@ Note: if the last CTE has `materialized` or `notMaterialized` you must add `:>> 
 Requires PostgreSQL 12 or higher.
 -}
 materialized
-  :: CommonTableExpression statement db params with with1
-  -> CommonTableExpression statement db params with with1
-materialized (CommonTableExpression stmt _) = CommonTableExpression stmt Materialized
+  :: Aliased (statement with db params) (cte ::: common)
+  -> CommonTableExpression statement db params with (cte ::: common ': with)
+materialized stmt = CommonTableExpression stmt Materialized
 
 {- | Force the WITH query to be merged into the parent query.
 
@@ -235,6 +236,6 @@ Note: if the last CTE has `materialized` or `notMaterialized` you must add `:>> 
 Requires PostgreSQL 12 or higher.
 -}
 notMaterialized
-  :: CommonTableExpression statement db params with with1
-  -> CommonTableExpression statement db params with with1
-notMaterialized (CommonTableExpression stmt _) = CommonTableExpression stmt NotMaterialized
+  :: Aliased (statement with db params) (cte ::: common)
+  -> CommonTableExpression statement db params with (cte ::: common ': with)
+notMaterialized stmt = CommonTableExpression stmt NotMaterialized
