@@ -585,6 +585,8 @@ class PGSubset ty where
   (@>) = unsafeBinaryOp "@>"
   (<@) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
   (<@) = unsafeBinaryOp "<@"
+infix 4 @>
+infix 4 <@
 instance PGSubset 'PGjsonb
 instance PGSubset 'PGtsquery
 instance PGSubset ('PGvararray ty)
