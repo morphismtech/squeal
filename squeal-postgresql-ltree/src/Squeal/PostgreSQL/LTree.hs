@@ -338,28 +338,34 @@ instance PGSubset PGltree
 -- | Does ltree match lquery?
 (%~) :: Operator (null0 PGltree) (null1 PGlquery) ('Null 'PGbool)
 (%~) = unsafeBinaryOp "~"
+infix 4 %~
 
 -- | Does ltree match lquery?
 (~%) :: Operator (null1 PGlquery) (null0 PGltree) ('Null 'PGbool)
 (~%) = unsafeBinaryOp "~"
+infix 4 ~%
 
 -- | Does ltree match any lquery in array?
 (%?) :: Operator
   (null0 PGltree) (null1 ('PGvararray ('NotNull PGlquery))) ('Null 'PGbool)
 (%?) = unsafeBinaryOp "?"
+infix 4 %?
 
 -- | Does ltree match any lquery in array?
 (?%) :: Operator
   (null0 ('PGvararray ('NotNull PGlquery))) (null1 PGltree) ('Null 'PGbool)
 (?%) = unsafeBinaryOp "?"
+infix 4 ?%
 
 -- | Does ltree match ltxtquery?
 (%@) :: Operator (null0 PGltree) (null1 PGltxtquery) ('Null 'PGbool)
 (%@) = unsafeBinaryOp "@"
+infix 4 %@
 
 -- | Does ltree match ltxtquery?
 (@%) :: Operator (null0  PGltxtquery) (null1 PGltree) ('Null 'PGbool)
 (@%) = unsafeBinaryOp "@"
+infix 4 @%
 
 -- | `(<>)` Concatenates ltree paths.
 instance Semigroup
@@ -374,31 +380,37 @@ instance Monoid
 (@>%) :: Operator
   (null0 ('PGvararray ('NotNull PGltree))) (null1 PGltree) ('Null 'PGbool)
 (@>%) = unsafeBinaryOp "@>"
+infix 4 @>%
 
 -- | Does array contain an ancestor of ltree?
 (%<@) :: Operator
   (null0 PGltree) (null1 ('PGvararray ('NotNull PGltree))) ('Null 'PGbool)
 (%<@) = unsafeBinaryOp "<@"
+infix 4 %<@
 
 -- | Does array contain a descendant of ltree?
 (<@%) :: Operator
   (null0 ('PGvararray ('NotNull PGltree))) (null1 PGltree) ('Null 'PGbool)
 (<@%) = unsafeBinaryOp "<@"
+infix 4 <@%
 
 -- | Does array contain a descendant of ltree?
 (%@>) :: Operator
   (null0 PGltree) (null1 ('PGvararray ('NotNull PGltree))) ('Null 'PGbool)
 (%@>) = unsafeBinaryOp "@>"
+infix 4 %@>
 
 -- | Does array contain any path matching lquery?
 (&~) :: Operator
   (null0 ('PGvararray ('NotNull PGltree))) (null1 PGlquery) ('Null 'PGbool)
 (&~) = unsafeBinaryOp "~"
+infix 4 &~
 
 -- | Does array contain any path matching lquery?
 (~&) :: Operator
   (null0 PGlquery) (null1 ('PGvararray ('NotNull PGltree))) ('Null 'PGbool)
 (~&) = unsafeBinaryOp "~"
+infix 4 ~&
 
 -- | Does ltree array contain any path matching any lquery?
 (&?) :: Operator
@@ -406,6 +418,7 @@ instance Monoid
   (null1 ('PGvararray ('NotNull PGlquery)))
   ('Null 'PGbool)
 (&?) = unsafeBinaryOp "?"
+infix 4 &?
 
 -- | Does ltree array contain any path matching any lquery?
 (?&) :: Operator
@@ -413,33 +426,40 @@ instance Monoid
   (null1 ('PGvararray ('NotNull PGltree)))
   ('Null 'PGbool)
 (?&) = unsafeBinaryOp "?"
+infix 4 ?&
 
 -- | Does array contain any path matching ltxtquery?
 (&@) :: Operator
   (null0 ('PGvararray ('NotNull PGltree))) (null1 PGltxtquery) ('Null 'PGbool)
 (&@) = unsafeBinaryOp "@"
+infix 4 &@
 
 -- | Does array contain any path matching ltxtquery?
 (@&) :: Operator
   (null0 PGltxtquery) (null1 ('PGvararray ('NotNull PGltree))) ('Null 'PGbool)
 (@&) = unsafeBinaryOp "@"
+infix 4 @&
 
 -- | Returns first array entry that is an ancestor of ltree, or NULL if none.
 (?@>) :: Operator
   (null0 ('PGvararray ('NotNull PGltree))) (null1 PGltree) ('Null PGltree)
 (?@>) = unsafeBinaryOp "?@>"
+infix 4 ?@>
 
 -- | Returns first array entry that is a descendant of ltree, or NULL if none.
 (?<@) :: Operator
   (null0 ('PGvararray ('NotNull PGltree))) (null1 PGltree) ('Null PGltree)
 (?<@) = unsafeBinaryOp "?<@"
+infix 4 ?<@
 
 -- | Returns first array entry that matches lquery, or NULL if none.
 (?~) :: Operator
   (null0 ('PGvararray ('NotNull PGltree))) (null1 PGlquery) ('Null PGltree)
 (?~) = unsafeBinaryOp "?~"
+infix 4 ?~
 
 -- | Returns first array entry that matches ltxtquery, or NULL if none.
 (?@) :: Operator
   (null0 ('PGvararray ('NotNull PGltree))) (null1 PGltxtquery) ('Null PGltree)
 (?@) = unsafeBinaryOp "?@"
+infix 4 ?@
