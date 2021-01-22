@@ -1,5 +1,6 @@
 resolver: lts-16.16
 packages:
 - squeal-postgresql
+- squeal-postgresql-plugin
 - squeal-postgresql-ltree
 - squeal-postgresql-uuid-ossp
