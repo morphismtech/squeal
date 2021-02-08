@@ -17,13 +17,15 @@
 
 module Main (main) where
 
-import Squeal.PostgreSQL
+import Data.Proxy
+import Squeal.PostgreSQL hiding (Has)
+import Squeal.PostgreSQL.Has
 
 main :: IO ()
 main = putStrLn "plugin test"
 
-example1 :: Has "foo" '["bar" ::: Int, "f0o" ::: Double, "baz" ::: Char] Double => ()
-example1 = ()
+example1 :: Has "foo" '["bar" ::: Int, "f0o" ::: Double, "baz" ::: Char] x => Proxy x -> ()
+example1 _ = ()
 
 example2 :: ()
-example2 = example1
+example2 = example1 Proxy

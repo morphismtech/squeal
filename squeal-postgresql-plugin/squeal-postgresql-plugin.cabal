@@ -19,6 +19,7 @@ source-repository head
 library
   hs-source-dirs: src
   exposed-modules:
+    Squeal.PostgreSQL.Has
     Squeal.PostgreSQL.Plugin
   default-language: Haskell2010
   ghc-options: -Wall -Werror
@@ -35,4 +36,5 @@ test-suite plugin
   main-is: Plugin.hs
   build-depends:
       base >= 4.12.0.0 && < 5.0
+    , squeal-postgresql
     , squeal-postgresql-plugin
