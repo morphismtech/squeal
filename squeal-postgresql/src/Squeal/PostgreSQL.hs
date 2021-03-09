@@ -87,7 +87,51 @@ We can easily see the generated SQL is unsurprising looking.
 CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));
 CREATE TABLE "emails" ("id" serial, "user_id" int NOT NULL, "email" text NULL, CONSTRAINT "pk_emails" PRIMARY KEY ("id"), CONSTRAINT "fk_user_id" FOREIGN KEY ("user_id") REFERENCES "users" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
 
-Notice that @setup@ starts with an empty public schema @(Public '[])@ and produces @DB@.
+It may seem duplicative to define _both_ `DB` and `setup`.
+In fact, `DB` can be inferred from `setup`!
+
+>>> :{
+let
+  setup :: Definition (Public '[]) _
+  setup =
+    createTable #users
+      ( serial `as` #id :*
+        (text & notNullable) `as` #name )
+      ( primaryKey #id `as` #pk_users ) >>>
+    createTable #emails
+      ( serial `as` #id :*
+        (int & notNullable) `as` #user_id :*
+        (text & nullable) `as` #email )
+      ( primaryKey #id `as` #pk_emails :*
+        foreignKey #user_id #users #id
+          (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_user_id )
+:}
+<BLANKLINE>
+<interactive>:78:36: error:
+    • Found type wildcard ‘_’
+        standing for ‘'["public"
+                        ::: ('("users",
+                               'Table
+                                 ('["pk_users" ::: 'PrimaryKey '["id"]]
+                                  :=> '["id" ::: '( 'Def, 'NotNull 'PGint4),
+                                        "name" ::: '( 'NoDef, 'NotNull 'PGtext)]))
+                               : Create
+                                   "emails"
+                                   ('Table
+                                      ('["pk_emails" ::: 'PrimaryKey '["id"],
+                                         "fk_user_id"
+                                         ::: 'ForeignKey '["user_id"] "public" "users" '["id"]]
+                                       :=> '["id" ::: '( 'Def, 'NotNull 'PGint4),
+                                             "user_id" ::: '( 'NoDef, 'NotNull 'PGint4),
+                                             "email" ::: '( 'NoDef, 'Null 'PGtext)]))
+                                   '[])] :: [(ghc-prim-0.5.3:GHC.Types.Symbol,
+                                              [(ghc-prim-0.5.3:GHC.Types.Symbol, SchemumType)])]’
+      To use the inferred type, enable PartialTypeSignatures
+    • In the second argument of ‘Definition’, namely ‘_’
+      In the type ‘Definition (Public '[]) _’
+      In the type signature: setup :: Definition (Public '[]) _
+
+Notice that @setup@ started with an empty public schema @(Public '[])@ and produced @DB@.
 In our `createTable` commands we included `TableConstraint`s to define
 primary and foreign keys, making them somewhat complex. Our @teardown@
 `Definition` is simpler.
