@@ -45,6 +45,7 @@ module Squeal.PostgreSQL.LTree
 
 import Control.Monad.Reader
 import Data.ByteString (ByteString)
+import Data.Int
 import Data.String
 import Data.Text
 import GHC.Generics
@@ -143,9 +144,17 @@ newtype LTree = UnsafeLTree {getLTree :: Text}
 -- | `PGltree`
 instance IsPG LTree where type PG LTree = PGltree
 instance FromPG LTree where
-  fromPG = UnsafeLTree <$> devalue Decoding.text_strict
+  -- fromPG = UnsafeLTree <$> devalue Decoding.text_strict
+  fromPG = UnsafeLTree <$> devalue decodeLTree
+    where
+      decodeLTree = do
+        version <- Decoding.int
+        unless ((version :: Int16) == 1) $ fail "fromPG @LTree version 1 expected"
+        Decoding.text_strict
 instance ToPG db LTree where
-  toPG = pure . Encoding.text_strict . getLTree
+  -- toPG = pure . Encoding.text_strict . getLTree
+  toPG (UnsafeLTree path) = pure $
+    Encoding.int2_int16 1 <> Encoding.text_strict path
 instance Inline LTree where
   inline
     = UnsafeExpression
