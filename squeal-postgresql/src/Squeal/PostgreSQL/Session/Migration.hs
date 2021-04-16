@@ -177,7 +177,7 @@ import Data.Text (Text)
 import Data.Time (UTCTime)
 import Prelude hiding ((.), id)
 import System.Environment
-import UnliftIO (MonadIO (..))
+import UnliftIO (MonadIO (..), mask, onException)
 
 import qualified Data.Text.IO as Text (putStrLn)
 import qualified Generics.SOP as SOP
@@ -227,7 +227,7 @@ class (Category def, Category run) => Migratory def run | def -> run where
   runMigrations :: Path (Migration def) db0 db1 -> run db0 db1
 -- | impure migrations
 instance Migratory (Indexed PQ IO ()) (Indexed PQ IO ()) where
-  runMigrations path = Indexed . unsafePQ . transactionally_ $ do
+  runMigrations path = Indexed . unsafePQ . unsafeTx $ do
     define createMigrations
     qtoMonoid upMigration path
     where
@@ -243,7 +243,7 @@ instance Migratory Definition (Indexed PQ IO ()) where
   runMigrations = runMigrations . qmap (qmap ixDefine)
 -- | impure rewinds
 instance Migratory (OpQ (Indexed PQ IO ())) (OpQ (Indexed PQ IO ())) where
-  runMigrations path = OpQ . Indexed . unsafePQ . transactionally_ $ do
+  runMigrations path = OpQ . Indexed . unsafePQ . unsafeTx $ do
     define createMigrations
     qtoMonoid @FoldPath downMigration (reversePath path)
     where
@@ -270,6 +270,13 @@ instance Migratory (IsoQ Definition) (IsoQ (Indexed PQ IO ())) where
 
 unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
 unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
+
+unsafeTx :: PQ db db IO x -> PQ db1 db2 IO x
+unsafeTx tx = unsafePQ $ mask $ \restore -> do
+  manipulate_ $ begin defaultMode
+  result <- restore tx `onException` (manipulate_ rollback)
+  manipulate_ commit
+  return result
 
 -- | Run migrations.
 migrate

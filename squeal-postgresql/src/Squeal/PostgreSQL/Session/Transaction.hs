@@ -13,12 +13,15 @@ transaction control language
   , FlexibleContexts
   , LambdaCase
   , OverloadedStrings
+  , RankNTypes
   , TypeInType
 #-}
 
 module Squeal.PostgreSQL.Session.Transaction
   ( -- * Transaction
-    transactionally
+    Transaction
+  , transactionallyUnsafe
+  , transactionally
   , transactionally_
   , transactionallyRetry
   , ephemerally
@@ -41,6 +44,24 @@ import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Session.Exception
 import Squeal.PostgreSQL.Session.Monad
+import Squeal.PostgreSQL.Session.Result
+
+-- | A `Transaction` conceptually should consist of
+-- only of database commands, extracting values from the
+-- result of those commands, and pure computations
+-- using those values.
+type Transaction db x =
+  forall pq. (MonadPQ db pq, MonadResult pq) => pq x
+
+{- | Since `MonadResult` inherits from `MonadIO`,
+you can `liftIO` to build a `Transaction`.
+However, since you can `transactionallyRetry`,
+it is better practice to use `transactionallyUnsafe`
+with a comment justifying why the action is idempotent,
+and hence safe.
+-} 
+transactionallyUnsafe :: IO x -> Transaction db x
+transactionallyUnsafe = liftIO
 
 {- | Run a computation `transactionally`;
 first `begin`,
@@ -49,9 +70,9 @@ then run the computation,
 otherwise `commit` and `return` the result.
 -}
 transactionally
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadUnliftIO tx, MonadPQ db tx, MonadResult tx)
   => TransactionMode
-  -> tx x -- ^ run inside a transaction
+  -> Transaction db x -- ^ run inside a transaction
   -> tx x
 transactionally mode tx = mask $ \restore -> do
   manipulate_ $ begin mode
@@ -61,8 +82,8 @@ transactionally mode tx = mask $ \restore -> do
 
 -- | Run a computation `transactionally_`, in `defaultMode`.
 transactionally_
-  :: (MonadUnliftIO tx, MonadPQ db tx)
-  => tx x -- ^ run inside a transaction
+  :: (MonadUnliftIO tx, MonadPQ db tx, MonadResult tx)
+  => Transaction db x -- ^ run inside a transaction
   -> tx x
 transactionally_ = transactionally defaultMode
 
