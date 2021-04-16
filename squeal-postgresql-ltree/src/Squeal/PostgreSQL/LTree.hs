@@ -21,7 +21,6 @@ labels of data stored in a hierarchical tree-like structure.
   , TypeFamilies
   , TypeOperators
   , TypeSynonymInstances
-  , UndecidableInstances
 #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -46,10 +45,10 @@ module Squeal.PostgreSQL.LTree
 
 import Control.Monad.Reader
 import Data.ByteString (ByteString)
+import Data.Int
 import Data.String
 import Data.Text
 import GHC.Generics
-import GHC.TypeLits
 import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Render
 import UnliftIO (throwIO)
@@ -144,16 +143,18 @@ newtype LTree = UnsafeLTree {getLTree :: Text}
   deriving stock (Eq,Ord,Show,Read,Generic)
 -- | `PGltree`
 instance IsPG LTree where type PG LTree = PGltree
-instance TypeError
-  ('Text "PostgreSQL does not support binary output for ltree, cast it to text.")
-  => FromPG LTree where
-  fromPG = error
-    "PostgreSQL does not support binary output for ltree, cast it to text."
-instance TypeError
-  ('Text "PostgreSQL does not support binary input for ltree, use inline or cast from text.")
-  => ToPG db LTree where
-  toPG _ = error
-    "PostgreSQL does not support binary input for ltree, use inline or cast from text."
+instance FromPG LTree where
+  -- fromPG = UnsafeLTree <$> devalue Decoding.text_strict
+  fromPG = UnsafeLTree <$> devalue decodeLTree
+    where
+      decodeLTree = do
+        version <- Decoding.int
+        unless ((version :: Int16) == 1) $ fail "fromPG @LTree version 1 expected"
+        Decoding.text_strict
+instance ToPG db LTree where
+  -- toPG = pure . Encoding.text_strict . getLTree
+  toPG (UnsafeLTree path) = pure $
+    Encoding.int2_int16 1 <> Encoding.text_strict path
 instance Inline LTree where
   inline
     = UnsafeExpression
