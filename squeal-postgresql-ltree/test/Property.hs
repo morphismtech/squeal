@@ -45,10 +45,6 @@ roundtrips = Group "roundtrips"
       labels <- replicateM n $
         Gen.string (Range.constant 1 50) Gen.ascii
       return $ UnsafeLTree $ fromString $ intercalate "." labels
-    -- genStringAscii = Gen.string (Range.linear 0 100) Gen.ascii
-    -- genStringLatin1 = Gen.string (Range.linear 0 100) Gen.latin1
-    -- genStringUnicode = Gen.string (Range.linear 0 100) Gen.unicode
-    -- genStringAll = Gen.string (Range.linear 0 100) Gen.unicodeAll
 
 roundtrip
   :: forall x
@@ -87,17 +83,3 @@ connectionString :: ByteString
 connectionString = "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 
 type DB = '["public" ::: '[]]
-
--- normalizeAscii :: String -> String
--- normalizeAscii = (stripped =<<)
---   where
---     stripped = \case
---       '\NUL' -> ""
---       ch -> [ch]
-
--- normalizeUtf8 :: String -> String
--- normalizeUtf8 = (stripped =<<)
---   where
---     stripped = \case
---       '\NUL' -> ""
---       ch -> [ch]
