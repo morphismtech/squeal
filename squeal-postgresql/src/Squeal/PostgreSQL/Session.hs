@@ -317,6 +317,8 @@ instance (Monad m, Semigroup r, db0 ~ db1) => Semigroup (PQ db0 db1 m r) where
 instance (Monad m, Monoid r, db0 ~ db1) => Monoid (PQ db0 db1 m r) where
   mempty = pure mempty
 
+instance MonadResult io => MonadResult (PQ db db io)
+
 -- | Do `connectdb` and `finish` before and after a computation.
 withConnection
   :: forall db0 db1 io x
