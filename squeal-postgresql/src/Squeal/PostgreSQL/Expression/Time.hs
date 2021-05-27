@@ -17,16 +17,20 @@ date/time functions and operators
   , OverloadedStrings
   , PolyKinds
   , RankNTypes
+  , TypeFamilies
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Expression.Time
   ( -- * Time Operation
     TimeOp (..)
     -- * Time Function
+  , atTimeZone
   , currentDate
   , currentTime
   , currentTimestamp
+  , dateTrunc
   , localTime
   , localTimestamp
   , now
@@ -41,12 +45,14 @@ module Squeal.PostgreSQL.Expression.Time
 
 import Data.Fixed
 import Data.String
+import GHC.TypeLits
 
 import qualified GHC.Generics as GHC
 import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Render
+import Squeal.PostgreSQL.Type.List
 import Squeal.PostgreSQL.Type.Schema
 
 -- $setup
@@ -127,6 +133,48 @@ makeTimestamptz ::
 makeTimestamptz = unsafeFunctionN "make_timestamptz"
 
 {-|
+Truncate a timestamp with the specified precision
+
+>>> printSQL $ dateTrunc Quarter (makeTimestamp (2010 :* 5 :* 6 :* 14 :* 45 *: 11.4))
+date_trunc('quarter', make_timestamp((2010 :: int4), (5 :: int4), (6 :: int4), (14 :: int4), (45 :: int4), (11.4 :: float8)))
+-}
+dateTrunc
+  :: time `In` '[ 'PGtimestamp, 'PGtimestamptz ]
+  => TimeUnit -> null time --> null time
+dateTrunc tUnit args = unsafeFunctionN "date_trunc" (timeUnitExpr *: args)
+  where
+  timeUnitExpr :: forall grp lat with db params from null0.
+    Expression grp lat with db params from (null0 'PGtext)
+  timeUnitExpr = UnsafeExpression . singleQuotedUtf8 . renderSQL $ tUnit
+
+type family PGAtTimeZone ty where
+  PGAtTimeZone 'PGtimestamptz = 'PGtimestamp
+  PGAtTimeZone 'PGtimestamp = 'PGtimestamptz
+  PGAtTimeZone 'PGtimetz = 'PGtimetz
+  PGAtTimeZone pg = TypeError
+    ( 'Text "Squeal type error: AT TIME ZONE cannot be applied to "
+      ':<>: 'ShowType pg )
+
+{-|
+Convert a timestamp, timestamp with time zone, or time of day with timezone to a different timezone using an interval offset or specific timezone denoted by text. When using the interval offset, the interval duration must be less than one day or 24 hours.
+
+>>> printSQL $ (makeTimestamp (2009 :* 7 :* 22 :* 19 :* 45 *: 11.4)) `atTimeZone` (interval_ 8 Hours)
+(make_timestamp((2009 :: int4), (7 :: int4), (22 :: int4), (19 :: int4), (45 :: int4), (11.4 :: float8)) AT TIME ZONE (INTERVAL '8.000 hours'))
+
+>>> :{
+ let
+   timezone :: Expression grp lat with db params from (null 'PGtext)
+   timezone = "EST"
+ in printSQL $ (makeTimestamptz (2015 :* 9 :* 15 :* 4 :* 45 *: 11.4)) `atTimeZone` timezone
+:}
+(make_timestamptz((2015 :: int4), (9 :: int4), (15 :: int4), (4 :: int4), (45 :: int4), (11.4 :: float8)) AT TIME ZONE (E'EST' :: text))
+-}
+atTimeZone
+  :: zone `In` '[ 'PGtext, 'PGinterval]
+  => Operator (null time) (null zone) (null (PGAtTimeZone time))
+atTimeZone = unsafeBinaryOp "AT TIME ZONE"
+
+{-|
 Affine space operations on time types.
 -}
 class TimeOp time diff | time -> diff where
@@ -167,7 +215,7 @@ infixl 6 !-!
 
 -- | A `TimeUnit` to use in `interval_` construction.
 data TimeUnit
-  = Years | Months | Weeks | Days
+  = Years | Quarter | Months | Weeks | Days
   | Hours | Minutes | Seconds
   | Microseconds | Milliseconds
   | Decades | Centuries | Millennia
@@ -177,6 +225,7 @@ instance SOP.HasDatatypeInfo TimeUnit
 instance RenderSQL TimeUnit where
   renderSQL = \case
     Years -> "years"
+    Quarter -> "quarter"
     Months -> "months"
     Weeks -> "weeks"
     Days -> "days"
