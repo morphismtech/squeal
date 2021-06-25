@@ -36,6 +36,7 @@ import qualified Generics.SOP.Record as SOP
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Session.Decode
+import Squeal.PostgreSQL.Session.Encode
 import Squeal.PostgreSQL.Session.Result
 import Squeal.PostgreSQL.Session.Statement
 import Squeal.PostgreSQL.Query

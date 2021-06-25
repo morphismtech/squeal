@@ -26,7 +26,6 @@ module Squeal.PostgreSQL.Session.Statement
   ( Statement (..)
   , query
   , manipulation
-  , GenericParams
   , GenericRow
   ) where
 
@@ -86,16 +85,6 @@ instance Functor (Statement db x) where fmap = rmap
 instance RenderSQL (Statement db x y) where
   renderSQL (Manipulation _ _ q) = renderSQL q
   renderSQL (Query _ _ q) = renderSQL q
-
--- | A `GenericParams` constraint to ensure that
--- a Haskell type is a product type,
--- all its terms have known Oids,
--- and can be encoded to corresponding
--- Postgres types.
-type GenericParams db params x xs =
-  ( SOP.All (OidOfNull db) params
-  , SOP.IsProductType x xs
-  , SOP.AllZip (ToParam db) params xs )
 
 -- | A `GenericRow` constraint to ensure that
 -- a Haskell type is a record type,
