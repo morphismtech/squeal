@@ -124,7 +124,7 @@ roundtrip
   :: forall x
    . ( ToPG DB x, FromPG x, Inline x
      , OidOf DB (PG x), PGTyped DB (PG x)
-     , Show x, Eq x )
+     , Show x, Eq x, NullPG x ~ 'NotNull (PG x) )
   => TypeExpression DB ('NotNull (PG x))
   -> Gen x
   -> (PropertyName, Property)
@@ -134,7 +134,7 @@ roundtripOn
   :: forall x
    . ( ToPG DB x, FromPG x, Inline x
      , OidOf DB (PG x), PGTyped DB (PG x)
-     , Show x, Eq x )
+     , Show x, Eq x, NullPG x ~ 'NotNull (PG x) )
   => (x -> x)
   -> TypeExpression DB ('NotNull (PG x))
   -> Gen x
