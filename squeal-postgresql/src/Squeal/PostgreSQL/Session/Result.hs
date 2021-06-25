@@ -9,8 +9,7 @@ Get values from a `Result`.
 -}
 
 {-# LANGUAGE
-    DefaultSignatures
-  , FlexibleContexts
+    FlexibleContexts
   , GADTs
   , LambdaCase
   , OverloadedStrings
@@ -20,7 +19,10 @@ Get values from a `Result`.
 
 module Squeal.PostgreSQL.Session.Result
   ( Result (..)
-  , MonadResult (..)
+  , getRow
+  , firstRow
+  , getRows
+  , nextRow
   , cmdStatus
   , cmdTuples
   , ntuples
@@ -29,6 +31,7 @@ module Squeal.PostgreSQL.Session.Result
   , okResult
   , resultErrorMessage
   , resultErrorCode
+  , liftResult
   ) where
 
 import Control.Exception (throw)
@@ -65,97 +68,83 @@ data Result y where
 instance Functor Result where
   fmap f (Result decode result) = Result (fmap f decode) result
 
-class MonadIO io => MonadResult io where
+-- | Get a row corresponding to a given row number from a `LibPQ.Result`,
+-- throwing an exception if the row number is out of bounds.
+getRow :: MonadIO io => LibPQ.Row -> Result y -> io y
+getRow r (Result decode result) = liftIO $ do
+  numRows <- LibPQ.ntuples result
+  numCols <- LibPQ.nfields result
+  when (numRows < r) $ throw $ RowsException "getRow" r numRows
+  row' <- traverse (LibPQ.getvalue result r) [0 .. numCols - 1]
+  case SOP.fromList row' of
+    Nothing -> throw $ ColumnsException "getRow" numCols
+    Just row -> case execDecodeRow decode row of
+      Left parseError -> throw $ DecodingException "getRow" parseError
+      Right y -> return y
 
-  -- | Get a row corresponding to a given row number from a `LibPQ.Result`,
-  -- throwing an exception if the row number is out of bounds.
-  getRow :: LibPQ.Row -> Result y -> io y
-  default getRow :: MonadIO io => LibPQ.Row -> Result y -> io y
-  getRow r (Result decode result) = liftIO $ do
-    numRows <- LibPQ.ntuples result
+-- | Intended to be used for unfolding in streaming libraries, `nextRow`
+-- takes a total number of rows (which can be found with `ntuples`)
+-- and a `LibPQ.Result` and given a row number if it's too large returns `Nothing`,
+-- otherwise returning the row along with the next row number.
+nextRow
+  :: MonadIO io
+  => LibPQ.Row -- ^ total number of rows
+  -> Result y -- ^ result
+  -> LibPQ.Row -- ^ row number
+  -> io (Maybe (LibPQ.Row, y))
+nextRow total (Result decode result) r
+  = liftIO $ if r >= total then return Nothing else do
     numCols <- LibPQ.nfields result
-    when (numRows < r) $ throw $ RowsException "getRow" r numRows
     row' <- traverse (LibPQ.getvalue result r) [0 .. numCols - 1]
     case SOP.fromList row' of
-      Nothing -> throw $ ColumnsException "getRow" numCols
+      Nothing -> throw $ ColumnsException "nextRow" numCols
       Just row -> case execDecodeRow decode row of
-        Left parseError -> throw $ DecodingException "getRow" parseError
+        Left parseError -> throw $ DecodingException "nextRow" parseError
+        Right y -> return $ Just (r+1, y)
+
+-- | Get all rows from a `LibPQ.Result`.
+getRows :: MonadIO io => Result y -> io [y]
+getRows (Result decode result) = liftIO $ do
+  numCols <- LibPQ.nfields result
+  numRows <- LibPQ.ntuples result
+  for [0 .. numRows - 1] $ \ r -> do
+    row' <- traverse (LibPQ.getvalue result r) [0 .. numCols - 1]
+    case SOP.fromList row' of
+      Nothing -> throw $ ColumnsException "getRows" numCols
+      Just row -> case execDecodeRow decode row of
+        Left parseError -> throw $ DecodingException "getRows" parseError
         Right y -> return y
 
-  -- | Intended to be used for unfolding in streaming libraries, `nextRow`
-  -- takes a total number of rows (which can be found with `ntuples`)
-  -- and a `LibPQ.Result` and given a row number if it's too large returns `Nothing`,
-  -- otherwise returning the row along with the next row number.
-  nextRow
-    :: LibPQ.Row -- ^ total number of rows
-    -> Result y -- ^ result
-    -> LibPQ.Row -- ^ row number
-    -> io (Maybe (LibPQ.Row, y))
-  default nextRow
-    :: MonadIO io
-    => LibPQ.Row -- ^ total number of rows
-    -> Result y -- ^ result
-    -> LibPQ.Row -- ^ row number
-    -> io (Maybe (LibPQ.Row, y))
-  nextRow total (Result decode result) r
-    = liftIO $ if r >= total then return Nothing else do
-      numCols <- LibPQ.nfields result
-      row' <- traverse (LibPQ.getvalue result r) [0 .. numCols - 1]
-      case SOP.fromList row' of
-        Nothing -> throw $ ColumnsException "nextRow" numCols
-        Just row -> case execDecodeRow decode row of
-          Left parseError -> throw $ DecodingException "nextRow" parseError
-          Right y -> return $ Just (r+1, y)
+-- | Get the first row if possible from a `LibPQ.Result`.
+firstRow :: MonadIO io => Result y -> io (Maybe y)
+firstRow (Result decode result) = liftIO $ do
+  numRows <- LibPQ.ntuples result
+  numCols <- LibPQ.nfields result
+  if numRows <= 0 then return Nothing else do
+    row' <- traverse (LibPQ.getvalue result 0) [0 .. numCols - 1]
+    case SOP.fromList row' of
+      Nothing -> throw $ ColumnsException "firstRow" numCols
+      Just row -> case execDecodeRow decode row of
+        Left parseError -> throw $ DecodingException "firstRow" parseError
+        Right y -> return $ Just y
 
-  -- | Get all rows from a `LibPQ.Result`.
-  getRows :: Result y -> io [y]
-  default getRows :: MonadIO io => Result y -> io [y]
-  getRows (Result decode result) = liftIO $ do
-    numCols <- LibPQ.nfields result
-    numRows <- LibPQ.ntuples result
-    for [0 .. numRows - 1] $ \ r -> do
-      row' <- traverse (LibPQ.getvalue result r) [0 .. numCols - 1]
-      case SOP.fromList row' of
-        Nothing -> throw $ ColumnsException "getRows" numCols
-        Just row -> case execDecodeRow decode row of
-          Left parseError -> throw $ DecodingException "getRows" parseError
-          Right y -> return y
-
-  -- | Get the first row if possible from a `LibPQ.Result`.
-  firstRow :: Result y -> io (Maybe y)
-  default firstRow :: MonadIO io => Result y -> io (Maybe y)
-  firstRow (Result decode result) = liftIO $ do
-    numRows <- LibPQ.ntuples result
-    numCols <- LibPQ.nfields result
-    if numRows <= 0 then return Nothing else do
-      row' <- traverse (LibPQ.getvalue result 0) [0 .. numCols - 1]
-      case SOP.fromList row' of
-        Nothing -> throw $ ColumnsException "firstRow" numCols
-        Just row -> case execDecodeRow decode row of
-          Left parseError -> throw $ DecodingException "firstRow" parseError
-          Right y -> return $ Just y
-
-  -- | Lifts actions on results from @LibPQ@.
-  liftResult
-    :: (LibPQ.Result -> IO x)
-    -> Result y -> io x
-  default liftResult
-    :: MonadIO io
-    => (LibPQ.Result -> IO x)
-    -> Result y -> io x
-  liftResult f (Result _ result) = liftIO $ f result
-instance MonadResult IO
+-- | Lifts actions on results from @LibPQ@.
+liftResult
+  :: MonadIO io
+  => (LibPQ.Result -> IO x)
+  -> Result y -> io x
+liftResult f (Result _ result) = liftIO $ f result
 
 -- | Returns the number of rows (tuples) in the query result.
-ntuples :: MonadResult io => Result y -> io LibPQ.Row
+ntuples :: MonadIO io => Result y -> io LibPQ.Row
 ntuples = liftResult LibPQ.ntuples
 
 -- | Returns the number of columns (fields) in the query result.
-nfields :: MonadResult io => Result y -> io LibPQ.Column
+nfields :: MonadIO io => Result y -> io LibPQ.Column
 nfields = liftResult LibPQ.nfields
 
 -- | Returns the result status of the command.
-resultStatus :: MonadResult io => Result y -> io LibPQ.ExecStatus
+resultStatus :: MonadIO io => Result y -> io LibPQ.ExecStatus
 resultStatus = liftResult LibPQ.resultStatus
 
 {- |
@@ -164,7 +153,7 @@ that generated the `Result`.
 Commonly this is just the name of the command,
 but it might include additional data such as the number of rows processed.
 -}
-cmdStatus :: MonadResult io => Result y -> io Text
+cmdStatus :: MonadIO io => Result y -> io Text
 cmdStatus = liftResult (getCmdStatus <=< LibPQ.cmdStatus)
   where
     getCmdStatus = \case
@@ -182,7 +171,7 @@ contains an INSERT, UPDATE, or DELETE statement.
 If the command that generated the PGresult was anything else,
 `cmdTuples` returns `Nothing`.
 -}
-cmdTuples :: MonadResult io => Result y -> io (Maybe LibPQ.Row)
+cmdTuples :: MonadIO io => Result y -> io (Maybe LibPQ.Row)
 cmdTuples = liftResult (getCmdTuples <=< LibPQ.cmdTuples)
   where
     getCmdTuples = \case
@@ -192,8 +181,8 @@ cmdTuples = liftResult (getCmdTuples <=< LibPQ.cmdTuples)
         then Nothing
         else fromInteger <$> readMaybe (Char8.unpack bytes)
 
-okResult_ :: LibPQ.Result -> IO ()
-okResult_ result = do
+okResult_ :: MonadIO io => LibPQ.Result -> io ()
+okResult_ result = liftIO $ do
   status <- LibPQ.resultStatus result
   case status of
     LibPQ.CommandOk -> return ()
@@ -210,13 +199,13 @@ okResult_ result = do
 
 -- | Check if a `Result`'s status is either `LibPQ.CommandOk`
 -- or `LibPQ.TuplesOk` otherwise `throw` a `SQLException`.
-okResult :: MonadResult io => Result y -> io ()
+okResult :: MonadIO io => Result y -> io ()
 okResult = liftResult okResult_ 
 
 -- | Returns the error message most recently generated by an operation
 -- on the connection.
 resultErrorMessage
-  :: MonadResult io => Result y -> io (Maybe ByteString)
+  :: MonadIO io => Result y -> io (Maybe ByteString)
 resultErrorMessage = liftResult LibPQ.resultErrorMessage
 
 -- | Returns the error code most recently generated by an operation
@@ -224,7 +213,7 @@ resultErrorMessage = liftResult LibPQ.resultErrorMessage
 --
 -- https://www.postgresql.org/docs/current/static/errcodes-appendix.html
 resultErrorCode
-  :: MonadResult io
+  :: MonadIO io
   => Result y
   -> io (Maybe ByteString)
 resultErrorCode = liftResult (flip LibPQ.resultErrorField LibPQ.DiagSqlstate)
