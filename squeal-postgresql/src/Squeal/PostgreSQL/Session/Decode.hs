@@ -10,7 +10,6 @@ decoding of result values
 
 {-# LANGUAGE
     AllowAmbiguousTypes
-  , ConstraintKinds
   , CPP
   , DataKinds
   , DerivingStrategies

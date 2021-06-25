@@ -11,8 +11,7 @@ together with an `EncodeParams` and a `DecodeRow`.
 -}
 
 {-# LANGUAGE
-    ConstraintKinds
-  , DataKinds
+    DataKinds
   , DeriveFunctor
   , DeriveFoldable
   , DeriveGeneric
