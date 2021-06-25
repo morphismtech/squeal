@@ -31,9 +31,6 @@ import Control.Monad
 import Control.Monad.Morph
 import Prelude hiding (id, (.))
 
-import qualified Generics.SOP as SOP
-import qualified Generics.SOP.Record as SOP
-
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Session.Decode
 import Squeal.PostgreSQL.Session.Encode
@@ -427,8 +424,7 @@ in
 runQueryParams ::
   ( MonadPQ db pq
   , GenericParams db params x xs
-  , SOP.IsRecord y ys
-  , SOP.AllZip FromField row ys
+  , GenericRow row y ys
   ) => Query '[] '[] db params row
     -- ^ `Squeal.PostgreSQL.Query.Select.select` and friends
     -> x -> pq (Result y)
@@ -454,7 +450,7 @@ in
 4
 -}
 runQuery
-  :: (MonadPQ db pq, SOP.IsRecord y ys, SOP.AllZip FromField row ys)
+  :: (MonadPQ db pq, GenericRow row y ys)
   => Query '[] '[] db '[] row
   -- ^ `Squeal.PostgreSQL.Query.Select.select` and friends
   -> pq (Result y)
@@ -503,9 +499,8 @@ in
 traversePrepared
   :: ( MonadPQ db pq
      , GenericParams db params x xs
-     , Traversable list
-     , SOP.IsRecord y ys
-     , SOP.AllZip FromField row ys )
+     , GenericRow row y ys
+     , Traversable list )
   => Manipulation '[] db params row
   -- ^ `Squeal.PostgreSQL.Manipulation.Insert.insertInto`,
   -- `Squeal.PostgreSQL.Manipulation.Update.update`,
@@ -554,9 +549,8 @@ in
 forPrepared
   :: ( MonadPQ db pq
      , GenericParams db params x xs
-     , Traversable list
-     , SOP.IsRecord y ys
-     , SOP.AllZip FromField row ys )
+     , GenericRow row y ys
+     , Traversable list )
   => list x
   -> Manipulation '[] db params row
   -- ^ `Squeal.PostgreSQL.Manipulation.Insert.insertInto`,

@@ -26,14 +26,12 @@ module Squeal.PostgreSQL.Session.Statement
   ( Statement (..)
   , query
   , manipulation
-  , GenericRow
   ) where
 
 import Data.Functor.Contravariant
 import Data.Profunctor (Profunctor (..))
 
 import qualified Generics.SOP as SOP
-import qualified Generics.SOP.Record as SOP
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Session.Decode
@@ -85,14 +83,6 @@ instance Functor (Statement db x) where fmap = rmap
 instance RenderSQL (Statement db x y) where
   renderSQL (Manipulation _ _ q) = renderSQL q
   renderSQL (Query _ _ q) = renderSQL q
-
--- | A `GenericRow` constraint to ensure that
--- a Haskell type is a record type,
--- and all its fields and can be decoded from corresponding
--- Postgres fields.
-type GenericRow row y ys =
-  ( SOP.IsRecord y ys
-  , SOP.AllZip FromField row ys )
 
 -- | Smart constructor for a structured query language statement
 query ::
