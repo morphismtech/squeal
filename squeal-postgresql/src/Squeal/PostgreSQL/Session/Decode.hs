@@ -40,8 +40,7 @@ module Squeal.PostgreSQL.Session.Decode
   , DecodeRow (..)
   , decodeRow
   , runDecodeRow
-  , GenericRow
-  , genericRow
+  , GenericRow (..)
   , appendRows
   , consRow
     -- * Decoding Classes
