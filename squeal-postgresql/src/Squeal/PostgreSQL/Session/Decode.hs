@@ -522,13 +522,13 @@ instance {-# OVERLAPPABLE #-} IsLabel fld (MaybeT (DecodeRow row) y)
     fromLabel = MaybeT . decodeRow $ \(_ SOP.:* bs) ->
       runDecodeRow (runMaybeT (fromLabel @fld)) bs
 
--- | A `GenericRow` constraint to ensure that
--- a Haskell type is a record type,
--- and all its fields and can be decoded from corresponding
--- Postgres fields.
+-- | A `GenericRow` constraint to ensure that a Haskell type
+-- is a record type,
+-- has a `RowPG`,
+-- and all its fields and can be decoded from corresponding Postgres fields.
 class
-  ( row ~ RowPG y
-  , SOP.IsRecord y ys
+  ( SOP.IsRecord y ys
+  , row ~ RowPG y
   , SOP.AllZip FromField row ys
   ) => GenericRow row y ys where
   {- | Row decoder for `SOP.Generic` records.

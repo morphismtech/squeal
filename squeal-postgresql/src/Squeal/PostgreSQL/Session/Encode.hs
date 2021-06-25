@@ -340,16 +340,15 @@ newtype EncodeParams
 instance Contravariant (EncodeParams db tys) where
   contramap f (EncodeParams g) = EncodeParams (g . f)
 
--- | A `GenericParams` constraint to ensure that
--- a Haskell type is a product type,
--- it has a `TuplePG`,
--- all its terms have known Oids,
--- and can be encoded to corresponding
--- Postgres types.
+-- | A `GenericParams` constraint to ensure that a Haskell type
+-- is a product type,
+-- has a `TuplePG`,
+-- and all its terms have known Oids,
+-- and can be encoded to corresponding Postgres types.
 class
-  ( params ~ TuplePG x
+  ( SOP.IsProductType x xs
+  , params ~ TuplePG x
   , SOP.All (OidOfNull db) params
-  , SOP.IsProductType x xs
   , SOP.AllZip (ToParam db) params xs
   ) => GenericParams db params x xs where
   {- | Parameter encoding for `SOP.Generic` tuples and records.
