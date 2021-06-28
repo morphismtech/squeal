@@ -45,7 +45,6 @@ module Squeal.PostgreSQL.LTree
 
 import Control.Monad.Reader
 import Data.ByteString (ByteString)
-import Data.Int
 import Data.String
 import Data.Text
 import GHC.Generics
@@ -53,6 +52,7 @@ import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Render
 import UnliftIO (throwIO)
 
+import qualified BinaryParser
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified Generics.SOP as SOP
 import qualified PostgreSQL.Binary.Decoding as Decoding
@@ -148,8 +148,8 @@ instance FromPG LTree where
   fromPG = UnsafeLTree <$> devalue decodeLTree
     where
       decodeLTree = do
-        version <- Decoding.int
-        unless ((version :: Int16) == 1) $ fail "fromPG @LTree version 1 expected"
+        version <- BinaryParser.byte
+        unless (version == 1) $ fail "fromPG @LTree version 1 expected"
         Decoding.text_strict
 instance ToPG db LTree where
   -- toPG = pure . Encoding.text_strict . getLTree
