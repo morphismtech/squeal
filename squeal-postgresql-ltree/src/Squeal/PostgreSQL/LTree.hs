@@ -53,6 +53,7 @@ import Squeal.PostgreSQL.Render
 import UnliftIO (throwIO)
 
 import qualified BinaryParser
+import qualified ByteString.StrictBuilder as Builder
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified Generics.SOP as SOP
 import qualified PostgreSQL.Binary.Decoding as Decoding
@@ -154,7 +155,7 @@ instance FromPG LTree where
 instance ToPG db LTree where
   -- toPG = pure . Encoding.text_strict . getLTree
   toPG (UnsafeLTree path) = pure $
-    Encoding.int2_int16 1 <> Encoding.text_strict path
+    Builder.word8 1 <> Encoding.text_strict path
 instance Inline LTree where
   inline
     = UnsafeExpression
