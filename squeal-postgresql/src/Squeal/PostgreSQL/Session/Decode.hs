@@ -26,6 +26,7 @@ decoding of result values
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
+  , UndecidableSuperClasses
 #-}
 
 module Squeal.PostgreSQL.Session.Decode
@@ -38,7 +39,7 @@ module Squeal.PostgreSQL.Session.Decode
   , DecodeRow (..)
   , decodeRow
   , runDecodeRow
-  , genericRow
+  , GenericRow (..)
   , appendRows
   , consRow
     -- * Decoding Classes
@@ -520,34 +521,46 @@ instance {-# OVERLAPPABLE #-} IsLabel fld (MaybeT (DecodeRow row) y)
     fromLabel = MaybeT . decodeRow $ \(_ SOP.:* bs) ->
       runDecodeRow (runMaybeT (fromLabel @fld)) bs
 
-{- | Row decoder for `SOP.Generic` records.
-
->>> import qualified GHC.Generics as GHC
->>> import qualified Generics.SOP as SOP
->>> data Two = Two {frst :: Int16, scnd :: String} deriving (Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
->>> :{
-let
-  decode :: DecodeRow '[ "frst" ::: 'NotNull 'PGint2, "scnd" ::: 'NotNull 'PGtext] Two
-  decode = genericRow
-in runDecodeRow decode (SOP.K (Just "\NUL\STX") :* SOP.K (Just "two") :* Nil)
-:}
-Right (Two {frst = 2, scnd = "two"})
--}
-genericRow :: forall row y ys.
+-- | A `GenericRow` constraint to ensure that a Haskell type
+-- is a record type,
+-- has a `RowPG`,
+-- and all its fields and can be decoded from corresponding Postgres fields.
+class
   ( SOP.IsRecord y ys
+  , row ~ RowPG y
   , SOP.AllZip FromField row ys
-  ) => DecodeRow row y
-genericRow
-  = DecodeRow
-  . ReaderT
-  $ fmap SOP.fromRecord
-  . SOP.hsequence'
-  . SOP.htrans (SOP.Proxy @FromField) (SOP.Comp . runField)
-runField
-  :: forall ty y. FromField ty y
-  => SOP.K (Maybe Strict.ByteString) ty
-  -> Except Strict.Text (SOP.P y)
-runField = liftEither . fromField @ty . SOP.unK
+  ) => GenericRow row y ys where
+  {- | Row decoder for `SOP.Generic` records.
+
+  >>> import qualified GHC.Generics as GHC
+  >>> import qualified Generics.SOP as SOP
+  >>> data Two = Two {frst :: Int16, scnd :: String} deriving (Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
+  >>> :{
+  let
+    decode :: DecodeRow '[ "frst" ::: 'NotNull 'PGint2, "scnd" ::: 'NotNull 'PGtext] Two
+    decode = genericRow
+  in runDecodeRow decode (SOP.K (Just "\NUL\STX") :* SOP.K (Just "two") :* Nil)
+  :}
+  Right (Two {frst = 2, scnd = "two"})
+  -}
+  genericRow :: DecodeRow row y
+instance
+  ( row ~ RowPG y
+  , SOP.IsRecord y ys
+  , SOP.AllZip FromField row ys
+  ) => GenericRow row y ys where
+  genericRow
+    = DecodeRow
+    . ReaderT
+    $ fmap SOP.fromRecord
+    . SOP.hsequence'
+    . SOP.htrans (SOP.Proxy @FromField) (SOP.Comp . runField)
+    where
+      runField
+        :: forall ty z. FromField ty z
+        => SOP.K (Maybe Strict.ByteString) ty
+        -> Except Strict.Text (SOP.P z)
+      runField = liftEither . fromField @ty . SOP.unK
 
 {- |
 >>> :{
