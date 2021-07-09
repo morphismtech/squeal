@@ -61,7 +61,9 @@ module Squeal.PostgreSQL.Expression.Json
   , jsonEach
   , jsonbEach
   , jsonEachText
+  , jsonArrayElementsText
   , jsonbEachText
+  , jsonbArrayElementsText
   , jsonObjectKeys
   , jsonbObjectKeys
   , JsonPopulateFunction
@@ -361,6 +363,16 @@ jsonEachText
     ("json_each_text" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGtext])
 jsonEachText = unsafeSetFunction "json_each_text"
 
+{- | Returns a set of text values from a JSON array
+
+>>> printSQL (select Star (from (jsonArrayElementsText (inline (Json (toJSON ["monkey", "pony", "bear"] ))))))
+SELECT * FROM json_array_elements_text(('["monkey","pony","bear"]' :: json))
+-}
+jsonArrayElementsText
+  :: null 'PGjson -|->
+    ("json_array_elements_text" ::: '["value" ::: 'NotNull 'PGtext])
+jsonArrayElementsText = unsafeSetFunction "json_array_elements_text"
+
 {- | Expands the outermost binary JSON object into a set of key/value pairs.
 
 >>> printSQL (select Star (from (jsonbEachText (inline (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
@@ -390,6 +402,16 @@ jsonbObjectKeys
   :: null 'PGjsonb -|->
     ("jsonb_object_keys" ::: '["jsonb_object_keys" ::: 'NotNull 'PGtext])
 jsonbObjectKeys = unsafeSetFunction "jsonb_object_keys"
+
+{- | Returns a set of text values from a binary JSON array
+
+>>> printSQL (select Star (from (jsonbArrayElementsText (inline (Jsonb (toJSON ["red", "green", "cyan"] ))))))
+SELECT * FROM jsonb_array_elements_text(('["red","green","cyan"]' :: jsonb))
+-}
+jsonbArrayElementsText
+  :: null 'PGjsonb -|->
+    ("jsonb_array_elements_text" ::: '["value" ::: 'NotNull 'PGtext])
+jsonbArrayElementsText = unsafeSetFunction "jsonb_array_elements_text"
 
 -- | Build rows from Json types.
 type JsonPopulateFunction fun json
