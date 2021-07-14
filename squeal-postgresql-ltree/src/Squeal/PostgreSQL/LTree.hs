@@ -52,6 +52,8 @@ import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Render
 import UnliftIO (throwIO)
 
+import qualified BinaryParser
+import qualified ByteString.StrictBuilder as Builder
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified Generics.SOP as SOP
 import qualified PostgreSQL.Binary.Decoding as Decoding
@@ -143,9 +145,17 @@ newtype LTree = UnsafeLTree {getLTree :: Text}
 -- | `PGltree`
 instance IsPG LTree where type PG LTree = PGltree
 instance FromPG LTree where
-  fromPG = UnsafeLTree <$> devalue Decoding.text_strict
+  -- fromPG = UnsafeLTree <$> devalue Decoding.text_strict
+  fromPG = UnsafeLTree <$> devalue decodeLTree
+    where
+      decodeLTree = do
+        version <- BinaryParser.byte
+        unless (version == 1) $ fail "fromPG @LTree version 1 expected"
+        Decoding.text_strict
 instance ToPG db LTree where
-  toPG = pure . Encoding.text_strict . getLTree
+  -- toPG = pure . Encoding.text_strict . getLTree
+  toPG (UnsafeLTree path) = pure $
+    Builder.word8 1 <> Encoding.text_strict path
 instance Inline LTree where
   inline
     = UnsafeExpression
