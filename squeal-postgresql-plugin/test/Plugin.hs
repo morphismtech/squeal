@@ -24,7 +24,7 @@ import Squeal.PostgreSQL.Has
 main :: IO ()
 main = putStrLn "plugin test"
 
-example1 :: Has "foo" '["bar" ::: Int, "f0o" ::: Double, "baz" ::: Char] x => Proxy x -> ()
+example1 :: Has "foo" '["bar" ::: Int, "foo" ::: Double, "baz" ::: Char] x => Proxy x -> ()
 example1 _ = ()
 
 example2 :: ()

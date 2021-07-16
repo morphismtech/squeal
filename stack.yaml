@@ -1,4 +1,4 @@
-resolver: lts-16.16
+resolver: lts-17.10
 packages:
 - squeal-postgresql
 - squeal-postgresql-plugin
