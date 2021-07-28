@@ -173,24 +173,29 @@ oidOfTypedef
 oidOfTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
-    Nothing -> throwIO $ ConnectionException "LibPQ.execParams"
+    Nothing -> throwIO $ ConnectionException oidErr
     Just result -> do
+      numRows <- LibPQ.ntuples result
+      when (numRows /= 1) $ throwIO $ RowsException oidErr 1 numRows
       valueMaybe <- LibPQ.getvalue result 0 0
       case valueMaybe of
-        Nothing -> throwIO $ ConnectionException "LibPQ.getvalue"
+        Nothing -> throwIO $ ConnectionException oidErr
         Just value -> case valueParser int value of
-          Left err -> throwIO $ DecodingException "oidOfTypedef" err
+          Left err -> throwIO $ DecodingException oidErr err
           Right oid -> return $ LibPQ.Oid oid
   where
+    tyVal = symbolVal (SOP.Proxy @ty)
+    schVal = symbolVal (SOP.Proxy @sch)
+    oidErr = "oidOfTypedef " <> fromString (schVal <> "." <> tyVal)
     q = ByteString.intercalate " "
       [ "SELECT pg_type.oid"
       , "FROM pg_type"
       , "INNER JOIN pg_namespace"
       , "ON pg_type.typnamespace = pg_namespace.oid"
       , "WHERE pg_type.typname = "
-      , "\'" <> fromString (symbolVal (SOP.Proxy @ty)) <> "\'"
+      , "\'" <> fromString tyVal <> "\'"
       , "AND pg_namespace.nspname = "
-      , "\'" <> fromString (symbolVal (SOP.Proxy @sch)) <> "\'"
+      , "\'" <> fromString schVal <> "\'"
       , ";" ]
 
 oidOfArrayTypedef
@@ -200,22 +205,27 @@ oidOfArrayTypedef
 oidOfArrayTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
-    Nothing -> throwIO $ ConnectionException "LibPQ.execParams"
+    Nothing -> throwIO $ ConnectionException oidErr
     Just result -> do
+      numRows <- LibPQ.ntuples result
+      when (numRows /= 1) $ throwIO $ RowsException oidErr 1 numRows
       valueMaybe <- LibPQ.getvalue result 0 0
       case valueMaybe of
-        Nothing -> throwIO $ ConnectionException "LibPQ.getvalue"
+        Nothing -> throwIO $ ConnectionException oidErr
         Just value -> case valueParser int value of
-          Left err -> throwIO $ DecodingException "oidOfArray" err
+          Left err -> throwIO $ DecodingException oidErr err
           Right oid -> return $ LibPQ.Oid oid
   where
+    tyVal = symbolVal (SOP.Proxy @ty)
+    schVal = symbolVal (SOP.Proxy @sch)
+    oidErr = "oidOfArrayTypedef " <> fromString (schVal <> "." <> tyVal)
     q = ByteString.intercalate " "
       [ "SELECT pg_type.typelem"
       , "FROM pg_type"
       , "INNER JOIN pg_namespace"
       , "ON pg_type.typnamespace = pg_namespace.oid"
       , "WHERE pg_type.typname = "
-      , "\'" <> fromString (symbolVal (SOP.Proxy @ty)) <> "\'"
+      , "\'" <> fromString tyVal <> "\'"
       , "AND pg_namespace.nspname = "
-      , "\'" <> fromString (symbolVal (SOP.Proxy @sch)) <> "\'"
+      , "\'" <> fromString schVal <> "\'"
       , ";" ]
