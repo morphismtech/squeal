@@ -9,17 +9,8 @@ transaction control language
 -}
 
 {-# LANGUAGE
-    DataKinds
-  , FlexibleContexts
-  , FlexibleInstances
-  , FunctionalDependencies
-  , LambdaCase
-  , MonoLocalBinds
-  , MultiParamTypeClasses
-  , OverloadedStrings
+    MonoLocalBinds
   , RankNTypes
-  , TypeInType
-  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Session.Transaction
