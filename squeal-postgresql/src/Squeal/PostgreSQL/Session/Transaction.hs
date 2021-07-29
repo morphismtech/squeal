@@ -25,8 +25,10 @@ transaction control language
 module Squeal.PostgreSQL.Session.Transaction
   ( -- * Transaction
     Transaction
-  , MonadTransaction (..)
+  , transactionally
   , transactionally_
+  , transactionallyRetry
+  , ephemerally
   , ephemerally_
     -- * Transaction Mode
   , TransactionMode (..)
@@ -53,34 +55,49 @@ import qualified Squeal.PostgreSQL.Session.Transaction.Unsafe as Unsafe
 
 type Transaction db x = forall m. (MonadPQ db m, MonadResult m) => m x
 
-class Monad tx => MonadTransaction db tx | tx -> db where
-  transactionally
-    :: TransactionMode
-    -> Transaction db x
-    -> tx x
-  transactionallyRetry
-    :: TransactionMode
-    -> Transaction db x
-    -> tx x
-  ephemerally
-    :: TransactionMode
-    -> Transaction db x
-    -> tx x
+transactionally
+  :: (MonadUnliftIO tx, MonadPQ db tx)
+  => TransactionMode
+  -> Transaction db x -- ^ run inside a transaction
+  -> tx x
+transactionally = Unsafe.transactionally
 
-instance (MonadUnliftIO tx, MonadPQ db tx, MonadResult tx)
-  => MonadTransaction db tx where
-    transactionally = Unsafe.transactionally
-    transactionallyRetry = Unsafe.transactionallyRetry
-    ephemerally = Unsafe.ephemerally
-
+-- | Run a computation `transactionally_`, in `defaultMode`.
 transactionally_
-  :: MonadTransaction db tx
-  => Transaction db x
+  :: (MonadUnliftIO tx, MonadPQ db tx)
+  => Transaction db x -- ^ run inside a transaction
   -> tx x
-transactionally_ = transactionally defaultMode
+transactionally_ = Unsafe.transactionally_
 
-ephemerally_
-  :: MonadTransaction db tx
-  => Transaction db x
+{- |
+`transactionallyRetry` a computation;
+
+* first `begin`,
+* then `try` the computation,
+  - if it raises a serialization failure then `rollback` and restart the transaction,
+  - if it raises any other exception then `rollback` and rethrow the exception,
+  - otherwise `commit` and `return` the result.
+-}
+transactionallyRetry
+  :: (MonadUnliftIO tx, MonadPQ db tx)
+  => TransactionMode
+  -> Transaction db x -- ^ run inside a transaction
   -> tx x
-ephemerally_ = ephemerally defaultMode
+transactionallyRetry = Unsafe.transactionallyRetry
+
+{- | Run a computation `ephemerally`;
+Like `transactionally` but always `rollback`, useful in testing.
+-}
+ephemerally
+  :: (MonadUnliftIO tx, MonadPQ db tx)
+  => TransactionMode
+  -> Transaction db x -- ^ run inside an ephemeral transaction
+  -> tx x
+ephemerally = Unsafe.ephemerally
+
+{- | Run a computation `ephemerally` in `defaultMode`. -}
+ephemerally_
+  :: (MonadUnliftIO tx, MonadPQ db tx)
+  => Transaction db x -- ^ run inside an ephemeral transaction
+  -> tx x
+ephemerally_ = Unsafe.ephemerally_
