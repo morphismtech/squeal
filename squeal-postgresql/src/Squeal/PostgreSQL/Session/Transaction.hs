@@ -55,6 +55,12 @@ import qualified Squeal.PostgreSQL.Session.Transaction.Unsafe as Unsafe
 
 type Transaction db x = forall m. (MonadPQ db m, MonadResult m) => m x
 
+{- | Run a computation `transactionally`;
+first `begin`,
+then run the computation,
+`onException` `rollback` and rethrow the exception,
+otherwise `commit` and `return` the result.
+-}
 transactionally
   :: (MonadUnliftIO tx, MonadPQ db tx)
   => TransactionMode
