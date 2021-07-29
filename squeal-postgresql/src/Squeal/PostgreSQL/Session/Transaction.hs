@@ -69,9 +69,9 @@ class Monad tx => MonadTransaction db tx | tx -> db where
 
 instance (MonadUnliftIO tx, MonadPQ db tx, MonadResult tx)
   => MonadTransaction db tx where
-    transactionally mode tx = Unsafe.transactionally mode tx
-    transactionallyRetry mode tx = Unsafe.transactionallyRetry mode tx
-    ephemerally mode tx = Unsafe.ephemerally mode tx
+    transactionally = Unsafe.transactionally
+    transactionallyRetry = Unsafe.transactionallyRetry
+    ephemerally = Unsafe.ephemerally
 
 transactionally_
   :: MonadTransaction db tx
