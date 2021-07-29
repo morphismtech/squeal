@@ -44,6 +44,15 @@ import Squeal.PostgreSQL.Session.Transaction.Unsafe
   )
 import qualified Squeal.PostgreSQL.Session.Transaction.Unsafe as Unsafe
 
+{- | A type of "safe" `Transaction`s,
+do-blocks that permit only database operations and pure
+functions, forbidding arbitrary `IO` operations.
+To permit arbitrary `IO`,
+
+>>> import qualified Squeal.PostgreSQL.Session.Transaction.Unsafe as Unsafe
+
+Then use the @Unsafe@ qualified form of the functions below.
+-} 
 type Transaction db x = forall m. (MonadPQ db m, MonadResult m) => m x
 
 {- | Run a computation `transactionally`;

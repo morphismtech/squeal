@@ -5,7 +5,7 @@ Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-transaction control language
+unsafe transaction control language
 -}
 
 {-# LANGUAGE
