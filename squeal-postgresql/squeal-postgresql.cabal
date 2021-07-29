@@ -79,6 +79,7 @@ library
     Squeal.PostgreSQL.Session.Result
     Squeal.PostgreSQL.Session.Statement
     Squeal.PostgreSQL.Session.Transaction
+    Squeal.PostgreSQL.Session.Transaction.Unsafe
     Squeal.PostgreSQL.Type
     Squeal.PostgreSQL.Type.Alias
     Squeal.PostgreSQL.Type.List
