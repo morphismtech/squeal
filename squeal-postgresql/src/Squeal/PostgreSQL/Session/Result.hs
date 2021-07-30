@@ -60,6 +60,17 @@ data Result y where
 instance Functor Result where
   fmap f (Result decode result) = Result (fmap f decode) result
 
+{- | A `MonadResult` operation extracts values
+from the `Result` of a `Squeal.PostgreSQL.Session.Monad.MonadPQ` operation.
+There is no need to define instances of `MonadResult`.
+An instance of `MonadIO` implies an instance of `MonadResult`.
+However, the constraint `MonadResult`
+does not imply the constraint `MonadIO`.
+Together, `Squeal.PostgreSQL.Session.Monad.MonadPQ` and
+`MonadResult` encompass database
+`Squeal.PostgreSQL.Session.Transaction.Transaction`s
+that forbid arbitrary `IO`.
+-}
 class Monad m => MonadResult m where
   -- | Get a row corresponding to a given row number from a `LibPQ.Result`,
   -- throwing an exception if the row number is out of bounds.

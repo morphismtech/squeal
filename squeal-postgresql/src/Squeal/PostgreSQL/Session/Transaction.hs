@@ -47,6 +47,7 @@ import qualified Squeal.PostgreSQL.Session.Transaction.Unsafe as Unsafe
 {- | A type of "safe" `Transaction`s,
 do-blocks that permit only database operations and pure
 functions, forbidding arbitrary `IO` operations.
+
 To permit arbitrary `IO`,
 
 >>> import qualified Squeal.PostgreSQL.Session.Transaction.Unsafe as Unsafe
@@ -56,10 +57,10 @@ Then use the @Unsafe@ qualified form of the functions below.
 type Transaction db x = forall m. (MonadPQ db m, MonadResult m) => m x
 
 {- | Run a computation `transactionally`;
-first `begin`,
+first `Unsafe.begin`,
 then run the computation,
-`onException` `rollback` and rethrow the exception,
-otherwise `commit` and `return` the result.
+`onException` `Unsafe.rollback` and rethrow the exception,
+otherwise `Unsafe.commit` and `return` the result.
 -}
 transactionally
   :: (MonadUnliftIO tx, MonadPQ db tx)
@@ -78,11 +79,11 @@ transactionally_ = Unsafe.transactionally_
 {- |
 `transactionallyRetry` a computation;
 
-* first `begin`,
+* first `Unsafe.begin`,
 * then `try` the computation,
-  - if it raises a serialization failure then `rollback` and restart the transaction,
-  - if it raises any other exception then `rollback` and rethrow the exception,
-  - otherwise `commit` and `return` the result.
+  - if it raises a serialization failure then `Unsafe.rollback` and restart the transaction,
+  - if it raises any other exception then `Unsafe.rollback` and rethrow the exception,
+  - otherwise `Unsafe.commit` and `return` the result.
 -}
 transactionallyRetry
   :: (MonadUnliftIO tx, MonadPQ db tx)
@@ -92,7 +93,7 @@ transactionallyRetry
 transactionallyRetry = Unsafe.transactionallyRetry
 
 {- | Run a computation `ephemerally`;
-Like `transactionally` but always `rollback`, useful in testing.
+Like `transactionally` but always `Unsafe.rollback`, useful in testing.
 -}
 ephemerally
   :: (MonadUnliftIO tx, MonadPQ db tx)

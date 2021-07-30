@@ -1,11 +1,11 @@
 {-|
 Module: Squeal.PostgreSQL.Session.Transaction.Unsafe
-Description: transaction control language
+Description: unsafe transaction control language
 Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-unsafe transaction control language
+transaction control language permitting arbitrary `IO`
 -}
 
 {-# LANGUAGE

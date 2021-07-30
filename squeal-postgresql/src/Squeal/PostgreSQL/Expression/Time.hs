@@ -26,7 +26,6 @@ module Squeal.PostgreSQL.Expression.Time
   ( -- * Time Operation
     TimeOp (..)
     -- * Time Function
-  , atTimeZone
   , currentDate
   , currentTime
   , currentTimestamp
@@ -38,6 +37,8 @@ module Squeal.PostgreSQL.Expression.Time
   , makeTime
   , makeTimestamp
   , makeTimestamptz
+  , atTimeZone
+  , PGAtTimeZone
     -- * Interval
   , interval_
   , TimeUnit (..)
@@ -147,6 +148,7 @@ dateTrunc tUnit args = unsafeFunctionN "date_trunc" (timeUnitExpr *: args)
     Expression grp lat with db params from (null0 'PGtext)
   timeUnitExpr = UnsafeExpression . singleQuotedUtf8 . renderSQL $ tUnit
 
+-- | Calculate the return time type of the `atTimeZone` `Operator`.
 type family PGAtTimeZone ty where
   PGAtTimeZone 'PGtimestamptz = 'PGtimestamp
   PGAtTimeZone 'PGtimestamp = 'PGtimestamptz
@@ -163,7 +165,7 @@ Convert a timestamp, timestamp with time zone, or time of day with timezone to a
 
 >>> :{
  let
-   timezone :: Expression grp lat with db params from (null 'PGtext)
+   timezone :: Expr (null 'PGtext)
    timezone = "EST"
  in printSQL $ (makeTimestamptz (2015 :* 9 :* 15 :* 4 :* 45 *: 11.4)) `atTimeZone` timezone
 :}
