@@ -35,7 +35,7 @@ module Squeal.PostgreSQL.Session.Transaction.Unsafe
   , DeferrableMode (..)
   ) where
 
-import UnliftIO
+import Control.Monad.Catch
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Render
@@ -49,7 +49,7 @@ then run the computation,
 otherwise `commit` and `return` the result.
 -}
 transactionally
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadMask tx, MonadPQ db tx)
   => TransactionMode
   -> tx x -- ^ run inside a transaction
   -> tx x
@@ -61,7 +61,7 @@ transactionally mode tx = mask $ \restore -> do
 
 -- | Run a computation `transactionally_`, in `defaultMode`.
 transactionally_
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadMask tx, MonadPQ db tx)
   => tx x -- ^ run inside a transaction
   -> tx x
 transactionally_ = transactionally defaultMode
@@ -76,7 +76,7 @@ transactionally_ = transactionally defaultMode
   - otherwise `commit` and `return` the result.
 -}
 transactionallyRetry
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadMask tx, MonadPQ db tx)
   => TransactionMode
   -> tx x -- ^ run inside a transaction
   -> tx x
@@ -92,16 +92,19 @@ transactionallyRetry mode tx = mask $ \restore ->
         Left (SerializationFailure _) -> do
           manipulate_ rollback
           loop attempt
+        Left (DeadlockDetected _) -> do
+          manipulate_ rollback
+          loop attempt
         Left err -> do
           manipulate_ rollback
-          throwIO err
+          throwM err
         Right x -> return x
 
 {- | Run a computation `ephemerally`;
 Like `transactionally` but always `rollback`, useful in testing.
 -}
 ephemerally
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadMask tx, MonadPQ db tx)
   => TransactionMode
   -> tx x -- ^ run inside an ephemeral transaction
   -> tx x
@@ -113,7 +116,7 @@ ephemerally mode tx = mask $ \restore -> do
 
 {- | Run a computation `ephemerally` in `defaultMode`. -}
 ephemerally_
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadMask tx, MonadPQ db tx)
   => tx x -- ^ run inside an ephemeral transaction
   -> tx x
 ephemerally_ = ephemerally defaultMode

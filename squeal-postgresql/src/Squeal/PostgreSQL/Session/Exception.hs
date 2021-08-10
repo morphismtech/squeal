@@ -18,6 +18,7 @@ module Squeal.PostgreSQL.Session.Exception
   , pattern UniqueViolation
   , pattern CheckViolation
   , pattern SerializationFailure
+  , pattern DeadlockDetected
   , SQLState (..)
   , LibPQ.ExecStatus (..)
   , catchSqueal
@@ -71,6 +72,10 @@ pattern CheckViolation msg =
 pattern SerializationFailure :: ByteString -> SquealException
 pattern SerializationFailure msg =
   SQLException (SQLState LibPQ.FatalError "40001" msg)
+-- | A pattern for deadlock detection exceptions.
+pattern DeadlockDetected :: ByteString -> SquealException
+pattern DeadlockDetected msg =
+  SQLException (SQLState LibPQ.FatalError "40P01" msg)
 
 -- | Catch `SquealException`s.
 catchSqueal

@@ -30,7 +30,7 @@ module Squeal.PostgreSQL.Session.Transaction
   , DeferrableMode (..)
   ) where
 
-import UnliftIO
+import Control.Monad.Catch
 
 import Squeal.PostgreSQL.Session.Monad
 import Squeal.PostgreSQL.Session.Result
@@ -54,7 +54,11 @@ To permit arbitrary `IO`,
 
 Then use the @Unsafe@ qualified form of the functions below.
 -} 
-type Transaction db x = forall m. (MonadPQ db m, MonadResult m) => m x
+type Transaction db x = forall m.
+  ( MonadPQ db m
+  , MonadResult m
+  , MonadCatch m
+  ) => m x
 
 {- | Run a computation `transactionally`;
 first `Unsafe.begin`,
@@ -63,7 +67,7 @@ then run the computation,
 otherwise `Unsafe.commit` and `return` the result.
 -}
 transactionally
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadMask tx, MonadResult tx, MonadPQ db tx)
   => TransactionMode
   -> Transaction db x -- ^ run inside a transaction
   -> tx x
@@ -71,7 +75,7 @@ transactionally = Unsafe.transactionally
 
 -- | Run a computation `transactionally_`, in `defaultMode`.
 transactionally_
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadMask tx, MonadResult tx, MonadPQ db tx)
   => Transaction db x -- ^ run inside a transaction
   -> tx x
 transactionally_ = Unsafe.transactionally_
@@ -86,7 +90,7 @@ transactionally_ = Unsafe.transactionally_
   - otherwise `Unsafe.commit` and `return` the result.
 -}
 transactionallyRetry
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadMask tx, MonadResult tx, MonadPQ db tx)
   => TransactionMode
   -> Transaction db x -- ^ run inside a transaction
   -> tx x
@@ -96,7 +100,7 @@ transactionallyRetry = Unsafe.transactionallyRetry
 Like `transactionally` but always `Unsafe.rollback`, useful in testing.
 -}
 ephemerally
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadMask tx, MonadResult tx, MonadPQ db tx)
   => TransactionMode
   -> Transaction db x -- ^ run inside an ephemeral transaction
   -> tx x
@@ -104,7 +108,7 @@ ephemerally = Unsafe.ephemerally
 
 {- | Run a computation `ephemerally` in `defaultMode`. -}
 ephemerally_
-  :: (MonadUnliftIO tx, MonadPQ db tx)
+  :: (MonadMask tx, MonadResult tx, MonadPQ db tx)
   => Transaction db x -- ^ run inside an ephemeral transaction
   -> tx x
 ephemerally_ = Unsafe.ephemerally_
