@@ -26,6 +26,7 @@ module Squeal.PostgreSQL.Session.Transaction.Unsafe
   , begin
   , commit
   , rollback
+  , withSavepoint
     -- * Transaction Mode
   , TransactionMode (..)
   , defaultMode
@@ -36,6 +37,7 @@ module Squeal.PostgreSQL.Session.Transaction.Unsafe
   ) where
 
 import Control.Monad.Catch
+import Data.ByteString
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Render
@@ -132,6 +134,28 @@ commit = UnsafeManipulation "COMMIT"
 -- | @ROLLBACK@ a transaction.
 rollback :: Manipulation_ db () ()
 rollback = UnsafeManipulation "ROLLBACK"
+
+{- | `withSavepoint`, used in a transaction block,
+allows a form of nested transactions,
+running a `Transaction` and returning its result,
+rolling back to the savepoint if it returned `Left`,
+or releasing the savepoint if it returned `Right`.
+-}
+withSavepoint
+  :: MonadPQ db tx
+  => ByteString -- ^ savepoint name
+  -> tx (Either e x)
+  -> tx (Either e x)
+withSavepoint savepoint tx = do
+  let svpt = "SAVEPOINT" <+> savepoint
+  manipulate_ $ UnsafeManipulation $ svpt
+  tx >>= \case
+    Left err -> do
+      manipulate_ $ UnsafeManipulation $ "ROLLBACK TO" <+> svpt
+      return (Left err)
+    Right x -> do
+      manipulate_ $ UnsafeManipulation $ "RELEASE" <+> svpt
+      return (Right x)
 
 -- | The available transaction characteristics are the transaction `IsolationLevel`,
 -- the transaction `AccessMode` (`ReadWrite` or `ReadOnly`), and the `DeferrableMode`.

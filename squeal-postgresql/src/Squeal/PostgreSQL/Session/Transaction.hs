@@ -9,9 +9,7 @@ transaction control language
 -}
 
 {-# LANGUAGE
-    LambdaCase
-  , MonoLocalBinds
-  , OverloadedStrings
+    MonoLocalBinds
   , RankNTypes
 #-}
 
@@ -36,8 +34,6 @@ module Squeal.PostgreSQL.Session.Transaction
 import Control.Monad.Catch
 import Data.ByteString
 
-import Squeal.PostgreSQL.Manipulation
-import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Session.Monad
 import Squeal.PostgreSQL.Session.Result
 import Squeal.PostgreSQL.Session.Transaction.Unsafe
@@ -129,13 +125,4 @@ withSavepoint
   :: ByteString -- ^ savepoint name
   -> Transaction db (Either e x)
   -> Transaction db (Either e x)
-withSavepoint savepoint tx = do
-  let svpt = "SAVEPOINT" <+> savepoint
-  manipulate_ $ UnsafeManipulation $ svpt
-  tx >>= \case
-    Left err -> do
-      manipulate_ $ UnsafeManipulation $ "ROLLBACK TO" <+> svpt
-      return (Left err)
-    Right x -> do
-      manipulate_ $ UnsafeManipulation $ "RELEASE" <+> svpt
-      return (Right x)
+withSavepoint = Unsafe.withSavepoint
