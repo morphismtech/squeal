@@ -9,7 +9,9 @@ transaction control language
 -}
 
 {-# LANGUAGE
-    MonoLocalBinds
+    LambdaCase
+  , MonoLocalBinds
+  , OverloadedStrings
   , RankNTypes
 #-}
 
@@ -21,6 +23,7 @@ module Squeal.PostgreSQL.Session.Transaction
   , transactionallyRetry
   , ephemerally
   , ephemerally_
+  , withSavepoint
     -- * Transaction Mode
   , TransactionMode (..)
   , defaultMode
@@ -31,7 +34,10 @@ module Squeal.PostgreSQL.Session.Transaction
   ) where
 
 import Control.Monad.Catch
+import Data.ByteString
 
+import Squeal.PostgreSQL.Manipulation
+import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Session.Monad
 import Squeal.PostgreSQL.Session.Result
 import Squeal.PostgreSQL.Session.Transaction.Unsafe
@@ -112,3 +118,24 @@ ephemerally_
   => Transaction db x -- ^ run inside an ephemeral transaction
   -> tx x
 ephemerally_ = Unsafe.ephemerally_
+
+{- | `withSavepoint`, used in a transaction block,
+allows a form of nested transactions,
+running a `Transaction` and returning its result,
+rolling back to the savepoint if it returned `Left`,
+or releasing the savepoint if it returned `Right`.
+-}
+withSavepoint
+  :: ByteString -- ^ savepoint name
+  -> Transaction db (Either e x)
+  -> Transaction db (Either e x)
+withSavepoint savepoint tx = do
+  let svpt = "SAVEPOINT" <+> savepoint
+  manipulate_ $ UnsafeManipulation $ svpt
+  tx >>= \case
+    Left err -> do
+      manipulate_ $ UnsafeManipulation $ "ROLLBACK TO" <+> svpt
+      return (Left err)
+    Right x -> do
+      manipulate_ $ UnsafeManipulation $ "RELEASE" <+> svpt
+      return (Right x)
