@@ -47,14 +47,28 @@ import Squeal.PostgreSQL.Session.Transaction.Unsafe
 import qualified Squeal.PostgreSQL.Session.Transaction.Unsafe as Unsafe
 
 {- | A type of "safe" `Transaction`s,
-do-blocks that permit only database operations and pure
-functions, forbidding arbitrary `IO` operations.
+do-blocks that permit only
+database operations, pure functions, and exception handling
+forbidding arbitrary `IO` operations.
 
 To permit arbitrary `IO`,
 
 >>> import qualified Squeal.PostgreSQL.Session.Transaction.Unsafe as Unsafe
 
 Then use the @Unsafe@ qualified form of the functions below.
+
+A safe `Transaction` can be run in two ways,
+
+1) it can be run directly in `IO` because as a
+   universally quantified type,
+   @Transaction db x@ permits interpretation in "subtypes" like
+   @(MonadPQ db m, MonadIO m, MonadCatch m) => m x@
+   or
+   @PQ db db IO x@
+
+2) it can be run in a transaction block, using
+   `transactionally`, `ephemerally`,
+   or `transactionallyRetry`
 -} 
 type Transaction db x = forall m.
   ( MonadPQ db m
@@ -87,7 +101,8 @@ transactionally_ = Unsafe.transactionally_
 
 * first `Unsafe.begin`,
 * then `try` the computation,
-  - if it raises a serialization failure then `Unsafe.rollback` and restart the transaction,
+  - if it raises a serialization failure or deadloack detection,
+    then `Unsafe.rollback` and restart the transaction,
   - if it raises any other exception then `Unsafe.rollback` and rethrow the exception,
   - otherwise `Unsafe.commit` and `return` the result.
 -}
@@ -120,6 +135,9 @@ allows a form of nested transactions,
 running a `Transaction` and returning its result,
 rolling back to the savepoint if it returned `Left`,
 or releasing the savepoint if it returned `Right`.
+
+Make sure to run `withSavepoint` in a transaction block,
+not directly or you will provoke a SQL exception.
 -}
 withSavepoint
   :: ByteString -- ^ savepoint name
