@@ -30,6 +30,7 @@ module Squeal.PostgreSQL.Session.Transaction.Unsafe
     -- * Transaction Mode
   , TransactionMode (..)
   , defaultMode
+  , retryMode
   , longRunningMode
   , IsolationLevel (..)
   , AccessMode (..)
@@ -73,7 +74,8 @@ transactionally_ = transactionally defaultMode
 
 * first `begin`,
 * then `try` the computation,
-  - if it raises a serialization failure then `rollback` and restart the transaction,
+  - if it raises a serialization failure or deadlock detection,
+    then `rollback` and restart the transaction,
   - if it raises any other exception then `rollback` and rethrow the exception,
   - otherwise `commit` and `return` the result.
 -}
@@ -137,9 +139,12 @@ rollback = UnsafeManipulation "ROLLBACK"
 
 {- | `withSavepoint`, used in a transaction block,
 allows a form of nested transactions,
-running a `Transaction` and returning its result,
+running a transaction and returning its result,
 rolling back to the savepoint if it returned `Left`,
 or releasing the savepoint if it returned `Right`.
+
+Make sure to run `withSavepoint` in a transaction block,
+not directly or you will provoke a SQL exception.
 -}
 withSavepoint
   :: MonadPQ db tx
@@ -169,6 +174,11 @@ data TransactionMode = TransactionMode
 -- `ReadWrite` `AccessMode` and `NotDeferrable` `DeferrableMode`.
 defaultMode :: TransactionMode
 defaultMode = TransactionMode ReadCommitted ReadWrite NotDeferrable
+
+-- | `TransactionMode` with a `Serializable` `IsolationLevel`,
+-- `ReadWrite` `AccessMode` and `NotDeferrable` `DeferrableMode`.
+retryMode :: TransactionMode
+retryMode = TransactionMode Serializable ReadWrite NotDeferrable
 
 -- | `TransactionMode` with a `Serializable` `IsolationLevel`,
 -- `ReadOnly` `AccessMode` and `Deferrable` `DeferrableMode`.
