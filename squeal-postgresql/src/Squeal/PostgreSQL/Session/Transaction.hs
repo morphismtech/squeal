@@ -132,9 +132,9 @@ ephemerally_ = Unsafe.ephemerally_
 
 {- | `withSavepoint`, used in a transaction block,
 allows a form of nested transactions,
-running a `Transaction` and returning its result,
+creating a savepoint, then running a transaction,
 rolling back to the savepoint if it returned `Left`,
-or releasing the savepoint if it returned `Right`.
+then releasing the savepoint and returning transaction's result.
 
 Make sure to run `withSavepoint` in a transaction block,
 not directly or you will provoke a SQL exception.

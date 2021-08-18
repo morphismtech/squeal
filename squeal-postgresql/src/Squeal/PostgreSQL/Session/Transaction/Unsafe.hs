@@ -37,8 +37,10 @@ module Squeal.PostgreSQL.Session.Transaction.Unsafe
   , DeferrableMode (..)
   ) where
 
+import Control.Monad
 import Control.Monad.Catch
 import Data.ByteString
+import Data.Either
 
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Render
@@ -139,9 +141,9 @@ rollback = UnsafeManipulation "ROLLBACK"
 
 {- | `withSavepoint`, used in a transaction block,
 allows a form of nested transactions,
-running a transaction and returning its result,
+creating a savepoint, then running a transaction,
 rolling back to the savepoint if it returned `Left`,
-or releasing the savepoint if it returned `Right`.
+then releasing the savepoint and returning transaction's result.
 
 Make sure to run `withSavepoint` in a transaction block,
 not directly or you will provoke a SQL exception.
@@ -154,13 +156,11 @@ withSavepoint
 withSavepoint savepoint tx = do
   let svpt = "SAVEPOINT" <+> savepoint
   manipulate_ $ UnsafeManipulation $ svpt
-  tx >>= \case
-    Left err -> do
-      manipulate_ $ UnsafeManipulation $ "ROLLBACK TO" <+> svpt
-      return (Left err)
-    Right x -> do
-      manipulate_ $ UnsafeManipulation $ "RELEASE" <+> svpt
-      return (Right x)
+  e_x <- tx
+  when (isLeft e_x) $
+    manipulate_ $ UnsafeManipulation $ "ROLLBACK TO" <+> svpt
+  manipulate_ $ UnsafeManipulation $ "RELEASE" <+> svpt
+  return e_x
 
 -- | The available transaction characteristics are the transaction `IsolationLevel`,
 -- the transaction `AccessMode` (`ReadWrite` or `ReadOnly`), and the `DeferrableMode`.
