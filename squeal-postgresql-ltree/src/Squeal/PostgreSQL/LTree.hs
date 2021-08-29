@@ -43,6 +43,7 @@ module Squeal.PostgreSQL.LTree
   , (?@>), (?<@), (?~), (?@)
   ) where
 
+import Control.Monad.Catch
 import Control.Monad.Reader
 import Data.ByteString (ByteString)
 import Data.String
@@ -50,7 +51,6 @@ import Data.Text
 import GHC.Generics
 import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Render
-import UnliftIO (throwIO)
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified Generics.SOP as SOP
@@ -104,13 +104,13 @@ oidLookup
 oidLookup tyOrArr name = ReaderT $ \(SOP.K conn) -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
-    Nothing -> throwIO $ ConnectionException "LibPQ.execParams"
+    Nothing -> throwM $ ConnectionException "LibPQ.execParams"
     Just result -> do
       valueMaybe <- LibPQ.getvalue result 0 0
       case valueMaybe of
-        Nothing -> throwIO $ ConnectionException "LibPQ.getvalue"
+        Nothing -> throwM $ ConnectionException "LibPQ.getvalue"
         Just value -> case Decoding.valueParser Decoding.int value of
-          Left err -> throwIO $ DecodingException "oidOfTy" err
+          Left err -> throwM $ DecodingException "oidOfTy" err
           Right oid' -> return $ LibPQ.Oid oid'
   where
     q = "SELECT " <> tyOrArr <> " FROM pg_type WHERE typname = \'" <> name <> "\';"
