@@ -21,6 +21,7 @@ module Squeal.PostgreSQL.Session.Transaction.Unsafe
     transactionally
   , transactionally_
   , transactionallyRetry
+  , transactionallyRetry_
   , ephemerally
   , ephemerally_
   , begin
@@ -60,7 +61,7 @@ transactionally
   -> tx x
 transactionally mode tx = mask $ \restore -> do
   manipulate_ $ begin mode
-  result <- restore tx `onException` (manipulate_ rollback)
+  result <- restore tx `onException` manipulate_ rollback
   manipulate_ commit
   return result
 
@@ -105,6 +106,13 @@ transactionallyRetry mode tx = mask $ \restore ->
           manipulate_ rollback
           throwM err
         Right x -> return x
+
+{- | `transactionallyRetry` in `retryMode`. -}
+transactionallyRetry_
+  :: (MonadMask tx, MonadPQ db tx)
+  => tx x -- ^ run inside a transaction
+  -> tx x
+transactionallyRetry_ = transactionallyRetry retryMode
 
 {- | Run a computation `ephemerally`;
 Like `transactionally` but always `rollback`, useful in testing.
@@ -176,7 +184,8 @@ defaultMode :: TransactionMode
 defaultMode = TransactionMode ReadCommitted ReadWrite NotDeferrable
 
 -- | `TransactionMode` with a `Serializable` `IsolationLevel`,
--- `ReadWrite` `AccessMode` and `NotDeferrable` `DeferrableMode`.
+-- `ReadWrite` `AccessMode` and `NotDeferrable` `DeferrableMode`,
+-- appropriate for short-lived queries or manipulations.
 retryMode :: TransactionMode
 retryMode = TransactionMode Serializable ReadWrite NotDeferrable
 

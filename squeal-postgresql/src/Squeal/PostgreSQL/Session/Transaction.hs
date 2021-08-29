@@ -19,6 +19,7 @@ module Squeal.PostgreSQL.Session.Transaction
   , transactionally
   , transactionally_
   , transactionallyRetry
+  , transactionallyRetry_
   , ephemerally
   , ephemerally_
   , withSavepoint
@@ -112,6 +113,13 @@ transactionallyRetry
   -> Transaction db x -- ^ run inside a transaction
   -> tx x
 transactionallyRetry = Unsafe.transactionallyRetry
+
+{- | `transactionallyRetry` in `retryMode`. -}
+transactionallyRetry_
+  :: (MonadMask tx, MonadResult tx, MonadPQ db tx)
+  => Transaction db x -- ^ run inside a transaction
+  -> tx x
+transactionallyRetry_ = Unsafe.transactionallyRetry_
 
 {- | Run a computation `ephemerally`;
 Like `transactionally` but always `Unsafe.rollback`, useful in testing.
