@@ -43,6 +43,7 @@ module Squeal.PostgreSQL.LTree
   , (?@>), (?<@), (?~), (?@)
   ) where
 
+import Control.Exception
 import Control.Monad.Reader
 import Data.ByteString (ByteString)
 import Data.String
@@ -50,7 +51,6 @@ import Data.Text
 import GHC.Generics
 import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Render
-import UnliftIO (throwIO)
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified Generics.SOP as SOP

@@ -39,12 +39,12 @@ module Squeal.PostgreSQL.Session
 
 import Control.Category
 import Control.Monad.Base (MonadBase(..))
-import Control.Monad.Catch (MonadCatch(..), MonadThrow(..), MonadMask(..), bracket_)
+import Control.Monad.Catch
 import Control.Monad.Except
 import Control.Monad.Morph
 import Control.Monad.Reader
 import Control.Monad.Trans.Control (MonadBaseControl(..), MonadTransControl(..))
-import UnliftIO (MonadUnliftIO (..), bracket,  throwIO)
+import UnliftIO (MonadUnliftIO(..))
 import Data.ByteString (ByteString)
 import Data.Foldable
 import Data.Functor ((<&>))
@@ -123,32 +123,32 @@ instance IndexedMonadTrans PQ where
 
 instance IndexedMonadTransPQ PQ where
 
-  define (UnsafeDefinition q) = PQ $ \ (K conn) -> do
-    resultMaybe <- liftIO $ LibPQ.exec conn q
+  define (UnsafeDefinition q) = PQ $ \ (K conn) -> liftIO $ do
+    resultMaybe <-  LibPQ.exec conn q
     case resultMaybe of
-      Nothing -> throwIO $ ConnectionException "LibPQ.exec"
+      Nothing -> throwM $ ConnectionException "LibPQ.exec"
       Just result -> K <$> okResult_ result
 
 instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
 
   executeParams (Manipulation encode decode (UnsafeManipulation q)) x =
-    PQ $ \ kconn@(K conn) -> do
+    PQ $ \ kconn@(K conn) -> liftIO $ do
       let
         formatParam
           :: forall param. OidOfNull db param
           => K (Maybe Encoding.Encoding) param
-          -> io (K (Maybe (LibPQ.Oid, ByteString, LibPQ.Format)) param)
+          -> IO (K (Maybe (LibPQ.Oid, ByteString, LibPQ.Format)) param)
         formatParam (K maybeEncoding) = do
-          oid <- liftIO $ runReaderT (oidOfNull @db @param) kconn
+          oid <- runReaderT (oidOfNull @db @param) kconn
           return . K $ maybeEncoding <&> \encoding ->
             (oid, encodingBytes encoding, LibPQ.Binary)
-      encodedParams <- liftIO $ runReaderT (runEncodeParams encode x) kconn
+      encodedParams <- runReaderT (runEncodeParams encode x) kconn
       formattedParams <- hcollapse <$>
         hctraverse' (Proxy @(OidOfNull db)) formatParam encodedParams
-      resultMaybe <- liftIO $
+      resultMaybe <-
         LibPQ.execParams conn (q <> ";") formattedParams LibPQ.Binary
       case resultMaybe of
-        Nothing -> throwIO $ ConnectionException "LibPQ.execParams"
+        Nothing -> throwM $ ConnectionException "LibPQ.execParams"
         Just result -> do
           okResult_ result
           return $ K (Result decode result)
@@ -170,13 +170,13 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
           oids <- hcollapse <$> hsequence' oidsOfParams
           prepResultMaybe <- LibPQ.prepare conn temp (q <> ";") (Just oids)
           case prepResultMaybe of
-            Nothing -> throwIO $ ConnectionException "LibPQ.prepare"
+            Nothing -> throwM $ ConnectionException "LibPQ.prepare"
             Just prepResult -> okResult_ prepResult
 
         deallocate = do
           deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
           case deallocResultMaybe of
-            Nothing -> throwIO $ ConnectionException "LibPQ.exec"
+            Nothing -> throwM $ ConnectionException "LibPQ.exec"
             Just deallocResult -> okResult_ deallocResult
 
         execPrepared = for list $ \ params -> do
@@ -190,7 +190,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
           resultMaybe <-
             LibPQ.execPrepared conn temp formattedParams LibPQ.Binary
           case resultMaybe of
-            Nothing -> throwIO $ ConnectionException "LibPQ.execPrepared"
+            Nothing -> throwM $ ConnectionException "LibPQ.execPrepared"
             Just result -> do
               okResult_ result
               return $ Result decode result
@@ -215,13 +215,13 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
           oids <- hcollapse <$> hsequence' oidsOfParams
           prepResultMaybe <- LibPQ.prepare conn temp (q <> ";") (Just oids)
           case prepResultMaybe of
-            Nothing -> throwIO $ ConnectionException "LibPQ.prepare"
+            Nothing -> throwM $ ConnectionException "LibPQ.prepare"
             Just prepResult -> okResult_ prepResult
 
         deallocate = do
           deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
           case deallocResultMaybe of
-            Nothing -> throwIO $ ConnectionException "LibPQ.exec"
+            Nothing -> throwM $ ConnectionException "LibPQ.exec"
             Just deallocResult -> okResult_ deallocResult
 
         execPrepared_ = for_ list $ \ params -> do
@@ -235,7 +235,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
           resultMaybe <-
             LibPQ.execPrepared conn temp formattedParams LibPQ.Binary
           case resultMaybe of
-            Nothing -> throwIO $ ConnectionException "LibPQ.execPrepared"
+            Nothing -> throwM $ ConnectionException "LibPQ.execPrepared"
             Just result -> okResult_ result
 
       liftIO (K <$> bracket_ prepare deallocate execPrepared_)
@@ -338,13 +338,12 @@ instance (Monad m, Monoid r, db0 ~ db1) => Monoid (PQ db0 db1 m r) where
 -- | Do `connectdb` and `finish` before and after a computation.
 withConnection
   :: forall db0 db1 io x
-   . MonadUnliftIO io
+   . (MonadIO io, MonadMask io)
   => ByteString
   -> PQ db0 db1 io x
   -> io x
-withConnection connString action = do
-  K x <- bracket (connectdb connString) finish (unPQ action)
-  return x
+withConnection connString action =
+  unK <$> bracket (connectdb connString) finish (unPQ action)
 
 okResult_ :: MonadIO io => LibPQ.Result -> io ()
 okResult_ result = liftIO $ do
@@ -355,9 +354,9 @@ okResult_ result = liftIO $ do
     _ -> do
       stateCodeMaybe <- LibPQ.resultErrorField result LibPQ.DiagSqlstate
       case stateCodeMaybe of
-        Nothing -> throwIO $ ConnectionException "LibPQ.resultErrorField"
+        Nothing -> throwM $ ConnectionException "LibPQ.resultErrorField"
         Just stateCode -> do
           msgMaybe <- LibPQ.resultErrorMessage result
           case msgMaybe of
-            Nothing -> throwIO $ ConnectionException "LibPQ.resultErrorMessage"
-            Just msg -> throwIO . SQLException $ SQLState status stateCode msg
+            Nothing -> throwM $ ConnectionException "LibPQ.resultErrorMessage"
+            Just msg -> throwM . SQLException $ SQLState status stateCode msg

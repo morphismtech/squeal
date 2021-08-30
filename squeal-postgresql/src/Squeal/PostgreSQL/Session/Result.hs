@@ -28,12 +28,12 @@ module Squeal.PostgreSQL.Session.Result
 
 import Control.Exception (throw)
 import Control.Monad (when, (<=<))
+import Control.Monad.Catch
 import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
 import Data.Text (Text)
 import Data.Traversable (for)
 import Text.Read (readMaybe)
-import UnliftIO (throwIO)
 
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as Char8
@@ -159,13 +159,13 @@ instance (Monad io, MonadIO io) => MonadResult io where
   cmdStatus = liftResult (getCmdStatus <=< LibPQ.cmdStatus)
     where
       getCmdStatus = \case
-        Nothing -> throwIO $ ConnectionException "LibPQ.cmdStatus"
+        Nothing -> throwM $ ConnectionException "LibPQ.cmdStatus"
         Just bytes -> return $ Text.decodeUtf8 bytes
 
   cmdTuples = liftResult (getCmdTuples <=< LibPQ.cmdTuples)
     where
       getCmdTuples = \case
-        Nothing -> throwIO $ ConnectionException "LibPQ.cmdTuples"
+        Nothing -> throwM $ ConnectionException "LibPQ.cmdTuples"
         Just bytes -> return $
           if ByteString.null bytes
           then Nothing
