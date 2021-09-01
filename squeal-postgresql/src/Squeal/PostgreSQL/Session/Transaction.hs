@@ -49,7 +49,7 @@ import qualified Squeal.PostgreSQL.Session.Transaction.Unsafe as Unsafe
 
 {- | A type of "safe" `Transaction`s,
 do-blocks that permit only
-database operations, pure functions, and exception handling
+database operations, pure functions, and synchronous exception handling
 forbidding arbitrary `IO` operations.
 
 To permit arbitrary `IO`,

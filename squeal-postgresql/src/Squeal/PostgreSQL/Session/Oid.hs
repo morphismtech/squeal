@@ -34,10 +34,10 @@ module Squeal.PostgreSQL.Session.Oid
   , OidOfField (..)
   ) where
 
+import Control.Monad.Catch
 import Control.Monad.Reader
 import Data.String
 import GHC.TypeLits
-import UnliftIO (throwIO)
 import PostgreSQL.Binary.Decoding (valueParser, int)
 
 import qualified Data.ByteString as ByteString
@@ -173,15 +173,15 @@ oidOfTypedef
 oidOfTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
-    Nothing -> throwIO $ ConnectionException oidErr
+    Nothing -> throwM $ ConnectionException oidErr
     Just result -> do
       numRows <- LibPQ.ntuples result
-      when (numRows /= 1) $ throwIO $ RowsException oidErr 1 numRows
+      when (numRows /= 1) $ throwM $ RowsException oidErr 1 numRows
       valueMaybe <- LibPQ.getvalue result 0 0
       case valueMaybe of
-        Nothing -> throwIO $ ConnectionException oidErr
+        Nothing -> throwM $ ConnectionException oidErr
         Just value -> case valueParser int value of
-          Left err -> throwIO $ DecodingException oidErr err
+          Left err -> throwM $ DecodingException oidErr err
           Right oid -> return $ LibPQ.Oid oid
   where
     tyVal = symbolVal (SOP.Proxy @ty)
@@ -205,15 +205,15 @@ oidOfArrayTypedef
 oidOfArrayTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
-    Nothing -> throwIO $ ConnectionException oidErr
+    Nothing -> throwM $ ConnectionException oidErr
     Just result -> do
       numRows <- LibPQ.ntuples result
-      when (numRows /= 1) $ throwIO $ RowsException oidErr 1 numRows
+      when (numRows /= 1) $ throwM $ RowsException oidErr 1 numRows
       valueMaybe <- LibPQ.getvalue result 0 0
       case valueMaybe of
-        Nothing -> throwIO $ ConnectionException oidErr
+        Nothing -> throwM $ ConnectionException oidErr
         Just value -> case valueParser int value of
-          Left err -> throwIO $ DecodingException oidErr err
+          Left err -> throwM $ DecodingException oidErr err
           Right oid -> return $ LibPQ.Oid oid
   where
     tyVal = symbolVal (SOP.Proxy @ty)
