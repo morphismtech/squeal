@@ -504,18 +504,28 @@ decodeRow
   :: (SOP.NP (SOP.K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
   -> DecodeRow row y
 decodeRow dec = DecodeRow . ReaderT $ liftEither . dec
-instance {-# OVERLAPPING #-} FromValue ty y
+instance {-# OVERLAPPING #-} (KnownSymbol fld, FromValue ty y)
   => IsLabel fld (DecodeRow (fld ::: ty ': row) y) where
-    fromLabel = decodeRow $ \(SOP.K b SOP.:* _) ->
-      fromValue @ty b
+    fromLabel = decodeRow $ \(SOP.K b SOP.:* _) -> do
+      let
+        flderr = mconcat
+          [ "field name: "
+          , "\"", fromString (symbolVal (SOP.Proxy @fld)), "\"; "
+          ]
+      left (flderr <>) $ fromValue @ty b
 instance {-# OVERLAPPABLE #-} IsLabel fld (DecodeRow row y)
   => IsLabel fld (DecodeRow (field ': row) y) where
     fromLabel = decodeRow $ \(_ SOP.:* bs) ->
       runDecodeRow (fromLabel @fld) bs
-instance {-# OVERLAPPING #-} FromValue ty (Maybe y)
+instance {-# OVERLAPPING #-} (KnownSymbol fld, FromValue ty (Maybe y))
   => IsLabel fld (MaybeT (DecodeRow (fld ::: ty ': row)) y) where
-    fromLabel = MaybeT . decodeRow $ \(SOP.K b SOP.:* _) ->
-      fromValue @ty b
+    fromLabel = MaybeT . decodeRow $ \(SOP.K b SOP.:* _) -> do
+      let
+        flderr = mconcat
+          [ "field name: "
+          , "\"", fromString (symbolVal (SOP.Proxy @fld)), "\"; "
+          ]
+      left (flderr <>) $ fromValue @ty b
 instance {-# OVERLAPPABLE #-} IsLabel fld (MaybeT (DecodeRow row) y)
   => IsLabel fld (MaybeT (DecodeRow (field ': row)) y) where
     fromLabel = MaybeT . decodeRow $ \(_ SOP.:* bs) ->

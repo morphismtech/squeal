@@ -150,7 +150,7 @@ notBetweenSymmetric = unsafeBetweenExpr "NOT BETWEEN SYMMETRIC"
 >>> printSQL $ true `isDistinctFrom` null_
 (TRUE IS DISTINCT FROM NULL)
 -}
-isDistinctFrom :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
+isDistinctFrom :: Operator (null0 ty) (null1 ty) (null 'PGbool)
 isDistinctFrom = unsafeBinaryOp "IS DISTINCT FROM"
 
 {- | equal, treating null like an ordinary value
@@ -158,7 +158,7 @@ isDistinctFrom = unsafeBinaryOp "IS DISTINCT FROM"
 >>> printSQL $ true `isNotDistinctFrom` null_
 (TRUE IS NOT DISTINCT FROM NULL)
 -}
-isNotDistinctFrom :: Operator (null0 ty) (null1 ty) ('NotNull 'PGbool)
+isNotDistinctFrom :: Operator (null0 ty) (null1 ty) (null 'PGbool)
 isNotDistinctFrom = unsafeBinaryOp "IS NOT DISTINCT FROM"
 
 {- | is true
