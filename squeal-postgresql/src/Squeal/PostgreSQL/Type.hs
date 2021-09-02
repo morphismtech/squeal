@@ -5,7 +5,7 @@ Copyright: (c) Eitan Chatav, 2010
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-types
+storage newtypes
 -}
 {-# LANGUAGE
     AllowAmbiguousTypes
@@ -33,7 +33,8 @@ types
 #-}
 
 module Squeal.PostgreSQL.Type
-  ( Money (..)
+  ( -- * Storage newtypes
+    Money (..)
   , Json (..)
   , Jsonb (..)
   , Composite (..)

@@ -35,7 +35,6 @@ library
     , postgresql-libpq >= 0.9.4.2
     , squeal-postgresql >= 0.7.0.1
     , text >= 1.2.3.2
-    , unliftio >= 0.2.12.1
 
 test-suite properties
   default-language: Haskell2010

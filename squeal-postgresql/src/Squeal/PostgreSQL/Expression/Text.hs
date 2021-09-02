@@ -11,6 +11,8 @@ text functions and operators
 {-# LANGUAGE
     DataKinds
   , OverloadedStrings
+  , RankNTypes
+  , ScopedTypeVariables
   , TypeOperators
 #-}
 
@@ -21,6 +23,8 @@ module Squeal.PostgreSQL.Expression.Text
   , charLength
   , like
   , ilike
+  , replace
+  , strpos
   ) where
 
 import Squeal.PostgreSQL.Expression
@@ -63,3 +67,22 @@ like = unsafeBinaryOp "LIKE"
 -- ((E'abc' :: text) ILIKE (E'a%' :: text))
 ilike :: Operator (null 'PGtext) (null 'PGtext) ('Null 'PGbool)
 ilike = unsafeBinaryOp "ILIKE"
+
+-- | Determines the location of the substring match using the `strpos`
+-- function. Returns the 1-based index of the first match, if no
+-- match exists the function returns (0).
+--
+-- >>> printSQL $ strpos ("string" *: "substring")
+-- strpos((E'string' :: text), (E'substring' :: text))
+strpos
+  :: '[null 'PGtext, null 'PGtext] ---> null 'PGint4
+strpos = unsafeFunctionN "strpos"
+
+-- | Over the string in the first argument, replace all occurrences of
+-- the second argument with the third and return the modified string.
+--
+-- >>> printSQL $ replace ("string" :* "from" *: "to")
+-- replace((E'string' :: text), (E'from' :: text), (E'to' :: text))
+replace
+  :: '[ null 'PGtext, null 'PGtext, null 'PGtext ] ---> null 'PGtext
+replace = unsafeFunctionN "replace"

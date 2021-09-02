@@ -230,11 +230,12 @@ as if it was only specified by the strongest one.
 Similarly, a table is processed as `NoWait` if that is specified
 in any of the clauses affecting it. Otherwise, it is processed
 as `SkipLocked` if that is specified in any of the clauses affecting it.
+Further, a `LockingClause` cannot be added to a grouped table expression.
 -}
 lockRows
   :: LockingClause from -- ^ row-level lock
-  -> TableExpression grp lat with db params from
-  -> TableExpression grp lat with db params from
+  -> TableExpression 'Ungrouped lat with db params from
+  -> TableExpression 'Ungrouped lat with db params from
 lockRows lck tab = tab {lockingClauses = lck : lockingClauses tab}
 
 {-----------------------------------------

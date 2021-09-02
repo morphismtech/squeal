@@ -43,14 +43,13 @@ module Squeal.PostgreSQL.LTree
   , (?@>), (?<@), (?~), (?@)
   ) where
 
+import Control.Exception
 import Control.Monad.Reader
-import Data.ByteString (ByteString)
 import Data.String
 import Data.Text
 import GHC.Generics
 import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Render
-import UnliftIO (throwIO)
 
 import qualified BinaryParser
 import qualified ByteString.StrictBuilder as Builder
@@ -87,35 +86,40 @@ instance PGTyped db PGlquery where pgtype = lquery
 instance PGTyped db PGltxtquery where pgtype = ltxtquery
 
 instance OidOf db PGltree where
-  oidOf = oidLookup "oid" "ltree"
+  oidOf = oidLtreeLookup "oid" "ltree"
 instance OidOf db PGlquery where
-  oidOf = oidLookup "oid" "lquery"
+  oidOf = oidLtreeLookup "oid" "lquery"
 instance OidOf db PGltxtquery where
-  oidOf = oidLookup "oid" "ltxtquery"
+  oidOf = oidLtreeLookup "oid" "ltxtquery"
 instance OidOfArray db PGltree where
-  oidOfArray = oidLookup "typarray" "ltree"
+  oidOfArray = oidLtreeLookup "typarray" "ltree"
 instance OidOfArray db PGlquery where
-  oidOfArray = oidLookup "typarray" "lquery"
+  oidOfArray = oidLtreeLookup "typarray" "lquery"
 instance OidOfArray db PGltxtquery where
-  oidOfArray = oidLookup "typarray" "ltxtquery"
+  oidOfArray = oidLtreeLookup "typarray" "ltxtquery"
 
-oidLookup
-  :: ByteString
-  -> ByteString
+oidLtreeLookup
+  :: String
+  -> String
   -> ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
-oidLookup tyOrArr name = ReaderT $ \(SOP.K conn) -> do
+oidLtreeLookup tyOrArr name = ReaderT $ \(SOP.K conn) -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
-    Nothing -> throwIO $ ConnectionException "LibPQ.execParams"
+    Nothing -> throwIO $ ConnectionException oidErr
     Just result -> do
+      numRows <- LibPQ.ntuples result
+      when (numRows /= 1) $ throwIO $ RowsException oidErr 1 numRows
       valueMaybe <- LibPQ.getvalue result 0 0
       case valueMaybe of
-        Nothing -> throwIO $ ConnectionException "LibPQ.getvalue"
+        Nothing -> throwIO $ ConnectionException oidErr
         Just value -> case Decoding.valueParser Decoding.int value of
-          Left err -> throwIO $ DecodingException "oidOfTy" err
+          Left err -> throwIO $ DecodingException oidErr err
           Right oid' -> return $ LibPQ.Oid oid'
   where
-    q = "SELECT " <> tyOrArr <> " FROM pg_type WHERE typname = \'" <> name <> "\';"
+    oidErr = "oidOf " <> fromString (name <> tyOrArr)
+    q = "SELECT " <> fromString tyOrArr
+      <> " FROM pg_type WHERE typname = \'"
+      <> fromString name <> "\';"
 
 {- |
 A label is a sequence of alphanumeric characters and underscores
