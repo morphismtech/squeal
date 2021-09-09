@@ -1,5 +1,5 @@
 name: squeal-postgresql
-version: 0.7.0.1
+version: 0.8.0.0
 synopsis: Squeal PostgreSQL Library
 description: Squeal is a type-safe embedding of PostgreSQL in Haskell
 homepage: https://github.com/morphismtech/squeal
