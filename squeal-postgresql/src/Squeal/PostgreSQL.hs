@@ -190,6 +190,11 @@ in
     & pqThen (define teardown)
 :}
 [User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole@hotmail.com"}]
+
+This should get you up and running with Squeal. Once you're writing more complicated
+queries and need a deeper understanding of Squeal's types and how everything
+fits together, check out the <https://github.com/morphismtech/squeal/blob/dev/squeal-core-concepts-handbook.md Core Concepts Handbook>
+in the toplevel of Squeal's Git repo.
 -}
 module Squeal.PostgreSQL
   ( module X
