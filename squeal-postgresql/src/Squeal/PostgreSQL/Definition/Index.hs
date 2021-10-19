@@ -173,14 +173,14 @@ brin = UnsafeIndexMethod "brin"
 -- DROP INDEX "ix";
 dropIndex
   :: (Has sch db schema, KnownSymbol ix)
-  => QualifiedAlias sch ix -- index alias
+  => QualifiedAlias sch ix -- ^ index alias
   -> Definition db (Alter sch (DropSchemum ix 'Index schema) db)
 dropIndex ix = UnsafeDefinition $ "DROP INDEX" <+> renderSQL ix <> ";"
 
 -- | Drop an index if it exists.
 dropIndexIfExists
   :: (Has sch db schema, KnownSymbol ix)
-  => QualifiedAlias sch ix -- index alias
+  => QualifiedAlias sch ix -- ^ index alias
   -> Definition db (Alter sch (DropSchemumIfExists ix 'Index schema) db)
 dropIndexIfExists ix = UnsafeDefinition $
   "DROP INDEX IF EXISTS" <+> renderSQL ix <> ";"

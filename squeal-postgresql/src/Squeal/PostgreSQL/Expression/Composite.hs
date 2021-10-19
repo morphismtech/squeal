@@ -65,7 +65,7 @@ row exprs = UnsafeExpression $ "ROW" <> parenthesized
 -- | A row constructor on all columns in a table expression.
 rowStar
   :: Has tab from row
-  => Alias tab
+  => Alias tab -- ^ intermediate table
   -> Expression grp lat with db params from (null ('PGcomposite row))
 rowStar tab = UnsafeExpression $ "ROW" <>
   parenthesized (renderSQL tab <> ".*")
