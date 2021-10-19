@@ -27,6 +27,7 @@ module Squeal.PostgreSQL.Session.Transaction
   , TransactionMode (..)
   , defaultMode
   , longRunningMode
+  , retryMode
   , IsolationLevel (..)
   , AccessMode (..)
   , DeferrableMode (..)
@@ -41,6 +42,7 @@ import Squeal.PostgreSQL.Session.Transaction.Unsafe
   ( TransactionMode (..)
   , defaultMode
   , longRunningMode
+  , retryMode
   , IsolationLevel (..)
   , AccessMode (..)
   , DeferrableMode (..)

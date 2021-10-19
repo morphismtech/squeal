@@ -125,7 +125,7 @@ instance FromPG Complex where
 -}
 rowValue
   :: (PG y ~ 'PGcomposite row, SOP.SListI row)
-  => DecodeRow row y
+  => DecodeRow row y -- ^ fields
   -> StateT Strict.ByteString (Except Strict.Text) y
 rowValue decoder = devalue $
   let
@@ -587,7 +587,7 @@ instance FromPG Dir where
 -}
 enumValue
   :: (SOP.All KnownSymbol labels, PG y ~ 'PGenum labels)
-  => NP (SOP.K y) labels
+  => NP (SOP.K y) labels -- ^ labels
   -> StateT Strict.ByteString (Except Strict.Text) y
 enumValue = devalue . enum . labels
   where
