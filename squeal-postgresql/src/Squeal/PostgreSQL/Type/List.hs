@@ -41,6 +41,8 @@ module Squeal.PostgreSQL.Type.List
   , Elem
   , In
   , Length
+  , SubList
+  , SubsetList
   ) where
 
 import Control.Category.Free
@@ -107,3 +109,48 @@ Length '[Char,String,Bool,Double] :: Nat
 type family Length (xs :: [k]) :: Nat where
   Length '[] = 0
   Length (_ : xs) = 1 + Length xs
+
+{- | `SubList` checks that one type level list is a sublist of another,
+with the same ordering.
+
+>>> :kind! SubList '[1,2,3] '[4,5,6]
+SubList '[1,2,3] '[4,5,6] :: Bool
+= 'False
+>>> :kind! SubList '[1,2,3] '[1,2,3,4]
+SubList '[1,2,3] '[1,2,3,4] :: Bool
+= 'True
+>>> :kind! SubList '[1,2,3] '[0,1,0,2,0,3]
+SubList '[1,2,3] '[0,1,0,2,0,3] :: Bool
+= 'True
+>>> :kind! SubList '[1,2,3] '[3,2,1]
+SubList '[1,2,3] '[3,2,1] :: Bool
+= 'False
+-}
+type family SubList (xs :: [k]) (ys :: [k]) :: Bool where
+  SubList '[] ys = 'True
+  SubList (x ': xs) '[] = 'False
+  SubList (x ': xs) (x ': ys) = SubList xs ys
+  SubList (x ': xs) (y ': ys) = SubList (x ': xs) ys
+
+{- | `SubsetList` checks that one type level list is a subset of another,
+regardless of ordering and repeats.
+
+>>> :kind! SubsetList '[1,2,3] '[4,5,6]
+SubsetList '[1,2,3] '[4,5,6] :: Bool
+= 'False
+>>> :kind! SubsetList '[1,2,3] '[1,2,3,4]
+SubsetList '[1,2,3] '[1,2,3,4] :: Bool
+= 'True
+>>> :kind! SubsetList '[1,2,3] '[0,1,0,2,0,3]
+SubsetList '[1,2,3] '[0,1,0,2,0,3] :: Bool
+= 'True
+>>> :kind! SubsetList '[1,2,3] '[3,2,1]
+SubsetList '[1,2,3] '[3,2,1] :: Bool
+= 'True
+>>> :kind! SubsetList '[1,1,1] '[3,2,1]
+SubsetList '[1,1,1] '[3,2,1] :: Bool
+= 'True
+-}
+type family SubsetList (xs :: [k]) (ys :: [k]) :: Bool where
+  SubsetList '[] ys = 'True
+  SubsetList (x ': xs) ys = Elem x ys && SubsetList xs ys

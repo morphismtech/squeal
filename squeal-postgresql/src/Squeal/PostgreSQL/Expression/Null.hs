@@ -10,8 +10,10 @@ null expressions and handlers
 
 {-# LANGUAGE
     DataKinds
+  , KindSignatures
   , OverloadedStrings
   , RankNTypes
+  , TypeFamilies
   , TypeOperators
 #-}
 
@@ -27,6 +29,7 @@ module Squeal.PostgreSQL.Expression.Null
   , isNotNull
   , matchNull
   , nullIf
+  , CombineNullity
   ) where
 
 import Squeal.PostgreSQL.Expression
@@ -121,3 +124,11 @@ NULLIF(FALSE, ($1 :: bool))
 -}
 nullIf :: '[ 'NotNull ty, 'NotNull ty] ---> 'Null ty
 nullIf = unsafeFunctionN "NULLIF"
+
+{-| Make the return type of the type family `NotNull` if both arguments are,
+   or `Null` otherwise.
+-}
+type family CombineNullity
+      (lhs :: PGType -> NullType) (rhs :: PGType -> NullType) :: PGType -> NullType where
+  CombineNullity 'NotNull 'NotNull = 'NotNull
+  CombineNullity _ _ = 'Null

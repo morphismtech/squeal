@@ -10,6 +10,7 @@
   , MultiParamTypeClasses
   , OverloadedLabels
   , OverloadedStrings
+  , RankNTypes
   , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
@@ -107,7 +108,9 @@ spec = before_ setupDB . after_ dropDB $ do
 
     let
       testUser = User "TestUser"
+      newUser :: User -> Transaction DB ()
       newUser = manipulateParams_ insertUser
+      insertUserTwice :: Transaction DB ()
       insertUserTwice = newUser testUser >> newUser testUser
       err23505 = UniqueViolation $ Char8.unlines
         [ "ERROR:  duplicate key value violates unique constraint \"unique_names\""
@@ -129,12 +132,10 @@ spec = before_ setupDB . after_ dropDB $ do
       let
         qry :: Query_ (Public '[]) () (Only Char)
         qry = values_ (inline 'a' `as` #fromOnly)
-        session = usingConnectionPool pool . transactionally_ $ do
-          result <- runQuery qry
-          Just (Only chr) <- firstRow result
-          return chr
+        session = usingConnectionPool pool $ transactionally_ $
+          firstRow =<< runQuery qry
       chrs <- replicateConcurrently 10 session
-      chrs `shouldSatisfy` all (== 'a')
+      chrs `shouldSatisfy` all (== Just (Only 'a'))
 
   describe "Ranges" $
 

@@ -24,12 +24,13 @@ encoding of statement parameters
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
+  , UndecidableSuperClasses
 #-}
 
 module Squeal.PostgreSQL.Session.Encode
   ( -- * Encode Parameters
     EncodeParams (..)
-  , genericParams
+  , GenericParams (..)
   , nilParams
   , (.*)
   , (*.)
@@ -48,6 +49,9 @@ import Control.Monad.Reader
 import Data.Bits
 import Data.ByteString as Strict (ByteString)
 import Data.ByteString.Lazy as Lazy (ByteString)
+import Data.Coerce (coerce)
+import Data.Functor.Const (Const(Const))
+import Data.Functor.Constant (Constant(Constant))
 import Data.Functor.Contravariant
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind
@@ -122,6 +126,9 @@ instance ToPG db Strict.ByteString where toPG = pure . bytea_strict
 instance ToPG db Lazy.ByteString where toPG = pure . bytea_lazy
 instance ToPG db (VarChar n) where toPG = pure . text_strict . getVarChar
 instance ToPG db (FixChar n) where toPG = pure . text_strict . getFixChar
+instance ToPG db x => ToPG db (Const x tag) where toPG = toPG @db @x . coerce
+instance ToPG db x => ToPG db (SOP.K x tag) where toPG = toPG @db @x . coerce
+instance ToPG db x => ToPG db (Constant x tag) where toPG = toPG @db @x . coerce
 instance ToPG db Day where toPG = pure . date
 instance ToPG db TimeOfDay where toPG = pure . time_int
 instance ToPG db (TimeOfDay, TimeZone) where toPG = pure . timetz_int
@@ -333,42 +340,56 @@ newtype EncodeParams
 instance Contravariant (EncodeParams db tys) where
   contramap f (EncodeParams g) = EncodeParams (g . f)
 
-{- | Parameter encoding for `SOP.Generic` tuples and records.
-
->>> import qualified GHC.Generics as GHC
->>> import qualified Generics.SOP as SOP
->>> data Two = Two Int16 String deriving (GHC.Generic, SOP.Generic)
->>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
->>> :{
-let
-  encode :: EncodeParams '[] '[ 'NotNull 'PGint2, 'NotNull 'PGtext] Two
-  encode = genericParams
-in runReaderT (runEncodeParams encode (Two 2 "two")) conn
-:}
-K (Just "\NUL\STX") :* K (Just "two") :* Nil
-
->>> :{
-let
-  encode :: EncodeParams '[] '[ 'NotNull 'PGint2, 'NotNull 'PGtext] (Int16, String)
-  encode = genericParams
-in runReaderT (runEncodeParams encode (2, "two")) conn
-:}
-K (Just "\NUL\STX") :* K (Just "two") :* Nil
-
->>> finish conn
--}
-genericParams :: forall db params x xs.
+-- | A `GenericParams` constraint to ensure that a Haskell type
+-- is a product type,
+-- has a `TuplePG`,
+-- and all its terms have known Oids,
+-- and can be encoded to corresponding Postgres types.
+class
   ( SOP.IsProductType x xs
+  , params ~ TuplePG x
+  , SOP.All (OidOfNull db) params
   , SOP.AllZip (ToParam db) params xs
-  ) => EncodeParams db params x
-genericParams = EncodeParams
-  $ hctransverse (SOP.Proxy @(ToParam db)) encodeNullParam
-  . SOP.unZ . SOP.unSOP . SOP.from
-  where
-    encodeNullParam
-      :: forall ty y. ToParam db ty y
-      => SOP.I y -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K (Maybe Encoding) ty)
-    encodeNullParam = fmap SOP.K . toParam @db @ty . SOP.unI
+  ) => GenericParams db params x xs where
+  {- | Parameter encoding for `SOP.Generic` tuples and records.
+
+  >>> import qualified GHC.Generics as GHC
+  >>> import qualified Generics.SOP as SOP
+  >>> data Two = Two Int16 String deriving (GHC.Generic, SOP.Generic)
+  >>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
+  >>> :{
+  let
+    encode :: EncodeParams '[] '[ 'NotNull 'PGint2, 'NotNull 'PGtext] Two
+    encode = genericParams
+  in runReaderT (runEncodeParams encode (Two 2 "two")) conn
+  :}
+  K (Just "\NUL\STX") :* K (Just "two") :* Nil
+
+  >>> :{
+  let
+    encode :: EncodeParams '[] '[ 'NotNull 'PGint2, 'NotNull 'PGtext] (Int16, String)
+    encode = genericParams
+  in runReaderT (runEncodeParams encode (2, "two")) conn
+  :}
+  K (Just "\NUL\STX") :* K (Just "two") :* Nil
+
+  >>> finish conn
+  -}
+  genericParams :: EncodeParams db params x
+instance
+  ( params ~ TuplePG x
+  , SOP.All (OidOfNull db) params
+  , SOP.IsProductType x xs
+  , SOP.AllZip (ToParam db) params xs
+  ) => GenericParams db params x xs where
+  genericParams = EncodeParams
+    $ hctransverse (SOP.Proxy @(ToParam db)) encodeNullParam
+    . SOP.unZ . SOP.unSOP . SOP.from
+    where
+      encodeNullParam
+        :: forall ty y. ToParam db ty y
+        => SOP.I y -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K (Maybe Encoding) ty)
+      encodeNullParam = fmap SOP.K . toParam @db @ty . SOP.unI
 
 -- | Encode 0 parameters.
 nilParams :: EncodeParams db '[] x
@@ -390,7 +411,7 @@ K Nothing :* K (Just "foo") :* Nil
 >>> finish conn
 -}
 (.*)
-  :: forall db x0 ty x tys. (ToParam db ty x0)
+  :: forall db x0 ty x tys. (ToParam db ty x0, ty ~ NullPG x0)
   => (x -> x0) -- ^ head
   -> EncodeParams db tys x -- ^ tail
   -> EncodeParams db (ty ': tys) x
@@ -415,7 +436,11 @@ K Nothing :* K (Just "foo") :* K (Just "z") :* Nil
 -}
 (*.)
   :: forall db x x0 ty0 x1 ty1
-   . (ToParam db ty0 x0, ToParam db ty1 x1)
+   . ( ToParam db ty0 x0
+     , ty0 ~ NullPG x0
+     , ToParam db ty1 x1
+     , ty1 ~ NullPG x1
+     )
   => (x -> x0) -- ^ second to last
   -> (x -> x1) -- ^ last
   -> EncodeParams db '[ty0, ty1] x
@@ -436,8 +461,8 @@ K (Just "\NUL\NUL\ACK\240") :* Nil
 >>> finish conn
 -}
 aParam
-  :: forall db x. ToParam db (NullPG x) x
-  => EncodeParams db '[NullPG x] x
+  :: forall db x ty. (ToParam db ty x, ty ~ NullPG x)
+  => EncodeParams db '[ty] x
 aParam = EncodeParams $
   fmap (\param -> SOP.K param :* Nil) . toParam @db @(NullPG x)
 

@@ -50,6 +50,10 @@ module Squeal.PostgreSQL.Type.Schema
   , SchemaType
   , SchemasType
   , Public
+    -- * Database Subsets
+  , SubDB
+  , SubsetDB
+  , ElemDB
     -- * Constraint
   , (:=>)
   , Optionality (..)
@@ -439,6 +443,41 @@ type family SetSchema sch0 sch1 schema0 schema1 obj srt ty db where
   SetSchema sch0 sch1 schema0 schema1 obj srt ty db = Alter sch1
     (Create obj (srt ty) schema1)
     (Alter sch0 (DropSchemum obj srt schema0) db)
+
+{- | `SubDB` checks that one `SchemasType` is a sublist of another,
+with the same ordering.
+
+>>> :kind! SubDB '["a" ::: '["b" ::: 'View '[]]] '["a" ::: '["b" ::: 'View '[], "c" ::: 'Typedef 'PGint4]]
+SubDB '["a" ::: '["b" ::: 'View '[]]] '["a" ::: '["b" ::: 'View '[], "c" ::: 'Typedef 'PGint4]] :: Bool
+= 'True
+-}
+type family SubDB (db0 :: SchemasType) (db1 :: SchemasType) :: Bool where
+  SubDB '[] db1 = 'True
+  SubDB (sch ': db0) '[] = 'False
+  SubDB (sch ::: schema0 ': db0) (sch ::: schema1 ': db1) =
+    If (SubList schema0 schema1)
+      (SubDB db0 db1)
+      (SubDB (sch ::: schema0 ': db0) db1)
+  SubDB db0 (sch1 ': db1) = SubDB db0 db1
+
+{- | `SubsetDB` checks that one `SchemasType` is a subset of another,
+regardless of ordering.
+
+>>> :kind! SubsetDB '["a" ::: '["d" ::: 'Typedef 'PGint2, "b" ::: 'View '[]]] '["a" ::: '["b" ::: 'View '[], "c" ::: 'Typedef 'PGint4, "d" ::: 'Typedef 'PGint2]]
+SubsetDB '["a" ::: '["d" ::: 'Typedef 'PGint2, "b" ::: 'View '[]]] '["a" ::: '["b" ::: 'View '[], "c" ::: 'Typedef 'PGint4, "d" ::: 'Typedef 'PGint2]] :: Bool
+= 'True
+-}
+type family SubsetDB (db0 :: SchemasType) (db1 :: SchemasType) :: Bool where
+  SubsetDB '[] db1 = 'True
+  SubsetDB (sch ': db0) db1 = ElemDB sch db1 && SubsetDB db0 db1
+
+{- | `ElemDB` checks that a schema may be found as a subset of another in a database,
+regardless of ordering.
+-}
+type family ElemDB (sch :: (Symbol, SchemaType)) (db :: SchemasType) :: Bool where
+  ElemDB sch '[] = 'False
+  ElemDB (sch ::: schema0) (sch ::: schema1 ': _) = SubsetList schema0 schema1
+  ElemDB sch (_ ': schs) = ElemDB sch schs
 
 -- | Check if a `TableConstraint` involves a column
 type family ConstraintInvolves column constraint where

@@ -353,7 +353,7 @@ type family Query_
 -- | The results of two queries can be combined using the set operation
 -- `union`. Duplicate rows are eliminated.
 union
-  :: Query lat with db params columns
+  :: Query lat with db params columns -- ^
   -> Query lat with db params columns
   -> Query lat with db params columns
 q1 `union` q2 = UnsafeQuery $
@@ -364,7 +364,7 @@ q1 `union` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `unionAll`, the disjoint union. Duplicate rows are retained.
 unionAll
-  :: Query lat with db params columns
+  :: Query lat with db params columns -- ^
   -> Query lat with db params columns
   -> Query lat with db params columns
 q1 `unionAll` q2 = UnsafeQuery $
@@ -375,7 +375,7 @@ q1 `unionAll` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `intersect`, the intersection. Duplicate rows are eliminated.
 intersect
-  :: Query lat with db params columns
+  :: Query lat with db params columns -- ^
   -> Query lat with db params columns
   -> Query lat with db params columns
 q1 `intersect` q2 = UnsafeQuery $
@@ -386,7 +386,7 @@ q1 `intersect` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `intersectAll`, the intersection. Duplicate rows are retained.
 intersectAll
-  :: Query lat with db params columns
+  :: Query lat with db params columns -- ^
   -> Query lat with db params columns
   -> Query lat with db params columns
 q1 `intersectAll` q2 = UnsafeQuery $
@@ -397,7 +397,7 @@ q1 `intersectAll` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `except`, the set difference. Duplicate rows are eliminated.
 except
-  :: Query lat with db params columns
+  :: Query lat with db params columns -- ^
   -> Query lat with db params columns
   -> Query lat with db params columns
 q1 `except` q2 = UnsafeQuery $
@@ -408,7 +408,7 @@ q1 `except` q2 = UnsafeQuery $
 -- | The results of two queries can be combined using the set operation
 -- `exceptAll`, the set difference. Duplicate rows are retained.
 exceptAll
-  :: Query lat with db params columns
+  :: Query lat with db params columns -- ^
   -> Query lat with db params columns
   -> Query lat with db params columns
 q1 `exceptAll` q2 = UnsafeQuery $

@@ -31,9 +31,9 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
-      - uses: actions/setup-haskell@v1.1
+      - uses: haskell/actions/setup@v1
         with:
-          ghc-version: '8.10.2' # Exact version of ghc to use
+          ghc-version: '8.10.5' # Exact version of ghc to use
           # cabal-version: 'latest'. Omitted, but defalts to 'latest'
           enable-stack: true
           stack-version: 'latest'
@@ -83,9 +83,9 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
-      - uses: actions/setup-haskell@v1.1
+      - uses: haskell/actions/setup@v1
         with:
-          ghc-version: '8.8.3' # Exact version of ghc to use
+          ghc-version: '8.8.4' # Exact version of ghc to use
           # cabal-version: 'latest'. Omitted, but defalts to 'latest'
           enable-stack: true
           stack-version: 'latest'
@@ -135,7 +135,7 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
-      - uses: actions/setup-haskell@v1.1
+      - uses: haskell/actions/setup@v1
         with:
           ghc-version: '8.6.5' # Exact version of ghc to use
           # cabal-version: 'latest'. Omitted, but defalts to 'latest'
