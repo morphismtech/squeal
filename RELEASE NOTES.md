@@ -1,5 +1,46 @@
 ## RELEASE NOTES
 
+### Version 0.8
+
+Thanks to Adam Wespiser, Cullin Poreski, Scott Fleischman
+and William Yao for lots of contributions.
+
+### Materialized CTEs
+
+Scott Fleischman contributed materialization support to Squeal's
+WITH statements.
+
+### LTrees and UUID
+
+New packages `squeal-postgresql-ltree` and `squeal-postgresql-uuid-ossp`
+were created to offer functionality from those Postgres extensions.
+
+### Safe Transactions
+
+Previously, Squeal transactions were "unsafe", allowing for arbitrary
+`IO`. Now, Squeal provides a new type `Transaction` that is a RankNType.
+
+```Haskell
+type Transaction db x = forall m.
+  ( MonadPQ db m
+  , MonadResult m
+  , MonadCatch m
+  ) => m x
+```
+
+A `Transaction` only permits database operations and error handling,
+no arbitrary `IO`. The class `MonadResult` is new but all of its
+methods are old and used to be constrained as `MonadIO`,
+now as `MonadResult`.
+
+Additionally, a new function `withSavepoint` was added, allowing
+for a kind of nested transactions.
+
+### Bug fixes
+
+Various bugs were fixed. Most importantly, poor asynchronous exception
+handling was ameliorated.
+
 ### Version 0.7
 
 Thanks to Samuel Schlesinger, Adam Wespiser, Cullin Poreski,
