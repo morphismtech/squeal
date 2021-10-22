@@ -566,6 +566,48 @@ instance Aggregate AggregateArg (Expression ('Grouped bys)) where
   varPop = unsafeAggregate "var_pop"
   varSamp = unsafeAggregate "var_samp"
 
+-- provides a nicer type error when we forget to group by
+-- note that we need to make our 'a' polymorphic so that we can still match when it's ambiguous
+instance ( TypeError ('Text "Cannot use aggregate functions to construct an Ungrouped Expression. Add a 'groupBy' to your TableExpression. If you want to aggregate across the entire result set, use 'groupBy Nil'.")
+         , a ~ AggregateArg
+         ) => Aggregate a (Expression 'Ungrouped) where
+  countStar = impossibleAggregateError
+  count = impossibleAggregateError
+  sum_ = impossibleAggregateError
+  arrayAgg = impossibleAggregateError
+  jsonAgg = impossibleAggregateError
+  jsonbAgg = impossibleAggregateError
+  bitAnd = impossibleAggregateError
+  bitOr = impossibleAggregateError
+  boolAnd = impossibleAggregateError
+  boolOr = impossibleAggregateError
+  every = impossibleAggregateError
+  max_ = impossibleAggregateError
+  min_ = impossibleAggregateError
+  avg = impossibleAggregateError
+  corr = impossibleAggregateError
+  covarPop = impossibleAggregateError
+  covarSamp = impossibleAggregateError
+  regrAvgX = impossibleAggregateError
+  regrAvgY = impossibleAggregateError
+  regrCount = impossibleAggregateError
+  regrIntercept = impossibleAggregateError
+  regrR2 = impossibleAggregateError
+  regrSlope = impossibleAggregateError
+  regrSxx = impossibleAggregateError
+  regrSxy = impossibleAggregateError
+  regrSyy = impossibleAggregateError
+  stddev = impossibleAggregateError
+  stddevPop = impossibleAggregateError
+  stddevSamp = impossibleAggregateError
+  variance = impossibleAggregateError
+  varPop = impossibleAggregateError
+  varSamp = impossibleAggregateError
+
+-- | helper function for our errors above
+impossibleAggregateError :: a
+impossibleAggregateError = error "impossible; called aggregate function for Ungrouped even though the Aggregate instance has a type error constraint."
+
 -- | escape hatch to define aggregate functions
 unsafeAggregate
   :: SOP.SListI xs
