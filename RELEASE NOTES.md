@@ -2,7 +2,7 @@
 
 ### Version 0.8
 
-Thanks to Adam Wespiser, Cullin Poreski, Scott Fleischman
+Thanks to Adam Wespiser, Cullin Poresky, Scott Fleischman
 and William Yao for lots of contributions.
 
 ### Materialized CTEs
@@ -43,7 +43,7 @@ handling was ameliorated.
 
 ### Version 0.7
 
-Thanks to Samuel Schlesinger, Adam Wespiser, Cullin Poreski,
+Thanks to Samuel Schlesinger, Adam Wespiser, Cullin Poresky,
 Matthew Doty and Mark Wotton for tons of contributions.
 Version 0.7 of Squeal makes many changes.
 
