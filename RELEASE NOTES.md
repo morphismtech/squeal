@@ -1,5 +1,194 @@
 ## RELEASE NOTES
 
+## Version 0.8.1.0
+
+Improvements to type errors for `Has`/`HasErr`, `HasParameter`,
+and trying to aggregate without grouping.
+
+### `Has`
+#### Lookup failed
+Now tells you specifically that lookup failed,
+the kind of thing we were trying to look up and in what,
+and a pretty-printed (usually, alphabetized and names-only)
+version of what we were looking in.
+```
+exe/Example.hs:112:11-41: error:
+    • Could not find table, view, typedef, index, function, or procedure (SchemumType) named "sers"
+      in schema (SchemaType):
+        Tables:
+          '["emails", "users"]
+      
+      
+      *Raw schema (SchemaType)*:
+      '[ '("users",
+           'Table
+             ('["pk_users" ::: 'PrimaryKey '["id"]]
+              :=> '["id" ::: ('Def :=> 'NotNull 'PGint4),
+                    "name" ::: ('NoDef :=> 'NotNull 'PGtext),
+                    "vec" ::: ('NoDef :=> 'NotNull ('PGvararray ('Null 'PGint2)))])),
+         "emails"
+         ::: 'Table
+               ('["pk_emails" ::: 'PrimaryKey '["id"],
+                  "fk_user_id" ::: 'ForeignKey '["user_id"] "user" "users" '["id"]]
+                :=> '["id" ::: ('Def :=> 'NotNull 'PGint4),
+                      "user_id" ::: ('NoDef :=> 'NotNull 'PGint4),
+                      "email" ::: ('NoDef :=> 'Null 'PGtext)])]
+      
+    • In the first argument of ‘(&)’, namely
+        ‘table ((#user ! #sers) `as` #u)’
+      In the first argument of ‘from’, namely
+        ‘(table ((#user ! #sers) `as` #u)
+            & innerJoin
+                (table ((#user ! #emails) `as` #e)) (#u ! #id .== #e ! #user_id))’
+      In the second argument of ‘select_’, namely
+        ‘(from
+            (table ((#user ! #sers) `as` #u)
+               & innerJoin
+                   (table ((#user ! #emails) `as` #e)) (#u ! #id .== #e ! #user_id)))’
+    |
+112 |   ( from (table ((#user ! #sers) `as` #u)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+exe/Example.hs:(106,15)-(107,92): error:
+    • Could not find schema (SchemaType) named "use"
+      in database (SchemasType):
+        '["org", "public", "user"]
+      
+      *Raw database (SchemasType)*:
+      '[ '("public", PublicSchema), "user" ::: UserSchema,
+         "org" ::: OrgSchema]
+      
+    • In the expression:
+        insertInto_
+          (#use ! #emails)
+          (Values_
+             (Default `as` #id
+                :* Set (param @1) `as` #user_id :* Set (param @2) `as` #email))
+      In an equation for ‘insertEmail’:
+          insertEmail
+            = insertInto_
+                (#use ! #emails)
+                (Values_
+                   (Default `as` #id
+                      :* Set (param @1) `as` #user_id :* Set (param @2) `as` #email))
+    |
+106 | insertEmail = insertInto_ (#use ! #emails)
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^...
+```
+#### Lookup succeeded, but types don't match
+Now specifies the lookup that the type mismatch comes from with kind
+information. Does not pretty-print because the value of the key is important.
+```
+exe/Example.hs:111:4-12: error:
+    • Type mismatch when looking up column (NullType) named "vec"
+      in row (RowType):
+      '[ '("id", 'NotNull 'PGint4), "name" ::: 'NotNull 'PGtext,
+         "vec" ::: 'NotNull ('PGvararray ('Null 'PGint2))]
+      
+      Expected: 'NotNull 'PGtext
+      But found: 'NotNull ('PGvararray ('Null 'PGint2))
+      
+    • In the first argument of ‘as’, namely ‘#u ! #vec’
+      In the first argument of ‘(:*)’, namely ‘#u ! #vec `as` #userName’
+      In the first argument of ‘select_’, namely
+        ‘(#u ! #vec `as` #userName
+            :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)’
+    |
+111 |   (#u ! #vec `as` #userName :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)
+    |    ^^^^^^^^^
+```
+#### Ambiguous types
+Generally identical, except complains about being unable to satisfy `Has` instead of exposing `HasErr`
+```
+
+exe/Example.hs:103:16-37: error:
+    • Ambiguous type variables ‘constraints0’,
+                               ‘constraint0’ arising from a use of ‘OnConstraint’
+      prevents the constraint ‘(Has
+                                  "pk_users" constraints0 constraint0)’ from being solved.
+      Probable fix: use a type annotation to specify what ‘constraints0’,
+                                                          ‘constraint0’ should be.
+      These potential instances exist:
+        three instances involving out-of-scope types
+        (use -fprint-potential-instances to see them all)
+    • In the first argument of ‘OnConflict’, namely
+        ‘(OnConstraint #pk_users)’
+      In the third argument of ‘insertInto’, namely
+        ‘(OnConflict (OnConstraint #pk_users) DoNothing)’
+      In the expression:
+        insertInto
+          (#user ! #users)
+          (Values_
+             (Default `as` #id
+                :* Set (param @1) `as` #name :* Set (param @2) `as` #vec))
+          (OnConflict (OnConstraint #pk_users) DoNothing)
+          (Returning_ (#id `as` #fromOnly))
+    |
+103 |   (OnConflict (OnConstraint #pk_users) DoNothing) (Returning_ (#id `as` #fromOnly))
+    |                ^^^^^^^^^^^^^^^^^^^^^^
+```
+### `HasParameter`
+#### Looking up index 0
+Now gives a special error about params being 1-indexed.
+```
+exe/Example.hs:118:18-25: error:
+    • Tried to get the param at index 0, but params are 1-indexed
+    • In the first argument of ‘Set’, namely ‘(param @0)’
+      In the first argument of ‘as’, namely ‘Set (param @0)’
+      In the first argument of ‘(:*)’, namely ‘Set (param @0) `as` #id’
+    |
+118 |   (Values_ (Set (param @0) `as` #id :* setUser))
+    |                  ^^^^^^^^
+```
+#### Looking up an out-of-bounds parameter
+Now gives a special error, returning the entire parameter list as well.
+Does not pretty-print since order is important, and there's no separate
+keys and values.
+```
+
+exe/Example.hs:118:18-25: error:
+    • Index 4 is out of bounds in 1-indexed parameter list:
+      '[ 'NotNull 'PGint4, 'NotNull 'PGtext,
+         'NotNull ('PGvararray ('Null 'PGint2))]
+    • In the first argument of ‘Set’, namely ‘(param @4)’
+      In the first argument of ‘as’, namely ‘Set (param @4)’
+      In the first argument of ‘(:*)’, namely ‘Set (param @4) `as` #id’
+    |
+118 |   (Values_ (Set (param @4) `as` #id :* setUser))
+    |                  ^^^^^^^^
+```
+#### Type mismatch when doing lookup
+Now gives a custom error similar to the one added for `Has`.
+```
+exe/Example.hs:118:18: error:
+    • Type mismatch when looking up param at index 2
+      in 1-indexed parameter list:
+        '[ 'NotNull 'PGint4, 'NotNull 'PGtext,
+           'NotNull ('PGvararray ('Null 'PGint2))]
+      
+      Expected: 'NotNull 'PGtext
+      But found: 'NotNull 'PGint4
+      
+    • In the first argument of ‘Set’, namely ‘(param @2)’
+      In the first argument of ‘as’, namely ‘Set (param @2)’
+      In the first argument of ‘(:*)’, namely ‘Set (param @2) `as` #id’
+    |
+118 |   (Values_ (Set (param @2) `as` #id :* setUser))
+    |                  ^^^^^^^^
+```
+### Using aggregates with an `'Ungrouped` `Expression`
+Now gives a custom error with some guidance.
+```
+exe/Example.hs:118:4: error:
+    • Cannot use aggregate functions to construct an Ungrouped Expression. Add a 'groupBy' to your TableExpression. If you want to aggregate across the entire result set, use 'groupBy Nil'.
+    • In the first argument of ‘as’, namely ‘countStar’
+      In the first argument of ‘(:*)’, namely ‘countStar `as` #count’
+      In the first argument of ‘select_’, namely
+        ‘(countStar `as` #count :* Nil)’
+    |
+118 |   (countStar `as` #count :* Nil)
+    |    ^^^^^^^^^
+```
+
 ### Version 0.8
 
 Thanks to Adam Wespiser, Cullin Poresky, Scott Fleischman
