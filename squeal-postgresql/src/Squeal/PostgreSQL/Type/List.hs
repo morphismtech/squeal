@@ -166,7 +166,7 @@ type family MergeSort (ls :: [[Symbol]]) :: [Symbol] where
   MergeSort '[x] = x
   MergeSort ls   = MergeSort (FoldMerge ls)
 
--- | 'Two's splits a type-level list into a list of sorted lists of length 2 (with a singelton list potentially at the end)
+-- | @Two@s splits a type-level list into a list of sorted lists of length 2 (with a singelton list potentially at the end)
 -- It is required for implementing 'MergeSort'
 type family Twos (ls :: [k]) :: [[k]] where
   Twos (x ': y ': rs) = Merge '[x] '[y] ': Twos rs

@@ -237,7 +237,7 @@ type family MismatchError' (err :: Constraint) (ppInfo :: PrettyPrintInfo) (alia
     ':$$: 'Text ""
     )
 
--- | @LookupFailedError@ reports a nicer error when we fail to look up some 'needle' in some 'haystack'
+-- | @LookupFailedError@ reports a nicer error when we fail to look up some @needle@ in some @haystack@
 type LookupFailedError needle haystack = LookupFailedError' (LookupFailedError' () (DefaultPrettyPrinter haystack) needle haystack) (PrettyPrintHaystack haystack) needle haystack
 
 -- | @LookupFailedError'@ is the workhorse behind @LookupFailedError@, but taking an additional type as the first argument. We can put another type error
