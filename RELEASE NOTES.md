@@ -1,5 +1,12 @@
 ## RELEASE NOTES
 
+## Version 0.8.1.1
+
+Fix a bug in how the new `Has` type mismatch errors
+were implemented, which made it do the expensive pretty-printing
+even in the non-error case, resulting in extreme memory usage
+at compile time for non-trivial cases.
+
 ## Version 0.8.1.0
 
 Improvements to type errors for `Has`/`HasErr`, `HasParameter`,
