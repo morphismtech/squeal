@@ -40,6 +40,7 @@ module Squeal.PostgreSQL.Type.PG
   , ColumnPG
   , TuplePG
   , RowPG
+  , ColumnsPG
     -- * Type families
   , LabelsPG
   , DimPG
@@ -47,6 +48,7 @@ module Squeal.PostgreSQL.Type.PG
   , TupleOf
   , TupleCodeOf
   , RowOf
+  , ColumnsOf
   , ConstructorsOf
   , ConstructorNameOf
   , ConstructorNamesOf
