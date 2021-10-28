@@ -49,7 +49,17 @@ module Squeal.PostgreSQL.Type.Schema
   , ReturnsType (..)
   , SchemaType
   , SchemasType
+  , PrettyPrintPartitionedSchema
   , Public
+  , PartitionedSchema(..)
+  , PartitionSchema
+  , SchemaFunctions
+  , SchemaIndexes
+  , SchemaProcedures
+  , SchemaTables
+  , SchemaTypes
+  , SchemaUnsafes
+  , SchemaViews
     -- * Database Subsets
   , SubDB
   , SubsetDB
@@ -204,6 +214,9 @@ type ColumnType = (Optionality,NullType)
 -- :}
 type ColumnsType = [(Symbol,ColumnType)]
 
+type instance PrettyPrintHaystack (haystack :: ColumnsType) =
+  'PrettyPrintInfo ('Text "column definition (ColumnType)") ('Text "table (ColumnsType)") ('ShowType (Sort (MapFst haystack)))
+
 -- | `TableConstraint` encodes various forms of data constraints
 -- of columns in a table.
 -- `TableConstraint`s give you as much control over the data in your tables
@@ -224,6 +237,9 @@ type family UsersConstraints :: TableConstraints where
 :}
 -}
 type TableConstraints = [(Symbol,TableConstraint)]
+
+type instance PrettyPrintHaystack (haystack :: TableConstraints) =
+  'PrettyPrintInfo ('Text "constraint (TableConstraint)") ('Text "table (TableConstraints)") ('ShowType (Sort (MapFst haystack)))
 
 -- | A `ForeignKey` must reference columns that either are
 -- a `PrimaryKey` or form a `Unique` constraint.
@@ -261,11 +277,17 @@ type family PersonRow :: RowType where
 -}
 type RowType = [(Symbol,NullType)]
 
+type instance PrettyPrintHaystack (haystack :: RowType) =
+  'PrettyPrintInfo ('Text "column (NullType)") ('Text "row (RowType)") ('ShowType (Sort (MapFst haystack)))
+
 {- | `FromType` is a row of `RowType`s. It can be thought of as
 a product, or horizontal gluing and is used in `Squeal.PostgreSQL.Query.From.FromClause`s
 and `Squeal.PostgreSQL.Query.Table.TableExpression`s.
 -}
 type FromType = [(Symbol,RowType)]
+
+type instance PrettyPrintHaystack (haystack :: FromType) =
+  'PrettyPrintInfo ('Text "row (RowType)") ('Text "from clause (FromType)") ('ShowType (Sort (MapFst haystack)))
 
 -- | `ColumnsToRow` removes column constraints.
 type family ColumnsToRow (columns :: ColumnsType) :: RowType where
@@ -571,6 +593,93 @@ type family Schema :: SchemaType where
 -}
 type SchemaType = [(Symbol,SchemumType)]
 
+-- | A @PartitionedSchema@ is a @SchemaType@ where each constructor of @SchemumType@ has
+-- been separated into its own list
+data PartitionedSchema = PartitionedSchema
+  { _tables     :: [(Symbol, TableType)]
+  , _views      :: [(Symbol, RowType)]
+  , _types      :: [(Symbol, PGType)]
+  , _indexes    :: [(Symbol, IndexType)]
+  , _functions  :: [(Symbol, FunctionType)]
+  , _procedures :: [(Symbol, [NullType])]
+  , _unsafes    :: [(Symbol, Symbol)]
+  }
+
+-- | @PartitionSchema@ partitions a @SchemaType@ into a @PartitionedSchema@
+type PartitionSchema schema = PartitionSchema' schema ('PartitionedSchema '[] '[] '[] '[] '[] '[] '[])
+
+type family PartitionSchema' (remaining :: SchemaType) (acc :: PartitionedSchema) :: PartitionedSchema where
+  PartitionSchema' '[] ps = ps
+  PartitionSchema' ('(s, 'Table table) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema ('(s, table) ': tables) views types indexes functions procedures unsafe)
+  PartitionSchema' ('(s, 'View view) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema tables ('(s, view) ': views) types indexes functions procedures unsafe)
+  PartitionSchema' ('(s, 'Typedef typ) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema tables views ('(s, typ) ': types) indexes functions procedures unsafe)
+  PartitionSchema' ('(s, 'Index ix) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema tables views types ('(s, ix) ': indexes) functions procedures unsafe)
+  PartitionSchema' ('(s, 'Function f) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema tables views types indexes ('(s, f) ': functions) procedures unsafe)
+  PartitionSchema' ('(s, 'Procedure p) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema tables views types indexes functions ('(s, p) ': procedures) unsafe)
+  PartitionSchema' ('(s, 'UnsafeSchemum u) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema tables views types indexes functions procedures ('(s, u) ': unsafe))
+
+-- | Get the tables from a @PartitionedSchema@
+type family SchemaTables (schema :: PartitionedSchema) :: [(Symbol, TableType)] where
+  SchemaTables ('PartitionedSchema tables _ _ _ _ _ _) = tables
+-- | Get the views from a @PartitionedSchema@
+type family SchemaViews (schema :: PartitionedSchema) :: [(Symbol, RowType)] where
+  SchemaViews ('PartitionedSchema _ views _ _ _ _ _) = views
+-- | Get the typedefs from a @PartitionedSchema@
+type family SchemaTypes (schema :: PartitionedSchema) :: [(Symbol, PGType)] where
+  SchemaTypes ('PartitionedSchema _ _ types _ _ _ _) = types
+-- | Get the indexes from a @PartitionedSchema@
+type family SchemaIndexes (schema :: PartitionedSchema) :: [(Symbol, IndexType)] where
+  SchemaIndexes ('PartitionedSchema _ _ _ indexes _ _ _) = indexes
+-- | Get the functions from a @PartitionedSchema@
+type family SchemaFunctions (schema :: PartitionedSchema) :: [(Symbol, FunctionType)] where
+  SchemaFunctions ('PartitionedSchema _ _ _ _ functions _ _) = functions
+-- | Get the procedured from a @PartitionedSchema@
+type family SchemaProcedures (schema :: PartitionedSchema) :: [(Symbol, [NullType])] where
+  SchemaProcedures ('PartitionedSchema _ _ _ _ _ procedures _) = procedures
+-- | Get the unsafe schema types from a @PartitionedSchema@
+type family SchemaUnsafes (schema :: PartitionedSchema) :: [(Symbol, Symbol)] where
+  SchemaUnsafes ('PartitionedSchema _ _ _ _ _ _ unsafes) = unsafes
+
+-- | @PrettyPrintPartitionedSchema@ makes a nice @ErrorMessage@ showing a @PartitionedSchema@,
+-- only including the names of the things in it and not the values. Additionally, empty
+-- fields are omitted
+type family PrettyPrintPartitionedSchema (schema :: PartitionedSchema) :: ErrorMessage where
+  PrettyPrintPartitionedSchema schema = IntersperseNewlines (FilterNonEmpty
+    [ FieldIfNonEmpty "Tables"              (SchemaTables schema)
+    , FieldIfNonEmpty "Views"               (SchemaViews schema)
+    , FieldIfNonEmpty "Types"               (SchemaTypes schema)
+    , FieldIfNonEmpty "Indexes"             (SchemaIndexes schema)
+    , FieldIfNonEmpty "Functions"           (SchemaFunctions schema)
+    , FieldIfNonEmpty "Procedures"          (SchemaProcedures schema)
+    , FieldIfNonEmpty "Unsafe schema items" (SchemaUnsafes schema)
+    ])
+
+type family FieldIfNonEmpty (fieldName :: Symbol) (value :: [(Symbol, k)]) :: ErrorMessage where
+  FieldIfNonEmpty _ '[] = 'Text ""
+  FieldIfNonEmpty n xs = 'Text "  " ':<>: 'Text n ':<>: 'Text ":" ':$$: 'Text "    " ':<>: 'ShowType (Sort (MapFst xs))
+
+type family FilterNonEmpty (ls :: [ErrorMessage]) :: [ErrorMessage] where
+  FilterNonEmpty ('Text "" ': rest) = FilterNonEmpty rest
+  FilterNonEmpty (x ': rest) = x ': FilterNonEmpty rest
+  FilterNonEmpty '[] = '[]
+
+type family IntersperseNewlines (ls :: [ErrorMessage]) :: ErrorMessage where
+  IntersperseNewlines (x ': y ': '[]) = x ':$$: y
+  IntersperseNewlines (x ': xs) = x ':$$: IntersperseNewlines xs
+  IntersperseNewlines '[] = 'Text ""
+
+type instance PrettyPrintHaystack (haystack :: SchemaType) =
+  'PrettyPrintInfo ('Text "table, view, typedef, index, function, or procedure (SchemumType)") ('Text "schema (SchemaType)")
+  ( PrettyPrintPartitionedSchema (PartitionSchema haystack)
+  )
+
 {- |
 A database contains one or more named schemas, which in turn contain tables.
 The same object name can be used in different schemas without conflict;
@@ -587,6 +696,9 @@ There are several reasons why one might want to use schemas:
   so they do not collide with the names of other objects.
 -}
 type SchemasType = [(Symbol,SchemaType)]
+
+type instance PrettyPrintHaystack (haystack :: SchemasType) =
+  'PrettyPrintInfo ('Text "schema (SchemaType)") ('Text "database (SchemasType)") ('Text "  " ':<>: 'ShowType (Sort (MapFst haystack)))
 
 -- | A type family to use for a single schema database.
 type family Public (schema :: SchemaType) :: SchemasType

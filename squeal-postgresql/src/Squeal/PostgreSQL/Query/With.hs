@@ -215,7 +215,7 @@ Note: if the last CTE has `materialized` or `notMaterialized` you must add `:>> 
 Requires PostgreSQL 12 or higher.
 -}
 materialized
-  :: Aliased (statement with db params) (cte ::: common)
+  :: Aliased (statement with db params) (cte ::: common) -- ^ CTE
   -> CommonTableExpression statement db params with (cte ::: common ': with)
 materialized stmt = CommonTableExpression stmt Materialized
 
@@ -240,6 +240,6 @@ Note: if the last CTE has `materialized` or `notMaterialized` you must add `:>> 
 Requires PostgreSQL 12 or higher.
 -}
 notMaterialized
-  :: Aliased (statement with db params) (cte ::: common)
+  :: Aliased (statement with db params) (cte ::: common) -- ^ CTE
   -> CommonTableExpression statement db params with (cte ::: common ': with)
 notMaterialized stmt = CommonTableExpression stmt NotMaterialized

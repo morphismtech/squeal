@@ -8,7 +8,7 @@ license: BSD3
 license-file: LICENSE
 author: Eitan Chatav
 maintainer: eitan.chatav@gmail.com
-copyright: Copyright (c) 2020 Morphism, LLC
+copyright: Copyright (c) 2021 Morphism, LLC
 category: Database
 build-type: Simple
 cabal-version: >=1.18
@@ -23,7 +23,7 @@ library
   exposed-modules:
     Squeal.PostgreSQL.LTree
   default-language: Haskell2010
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall
   build-depends:
       base >= 4.12.0.0 && < 5.0
     , bytestring >= 0.10.10.0
@@ -33,4 +33,3 @@ library
     , postgresql-libpq >= 0.9.4.2
     , squeal-postgresql >= 0.7.0.1
     , text >= 1.2.3.2
-    , unliftio >= 0.2.12.1

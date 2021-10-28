@@ -41,6 +41,8 @@ module Squeal.PostgreSQL.Type.List
   , Elem
   , In
   , Length
+  , MapFst
+  , Sort
   , SubList
   , SubsetList
   ) where
@@ -154,3 +156,44 @@ SubsetList '[1,1,1] '[3,2,1] :: Bool
 type family SubsetList (xs :: [k]) (ys :: [k]) :: Bool where
   SubsetList '[] ys = 'True
   SubsetList (x ': xs) ys = Elem x ys && SubsetList xs ys
+
+-- | 'Sort' sorts a type level list of 'Symbol's in ascending lexicographic order
+type Sort ls = MergeSort (Twos ls)
+
+-- | 'MergeSort' is the workhorse behind 'Sort'
+type family MergeSort (ls :: [[Symbol]]) :: [Symbol] where
+  MergeSort '[]  = '[]
+  MergeSort '[x] = x
+  MergeSort ls   = MergeSort (FoldMerge ls)
+
+-- | @Two@s splits a type-level list into a list of sorted lists of length 2 (with a singelton list potentially at the end)
+-- It is required for implementing 'MergeSort'
+type family Twos (ls :: [k]) :: [[k]] where
+  Twos (x ': y ': rs) = Merge '[x] '[y] ': Twos rs
+  Twos '[x]           = '[ '[x]]
+  Twos '[]            = '[]
+
+-- | 'Merge' two sorted lists into one list
+type family Merge (ls :: [Symbol]) (rs :: [Symbol]) :: [Symbol] where
+  Merge '[] r = r
+  Merge l '[] = l
+  Merge (l ': ls) (r ': rs) = If (Leq l r) (l ': Merge ls (r ': rs)) (r ': Merge (l ': ls) rs)
+
+-- | 'FoldMerge' folds over a list of sorted lists, merging them into a single sorted list
+type family FoldMerge (ls :: [[Symbol]]) :: [[Symbol]] where
+  FoldMerge (x ': y ': rs) = (Merge x y ': FoldMerge rs)
+  FoldMerge '[x]           = '[x]
+  FoldMerge '[]            = '[]
+
+type Leq l r = OrderingIsLeq (CmpSymbol l r)
+
+type family OrderingIsLeq (o :: Ordering) :: Bool where
+  OrderingIsLeq 'LT = 'True
+  OrderingIsLeq 'EQ = 'True
+  OrderingIsLeq 'GT = 'False
+
+-- | 'MapFst' takes the first value of each tuple of a type level list of tuples. Useful for getting
+-- only the names in associatve lists
+type family MapFst (ls :: [(j, k)]) :: [j] where
+  MapFst ('(j, _) ': rest) = j ': MapFst rest
+  MapFst '[] = '[]

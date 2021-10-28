@@ -21,6 +21,7 @@ labels of data stored in a hierarchical tree-like structure.
   , TypeFamilies
   , TypeOperators
   , TypeSynonymInstances
+  , UndecidableInstances
 #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -43,14 +44,14 @@ module Squeal.PostgreSQL.LTree
   , (?@>), (?<@), (?~), (?@)
   ) where
 
+import Control.Exception hiding (TypeError)
 import Control.Monad.Reader
-import Data.ByteString (ByteString)
 import Data.String
 import Data.Text
 import GHC.Generics
+import GHC.TypeLits (ErrorMessage(Text), TypeError)
 import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Render
-import UnliftIO (throwIO)
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified Generics.SOP as SOP
@@ -85,35 +86,40 @@ instance PGTyped db PGlquery where pgtype = lquery
 instance PGTyped db PGltxtquery where pgtype = ltxtquery
 
 instance OidOf db PGltree where
-  oidOf = oidLookup "oid" "ltree"
+  oidOf = oidLtreeLookup "oid" "ltree"
 instance OidOf db PGlquery where
-  oidOf = oidLookup "oid" "lquery"
+  oidOf = oidLtreeLookup "oid" "lquery"
 instance OidOf db PGltxtquery where
-  oidOf = oidLookup "oid" "ltxtquery"
+  oidOf = oidLtreeLookup "oid" "ltxtquery"
 instance OidOfArray db PGltree where
-  oidOfArray = oidLookup "typarray" "ltree"
+  oidOfArray = oidLtreeLookup "typarray" "ltree"
 instance OidOfArray db PGlquery where
-  oidOfArray = oidLookup "typarray" "lquery"
+  oidOfArray = oidLtreeLookup "typarray" "lquery"
 instance OidOfArray db PGltxtquery where
-  oidOfArray = oidLookup "typarray" "ltxtquery"
+  oidOfArray = oidLtreeLookup "typarray" "ltxtquery"
 
-oidLookup
-  :: ByteString
-  -> ByteString
+oidLtreeLookup
+  :: String
+  -> String
   -> ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
-oidLookup tyOrArr name = ReaderT $ \(SOP.K conn) -> do
+oidLtreeLookup tyOrArr name = ReaderT $ \(SOP.K conn) -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
-    Nothing -> throwIO $ ConnectionException "LibPQ.execParams"
+    Nothing -> throwIO $ ConnectionException oidErr
     Just result -> do
+      numRows <- LibPQ.ntuples result
+      when (numRows /= 1) $ throwIO $ RowsException oidErr 1 numRows
       valueMaybe <- LibPQ.getvalue result 0 0
       case valueMaybe of
-        Nothing -> throwIO $ ConnectionException "LibPQ.getvalue"
+        Nothing -> throwIO $ ConnectionException oidErr
         Just value -> case Decoding.valueParser Decoding.int value of
-          Left err -> throwIO $ DecodingException "oidOfTy" err
+          Left err -> throwIO $ DecodingException oidErr err
           Right oid' -> return $ LibPQ.Oid oid'
   where
-    q = "SELECT " <> tyOrArr <> " FROM pg_type WHERE typname = \'" <> name <> "\';"
+    oidErr = "oidOf " <> fromString (name <> tyOrArr)
+    q = "SELECT " <> fromString tyOrArr
+      <> " FROM pg_type WHERE typname = \'"
+      <> fromString name <> "\';"
 
 {- |
 A label is a sequence of alphanumeric characters and underscores
@@ -142,10 +148,12 @@ newtype LTree = UnsafeLTree {getLTree :: Text}
   deriving stock (Eq,Ord,Show,Read,Generic)
 -- | `PGltree`
 instance IsPG LTree where type PG LTree = PGltree
-instance FromPG LTree where
+instance TypeError ('Text "LTree binary instances not yet implemented.")
+  => FromPG LTree where
   fromPG = UnsafeLTree <$> devalue Decoding.text_strict
-instance ToPG db LTree where
-  toPG = pure . Encoding.text_strict . getLTree
+instance TypeError ('Text "LTree binary instances not yet implemented.")
+  => ToPG db LTree where
+    toPG = pure . Encoding.text_strict . getLTree
 instance Inline LTree where
   inline
     = UnsafeExpression
@@ -213,9 +221,11 @@ newtype LQuery = UnsafeLQuery {getLQuery :: Text}
   deriving stock (Eq,Ord,Show,Read,Generic)
 -- | `PGlquery`
 instance IsPG LQuery where type PG LQuery = PGlquery
-instance FromPG LQuery where
+instance TypeError ('Text "LQuery binary instances not yet implemented.")
+  => FromPG LQuery where
   fromPG = UnsafeLQuery <$> devalue Decoding.text_strict
-instance ToPG db LQuery where
+instance TypeError ('Text "LQuery binary instances not yet implemented.")
+  => ToPG db LQuery where
   toPG = pure . Encoding.text_strict . getLQuery
 instance Inline LQuery where
   inline
@@ -252,9 +262,11 @@ newtype LTxtQuery = UnsafeLTxtQuery {getLTxtQuery :: Text}
   deriving stock (Eq,Ord,Show,Read,Generic)
 -- | `PGltxtquery`
 instance IsPG LTxtQuery where type PG LTxtQuery = PGltxtquery
-instance FromPG LTxtQuery where
+instance TypeError ('Text "LTxtQuery binary instances not yet implemented.")
+  => FromPG LTxtQuery where
   fromPG = UnsafeLTxtQuery <$> devalue Decoding.text_strict
-instance ToPG db LTxtQuery where
+instance TypeError ('Text "LTxtQuery binary instances not yet implemented.")
+  => ToPG db LTxtQuery where
   toPG = pure . Encoding.text_strict . getLTxtQuery
 instance Inline LTxtQuery where
   inline
