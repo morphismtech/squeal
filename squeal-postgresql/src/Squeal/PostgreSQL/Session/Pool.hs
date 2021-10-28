@@ -17,11 +17,11 @@ Here's a simplified example:
 >>> :{
 do
   let
-    query :: Query_ (Public '[]) () (Only Char)
-    query = values_ (inline 'a' `as` #fromOnly)
-  pool <- createConnectionPool "host=localhost port=5432 dbname=exampledb" 1 0.5 10
+    qry :: Query_ (Public '[]) () (Only Char)
+    qry = values_ (inline 'a' `as` #fromOnly)
+  pool <- createConnectionPool "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" 1 0.5 10
   chr <- usingConnectionPool pool $ do
-    result <- runQuery query
+    result <- runQuery qry
     Just (Only a) <- firstRow result
     return a
   destroyConnectionPool pool
@@ -52,19 +52,20 @@ module Squeal.PostgreSQL.Session.Pool
   , destroyConnectionPool
   ) where
 
+import Control.Monad.Catch
+import Control.Monad.IO.Class
 import Data.ByteString
 import Data.Time
-import UnliftIO (MonadUnliftIO (..))
-import UnliftIO.Pool (Pool, createPool, destroyAllResources, withResource)
+import Data.Pool
 
 import Squeal.PostgreSQL.Type.Schema
 import Squeal.PostgreSQL.Session (PQ (..))
 import Squeal.PostgreSQL.Session.Connection
 
 -- | Create a striped pool of connections.
--- Although the garbage collector will destroy all idle connections when the pool is garbage collected it's recommended to manually `destroyAllResources` when you're done with the pool so that the connections are freed up as soon as possible.
+-- Although the garbage collector will destroy all idle connections when the pool is garbage collected it's recommended to manually `destroyConnectionPool` when you're done with the pool so that the connections are freed up as soon as possible.
 createConnectionPool
-  :: forall (db :: SchemasType) io. MonadUnliftIO io
+  :: forall (db :: SchemasType) io. MonadIO io
   => ByteString
   -- ^ The passed string can be empty to use all default parameters, or it can
   -- contain one or more parameter settings separated by whitespace.
@@ -82,7 +83,7 @@ createConnectionPool
   -- Requests for connections will block if this limit is reached on a single stripe, even if other stripes have idle connections available.
   -> io (Pool (K Connection db))
 createConnectionPool conninfo stripes idle maxResrc =
-  createPool (connectdb conninfo) finish stripes idle maxResrc
+  liftIO $ createPool (connectdb conninfo) finish stripes idle maxResrc
 
 {-|
 Temporarily take a connection from a `Pool`, perform an action with it,
@@ -95,11 +96,16 @@ If the maximum number of connections has been reached, this function blocks
 until a connection becomes available.
 -}
 usingConnectionPool
-  :: MonadUnliftIO io
+  :: (MonadIO io, MonadMask io)
   => Pool (K Connection db) -- ^ pool
   -> PQ db db io x -- ^ session
   -> io x
-usingConnectionPool pool (PQ session) = unK <$> withResource pool session
+usingConnectionPool pool (PQ session) = mask $ \restore -> do
+  (conn, local) <- liftIO $ takeResource pool
+  ret <- restore (session conn) `onException`
+            liftIO (destroyResource pool local conn)
+  liftIO $ putResource local conn
+  return $ unK ret
 
 {- |
 Destroy all connections in all stripes in the pool.
@@ -118,7 +124,7 @@ instead of waiting on the garbage collector to destroy them,
 thus freeing up those connections sooner.
 -}
 destroyConnectionPool
-  :: MonadUnliftIO io
+  :: MonadIO io
   => Pool (K Connection db) -- ^ pool
   -> io ()
-destroyConnectionPool = destroyAllResources
+destroyConnectionPool = liftIO . destroyAllResources

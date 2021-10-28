@@ -36,6 +36,7 @@ module Squeal.PostgreSQL.Manipulation.Update
   ) where
 
 import Data.ByteString hiding (foldr)
+import GHC.TypeLits
 
 import qualified Generics.SOP as SOP
 
@@ -61,37 +62,73 @@ renderUpdate (expr `As` col) = renderSQL col <+> "=" <+> renderSQL expr
 UPDATE statements
 -----------------------------------------}
 
--- | An `update` command changes the values of the specified columns
--- in all rows that satisfy the condition.
+{- | An `update` command changes the values of the specified columns
+in all rows that satisfy the condition.
+
+>>> type Columns = '["col1" ::: 'Def :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab1" ::: 'Table ('[] :=> Columns), "tab2" ::: 'Table ('[] :=> Columns)]
+>>> :{
+let
+  manp :: Manipulation with (Public Schema) '[]
+    '["col1" ::: 'NotNull 'PGint4,
+      "col2" ::: 'NotNull 'PGint4]
+  manp = update
+    (#tab1 `as` #t1)
+    (Set (2 + #t2 ! #col2) `as` #col1)
+    (Using (table (#tab2 `as` #t2)))
+    (#t1 ! #col1 ./= #t2 ! #col2)
+    (Returning (#t1 & DotStar))
+in printSQL manp
+:}
+UPDATE "tab1" AS "t1" SET "col1" = ((2 :: int4) + "t2"."col2") FROM "tab2" AS "t2" WHERE ("t1"."col1" <> "t2"."col2") RETURNING "t1".*
+-}
 update
   :: ( Has sch db schema
-     , Has tab schema ('Table table)
+     , Has tab0 schema ('Table table)
      , Updatable table updates
      , SOP.SListI row )
-  => QualifiedAlias sch tab -- ^ table to update
-  -> NP (Aliased (Optional (Expression 'Ungrouped '[] '[] db params '[tab ::: TableToRow table]))) updates
-  -- ^ modified values to replace old values
-  -> Condition  'Ungrouped '[] with db params '[tab ::: TableToRow table]
-  -- ^ condition under which to perform update on a row
-  -> ReturningClause with db params '[tab ::: TableToRow table] row -- ^ results to return
+  => Aliased (QualifiedAlias sch) (tab ::: tab0) -- ^ table to update
+  -> NP (Aliased (Optional (Expression 'Ungrouped '[] with db params (tab ::: TableToRow table ': from)))) updates
+  -- ^ update expressions, modified values to replace old values
+  -> UsingClause with db params from
+  -- ^ FROM A table expression allowing columns from other tables to appear
+  -- in the WHERE condition and update expressions.
+  -> Condition  'Ungrouped '[] with db params (tab ::: TableToRow table ': from)
+  -- ^ WHERE condition under which to perform update on a row
+  -> ReturningClause with db params (tab ::: TableToRow table ': from) row -- ^ results to return
   -> Manipulation with db params row
-update tab columns wh returning = UnsafeManipulation $
+update (tab0 `As` tab) columns using wh returning = UnsafeManipulation $
   "UPDATE"
-  <+> renderSQL tab
+  <+> renderSQL tab0 <+> "AS" <+> renderSQL tab
   <+> "SET"
   <+> renderCommaSeparated renderUpdate columns
+  <> case using of
+    NoUsing -> ""
+    Using tables -> " FROM" <+> renderSQL tables
   <+> "WHERE" <+> renderSQL wh
   <> renderSQL returning
 
--- | Update a row returning `Nil`.
+{- | Update a row returning `Nil`.
+
+>>> type Columns = '["col1" ::: 'Def :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> :{
+let
+  manp :: Manipulation with (Public Schema) '[] '[]
+  manp = update_ #tab (Set 2 `as` #col1) (#col1 ./= #col2)
+in printSQL manp
+:}
+UPDATE "tab" AS "tab" SET "col1" = (2 :: int4) WHERE ("col1" <> "col2")
+-}
 update_
   :: ( Has sch db schema
-     , Has tab schema ('Table table)
+     , Has tab0 schema ('Table table)
+     , KnownSymbol tab
      , Updatable table updates )
-  => QualifiedAlias sch tab -- ^ table to update
-  -> NP (Aliased (Optional (Expression 'Ungrouped '[] '[] db params '[tab ::: TableToRow table]))) updates
+  => Aliased (QualifiedAlias sch) (tab ::: tab0) -- ^ table to update
+  -> NP (Aliased (Optional (Expression 'Ungrouped '[] with db params '[tab ::: TableToRow table]))) updates
   -- ^ modified values to replace old values
   -> Condition  'Ungrouped '[] with db params '[tab ::: TableToRow table]
   -- ^ condition under which to perform update on a row
   -> Manipulation with db params '[]
-update_ tab columns wh = update tab columns wh (Returning_ Nil)
+update_ tab columns wh = update tab columns NoUsing wh (Returning_ Nil)

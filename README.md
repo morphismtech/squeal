@@ -1,8 +1,8 @@
 # squeal
 
-![squeal-icon](http://www.emoticonswallpapers.com/emotion/cute-big-pig/cute-pig-smiley-046.gif)
+![squeal-icon](https://raw.githubusercontent.com/morphismtech/squeal/dev/squeal.gif)
 
-[![CircleCI](https://circleci.com/gh/echatav/squeal.svg?style=svg&circle-token=a699a654ef50db2c3744fb039cf2087c484d1226)](https://circleci.com/gh/morphismtech/squeal)
+[![GitHub CI](https://github.com/morphismtech/squeal/workflows/CI/badge.svg)](https://github.com/morphismtech/squeal/actions)
 
 [Github](https://github.com/morphismtech/squeal)
 
@@ -155,7 +155,7 @@ let
         (text & nullable) `as` #email )
       ( primaryKey #id `as` #pk_emails :*
         foreignKey #user_id #users #id
-          OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
+          (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_user_id )
 :}
 ```
 
@@ -287,10 +287,14 @@ let
     usersRows <- getRows usersResult
     liftIO $ print usersRows
 in
-  withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
     define setup
     & pqThen session
     & pqThen (define teardown)
 :}
 [User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole@hotmail.com"}]
 ```
+
+This should get you up and running with Squeal. Once you're writing more complicated
+queries and need a deeper understanding of Squeal's types and how everything
+fits together, check out the [Core Concepts Handbook](squeal-core-concepts-handbook.md).

@@ -39,6 +39,9 @@ import Data.Binary.Builder (toLazyByteString)
 import Data.ByteString.Lazy (toStrict)
 import Data.ByteString.Builder (doubleDec, floatDec, int16Dec, int32Dec, int64Dec)
 import Data.ByteString.Builder.Scientific (scientificBuilder)
+import Data.Coerce (coerce)
+import Data.Functor.Const (Const(Const))
+import Data.Functor.Constant (Constant(Constant))
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind (Type)
 import Data.Scientific (Scientific)
@@ -168,6 +171,9 @@ instance (KnownNat n, 1 <= n) => Inline (FixChar n) where
     . UnsafeExpression
     . escapeQuotedText
     . getFixChar
+instance Inline x => Inline (Const x tag) where inline = inline @x . coerce
+instance Inline x => Inline (SOP.K x tag) where inline = inline @x . coerce
+instance Inline x => Inline (Constant x tag) where inline = inline @x . coerce
 instance Inline DiffTime where
   inline dt =
     let
@@ -295,7 +301,7 @@ instance (KnownSymbol alias, InlineParam x ty)
   => InlineField (alias ::: x) (alias ::: ty) where
     inlineField (SOP.P x) = inlineParam x `as` Alias @alias
 
--- | Use a Haskell record as a inline a row of expressions.
+-- | Inline a Haskell record as a row of expressions.
 inlineFields
   :: ( SOP.IsRecord hask fields
      , SOP.AllZip InlineField fields row )
@@ -325,7 +331,7 @@ instance (KnownSymbol col, InlineParam x ty)
       Default -> Default `as` (Alias @col)
       Set (SOP.I x) -> Set (inlineParam x) `as` (Alias @col)
 
--- | Use a Haskell record as a inline list of columns
+-- | Inline a Haskell record as a list of columns.
 inlineColumns
   :: ( SOP.IsRecord hask xs
      , SOP.AllZip InlineColumn xs columns )

@@ -40,6 +40,7 @@ module Squeal.PostgreSQL.Definition.Constraint
   , ForeignKeyed
   , OnDeleteClause (..)
   , OnUpdateClause (..)
+  , ReferentialAction (..)
   ) where
 
 import Control.DeepSeq
@@ -223,7 +224,7 @@ let
        (text & nullable) `as` #email )
      ( primaryKey #id `as` #pk_emails :*
        foreignKey #user_id #users #id
-         OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
+         (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_user_id )
 in printSQL setup
 :}
 CREATE TABLE "users" ("id" serial, "name" text NOT NULL, CONSTRAINT "pk_users" PRIMARY KEY ("id"));
@@ -254,7 +255,7 @@ let
        (integer & nullable) `as` #employer_id )
      ( primaryKey #id `as` #employees_pk :*
        foreignKey #employer_id #employees #id
-         OnDeleteCascade OnUpdateCascade `as` #employees_employer_fk )
+         (OnDelete Cascade) (OnUpdate Cascade) `as` #employees_employer_fk )
 in printSQL setup
 :}
 CREATE TABLE "employees" ("id" serial, "name" text NOT NULL, "employer_id" integer NULL, CONSTRAINT "employees_pk" PRIMARY KEY ("id"), CONSTRAINT "employees_employer_fk" FOREIGN KEY ("employer_id") REFERENCES "employees" ("id") ON DELETE CASCADE ON UPDATE CASCADE);
@@ -307,39 +308,44 @@ type ForeignKeyed db
     , Uniquely refcolumns constraints )
 
 -- | `OnDeleteClause` indicates what to do with rows that reference a deleted row.
-data OnDeleteClause
-  = OnDeleteNoAction
-    -- ^ if any referencing rows still exist when the constraint is checked,
-    -- an error is raised
-  | OnDeleteRestrict -- ^ prevents deletion of a referenced row
-  | OnDeleteCascade
-    -- ^ specifies that when a referenced row is deleted,
-    -- row(s) referencing it should be automatically deleted as well
+newtype OnDeleteClause = OnDelete ReferentialAction
   deriving (GHC.Generic,Show,Eq,Ord)
 instance NFData OnDeleteClause
--- | Render `OnDeleteClause`.
 instance RenderSQL OnDeleteClause where
-  renderSQL = \case
-    OnDeleteNoAction -> "ON DELETE NO ACTION"
-    OnDeleteRestrict -> "ON DELETE RESTRICT"
-    OnDeleteCascade -> "ON DELETE CASCADE"
+  renderSQL (OnDelete action) = "ON DELETE" <+> renderSQL action
 
 -- | Analagous to `OnDeleteClause` there is also `OnUpdateClause` which is invoked
 -- when a referenced column is changed (updated).
-data OnUpdateClause
-  = OnUpdateNoAction
-  -- ^ if any referencing rows has not changed when the constraint is checked,
-  -- an error is raised
-  | OnUpdateRestrict -- ^ prevents update of a referenced row
-  | OnUpdateCascade
-    -- ^ the updated values of the referenced column(s) should be copied
-    -- into the referencing row(s)
+newtype OnUpdateClause = OnUpdate ReferentialAction
   deriving (GHC.Generic,Show,Eq,Ord)
 instance NFData OnUpdateClause
-
--- | Render `OnUpdateClause`.
 instance RenderSQL OnUpdateClause where
+  renderSQL (OnUpdate action) = "ON UPDATE" <+> renderSQL action
+
+{- | When the data in the referenced columns is changed,
+certain actions are performed on the data in this table's columns.-}
+data ReferentialAction
+  = NoAction
+  {- ^ Produce an error indicating that the deletion or update
+  would create a foreign key constraint violation.
+  If the constraint is deferred, this error will be produced
+  at constraint check time if there still exist any referencing rows.-}
+  | Restrict
+  {- ^ Produce an error indicating that the deletion or update
+  would create a foreign key constraint violation.
+  This is the same as `NoAction` except that the check is not deferrable.-}
+  | Cascade
+  {- ^ Delete any rows referencing the deleted row,
+  or update the value of the referencing column
+  to the new value of the referenced column, respectively.-}
+  | SetNull {- ^ Set the referencing column(s) to null.-}
+  | SetDefault {- ^ Set the referencing column(s) to their default values.-}
+  deriving (GHC.Generic,Show,Eq,Ord)
+instance NFData ReferentialAction
+instance RenderSQL ReferentialAction where
   renderSQL = \case
-    OnUpdateNoAction -> "ON UPDATE NO ACTION"
-    OnUpdateRestrict -> "ON UPDATE RESTRICT"
-    OnUpdateCascade -> "ON UPDATE CASCADE"
+    NoAction -> "NO ACTION"
+    Restrict -> "RESTRICT"
+    Cascade -> "CASCADE"
+    SetNull -> "SET NULL"
+    SetDefault -> "SET DEFAULT"

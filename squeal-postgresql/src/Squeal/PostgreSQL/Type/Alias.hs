@@ -44,8 +44,14 @@ module Squeal.PostgreSQL.Type.Alias
   , mapAliased
   , Has
   , HasUnique
+  , HasErr
   , HasAll
   , HasIn
+    -- * Error reporting
+  , LookupFailedError
+  , PrettyPrintHaystack
+  , PrettyPrintInfo(..)
+  , MismatchError
     -- * Qualified Aliases
   , QualifiedAlias (..)
   , IsQualified (..)
@@ -57,6 +63,7 @@ module Squeal.PostgreSQL.Type.Alias
 import Control.DeepSeq
 import Data.ByteString (ByteString)
 import Data.String (fromString)
+import GHC.Exts (Any, Constraint)
 import GHC.OverloadedLabels
 import GHC.TypeLits
 
@@ -183,13 +190,91 @@ type HasUnique alias fields field = fields ~ '[alias ::: field]
 -- | @Has alias fields field@ is a constraint that proves that
 -- @fields@ has a field of @alias ::: field@, inferring @field@
 -- from @alias@ and @fields@.
-class KnownSymbol alias =>
-  Has (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
-  | alias fields -> field where
-instance {-# OVERLAPPING #-} (KnownSymbol alias, field0 ~ field1)
+class (KnownSymbol alias) => Has (alias :: Symbol) (fields :: [(Symbol, kind)]) (field :: kind) | alias fields -> field
+-- having these instances forces 'Has' to inspect 'alias' and 'fields' and thereby fail before delegating to
+-- 'HasErr', which means 'Has' shows up in error messages instead of 'HasErr'
+instance {-# OVERLAPPING #-} (KnownSymbol alias, HasErr (alias ::: field0 ': fields) alias (alias ::: field0 ': fields) field1)
   => Has alias (alias ::: field0 ': fields) field1
-instance {-# OVERLAPPABLE #-} (KnownSymbol alias, Has alias fields field)
+instance {-# OVERLAPPABLE #-} (KnownSymbol alias, HasErr (field' ': fields) alias (field' ': fields) field)
   => Has alias (field' ': fields) field
+instance (KnownSymbol alias, HasErr '[] alias '[] field)
+  => Has alias '[] field
+
+{- | 'HasErr' is like `Has` except it also retains the original
+list of fields being searched, so that error messages are more
+useful.
+-}
+class KnownSymbol alias =>
+  HasErr (allFields :: [(Symbol, kind)]) (alias :: Symbol) (fields :: [(Symbol,kind)]) (field :: kind)
+  | alias fields -> field where
+instance {-# OVERLAPPING #-} (KnownSymbol alias, field0 ~ field1, MismatchError alias allFields field0 field1)
+  => HasErr allFields alias (alias ::: field0 ': fields) field1
+instance {-# OVERLAPPABLE #-} (KnownSymbol alias, HasErr allFields alias fields field)
+  => HasErr allFields alias (field' ': fields) field
+instance ( KnownSymbol alias
+         , LookupFailedError alias allFields -- report a nicer error
+         , field ~ Any -- required to satisfy the fundep
+         ) => HasErr allFields alias '[] field
+
+-- | @MismatchError@ reports a nicer error with more context when we successfully do a lookup but
+-- find a different field than we expected. As a type family, it ensures that we only do the (expensive)
+-- calculation of coming up with our pretty printing information when we actually have a mismatch
+type family MismatchError (alias :: Symbol) (fields :: [(Symbol, kind)]) (found :: kind) (expected :: kind) :: Constraint where
+  MismatchError _ _ found found = ()
+  MismatchError alias fields found expected = MismatchError' (MismatchError' () (DefaultPrettyPrinter fields) alias fields found expected) (PrettyPrintHaystack fields) alias fields found expected
+
+-- | @MismatchError'@ is the workhorse behind @MismatchError@, but taking an additional type as the first argument. We can put another type error
+-- in there which will only show if @MismatchError'@ is stuck; this allows us to fall back to @DefaultPrettyPrinter@ when a @PrettyPrintHaystack@ instance
+-- is missing
+type family MismatchError' (err :: Constraint) (ppInfo :: PrettyPrintInfo) (alias :: Symbol) (fields :: [(Symbol, kind)]) (found :: kind) (expected :: kind) :: Constraint where
+  MismatchError' _ ('PrettyPrintInfo needleName haystackName _) alias fields found expected = TypeError
+    (     'Text "Type mismatch when looking up " ':<>: needleName ':<>: 'Text " named " ':<>: 'ShowType alias
+    ':$$: 'Text "in " ':<>: haystackName ':<>: 'Text ":"
+    -- we don't use a pretty haystack because we want to show the values
+    ':$$: 'ShowType fields
+    ':$$: 'Text ""
+    ':$$: 'Text "Expected: " ':<>: 'ShowType expected
+    ':$$: 'Text "But found: " ':<>: 'ShowType found
+    ':$$: 'Text ""
+    )
+
+-- | @LookupFailedError@ reports a nicer error when we fail to look up some @needle@ in some @haystack@
+type LookupFailedError needle haystack = LookupFailedError' (LookupFailedError' () (DefaultPrettyPrinter haystack) needle haystack) (PrettyPrintHaystack haystack) needle haystack
+
+-- | @LookupFailedError'@ is the workhorse behind @LookupFailedError@, but taking an additional type as the first argument. We can put another type error
+-- in there which will only show if @LookupFailedError'@ is stuck; this allows us to fall back to @DefaultPrettyPrinter@ when a @PrettyPrintHaystack@ instance
+-- is missing
+type family LookupFailedError' (fallbackForUnknownKind :: Constraint) (prettyPrintInfo :: PrettyPrintInfo) (needle :: Symbol) (haystack :: [(Symbol, k)]) :: Constraint where
+  LookupFailedError' _ ('PrettyPrintInfo needleName haystackName prettyHaystack) needle rawHaystack = TypeError
+    (     'Text "Could not find " ':<>: needleName ':<>: 'Text " named " ':<>: 'ShowType needle
+    ':$$: 'Text "in " ':<>: haystackName ':<>: 'Text ":"
+    ':$$: prettyHaystack
+    ':$$: 'Text ""
+    ':$$: 'Text "*Raw " ':<>: haystackName ':<>: 'Text "*:"
+    ':$$: 'ShowType rawHaystack
+    ':$$: 'Text ""
+    )
+
+-- | @PrettyPrintInfo@ is a data type intended to be used at the type level
+-- which describes how to pretty print a haystack in our custom errors. The general intention is we use @PrettyPrintHaystack@
+-- to define a more specific way of pretty printing our error information for each kind that we care about
+data PrettyPrintInfo = PrettyPrintInfo
+  { _needleName :: ErrorMessage
+  , _haystackName :: ErrorMessage
+  , _haystackPrettyPrint :: ErrorMessage
+  }
+
+-- | 'PrettyPrintHaystack' allows us to use the kind of our haystack to come up
+-- with nicer errors. It is implemented as an open type family for dependency reasons
+type family PrettyPrintHaystack (haystack :: [(Symbol, k)]) :: PrettyPrintInfo
+
+-- | @DefaultPrettyPrinter@ provides a default we can use for kinds that don't provide an instance of @PrettyPrintInfo@,
+-- although that should generally only be accidental
+type family DefaultPrettyPrinter (haystack :: [(Symbol, k)]) :: PrettyPrintInfo where
+  DefaultPrettyPrinter (haystack :: [(Symbol, k)]) = 'PrettyPrintInfo
+    ('Text "some kind without a PrettyPrintHaystack instance ("  ':<>: 'ShowType k ':<>: 'Text ")")
+    ('Text "associative list of that kind ([(Symbol, "  ':<>: 'ShowType k ':<>: 'Text ")])")
+    ('ShowType (Sort (MapFst haystack)))
 
 {-| @HasIn fields (alias ::: field)@ is a constraint that proves that
 @fields@ has a field of @alias ::: field@. It is used in @UPDATE@s to

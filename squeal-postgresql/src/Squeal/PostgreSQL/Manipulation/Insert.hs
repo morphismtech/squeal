@@ -73,13 +73,29 @@ before a database can be of much use is to insert data. Data is
 conceptually inserted one row at a time. Of course you can also insert
 more than one row, but there is no way to insert less than one row.
 Even if you know only some column values, a complete row must be created.
+
+>>> type CustomersColumns = '["name" ::: 'NoDef :=> 'NotNull 'PGtext, "email" ::: 'NoDef :=> 'NotNull 'PGtext]
+>>> type CustomersConstraints = '["uq" ::: 'Unique '["name"]]
+>>> type CustomersSchema = '["customers" ::: 'Table (CustomersConstraints :=> CustomersColumns)]
+>>> :{
+let
+  manp :: Manipulation with (Public CustomersSchema) '[] '[]
+  manp =
+    insertInto #customers
+      (Values_ (Set "John Smith" `as` #name :* Set "john@smith.com" `as` #email))
+      (OnConflict (OnConstraint #uq)
+        (DoUpdate (Set (#excluded ! #email <> "; " <> #customers ! #email) `as` #email) []))
+      (Returning_ Nil)
+in printSQL manp
+:}
+INSERT INTO "customers" AS "customers" ("name", "email") VALUES ((E'John Smith' :: text), (E'john@smith.com' :: text)) ON CONFLICT ON CONSTRAINT "uq" DO UPDATE SET "email" = ("excluded"."email" || ((E'; ' :: text) || "customers"."email"))
 -}
 insertInto
   :: ( Has sch db schema
-     , Has tab schema ('Table table)
+     , Has tab0 schema ('Table table)
      , SOP.SListI (TableToColumns table)
      , SOP.SListI row )
-  => QualifiedAlias sch tab
+  => Aliased (QualifiedAlias sch) (tab ::: tab0)
   -- ^ table
   -> QueryClause with db params (TableToColumns table)
   -- ^ what to insert
@@ -88,18 +104,31 @@ insertInto
   -> ReturningClause with db params '[tab ::: TableToRow table] row
   -- ^ what to return
   -> Manipulation with db params row
-insertInto tab qry conflict ret = UnsafeManipulation $
-  "INSERT" <+> "INTO" <+> renderSQL tab
+insertInto (tab0 `As` tab) qry conflict ret = UnsafeManipulation $
+  "INSERT" <+> "INTO"
+  <+> renderSQL tab0 <+> "AS" <+> renderSQL tab
   <+> renderSQL qry
   <> renderSQL conflict
   <> renderSQL ret
 
--- | Like `insertInto` but with `OnConflictDoRaise` and no `ReturningClause`.
+{- | Like `insertInto` but with `OnConflictDoRaise` and no `ReturningClause`.
+
+>>> type Columns = '["col1" ::: 'NoDef :=> 'Null 'PGint4, "col2" ::: 'Def :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> :{
+let
+  manp :: Manipulation with (Public Schema) '[] '[]
+  manp =
+    insertInto_ #tab (Values_ (Set 2 `as` #col1 :* Default `as` #col2))
+in printSQL manp
+:}
+INSERT INTO "tab" AS "tab" ("col1", "col2") VALUES ((2 :: int4), DEFAULT)
+-}
 insertInto_
   :: ( Has sch db schema
-     , Has tab schema ('Table table)
+     , Has tab0 schema ('Table table)
      , SOP.SListI (TableToColumns table) )
-  => QualifiedAlias sch tab
+  => Aliased (QualifiedAlias sch) (tab ::: tab0)
   -- ^ table
   -> QueryClause with db params (TableToColumns table)
   -- ^ what to insert
@@ -111,9 +140,9 @@ insertInto_ tab qry =
 data QueryClause with db params columns where
   Values
     :: SOP.SListI columns
-    => NP (Aliased (Optional (Expression  'Ungrouped '[] with db params '[]))) columns
+    => NP (Aliased (Optional (Expression 'Ungrouped '[] with db params from))) columns
     -- ^ row of values
-    -> [NP (Aliased (Optional (Expression  'Ungrouped '[] with db params '[]))) columns]
+    -> [NP (Aliased (Optional (Expression 'Ungrouped '[] with db params from))) columns]
     -- ^ additional rows of values
     -> QueryClause with db params columns
   Select
@@ -163,7 +192,7 @@ instance RenderSQL (QueryClause with db params columns) where
 -- whose `ColumnsType` must match the tables'.
 pattern Values_
   :: SOP.SListI columns
-  => NP (Aliased (Optional (Expression  'Ungrouped '[] with db params '[]))) columns
+  => NP (Aliased (Optional (Expression  'Ungrouped '[] with db params from))) columns
   -- ^ row of values
   -> QueryClause with db params columns
 pattern Values_ vals = Values vals []

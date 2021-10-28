@@ -81,8 +81,6 @@ data JoinItem
       -- ^ Subqueries can be preceded by `JoinLateral`.
       -- This allows them to reference columns provided
       -- by preceding `FromClause` items.
-      -- `subquery` is evaluated independently and so
-      -- cannot cross-reference any other `FromClause` item.
       -> JoinItem lat with db params left '[query]
     JoinFunction
       :: SetFun db arg set
@@ -96,7 +94,7 @@ data JoinItem
       :: SListI args
       => SetFunN db args set
       -- ^ Set returning multi-argument functions
-      -- can be preceded by `JoinFunction`.
+      -- can be preceded by `JoinFunctionN`.
       -- This allows them to reference columns provided
       -- by preceding `FromClause` items.
       -> NP (Expression 'Ungrouped lat with db params left) args

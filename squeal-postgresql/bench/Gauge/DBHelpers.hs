@@ -14,21 +14,15 @@
 
 module Gauge.DBHelpers where
 
-import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString.Char8         as C
 import qualified Data.Text                     as T
 import           Control.Monad                  ( void )
-import           Control.Monad.Except           ( MonadIO
-                                                , throwError
-                                                )
 import           Control.Monad.IO.Class         ( liftIO )
 import           Control.Monad.Loops            ( iterateWhile )
-import           GHC.Generics                   ( Generic
-                                                , Generic1
-                                                )
+import           GHC.Generics                   ( Generic )
 import           Test.QuickCheck
 import           Squeal.PostgreSQL
-import qualified Data.ByteString.Char8         as C
+import qualified Squeal.PostgreSQL.Session.Transaction.Unsafe as Unsafe
 import           Control.DeepSeq
 -- Project imports
 import           Gauge.Schema                   ( Schemas )
@@ -43,7 +37,7 @@ instance NFData SquealPool where
 runDbErr
   :: SquealPool -> PQ Schemas Schemas IO b -> IO (Either SquealException b)
 runDbErr pool session = do
-  liftIO . runUsingConnPool pool $ trySqueal (transactionally_ session)
+  liftIO . runUsingConnPool pool $ trySqueal (Unsafe.transactionally_ session)
 
 runDbWithPool :: SquealPool -> PQ Schemas Schemas IO b -> IO b
 runDbWithPool pool session = do

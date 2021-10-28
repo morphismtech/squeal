@@ -19,7 +19,9 @@ aggregate functions and arguments
   , OverloadedStrings
   , PatternSynonyms
   , PolyKinds
+  , ScopedTypeVariables
   , StandaloneDeriving
+  , TypeApplications
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
@@ -28,6 +30,7 @@ aggregate functions and arguments
 module Squeal.PostgreSQL.Expression.Aggregate
   ( -- * Aggregate
     Aggregate (..)
+    -- * Aggregate Arguments
   , AggregateArg (..)
   , pattern All
   , pattern Alls
@@ -416,11 +419,24 @@ data AggregateArg
   = AggregateAll
   { aggregateArgs :: NP (Expression 'Ungrouped lat with db params from) xs
   , aggregateOrder :: [SortExpression 'Ungrouped lat with db params from]
-  , aggregateFilter :: [Condition 'Ungrouped lat with db params from] }
+    -- ^ `orderBy`
+  , aggregateFilter :: [Condition 'Ungrouped lat with db params from]
+    -- ^ `filterWhere`
+  }
   | AggregateDistinct
   { aggregateArgs :: NP (Expression 'Ungrouped lat with db params from) xs
   , aggregateOrder :: [SortExpression 'Ungrouped lat with db params from]
-  , aggregateFilter :: [Condition 'Ungrouped lat with db params from] }
+    -- ^ `orderBy`
+  , aggregateFilter :: [Condition 'Ungrouped lat with db params from]
+    -- ^ `filterWhere`
+  }
+
+instance (HasUnique tab (Join from lat) row, Has col row ty)
+  => IsLabel col (AggregateArg '[ty] lat with db params from) where
+    fromLabel = All (fromLabel @col)
+instance (Has tab (Join from lat) row, Has col row ty)
+  => IsQualified tab col (AggregateArg '[ty] lat with db params from) where
+    tab ! col = All (tab ! col)
 
 instance SOP.SListI xs => RenderSQL (AggregateArg xs lat with db params from) where
   renderSQL = \case
@@ -447,6 +463,7 @@ instance OrderBy (AggregateArg xs) 'Ungrouped where
 -- argument once for each input row.
 pattern All
   :: Expression 'Ungrouped lat with db params from x
+  -- ^ argument
   -> AggregateArg '[x] lat with db params from
 pattern All x = Alls (x :* Nil)
 
@@ -454,6 +471,7 @@ pattern All x = Alls (x :* Nil)
 -- arguments once for each input row.
 pattern Alls
   :: NP (Expression 'Ungrouped lat with db params from) xs
+  -- ^ arguments
   -> AggregateArg xs lat with db params from
 pattern Alls xs = AggregateAll xs [] []
 
@@ -462,6 +480,7 @@ pattern Alls xs = AggregateAll xs [] []
 -- is not null
 allNotNull
   :: Expression 'Ungrouped lat with db params from ('Null x)
+  -- ^ argument
   -> AggregateArg '[ 'NotNull x] lat with db params from
 allNotNull x = All (unsafeNotNull x) & filterWhere (not_ (isNull x))
 
@@ -471,6 +490,7 @@ distinct value of the expression found in the input.
 -}
 pattern Distinct
   :: Expression 'Ungrouped lat with db params from x
+  -- ^ argument
   -> AggregateArg '[x] lat with db params from
 pattern Distinct x = Distincts (x :* Nil)
 
@@ -480,6 +500,7 @@ distinct set of values, for multiple expressions, found in the input.
 -}
 pattern Distincts
   :: NP (Expression 'Ungrouped lat with db params from) xs
+  -- ^ arguments
   -> AggregateArg xs lat with db params from
 pattern Distincts xs = AggregateDistinct xs [] []
 
@@ -489,6 +510,7 @@ distinct, not null value of the expression found in the input.
 -}
 distinctNotNull
   :: Expression 'Ungrouped lat with db params from ('Null x)
+  -- ^ argument
   -> AggregateArg '[ 'NotNull x] lat with db params from
 distinctNotNull x = Distinct (unsafeNotNull x) & filterWhere (not_ (isNull x))
 
@@ -502,6 +524,7 @@ class FilterWhere arg grp | arg -> grp where
   -}
   filterWhere
     :: Condition grp lat with db params from
+    -- ^ include rows which evaluate to true
     -> arg xs lat with db params from
     -> arg xs lat with db params from
 instance FilterWhere AggregateArg 'Ungrouped where
@@ -542,6 +565,48 @@ instance Aggregate AggregateArg (Expression ('Grouped bys)) where
   variance = unsafeAggregate "variance"
   varPop = unsafeAggregate "var_pop"
   varSamp = unsafeAggregate "var_samp"
+
+-- provides a nicer type error when we forget to group by
+-- note that we need to make our 'a' polymorphic so that we can still match when it's ambiguous
+instance ( TypeError ('Text "Cannot use aggregate functions to construct an Ungrouped Expression. Add a 'groupBy' to your TableExpression. If you want to aggregate across the entire result set, use 'groupBy Nil'.")
+         , a ~ AggregateArg
+         ) => Aggregate a (Expression 'Ungrouped) where
+  countStar = impossibleAggregateError
+  count = impossibleAggregateError
+  sum_ = impossibleAggregateError
+  arrayAgg = impossibleAggregateError
+  jsonAgg = impossibleAggregateError
+  jsonbAgg = impossibleAggregateError
+  bitAnd = impossibleAggregateError
+  bitOr = impossibleAggregateError
+  boolAnd = impossibleAggregateError
+  boolOr = impossibleAggregateError
+  every = impossibleAggregateError
+  max_ = impossibleAggregateError
+  min_ = impossibleAggregateError
+  avg = impossibleAggregateError
+  corr = impossibleAggregateError
+  covarPop = impossibleAggregateError
+  covarSamp = impossibleAggregateError
+  regrAvgX = impossibleAggregateError
+  regrAvgY = impossibleAggregateError
+  regrCount = impossibleAggregateError
+  regrIntercept = impossibleAggregateError
+  regrR2 = impossibleAggregateError
+  regrSlope = impossibleAggregateError
+  regrSxx = impossibleAggregateError
+  regrSxy = impossibleAggregateError
+  regrSyy = impossibleAggregateError
+  stddev = impossibleAggregateError
+  stddevPop = impossibleAggregateError
+  stddevSamp = impossibleAggregateError
+  variance = impossibleAggregateError
+  varPop = impossibleAggregateError
+  varSamp = impossibleAggregateError
+
+-- | helper function for our errors above
+impossibleAggregateError :: a
+impossibleAggregateError = error "impossible; called aggregate function for Ungrouped even though the Aggregate instance has a type error constraint."
 
 -- | escape hatch to define aggregate functions
 unsafeAggregate
