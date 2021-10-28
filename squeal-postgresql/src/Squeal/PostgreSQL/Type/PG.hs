@@ -235,8 +235,8 @@ type family RowPG (hask :: Type) :: RowType where
 
 -- | `RowOf` applies `NullPG` to the fields of a list.
 type family RowOf (record :: [(Symbol, Type)]) :: RowType where
-  RowOf (col ::: ty ': record) = col ::: NullPG ty ': RowOf record
   RowOf '[] = '[]
+  RowOf (col ::: ty ': record) = col ::: NullPG ty ': RowOf record
 
 {- | `NullPG` turns a Haskell type into a `NullType`.
 
@@ -264,6 +264,21 @@ ColumnPG (Optional SOP.I ('Def :=> Double)) :: (Optionality,
 type family ColumnPG (hask :: Type) :: ColumnType where
   ColumnPG (Optional SOP.I (def :=> hask)) = def :=> NullPG hask
   ColumnPG hask = 'NoDef :=> NullPG hask
+{-
+>>> data Person = Person { name :: Strict.Text, age :: Int32, sex :: Optional SOP.I String } deriving GHC.Generic
+>>> instance SOP.Generic Person
+>>> instance SOP.HasDatatypeInfo Person
+>>> :kind! ColumnsPG Person
+ColumnsPG Person :: [(Symbol, NullType)]
+= '["name" ::: 'NoDef :=> 'NotNull 'PGtext, "age" ::: 'NoDef :=> 'NotNull 'PGint4, "sex" ::: 'Def :=> 'NotNull 'PGtext]
+-}
+type family ColumnsPG (hask :: Type) :: ColumnsType where
+  ColumnsPG hask = ColumnsOf (SOP.RecordCodeOf hask)
+
+-- | `ColumnsOf` applies `ColumnPG` to the fields of a list.
+type family ColumnsOf (record :: [(Symbol, Type)]) :: ColumnsType where
+  ColumnsOf '[] = '[]
+  ColumnsOf (col ::: ty ': record) = col ::: ColumnPG ty ': ColumnsOf record
 
 {- | `TuplePG` turns a Haskell tuple type (including record types) into
 the corresponding list of `NullType`s.
