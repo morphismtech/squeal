@@ -167,6 +167,7 @@ module Squeal.PostgreSQL.Session.Migration
 import Control.Category
 import Control.Category.Free
 import Control.Monad
+import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
 import Data.Foldable (traverse_)
 import Data.Function ((&))
@@ -177,7 +178,6 @@ import Data.Text (Text)
 import Data.Time (UTCTime)
 import Prelude hiding ((.), id)
 import System.Environment
-import UnliftIO (MonadIO (..))
 
 import qualified Data.Text.IO as Text (putStrLn)
 import qualified Generics.SOP as SOP
@@ -201,7 +201,7 @@ import Squeal.PostgreSQL.Session.Indexed
 import Squeal.PostgreSQL.Session.Monad
 import Squeal.PostgreSQL.Session.Result
 import Squeal.PostgreSQL.Session.Statement
-import Squeal.PostgreSQL.Session.Transaction
+import Squeal.PostgreSQL.Session.Transaction.Unsafe
 import Squeal.PostgreSQL.Query.From
 import Squeal.PostgreSQL.Query.Select
 import Squeal.PostgreSQL.Query.Table

@@ -1,5 +1,5 @@
 name: squeal-postgresql
-version: 0.7.0.1
+version: 0.8.1.1
 synopsis: Squeal PostgreSQL Library
 description: Squeal is a type-safe embedding of PostgreSQL in Haskell
 homepage: https://github.com/morphismtech/squeal
@@ -8,7 +8,7 @@ license: BSD3
 license-file: LICENSE
 author: Eitan Chatav
 maintainer: eitan.chatav@gmail.com
-copyright: Copyright (c) 2017 Morphism, LLC
+copyright: Copyright (c) 2021 Morphism, LLC
 category: Database
 build-type: Simple
 cabal-version: >=1.18
@@ -79,13 +79,14 @@ library
     Squeal.PostgreSQL.Session.Result
     Squeal.PostgreSQL.Session.Statement
     Squeal.PostgreSQL.Session.Transaction
+    Squeal.PostgreSQL.Session.Transaction.Unsafe
     Squeal.PostgreSQL.Type
     Squeal.PostgreSQL.Type.Alias
     Squeal.PostgreSQL.Type.List
     Squeal.PostgreSQL.Type.PG
     Squeal.PostgreSQL.Type.Schema
   default-language: Haskell2010
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall
   build-depends:
       aeson >= 1.4.7.1
     , base >= 4.12.0.0 && < 5.0
@@ -112,7 +113,6 @@ library
     , transformers >= 0.5.6.2
     , transformers-base >= 0.4.5.2
     , unliftio >= 0.2.12.1
-    , unliftio-pool >= 0.2.1.1
     , uuid-types >= 1.0.3
     , vector >= 0.12.1.2
 
@@ -120,7 +120,7 @@ test-suite doctest
   default-language: Haskell2010
   type: exitcode-stdio-1.0
   hs-source-dirs: test
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall
   main-is: Doc.hs
   build-depends:
       base >= 4.12.0.0 && < 5.0
@@ -131,7 +131,7 @@ test-suite properties
   default-language: Haskell2010
   type: exitcode-stdio-1.0
   hs-source-dirs: test
-  ghc-options: -Wall  -Werror
+  ghc-options: -Wall 
   main-is: Property.hs
   build-depends:
       base >= 4.12.0.0 && < 5.0
@@ -148,7 +148,7 @@ test-suite spec
   default-language: Haskell2010
   type: exitcode-stdio-1.0
   hs-source-dirs: test
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall
   main-is: Spec.hs
   build-depends:
       async >= 2.2.2
@@ -196,7 +196,7 @@ benchmark gauge
 executable example
   default-language: Haskell2010
   hs-source-dirs: exe
-  ghc-options: -Wall -Werror
+  ghc-options: -Wall
   main-is: Example.hs
   build-depends:
       base >= 4.10.0.0 && < 5.0

@@ -18,6 +18,7 @@ module Squeal.PostgreSQL.Session.Exception
   , pattern UniqueViolation
   , pattern CheckViolation
   , pattern SerializationFailure
+  , pattern DeadlockDetected
   , SQLState (..)
   , LibPQ.ExecStatus (..)
   , catchSqueal
@@ -26,10 +27,9 @@ module Squeal.PostgreSQL.Session.Exception
   , throwSqueal
   ) where
 
-import Control.Exception (Exception)
+import Control.Monad.Catch
 import Data.ByteString (ByteString)
 import Data.Text (Text)
-import UnliftIO (MonadUnliftIO (..), catch, handle, try, throwIO)
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 
@@ -71,26 +71,30 @@ pattern CheckViolation msg =
 pattern SerializationFailure :: ByteString -> SquealException
 pattern SerializationFailure msg =
   SQLException (SQLState LibPQ.FatalError "40001" msg)
+-- | A pattern for deadlock detection exceptions.
+pattern DeadlockDetected :: ByteString -> SquealException
+pattern DeadlockDetected msg =
+  SQLException (SQLState LibPQ.FatalError "40P01" msg)
 
 -- | Catch `SquealException`s.
 catchSqueal
-  :: MonadUnliftIO io
-  => io a
-  -> (SquealException -> io a) -- ^ handler
-  -> io a
+  :: MonadCatch m
+  => m a
+  -> (SquealException -> m a) -- ^ handler
+  -> m a
 catchSqueal = catch
 
 -- | Handle `SquealException`s.
 handleSqueal
-  :: MonadUnliftIO io
-  => (SquealException -> io a) -- ^ handler
-  -> io a -> io a
+  :: MonadCatch m
+  => (SquealException -> m a) -- ^ handler
+  -> m a -> m a
 handleSqueal = handle
 
 -- | `Either` return a `SquealException` or a result.
-trySqueal :: MonadUnliftIO io => io a -> io (Either SquealException a)
+trySqueal :: MonadCatch m => m a -> m (Either SquealException a)
 trySqueal = try
 
 -- | Throw `SquealException`s.
-throwSqueal :: MonadUnliftIO io => SquealException -> io a
-throwSqueal = throwIO
+throwSqueal :: MonadThrow m => SquealException -> m a
+throwSqueal = throwM
