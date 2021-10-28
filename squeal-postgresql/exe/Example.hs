@@ -9,7 +9,7 @@
   , TypeOperators
 #-}
 
-module Main (main, main2) where
+module Main (main, main2, upsertUser) where
 
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int16, Int32)
@@ -79,7 +79,7 @@ setup =
       columntypeFrom @(Maybe Text) `as` #email )
     ( primaryKey #id `as` #pk_emails :*
       foreignKey #user_id (#user ! #users) #id
-        OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
+        (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_user_id )
   >>>
   createTable (#org ! #organizations)
     ( serial `as` #id :*
@@ -90,9 +90,9 @@ setup =
     ( notNullable int4 `as` #member :*
       notNullable int4 `as` #organization )
     ( foreignKey #member (#user ! #users) #id
-        OnDeleteCascade OnUpdateCascade `as` #fk_member :*
+        (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_member :*
       foreignKey #organization (#org ! #organizations) #id
-        OnDeleteCascade OnUpdateCascade `as` #fk_organization )
+        (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_organization )
       
 teardown :: Definition Schemas (Public '[])
 teardown = dropType #positive >>> dropSchemaCascade #user >>> dropSchemaCascade #org
@@ -112,6 +112,14 @@ getUsers = select_
   ( from (table ((#user ! #users) `as` #u)
     & innerJoin (table ((#user ! #emails) `as` #e))
       (#u ! #id .== #e ! #user_id)) )
+
+upsertUser :: Manipulation_ Schemas (Int32, String, VarArray [Maybe Int16]) ()
+upsertUser = insertInto (#user ! #users `as` #u)
+  (Values_ (Set (param @1) `as` #id :* setUser))
+  (OnConflict (OnConstraint #pk_users) (DoUpdate setUser [#u ! #id .== param @1]))
+  (Returning_ Nil)
+  where
+    setUser = Set (param @2) `as` #name :* Set (param @3) `as` #vec :* Nil
 
 data User
   = User
@@ -144,7 +152,7 @@ main :: IO ()
 main = do
   Char8.putStrLn "squeal"
   connectionString <- pure
-    "host=localhost port=5432 dbname=exampledb"
+    "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
   Char8.putStrLn $ "connecting to " <> connectionString
   connection0 <- connectdb connectionString
   Char8.putStrLn "setting up schema"
@@ -156,7 +164,7 @@ main = do
 
 main2 :: IO ()
 main2 =
-  withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
     define setup
     & pqThen session
     & pqThen (define teardown)

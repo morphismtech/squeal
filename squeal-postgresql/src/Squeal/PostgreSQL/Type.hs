@@ -5,7 +5,7 @@ Copyright: (c) Eitan Chatav, 2010
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-types
+storage newtypes
 -}
 {-# LANGUAGE
     AllowAmbiguousTypes
@@ -33,7 +33,8 @@ types
 #-}
 
 module Squeal.PostgreSQL.Type
-  ( Money (..)
+  ( -- * Storage newtypes
+    Money (..)
   , Json (..)
   , Jsonb (..)
   , Composite (..)
@@ -60,6 +61,10 @@ import qualified Generics.SOP as SOP
 {- | The `Money` newtype stores a monetary value in terms
 of the number of cents, i.e. @$2,000.20@ would be expressed as
 @Money { cents = 200020 }@.
+
+>>> :kind! PG Money
+PG Money :: PGType
+= 'PGmoney
 -}
 newtype Money = Money { cents :: Int64 }
   deriving stock (Eq, Ord, Show, Read, GHC.Generic)
@@ -68,6 +73,10 @@ newtype Money = Money { cents :: Int64 }
 {- | The `Json` newtype is an indication that the Haskell
 type it's applied to should be stored as a
 `Squeal.PostgreSQL.Type.Schema.PGjson`.
+
+>>> :kind! PG (Json [String])
+PG (Json [String]) :: PGType
+= 'PGjson
 -}
 newtype Json hask = Json {getJson :: hask}
   deriving stock (Eq, Ord, Show, Read, GHC.Generic)
@@ -76,6 +85,10 @@ newtype Json hask = Json {getJson :: hask}
 {- | The `Jsonb` newtype is an indication that the Haskell
 type it's applied to should be stored as a
 `Squeal.PostgreSQL.Type.Schema.PGjsonb`.
+
+>>> :kind! PG (Jsonb [String])
+PG (Jsonb [String]) :: PGType
+= 'PGjsonb
 -}
 newtype Jsonb hask = Jsonb {getJsonb :: hask}
   deriving stock (Eq, Ord, Show, Read, GHC.Generic)
@@ -84,6 +97,20 @@ newtype Jsonb hask = Jsonb {getJsonb :: hask}
 {- | The `Composite` newtype is an indication that the Haskell
 type it's applied to should be stored as a
 `Squeal.PostgreSQL.Type.Schema.PGcomposite`.
+
+>>> :{
+data Complex = Complex
+  { real :: Double
+  , imaginary :: Double
+  } deriving stock GHC.Generic
+    deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+:}
+
+>>> :kind! PG (Composite Complex)
+PG (Composite Complex) :: PGType
+= 'PGcomposite
+    '["real" ::: 'NotNull 'PGfloat8,
+      "imaginary" ::: 'NotNull 'PGfloat8]
 -}
 newtype Composite record = Composite {getComposite :: record}
   deriving stock (Eq, Ord, Show, Read, GHC.Generic)
@@ -92,6 +119,10 @@ newtype Composite record = Composite {getComposite :: record}
 {- | The `Enumerated` newtype is an indication that the Haskell
 type it's applied to should be stored as a
 `Squeal.PostgreSQL.Type.Schema.PGenum`.
+
+>>> :kind! PG (Enumerated Ordering)
+PG (Enumerated Ordering) :: PGType
+= 'PGenum '["LT", "EQ", "GT"]
 -}
 newtype Enumerated enum = Enumerated {getEnumerated :: enum}
   deriving stock (Eq, Ord, Show, Read, GHC.Generic)
@@ -129,7 +160,12 @@ newtype Only x = Only { fromOnly :: x }
 instance SOP.Generic (Only x)
 instance SOP.HasDatatypeInfo (Only x)
 
--- | Variable-length text type with limit
+{- | Variable-length text type with limit
+
+>>> :kind! PG (VarChar 4)
+PG (VarChar 4) :: PGType
+= 'PGvarchar 4
+-}
 newtype VarChar (n :: Nat) = VarChar Strict.Text
   deriving (Eq,Ord,Read,Show)
 
@@ -144,7 +180,12 @@ varChar t =
 getVarChar :: VarChar n -> Strict.Text
 getVarChar (VarChar t) = t
 
--- | Fixed-length, blank padded
+{- | Fixed-length, blank padded
+
+>>> :kind! PG (FixChar 4)
+PG (FixChar 4) :: PGType
+= 'PGchar 4
+-}
 newtype FixChar (n :: Nat) = FixChar Strict.Text
   deriving (Eq,Ord,Read,Show)
 

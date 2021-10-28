@@ -22,7 +22,10 @@ window functions, arguments and definitions
   , OverloadedStrings
   , PatternSynonyms
   , RankNTypes
+  , ScopedTypeVariables
+  , TypeApplications
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Expression.Window
@@ -118,7 +121,7 @@ instance OrderBy (WindowDefinition grp) grp where
   orderBy sortsR (WindowDefinition parts sortsL)
     = WindowDefinition parts (sortsL ++ sortsR)
 
-instance RenderSQL (WindowDefinition lat with db from grp params) where
+instance RenderSQL (WindowDefinition grp lat with db params from) where
   renderSQL (WindowDefinition part ord) =
     renderPartitionByClause part <> renderSQL ord
     where
@@ -173,8 +176,23 @@ data WindowArg
   (from :: FromType)
     = WindowArg
     { windowArgs :: NP (Expression grp lat with db params from) args
+      -- ^ `Window` or `Windows`
     , windowFilter :: [Condition grp lat with db params from]
+      -- ^ `filterWhere`
     } deriving stock (GHC.Generic)
+
+instance (HasUnique tab (Join from lat) row, Has col row ty)
+  => IsLabel col (WindowArg 'Ungrouped '[ty] lat with db params from) where
+    fromLabel = Window (fromLabel @col)
+instance (Has tab (Join from lat) row, Has col row ty)
+  => IsQualified tab col (WindowArg 'Ungrouped '[ty] lat with db params from) where
+    tab ! col = Window (tab ! col)
+instance (HasUnique tab (Join from lat) row, Has col row ty, GroupedBy tab col bys)
+  => IsLabel col (WindowArg ('Grouped bys) '[ty] lat with db params from) where
+    fromLabel = Window (fromLabel @col)
+instance (Has tab (Join from lat) row, Has col row ty, GroupedBy tab col bys)
+  => IsQualified tab col (WindowArg ('Grouped bys) '[ty] lat with db params from) where
+    tab ! col = Window (tab ! col)
 
 instance SOP.SListI args
   => RenderSQL (WindowArg grp args lat with db params from) where
@@ -193,12 +211,14 @@ instance FilterWhere (WindowArg grp) grp where
 -- | `Window` invokes a `WindowFunction` on a single argument.
 pattern Window
   :: Expression grp lat with db params from arg
+  -- ^ argument
   -> WindowArg grp '[arg] lat with db params from
 pattern Window x = Windows (x :* Nil)
 
 -- | `Windows` invokes a `WindowFunction` on multiple argument.
 pattern Windows
   :: NP (Expression grp lat with db params from) args
+  -- ^ arguments
   -> WindowArg grp args lat with db params from
 pattern Windows xs = WindowArg xs []
 

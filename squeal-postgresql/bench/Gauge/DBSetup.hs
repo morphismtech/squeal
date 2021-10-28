@@ -17,14 +17,12 @@ import           Data.ByteString                ( ByteString )
 import qualified Data.ByteString.Char8         as C
 import           Control.Monad                  ( void )
 import           GHC.Generics
-import           Test.QuickCheck
 import           Squeal.PostgreSQL
 -- Project imports
 import           Gauge.Schema                   ( Schemas
                                                 , DeviceOS
                                                 , IPLocation
                                                 )
-import           Gauge.Queries                  ( InsertUser )
 
 
 -- First create enums as they're needed in the Schema
@@ -59,7 +57,7 @@ setup =
           )
           (    primaryKey #id
           `as` #pk_user_devices
-          :*   foreignKey #user_id #users #id OnDeleteCascade OnUpdateCascade
+          :*   foreignKey #user_id #users #id (OnDelete Cascade) (OnUpdate Cascade)
           `as` #fk_user_id
           :*   unique #token
           `as` #token
@@ -99,7 +97,7 @@ makeConnStr PGConfig { pgHost = host, pgPort = portNumber, pgDbname = dbName, pg
     <> show portNumber
 
 connectionString :: ByteString
-connectionString = "host=localhost port=5432 dbname=exampledb"
+connectionString = "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 
 performDBAction :: Definition a b -> String -> IO ()
 performDBAction action message = do

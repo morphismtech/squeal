@@ -21,11 +21,7 @@ import           Data.Text                      ( Text )
 import           Data.Int                       ( Int16
                                                 , Int64
                                                 )
-import           Test.QuickCheck                ( Arbitrary(..)
-                                                , PrintableString(..)
-                                                , listOf
-                                                , arbitraryPrintableChar
-                                                )
+import           Test.QuickCheck                ( Arbitrary(..) )
 import           Generic.Random                 ( genericArbitrarySingle )
 -- Import Orphan instances
 import           Test.QuickCheck.Instances      ( )

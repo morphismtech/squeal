@@ -5,8 +5,8 @@ Copyright: (c) Eitan Chatav, 2019
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-`Squeal.PostgreSQL.Type.Schema` provides a type-level DSL
-for kinds of Postgres types, tables, schema, constraints, and more.
+Provides a type-level DSL for kinds of Postgres types,
+tables, schema, constraints, and more.
 It also defines useful type families to operate on these.
 -}
 
@@ -49,7 +49,21 @@ module Squeal.PostgreSQL.Type.Schema
   , ReturnsType (..)
   , SchemaType
   , SchemasType
+  , PrettyPrintPartitionedSchema
   , Public
+  , PartitionedSchema(..)
+  , PartitionSchema
+  , SchemaFunctions
+  , SchemaIndexes
+  , SchemaProcedures
+  , SchemaTables
+  , SchemaTypes
+  , SchemaUnsafes
+  , SchemaViews
+    -- * Database Subsets
+  , SubDB
+  , SubsetDB
+  , ElemDB
     -- * Constraint
   , (:=>)
   , Optionality (..)
@@ -78,7 +92,6 @@ module Squeal.PostgreSQL.Type.Schema
   , PGNum
   , PGIntegral
   , PGFloating
-  , PGTypeOf
   , PGJsonType
   , PGJsonKey
   , SamePGType
@@ -150,7 +163,7 @@ data PGType
   | PGcomposite RowType -- ^ a composite type represents the structure of a row or record; it is essentially just a list of field names and their data types.
   | PGtsvector -- ^ A tsvector value is a sorted list of distinct lexemes, which are words that have been normalized to merge different variants of the same word.
   | PGtsquery -- ^ A tsquery value stores lexemes that are to be searched for.
-  | PGoid -- Object identifiers (OIDs) are used internally by PostgreSQL as primary keys for various system tables.
+  | PGoid -- ^ Object identifiers (OIDs) are used internally by PostgreSQL as primary keys for various system tables.
   | PGrange PGType -- ^ Range types are data types representing a range of values of some element type (called the range's subtype).
   | UnsafePGType Symbol -- ^ an escape hatch for unsupported PostgreSQL types
 
@@ -201,6 +214,9 @@ type ColumnType = (Optionality,NullType)
 -- :}
 type ColumnsType = [(Symbol,ColumnType)]
 
+type instance PrettyPrintHaystack (haystack :: ColumnsType) =
+  'PrettyPrintInfo ('Text "column definition (ColumnType)") ('Text "table (ColumnsType)") ('ShowType (Sort (MapFst haystack)))
+
 -- | `TableConstraint` encodes various forms of data constraints
 -- of columns in a table.
 -- `TableConstraint`s give you as much control over the data in your tables
@@ -221,6 +237,9 @@ type family UsersConstraints :: TableConstraints where
 :}
 -}
 type TableConstraints = [(Symbol,TableConstraint)]
+
+type instance PrettyPrintHaystack (haystack :: TableConstraints) =
+  'PrettyPrintInfo ('Text "constraint (TableConstraint)") ('Text "table (TableConstraints)") ('ShowType (Sort (MapFst haystack)))
 
 -- | A `ForeignKey` must reference columns that either are
 -- a `PrimaryKey` or form a `Unique` constraint.
@@ -244,7 +263,7 @@ type family Uniquely
 -- :}
 type TableType = (TableConstraints,ColumnsType)
 
-{- | A `RowType` is a row of `NullType`. They correspond to Haskell
+{- | A `RowType` is a row of `NullType`s. They correspond to Haskell
 record types by means of `Squeal.PostgreSQL.Binary.RowPG` and are used in many places.
 
 >>> :{
@@ -258,11 +277,17 @@ type family PersonRow :: RowType where
 -}
 type RowType = [(Symbol,NullType)]
 
+type instance PrettyPrintHaystack (haystack :: RowType) =
+  'PrettyPrintInfo ('Text "column (NullType)") ('Text "row (RowType)") ('ShowType (Sort (MapFst haystack)))
+
 {- | `FromType` is a row of `RowType`s. It can be thought of as
-a product, or horizontal gluing and is used in `Squeal.PostgreSQL.Query.FromClause`s
-and `Squeal.PostgreSQL.Query.TableExpression`s.
+a product, or horizontal gluing and is used in `Squeal.PostgreSQL.Query.From.FromClause`s
+and `Squeal.PostgreSQL.Query.Table.TableExpression`s.
 -}
 type FromType = [(Symbol,RowType)]
+
+type instance PrettyPrintHaystack (haystack :: FromType) =
+  'PrettyPrintInfo ('Text "row (RowType)") ('Text "from clause (FromType)") ('ShowType (Sort (MapFst haystack)))
 
 -- | `ColumnsToRow` removes column constraints.
 type family ColumnsToRow (columns :: ColumnsType) :: RowType where
@@ -288,10 +313,6 @@ type PGFloating = '[ 'PGfloat4, 'PGfloat8, 'PGnumeric]
 -- | Integral Postgres types.
 type PGIntegral = '[ 'PGint2, 'PGint4, 'PGint8]
 
--- | `PGTypeOf` forgets about @NULL@ and any column constraints.
-type family PGTypeOf (ty :: NullType) :: PGType where
-  PGTypeOf (null pg) = pg
-
 -- | Equality constraint on the underlying `PGType` of two columns.
 class SamePGType
   (ty0 :: (Symbol,ColumnType)) (ty1 :: (Symbol,ColumnType)) where
@@ -312,8 +333,7 @@ type family NotAllNull (columns :: ColumnsType) :: Constraint where
 
 -- | `NullifyType` is an idempotent that nullifies a `NullType`.
 type family NullifyType (ty :: NullType) :: NullType where
-  NullifyType ('Null ty) = 'Null ty
-  NullifyType ('NotNull ty) = 'Null ty
+  NullifyType (null ty) = 'Null ty
 
 -- | `NullifyRow` is an idempotent that nullifies a `RowType`.
 type family NullifyRow (columns :: RowType) :: RowType where
@@ -323,15 +343,15 @@ type family NullifyRow (columns :: RowType) :: RowType where
 
 -- | `NullifyFrom` is an idempotent that nullifies a `FromType`
 -- used to nullify the left or right hand side of an outer join
--- in a `Squeal.PostgreSQL.Query.FromClause`.
+-- in a `Squeal.PostgreSQL.Query.From.FromClause`.
 type family NullifyFrom (tables :: FromType) :: FromType where
   NullifyFrom (table ::: columns ': tables) =
     table ::: NullifyRow columns ': NullifyFrom tables
   NullifyFrom '[] = '[]
 
 -- | @Create alias x xs@ adds @alias ::: x@ to the end of @xs@ and is used in
--- `Squeal.PostgreSQL.Definition.createTable` statements and in @ALTER TABLE@
--- `Squeal.PostgreSQL.Definition.addColumn`.
+-- `Squeal.PostgreSQL.Definition.Table.createTable` statements and in @ALTER TABLE@
+-- `Squeal.PostgreSQL.Definition.Table.addColumn`.
 type family Create alias x xs where
   Create alias x '[] = '[alias ::: x]
   Create alias x (alias ::: y ': xs) = TypeError
@@ -446,6 +466,41 @@ type family SetSchema sch0 sch1 schema0 schema1 obj srt ty db where
     (Create obj (srt ty) schema1)
     (Alter sch0 (DropSchemum obj srt schema0) db)
 
+{- | `SubDB` checks that one `SchemasType` is a sublist of another,
+with the same ordering.
+
+>>> :kind! SubDB '["a" ::: '["b" ::: 'View '[]]] '["a" ::: '["b" ::: 'View '[], "c" ::: 'Typedef 'PGint4]]
+SubDB '["a" ::: '["b" ::: 'View '[]]] '["a" ::: '["b" ::: 'View '[], "c" ::: 'Typedef 'PGint4]] :: Bool
+= 'True
+-}
+type family SubDB (db0 :: SchemasType) (db1 :: SchemasType) :: Bool where
+  SubDB '[] db1 = 'True
+  SubDB (sch ': db0) '[] = 'False
+  SubDB (sch ::: schema0 ': db0) (sch ::: schema1 ': db1) =
+    If (SubList schema0 schema1)
+      (SubDB db0 db1)
+      (SubDB (sch ::: schema0 ': db0) db1)
+  SubDB db0 (sch1 ': db1) = SubDB db0 db1
+
+{- | `SubsetDB` checks that one `SchemasType` is a subset of another,
+regardless of ordering.
+
+>>> :kind! SubsetDB '["a" ::: '["d" ::: 'Typedef 'PGint2, "b" ::: 'View '[]]] '["a" ::: '["b" ::: 'View '[], "c" ::: 'Typedef 'PGint4, "d" ::: 'Typedef 'PGint2]]
+SubsetDB '["a" ::: '["d" ::: 'Typedef 'PGint2, "b" ::: 'View '[]]] '["a" ::: '["b" ::: 'View '[], "c" ::: 'Typedef 'PGint4, "d" ::: 'Typedef 'PGint2]] :: Bool
+= 'True
+-}
+type family SubsetDB (db0 :: SchemasType) (db1 :: SchemasType) :: Bool where
+  SubsetDB '[] db1 = 'True
+  SubsetDB (sch ': db0) db1 = ElemDB sch db1 && SubsetDB db0 db1
+
+{- | `ElemDB` checks that a schema may be found as a subset of another in a database,
+regardless of ordering.
+-}
+type family ElemDB (sch :: (Symbol, SchemaType)) (db :: SchemasType) :: Bool where
+  ElemDB sch '[] = 'False
+  ElemDB (sch ::: schema0) (sch ::: schema1 ': _) = SubsetList schema0 schema1
+  ElemDB sch (_ ': schs) = ElemDB sch schs
+
 -- | Check if a `TableConstraint` involves a column
 type family ConstraintInvolves column constraint where
   ConstraintInvolves column ('Check columns) = column `Elem` columns
@@ -462,7 +517,7 @@ type family DropIfConstraintsInvolve column constraints where
         (DropIfConstraintsInvolve column constraints)
         (alias ::: constraint ': DropIfConstraintsInvolve column constraints)
 
--- | A `SchemumType` is a user-defined type, either a `Table`,
+-- | A `SchemumType` is a user-created type, like a `Table`,
 -- `View` or `Typedef`.
 data SchemumType
   = Table TableType
@@ -470,14 +525,18 @@ data SchemumType
   | Typedef PGType
   | Index IndexType
   | Function FunctionType
-  | Procedure ProcedureType
+  | Procedure [NullType]
   | UnsafeSchemum Symbol
 
--- | Use `:=>` to pair the parameter types with the return
--- type of a function.
-type FunctionType = ([NullType], ReturnsType)
+{- | Use `:=>` to pair the parameter types with the return
+type of a function.
 
-type ProcedureType = [NullType]
+>>> :{
+type family Fn :: FunctionType where
+  Fn = '[ 'NotNull 'PGint4] :=> 'Returns ('NotNull 'PGint4)
+:}
+-}
+type FunctionType = ([NullType], ReturnsType)
 
 {- |
 PostgreSQL provides several index types:
@@ -510,7 +569,7 @@ data ReturnsType
   = Returns NullType -- ^ function
   | ReturnsTable RowType -- ^ set returning function
 
-{- | The schema of a database consists of a list of aliased,
+{- | A schema of a database consists of a list of aliased,
 user-defined `SchemumType`s.
 
 >>> :{
@@ -534,6 +593,93 @@ type family Schema :: SchemaType where
 -}
 type SchemaType = [(Symbol,SchemumType)]
 
+-- | A @PartitionedSchema@ is a @SchemaType@ where each constructor of @SchemumType@ has
+-- been separated into its own list
+data PartitionedSchema = PartitionedSchema
+  { _tables     :: [(Symbol, TableType)]
+  , _views      :: [(Symbol, RowType)]
+  , _types      :: [(Symbol, PGType)]
+  , _indexes    :: [(Symbol, IndexType)]
+  , _functions  :: [(Symbol, FunctionType)]
+  , _procedures :: [(Symbol, [NullType])]
+  , _unsafes    :: [(Symbol, Symbol)]
+  }
+
+-- | @PartitionSchema@ partitions a @SchemaType@ into a @PartitionedSchema@
+type PartitionSchema schema = PartitionSchema' schema ('PartitionedSchema '[] '[] '[] '[] '[] '[] '[])
+
+type family PartitionSchema' (remaining :: SchemaType) (acc :: PartitionedSchema) :: PartitionedSchema where
+  PartitionSchema' '[] ps = ps
+  PartitionSchema' ('(s, 'Table table) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema ('(s, table) ': tables) views types indexes functions procedures unsafe)
+  PartitionSchema' ('(s, 'View view) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema tables ('(s, view) ': views) types indexes functions procedures unsafe)
+  PartitionSchema' ('(s, 'Typedef typ) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema tables views ('(s, typ) ': types) indexes functions procedures unsafe)
+  PartitionSchema' ('(s, 'Index ix) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema tables views types ('(s, ix) ': indexes) functions procedures unsafe)
+  PartitionSchema' ('(s, 'Function f) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema tables views types indexes ('(s, f) ': functions) procedures unsafe)
+  PartitionSchema' ('(s, 'Procedure p) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema tables views types indexes functions ('(s, p) ': procedures) unsafe)
+  PartitionSchema' ('(s, 'UnsafeSchemum u) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
+    = PartitionSchema' rest ('PartitionedSchema tables views types indexes functions procedures ('(s, u) ': unsafe))
+
+-- | Get the tables from a @PartitionedSchema@
+type family SchemaTables (schema :: PartitionedSchema) :: [(Symbol, TableType)] where
+  SchemaTables ('PartitionedSchema tables _ _ _ _ _ _) = tables
+-- | Get the views from a @PartitionedSchema@
+type family SchemaViews (schema :: PartitionedSchema) :: [(Symbol, RowType)] where
+  SchemaViews ('PartitionedSchema _ views _ _ _ _ _) = views
+-- | Get the typedefs from a @PartitionedSchema@
+type family SchemaTypes (schema :: PartitionedSchema) :: [(Symbol, PGType)] where
+  SchemaTypes ('PartitionedSchema _ _ types _ _ _ _) = types
+-- | Get the indexes from a @PartitionedSchema@
+type family SchemaIndexes (schema :: PartitionedSchema) :: [(Symbol, IndexType)] where
+  SchemaIndexes ('PartitionedSchema _ _ _ indexes _ _ _) = indexes
+-- | Get the functions from a @PartitionedSchema@
+type family SchemaFunctions (schema :: PartitionedSchema) :: [(Symbol, FunctionType)] where
+  SchemaFunctions ('PartitionedSchema _ _ _ _ functions _ _) = functions
+-- | Get the procedured from a @PartitionedSchema@
+type family SchemaProcedures (schema :: PartitionedSchema) :: [(Symbol, [NullType])] where
+  SchemaProcedures ('PartitionedSchema _ _ _ _ _ procedures _) = procedures
+-- | Get the unsafe schema types from a @PartitionedSchema@
+type family SchemaUnsafes (schema :: PartitionedSchema) :: [(Symbol, Symbol)] where
+  SchemaUnsafes ('PartitionedSchema _ _ _ _ _ _ unsafes) = unsafes
+
+-- | @PrettyPrintPartitionedSchema@ makes a nice @ErrorMessage@ showing a @PartitionedSchema@,
+-- only including the names of the things in it and not the values. Additionally, empty
+-- fields are omitted
+type family PrettyPrintPartitionedSchema (schema :: PartitionedSchema) :: ErrorMessage where
+  PrettyPrintPartitionedSchema schema = IntersperseNewlines (FilterNonEmpty
+    [ FieldIfNonEmpty "Tables"              (SchemaTables schema)
+    , FieldIfNonEmpty "Views"               (SchemaViews schema)
+    , FieldIfNonEmpty "Types"               (SchemaTypes schema)
+    , FieldIfNonEmpty "Indexes"             (SchemaIndexes schema)
+    , FieldIfNonEmpty "Functions"           (SchemaFunctions schema)
+    , FieldIfNonEmpty "Procedures"          (SchemaProcedures schema)
+    , FieldIfNonEmpty "Unsafe schema items" (SchemaUnsafes schema)
+    ])
+
+type family FieldIfNonEmpty (fieldName :: Symbol) (value :: [(Symbol, k)]) :: ErrorMessage where
+  FieldIfNonEmpty _ '[] = 'Text ""
+  FieldIfNonEmpty n xs = 'Text "  " ':<>: 'Text n ':<>: 'Text ":" ':$$: 'Text "    " ':<>: 'ShowType (Sort (MapFst xs))
+
+type family FilterNonEmpty (ls :: [ErrorMessage]) :: [ErrorMessage] where
+  FilterNonEmpty ('Text "" ': rest) = FilterNonEmpty rest
+  FilterNonEmpty (x ': rest) = x ': FilterNonEmpty rest
+  FilterNonEmpty '[] = '[]
+
+type family IntersperseNewlines (ls :: [ErrorMessage]) :: ErrorMessage where
+  IntersperseNewlines (x ': y ': '[]) = x ':$$: y
+  IntersperseNewlines (x ': xs) = x ':$$: IntersperseNewlines xs
+  IntersperseNewlines '[] = 'Text ""
+
+type instance PrettyPrintHaystack (haystack :: SchemaType) =
+  'PrettyPrintInfo ('Text "table, view, typedef, index, function, or procedure (SchemumType)") ('Text "schema (SchemaType)")
+  ( PrettyPrintPartitionedSchema (PartitionSchema haystack)
+  )
+
 {- |
 A database contains one or more named schemas, which in turn contain tables.
 The same object name can be used in different schemas without conflict;
@@ -551,6 +697,9 @@ There are several reasons why one might want to use schemas:
 -}
 type SchemasType = [(Symbol,SchemaType)]
 
+type instance PrettyPrintHaystack (haystack :: SchemasType) =
+  'PrettyPrintInfo ('Text "schema (SchemaType)") ('Text "database (SchemasType)") ('Text "  " ':<>: 'ShowType (Sort (MapFst haystack)))
+
 -- | A type family to use for a single schema database.
 type family Public (schema :: SchemaType) :: SchemasType
   where Public schema = '["public" ::: schema]
@@ -558,7 +707,7 @@ type family Public (schema :: SchemaType) :: SchemasType
 -- | `IsPGlabel` looks very much like the `IsLabel` class. Whereas
 -- the overloaded label, `fromLabel` is used for column references,
 -- `label`s are used for enum terms. A `label` is called with
--- type application like `label @"beef"`.
+-- type application like `label` @"beef".
 class IsPGlabel (label :: Symbol) expr where label :: expr
 instance label ~ label1
   => IsPGlabel label (PGlabel label1) where label = PGlabel

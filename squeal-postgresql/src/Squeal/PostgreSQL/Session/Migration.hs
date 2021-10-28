@@ -71,7 +71,7 @@ let
             nullable text `as` #email )
           ( primaryKey #id `as` #pk_emails :*
             foreignKey #user_id #users #id
-              OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
+              (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_user_id )
     , down = dropTable #emails
     }
 :}
@@ -84,7 +84,7 @@ Now run the migrations.
 
 >>> import Control.Monad.IO.Class
 >>> :{
-withConnection "host=localhost port=5432 dbname=exampledb" $
+withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
   manipulate_ (UnsafeManipulation "SET client_min_messages TO WARNING;")
     -- suppress notices
   & pqThen (liftIO (putStrLn "Migrate"))
@@ -97,7 +97,7 @@ Rollback
 
 We can also create a simple executable using `mainMigrateIso`.
 
->>> let main = mainMigrateIso "host=localhost port=5432 dbname=exampledb" migrations
+>>> let main = mainMigrateIso "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" migrations
 
 >>> withArgs [] main
 Invalid command: "". Use:
@@ -167,6 +167,7 @@ module Squeal.PostgreSQL.Session.Migration
 import Control.Category
 import Control.Category.Free
 import Control.Monad
+import Control.Monad.IO.Class
 import Data.ByteString (ByteString)
 import Data.Foldable (traverse_)
 import Data.Function ((&))
@@ -177,7 +178,6 @@ import Data.Text (Text)
 import Data.Time (UTCTime)
 import Prelude hiding ((.), id)
 import System.Environment
-import UnliftIO (MonadIO (..))
 
 import qualified Data.Text.IO as Text (putStrLn)
 import qualified Generics.SOP as SOP
@@ -201,7 +201,7 @@ import Squeal.PostgreSQL.Session.Indexed
 import Squeal.PostgreSQL.Session.Monad
 import Squeal.PostgreSQL.Session.Result
 import Squeal.PostgreSQL.Session.Statement
-import Squeal.PostgreSQL.Session.Transaction
+import Squeal.PostgreSQL.Session.Transaction.Unsafe
 import Squeal.PostgreSQL.Query.From
 import Squeal.PostgreSQL.Query.Select
 import Squeal.PostgreSQL.Query.Table
@@ -211,8 +211,8 @@ import Squeal.PostgreSQL.Type.Schema
 
 -- | A `Migration` consists of a name and a migration definition.
 data Migration def db0 db1 = Migration
-  { migrationName :: Text -- ^ The `name` of a `Migration`.
-    -- Each `name` in a `Migration` should be unique.
+  { migrationName :: Text -- ^ The name of a `Migration`.
+    -- Each `migrationName` should be unique.
   , migrationDef :: def db0 db1 -- ^ The migration of a `Migration`.
   } deriving (GHC.Generic)
 instance QFunctor Migration where

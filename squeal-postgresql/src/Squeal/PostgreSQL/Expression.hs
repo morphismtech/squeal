@@ -203,46 +203,46 @@ unsafeFunctionVar :: ByteString -> FunctionVar x0 x1 y
 unsafeFunctionVar fun xs x = UnsafeExpression $ fun <> parenthesized
   (commaSeparated (renderSQL <$> xs) <> ", " <> renderSQL x)
 
-instance (HasUnique tab (Join lat from) row, Has col row ty)
+instance (HasUnique tab (Join from lat) row, Has col row ty)
   => IsLabel col (Expression 'Ungrouped lat with db params from ty) where
     fromLabel = UnsafeExpression $ renderSQL (Alias @col)
-instance (HasUnique tab (Join lat from) row, Has col row ty, tys ~ '[ty])
+instance (HasUnique tab (Join from lat) row, Has col row ty, tys ~ '[ty])
   => IsLabel col (NP (Expression 'Ungrouped lat with db params from) tys) where
     fromLabel = fromLabel @col :* Nil
-instance (HasUnique tab (Join lat from) row, Has col row ty, column ~ (col ::: ty))
+instance (HasUnique tab (Join from lat) row, Has col row ty, column ~ (col ::: ty))
   => IsLabel col
     (Aliased (Expression 'Ungrouped lat with db params from) column) where
     fromLabel = fromLabel @col `As` Alias
-instance (HasUnique tab (Join lat from) row, Has col row ty, columns ~ '[col ::: ty])
+instance (HasUnique tab (Join from lat) row, Has col row ty, columns ~ '[col ::: ty])
   => IsLabel col
     (NP (Aliased (Expression 'Ungrouped lat with db params from)) columns) where
     fromLabel = fromLabel @col :* Nil
 
-instance (Has tab (Join lat from) row, Has col row ty)
+instance (Has tab (Join from lat) row, Has col row ty)
   => IsQualified tab col (Expression 'Ungrouped lat with db params from ty) where
     tab ! col = UnsafeExpression $
       renderSQL tab <> "." <> renderSQL col
-instance (Has tab (Join lat from) row, Has col row ty, tys ~ '[ty])
+instance (Has tab (Join from lat) row, Has col row ty, tys ~ '[ty])
   => IsQualified tab col (NP (Expression 'Ungrouped lat with db params from) tys) where
     tab ! col = tab ! col :* Nil
-instance (Has tab (Join lat from) row, Has col row ty, column ~ (col ::: ty))
+instance (Has tab (Join from lat) row, Has col row ty, column ~ (col ::: ty))
   => IsQualified tab col
     (Aliased (Expression 'Ungrouped lat with db params from) column) where
     tab ! col = tab ! col `As` col
-instance (Has tab (Join lat from) row, Has col row ty, columns ~ '[col ::: ty])
+instance (Has tab (Join from lat) row, Has col row ty, columns ~ '[col ::: ty])
   => IsQualified tab col
     (NP (Aliased (Expression 'Ungrouped lat with db params from)) columns) where
     tab ! col = tab ! col :* Nil
 
 instance
-  ( HasUnique tab (Join lat from) row
+  ( HasUnique tab (Join from lat) row
   , Has col row ty
   , GroupedBy tab col bys
   ) => IsLabel col
     (Expression ('Grouped bys) lat with db params from ty) where
       fromLabel = UnsafeExpression $ renderSQL (Alias @col)
 instance
-  ( HasUnique tab (Join lat from) row
+  ( HasUnique tab (Join from lat) row
   , Has col row ty
   , GroupedBy tab col bys
   , tys ~ '[ty]
@@ -250,7 +250,7 @@ instance
     (NP (Expression ('Grouped bys) lat with db params from) tys) where
       fromLabel = fromLabel @col :* Nil
 instance
-  ( HasUnique tab (Join lat from) row
+  ( HasUnique tab (Join from lat) row
   , Has col row ty
   , GroupedBy tab col bys
   , column ~ (col ::: ty)
@@ -258,7 +258,7 @@ instance
     (Aliased (Expression ('Grouped bys) lat with db params from) column) where
       fromLabel = fromLabel @col `As` Alias
 instance
-  ( HasUnique tab (Join lat from) row
+  ( HasUnique tab (Join from lat) row
   , Has col row ty
   , GroupedBy tab col bys
   , columns ~ '[col ::: ty]
@@ -267,7 +267,7 @@ instance
       fromLabel = fromLabel @col :* Nil
 
 instance
-  ( Has tab (Join lat from) row
+  ( Has tab (Join from lat) row
   , Has col row ty
   , GroupedBy tab col bys
   ) => IsQualified tab col
@@ -275,7 +275,7 @@ instance
       tab ! col = UnsafeExpression $
         renderSQL tab <> "." <> renderSQL col
 instance
-  ( Has tab (Join lat from) row
+  ( Has tab (Join from lat) row
   , Has col row ty
   , GroupedBy tab col bys
   , tys ~ '[ty]
@@ -283,7 +283,7 @@ instance
     (NP (Expression ('Grouped bys) lat with db params from) tys) where
       tab ! col = tab ! col :* Nil
 instance
-  ( Has tab (Join lat from) row
+  ( Has tab (Join from lat) row
   , Has col row ty
   , GroupedBy tab col bys
   , column ~ (col ::: ty)
@@ -291,7 +291,7 @@ instance
     (Aliased (Expression ('Grouped bys) lat with db params from) column) where
       tab ! col = tab ! col `As` col
 instance
-  ( Has tab (Join lat from) row
+  ( Has tab (Join from lat) row
   , Has col row ty
   , GroupedBy tab col bys
   , columns ~ '[col ::: ty]
@@ -585,6 +585,8 @@ class PGSubset ty where
   (@>) = unsafeBinaryOp "@>"
   (<@) :: Operator (null0 ty) (null1 ty) ('Null 'PGbool)
   (<@) = unsafeBinaryOp "<@"
+infix 4 @>
+infix 4 <@
 instance PGSubset 'PGjsonb
 instance PGSubset 'PGtsquery
 instance PGSubset ('PGvararray ty)

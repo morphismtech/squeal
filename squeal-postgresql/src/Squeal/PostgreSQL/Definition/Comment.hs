@@ -60,8 +60,8 @@ commentOnTable
      , Has sch db schema
      , Has tab schema ('Table table)
      )
-  => QualifiedAlias sch tab
-  -> Text
+  => QualifiedAlias sch tab -- ^ table
+  -> Text -- ^ comment
   -> Definition db db
 commentOnTable alias comm = UnsafeDefinition $
   "COMMENT ON TABLE" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <> ";"
@@ -76,8 +76,8 @@ commentOnType
      , Has sch db schema
      , Has typ schema ('Typedef type_)
      )
-  => QualifiedAlias sch typ
-  -> Text
+  => QualifiedAlias sch typ -- ^ type
+  -> Text -- ^ comment
   -> Definition db db
 commentOnType alias comm = UnsafeDefinition $
   "COMMENT ON TYPE" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <> ";"
@@ -92,8 +92,8 @@ commentOnView
      , Has sch db schema
      , Has vie schema ('View view)
      )
-  => QualifiedAlias sch vie
-  -> Text
+  => QualifiedAlias sch vie -- ^ view
+  -> Text -- ^ comment
   -> Definition db db
 commentOnView alias comm = UnsafeDefinition $
   "COMMENT ON VIEW" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <> ";"
@@ -108,8 +108,8 @@ commentOnIndex
      , Has sch db schema
      , Has ind schema ('Index index)
      )
-  => QualifiedAlias sch ind
-  -> Text
+  => QualifiedAlias sch ind -- ^ index
+  -> Text -- ^ comment
   -> Definition db db
 commentOnIndex alias comm = UnsafeDefinition $
   "COMMENT ON INDEX" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <> ";"
@@ -124,8 +124,8 @@ commentOnFunction
      , Has sch db schema
      , Has fun schema ('Function function)
      )
-  => QualifiedAlias sch fun
-  -> Text
+  => QualifiedAlias sch fun -- ^ function
+  -> Text -- ^ comment
   -> Definition db db
 commentOnFunction alias comm = UnsafeDefinition $
   "COMMENT ON FUNCTION" <+> renderSQL alias <+> "IS" <+> singleQuotedText comm <> ";"
@@ -142,12 +142,13 @@ commentOnColumn
      , Has tab schema ('Table '(cons, cols))
      , Has col cols '(def, nulltyp)
      )
-  => QualifiedAlias sch tab
-  -> Alias col 
-  -> Text
+  => QualifiedAlias sch tab -- ^ table
+  -> Alias col -- ^ column
+  -> Text -- ^ comment
   -> Definition db db
 commentOnColumn table col comm = UnsafeDefinition $
-  "COMMENT ON COLUMN" <+> renderSQL table <> "." <> renderSQL col <+> "IS" <+> singleQuotedText comm <> ";"
+  "COMMENT ON COLUMN" <+> renderSQL table <> "." <> renderSQL col <+> "IS"
+  <+> singleQuotedText comm <> ";"
 
 {- |
 When a user views a schema in the database (i.e. with \dn+ <schema>), it is
@@ -157,8 +158,8 @@ commentOnSchema
   :: ( KnownSymbol sch
      , Has sch db schema
      )
-  => Alias sch
-  -> Text
+  => Alias sch -- ^ schema
+  -> Text -- ^ comment
   -> Definition db db
 commentOnSchema schema comm = UnsafeDefinition $
   "COMMENT ON SCHEMA" <+> renderSQL schema <> "IS" <+> singleQuotedText comm <> ";"

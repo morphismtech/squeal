@@ -78,7 +78,7 @@ let
         (text & nullable) `as` #email )
       ( primaryKey #id `as` #pk_emails :*
         foreignKey #user_id #users #id
-          OnDeleteCascade OnUpdateCascade `as` #fk_user_id )
+          (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_user_id )
 :}
 
 We can easily see the generated SQL is unsurprising looking.
@@ -136,7 +136,7 @@ let
 :}
 
 >>> printSQL insertUser
-WITH "u" AS (INSERT INTO "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) RETURNING "id" AS "id", ($2 :: text) AS "email") INSERT INTO "emails" ("user_id", "email") SELECT "u"."id", "u"."email" FROM "u" AS "u"
+WITH "u" AS (INSERT INTO "users" AS "users" ("id", "name") VALUES (DEFAULT, ($1 :: text)) RETURNING "id" AS "id", ($2 :: text) AS "email") INSERT INTO "emails" AS "emails" ("user_id", "email") SELECT "u"."id", "u"."email" FROM "u" AS "u"
 
 Next we write a `Statement` to retrieve users from the database. We're not
 interested in the ids here, just the usernames and email addresses. We
@@ -184,12 +184,17 @@ let
     usersRows <- getRows usersResult
     liftIO $ print usersRows
 in
-  withConnection "host=localhost port=5432 dbname=exampledb" $
+  withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
     define setup
     & pqThen session
     & pqThen (define teardown)
 :}
 [User {userName = "Alice", userEmail = Just "alice@gmail.com"},User {userName = "Bob", userEmail = Nothing},User {userName = "Carole", userEmail = Just "carole@hotmail.com"}]
+
+This should get you up and running with Squeal. Once you're writing more complicated
+queries and need a deeper understanding of Squeal's types and how everything
+fits together, check out the <https://github.com/morphismtech/squeal/blob/dev/squeal-core-concepts-handbook.md Core Concepts Handbook>
+in the toplevel of Squeal's Git repo.
 -}
 module Squeal.PostgreSQL
   ( module X
