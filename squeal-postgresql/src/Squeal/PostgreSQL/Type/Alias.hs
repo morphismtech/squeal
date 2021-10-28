@@ -217,15 +217,16 @@ instance ( KnownSymbol alias
          ) => HasErr allFields alias '[] field
 
 -- | @MismatchError@ reports a nicer error with more context when we successfully do a lookup but
--- find a different field than we expected
-type MismatchError (alias :: Symbol) (fields :: [(Symbol, kind)]) (found :: kind) (expected :: kind)
-  = MismatchError' (MismatchError' () (DefaultPrettyPrinter fields) alias fields found expected) (PrettyPrintHaystack fields) alias fields found expected
+-- find a different field than we expected. As a type family, it ensures that we only do the (expensive)
+-- calculation of coming up with our pretty printing information when we actually have a mismatch
+type family MismatchError (alias :: Symbol) (fields :: [(Symbol, kind)]) (found :: kind) (expected :: kind) :: Constraint where
+  MismatchError _ _ found found = ()
+  MismatchError alias fields found expected = MismatchError' (MismatchError' () (DefaultPrettyPrinter fields) alias fields found expected) (PrettyPrintHaystack fields) alias fields found expected
 
 -- | @MismatchError'@ is the workhorse behind @MismatchError@, but taking an additional type as the first argument. We can put another type error
 -- in there which will only show if @MismatchError'@ is stuck; this allows us to fall back to @DefaultPrettyPrinter@ when a @PrettyPrintHaystack@ instance
 -- is missing
 type family MismatchError' (err :: Constraint) (ppInfo :: PrettyPrintInfo) (alias :: Symbol) (fields :: [(Symbol, kind)]) (found :: kind) (expected :: kind) :: Constraint where
-  MismatchError' _ _ _ _ found found = ()
   MismatchError' _ ('PrettyPrintInfo needleName haystackName _) alias fields found expected = TypeError
     (     'Text "Type mismatch when looking up " ':<>: needleName ':<>: 'Text " named " ':<>: 'ShowType alias
     ':$$: 'Text "in " ':<>: haystackName ':<>: 'Text ":"
