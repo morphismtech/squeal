@@ -103,7 +103,8 @@ TRUE IN (TRUE, FALSE, NULL)
 in_
   :: Expression grp lat with db params from ty -- ^ expression
   -> [Expression grp lat with db params from ty]
-  -> Expression grp lat with db params from (null 'PGbool)
+  -> Expression grp lat with db params from ('Null 'PGbool)
+_ `in_` [] = false
 expr `in_` exprs = UnsafeExpression $ renderSQL expr <+> "IN"
   <+> parenthesized (commaSeparated (renderSQL <$> exprs))
 
@@ -117,6 +118,7 @@ TRUE NOT IN (FALSE, NULL)
 notIn
   :: Expression grp lat with db params from ty -- ^ expression
   -> [Expression grp lat with db params from ty]
-  -> Expression grp lat with db params from (null 'PGbool)
+  -> Expression grp lat with db params from ('Null 'PGbool)
+_ `notIn` [] = true
 expr `notIn` exprs = UnsafeExpression $ renderSQL expr <+> "NOT IN"
   <+> parenthesized (commaSeparated (renderSQL <$> exprs))

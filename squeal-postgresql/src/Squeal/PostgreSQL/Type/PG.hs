@@ -5,8 +5,8 @@ Copyright: (c) Eitan Chatav, 2010
 Maintainer: eitan@morphism.tech
 Stability: experimental
 
-`Squeal.PostgreSQL.Type.PG` provides type families for turning Haskell
-`Type`s into corresponding Postgres types.
+Provides type families for turning Haskell `Type`s
+into corresponding Postgres types.
 -}
 {-# LANGUAGE
     AllowAmbiguousTypes
@@ -52,6 +52,8 @@ module Squeal.PostgreSQL.Type.PG
   ) where
 
 import Data.Aeson (Value)
+import Data.Functor.Const (Const)
+import Data.Functor.Constant (Constant)
 import Data.Kind (Type)
 import Data.Int (Int16, Int32, Int64)
 import Data.Scientific (Scientific)
@@ -170,6 +172,12 @@ instance IsPG Value where type PG Value = 'PGjson
 instance IsPG (VarChar n) where type PG (VarChar n) = 'PGvarchar n
 -- | `PGvarchar`
 instance IsPG (FixChar n) where type PG (FixChar n) = 'PGchar n
+-- | `PG hask`
+instance IsPG hask => IsPG (Const hask tag) where type PG (Const hask tag) = PG hask
+-- | `PG hask`
+instance IsPG hask => IsPG (SOP.K hask tag) where type PG (SOP.K hask tag) = PG hask
+-- | `PG hask`
+instance IsPG hask => IsPG (Constant hask tag) where type PG (Constant hask tag) = PG hask
 
 -- | `PGmoney`
 instance IsPG Money where type PG Money = 'PGmoney

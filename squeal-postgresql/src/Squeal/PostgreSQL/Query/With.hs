@@ -36,10 +36,16 @@ module Squeal.PostgreSQL.Query.With
     With (..)
   , CommonTableExpression (..)
   , withRecursive
+  , Materialization (..)
+  , materialized
+  , notMaterialized
   ) where
 
 import Data.Quiver.Functor
 import GHC.TypeLits
+
+import qualified GHC.Generics as GHC
+import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Query
@@ -134,6 +140,23 @@ withRecursive (recursive `As` cte) query = UnsafeQuery $
     <+> "AS" <+> parenthesized (renderSQL recursive)
     <+> renderSQL query
 
+-- | Whether the contents of the WITH clause are materialized.
+-- If a WITH query is non-recursive and side-effect-free (that is, it is a SELECT containing no volatile functions) then it can be folded into the parent query, allowing joint optimization of the two query levels.
+--
+-- Note: Use of `Materialized` or `NotMaterialized` requires PostgreSQL version 12 or higher. For earlier versions, use `DefaultMaterialization` which in those earlier versions of PostgreSQL behaves as `Materialized`. PostgreSQL 12 both changes the default behavior as well as adds options for customizing the materialization behavior.
+data Materialization =
+  DefaultMaterialization -- ^ By default, folding happens if the parent query references the WITH query just once, but not if it references the WITH query more than once. Note: this is the behavior in PostgreSQL 12+. In PostgreSQL 11 and earlier, all CTEs are materialized.
+  | Materialized -- ^ You can override that decision by specifying MATERIALIZED to force separate calculation of the WITH query. Requires PostgreSQL 12+.
+  | NotMaterialized -- ^ or by specifying NOT MATERIALIZED to force it to be merged into the parent query. Requires PostgreSQL 12+.
+  deriving (Eq, Ord, Show, Read, Enum, GHC.Generic)
+instance SOP.Generic Materialization
+instance SOP.HasDatatypeInfo Materialization
+instance RenderSQL Materialization where
+  renderSQL = \case
+    DefaultMaterialization -> ""
+    Materialized -> "MATERIALIZED"
+    NotMaterialized -> "NOT MATERIALIZED"
+
 -- | A `CommonTableExpression` is an auxiliary statement in a `with` clause.
 data CommonTableExpression statement
   (db :: SchemasType)
@@ -143,6 +166,8 @@ data CommonTableExpression statement
   CommonTableExpression
     :: Aliased (statement with db params) (cte ::: common)
     -- ^ aliased statement
+    -> Materialization
+    -- ^ materialization of the CTE output
     -> CommonTableExpression statement db params with (cte ::: common ': with)
 instance
   ( KnownSymbol cte
@@ -150,7 +175,7 @@ instance
   ) => Aliasable cte
     (statement with db params common)
     (CommonTableExpression statement db params with with1) where
-      statement `as` cte = CommonTableExpression (statement `as` cte)
+      statement `as` cte = CommonTableExpression (statement `as` cte) DefaultMaterialization
 instance
   ( KnownSymbol cte
   , with1 ~ (cte ::: common ': with)
@@ -161,5 +186,60 @@ instance
 
 instance (forall c s p r. RenderSQL (statement c s p r)) => RenderSQL
   (CommonTableExpression statement db params with0 with1) where
-    renderSQL (CommonTableExpression (statement `As` cte)) =
-      renderSQL cte <+> "AS" <+> parenthesized (renderSQL statement)
+    renderSQL (CommonTableExpression (statement `As` cte) materialization) =
+      renderSQL cte
+        <+> "AS"
+        <+> renderSQL materialization
+        <> case materialization of
+              DefaultMaterialization -> ""
+              _ -> " "
+        <> parenthesized (renderSQL statement)
+
+{- | Force separate calculation of the WITH query.
+
+>>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> :{
+let
+  qry :: Query lat with (Public Schema) params '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  qry = with (
+    materialized (select Star (from (table #tab)) `as` #cte1) :>>
+    select Star (from (common #cte1)) `as` #cte2
+    ) (select Star (from (common #cte2)))
+in printSQL qry
+:}
+WITH "cte1" AS MATERIALIZED (SELECT * FROM "tab" AS "tab"), "cte2" AS (SELECT * FROM "cte1" AS "cte1") SELECT * FROM "cte2" AS "cte2"
+
+Note: if the last CTE has `materialized` or `notMaterialized` you must add `:>> Done`.
+
+Requires PostgreSQL 12 or higher.
+-}
+materialized
+  :: Aliased (statement with db params) (cte ::: common) -- ^ CTE
+  -> CommonTableExpression statement db params with (cte ::: common ': with)
+materialized stmt = CommonTableExpression stmt Materialized
+
+{- | Force the WITH query to be merged into the parent query.
+
+>>> type Columns = '["col1" ::: 'NoDef :=> 'NotNull 'PGint4, "col2" ::: 'NoDef :=> 'NotNull 'PGint4]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> :{
+let
+  qry :: Query lat with (Public Schema) params '["col1" ::: 'NotNull 'PGint4, "col2" ::: 'NotNull 'PGint4]
+  qry = with (
+    select Star (from (table #tab)) `as` #cte1 :>>
+    notMaterialized (select Star (from (common #cte1)) `as` #cte2) :>>
+    Done
+    ) (select Star (from (common #cte2)))
+in printSQL qry
+:}
+WITH "cte1" AS (SELECT * FROM "tab" AS "tab"), "cte2" AS NOT MATERIALIZED (SELECT * FROM "cte1" AS "cte1") SELECT * FROM "cte2" AS "cte2"
+
+Note: if the last CTE has `materialized` or `notMaterialized` you must add `:>> Done` to finish the `Path`.
+
+Requires PostgreSQL 12 or higher.
+-}
+notMaterialized
+  :: Aliased (statement with db params) (cte ::: common) -- ^ CTE
+  -> CommonTableExpression statement db params with (cte ::: common ': with)
+notMaterialized stmt = CommonTableExpression stmt NotMaterialized

@@ -22,7 +22,10 @@ window functions, arguments and definitions
   , OverloadedStrings
   , PatternSynonyms
   , RankNTypes
+  , ScopedTypeVariables
+  , TypeApplications
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Expression.Window
@@ -177,6 +180,19 @@ data WindowArg
     , windowFilter :: [Condition grp lat with db params from]
       -- ^ `filterWhere`
     } deriving stock (GHC.Generic)
+
+instance (HasUnique tab (Join from lat) row, Has col row ty)
+  => IsLabel col (WindowArg 'Ungrouped '[ty] lat with db params from) where
+    fromLabel = Window (fromLabel @col)
+instance (Has tab (Join from lat) row, Has col row ty)
+  => IsQualified tab col (WindowArg 'Ungrouped '[ty] lat with db params from) where
+    tab ! col = Window (tab ! col)
+instance (HasUnique tab (Join from lat) row, Has col row ty, GroupedBy tab col bys)
+  => IsLabel col (WindowArg ('Grouped bys) '[ty] lat with db params from) where
+    fromLabel = Window (fromLabel @col)
+instance (Has tab (Join from lat) row, Has col row ty, GroupedBy tab col bys)
+  => IsQualified tab col (WindowArg ('Grouped bys) '[ty] lat with db params from) where
+    tab ! col = Window (tab ! col)
 
 instance SOP.SListI args
   => RenderSQL (WindowArg grp args lat with db params from) where

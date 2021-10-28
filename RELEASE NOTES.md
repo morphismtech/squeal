@@ -1,5 +1,382 @@
 ## RELEASE NOTES
 
+## Version 0.8.1.1
+
+Fix a bug in how the new `Has` type mismatch errors
+were implemented, which made it do the expensive pretty-printing
+even in the non-error case, resulting in extreme memory usage
+at compile time for non-trivial cases.
+
+## Version 0.8.1.0
+
+Improvements to type errors for `Has`/`HasErr`, `HasParameter`,
+and trying to aggregate without grouping.
+
+### `Has`
+#### Lookup failed
+Now tells you specifically that lookup failed,
+the kind of thing we were trying to look up and in what,
+and a pretty-printed (usually, alphabetized and names-only)
+version of what we were looking in.
+```
+exe/Example.hs:112:11-41: error:
+    • Could not find table, view, typedef, index, function, or procedure (SchemumType) named "sers"
+      in schema (SchemaType):
+        Tables:
+          '["emails", "users"]
+      
+      
+      *Raw schema (SchemaType)*:
+      '[ '("users",
+           'Table
+             ('["pk_users" ::: 'PrimaryKey '["id"]]
+              :=> '["id" ::: ('Def :=> 'NotNull 'PGint4),
+                    "name" ::: ('NoDef :=> 'NotNull 'PGtext),
+                    "vec" ::: ('NoDef :=> 'NotNull ('PGvararray ('Null 'PGint2)))])),
+         "emails"
+         ::: 'Table
+               ('["pk_emails" ::: 'PrimaryKey '["id"],
+                  "fk_user_id" ::: 'ForeignKey '["user_id"] "user" "users" '["id"]]
+                :=> '["id" ::: ('Def :=> 'NotNull 'PGint4),
+                      "user_id" ::: ('NoDef :=> 'NotNull 'PGint4),
+                      "email" ::: ('NoDef :=> 'Null 'PGtext)])]
+      
+    • In the first argument of ‘(&)’, namely
+        ‘table ((#user ! #sers) `as` #u)’
+      In the first argument of ‘from’, namely
+        ‘(table ((#user ! #sers) `as` #u)
+            & innerJoin
+                (table ((#user ! #emails) `as` #e)) (#u ! #id .== #e ! #user_id))’
+      In the second argument of ‘select_’, namely
+        ‘(from
+            (table ((#user ! #sers) `as` #u)
+               & innerJoin
+                   (table ((#user ! #emails) `as` #e)) (#u ! #id .== #e ! #user_id)))’
+    |
+112 |   ( from (table ((#user ! #sers) `as` #u)
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+exe/Example.hs:(106,15)-(107,92): error:
+    • Could not find schema (SchemaType) named "use"
+      in database (SchemasType):
+        '["org", "public", "user"]
+      
+      *Raw database (SchemasType)*:
+      '[ '("public", PublicSchema), "user" ::: UserSchema,
+         "org" ::: OrgSchema]
+      
+    • In the expression:
+        insertInto_
+          (#use ! #emails)
+          (Values_
+             (Default `as` #id
+                :* Set (param @1) `as` #user_id :* Set (param @2) `as` #email))
+      In an equation for ‘insertEmail’:
+          insertEmail
+            = insertInto_
+                (#use ! #emails)
+                (Values_
+                   (Default `as` #id
+                      :* Set (param @1) `as` #user_id :* Set (param @2) `as` #email))
+    |
+106 | insertEmail = insertInto_ (#use ! #emails)
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^...
+```
+#### Lookup succeeded, but types don't match
+Now specifies the lookup that the type mismatch comes from with kind
+information. Does not pretty-print because the value of the key is important.
+```
+exe/Example.hs:111:4-12: error:
+    • Type mismatch when looking up column (NullType) named "vec"
+      in row (RowType):
+      '[ '("id", 'NotNull 'PGint4), "name" ::: 'NotNull 'PGtext,
+         "vec" ::: 'NotNull ('PGvararray ('Null 'PGint2))]
+      
+      Expected: 'NotNull 'PGtext
+      But found: 'NotNull ('PGvararray ('Null 'PGint2))
+      
+    • In the first argument of ‘as’, namely ‘#u ! #vec’
+      In the first argument of ‘(:*)’, namely ‘#u ! #vec `as` #userName’
+      In the first argument of ‘select_’, namely
+        ‘(#u ! #vec `as` #userName
+            :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)’
+    |
+111 |   (#u ! #vec `as` #userName :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)
+    |    ^^^^^^^^^
+```
+#### Ambiguous types
+Generally identical, except complains about being unable to satisfy `Has` instead of exposing `HasErr`
+```
+
+exe/Example.hs:103:16-37: error:
+    • Ambiguous type variables ‘constraints0’,
+                               ‘constraint0’ arising from a use of ‘OnConstraint’
+      prevents the constraint ‘(Has
+                                  "pk_users" constraints0 constraint0)’ from being solved.
+      Probable fix: use a type annotation to specify what ‘constraints0’,
+                                                          ‘constraint0’ should be.
+      These potential instances exist:
+        three instances involving out-of-scope types
+        (use -fprint-potential-instances to see them all)
+    • In the first argument of ‘OnConflict’, namely
+        ‘(OnConstraint #pk_users)’
+      In the third argument of ‘insertInto’, namely
+        ‘(OnConflict (OnConstraint #pk_users) DoNothing)’
+      In the expression:
+        insertInto
+          (#user ! #users)
+          (Values_
+             (Default `as` #id
+                :* Set (param @1) `as` #name :* Set (param @2) `as` #vec))
+          (OnConflict (OnConstraint #pk_users) DoNothing)
+          (Returning_ (#id `as` #fromOnly))
+    |
+103 |   (OnConflict (OnConstraint #pk_users) DoNothing) (Returning_ (#id `as` #fromOnly))
+    |                ^^^^^^^^^^^^^^^^^^^^^^
+```
+### `HasParameter`
+#### Looking up index 0
+Now gives a special error about params being 1-indexed.
+```
+exe/Example.hs:118:18-25: error:
+    • Tried to get the param at index 0, but params are 1-indexed
+    • In the first argument of ‘Set’, namely ‘(param @0)’
+      In the first argument of ‘as’, namely ‘Set (param @0)’
+      In the first argument of ‘(:*)’, namely ‘Set (param @0) `as` #id’
+    |
+118 |   (Values_ (Set (param @0) `as` #id :* setUser))
+    |                  ^^^^^^^^
+```
+#### Looking up an out-of-bounds parameter
+Now gives a special error, returning the entire parameter list as well.
+Does not pretty-print since order is important, and there's no separate
+keys and values.
+```
+
+exe/Example.hs:118:18-25: error:
+    • Index 4 is out of bounds in 1-indexed parameter list:
+      '[ 'NotNull 'PGint4, 'NotNull 'PGtext,
+         'NotNull ('PGvararray ('Null 'PGint2))]
+    • In the first argument of ‘Set’, namely ‘(param @4)’
+      In the first argument of ‘as’, namely ‘Set (param @4)’
+      In the first argument of ‘(:*)’, namely ‘Set (param @4) `as` #id’
+    |
+118 |   (Values_ (Set (param @4) `as` #id :* setUser))
+    |                  ^^^^^^^^
+```
+#### Type mismatch when doing lookup
+Now gives a custom error similar to the one added for `Has`.
+```
+exe/Example.hs:118:18: error:
+    • Type mismatch when looking up param at index 2
+      in 1-indexed parameter list:
+        '[ 'NotNull 'PGint4, 'NotNull 'PGtext,
+           'NotNull ('PGvararray ('Null 'PGint2))]
+      
+      Expected: 'NotNull 'PGtext
+      But found: 'NotNull 'PGint4
+      
+    • In the first argument of ‘Set’, namely ‘(param @2)’
+      In the first argument of ‘as’, namely ‘Set (param @2)’
+      In the first argument of ‘(:*)’, namely ‘Set (param @2) `as` #id’
+    |
+118 |   (Values_ (Set (param @2) `as` #id :* setUser))
+    |                  ^^^^^^^^
+```
+### Using aggregates with an `'Ungrouped` `Expression`
+Now gives a custom error with some guidance.
+```
+exe/Example.hs:118:4: error:
+    • Cannot use aggregate functions to construct an Ungrouped Expression. Add a 'groupBy' to your TableExpression. If you want to aggregate across the entire result set, use 'groupBy Nil'.
+    • In the first argument of ‘as’, namely ‘countStar’
+      In the first argument of ‘(:*)’, namely ‘countStar `as` #count’
+      In the first argument of ‘select_’, namely
+        ‘(countStar `as` #count :* Nil)’
+    |
+118 |   (countStar `as` #count :* Nil)
+    |    ^^^^^^^^^
+```
+
+### Version 0.8
+
+Thanks to Adam Wespiser, Cullin Poresky, Scott Fleischman
+and William Yao for lots of contributions.
+
+### Materialized CTEs
+
+Scott Fleischman contributed materialization support to Squeal's
+WITH statements.
+
+### LTrees and UUID
+
+New packages `squeal-postgresql-ltree` and `squeal-postgresql-uuid-ossp`
+were created to offer functionality from those Postgres extensions.
+
+### Safe Transactions
+
+Previously, Squeal transactions were "unsafe", allowing for arbitrary
+`IO`. Now, Squeal provides a new type `Transaction` that is a RankNType.
+
+```Haskell
+type Transaction db x = forall m.
+  ( MonadPQ db m
+  , MonadResult m
+  , MonadCatch m
+  ) => m x
+```
+
+A `Transaction` only permits database operations and error handling,
+no arbitrary `IO`. The class `MonadResult` is new but all of its
+methods are old and used to be constrained as `MonadIO`,
+now as `MonadResult`.
+
+Additionally, a new function `withSavepoint` was added, allowing
+for a kind of nested transactions.
+
+### Bug fixes
+
+Various bugs were fixed. Most importantly, poor asynchronous exception
+handling was ameliorated.
+
+### Version 0.7
+
+Thanks to Samuel Schlesinger, Adam Wespiser, Cullin Poresky,
+Matthew Doty and Mark Wotton for tons of contributions.
+Version 0.7 of Squeal makes many changes.
+
+**Inter-schema Foreign Key Bug**
+Unfortunately, there was a bug in inter-schema foreign keys in previous
+versions of Squeal. Essentially, it was erroneously assumed that
+foreign keys always point to tables in the public schema. To remedy this
+the `ForeignKey` type has changed kind from
+
+```Haskell
+>>> :kind 'ForeignKey
+'ForeignKey :: [Symbol]
+               -> Symbol -> [Symbol] -> TableConstraint
+```
+
+to
+
+```Haskell
+>>> :kind 'ForeignKey
+'ForeignKey :: [Symbol]
+               -> Symbol -> Symbol -> [Symbol] -> TableConstraint
+```
+
+To upgrade your database schemas type, you will have to change, e.g.
+
+```Haskell
+'ForeignKey '["foo_id1", "foo_id2"] "foo" '["id1", "id2"]
+```
+
+to
+
+```Haskell
+'ForeignKey '["foo_id1", "foo_id2"] "public" "foo" '["id1", "id2"]
+```
+
+**Locking Clauses**
+
+You can now add row level locking clauses to your `select` queries
+
+**Polymorphic Lateral Contexts**
+
+Previously, lateral contexts which are used for lateral joins
+and subquery expressions had to have monomorphic lateral contexts,
+which greatly reduced composability of queries involving lateral
+joins. Squeal 0.7 fixes this limitation, making it possible to
+have polymorphic lateral context! When looking up a column heretofore,
+the relevant typeclasses would search through `Join lat from`.
+This is the "correct" ordering as far as the structure from
+left to right in the query, making lat consistently ordered as
+one goes through nested lateral joins or nested subquery expressions.
+However, it doesn't really matter how the lookup orders the columns.
+And if the lookup searches through Join from lat instead then thanks
+to good old Haskell lazy list appending, if a query only references
+columns in from then it will work no matter the lat.
+With a small proviso; if you leave lat polymorphic,
+then you must qualify all columns since there could be more than
+one table even if from has only one table in it.
+
+**Decoders**
+
+The `DecodeRow` `Monad` now has a `MonadFail` instance.
+
+New row decoder combinators have been added. The functions
+`appendRows` and `consRow` let you build row decoders up
+from pieces.
+
+Previously, Squeal made it easy to decode enum types to Haskell
+enum types (sum types with nullary constructors) so long as
+the Haskell type exactly matches the enum type. However, because
+of limitations in Haskell - constructors must be capitalized,
+name conflicts are often disambiguated with extra letters, etc -
+it's often the case that their constructors won't exactly match the
+Postgres enum type's labels. The new function `enumValue` allows
+to define typesafe custom enum decoders, similar to how `rowValue`
+allows to define typesafe custom composite decoders.
+
+```Haskell
+>>> :{
+data Dir = North | East | South | West
+instance IsPG Dir where
+  type PG Dir = 'PGenum '["north", "south", "east", "west"]
+instance FromPG Dir where
+  fromPG = enumValue $
+    label @"north" North :*
+    label @"south" South :*
+    label @"east" East :*
+    label @"west" West
+:}
+```
+
+**Definitions**
+
+New DDL statements have been added allowing to rename and
+reset the schema of different schemum objects. Also, new DDL statements
+have been added for adding comments to schemum objects.
+
+**Procedures**
+
+Squeal now supports procedure definitions and calls.
+
+**cmdTuples and cmdStatus**
+
+The `cmdTuples` and `cmdStatus` functions from `LibPQ` are now
+included.
+
+**PQ Monad Instances**
+
+the `PQ` `Monad` has been given instances for `MonadCatch`,
+`MonadThrow`, `MonadMask`, `MonadBase`, `MonadBaseControl`, and
+`MonadTransControl`.
+
+**Referential Actions**
+
+A new type `ReferentialAction` has been factored out of
+`OnDeleteClause`s and `OnUpdateClause`s. And Missing actions,
+`SetNotNull` and `SetDefault` are now included.
+
+To upgrade, change from e.g. `OnDeleteCascade` to `OnDelete Cascade`.
+
+**Array functions**
+
+Squeal now offers typesafe indexing for fixed length arrays and matrices,
+with new functions `index1` and `index2`. And new functions `arrAny`
+and `arrAll` have been added to enable comparisons to any or all elements
+of a variable length array.
+
+**Manipulations**
+
+Tables being manipulated are now re-aliasable, and updates can reference
+"from" clauses, actually called `UsingClause`s in Squeal, similar to deletes.
+
+**Other changes**
+New tests and bugfixes have been added. More support for encoding and decoding
+of different types has been added. Time values now use `iso8601` formatting
+for inlining. Also, the GitHub repo has moved from using Circle CI to using
+GitHub Actions for continuous integration testing.
+
 ### Version 0.6
 
 Version 0.6 makes a number of large changes and additions to Squeal.

@@ -10,6 +10,7 @@ decoding of result values
 
 {-# LANGUAGE
     AllowAmbiguousTypes
+  , CPP
   , DataKinds
   , DerivingStrategies
   , FlexibleContexts
@@ -25,6 +26,7 @@ decoding of result values
   , TypeFamilies
   , TypeOperators
   , UndecidableInstances
+  , UndecidableSuperClasses
 #-}
 
 module Squeal.PostgreSQL.Session.Decode
@@ -37,7 +39,7 @@ module Squeal.PostgreSQL.Session.Decode
   , DecodeRow (..)
   , decodeRow
   , runDecodeRow
-  , genericRow
+  , GenericRow (..)
   , appendRows
   , consRow
     -- * Decoding Classes
@@ -52,11 +54,17 @@ import BinaryParser
 import Control.Applicative
 import Control.Arrow
 import Control.Monad
+#if MIN_VERSION_base(4,13,0)
+#else
+import Control.Monad.Fail
+#endif
 import Control.Monad.Except
 import Control.Monad.Reader
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.Bits
+import Data.Coerce (coerce)
+import Data.Functor.Constant (Constant(Constant))
 import Data.Int (Int16, Int32, Int64)
 import Data.Kind
 import Data.Scientific (Scientific)
@@ -117,7 +125,7 @@ instance FromPG Complex where
 -}
 rowValue
   :: (PG y ~ 'PGcomposite row, SOP.SListI row)
-  => DecodeRow row y
+  => DecodeRow row y -- ^ fields
   -> StateT Strict.ByteString (Except Strict.Text) y
 rowValue decoder = devalue $
   let
@@ -158,14 +166,14 @@ class IsPG y => FromPG y where
     , imaginary :: Double
     } deriving stock GHC.Generic
       deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-      deriving (IsPG, FromPG) via (Composite Complex)
+      deriving (IsPG, FromPG) via Composite Complex
   :}
 
   >>> :{
   data Direction = North | South | East | West
     deriving stock GHC.Generic
     deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-    deriving (IsPG, FromPG) via (Enumerated Direction)
+    deriving (IsPG, FromPG) via Enumerated Direction
   :}
 
   -}
@@ -228,6 +236,12 @@ instance KnownNat n => FromPG (FixChar n) where
         , "."
         ]
       Just x -> pure x
+instance FromPG x => FromPG (Const x tag) where
+  fromPG = coerce $ fromPG @x
+instance FromPG x => FromPG (SOP.K x tag) where
+  fromPG = coerce $ fromPG @x
+instance FromPG x => FromPG (Constant x tag) where
+  fromPG = coerce $ fromPG @x
 instance FromPG Day where
   fromPG = devalue date
 instance FromPG TimeOfDay where
@@ -490,51 +504,73 @@ decodeRow
   :: (SOP.NP (SOP.K (Maybe Strict.ByteString)) row -> Either Strict.Text y)
   -> DecodeRow row y
 decodeRow dec = DecodeRow . ReaderT $ liftEither . dec
-instance {-# OVERLAPPING #-} FromValue ty y
+instance {-# OVERLAPPING #-} (KnownSymbol fld, FromValue ty y)
   => IsLabel fld (DecodeRow (fld ::: ty ': row) y) where
-    fromLabel = decodeRow $ \(SOP.K b SOP.:* _) ->
-      fromValue @ty b
+    fromLabel = decodeRow $ \(SOP.K b SOP.:* _) -> do
+      let
+        flderr = mconcat
+          [ "field name: "
+          , "\"", fromString (symbolVal (SOP.Proxy @fld)), "\"; "
+          ]
+      left (flderr <>) $ fromValue @ty b
 instance {-# OVERLAPPABLE #-} IsLabel fld (DecodeRow row y)
   => IsLabel fld (DecodeRow (field ': row) y) where
     fromLabel = decodeRow $ \(_ SOP.:* bs) ->
       runDecodeRow (fromLabel @fld) bs
-instance {-# OVERLAPPING #-} FromValue ty (Maybe y)
+instance {-# OVERLAPPING #-} (KnownSymbol fld, FromValue ty (Maybe y))
   => IsLabel fld (MaybeT (DecodeRow (fld ::: ty ': row)) y) where
-    fromLabel = MaybeT . decodeRow $ \(SOP.K b SOP.:* _) ->
-      fromValue @ty b
+    fromLabel = MaybeT . decodeRow $ \(SOP.K b SOP.:* _) -> do
+      let
+        flderr = mconcat
+          [ "field name: "
+          , "\"", fromString (symbolVal (SOP.Proxy @fld)), "\"; "
+          ]
+      left (flderr <>) $ fromValue @ty b
 instance {-# OVERLAPPABLE #-} IsLabel fld (MaybeT (DecodeRow row) y)
   => IsLabel fld (MaybeT (DecodeRow (field ': row)) y) where
     fromLabel = MaybeT . decodeRow $ \(_ SOP.:* bs) ->
       runDecodeRow (runMaybeT (fromLabel @fld)) bs
 
-{- | Row decoder for `SOP.Generic` records.
-
->>> import qualified GHC.Generics as GHC
->>> import qualified Generics.SOP as SOP
->>> data Two = Two {frst :: Int16, scnd :: String} deriving (Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
->>> :{
-let
-  decode :: DecodeRow '[ "frst" ::: 'NotNull 'PGint2, "scnd" ::: 'NotNull 'PGtext] Two
-  decode = genericRow
-in runDecodeRow decode (SOP.K (Just "\NUL\STX") :* SOP.K (Just "two") :* Nil)
-:}
-Right (Two {frst = 2, scnd = "two"})
--}
-genericRow :: forall row y ys.
+-- | A `GenericRow` constraint to ensure that a Haskell type
+-- is a record type,
+-- has a `RowPG`,
+-- and all its fields and can be decoded from corresponding Postgres fields.
+class
   ( SOP.IsRecord y ys
+  , row ~ RowPG y
   , SOP.AllZip FromField row ys
-  ) => DecodeRow row y
-genericRow
-  = DecodeRow
-  . ReaderT
-  $ fmap SOP.fromRecord
-  . SOP.hsequence'
-  . SOP.htrans (SOP.Proxy @FromField) (SOP.Comp . runField)
-runField
-  :: forall ty y. FromField ty y
-  => SOP.K (Maybe Strict.ByteString) ty
-  -> Except Strict.Text (SOP.P y)
-runField = liftEither . fromField @ty . SOP.unK
+  ) => GenericRow row y ys where
+  {- | Row decoder for `SOP.Generic` records.
+
+  >>> import qualified GHC.Generics as GHC
+  >>> import qualified Generics.SOP as SOP
+  >>> data Two = Two {frst :: Int16, scnd :: String} deriving (Show, GHC.Generic, SOP.Generic, SOP.HasDatatypeInfo)
+  >>> :{
+  let
+    decode :: DecodeRow '[ "frst" ::: 'NotNull 'PGint2, "scnd" ::: 'NotNull 'PGtext] Two
+    decode = genericRow
+  in runDecodeRow decode (SOP.K (Just "\NUL\STX") :* SOP.K (Just "two") :* Nil)
+  :}
+  Right (Two {frst = 2, scnd = "two"})
+  -}
+  genericRow :: DecodeRow row y
+instance
+  ( row ~ RowPG y
+  , SOP.IsRecord y ys
+  , SOP.AllZip FromField row ys
+  ) => GenericRow row y ys where
+  genericRow
+    = DecodeRow
+    . ReaderT
+    $ fmap SOP.fromRecord
+    . SOP.hsequence'
+    . SOP.htrans (SOP.Proxy @FromField) (SOP.Comp . runField)
+    where
+      runField
+        :: forall ty z. FromField ty z
+        => SOP.K (Maybe Strict.ByteString) ty
+        -> Except Strict.Text (SOP.P z)
+      runField = liftEither . fromField @ty . SOP.unK
 
 {- |
 >>> :{
@@ -551,7 +587,7 @@ instance FromPG Dir where
 -}
 enumValue
   :: (SOP.All KnownSymbol labels, PG y ~ 'PGenum labels)
-  => NP (SOP.K y) labels
+  => NP (SOP.K y) labels -- ^ labels
   -> StateT Strict.ByteString (Except Strict.Text) y
 enumValue = devalue . enum . labels
   where
