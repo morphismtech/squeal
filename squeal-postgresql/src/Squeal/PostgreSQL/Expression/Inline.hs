@@ -101,29 +101,41 @@ instance Inline Bool where
     True -> true
     False -> false
 instance JSON.ToJSON x => Inline (Json x) where
-  inline = inferredtype . UnsafeExpression
-    . singleQuotedUtf8 . toStrict . JSON.encode . getJson
+  inline (Json x)
+    = inferredtype
+    . UnsafeExpression
+    . singleQuotedUtf8
+    . toStrict
+    . JSON.encode
+    $ x
 instance JSON.ToJSON x => Inline (Jsonb x) where
-  inline = inferredtype . UnsafeExpression
-    . singleQuotedUtf8 . toStrict . JSON.encode . getJsonb
+  inline (Jsonb x)
+    = inferredtype
+    . UnsafeExpression
+    . singleQuotedUtf8
+    . toStrict
+    . JSON.encode
+    $ x
 instance Inline Char where
   inline chr = inferredtype . UnsafeExpression $
     "E\'" <> fromString (escape chr) <> "\'"
-instance Inline String where inline = fromString
+instance Inline String where inline x = fromString x
 instance Inline Int16 where
-  inline
+  inline x
     = inferredtype
     . UnsafeExpression
     . toStrict
     . toLazyByteString
     . int16Dec
+    $ x
 instance Inline Int32 where
-  inline
+  inline x
     = inferredtype
     . UnsafeExpression
     . toStrict
     . toLazyByteString
     . int32Dec
+    $ x
 instance Inline Int64 where
   inline x =
     if x == minBound
@@ -151,29 +163,33 @@ instance Inline Double where
     where
       decimal = toStrict . toLazyByteString . doubleDec
 instance Inline Scientific where
-  inline
+  inline x
     = inferredtype
     . UnsafeExpression
     . toStrict
     . toLazyByteString
     . scientificBuilder
-instance Inline Text where inline = fromString . Text.unpack
-instance Inline Lazy.Text where inline = fromString . Lazy.Text.unpack
+    $ x
+instance Inline Text where inline x = fromString . Text.unpack $ x
+instance Inline Lazy.Text where inline x = fromString . Lazy.Text.unpack $ x
 instance (KnownNat n, 1 <= n) => Inline (VarChar n) where
-  inline
+  inline x
     = inferredtype
     . UnsafeExpression
     . escapeQuotedText
     . getVarChar
+    $ x
 instance (KnownNat n, 1 <= n) => Inline (FixChar n) where
-  inline
+  inline x
     = inferredtype
     . UnsafeExpression
     . escapeQuotedText
     . getFixChar
-instance Inline x => Inline (Const x tag) where inline = inline @x . coerce
-instance Inline x => Inline (SOP.K x tag) where inline = inline @x . coerce
-instance Inline x => Inline (Constant x tag) where inline = inline @x . coerce
+    $ x
+instance Inline x => Inline (Const x tag) where inline (Const x) = inline x
+instance Inline x => Inline (SOP.K x tag) where inline (SOP.K x) = inline x
+instance Inline x => Inline (Constant x tag) where
+  inline (Constant x) = inline x
 instance Inline DiffTime where
   inline dt =
     let
@@ -185,58 +201,64 @@ instance Inline DiffTime where
         interval_ (fromIntegral secs) Seconds
         +! interval_ (fromIntegral microsecs) Microseconds
 instance Inline Day where
-  inline
+  inline x
     = inferredtype
     . UnsafeExpression
     . singleQuotedUtf8
     . fromString
     . iso8601Show
+    $ x
 instance Inline UTCTime where
-  inline
+  inline x
     = inferredtype
     . UnsafeExpression
     . singleQuotedUtf8
     . fromString
     . iso8601Show
+    $ x
 instance Inline (TimeOfDay, TimeZone) where
-  inline
+  inline x
     = inferredtype
     . UnsafeExpression
     . singleQuotedUtf8
     . fromString
     . formatShow (timeOfDayAndOffsetFormat ExtendedFormat)
+    $ x
 instance Inline TimeOfDay where
-  inline
-    = inferredtype
-    . UnsafeExpression
-    . singleQuotedUtf8
-    . fromString
-    . iso8601Show 
-instance Inline LocalTime where
-  inline
+  inline x
     = inferredtype
     . UnsafeExpression
     . singleQuotedUtf8
     . fromString
     . iso8601Show
+    $ x
+instance Inline LocalTime where
+  inline x
+    = inferredtype
+    . UnsafeExpression
+    . singleQuotedUtf8
+    . fromString
+    . iso8601Show
+    $ x
 instance Inline (Range Int32) where
-  inline = range int4range . fmap inline
+  inline x = range int4range . fmap (\y -> inline y) $ x
 instance Inline (Range Int64) where
-  inline = range int8range . fmap inline
+  inline x = range int8range . fmap (\y -> inline y) $ x
 instance Inline (Range Scientific) where
-  inline = range numrange . fmap inline
+  inline x = range numrange . fmap (\y -> inline y) $ x
 instance Inline (Range LocalTime) where
-  inline = range tsrange . fmap inline
+  inline x = range tsrange . fmap (\y -> inline y) $ x
 instance Inline (Range UTCTime) where
-  inline = range tstzrange . fmap inline
+  inline x = range tstzrange . fmap (\y -> inline y) $ x
 instance Inline (Range Day) where
-  inline = range daterange . fmap inline
+  inline x = range daterange . fmap (\y -> inline y) $ x
 instance Inline UUID where
-  inline
+  inline x
     = inferredtype
     . UnsafeExpression
     . singleQuotedUtf8
     . toASCIIBytes
+    $ x
 instance Inline Money where
   inline moolah = inferredtype . UnsafeExpression $
     fromString (show dollars)
@@ -245,17 +267,17 @@ instance Inline Money where
       (dollars,pennies) = cents moolah `divMod` 100
 instance InlineParam x (NullPG x)
   => Inline (VarArray [x]) where
-    inline (VarArray xs) = array (inlineParam <$> xs)
+    inline (VarArray xs) = array ((\x -> inlineParam x) <$> xs)
 instance InlineParam x (NullPG x)
   => Inline (VarArray (Vector x)) where
-    inline (VarArray xs) = array (inlineParam <$> toList xs)
+    inline (VarArray xs) = array ((\x -> inlineParam x) <$> toList xs)
 instance Inline Oid where
   inline (Oid o) = inferredtype . UnsafeExpression . fromString $ show o
 instance
   ( SOP.IsEnumType x
   , SOP.HasDatatypeInfo x
   ) => Inline (Enumerated x) where
-    inline =
+    inline (Enumerated x) =
       let
         gshowConstructor
           :: NP SOP.ConstructorInfo xss
@@ -273,22 +295,22 @@ instance
         . gshowConstructor
             (SOP.constructorInfo (SOP.datatypeInfo (SOP.Proxy @x)))
         . SOP.from
-        . getEnumerated
+        $ x
 instance
   ( SOP.IsRecord x xs
   , SOP.AllZip InlineField xs (RowPG x)
   ) => Inline (Composite x) where
-    inline
+    inline (Composite x)
       = row
       . SOP.htrans (SOP.Proxy @InlineField) inlineField
       . SOP.toRecord
-      . getComposite
+      $ x
 
 -- | Lifts `Inline` to `NullType`s.
 class InlineParam x ty where inlineParam :: x -> Expr ty
 instance (Inline x, pg ~ PG x) => InlineParam x ('NotNull pg) where inlineParam = inline
 instance (Inline x, pg ~ PG x) => InlineParam (Maybe x) ('Null pg) where
-  inlineParam = maybe null_ inline
+  inlineParam x = maybe null_ (\y -> inline y) x
 
 -- | Lifts `Inline` to fields.
 class InlineField
