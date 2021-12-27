@@ -1,0 +1,5 @@
+resolver: lts-14.27
+packages:
+- squeal-postgresql
+- squeal-postgresql-ltree
+- squeal-postgresql-uuid-ossp

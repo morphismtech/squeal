@@ -39,10 +39,10 @@ jobs:
           stack-version: 'latest'
 
       - name: build
-        run: stack build --fast
+        run: stack build --fast --stack-yaml stack-ghc810.yaml
 
       - name: test
-        run: stack test --fast
+        run: stack test --fast --stack-yaml stack-ghc810.yaml
         env:
           PG_USER: postgres
           PG_HOST: localhost
@@ -51,10 +51,10 @@ jobs:
           PG_PORT: ${{ job.services.postgres.ports['5432'] }}
 
       - name: benchmark
-        run: stack bench --fast
+        run: stack bench --fast --stack-yaml stack-ghc810.yaml
       
       - name: documentation
-        run: stack haddock --fast
+        run: stack haddock --fast --stack-yaml stack-ghc810.yaml
 
       - name: cache
         uses: actions/cache@v2
@@ -91,10 +91,10 @@ jobs:
           stack-version: 'latest'
 
       - name: build
-        run: stack build --fast
+        run: stack build --fast --stack-yaml stack-ghc808.yaml
 
       - name: test
-        run: stack test --fast
+        run: stack test --fast --stack-yaml stack-ghc808.yaml
         env:
           PG_USER: postgres
           PG_HOST: localhost
@@ -103,10 +103,10 @@ jobs:
           PG_PORT: ${{ job.services.postgres.ports['5432'] }}
 
       - name: benchmark
-        run: stack bench --fast
+        run: stack bench --fast --stack-yaml stack-ghc808.yaml
       
       - name: documentation
-        run: stack haddock --fast
+        run: stack haddock --fast --stack-yaml stack-ghc808.yaml
 
       - name: cache
         uses: actions/cache@v2
@@ -143,10 +143,10 @@ jobs:
           stack-version: 'latest'
 
       - name: build
-        run: stack build --fast
+        run: stack build --fast --stack-yaml stack-ghc810.yaml
 
       - name: test
-        run: stack test --fast
+        run: stack test --fast --stack-yaml stack-ghc810.yaml
         env:
           PG_USER: postgres
           PG_HOST: localhost
@@ -155,10 +155,10 @@ jobs:
           PG_PORT: ${{ job.services.postgres.ports['5432'] }}
 
       - name: benchmark
-        run: stack bench --fast
+        run: stack bench --fast --stack-yaml stack-ghc810.yaml
       
       - name: documentation
-        run: stack haddock --fast
+        run: stack haddock --fast --stack-yaml stack-ghc810.yaml
 
       - name: cache
         uses: actions/cache@v2
