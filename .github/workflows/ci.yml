@@ -11,6 +11,58 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
+  ghc9_0:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: exampledb
+        ports:
+        - 5432:5432
+        # needed because the postgres container does not provide a healthcheck
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+      - uses: haskell/actions/setup@v1
+        with:
+          enable-stack: true
+          stack-version: 'latest'
+          stack-no-global: true
+          stack-setup-ghc: true
+
+      - name: build
+        run: stack build --fast
+
+      - name: test
+        run: stack test --fast
+        env:
+          PG_USER: postgres
+          PG_HOST: localhost
+          PG_DATABASE: exampledb
+          PG_PASSWORD: postgres
+          PG_PORT: ${{ job.services.postgres.ports['5432'] }}
+
+      - name: benchmark
+        run: stack bench --fast
+      
+      - name: documentation
+        run: stack haddock --fast
+
+      - name: cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ".stack-work"
+            "/root/.stack/"
+          key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
   ghc8_10:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
@@ -33,10 +85,10 @@ jobs:
       - uses: actions/checkout@v2
       - uses: haskell/actions/setup@v1
         with:
-          ghc-version: '8.10.5' # Exact version of ghc to use
-          # cabal-version: 'latest'. Omitted, but defalts to 'latest'
           enable-stack: true
           stack-version: 'latest'
+          stack-no-global: true
+          stack-setup-ghc: true
 
       - name: build
         run: stack build --fast --stack-yaml stack-ghc8_10.yaml
@@ -85,10 +137,10 @@ jobs:
       - uses: actions/checkout@v2
       - uses: haskell/actions/setup@v1
         with:
-          ghc-version: '8.8.4' # Exact version of ghc to use
-          # cabal-version: 'latest'. Omitted, but defalts to 'latest'
           enable-stack: true
           stack-version: 'latest'
+          stack-no-global: true
+          stack-setup-ghc: true
 
       - name: build
         run: stack build --fast --stack-yaml stack-ghc8_8.yaml
@@ -107,58 +159,6 @@ jobs:
       
       - name: documentation
         run: stack haddock --fast --stack-yaml stack-ghc8_8.yaml
-
-      - name: cache
-        uses: actions/cache@v2
-        with:
-          path: |
-            ".stack-work"
-            "/root/.stack/"
-          key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
-  ghc8_6:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:11
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: exampledb
-        ports:
-        - 5432:5432
-        # needed because the postgres container does not provide a healthcheck
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
-      - uses: haskell/actions/setup@v1
-        with:
-          ghc-version: '8.6.5' # Exact version of ghc to use
-          # cabal-version: 'latest'. Omitted, but defalts to 'latest'
-          enable-stack: true
-          stack-version: 'latest'
-
-      - name: build
-        run: stack build --fast --stack-yaml stack-ghc8_6.yaml
-
-      - name: test
-        run: stack test --fast --stack-yaml stack-ghc8_6.yaml
-        env:
-          PG_USER: postgres
-          PG_HOST: localhost
-          PG_DATABASE: exampledb
-          PG_PASSWORD: postgres
-          PG_PORT: ${{ job.services.postgres.ports['5432'] }}
-
-      - name: benchmark
-        run: stack bench --fast --stack-yaml stack-ghc8_6.yaml
-      
-      - name: documentation
-        run: stack haddock --fast --stack-yaml stack-ghc8_6.yaml
 
       - name: cache
         uses: actions/cache@v2
