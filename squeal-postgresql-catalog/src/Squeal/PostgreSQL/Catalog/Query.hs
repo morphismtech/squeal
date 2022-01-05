@@ -33,41 +33,39 @@ selectEnums = select_
     & groupBy (#n ! #nspname :* #t ! #typname)
   )
 
-selectComposites :: Query lat with DB params '[
+selectRelations :: Query lat with DB params '[
   "nspname" ::: 'NotNull 'PGtext,
-  "typname" ::: 'NotNull 'PGtext,
-  "fields" ::: 'NotNull ('PGvararray ('NotNull ('PGcomposite '[
+  "relname" ::: 'NotNull 'PGtext,
+  "relkind" ::: 'NotNull ('PGchar 1),
+  "attributes" ::: 'NotNull ('PGvararray ('NotNull ('PGcomposite '[
     "attname" ::: 'NotNull 'PGtext,
     "nspname" ::: 'NotNull 'PGtext,
     "typname" ::: 'NotNull 'PGtext])))]
-selectComposites =
+selectRelations =
   from
-    ( table (#pg_catalog ! #pg_type `as` #t)
-      & innerJoin (table (#pg_catalog ! #pg_class `as` #c))
-        (#c ! #reltype .== #t ! #oid)
-      & innerJoin (table (#pg_catalog ! #pg_attribute `as` #a))
-        (#a ! #atttypid .== #t ! #oid)
-      & innerJoin (table (#pg_catalog ! #pg_namespace `as` #n))
-        (#n ! #oid .== #t ! #typnamespace)
-      & innerJoin (table (#pg_catalog ! #pg_type `as` #at))
-        (#at ! #oid .== #a ! #atttypid)
-      & innerJoin (table (#pg_catalog ! #pg_namespace `as` #an))
-        (#an ! #oid .== #at ! #typnamespace)
+    ( table (#pg_catalog ! #pg_namespace `as` #nsp)
+      & innerJoin (table (#pg_catalog ! #pg_class `as` #rel))
+        (#rel ! #relnamespace .== #nsp ! #oid)
+      & innerJoin (table (#pg_catalog ! #pg_attribute `as` #att))
+        (#att ! #attrelid .== #rel ! #oid)
+      & innerJoin (table (#pg_catalog ! #pg_type `as` #atttyp))
+        (#atttyp ! #oid .== #att ! #atttypid)
+      & innerJoin (table (#pg_catalog ! #pg_namespace `as` #attnsp))
+        (#attnsp ! #oid .== #atttyp ! #typnamespace)
     )
-  & where_ (#t ! #typtype .== inline 'c')
-  & where_ (#c ! #relkind .== inline 'c')
-  & groupBy (#n ! #nspname :* #t ! #typname)
+  & groupBy (#nsp ! #nspname :* #rel ! #relname :* #rel ! #relkind)
   & select_
-    ( mapAliased (cast text) (#n ! #nspname) :*
-      mapAliased (cast text) (#t ! #typname) :*
+    ( mapAliased (cast text) (#nsp ! #nspname) :*
+      mapAliased (cast text) (#rel ! #relname) :*
+      #rel ! #relkind :*
       fromNull (array0 record)
         ( arrayAgg
           ( All (row (
-              mapAliased (cast text) (#a ! #attname) :*
-              mapAliased (cast text) (#an ! #nspname) *:
-              mapAliased (cast text) (#at ! #typname)
+              mapAliased (cast text) (#att ! #attname) :*
+              mapAliased (cast text) (#attnsp ! #nspname) *:
+              mapAliased (cast text) (#atttyp ! #typname)
               ))
-            & orderBy [Asc (#a ! #attnum)]
+            & orderBy [Asc (#att ! #attnum)]
           )
-        ) `as` #fields
+        ) `as` #attributes
     )

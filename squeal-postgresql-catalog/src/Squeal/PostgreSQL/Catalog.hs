@@ -284,7 +284,8 @@ type PgClassColumns = '["relname" ::: 'NoDef :=> 'NotNull PGname
   ,"relfrozenxid" ::: 'NoDef :=> 'NotNull PGxid
   ,"relminmxid" ::: 'NoDef :=> 'NotNull PGxid
   ,"relacl" ::: 'NoDef :=> 'Null (PGvararray (NotNull PGaclitem))
-  ,"reloptions" ::: 'NoDef :=> 'Null (PGvararray (NotNull PGtext))]
+  ,"reloptions" ::: 'NoDef :=> 'Null (PGvararray (NotNull PGtext))
+  ,"oid" ::: 'NoDef :=> 'NotNull PGoid]
 type PgClassConstraints = '[]
 type PgClassTable = PgClassConstraints :=> PgClassColumns
 
