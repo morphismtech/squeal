@@ -299,7 +299,7 @@ If you squint through the mess of type parameter noise, you can see that this
 is how certain types are constructed (for instance, our NP lists of expressions
 in select lists, and expressions themselves):
 
-![IsQualified/Aliasable allows us to construct many different types with labels](squeal/isqualified-intro.png)
+![IsQualified/Aliasable allows us to construct many different types with labels](squeal-core-concepts-handbook/isqualified-intro.png)
 
 and thus, how you can use `(!)` and `as` in so many places.
 
@@ -320,7 +320,7 @@ another NP as its second argument, which is why you might think you need Nil to
 terminate the NP list. But if you look at the instances of `IsQualified`, it can
 polymorphically return an NP already!
 
-![IsQualified allows us to directly create a value of type NP](squeal/isqualified-can-be-np.png)
+![IsQualified allows us to directly create a value of type NP](squeal-core-concepts-handbook/isqualified-can-be-np.png)
 
 So we can simplify our definition a bit:
 
@@ -345,7 +345,7 @@ sch) tab`, since that's the parameter for `table`. We can then be assured that
 callers can construct values of this type, since we can see an instance for
 `IsQualified` for it.
 
-![Table names can be constructed through IsQualified as well](squeal/isqualified-alias.png)
+![Table names can be constructed through IsQualified as well](squeal-core-concepts-handbook/isqualified-alias.png)
 
 Following the typeclasses, we see that we can do something similar for
 Expression, since there are instances for `IsQualified` and `Aliasable` for
@@ -682,7 +682,7 @@ Squeal actually checks one other place, the `lat` type param.
 You can see this in the various IsQualified instances for Expression, Aliased Expression,
 etc.
 
-![IsQualified looks in both lat and from for scoping expressions](squeal/isqualified-join-constraint.png)
+![IsQualified looks in both lat and from for scoping expressions](squeal-core-concepts-handbook/isqualified-join-constraint.png)
 
 Other than joins, there's one other place where identifiers can come into scope
 for a query: a Postgres-specific feature called lateral joins. If you've used
