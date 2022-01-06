@@ -13,33 +13,34 @@ selectEnums :: Query lat with DB params '[
   "nspname" ::: 'NotNull 'PGtext,
   "typname" ::: 'NotNull 'PGtext,
   "enumlabels" ::: 'NotNull ('PGvararray ('NotNull 'PGtext))]
-selectEnums = select_ 
-  ( mapAliased (cast text) (#n ! #nspname) :*
-    mapAliased (cast text) (#t ! #typname) :*
-    fromNull (array0 text)
-      ( arrayAgg
-        ( All (cast text (#e ! #enumlabel))
-          & orderBy [Asc (#e ! #enumsortorder)]
-        )
-      ) `as` #enumlabels
-  )
-  ( from
-    ( table (#pg_catalog ! #pg_type `as` #t)
-      & innerJoin (table (#pg_catalog ! #pg_enum `as` #e))
-        (#t ! #oid .== #e ! #enumtypid)
-      & innerJoin (table (#pg_catalog ! #pg_namespace `as` #n))
-        (#t ! #typnamespace  .== #n ! #oid)
+selectEnums =
+  from
+    ( table (#pg_catalog ! #pg_namespace `as` #nsp)
+      & innerJoin (table (#pg_catalog ! #pg_type `as` #typ))
+        (#typ ! #typnamespace .== #nsp ! #oid)
+      & innerJoin (table (#pg_catalog ! #pg_enum `as` #enum))
+        (#enum ! #enumtypid .== #typ ! #oid)
     )
-    & groupBy (#n ! #nspname :* #t ! #typname)
-  )
+  & groupBy (#nsp ! #nspname :* #typ ! #typname)
+  & select_
+    ( mapAliased (cast text) (#nsp ! #nspname) :*
+      mapAliased (cast text) (#typ ! #typname) :*
+      fromNull (array0 text)
+        ( arrayAgg
+          ( All (cast text (#enum ! #enumlabel))
+            & orderBy [Asc (#enum ! #enumsortorder)]
+          )
+        ) `as` #enumlabels
+    )
 
 selectRelations :: Query lat with DB params '[
   "nspname" ::: 'NotNull 'PGtext,
   "relname" ::: 'NotNull 'PGtext,
   "relkind" ::: 'NotNull ('PGchar 1),
   "attributes" ::: 'NotNull ('PGvararray ('NotNull ('PGcomposite '[
-    "attname" ::: 'NotNull 'PGtext,
     "nspname" ::: 'NotNull 'PGtext,
+    "attname" ::: 'NotNull 'PGtext,
+    "atthasdef" ::: 'NotNull 'PGbool,
     "typname" ::: 'NotNull 'PGtext])))]
 selectRelations =
   from
@@ -61,11 +62,26 @@ selectRelations =
       fromNull (array0 record)
         ( arrayAgg
           ( All (row (
+              mapAliased (cast text) (#attnsp ! #nspname) :*
               mapAliased (cast text) (#att ! #attname) :*
-              mapAliased (cast text) (#attnsp ! #nspname) *:
+              #att ! #atthasdef *:
               mapAliased (cast text) (#atttyp ! #typname)
               ))
             & orderBy [Asc (#att ! #attnum)]
           )
         ) `as` #attributes
     )
+
+selectRelationsKind :: Char -> Query lat with DB params '[
+  "nspname" ::: 'NotNull 'PGtext,
+  "relname" ::: 'NotNull 'PGtext,
+  "relkind" ::: 'NotNull ('PGchar 1),
+  "attributes" ::: 'NotNull ('PGvararray ('NotNull ('PGcomposite '[
+    "nspname" ::: 'NotNull 'PGtext,
+    "attname" ::: 'NotNull 'PGtext,
+    "atthasdef" ::: 'NotNull 'PGbool,
+    "typname" ::: 'NotNull 'PGtext])))]
+selectRelationsKind c =
+  from (subquery (selectRelations `as` #rel))
+  & where_ (#rel ! #relkind .== inline c)
+  & select Star
