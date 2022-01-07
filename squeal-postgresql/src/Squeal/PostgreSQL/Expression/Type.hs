@@ -377,13 +377,15 @@ instance PGTyped db ('PGrange 'PGtimestamp) where pgtype = tsrange
 instance PGTyped db ('PGrange 'PGtimestamptz) where pgtype = tstzrange
 instance PGTyped db ('PGrange 'PGdate) where pgtype = daterange
 instance
-  ( UserType db ('PGcomposite row) ~ '(sch,td)
+  ( rels ~ DbRelations db
+  , FindFullName "no composite found with relation: " rels row ~ '(sch,td)
   , Has sch db schema
   , Has td schema ('Typedef ('PGcomposite row))
   ) => PGTyped db ('PGcomposite row) where
     pgtype = typedef (QualifiedAlias @sch @td)
 instance
-  ( UserType db ('PGenum labels) ~ '(sch,td)
+  ( enums ~ DbEnums db
+  , FindFullName "no enum found with labels: " enums labels ~ '(sch,td)
   , Has sch db schema
   , Has td schema ('Typedef ('PGenum labels))
   ) => PGTyped db ('PGenum labels) where
