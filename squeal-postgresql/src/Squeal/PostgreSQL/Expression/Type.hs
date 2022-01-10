@@ -37,6 +37,7 @@ module Squeal.PostgreSQL.Expression.Type
   , typedef
   , typetable
   , typeview
+  , typerow
   , bool
   , int2
   , smallint
@@ -171,6 +172,16 @@ newtype TypeExpression (db :: SchemasType) (ty :: NullType)
   deriving newtype (NFData)
 instance RenderSQL (TypeExpression db ty) where
   renderSQL = renderTypeExpression
+
+typerow
+  :: ( relss ~ DbRelations db
+     , Has sch relss rels
+     , Has rel rels row
+     )
+  => QualifiedAlias sch rel
+  -- ^ type alias
+  -> TypeExpression db (null ('PGcomposite row))
+typerow = UnsafeTypeExpression . renderSQL
 
 -- | The enum or composite type in a `Typedef` can be expressed by its alias.
 typedef
@@ -377,12 +388,12 @@ instance PGTyped db ('PGrange 'PGtimestamp) where pgtype = tsrange
 instance PGTyped db ('PGrange 'PGtimestamptz) where pgtype = tstzrange
 instance PGTyped db ('PGrange 'PGdate) where pgtype = daterange
 instance
-  ( rels ~ DbRelations db
-  , FindFullName "no composite found with relation: " rels row ~ '(sch,td)
-  , Has sch db schema
-  , Has td schema ('Typedef ('PGcomposite row))
+  ( relss ~ DbRelations db
+  , Has sch relss rels
+  , Has rel rels row
+  , FindFullName "no composite found with relation: " relss row ~ '(sch,rel)  
   ) => PGTyped db ('PGcomposite row) where
-    pgtype = typedef (QualifiedAlias @sch @td)
+    pgtype = typerow (QualifiedAlias @sch @rel)
 instance
   ( enums ~ DbEnums db
   , FindFullName "no enum found with labels: " enums labels ~ '(sch,td)
