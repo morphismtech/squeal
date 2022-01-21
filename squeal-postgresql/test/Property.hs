@@ -71,6 +71,7 @@ roundtrips = Group "roundtrips"
   , roundtrip (vararray (typedef #schwarma)) genSchwarmaArray
   , roundtrip (typerow #tab) genRow
   , roundtrip (vararray (typetable #tab)) genRowArray
+  , ("table insert", roundtripTable)
   ]
   where
     genInt16 = Gen.int16 Range.exponentialBounded
@@ -267,3 +268,41 @@ data HaskRow = HaskRow {foo :: Int16, bar :: Schwarma, baz :: Bool}
   deriving (IsPG, FromPG, Inline) via Composite HaskRow
 deriving via Composite HaskRow
   instance db ~ DB => ToPG db HaskRow
+
+insertTabParams :: Statement DB (VarArray [HaskRow]) ()
+insertTabParams = Manipulation enc dec sql
+  where
+    enc = aParam
+    dec = return ()
+    sql = insertInto_ #tab unnestedParam
+    unnestedParam = Select
+      ( Set (#unnest & field #tab #foo) `as` #foo :*
+        Set (#unnest & field #tab #bar) `as` #bar :*
+        Set (#unnest & field #tab #baz) `as` #baz
+      )
+      ( from (unnest (param @1)) )
+
+insertTabInlines :: [HaskRow] -> Statement DB () ()
+insertTabInlines = \case
+  [] -> error "needs at least 1 row"
+  rw:rows -> manipulation $ insertInto_ #tab (inlineValues rw rows)
+
+selectTab :: Statement DB () HaskRow
+selectTab = query $ select Star (from (table #tab))
+
+roundtripTable :: Property
+roundtripTable = property $ do
+  let
+    genInt16 = Gen.int16 Range.exponentialBounded
+    genRow = HaskRow
+      <$> genInt16
+      <*> Gen.enumBounded
+      <*> Gen.bool
+    genRowArray = Gen.list (Range.constant 1 100) genRow
+  params <- forAll genRowArray
+  inlines <- forAll genRowArray
+  tabRows <- lift . withConnection connectionString $ ephemerally_ $ do
+    executeParams_ insertTabParams (VarArray params)
+    execute_ (insertTabInlines inlines)
+    getRows =<< execute selectTab
+  tabRows === params ++ inlines
