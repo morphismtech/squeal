@@ -5,11 +5,14 @@
   , DerivingStrategies
   , DerivingVia
   , FlexibleContexts
+  , FlexibleInstances
   , GADTs
   , LambdaCase
+  , MultiParamTypeClasses
   , OverloadedLabels
   , OverloadedStrings
   , ScopedTypeVariables
+  , StandaloneDeriving
   , TypeApplications
   , TypeOperators
   , UndecidableInstances
@@ -20,6 +23,7 @@ module Main (main) where
 import Control.Monad.Trans
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 (unpack)
+import Data.Int (Int16)
 import Data.Scientific (fromFloatDigits)
 import Data.Fixed (Fixed(MkFixed), Micro, Pico)
 import Data.String (IsString(fromString))
@@ -35,9 +39,9 @@ import qualified Hedgehog.Range as Range
 
 main :: IO ()
 main = withUtf8 $ do
-  withConnection connectionString $ define createSchwarma
+  withConnection connectionString $ define createDB
   Main.defaultMain [checkSequential roundtrips]
-  withConnection connectionString $ define dropSchwarma
+  withConnection connectionString $ define dropDB
 
 roundtrips :: Group
 roundtrips = Group "roundtrips"
@@ -65,6 +69,8 @@ roundtrips = Group "roundtrips"
   , roundtripOn normalizeIntRange daterange (genRange genDay)
   , roundtrip (typedef #schwarma) genSchwarma
   , roundtrip (vararray (typedef #schwarma)) genSchwarmaArray
+  , roundtrip (typerow #tab) genRow
+  , roundtrip (vararray (typetable #tab)) genRowArray
   ]
   where
     genInt16 = Gen.int16 Range.exponentialBounded
@@ -119,6 +125,11 @@ roundtrips = Group "roundtrips"
     --   , "CDT", "MST", "MDT", "PST", "PDT" ]
     genSchwarma = Gen.enumBounded @_ @Schwarma
     genSchwarmaArray = VarArray <$> Gen.list (Range.constant 1 10) genSchwarma
+    genRow = HaskRow
+      <$> genInt16
+      <*> Gen.enumBounded
+      <*> Gen.bool
+    genRowArray = VarArray <$> Gen.list (Range.constant 1 10) genRow
 
 roundtrip
   :: forall x
@@ -223,10 +234,36 @@ data Schwarma = Chicken | Lamb | Beef
   deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
   deriving (IsPG, FromPG, ToPG db, Inline) via Enumerated Schwarma
 
-type DB = '["public" ::: '["schwarma" ::: 'Typedef (PG Schwarma)]]
 
-createSchwarma :: Definition '["public" ::: '[]] DB
-createSchwarma = createTypeEnumFrom @Schwarma #schwarma
+type Schema = '[
+  "schwarma" ::: 'Typedef (PG Schwarma),
+  "tab" ::: 'Table ('[] :=> PGRow)]
 
-dropSchwarma :: Definition DB '["public" ::: '[]]
-dropSchwarma = dropType #schwarma
+type DB0 = Public '[]
+
+type DB = Public Schema
+
+createDB :: Definition DB0 DB
+createDB =
+  createTypeEnumFrom @Schwarma #schwarma >>>
+  createTable #tab
+    ( notNullable int2 `as` #foo :*
+      notNullable (typedef #schwarma) `as` #bar :*
+      notNullable bool `as` #baz
+    )
+    Nil
+
+dropDB :: Definition DB DB0
+dropDB = dropTable #tab >>> dropType #schwarma
+
+type PGRow = '[
+  "foo" ::: 'NoDef :=> 'NotNull 'PGint2,
+  "bar" ::: 'NoDef :=> 'NotNull (PG Schwarma),
+  "baz" ::: 'NoDef :=> 'NotNull 'PGbool]
+
+data HaskRow = HaskRow {foo :: Int16, bar :: Schwarma, baz :: Bool}
+  deriving stock (Eq, Show, GHC.Generic)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+  deriving (IsPG, FromPG, Inline) via Composite HaskRow
+deriving via Composite HaskRow
+  instance db ~ DB => ToPG db HaskRow
