@@ -23,6 +23,8 @@ module Main (main) where
 import Control.Monad.Trans
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 (unpack)
+import Data.Function (on)
+import Data.Functor.Contravariant (contramap)
 import Data.Int (Int16)
 import Data.Scientific (fromFloatDigits)
 import Data.Fixed (Fixed(MkFixed), Micro, Pico)
@@ -36,6 +38,7 @@ import qualified GHC.Generics as GHC
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Main as Main
 import qualified Hedgehog.Range as Range
+import Data.List (sort)
 
 main :: IO ()
 main = withUtf8 $ do
@@ -231,18 +234,24 @@ normalizeUtf8 = (stripped =<<)
       ch -> [ch]
 
 data Schwarma = Chicken | Lamb | Beef
-  deriving stock (Eq, Show, Bounded, Enum, GHC.Generic)
+  deriving stock (Eq, Ord, Show, Bounded, Enum, GHC.Generic)
   deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
   deriving (IsPG, FromPG, ToPG db, Inline) via Enumerated Schwarma
 
+data HaskRow = HaskRow {foo :: Int16, bar :: Schwarma, baz :: Bool}
+  deriving stock (Eq, Ord, Show, GHC.Generic)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+  deriving (IsPG, FromPG, Inline) via Composite HaskRow
+deriving via Composite HaskRow
+  instance db ~ DB => ToPG db HaskRow
 
 type Schema = '[
   "schwarma" ::: 'Typedef (PG Schwarma),
   "tab" ::: 'Table ('[] :=> PGRow)]
 
-type DB0 = Public '[]
-
 type DB = Public Schema
+
+type DB0 = Public '[]
 
 createDB :: Definition DB0 DB
 createDB =
@@ -251,8 +260,7 @@ createDB =
     ( notNullable int2 `as` #foo :*
       notNullable (typedef #schwarma) `as` #bar :*
       notNullable bool `as` #baz
-    )
-    Nil
+    ) Nil
 
 dropDB :: Definition DB DB0
 dropDB = dropTable #tab >>> dropType #schwarma
@@ -262,30 +270,28 @@ type PGRow = '[
   "bar" ::: 'NoDef :=> 'NotNull (PG Schwarma),
   "baz" ::: 'NoDef :=> 'NotNull 'PGbool]
 
-data HaskRow = HaskRow {foo :: Int16, bar :: Schwarma, baz :: Bool}
-  deriving stock (Eq, Show, GHC.Generic)
-  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-  deriving (IsPG, FromPG, Inline) via Composite HaskRow
-deriving via Composite HaskRow
-  instance db ~ DB => ToPG db HaskRow
-
-insertTabParams :: Statement DB (VarArray [HaskRow]) ()
-insertTabParams = Manipulation enc dec sql
-  where
-    enc = aParam
-    dec = return ()
-    sql = insertInto_ #tab unnestedParam
-    unnestedParam = Select
-      ( Set (#unnest & field #tab #foo) `as` #foo :*
-        Set (#unnest & field #tab #bar) `as` #bar :*
-        Set (#unnest & field #tab #baz) `as` #baz
-      )
-      ( from (unnest (param @1)) )
-
-insertTabInlines :: [HaskRow] -> Statement DB () ()
-insertTabInlines = \case
+insertTabInline :: [HaskRow] -> Statement DB () ()
+insertTabInline = \case
   [] -> error "needs at least 1 row"
   rw:rows -> manipulation $ insertInto_ #tab (inlineValues rw rows)
+
+insertTabParams :: Statement DB HaskRow ()
+insertTabParams = manipulation . insertInto_ #tab . Values_ $
+  Set (param @1) `as` #foo :*
+  Set (param @2) `as` #bar :*
+  Set (param @3) `as` #baz
+
+insertTabUnnest :: Statement DB [HaskRow] ()
+insertTabUnnest = Manipulation enc dec sql
+  where
+    enc = contramap VarArray aParam
+    dec = return ()
+    sql = insertInto_ #tab unnested
+    unnested = Select fields (from (unnest (param @1)))
+    fields =
+      Set (#unnest & field #tab #foo) `as` #foo :*
+      Set (#unnest & field #tab #bar) `as` #bar :*
+      Set (#unnest & field #tab #baz) `as` #baz
 
 selectTab :: Statement DB () HaskRow
 selectTab = query $ select Star (from (table #tab))
@@ -298,11 +304,13 @@ roundtripTable = property $ do
       <$> genInt16
       <*> Gen.enumBounded
       <*> Gen.bool
-    genRowArray = Gen.list (Range.constant 1 100) genRow
-  params <- forAll genRowArray
-  inlines <- forAll genRowArray
+    genRows = Gen.list (Range.constant 1 100) genRow
+  rows1 <- forAll genRows
+  rows2 <- forAll genRows
+  rows3 <- forAll genRows
   tabRows <- lift . withConnection connectionString $ ephemerally_ $ do
-    executeParams_ insertTabParams (VarArray params)
-    execute_ (insertTabInlines inlines)
+    execute_ (insertTabInline rows1)
+    executePrepared_ insertTabParams rows2
+    executeParams_ insertTabUnnest rows3
     getRows =<< execute selectTab
-  tabRows === params ++ inlines
+  ((===) `on` sort) tabRows (rows1 ++ rows2 ++ rows3)
