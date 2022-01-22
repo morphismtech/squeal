@@ -173,6 +173,9 @@ newtype TypeExpression (db :: SchemasType) (ty :: NullType)
 instance RenderSQL (TypeExpression db ty) where
   renderSQL = renderTypeExpression
 
+-- | The composite type corresponding to a relation can be expressed
+-- by its alias. A relation is either a composite type, a table or a view.
+-- It subsumes `typetable` and `typeview` and partly overlaps `typedef`.
 typerow
   :: ( relss ~ DbRelations db
      , Has sch relss rels
@@ -391,12 +394,12 @@ instance
   ( relss ~ DbRelations db
   , Has sch relss rels
   , Has rel rels row
-  , FindFullName "no composite found with relation: " relss row ~ '(sch,rel)  
+  , FindQualified "no composite found with relation: " relss row ~ '(sch,rel)  
   ) => PGTyped db ('PGcomposite row) where
     pgtype = typerow (QualifiedAlias @sch @rel)
 instance
   ( enums ~ DbEnums db
-  , FindFullName "no enum found with labels: " enums labels ~ '(sch,td)
+  , FindQualified "no enum found with labels: " enums labels ~ '(sch,td)
   , Has sch db schema
   , Has td schema ('Typedef ('PGenum labels))
   ) => PGTyped db ('PGenum labels) where

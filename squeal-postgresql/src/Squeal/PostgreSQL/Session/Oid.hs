@@ -145,26 +145,26 @@ instance
   ( KnownSymbol sch
   , KnownSymbol td
   , rels ~ DbRelations db
-  , FindFullName "no composite found with relation: " rels row ~ '(sch,td)
+  , FindQualified "no composite found with relation: " rels row ~ '(sch,td)
   ) => OidOf db ('PGcomposite row) where
     oidOf = oidOfTypedef @sch @td
 instance
   ( KnownSymbol sch
   , KnownSymbol td
   , rels ~ DbRelations db
-  , FindFullName "no composite found with relation: " rels row ~ '(sch,td)
+  , FindQualified "no composite found with relation: " rels row ~ '(sch,td)
   ) => OidOfArray db ('PGcomposite row) where
     oidOfArray = oidOfArrayTypedef @sch @td
 instance
   ( enums ~ DbEnums db
-  , FindFullName "no enum found with labels: " enums labels ~ '(sch,td)
+  , FindQualified "no enum found with labels: " enums labels ~ '(sch,td)
   , KnownSymbol sch
   , KnownSymbol td
   ) => OidOf db ('PGenum labels) where
     oidOf = oidOfTypedef @sch @td
 instance
   ( enums ~ DbEnums db
-  , FindFullName "no enum found with labels: " enums labels ~ '(sch,td)
+  , FindQualified "no enum found with labels: " enums labels ~ '(sch,td)
   , KnownSymbol sch
   , KnownSymbol td
   ) => OidOfArray db ('PGenum labels) where

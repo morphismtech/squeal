@@ -112,7 +112,7 @@ module Squeal.PostgreSQL.Type.Schema
     -- * User Type Lookup
   , DbEnums
   , DbRelations
-  , FindFullName
+  , FindQualified
   ) where
 
 import Control.Category
@@ -756,6 +756,8 @@ type family SchemaEnums schema where
     enum ::: labels ': SchemaEnums schema
   SchemaEnums (_ ': schema) = SchemaEnums schema
 
+{- | Filters schemas down to labels of all enum typedefs.
+-}
 type family DbEnums db where
   DbEnums '[] = '[]
   DbEnums (sch ::: schema ': schemas) =
@@ -771,6 +773,9 @@ type family SchemaRelations schema where
     ty ::: row ': SchemaRelations schema
   SchemaRelations (_ ': schema) = SchemaRelations schema
 
+{- | Filters schemas down to rows of relations;
+all composites, tables and views.
+-}
 type family DbRelations db where
   DbRelations '[] = '[]
   DbRelations (sch ::: schema ': schemas) =
@@ -782,10 +787,18 @@ type family FindName xs x where
   FindName (_ ': xs) x = FindName xs x
 
 type family FindNamespace err nsp name xss x where
-  FindNamespace err _ 'Nothing xss x = FindFullName err xss x
+  FindNamespace err _ 'Nothing xss x = FindQualified err xss x
   FindNamespace _ nsp ('Just name) _ _ = '(nsp, name)
 
-type family FindFullName err xss x where
-  FindFullName err '[] x = TypeError ('Text err ':<>: 'ShowType x)
-  FindFullName err ( '(nsp, xs) ': xss) x =
+{- | Find fully qualified name with a type error if lookup fails.
+This is used to find the qualified name of a user defined type.
+
+>>> :kind! FindQualified "my error message: "
+FindQualified "my error message: " :: [(k1, [(k2, k3)])]
+                                      -> k3 -> (k1, k2)
+= FindQualified "my error message: "
+-}
+type family FindQualified err xss x where
+  FindQualified err '[] x = TypeError ('Text err ':<>: 'ShowType x)
+  FindQualified err ( '(nsp, xs) ': xss) x =
     FindNamespace err nsp (FindName xs x) xss x
