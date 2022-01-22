@@ -394,7 +394,7 @@ instance
   ( relss ~ DbRelations db
   , Has sch relss rels
   , Has rel rels row
-  , FindQualified "no composite found with relation: " relss row ~ '(sch,rel)  
+  , FindQualified "no relation found with row: " relss row ~ '(sch,rel)  
   ) => PGTyped db ('PGcomposite row) where
     pgtype = typerow (QualifiedAlias @sch @rel)
 instance

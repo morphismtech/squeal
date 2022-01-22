@@ -145,14 +145,14 @@ instance
   ( KnownSymbol sch
   , KnownSymbol td
   , rels ~ DbRelations db
-  , FindQualified "no composite found with relation: " rels row ~ '(sch,td)
+  , FindQualified "no relation found with row: " rels row ~ '(sch,td)
   ) => OidOf db ('PGcomposite row) where
     oidOf = oidOfTypedef @sch @td
 instance
   ( KnownSymbol sch
   , KnownSymbol td
   , rels ~ DbRelations db
-  , FindQualified "no composite found with relation: " rels row ~ '(sch,td)
+  , FindQualified "no relation found with row: " rels row ~ '(sch,td)
   ) => OidOfArray db ('PGcomposite row) where
     oidOfArray = oidOfArrayTypedef @sch @td
 instance
