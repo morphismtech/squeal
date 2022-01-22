@@ -789,4 +789,3 @@ type family FindFullName err xss x where
   FindFullName err '[] x = TypeError ('Text err ':<>: 'ShowType x)
   FindFullName err ( '(nsp, xs) ': xss) x =
     FindNamespace err nsp (FindName xs x) xss x
-  
