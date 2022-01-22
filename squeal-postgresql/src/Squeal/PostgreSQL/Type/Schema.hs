@@ -797,6 +797,16 @@ This is used to find the qualified name of a user defined type.
 FindQualified "my error message: " :: [(k1, [(k2, k3)])]
                                       -> k3 -> (k1, k2)
 = FindQualified "my error message: "
+
+>>> :kind! FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Double
+FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Double :: (Symbol,
+                                                                                  Symbol)
+= '("foo", "bar")
+
+>>> :kind! FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Bool
+FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Bool :: (Symbol,
+                                                                                Symbol)
+= (TypeError ...)
 -}
 type family FindQualified err xss x where
   FindQualified err '[] x = TypeError ('Text err ':<>: 'ShowType x)
