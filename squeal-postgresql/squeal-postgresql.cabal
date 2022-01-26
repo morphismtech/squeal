@@ -5,7 +5,6 @@ description: Squeal is a type-safe embedding of PostgreSQL in Haskell
 homepage: https://github.com/morphismtech/squeal
 bug-reports: https://github.com/morphismtech/squeal/issues
 license: BSD3
-license-file: LICENSE
 author: Eitan Chatav
 maintainer: eitan.chatav@gmail.com
 copyright: Copyright (c) 2021 Morphism, LLC
@@ -21,69 +20,6 @@ source-repository head
 library
   hs-source-dirs: src
   exposed-modules:
-    Squeal.PostgreSQL
-    Squeal.PostgreSQL.Definition
-    Squeal.PostgreSQL.Definition.Comment
-    Squeal.PostgreSQL.Definition.Constraint
-    Squeal.PostgreSQL.Definition.Function
-    Squeal.PostgreSQL.Definition.Index
-    Squeal.PostgreSQL.Definition.Table
-    Squeal.PostgreSQL.Definition.Type
-    Squeal.PostgreSQL.Definition.Procedure
-    Squeal.PostgreSQL.Definition.Schema
-    Squeal.PostgreSQL.Definition.View
-    Squeal.PostgreSQL.Expression
-    Squeal.PostgreSQL.Expression.Aggregate
-    Squeal.PostgreSQL.Expression.Array
-    Squeal.PostgreSQL.Expression.Comparison
-    Squeal.PostgreSQL.Expression.Composite
-    Squeal.PostgreSQL.Expression.Default
-    Squeal.PostgreSQL.Expression.Json
-    Squeal.PostgreSQL.Expression.Inline
-    Squeal.PostgreSQL.Expression.Logic
-    Squeal.PostgreSQL.Expression.Math
-    Squeal.PostgreSQL.Expression.Null
-    Squeal.PostgreSQL.Expression.Parameter
-    Squeal.PostgreSQL.Expression.Range
-    Squeal.PostgreSQL.Expression.Sort
-    Squeal.PostgreSQL.Expression.Subquery
-    Squeal.PostgreSQL.Expression.Text
-    Squeal.PostgreSQL.Expression.TextSearch
-    Squeal.PostgreSQL.Expression.Time
-    Squeal.PostgreSQL.Expression.Type
-    Squeal.PostgreSQL.Expression.Window
-    Squeal.PostgreSQL.Manipulation
-    Squeal.PostgreSQL.Manipulation.Call
-    Squeal.PostgreSQL.Manipulation.Delete
-    Squeal.PostgreSQL.Manipulation.Insert
-    Squeal.PostgreSQL.Manipulation.Update
-    Squeal.PostgreSQL.Render
-    Squeal.PostgreSQL.Query
-    Squeal.PostgreSQL.Query.From
-    Squeal.PostgreSQL.Query.From.Join
-    Squeal.PostgreSQL.Query.From.Set
-    Squeal.PostgreSQL.Query.Select
-    Squeal.PostgreSQL.Query.Table
-    Squeal.PostgreSQL.Query.Values
-    Squeal.PostgreSQL.Query.With
-    Squeal.PostgreSQL.Session
-    Squeal.PostgreSQL.Session.Connection
-    Squeal.PostgreSQL.Session.Decode
-    Squeal.PostgreSQL.Session.Encode
-    Squeal.PostgreSQL.Session.Exception
-    Squeal.PostgreSQL.Session.Indexed
-    Squeal.PostgreSQL.Session.Migration
-    Squeal.PostgreSQL.Session.Monad
-    Squeal.PostgreSQL.Session.Oid
-    Squeal.PostgreSQL.Session.Pool
-    Squeal.PostgreSQL.Session.Result
-    Squeal.PostgreSQL.Session.Statement
-    Squeal.PostgreSQL.Session.Transaction
-    Squeal.PostgreSQL.Session.Transaction.Unsafe
-    Squeal.PostgreSQL.Type
-    Squeal.PostgreSQL.Type.Alias
-    Squeal.PostgreSQL.Type.List
-    Squeal.PostgreSQL.Type.PG
     Squeal.PostgreSQL.Type.Schema
   default-language: Haskell2010
   ghc-options: -Wall
