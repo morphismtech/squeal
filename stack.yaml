@@ -1,5 +1,3 @@
 resolver: nightly-2021-12-16
 packages:
 - squeal-postgresql
-- squeal-postgresql-ltree
-- squeal-postgresql-uuid-ossp

@@ -1,1 +1,0 @@
-# squeal-postgresql-uuid-ossp

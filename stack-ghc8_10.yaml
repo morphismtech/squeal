@@ -1,5 +1,0 @@
-resolver: lts-18.20
-packages:
-- squeal-postgresql
-- squeal-postgresql-ltree
-- squeal-postgresql-uuid-ossp
