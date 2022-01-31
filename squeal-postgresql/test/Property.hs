@@ -5,11 +5,14 @@
   , DerivingStrategies
   , DerivingVia
   , FlexibleContexts
+  , FlexibleInstances
   , GADTs
   , LambdaCase
+  , MultiParamTypeClasses
   , OverloadedLabels
   , OverloadedStrings
   , ScopedTypeVariables
+  , StandaloneDeriving
   , TypeApplications
   , TypeOperators
   , UndecidableInstances
@@ -20,6 +23,9 @@ module Main (main) where
 import Control.Monad.Trans
 import Data.ByteString (ByteString)
 import Data.ByteString.Char8 (unpack)
+import Data.Function (on)
+import Data.Functor.Contravariant (contramap)
+import Data.Int (Int16)
 import Data.Scientific (fromFloatDigits)
 import Data.Fixed (Fixed(MkFixed), Micro, Pico)
 import Data.String (IsString(fromString))
@@ -32,12 +38,13 @@ import qualified GHC.Generics as GHC
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Main as Main
 import qualified Hedgehog.Range as Range
+import Data.List (sort)
 
 main :: IO ()
 main = withUtf8 $ do
-  withConnection connectionString $ define createSchwarma
+  withConnection connectionString $ define createDB
   Main.defaultMain [checkSequential roundtrips]
-  withConnection connectionString $ define dropSchwarma
+  withConnection connectionString $ define dropDB
 
 roundtrips :: Group
 roundtrips = Group "roundtrips"
@@ -65,6 +72,9 @@ roundtrips = Group "roundtrips"
   , roundtripOn normalizeIntRange daterange (genRange genDay)
   , roundtrip (typedef #schwarma) genSchwarma
   , roundtrip (vararray (typedef #schwarma)) genSchwarmaArray
+  , roundtrip (typerow #tab) genRow
+  , roundtrip (vararray (typetable #tab)) genRowArray
+  , ("table insert", roundtripTable)
   ]
   where
     genInt16 = Gen.int16 Range.exponentialBounded
@@ -119,6 +129,11 @@ roundtrips = Group "roundtrips"
     --   , "CDT", "MST", "MDT", "PST", "PDT" ]
     genSchwarma = Gen.enumBounded @_ @Schwarma
     genSchwarmaArray = VarArray <$> Gen.list (Range.constant 1 10) genSchwarma
+    genRow = HaskRow
+      <$> genInt16
+      <*> Gen.enumBounded
+      <*> Gen.bool
+    genRowArray = VarArray <$> Gen.list (Range.constant 1 10) genRow
 
 roundtrip
   :: forall x
@@ -219,14 +234,83 @@ normalizeUtf8 = (stripped =<<)
       ch -> [ch]
 
 data Schwarma = Chicken | Lamb | Beef
-  deriving stock (Eq, Show, Bounded, Enum, GHC.Generic)
+  deriving stock (Eq, Ord, Show, Bounded, Enum, GHC.Generic)
   deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
   deriving (IsPG, FromPG, ToPG db, Inline) via Enumerated Schwarma
 
-type DB = '["public" ::: '["schwarma" ::: 'Typedef (PG Schwarma)]]
+data HaskRow = HaskRow {foo :: Int16, bar :: Schwarma, baz :: Bool}
+  deriving stock (Eq, Ord, Show, GHC.Generic)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+  deriving (IsPG, FromPG, Inline) via Composite HaskRow
+deriving via Composite HaskRow
+  instance db ~ DB => ToPG db HaskRow
 
-createSchwarma :: Definition '["public" ::: '[]] DB
-createSchwarma = createTypeEnumFrom @Schwarma #schwarma
+type Schema = '[
+  "schwarma" ::: 'Typedef (PG Schwarma),
+  "tab" ::: 'Table ('[] :=> PGRow)]
 
-dropSchwarma :: Definition DB '["public" ::: '[]]
-dropSchwarma = dropType #schwarma
+type DB = Public Schema
+
+type DB0 = Public '[]
+
+createDB :: Definition DB0 DB
+createDB =
+  createTypeEnumFrom @Schwarma #schwarma >>>
+  createTable #tab
+    ( notNullable int2 `as` #foo :*
+      notNullable (typedef #schwarma) `as` #bar :*
+      notNullable bool `as` #baz
+    ) Nil
+
+dropDB :: Definition DB DB0
+dropDB = dropTable #tab >>> dropType #schwarma
+
+type PGRow = '[
+  "foo" ::: 'NoDef :=> 'NotNull 'PGint2,
+  "bar" ::: 'NoDef :=> 'NotNull (PG Schwarma),
+  "baz" ::: 'NoDef :=> 'NotNull 'PGbool]
+
+insertTabInline :: [HaskRow] -> Statement DB () ()
+insertTabInline = \case
+  [] -> error "needs at least 1 row"
+  rw:rows -> manipulation $ insertInto_ #tab (inlineValues rw rows)
+
+insertTabParams :: Statement DB HaskRow ()
+insertTabParams = manipulation . insertInto_ #tab . Values_ $
+  Set (param @1) `as` #foo :*
+  Set (param @2) `as` #bar :*
+  Set (param @3) `as` #baz
+
+insertTabUnnest :: Statement DB [HaskRow] ()
+insertTabUnnest = Manipulation enc dec sql
+  where
+    enc = contramap VarArray aParam
+    dec = return ()
+    sql = insertInto_ #tab unnested
+    unnested = Select fields (from (unnest (param @1)))
+    fields =
+      Set (#unnest & field #tab #foo) `as` #foo :*
+      Set (#unnest & field #tab #bar) `as` #bar :*
+      Set (#unnest & field #tab #baz) `as` #baz
+
+selectTab :: Statement DB () HaskRow
+selectTab = query $ select Star (from (table #tab))
+
+roundtripTable :: Property
+roundtripTable = property $ do
+  let
+    genInt16 = Gen.int16 Range.exponentialBounded
+    genRow = HaskRow
+      <$> genInt16
+      <*> Gen.enumBounded
+      <*> Gen.bool
+    genRows = Gen.list (Range.constant 1 100) genRow
+  rows1 <- forAll genRows
+  rows2 <- forAll genRows
+  rows3 <- forAll genRows
+  tabRows <- lift . withConnection connectionString $ ephemerally_ $ do
+    execute_ (insertTabInline rows1)
+    executePrepared_ insertTabParams rows2
+    executeParams_ insertTabUnnest rows3
+    getRows =<< execute selectTab
+  ((===) `on` sort) tabRows (rows1 ++ rows2 ++ rows3)

@@ -142,35 +142,38 @@ instance OidOfArray db ('PGrange 'PGtimestamptz) where oidOfArray = pure $ LibPQ
 instance OidOf db ('PGrange 'PGdate) where oidOf = pure $ LibPQ.Oid 3912
 instance OidOfArray db ('PGrange 'PGdate) where oidOfArray = pure $ LibPQ.Oid 3913
 instance
-  ( UserType db ('PGcomposite row) ~ '(sch,td)
-  , Has sch db schema
-  , Has td schema ('Typedef ('PGcomposite row)) )
-  => OidOf db ('PGcomposite row) where
-    oidOf = oidOfTypedef (QualifiedAlias @sch @td)
+  ( KnownSymbol sch
+  , KnownSymbol td
+  , rels ~ DbRelations db
+  , FindQualified "no relation found with row: " rels row ~ '(sch,td)
+  ) => OidOf db ('PGcomposite row) where
+    oidOf = oidOfTypedef @sch @td
 instance
-  ( UserType db ('PGcomposite row) ~ '(sch,td)
-  , Has sch db schema
-  , Has td schema ('Typedef ('PGcomposite row)) )
-  => OidOfArray db ('PGcomposite row) where
-    oidOfArray = oidOfArrayTypedef (QualifiedAlias @sch @td)
+  ( KnownSymbol sch
+  , KnownSymbol td
+  , rels ~ DbRelations db
+  , FindQualified "no relation found with row: " rels row ~ '(sch,td)
+  ) => OidOfArray db ('PGcomposite row) where
+    oidOfArray = oidOfArrayTypedef @sch @td
 instance
-  ( UserType db ('PGenum labels) ~ '(sch,td)
-  , Has sch db schema
-  , Has td schema ('Typedef ('PGenum labels)) )
-  => OidOf db ('PGenum labels) where
-    oidOf = oidOfTypedef (QualifiedAlias @sch @td)
+  ( enums ~ DbEnums db
+  , FindQualified "no enum found with labels: " enums labels ~ '(sch,td)
+  , KnownSymbol sch
+  , KnownSymbol td
+  ) => OidOf db ('PGenum labels) where
+    oidOf = oidOfTypedef @sch @td
 instance
-  ( UserType db ('PGenum labels) ~ '(sch,td)
-  , Has sch db schema
-  , Has td schema ('Typedef ('PGenum labels)) )
-  => OidOfArray db ('PGenum labels) where
-    oidOfArray = oidOfArrayTypedef (QualifiedAlias @sch @td)
+  ( enums ~ DbEnums db
+  , FindQualified "no enum found with labels: " enums labels ~ '(sch,td)
+  , KnownSymbol sch
+  , KnownSymbol td
+  ) => OidOfArray db ('PGenum labels) where
+    oidOfArray = oidOfArrayTypedef @sch @td
 
 oidOfTypedef
-  :: (Has sch db schema, Has ty schema pg)
-  => QualifiedAlias sch ty
-  -> ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
-oidOfTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
+  :: forall sch ty db. (KnownSymbol sch, KnownSymbol ty)
+  => ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
+oidOfTypedef = ReaderT $ \(SOP.K conn) -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
     Nothing -> throwM $ ConnectionException oidErr
@@ -199,10 +202,9 @@ oidOfTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
       , ";" ]
 
 oidOfArrayTypedef
-  :: (Has sch db schema, Has ty schema pg)
-  => QualifiedAlias sch ty
-  -> ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
-oidOfArrayTypedef (_ :: QualifiedAlias sch ty) = ReaderT $ \(SOP.K conn) -> do
+  :: forall sch ty db. (KnownSymbol sch, KnownSymbol ty)
+  => ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
+oidOfArrayTypedef = ReaderT $ \(SOP.K conn) -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
     Nothing -> throwM $ ConnectionException oidErr

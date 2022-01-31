@@ -109,10 +109,10 @@ module Squeal.PostgreSQL.Type.Schema
   , Updatable
   , AllUnique
   , IsNotElem
-    -- * User Types
-  , UserType
-  , UserTypeName
-  , UserTypeNamespace
+    -- * User Type Lookup
+  , DbEnums
+  , DbRelations
+  , FindQualified
   ) where
 
 import Control.Category
@@ -750,24 +750,65 @@ type Updatable table columns =
   , AllUnique columns
   , SListI (TableToColumns table) )
 
--- | Calculate the name of a user defined type.
-type family UserTypeName (schema :: SchemaType) (ty :: PGType) where
-  UserTypeName '[] ty = 'Nothing
-  UserTypeName (td ::: 'Typedef ty ': _) ty = 'Just td
-  UserTypeName (_ ': schema) ty = UserTypeName schema ty
+type family SchemaEnums schema where
+  SchemaEnums '[] = '[]
+  SchemaEnums (enum ::: 'Typedef ('PGenum labels) ': schema) =
+    enum ::: labels ': SchemaEnums schema
+  SchemaEnums (_ ': schema) = SchemaEnums schema
 
--- | Helper to calculate the schema of a user defined type.
-type family UserTypeNamespace
-  (sch :: Symbol)
-  (td :: Maybe Symbol)
-  (schemas :: SchemasType)
-  (ty :: PGType) where
-    UserTypeNamespace sch 'Nothing schemas ty = UserType schemas ty
-    UserTypeNamespace sch ('Just td) schemas ty = '(sch, td)
+{- | Filters schemas down to labels of all enum typedefs.
+-}
+type family DbEnums db where
+  DbEnums '[] = '[]
+  DbEnums (sch ::: schema ': schemas) =
+    sch ::: SchemaEnums schema ': DbEnums schemas
 
--- | Calculate the schema and name of a user defined type.
-type family UserType (db :: SchemasType) (ty :: PGType) where
-  UserType '[] ty = TypeError
-    ('Text "No such user type: " ':<>: 'ShowType ty)
-  UserType (sch ::: schema ': schemas) ty =
-    UserTypeNamespace sch (UserTypeName schema ty) schemas ty
+type family SchemaRelations schema where
+  SchemaRelations '[] = '[]
+  SchemaRelations (tab ::: 'Table table ': schema) =
+    tab ::: TableToRow table ': SchemaRelations schema
+  SchemaRelations (vw ::: 'View row ': schema) =
+    vw ::: row ': SchemaRelations schema
+  SchemaRelations (ty ::: 'Typedef ('PGcomposite row) ': schema) =
+    ty ::: row ': SchemaRelations schema
+  SchemaRelations (_ ': schema) = SchemaRelations schema
+
+{- | Filters schemas down to rows of relations;
+all composites, tables and views.
+-}
+type family DbRelations db where
+  DbRelations '[] = '[]
+  DbRelations (sch ::: schema ': schemas) =
+    sch ::: SchemaRelations schema ': DbRelations schemas
+
+type family FindName xs x where
+  FindName '[] xs = 'Nothing
+  FindName ( '(name, x) ': _) x = 'Just name
+  FindName (_ ': xs) x = FindName xs x
+
+type family FindNamespace err nsp name xss x where
+  FindNamespace err _ 'Nothing xss x = FindQualified err xss x
+  FindNamespace _ nsp ('Just name) _ _ = '(nsp, name)
+
+{- | Find fully qualified name with a type error if lookup fails.
+This is used to find the qualified name of a user defined type.
+
+>>> :kind! FindQualified "my error message: "
+FindQualified "my error message: " :: [(k1, [(k2, k3)])]
+                                      -> k3 -> (k1, k2)
+= FindQualified "my error message: "
+
+>>> :kind! FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Double
+FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Double :: (Symbol,
+                                                                                  Symbol)
+= '("foo", "bar")
+
+>>> :kind! FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Bool
+FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Bool :: (Symbol,
+                                                                                Symbol)
+= (TypeError ...)
+-}
+type family FindQualified err xss x where
+  FindQualified err '[] x = TypeError ('Text err ':<>: 'ShowType x)
+  FindQualified err ( '(nsp, xs) ': xss) x =
+    FindNamespace err nsp (FindName xs x) xss x
