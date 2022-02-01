@@ -58,7 +58,8 @@ type PGanyarray = UnsafePGType "anyarray"
 
 type DB = '["pg_catalog" ::: Schema]
 
-type Schema = Join Tables (Join Views (Join Enums (Join Functions Domains)))
+-- type Schema = Join Tables (Join Views (Join Enums (Join Functions Domains)))
+type Schema = Tables
 -- enums
 
 -- decls
@@ -66,60 +67,62 @@ type Enums =
   ('[] :: [(Symbol,SchemumType)])
 -- schema
 type Tables = ('[
-   "pg_aggregate" ::: 'Table PgAggregateTable
-  ,"pg_am" ::: 'Table PgAmTable
-  ,"pg_amop" ::: 'Table PgAmopTable
-  ,"pg_amproc" ::: 'Table PgAmprocTable
-  ,"pg_attrdef" ::: 'Table PgAttrdefTable
+  --  "pg_aggregate" ::: 'Table PgAggregateTable
+  -- ,"pg_am" ::: 'Table PgAmTable
+  -- ,"pg_amop" ::: 'Table PgAmopTable
+  -- ,"pg_amproc" ::: 'Table PgAmprocTable
+  -- ,
+  "pg_attrdef" ::: 'Table PgAttrdefTable
   ,"pg_attribute" ::: 'Table PgAttributeTable
-  ,"pg_auth_members" ::: 'Table PgAuthMembersTable
-  ,"pg_authid" ::: 'Table PgAuthidTable
-  ,"pg_cast" ::: 'Table PgCastTable
+  -- ,"pg_auth_members" ::: 'Table PgAuthMembersTable
+  -- ,"pg_authid" ::: 'Table PgAuthidTable
+  -- ,"pg_cast" ::: 'Table PgCastTable
   ,"pg_class" ::: 'Table PgClassTable
-  ,"pg_collation" ::: 'Table PgCollationTable
-  ,"pg_constraint" ::: 'Table PgConstraintTable
-  ,"pg_conversion" ::: 'Table PgConversionTable
-  ,"pg_database" ::: 'Table PgDatabaseTable
-  ,"pg_db_role_setting" ::: 'Table PgDbRoleSettingTable
-  ,"pg_default_acl" ::: 'Table PgDefaultAclTable
-  ,"pg_depend" ::: 'Table PgDependTable
-  ,"pg_description" ::: 'Table PgDescriptionTable
+  -- ,"pg_collation" ::: 'Table PgCollationTable
+  -- ,"pg_constraint" ::: 'Table PgConstraintTable
+  -- ,"pg_conversion" ::: 'Table PgConversionTable
+  -- ,"pg_database" ::: 'Table PgDatabaseTable
+  -- ,"pg_db_role_setting" ::: 'Table PgDbRoleSettingTable
+  -- ,"pg_default_acl" ::: 'Table PgDefaultAclTable
+  -- ,"pg_depend" ::: 'Table PgDependTable
+  -- ,"pg_description" ::: 'Table PgDescriptionTable
   ,"pg_enum" ::: 'Table PgEnumTable
-  ,"pg_event_trigger" ::: 'Table PgEventTriggerTable
-  ,"pg_extension" ::: 'Table PgExtensionTable
-  ,"pg_foreign_data_wrapper" ::: 'Table PgForeignDataWrapperTable
-  ,"pg_foreign_server" ::: 'Table PgForeignServerTable
-  ,"pg_foreign_table" ::: 'Table PgForeignTableTable
-  ,"pg_index" ::: 'Table PgIndexTable
-  ,"pg_inherits" ::: 'Table PgInheritsTable
-  ,"pg_language" ::: 'Table PgLanguageTable
-  ,"pg_largeobject" ::: 'Table PgLargeobjectTable
-  ,"pg_largeobject_metadata" ::: 'Table PgLargeobjectMetadataTable
+  -- ,"pg_event_trigger" ::: 'Table PgEventTriggerTable
+  -- ,"pg_extension" ::: 'Table PgExtensionTable
+  -- ,"pg_foreign_data_wrapper" ::: 'Table PgForeignDataWrapperTable
+  -- ,"pg_foreign_server" ::: 'Table PgForeignServerTable
+  -- ,"pg_foreign_table" ::: 'Table PgForeignTableTable
+  -- ,"pg_index" ::: 'Table PgIndexTable
+  -- ,"pg_inherits" ::: 'Table PgInheritsTable
+  -- ,"pg_language" ::: 'Table PgLanguageTable
+  -- ,"pg_largeobject" ::: 'Table PgLargeobjectTable
+  -- ,"pg_largeobject_metadata" ::: 'Table PgLargeobjectMetadataTable
   ,"pg_namespace" ::: 'Table PgNamespaceTable
-  ,"pg_opclass" ::: 'Table PgOpclassTable
-  ,"pg_operator" ::: 'Table PgOperatorTable
-  ,"pg_opfamily" ::: 'Table PgOpfamilyTable
-  ,"pg_pltemplate" ::: 'Table PgPltemplateTable
-  ,"pg_policy" ::: 'Table PgPolicyTable
-  ,"pg_proc" ::: 'Table PgProcTable
-  ,"pg_range" ::: 'Table PgRangeTable
-  ,"pg_replication_origin" ::: 'Table PgReplicationOriginTable
-  ,"pg_rewrite" ::: 'Table PgRewriteTable
-  ,"pg_seclabel" ::: 'Table PgSeclabelTable
-  ,"pg_shdepend" ::: 'Table PgShdependTable
-  ,"pg_shdescription" ::: 'Table PgShdescriptionTable
-  ,"pg_shseclabel" ::: 'Table PgShseclabelTable
-  ,"pg_statistic" ::: 'Table PgStatisticTable
-  ,"pg_tablespace" ::: 'Table PgTablespaceTable
-  ,"pg_transform" ::: 'Table PgTransformTable
-  ,"pg_trigger" ::: 'Table PgTriggerTable
-  ,"pg_ts_config" ::: 'Table PgTsConfigTable
-  ,"pg_ts_config_map" ::: 'Table PgTsConfigMapTable
-  ,"pg_ts_dict" ::: 'Table PgTsDictTable
-  ,"pg_ts_parser" ::: 'Table PgTsParserTable
-  ,"pg_ts_template" ::: 'Table PgTsTemplateTable
+  -- ,"pg_opclass" ::: 'Table PgOpclassTable
+  -- ,"pg_operator" ::: 'Table PgOperatorTable
+  -- ,"pg_opfamily" ::: 'Table PgOpfamilyTable
+  -- ,"pg_pltemplate" ::: 'Table PgPltemplateTable
+  -- ,"pg_policy" ::: 'Table PgPolicyTable
+  -- ,"pg_proc" ::: 'Table PgProcTable
+  -- ,"pg_range" ::: 'Table PgRangeTable
+  -- ,"pg_replication_origin" ::: 'Table PgReplicationOriginTable
+  -- ,"pg_rewrite" ::: 'Table PgRewriteTable
+  -- ,"pg_seclabel" ::: 'Table PgSeclabelTable
+  -- ,"pg_shdepend" ::: 'Table PgShdependTable
+  -- ,"pg_shdescription" ::: 'Table PgShdescriptionTable
+  -- ,"pg_shseclabel" ::: 'Table PgShseclabelTable
+  -- ,"pg_statistic" ::: 'Table PgStatisticTable
+  -- ,"pg_tablespace" ::: 'Table PgTablespaceTable
+  -- ,"pg_transform" ::: 'Table PgTransformTable
+  -- ,"pg_trigger" ::: 'Table PgTriggerTable
+  -- ,"pg_ts_config" ::: 'Table PgTsConfigTable
+  -- ,"pg_ts_config_map" ::: 'Table PgTsConfigMapTable
+  -- ,"pg_ts_dict" ::: 'Table PgTsDictTable
+  -- ,"pg_ts_parser" ::: 'Table PgTsParserTable
+  -- ,"pg_ts_template" ::: 'Table PgTsTemplateTable
   ,"pg_type" ::: 'Table PgTypeTable
-  ,"pg_user_mapping" ::: 'Table PgUserMappingTable]  :: [(Symbol,SchemumType)])
+  -- ,"pg_user_mapping" ::: 'Table PgUserMappingTable
+  ]  :: [(Symbol,SchemumType)])
 
 -- defs
 type PgAggregateColumns = '["aggfnoid" ::: 'NoDef :=> 'NotNull PGregproc
