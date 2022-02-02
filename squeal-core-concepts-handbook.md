@@ -83,7 +83,7 @@ manip = deleteFrom
   #users
   (Using (table #emails))
   (#users ! #id .== #emails ! #user_id)
-  Returning_ Nil
+  (Returning_ Nil)
 ```
 
 Once you get into specifying the actual bits of data you care about, you're
