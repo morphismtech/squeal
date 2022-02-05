@@ -302,7 +302,7 @@ foldlNP f z = \case
 
 {- |
 `EncodeParams` describes an encoding of a Haskell `Type`
-into a list of parameter `NullType`s.
+into a list of parameter `NullType`s or into a `RowType`.
 
 >>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 >>> :{
@@ -314,6 +314,16 @@ let
 in runReaderT (runEncodeParams encode (1,('a',"foo"))) conn
 :}
 K (Just "\NUL\SOH") :* K (Just "a") :* K (Just "foo") :* Nil
+
+>>> :{
+let
+  encode :: EncodeParams '[]
+    '["fst" ::: 'NotNull 'PGint2, "snd" ::: 'NotNull ('PGchar 1)]
+    (Int16, Char)
+  encode = fst `as` #fst #. snd `as` #snd
+in runReaderT (runEncodeParams encode (1,'a')) conn
+:}
+K (Just "\NUL\SOH") :* K (Just "a") :* Nil
 
 >>> finish conn
 -}
@@ -520,6 +530,21 @@ hcfoldMapM c f = \case
   Nil -> pure mempty
   x :* xs -> (<>) <$> f x <*> hcfoldMapM c f xs
 
+{- |
+>>> :set -XTypeFamilies -XFlexibleInstances
+>>> :{
+data Complex = Complex
+  { real :: Double
+  , imaginary :: Double
+  }
+instance IsPG Complex where
+  type PG Complex = 'PGcomposite '[
+    "re" ::: 'NotNull 'PGfloat8,
+    "im" ::: 'NotNull 'PGfloat8]
+instance ToPG db Complex where
+  toPG = rowParam $ real `as` #re #. imaginary `as` #im
+:}
+-}
 rowParam
   :: forall db row x. (PG x ~ 'PGcomposite row, SOP.All (OidOfField db) row)
   => EncodeParams db row x
@@ -572,6 +597,28 @@ instance (ToParam db ty x, ty ~ NullPG x)
       $ fmap (\param -> SOP.K param :* Nil)
       . toParam @db @(NullPG x)
 
+{- |
+>>> import GHC.Generics as GHC
+>>> :{
+data L = L {frst :: Int16, scnd :: Char}
+  deriving stock (GHC.Generic, Show)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+data R = R {thrd :: Bool, frth :: Bool}
+  deriving stock (GHC.Generic, Show)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+instance IsPG (L,R) where
+  type PG (L,R) = 'PGcomposite '[
+    "frst" ::: 'NotNull 'PGint2,
+    "scnd" ::: 'NotNull ('PGchar 1),
+    "thrd" ::: 'NotNull 'PGbool,
+    "frth" ::: 'NotNull 'PGbool]
+instance ToPG db (L,R) where
+  toPG = rowParam $
+    contramap fst genericRowParams
+    `appendParams`
+    contramap snd genericRowParams
+:}
+-}
 genericRowParams
   ::  forall db row x xs.
       ( SOP.IsRecord x xs
