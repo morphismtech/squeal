@@ -36,6 +36,7 @@ module Squeal.PostgreSQL.Session.Encode
   , (*.)
   , aParam
   , appendParams
+  , enumParam
   , rowParam
   , genericRowParams
   , (.#)
@@ -529,6 +530,39 @@ hcfoldMapM
 hcfoldMapM c f = \case
   Nil -> pure mempty
   x :* xs -> (<>) <$> f x <*> hcfoldMapM c f xs
+
+{- |
+>>> :set -XLambdaCase -XFlexibleInstances
+>>> :{
+data Dir = North | South | East | West
+instance IsPG Dir where
+  type PG Dir = 'PGenum '["north", "south", "east", "west"]
+instance ToPG db Dir where
+  toPG = enumParam $ \case
+    North -> label @"north"
+    South -> label @"south"
+    East -> label @"east"
+    West -> label @"west"
+:}
+-}
+enumParam
+  :: forall db labels x. (PG x ~ 'PGenum labels, SOP.All KnownSymbol labels)
+  => (x -> SOP.NS (SOP.K ()) labels)
+  -> x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
+enumParam casesOf
+  = return
+  . text_strict
+  . Strict.Text.pack
+  . enumCases
+  . casesOf
+  where
+    enumCases
+      :: SOP.All KnownSymbol lbls
+      => SOP.NS (SOP.K ()) lbls
+      -> String
+    enumCases = \case
+      SOP.Z (SOP.K () :: SOP.K () label) -> symbolVal (SOP.Proxy @label)
+      SOP.S cases -> enumCases cases
 
 {- |
 >>> :set -XTypeFamilies -XFlexibleInstances
