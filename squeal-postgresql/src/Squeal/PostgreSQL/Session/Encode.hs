@@ -206,7 +206,7 @@ instance
   , SOP.All (OidOfField db) fields
   , RowPG x ~ fields
   ) => ToPG db (Composite x) where
-    toPG = rowParam @db @fields (contramap getComposite genericRowParams)
+    toPG = rowParam (contramap getComposite genericRowParams)
 instance ToPG db x => ToPG db (Range x) where
   toPG r = do
     payload <- case r of
@@ -546,7 +546,7 @@ instance ToPG db Dir where
 :}
 -}
 enumParam
-  :: forall db labels x. (PG x ~ 'PGenum labels, SOP.All KnownSymbol labels)
+  :: (PG x ~ 'PGenum labels, SOP.All KnownSymbol labels)
   => (x -> SOP.NS (SOP.K ()) labels)
   -> x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
 enumParam casesOf
@@ -580,10 +580,10 @@ instance ToPG db Complex where
 :}
 -}
 rowParam
-  :: forall db row x. (PG x ~ 'PGcomposite row, SOP.All (OidOfField db) row)
+  :: (PG x ~ 'PGcomposite row, SOP.All (OidOfField db) row)
   => EncodeParams db row x
   -> x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
-rowParam enc x = do
+rowParam (enc :: EncodeParams db row x) x = do
   let
     compositeSize
       = int4_int32
