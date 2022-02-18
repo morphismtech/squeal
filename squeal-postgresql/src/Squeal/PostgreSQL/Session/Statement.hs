@@ -28,11 +28,14 @@ module Squeal.PostgreSQL.Session.Statement
   , Prepared (..)
   ) where
 
+import Control.Applicative
 import Control.Arrow
 import Control.Category
 import Control.Monad
+import Control.Monad.Fix
 import Data.Functor.Contravariant
 import Data.Profunctor
+import GHC.Generics
 import Prelude hiding ((.),id)
 
 import qualified Generics.SOP as SOP
@@ -42,7 +45,7 @@ import Squeal.PostgreSQL.Session.Decode
 import Squeal.PostgreSQL.Session.Encode
 import Squeal.PostgreSQL.Session.Oid
 import Squeal.PostgreSQL.Query
-import Squeal.PostgreSQL.Render
+import Squeal.PostgreSQL.Render hiding ((<+>))
 
 -- | A `Statement` consists of a `Squeal.PostgreSQL.Statement.Manipulation`
 -- or a `Squeal.PostgreSQL.Session.Statement.Query` that can be run
@@ -109,26 +112,50 @@ manipulation ::
     -> Statement db x y
 manipulation = Manipulation genericParams genericRow
 
+{- |
+`Squeal.PostgreSQL.Session.Monad.prepare` and
+`Squeal.PostgreSQL.Session.Monad.prepare_` create a `Prepared` statement.
+A `Prepared` statement is a server-side object
+that can be used to optimize performance.
+When the PREPARE statement is executed,
+the specified statement is parsed, analyzed, and rewritten.
+
+When the `runPrepared` command is subsequently issued,
+the prepared statement is planned and executed.
+This division of labor avoids repetitive parse analysis work,
+while allowing the execution plan to
+depend on the specific parameter values supplied.
+
+`Prepared` statements only last for the duration
+of the current database session. When the session ends,
+the prepared statement is forgotten,
+so it must be recreated before being used again.
+This also means that a single prepared statement
+cannot be used by multiple simultaneous database clients;
+however, each client can create their own `Prepared` statement to use.
+Prepared statements can be manually cleaned up using the `deallocate` command.
+-}
 data Prepared f x y = Prepared
-  { runPrepared :: x -> f y
-  , deallocate :: f ()
-  } deriving Functor
+  { runPrepared :: x -> f y -- ^ execute a prepared statement
+  , deallocate :: f () -- ^ manually clean up a prepared statement
+  } deriving (Functor, Generic, Generic1)
+
+instance Applicative f => Applicative (Prepared f x) where
+  pure a = Prepared (\_ -> pure a) (pure ())
+  p1 <*> p2 = Prepared
+    (kleisliRun2 (<*>) p1 p2)
+    (deallocate p1 *> deallocate p2)
+
+instance Alternative f => Alternative (Prepared f x) where
+  empty = Prepared (runKleisli empty) empty
+  p1 <|> p2 = Prepared
+    (kleisliRun2 (<|>) p1 p2)
+    (deallocate p1 *> deallocate p2)
 
 instance Functor f => Profunctor (Prepared f) where
   dimap g f prepared = Prepared
     (fmap f . runPrepared prepared . g)
     (deallocate prepared)
-
-kleisliRun1
-  :: (Kleisli m a b -> Kleisli m c d)
-  -> Prepared m a b -> c -> m d
-kleisliRun1 f = runKleisli . f . Kleisli . runPrepared
-
-kleisliRun2
-  :: (Kleisli m a b -> Kleisli m c d -> Kleisli m e f)
-  -> Prepared m a b -> Prepared m c d -> e -> m f
-kleisliRun2 (?) p1 p2 = runKleisli $
-  Kleisli (runPrepared p1) ? Kleisli (runPrepared p2)
 
 instance Monad f => Strong (Prepared f) where
   first' p = Prepared (kleisliRun1 first' p) (deallocate p)
@@ -162,3 +189,27 @@ instance Monad f => ArrowChoice (Prepared f) where
   bd ||| cd = Prepared
     (kleisliRun2 (|||) bd cd)
     (deallocate bd >> deallocate cd)
+
+instance MonadFix f => ArrowLoop (Prepared f) where
+  loop p = Prepared (kleisliRun1 loop p) (deallocate p)
+
+instance MonadPlus f => ArrowZero (Prepared f) where
+  zeroArrow = Prepared (runKleisli zeroArrow) (return ())
+
+instance MonadPlus f => ArrowPlus (Prepared f) where
+  p1 <+> p2 = Prepared
+    (kleisliRun2 (<+>) p1 p2)
+    (deallocate p1 >> deallocate p2)
+
+-- helper functions
+
+kleisliRun1
+  :: (Kleisli m a b -> Kleisli m c d)
+  -> Prepared m a b -> c -> m d
+kleisliRun1 f = runKleisli . f . Kleisli . runPrepared
+
+kleisliRun2
+  :: (Kleisli m a b -> Kleisli m c d -> Kleisli m e f)
+  -> Prepared m a b -> Prepared m c d -> e -> m f
+kleisliRun2 (?) p1 p2 = runKleisli $
+  Kleisli (runPrepared p1) ? Kleisli (runPrepared p2)
