@@ -128,13 +128,9 @@ while allowing the execution plan to
 depend on the specific parameter values supplied.
 
 `Prepared` statements only last for the duration
-of the current database session. When the session ends,
-the prepared statement is forgotten,
-so it must be recreated before being used again.
-This also means that a single prepared statement
-cannot be used by multiple simultaneous database clients;
-however, each client can create their own `Prepared` statement to use.
-Prepared statements can be manually cleaned up using the `deallocate` command.
+of the current database session.
+Prepared statements can be manually cleaned up
+using the `deallocate` command.
 -}
 data Prepared f x y = Prepared
   { runPrepared :: x -> f y -- ^ execute a prepared statement
