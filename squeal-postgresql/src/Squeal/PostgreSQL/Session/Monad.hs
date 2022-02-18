@@ -31,7 +31,6 @@ import Control.Category (Category (..))
 import Control.Monad
 import Control.Monad.Morph
 import Data.Foldable
-import Data.Profunctor
 import Data.Traversable
 import Prelude hiding (id, (.))
 
@@ -264,13 +263,6 @@ executePrepared_ statement list = do
   prepared <- prepare_ statement
   traverse_ (execPrepared prepared) list
   deallocate prepared
-
-data Prepared pq x y = Prepared
-  { execPrepared :: x -> pq y
-  , deallocate :: pq ()
-  } deriving Functor
-instance Functor pq => Profunctor (Prepared pq) where
-  dimap g f (Prepared e d) = Prepared (fmap f . e . g) d
 
 {- |
 `manipulateParams` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`.

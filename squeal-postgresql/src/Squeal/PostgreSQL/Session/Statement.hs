@@ -25,6 +25,7 @@ module Squeal.PostgreSQL.Session.Statement
   ( Statement (..)
   , query
   , manipulation
+  , Prepared (..)
   ) where
 
 import Data.Functor.Contravariant
@@ -103,3 +104,11 @@ manipulation ::
     -- or `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom`, ...
     -> Statement db x y
 manipulation = Manipulation genericParams genericRow
+
+data Prepared f x y = Prepared
+  { execPrepared :: x -> f y
+  , deallocate :: f ()
+  } deriving Functor
+
+instance Functor f => Profunctor (Prepared f) where
+  dimap g f (Prepared e d) = Prepared (fmap f . e . g) d
