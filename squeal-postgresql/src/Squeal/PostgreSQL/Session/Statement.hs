@@ -117,7 +117,8 @@ manipulation = Manipulation genericParams genericRow
 `Squeal.PostgreSQL.Session.Monad.prepare_` create a `Prepared` statement.
 A `Prepared` statement is a server-side object
 that can be used to optimize performance.
-When the PREPARE statement is executed,
+When `Squeal.PostgreSQL.Session.Monad.prepare`
+or `Squeal.PostgreSQL.Session.Monad.prepare_` is executed,
 the specified statement is parsed, analyzed, and rewritten.
 
 When the `runPrepared` command is subsequently issued,
