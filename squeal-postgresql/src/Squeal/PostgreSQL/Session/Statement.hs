@@ -162,8 +162,8 @@ instance Monad f => Strong (Prepared f) where
   second' p = Prepared (kleisliRun1 second' p) (deallocate p)
 
 instance Monad f => Choice (Prepared f) where
-  left' x = Prepared (kleisliRun1 left' x) (deallocate x)
-  right' x = Prepared (kleisliRun1 right' x) (deallocate x)
+  left' p = Prepared (kleisliRun1 left' p) (deallocate p)
+  right' p = Prepared (kleisliRun1 right' p) (deallocate p)
 
 instance Monad f => Category (Prepared f) where
   id = Prepared return (return ())
@@ -183,9 +183,7 @@ instance Monad f => Arrow (Prepared f) where
 instance Monad f => ArrowChoice (Prepared f) where
   left = left'
   right = right'
-  ab +++ cd = Prepared
-    (kleisliRun2 (+++) ab cd)
-    (deallocate ab >> deallocate cd)
+  ab +++ cd = left ab >>> right cd
   bd ||| cd = Prepared
     (kleisliRun2 (|||) bd cd)
     (deallocate bd >> deallocate cd)
