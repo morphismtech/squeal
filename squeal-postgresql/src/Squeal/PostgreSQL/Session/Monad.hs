@@ -180,9 +180,8 @@ class Monad pq => MonadPQ db pq | pq -> db where
   prepare statement = do
     prepared <- lift $ prepare statement
     return $ Prepared
-      { runPrepared = lift . runPrepared prepared
-      , deallocate = lift (deallocate prepared)
-      }
+      (lift . runPrepared prepared)
+      (lift (deallocate prepared))
 
   prepare_
     :: Statement db x ()
@@ -190,9 +189,8 @@ class Monad pq => MonadPQ db pq | pq -> db where
   prepare_ statement = do
     prepared <- prepare statement
     return $ Prepared
-      { runPrepared = void . runPrepared prepared
-      , deallocate = deallocate prepared
-      }
+      (void . runPrepared prepared)
+      (deallocate prepared)
 
 {- |
 `executePrepared` runs a `Statement` on a `Traversable`
