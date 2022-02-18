@@ -111,4 +111,7 @@ data Prepared f x y = Prepared
   } deriving Functor
 
 instance Functor f => Profunctor (Prepared f) where
-  dimap g f (Prepared e d) = Prepared (fmap f . e . g) d
+  dimap g f prepared = Prepared
+    { runPrepared = fmap f . runPrepared prepared . g
+    , deallocate = deallocate prepared
+    }

@@ -163,7 +163,6 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
 
       prep = "prepared_statement_" <> statementNum
 
-      prepare' :: PQ db0 db1 io ()
       prepare' = PQ $ \ kconn@(K conn) -> liftIO $ do
         let
           oidOfParam :: forall p. OidOfNull db p => (IO :.: K LibPQ.Oid) p
@@ -179,7 +178,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
       deallocate' = manipulate_ . UnsafeManipulation $
         "DEALLOCATE " <> prep <> ";"
 
-      execPrepared' params = PQ $ \ kconn@(K conn) -> liftIO $ do
+      runPrepared' params = PQ $ \ kconn@(K conn) -> liftIO $ do
         encodedParams <- runReaderT (runEncodeParams encode params) kconn
         let
           formatParam encoding = (encodingBytes encoding, LibPQ.Binary)
@@ -190,13 +189,13 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
         resultMaybe <-
           LibPQ.execPrepared conn prep formattedParams LibPQ.Binary
         case resultMaybe of
-          Nothing -> throwM $ ConnectionException "LibPQ.execPrepared"
+          Nothing -> throwM $ ConnectionException "LibPQ.runPrepared"
           Just result -> do
             okResult_ result
             return . K $ Result decode result
 
     prepare'
-    return $ Prepared execPrepared' deallocate'
+    return $ Prepared runPrepared' deallocate'
 
   prepare (Query encode decode q) = prepare (Manipulation encode decode (queryStatement q))
 
