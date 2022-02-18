@@ -178,15 +178,21 @@ class Monad pq => MonadPQ db pq | pq -> db where
     -- ^ query or manipulation
     -> pq (Prepared pq x (Result y))
   prepare statement = do
-    Prepared e d <- lift $ prepare statement
-    return $ Prepared (lift . e) (lift d)
+    prepared <- lift $ prepare statement
+    return $ Prepared
+      { runPrepared = lift . runPrepared prepared
+      , deallocate = lift (deallocate prepared)
+      }
 
   prepare_
     :: Statement db x ()
     -> pq (Prepared pq x ())
   prepare_ statement = do
-    Prepared e d <- prepare statement
-    return $ Prepared (void . e) d
+    prepared <- prepare statement
+    return $ Prepared
+      { runPrepared = void . runPrepared prepared
+      , deallocate = deallocate prepared
+      }
 
 {- |
 `executePrepared` runs a `Statement` on a `Traversable`
@@ -218,7 +224,7 @@ executePrepared
   -> pq (list (Result y))
 executePrepared statement list = do
   prepared <- prepare statement
-  results <- traverse (execPrepared prepared) list
+  results <- traverse (runPrepared prepared) list
   deallocate prepared
   return results
 
@@ -261,7 +267,7 @@ executePrepared_
   -> pq ()
 executePrepared_ statement list = do
   prepared <- prepare_ statement
-  traverse_ (execPrepared prepared) list
+  traverse_ (runPrepared prepared) list
   deallocate prepared
 
 {- |

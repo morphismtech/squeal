@@ -106,7 +106,7 @@ manipulation ::
 manipulation = Manipulation genericParams genericRow
 
 data Prepared f x y = Prepared
-  { execPrepared :: x -> f y
+  { runPrepared :: x -> f y
   , deallocate :: f ()
   } deriving Functor
 
