@@ -119,10 +119,10 @@ A `Prepared` statement is a server-side object
 that can be used to optimize performance.
 When `Squeal.PostgreSQL.Session.Monad.prepare`
 or `Squeal.PostgreSQL.Session.Monad.prepare_` is executed,
-the specified statement is parsed, analyzed, and rewritten.
+the specified `Statement` is parsed, analyzed, and rewritten.
 
 When the `runPrepared` command is subsequently issued,
-the prepared statement is planned and executed.
+the `Prepared` statement is planned and executed.
 This division of labor avoids repetitive parse analysis work,
 while allowing the execution plan to
 depend on the specific parameter values supplied.

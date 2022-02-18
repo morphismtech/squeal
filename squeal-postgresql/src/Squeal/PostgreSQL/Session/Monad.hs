@@ -25,7 +25,21 @@ typeclass `MonadPQ`.
   , UndecidableInstances
 #-}
 
-module Squeal.PostgreSQL.Session.Monad where
+module Squeal.PostgreSQL.Session.Monad
+  ( MonadPQ (..)
+  , manipulateParams
+  , manipulateParams_
+  , manipulate
+  , manipulate_
+  , runQueryParams
+  , runQuery
+  , executePrepared
+  , executePrepared_
+  , traversePrepared
+  , forPrepared
+  , traversePrepared_
+  , forPrepared_
+  ) where
 
 import Control.Category (Category (..))
 import Control.Monad
@@ -166,11 +180,37 @@ class Monad pq => MonadPQ db pq | pq -> db where
     withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $ execute_ silence
   :}
   -}
-  execute_ :: Statement db () () -> pq ()
+  execute_
+    :: Statement db () ()
+    -- ^ query or manipulation
+    -> pq ()
   execute_ = void . execute
 
+  {- |
+  `prepare` creates a `Prepared` statement. When `prepare` is executed,
+  the specified `Statement` is parsed, analyzed, and rewritten.
+
+  >>> import Data.Int (Int32, Int64)
+  >>> import Data.Monoid (Sum(Sum))
+  >>> :{
+  let
+    sumOf :: Statement db (Int32, Int32) (Sum Int32)
+    sumOf = query $ values_ $
+      ( param @1 @('NotNull 'PGint4) +
+        param @2 @('NotNull 'PGint4)
+      ) `as` #getSum
+  in
+    withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $ do
+      prepared <- prepare sumOf
+      result <- runPrepared prepared (2,2)
+      deallocate prepared
+      firstRow result
+  :}
+  Just (Sum {getSum = 4})
+  -}
   prepare
     :: Statement db x y
+    -- ^ query or manipulation
     -> pq (Prepared pq x (Result y))
   default prepare
     :: (MonadTrans t, MonadPQ db m, pq ~ t m)
@@ -183,8 +223,43 @@ class Monad pq => MonadPQ db pq | pq -> db where
       (lift . runPrepared prepared)
       (lift (deallocate prepared))
 
+  {- |
+  `prepare_` creates a `Prepared` statement. When `prepare_` is executed,
+  the specified `Statement` is parsed, analyzed, and rewritten.
+
+  >>> type Column = 'NoDef :=> 'NotNull 'PGint4
+  >>> type Columns = '["col1" ::: Column, "col2" ::: Column]
+  >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+  >>> type DB = Public Schema
+  >>> import Data.Int(Int32)
+  >>> :{
+  let
+    insertion :: Statement DB (Int32, Int32) ()
+    insertion = manipulation $ insertInto_ #tab $ Values_ $
+      Set (param @1 @('NotNull 'PGint4)) `as` #col1 :*
+      Set (param @2 @('NotNull 'PGint4)) `as` #col2
+    setup :: Definition (Public '[]) DB
+    setup = createTable #tab
+      ( notNullable int4 `as` #col1 :*
+        notNullable int4 `as` #col2
+      ) Nil
+    session :: PQ DB DB IO ()
+    session = do
+      prepared <- prepare_ insertion
+      runPrepared prepared (2,2)
+      deallocate prepared
+    teardown :: Definition DB (Public '[])
+    teardown = dropTable #tab
+  in
+    withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
+      define setup
+      & pqThen session
+      & pqThen (define teardown)
+  :}
+  -}
   prepare_
     :: Statement db x ()
+    -- ^ query or manipulation
     -> pq (Prepared pq x ())
   prepare_ statement = do
     prepared <- prepare statement
