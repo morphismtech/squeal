@@ -28,8 +28,12 @@ module Squeal.PostgreSQL.Session.Statement
   , Prepared (..)
   ) where
 
+import Control.Arrow
+import Control.Category
+import Control.Monad
 import Data.Functor.Contravariant
-import Data.Profunctor (Profunctor (..))
+import Data.Profunctor
+import Prelude hiding ((.),id)
 
 import qualified Generics.SOP as SOP
 
@@ -114,3 +118,47 @@ instance Functor f => Profunctor (Prepared f) where
   dimap g f prepared = Prepared
     (fmap f . runPrepared prepared . g)
     (deallocate prepared)
+
+kleisliRun1
+  :: (Kleisli m a b -> Kleisli m c d)
+  -> Prepared m a b -> c -> m d
+kleisliRun1 f = runKleisli . f . Kleisli . runPrepared
+
+kleisliRun2
+  :: (Kleisli m a b -> Kleisli m c d -> Kleisli m e f)
+  -> Prepared m a b -> Prepared m c d -> e -> m f
+kleisliRun2 (?) p1 p2 = runKleisli $
+  Kleisli (runPrepared p1) ? Kleisli (runPrepared p2)
+
+instance Monad f => Strong (Prepared f) where
+  first' p = Prepared (kleisliRun1 first' p) (deallocate p)
+  second' p = Prepared (kleisliRun1 second' p) (deallocate p)
+
+instance Monad f => Choice (Prepared f) where
+  left' x = Prepared (kleisliRun1 left' x) (deallocate x)
+  right' x = Prepared (kleisliRun1 right' x) (deallocate x)
+
+instance Monad f => Category (Prepared f) where
+  id = Prepared return (return ())
+  cd . ab = Prepared
+    (runPrepared ab >=> runPrepared cd)
+    (deallocate ab >> deallocate cd)
+
+instance Monad f => Arrow (Prepared f) where
+  arr ab = Prepared (return . ab) (return ())
+  first = first'
+  second = second'
+  ab *** cd = first ab >>> second cd
+  ab &&& ac = Prepared
+    (kleisliRun2 (&&&) ab ac)
+    (deallocate ab >> deallocate ac)
+
+instance Monad f => ArrowChoice (Prepared f) where
+  left = left'
+  right = right'
+  ab +++ cd = Prepared
+    (kleisliRun2 (+++) ab cd)
+    (deallocate ab >> deallocate cd)
+  bd ||| cd = Prepared
+    (kleisliRun2 (|||) bd cd)
+    (deallocate bd >> deallocate cd)
