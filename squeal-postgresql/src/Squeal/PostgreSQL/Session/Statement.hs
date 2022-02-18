@@ -129,7 +129,7 @@ depend on the specific parameter values supplied.
 
 `Prepared` statements only last for the duration
 of the current database session.
-Prepared statements can be manually cleaned up
+`Prepared` statements can be manually cleaned up
 using the `deallocate` command.
 -}
 data Prepared f x y = Prepared
