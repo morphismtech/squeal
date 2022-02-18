@@ -11,6 +11,7 @@ typeclass `MonadPQ`.
 {-# LANGUAGE
     DataKinds
   , DefaultSignatures
+  , DeriveFunctor
   , FlexibleContexts
   , FlexibleInstances
   , FunctionalDependencies
@@ -28,7 +29,11 @@ module Squeal.PostgreSQL.Session.Monad where
 
 import Control.Category (Category (..))
 import Control.Monad
+import Control.Monad.Catch
 import Control.Monad.Morph
+import Data.Foldable
+import Data.Profunctor
+import Data.Traversable
 import Prelude hiding (id, (.))
 
 import Squeal.PostgreSQL.Manipulation
@@ -166,90 +171,102 @@ class Monad pq => MonadPQ db pq | pq -> db where
   execute_ :: Statement db () () -> pq ()
   execute_ = void . execute
 
-  {- |
-  `executePrepared` runs a `Statement` on a `Traversable`
-  container by first preparing the statement, then running the prepared
-  statement on each element.
-
-  >>> import Data.Int (Int32, Int64)
-  >>> import Data.Monoid (Sum(Sum))
-  >>> :{
-  let
-    sumOf :: Statement db (Int32, Int32) (Sum Int32)
-    sumOf = query $ values_ $
-      ( param @1 @('NotNull 'PGint4) +
-        param @2 @('NotNull 'PGint4)
-      ) `as` #getSum
-  in
-    withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $ do
-      results <- executePrepared sumOf [(2,2),(3,3),(4,4)]
-      traverse firstRow results
-  :}
-  [Just (Sum {getSum = 4}),Just (Sum {getSum = 6}),Just (Sum {getSum = 8})]
-  -}
-  executePrepared
-    :: Traversable list
+  prepare
+    :: Statement db x y
+    -> pq (Prepared pq x (Result y))
+  default prepare
+    :: (MonadTrans t, MonadPQ db m, pq ~ t m)
     => Statement db x y
     -- ^ query or manipulation
-    -> list x
-    -- ^ list of parameters
-    -> pq (list (Result y))
-  default executePrepared
-    :: (MonadTrans t, MonadPQ db m, pq ~ t m)
-    => Traversable list
-    => Statement db x y
-    -- ^ query or manipulation
-    -> list x
-    -- ^ list of parameters
-    -> pq (list (Result y))
-  executePrepared statement x = lift $ executePrepared statement x
+    -> pq (Prepared pq x (Result y))
+  prepare statement = do
+    Prepared e d <- lift $ prepare statement
+    return $ Prepared (lift . e) (lift d)
 
-  {- |
-  `executePrepared_` runs a returning-free `Statement` on a `Foldable`
-  container by first preparing the statement, then running the prepared
-  statement on each element.
+  prepare_
+    :: Statement db x ()
+    -> pq (Prepared pq x ())
+  prepare_ statement = do
+    Prepared e d <- prepare statement
+    return $ Prepared (void . e) d
 
-  >>> type Column = 'NoDef :=> 'NotNull 'PGint4
-  >>> type Columns = '["col1" ::: Column, "col2" ::: Column]
-  >>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
-  >>> type DB = Public Schema
-  >>> import Data.Int(Int32)
-  >>> :{
-  let
-    insertion :: Statement DB (Int32, Int32) ()
-    insertion = manipulation $ insertInto_ #tab $ Values_ $
-      Set (param @1 @('NotNull 'PGint4)) `as` #col1 :*
-      Set (param @2 @('NotNull 'PGint4)) `as` #col2
-    setup :: Definition (Public '[]) DB
-    setup = createTable #tab
-      ( notNullable int4 `as` #col1 :*
-        notNullable int4 `as` #col2
-      ) Nil
-    teardown :: Definition DB (Public '[])
-    teardown = dropTable #tab
-  in
-    withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
-      define setup
-      & pqThen (executePrepared_ insertion [(2,2),(3,3),(4,4)])
-      & pqThen (define teardown)
-  :}
-  -}
-  executePrepared_
-    :: Foldable list
-    => Statement db x ()
-    -- ^ query or manipulation
-    -> list x
-    -- ^ list of parameters
-    -> pq ()
-  default executePrepared_
-    :: (MonadTrans t, MonadPQ db m, pq ~ t m)
-    => Foldable list
-    => Statement db x ()
-    -- ^ query or manipulation
-    -> list x
-    -- ^ list of parameters
-    -> pq ()
-  executePrepared_ statement x = lift $ executePrepared_ statement x
+{- |
+`executePrepared` runs a `Statement` on a `Traversable`
+container by first preparing the statement, then running the prepared
+statement on each element.
+
+>>> import Data.Int (Int32, Int64)
+>>> import Data.Monoid (Sum(Sum))
+>>> :{
+let
+  sumOf :: Statement db (Int32, Int32) (Sum Int32)
+  sumOf = query $ values_ $
+    ( param @1 @('NotNull 'PGint4) +
+      param @2 @('NotNull 'PGint4)
+    ) `as` #getSum
+in
+  withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $ do
+    results <- executePrepared sumOf [(2,2),(3,3),(4,4)]
+    traverse firstRow results
+:}
+[Just (Sum {getSum = 4}),Just (Sum {getSum = 6}),Just (Sum {getSum = 8})]
+-}
+executePrepared
+  :: (MonadMask pq, MonadPQ db pq, Traversable list)
+  => Statement db x y
+  -- ^ query or manipulation
+  -> list x
+  -- ^ list of parameters
+  -> pq (list (Result y))
+executePrepared statement list =
+  bracket (prepare statement) deallocate (for list . execPrepared)
+
+{- |
+`executePrepared_` runs a returning-free `Statement` on a `Foldable`
+container by first preparing the statement, then running the prepared
+statement on each element.
+
+>>> type Column = 'NoDef :=> 'NotNull 'PGint4
+>>> type Columns = '["col1" ::: Column, "col2" ::: Column]
+>>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
+>>> type DB = Public Schema
+>>> import Data.Int(Int32)
+>>> :{
+let
+  insertion :: Statement DB (Int32, Int32) ()
+  insertion = manipulation $ insertInto_ #tab $ Values_ $
+    Set (param @1 @('NotNull 'PGint4)) `as` #col1 :*
+    Set (param @2 @('NotNull 'PGint4)) `as` #col2
+  setup :: Definition (Public '[]) DB
+  setup = createTable #tab
+    ( notNullable int4 `as` #col1 :*
+      notNullable int4 `as` #col2
+    ) Nil
+  teardown :: Definition DB (Public '[])
+  teardown = dropTable #tab
+in
+  withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
+    define setup
+    & pqThen (executePrepared_ insertion [(2,2),(3,3),(4,4)])
+    & pqThen (define teardown)
+:}
+-}
+executePrepared_
+  :: (MonadMask pq, MonadPQ db pq, Foldable list)
+  => Statement db x ()
+  -- ^ query or manipulation
+  -> list x
+  -- ^ list of parameters
+  -> pq ()
+executePrepared_ statement list =
+  bracket (prepare_ statement) deallocate (for_ list . execPrepared)
+
+data Prepared pq x y = Prepared
+  { execPrepared :: x -> pq y
+  , deallocate :: pq ()
+  } deriving Functor
+instance Functor pq => Profunctor (Prepared pq) where
+  dimap g f (Prepared e d) = Prepared (fmap f . e . g) d
 
 {- |
 `manipulateParams` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`.
@@ -497,7 +514,8 @@ in
 [4,6,8]
 -}
 traversePrepared
-  :: ( MonadPQ db pq
+  :: ( MonadMask pq
+     , MonadPQ db pq
      , GenericParams db params x xs
      , GenericRow row y ys
      , Traversable list )
@@ -547,7 +565,8 @@ in
 [4,6,8]
 -}
 forPrepared
-  :: ( MonadPQ db pq
+  :: ( MonadMask pq
+     , MonadPQ db pq
      , GenericParams db params x xs
      , GenericRow row y ys
      , Traversable list )
@@ -591,7 +610,8 @@ in
 :}
 -}
 traversePrepared_
-  :: ( MonadPQ db pq
+  :: ( MonadMask pq
+     , MonadPQ db pq
      , GenericParams db params x xs
      , Foldable list )
   => Manipulation '[] db params '[]
@@ -630,7 +650,8 @@ in
 :}
 -}
 forPrepared_
-  :: ( MonadPQ db pq
+  :: ( MonadMask pq
+     , MonadPQ db pq
      , GenericParams db params x xs
      , Foldable list )
   => list x

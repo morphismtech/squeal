@@ -137,7 +137,7 @@ users =
   , User "Carole" (Just "carole@hotmail.com") (VarArray [Just 3,Nothing, Just 4])
   ]
 
-session :: (MonadIO pq, MonadPQ Schemas pq) => pq ()
+session :: PQ Schemas Schemas IO ()
 session = do
   liftIO $ Char8.putStrLn "manipulating"
   idResults <- traversePrepared insertUser ([(userName user, userVec user) | user <- users])
