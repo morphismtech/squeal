@@ -29,7 +29,6 @@ module Squeal.PostgreSQL.Session.Monad where
 
 import Control.Category (Category (..))
 import Control.Monad
-import Control.Monad.Catch
 import Control.Monad.Morph
 import Data.Foldable
 import Data.Profunctor
@@ -212,14 +211,17 @@ in
 [Just (Sum {getSum = 4}),Just (Sum {getSum = 6}),Just (Sum {getSum = 8})]
 -}
 executePrepared
-  :: (MonadMask pq, MonadPQ db pq, Traversable list)
+  :: (MonadPQ db pq, Traversable list)
   => Statement db x y
   -- ^ query or manipulation
   -> list x
   -- ^ list of parameters
   -> pq (list (Result y))
-executePrepared statement list =
-  bracket (prepare statement) deallocate (for list . execPrepared)
+executePrepared statement list = do
+  prepared <- prepare statement
+  results <- traverse (execPrepared prepared) list
+  deallocate prepared
+  return results
 
 {- |
 `executePrepared_` runs a returning-free `Statement` on a `Foldable`
@@ -252,14 +254,16 @@ in
 :}
 -}
 executePrepared_
-  :: (MonadMask pq, MonadPQ db pq, Foldable list)
+  :: (MonadPQ db pq, Foldable list)
   => Statement db x ()
   -- ^ query or manipulation
   -> list x
   -- ^ list of parameters
   -> pq ()
-executePrepared_ statement list =
-  bracket (prepare_ statement) deallocate (for_ list . execPrepared)
+executePrepared_ statement list = do
+  prepared <- prepare_ statement
+  traverse_ (execPrepared prepared) list
+  deallocate prepared
 
 data Prepared pq x y = Prepared
   { execPrepared :: x -> pq y
@@ -514,8 +518,7 @@ in
 [4,6,8]
 -}
 traversePrepared
-  :: ( MonadMask pq
-     , MonadPQ db pq
+  :: ( MonadPQ db pq
      , GenericParams db params x xs
      , GenericRow row y ys
      , Traversable list )
@@ -565,8 +568,7 @@ in
 [4,6,8]
 -}
 forPrepared
-  :: ( MonadMask pq
-     , MonadPQ db pq
+  :: ( MonadPQ db pq
      , GenericParams db params x xs
      , GenericRow row y ys
      , Traversable list )
@@ -610,8 +612,7 @@ in
 :}
 -}
 traversePrepared_
-  :: ( MonadMask pq
-     , MonadPQ db pq
+  :: ( MonadPQ db pq
      , GenericParams db params x xs
      , Foldable list )
   => Manipulation '[] db params '[]
@@ -650,8 +651,7 @@ in
 :}
 -}
 forPrepared_
-  :: ( MonadMask pq
-     , MonadPQ db pq
+  :: ( MonadPQ db pq
      , GenericParams db params x xs
      , Foldable list )
   => list x

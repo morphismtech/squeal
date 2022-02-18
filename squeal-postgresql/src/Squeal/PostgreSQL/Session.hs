@@ -157,7 +157,11 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
 
   prepare (Manipulation encode decode (UnsafeManipulation q :: Manipulation '[] db params row)) = do
     let
-      prep = "prepared_statement_" <> fromString (show (hash q))
+      statementNum = fromString $ case show (hash q) of
+        '-':num -> "negative_" <> num
+        num -> num
+
+      prep = "prepared_statement_" <> statementNum
 
       prepare' :: PQ db0 db1 io ()
       prepare' = PQ $ \ kconn@(K conn) -> liftIO $ do
