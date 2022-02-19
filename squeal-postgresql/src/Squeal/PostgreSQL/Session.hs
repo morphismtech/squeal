@@ -37,6 +37,7 @@ module Squeal.PostgreSQL.Session
   , withConnection
   ) where
 
+import Control.Applicative
 import Control.Category
 import Control.Monad.Base (MonadBase(..))
 import Control.Monad.Catch
@@ -290,6 +291,17 @@ instance (Monad m, Semigroup r, db0 ~ db1) => Semigroup (PQ db0 db1 m r) where
 
 instance (Monad m, Monoid r, db0 ~ db1) => Monoid (PQ db0 db1 m r) where
   mempty = pure mempty
+
+instance MonadFix m => MonadFix (PQ db db m) where
+  mfix f = PQ $ \conn -> mfix $ \ (K a) -> K <$> evalPQ (f a) conn
+
+instance (Monad m, Alternative m, db0 ~ db1)
+  => Alternative (PQ db0 db1 m) where
+    empty = lift empty
+    altL <|> altR = PQ $ \ conn -> fmap K $
+      evalPQ altL conn <|> evalPQ altR conn
+
+instance (MonadPlus m, db0 ~ db1) => MonadPlus (PQ db0 db1 m)
 
 -- | Do `connectdb` and `finish` before and after a computation.
 withConnection

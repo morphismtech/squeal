@@ -35,6 +35,7 @@ import Control.Monad
 import Control.Monad.Fix
 import Data.Functor.Contravariant
 import Data.Profunctor
+import Data.Profunctor.Traversing
 import GHC.Generics
 import Prelude hiding ((.),id)
 
@@ -72,18 +73,18 @@ data Statement db x y where
     -> Statement db x y
 
 instance Profunctor (Statement db) where
-  lmap f (Manipulation encode decode q) =
-    Manipulation (contramap f encode) decode q
-  lmap f (Query encode decode q) =
-    Query (contramap f encode) decode q
-  rmap f (Manipulation encode decode q) =
-    Manipulation encode (fmap f decode) q
-  rmap f (Query encode decode q) =
-    Query encode (fmap f decode) q
-  dimap f g (Manipulation encode decode q) =
-    Manipulation (contramap f encode) (fmap g decode) q
-  dimap f g (Query encode decode q) =
-    Query (contramap f encode) (fmap g decode) q
+  lmap m (Manipulation encode decode q) =
+    Manipulation (contramap m encode) decode q
+  lmap m (Query encode decode q) =
+    Query (contramap m encode) decode q
+  rmap m (Manipulation encode decode q) =
+    Manipulation encode (fmap m decode) q
+  rmap m (Query encode decode q) =
+    Query encode (fmap m decode) q
+  dimap m g (Manipulation encode decode q) =
+    Manipulation (contramap m encode) (fmap g decode) q
+  dimap m g (Query encode decode q) =
+    Query (contramap m encode) (fmap g decode) q
 
 instance Functor (Statement db x) where fmap = rmap
 
@@ -132,79 +133,86 @@ of the current database session.
 `Prepared` statements can be manually cleaned up
 using the `deallocate` command.
 -}
-data Prepared f x y = Prepared
-  { runPrepared :: x -> f y -- ^ execute a prepared statement
-  , deallocate :: f () -- ^ manually clean up a prepared statement
+data Prepared m x y = Prepared
+  { runPrepared :: x -> m y -- ^ execute a prepared statement
+  , deallocate :: m () -- ^ manually clean up a prepared statement
   } deriving (Functor, Generic, Generic1)
 
-instance Applicative f => Applicative (Prepared f x) where
+instance Applicative m => Applicative (Prepared m x) where
   pure a = Prepared (\_ -> pure a) (pure ())
   p1 <*> p2 = Prepared
-    (kleisliRun2 (<*>) p1 p2)
+    (run2 (<*>) p1 p2)
     (deallocate p1 *> deallocate p2)
 
-instance Alternative f => Alternative (Prepared f x) where
+instance Alternative m => Alternative (Prepared m x) where
   empty = Prepared (runKleisli empty) empty
   p1 <|> p2 = Prepared
-    (kleisliRun2 (<|>) p1 p2)
+    (run2 (<|>) p1 p2)
     (deallocate p1 *> deallocate p2)
 
-instance Functor f => Profunctor (Prepared f) where
-  dimap g f prepared = Prepared
-    (fmap f . runPrepared prepared . g)
+instance Functor m => Profunctor (Prepared m) where
+  dimap g m prepared = Prepared
+    (fmap m . runPrepared prepared . g)
     (deallocate prepared)
 
-instance Monad f => Strong (Prepared f) where
-  first' p = Prepared (kleisliRun1 first' p) (deallocate p)
-  second' p = Prepared (kleisliRun1 second' p) (deallocate p)
+instance Monad m => Strong (Prepared m) where
+  first' p = Prepared (run1 first' p) (deallocate p)
+  second' p = Prepared (run1 second' p) (deallocate p)
 
-instance Monad f => Choice (Prepared f) where
-  left' p = Prepared (kleisliRun1 left' p) (deallocate p)
-  right' p = Prepared (kleisliRun1 right' p) (deallocate p)
+instance Monad m => Choice (Prepared m) where
+  left' p = Prepared (run1 left' p) (deallocate p)
+  right' p = Prepared (run1 right' p) (deallocate p)
 
-instance Monad f => Category (Prepared f) where
+instance MonadFix m => Costrong (Prepared m) where
+  unfirst p = Prepared (run1 unfirst p) (deallocate p)
+  unsecond p = Prepared (run1 unsecond p) (deallocate p)
+
+instance Monad m => Category (Prepared m) where
   id = Prepared return (return ())
   cd . ab = Prepared
     (runPrepared ab >=> runPrepared cd)
     (deallocate ab >> deallocate cd)
 
-instance Monad f => Arrow (Prepared f) where
+instance Monad m => Arrow (Prepared m) where
   arr ab = Prepared (return . ab) (return ())
   first = first'
   second = second'
   ab *** cd = first ab >>> second cd
   ab &&& ac = Prepared
-    (kleisliRun2 (&&&) ab ac)
+    (run2 (&&&) ab ac)
     (deallocate ab >> deallocate ac)
 
-instance Monad f => ArrowChoice (Prepared f) where
+instance Monad m => ArrowChoice (Prepared m) where
   left = left'
   right = right'
   ab +++ cd = left ab >>> right cd
   bd ||| cd = Prepared
-    (kleisliRun2 (|||) bd cd)
+    (run2 (|||) bd cd)
     (deallocate bd >> deallocate cd)
 
-instance MonadFix f => ArrowLoop (Prepared f) where
-  loop p = Prepared (kleisliRun1 loop p) (deallocate p)
+instance MonadFix m => ArrowLoop (Prepared m) where
+  loop p = Prepared (run1 loop p) (deallocate p)
 
-instance MonadPlus f => ArrowZero (Prepared f) where
+instance MonadPlus m => ArrowZero (Prepared m) where
   zeroArrow = Prepared (runKleisli zeroArrow) (return ())
 
-instance MonadPlus f => ArrowPlus (Prepared f) where
+instance MonadPlus m => ArrowPlus (Prepared m) where
   p1 <+> p2 = Prepared
-    (kleisliRun2 (<+>) p1 p2)
+    (run2 (<+>) p1 p2)
     (deallocate p1 >> deallocate p2)
+
+instance Monad m => Traversing (Prepared m) where
+  traverse' p = Prepared (run1 traverse' p) (deallocate p)
 
 -- helper functions
 
-kleisliRun1
+run1
   :: (Kleisli m a b -> Kleisli m c d)
   -> Prepared m a b -> c -> m d
-kleisliRun1 f = runKleisli . f . Kleisli . runPrepared
+run1 m = runKleisli . m . Kleisli . runPrepared
 
-kleisliRun2
+run2
   :: (Kleisli m a b -> Kleisli m c d -> Kleisli m e f)
   -> Prepared m a b -> Prepared m c d -> e -> m f
-kleisliRun2 (?) p1 p2 = runKleisli $
+run2 (?) p1 p2 = runKleisli $
   Kleisli (runPrepared p1) ? Kleisli (runPrepared p2)
