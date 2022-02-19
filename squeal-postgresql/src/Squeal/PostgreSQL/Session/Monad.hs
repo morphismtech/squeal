@@ -26,19 +26,24 @@ typeclass `MonadPQ`.
 #-}
 
 module Squeal.PostgreSQL.Session.Monad
-  ( MonadPQ (..)
+  ( -- * MonadPQ
+    MonadPQ (..)
+    -- * Manipulate
   , manipulateParams
   , manipulateParams_
   , manipulate
   , manipulate_
+    -- * Run Query
   , runQueryParams
   , runQuery
+    -- * Prepared
   , executePrepared
   , executePrepared_
   , traversePrepared
   , forPrepared
   , traversePrepared_
   , forPrepared_
+  , withPrepared
   ) where
 
 import Control.Category (Category (..))
@@ -268,6 +273,26 @@ class Monad pq => MonadPQ db pq | pq -> db where
       (deallocate prepared)
 
 {- |
+* `prepare` a statement
+* transforming its inputs and outputs
+  using `Prepared` combinators
+  run the `Prepared` statement
+* deallocate the `Prepared` statement
+
+-}
+withPrepared
+  :: MonadPQ db pq
+  => (Prepared pq x (Result y) -> Prepared pq x' y')
+  -- ^ transform the input and output
+  -> Statement db x y -- ^ query or manipulation
+  -> x' -> pq y'
+withPrepared transform statement x' = do
+  prepared <- transform <$> prepare statement
+  y' <- runPrepared prepared x'
+  deallocate prepared
+  return y'
+
+{- |
 `executePrepared` runs a `Statement` on a `Traversable`
 container by first preparing the statement, then running the prepared
 statement on each element.
@@ -295,11 +320,7 @@ executePrepared
   -> list x
   -- ^ list of parameters
   -> pq (list (Result y))
-executePrepared statement list = do
-  prepared <- prepare statement
-  results <- traverse (runPrepared prepared) list
-  deallocate prepared
-  return results
+executePrepared = withPrepared traverse'
 
 {- |
 `executePrepared_` runs a returning-free `Statement` on a `Foldable`
@@ -338,10 +359,8 @@ executePrepared_
   -> list x
   -- ^ list of parameters
   -> pq ()
-executePrepared_ statement list = do
-  prepared <- prepare_ statement
-  traverse_ (runPrepared prepared) list
-  deallocate prepared
+executePrepared_ = withPrepared $ \p ->
+  Prepared (traverse_ (void . runPrepared p)) (deallocate p)
 
 {- |
 `manipulateParams` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`.
