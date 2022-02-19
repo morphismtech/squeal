@@ -282,7 +282,7 @@ class Monad pq => MonadPQ db pq | pq -> db where
 >>> :type withPrepared traverse'
 withPrepared traverse'
   :: (MonadPQ db pq, Traversable f) =>
-     Statement db a y -> f a -> pq (f (Result y))
+     Statement db a b -> f a -> pq (f (Result b))
 -}
 withPrepared
   :: MonadPQ db pq
