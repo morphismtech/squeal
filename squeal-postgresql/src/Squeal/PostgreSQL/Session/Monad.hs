@@ -50,6 +50,7 @@ import Control.Category (Category (..))
 import Control.Monad
 import Control.Monad.Morph
 import Data.Foldable
+import Data.Profunctor.Traversing
 import Data.Traversable
 import Prelude hiding (id, (.))
 
@@ -274,20 +275,23 @@ class Monad pq => MonadPQ db pq | pq -> db where
 
 {- |
 * `prepare` a statement
-* transforming its inputs and outputs
-  using `Prepared` combinators
+* transforming its inputs and outputs with an optic,
   run the `Prepared` statement
 * deallocate the `Prepared` statement
 
+>>> :type withPrepared traverse'
+withPrepared traverse'
+  :: (MonadPQ db pq, Traversable f) =>
+     Statement db a y -> f a -> pq (f (Result y))
 -}
 withPrepared
   :: MonadPQ db pq
-  => (Prepared pq x (Result y) -> Prepared pq x' y')
+  => (Prepared pq a (Result b) -> Prepared pq s t)
   -- ^ transform the input and output
-  -> Statement db x y -- ^ query or manipulation
-  -> x' -> pq y'
-withPrepared transform statement x' = do
-  prepared <- transform <$> prepare statement
+  -> Statement db a b -- ^ query or manipulation
+  -> s -> pq t
+withPrepared optic statement x' = do
+  prepared <- optic <$> prepare statement
   y' <- runPrepared prepared x'
   deallocate prepared
   return y'

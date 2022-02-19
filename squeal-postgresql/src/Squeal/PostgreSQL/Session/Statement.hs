@@ -22,9 +22,11 @@ together with an `EncodeParams` and a `DecodeRow`.
 #-}
 
 module Squeal.PostgreSQL.Session.Statement
-  ( Statement (..)
+  ( -- * Statement
+    Statement (..)
   , query
   , manipulation
+    -- * Prepared
   , Prepared (..)
   ) where
 
@@ -52,7 +54,7 @@ import Squeal.PostgreSQL.Render hiding ((<+>))
 -- or a `Squeal.PostgreSQL.Session.Statement.Query` that can be run
 -- in a `Squeal.PostgreSQL.Session.Monad.MonadPQ`.
 data Statement db x y where
-  -- | Constructor for a data manipulation language statement
+  -- | Constructor for a data manipulation language `Statement`
   Manipulation
     :: (SOP.All (OidOfNull db) params, SOP.SListI row)
     => EncodeParams db params x -- ^ encoding of parameters
@@ -62,7 +64,7 @@ data Statement db x y where
     -- `Squeal.PostgreSQL.Manipulation.Update.update`,
     -- or `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom`, ...
     -> Statement db x y
-  -- | Constructor for a structured query language statement
+  -- | Constructor for a structured query language `Statement`
   Query
     :: (SOP.All (OidOfNull db) params, SOP.SListI row)
     => EncodeParams db params x -- ^ encoding of parameters
@@ -92,7 +94,7 @@ instance RenderSQL (Statement db x y) where
   renderSQL (Manipulation _ _ q) = renderSQL q
   renderSQL (Query _ _ q) = renderSQL q
 
--- | Smart constructor for a structured query language statement
+-- | Smart constructor for a structured query language `Statement`
 query ::
   ( GenericParams db params x xs
   , GenericRow row y ys
@@ -102,7 +104,7 @@ query ::
     -> Statement db x y
 query = Query genericParams genericRow
 
--- | Smart constructor for a data manipulation language statement
+-- | Smart constructor for a data manipulation language `Statement`
 manipulation ::
   ( GenericParams db params x xs
   , GenericRow row y ys
