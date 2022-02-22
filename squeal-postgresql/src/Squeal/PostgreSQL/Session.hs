@@ -61,6 +61,7 @@ import qualified PostgreSQL.Binary.Encoding as Encoding
 
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Manipulation
+import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Session.Connection
 import Squeal.PostgreSQL.Session.Encode
 import Squeal.PostgreSQL.Session.Exception
@@ -162,7 +163,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
         '-':num -> "negative_" <> num
         num -> num
 
-      prep = "prepared_statement_" <> statementNum
+      prepName = "prepared_statement_" <> statementNum
 
       prepare' = PQ $ \ kconn@(K conn) -> liftIO $ do
         let
@@ -171,13 +172,13 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
           oidsOfParams :: NP (IO :.: K LibPQ.Oid) params
           oidsOfParams = hcpure (Proxy @(OidOfNull db)) oidOfParam
         oids <- hcollapse <$> hsequence' oidsOfParams
-        prepResultMaybe <- LibPQ.prepare conn prep (q <> ";") (Just oids)
+        prepResultMaybe <- LibPQ.prepare conn prepName (q <> ";") (Just oids)
         case prepResultMaybe of
           Nothing -> throwM $ ConnectionException "LibPQ.prepare"
           Just prepResult -> K <$> okResult_ prepResult
 
       deallocate' = manipulate_ . UnsafeManipulation $
-        "DEALLOCATE " <> prep <> ";"
+        "DEALLOCATE" <+> prepName
 
       runPrepared' params = PQ $ \ kconn@(K conn) -> liftIO $ do
         encodedParams <- runReaderT (runEncodeParams encode params) kconn
@@ -188,7 +189,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
             | maybeParam <- hcollapse encodedParams
             ]
         resultMaybe <-
-          LibPQ.execPrepared conn prep formattedParams LibPQ.Binary
+          LibPQ.execPrepared conn prepName formattedParams LibPQ.Binary
         case resultMaybe of
           Nothing -> throwM $ ConnectionException "LibPQ.runPrepared"
           Just result -> do
