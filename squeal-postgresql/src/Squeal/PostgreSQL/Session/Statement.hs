@@ -75,18 +75,18 @@ data Statement db x y where
     -> Statement db x y
 
 instance Profunctor (Statement db) where
-  lmap m (Manipulation encode decode q) =
-    Manipulation (contramap m encode) decode q
-  lmap m (Query encode decode q) =
-    Query (contramap m encode) decode q
-  rmap m (Manipulation encode decode q) =
-    Manipulation encode (fmap m decode) q
-  rmap m (Query encode decode q) =
-    Query encode (fmap m decode) q
-  dimap m g (Manipulation encode decode q) =
-    Manipulation (contramap m encode) (fmap g decode) q
-  dimap m g (Query encode decode q) =
-    Query (contramap m encode) (fmap g decode) q
+  lmap f (Manipulation encode decode q) =
+    Manipulation (contramap f encode) decode q
+  lmap f (Query encode decode q) =
+    Query (contramap f encode) decode q
+  rmap f (Manipulation encode decode q) =
+    Manipulation encode (fmap f decode) q
+  rmap f (Query encode decode q) =
+    Query encode (fmap f decode) q
+  dimap f g (Manipulation encode decode q) =
+    Manipulation (contramap f encode) (fmap g decode) q
+  dimap f g (Query encode decode q) =
+    Query (contramap f encode) (fmap g decode) q
 
 instance Functor (Statement db x) where fmap = rmap
 
@@ -154,7 +154,7 @@ instance Alternative m => Alternative (Prepared m x) where
 
 instance Functor m => Profunctor (Prepared m) where
   dimap g m prepared = Prepared
-    (fmap m . runPrepared prepared . g)
+    (fmap f . runPrepared prepared . g)
     (deallocate prepared)
 
 instance Monad m => Strong (Prepared m) where
