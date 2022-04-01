@@ -153,7 +153,7 @@ instance Alternative m => Alternative (Prepared m x) where
     (deallocate p1 *> deallocate p2)
 
 instance Functor m => Profunctor (Prepared m) where
-  dimap g m prepared = Prepared
+  dimap g f prepared = Prepared
     (fmap f . runPrepared prepared . g)
     (deallocate prepared)
 
