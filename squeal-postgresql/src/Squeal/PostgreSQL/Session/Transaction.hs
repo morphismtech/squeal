@@ -90,14 +90,14 @@ transactionally
   => TransactionMode
   -> Transaction db x -- ^ run inside a transaction
   -> tx x
-transactionally = Unsafe.transactionally
+transactionally mode tx = Unsafe.transactionally mode tx
 
 -- | Run a computation `transactionally_`, in `defaultMode`.
 transactionally_
   :: (MonadMask tx, MonadResult tx, MonadPQ db tx)
   => Transaction db x -- ^ run inside a transaction
   -> tx x
-transactionally_ = Unsafe.transactionally_
+transactionally_ tx = Unsafe.transactionally_ tx
 
 {- |
 `transactionallyRetry` a computation;
@@ -114,14 +114,14 @@ transactionallyRetry
   => TransactionMode
   -> Transaction db x -- ^ run inside a transaction
   -> tx x
-transactionallyRetry = Unsafe.transactionallyRetry
+transactionallyRetry mode tx = Unsafe.transactionallyRetry mode tx
 
 {- | `transactionallyRetry` in `retryMode`. -}
 transactionallyRetry_
   :: (MonadMask tx, MonadResult tx, MonadPQ db tx)
   => Transaction db x -- ^ run inside a transaction
   -> tx x
-transactionallyRetry_ = Unsafe.transactionallyRetry_
+transactionallyRetry_ tx = Unsafe.transactionallyRetry_ tx
 
 {- | Run a computation `ephemerally`;
 Like `transactionally` but always `Unsafe.rollback`, useful in testing.
@@ -131,14 +131,14 @@ ephemerally
   => TransactionMode
   -> Transaction db x -- ^ run inside an ephemeral transaction
   -> tx x
-ephemerally = Unsafe.ephemerally
+ephemerally mode tx = Unsafe.ephemerally mode tx
 
 {- | Run a computation `ephemerally` in `defaultMode`. -}
 ephemerally_
   :: (MonadMask tx, MonadResult tx, MonadPQ db tx)
   => Transaction db x -- ^ run inside an ephemeral transaction
   -> tx x
-ephemerally_ = Unsafe.ephemerally_
+ephemerally_ tx = Unsafe.ephemerally_ tx
 
 {- | `withSavepoint`, used in a transaction block,
 allows a form of nested transactions,
@@ -153,4 +153,4 @@ withSavepoint
   :: ByteString -- ^ savepoint name
   -> Transaction db (Either e x)
   -> Transaction db (Either e x)
-withSavepoint = Unsafe.withSavepoint
+withSavepoint sv tx = Unsafe.withSavepoint sv tx
