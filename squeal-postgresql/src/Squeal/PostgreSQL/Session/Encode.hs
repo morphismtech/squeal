@@ -547,7 +547,7 @@ instance ToPG db Dir where
 -}
 enumParam
   :: (PG x ~ 'PGenum labels, SOP.All KnownSymbol labels)
-  => (x -> SOP.NS (SOP.K ()) labels)
+  => (x -> SOP.NS PGlabel labels)
   -> x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
 enumParam casesOf
   = return
@@ -558,10 +558,10 @@ enumParam casesOf
   where
     enumCases
       :: SOP.All KnownSymbol lbls
-      => SOP.NS (SOP.K ()) lbls
+      => SOP.NS PGlabel lbls
       -> String
     enumCases = \case
-      SOP.Z (SOP.K () :: SOP.K () label) -> symbolVal (SOP.Proxy @label)
+      SOP.Z (_ :: PGlabel lbl) -> symbolVal (SOP.Proxy @lbl)
       SOP.S cases -> enumCases cases
 
 {- |
