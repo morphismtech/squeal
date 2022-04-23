@@ -1,4 +1,4 @@
-resolver: lts-18.20
+resolver: lts-18.28
 packages:
 - squeal-postgresql
 - squeal-postgresql-ltree
