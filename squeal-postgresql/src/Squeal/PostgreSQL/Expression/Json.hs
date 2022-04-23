@@ -336,8 +336,8 @@ jsonbPretty = unsafeFunction "jsonb_pretty"
 
 {- | Expands the outermost JSON object into a set of key/value pairs.
 
->>> printSQL (select Star (from (jsonEach (inline (Json (object ["a" .= "foo", "b" .= "bar"]))))))
-SELECT * FROM json_each(('{"b":"bar","a":"foo"}' :: json))
+>>> printSQL (select Star (from (jsonEach (inline (Json (object ["a" .= "foo"]))))))
+SELECT * FROM json_each(('{"a":"foo"}' :: json))
 -}
 jsonEach :: null 'PGjson -|->
   ("json_each" ::: '["key" ::: 'NotNull 'PGtext, "value" ::: 'NotNull 'PGjson])
@@ -345,8 +345,8 @@ jsonEach = unsafeSetFunction "json_each"
 
 {- | Expands the outermost binary JSON object into a set of key/value pairs.
 
->>> printSQL (select Star (from (jsonbEach (inline (Jsonb (object ["a" .= "foo", "b" .= "bar"]))))))
-SELECT * FROM jsonb_each(('{"b":"bar","a":"foo"}' :: jsonb))
+>>> printSQL (select Star (from (jsonbEach (inline (Jsonb (object ["a" .= "foo"]))))))
+SELECT * FROM jsonb_each(('{"a":"foo"}' :: jsonb))
 -}
 jsonbEach
   :: null 'PGjsonb -|->
@@ -355,8 +355,8 @@ jsonbEach = unsafeSetFunction "jsonb_each"
 
 {- | Expands the outermost JSON object into a set of key/value pairs.
 
->>> printSQL (select Star (from (jsonEachText (inline (Json (object ["a" .= "foo", "b" .= "bar"]))))))
-SELECT * FROM json_each_text(('{"b":"bar","a":"foo"}' :: json))
+>>> printSQL (select Star (from (jsonEachText (inline (Json (object ["a" .= "foo"]))))))
+SELECT * FROM json_each_text(('{"a":"foo"}' :: json))
 -}
 jsonEachText
   :: null 'PGjson -|->
