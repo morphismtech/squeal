@@ -363,8 +363,7 @@ executePrepared_
   -> list x
   -- ^ list of parameters
   -> pq ()
-executePrepared_ = withPrepared $ \p ->
-  Prepared (traverse_ (void . runPrepared p)) (deallocate p)
+executePrepared_ = withPrepared (wander traverse_)
 
 {- |
 `manipulateParams` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`.
