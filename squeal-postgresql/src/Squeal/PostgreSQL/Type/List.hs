@@ -177,20 +177,19 @@ type family Twos (ls :: [k]) :: [[k]] where
 type family Merge (ls :: [Symbol]) (rs :: [Symbol]) :: [Symbol] where
   Merge '[] r = r
   Merge l '[] = l
-  Merge (l ': ls) (r ': rs) = If (Leq l r) (l ': Merge ls (r ': rs)) (r ': Merge (l ': ls) rs)
+  Merge (l ': ls) (r ': rs) = MergeHelper (l ': ls) (r ': rs) (CmpSymbol l r)
+
+-- | 'MergeHelper' decides whether to take an element from the right or left list next,
+-- depending on the result of their comparison
+type family MergeHelper (ls :: [Symbol]) (rs :: [Symbol]) (cmp :: Ordering) where
+  MergeHelper ls        (r ': rs) 'GT = r ': Merge ls rs
+  MergeHelper (l ': ls) rs        leq = l ': Merge ls rs
 
 -- | 'FoldMerge' folds over a list of sorted lists, merging them into a single sorted list
 type family FoldMerge (ls :: [[Symbol]]) :: [[Symbol]] where
   FoldMerge (x ': y ': rs) = (Merge x y ': FoldMerge rs)
   FoldMerge '[x]           = '[x]
   FoldMerge '[]            = '[]
-
-type Leq l r = OrderingIsLeq (CmpSymbol l r)
-
-type family OrderingIsLeq (o :: Ordering) :: Bool where
-  OrderingIsLeq 'LT = 'True
-  OrderingIsLeq 'EQ = 'True
-  OrderingIsLeq 'GT = 'False
 
 -- | 'MapFst' takes the first value of each tuple of a type level list of tuples. Useful for getting
 -- only the names in associatve lists
