@@ -715,6 +715,12 @@ instance labels ~ '[label]
   => IsPGlabel label (NP PGlabel labels) where label = PGlabel :* Nil
 instance IsPGlabel label (y -> K y label) where label = K
 instance IsPGlabel label (y -> NP (K y) '[label]) where label y = K y :* Nil
+instance {-# OVERLAPPING #-}
+  IsPGlabel label0 (NS PGlabel (label0 ': labels)) where
+    label = Z PGlabel
+instance {-# OVERLAPPABLE #-} IsPGlabel label0 (NS PGlabel labels)
+  => IsPGlabel label0 (NS PGlabel (label1 ': labels)) where
+    label = S (label @label0)
 -- | A `PGlabel` unit type with an `IsPGlabel` instance
 data PGlabel (label :: Symbol) = PGlabel
 instance KnownSymbol label => RenderSQL (PGlabel label) where

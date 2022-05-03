@@ -36,6 +36,11 @@ module Squeal.PostgreSQL.Session.Encode
   , (*.)
   , aParam
   , appendParams
+  , enumParam
+  , rowParam
+  , genericRowParams
+  , (.#)
+  , (#.)
     -- * Encoding Classes
   , ToPG (..)
   , ToParam (..)
@@ -201,25 +206,7 @@ instance
   , SOP.All (OidOfField db) fields
   , RowPG x ~ fields
   ) => ToPG db (Composite x) where
-    toPG (Composite x) = do
-      let
-        compositeSize
-          = int4_int32
-          $ fromIntegral
-          $ SOP.lengthSList
-          $ SOP.Proxy @xs
-        each
-          :: OidOfField db field
-          => SOP.K (Maybe Encoding) field
-          -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
-        each (SOP.K field :: SOP.K (Maybe Encoding) field) = do
-          oid <- getOid <$> oidOfField @db @field
-          return $ int4_word32 oid <> maybe null4 sized field
-      fields :: NP (SOP.K (Maybe Encoding)) fields <- hctransverse
-        (SOP.Proxy @(ToField db)) (toField @db) (SOP.toRecord x)
-      compositePayload <- hcfoldMapM
-        (SOP.Proxy @(OidOfField db)) each fields
-      return $ compositeSize <> compositePayload
+    toPG = rowParam (contramap getComposite genericRowParams)
 instance ToPG db x => ToPG db (Range x) where
   toPG r = do
     payload <- case r of
@@ -316,7 +303,7 @@ foldlNP f z = \case
 
 {- |
 `EncodeParams` describes an encoding of a Haskell `Type`
-into a list of parameter `NullType`s.
+into a list of parameter `NullType`s or into a `RowType`.
 
 >>> conn <- connectdb @'[] "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
 >>> :{
@@ -329,11 +316,21 @@ in runReaderT (runEncodeParams encode (1,('a',"foo"))) conn
 :}
 K (Just "\NUL\SOH") :* K (Just "a") :* K (Just "foo") :* Nil
 
+>>> :{
+let
+  encode :: EncodeParams '[]
+    '["fst" ::: 'NotNull 'PGint2, "snd" ::: 'NotNull ('PGchar 1)]
+    (Int16, Char)
+  encode = fst `as` #fst #. snd `as` #snd
+in runReaderT (runEncodeParams encode (1,'a')) conn
+:}
+K (Just "\NUL\SOH") :* K (Just "a") :* Nil
+
 >>> finish conn
 -}
 newtype EncodeParams
   (db :: SchemasType)
-  (tys :: [NullType])
+  (tys :: [k])
   (x :: Type) = EncodeParams
   { runEncodeParams :: x
     -> ReaderT (SOP.K LibPQ.Connection db) IO (NP (SOP.K (Maybe Encoding)) tys) }
@@ -533,3 +530,136 @@ hcfoldMapM
 hcfoldMapM c f = \case
   Nil -> pure mempty
   x :* xs -> (<>) <$> f x <*> hcfoldMapM c f xs
+
+{- |
+>>> :set -XLambdaCase -XFlexibleInstances
+>>> :{
+data Dir = North | South | East | West
+instance IsPG Dir where
+  type PG Dir = 'PGenum '["north", "south", "east", "west"]
+instance ToPG db Dir where
+  toPG = enumParam $ \case
+    North -> label @"north"
+    South -> label @"south"
+    East -> label @"east"
+    West -> label @"west"
+:}
+-}
+enumParam
+  :: (PG x ~ 'PGenum labels, SOP.All KnownSymbol labels)
+  => (x -> SOP.NS PGlabel labels)
+  -> x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
+enumParam casesOf
+  = return
+  . text_strict
+  . Strict.Text.pack
+  . enumCases
+  . casesOf
+  where
+    enumCases
+      :: SOP.All KnownSymbol lbls
+      => SOP.NS PGlabel lbls
+      -> String
+    enumCases = \case
+      SOP.Z (_ :: PGlabel lbl) -> symbolVal (SOP.Proxy @lbl)
+      SOP.S cases -> enumCases cases
+
+{- |
+>>> :set -XTypeFamilies -XFlexibleInstances
+>>> :{
+data Complex = Complex
+  { real :: Double
+  , imaginary :: Double
+  }
+instance IsPG Complex where
+  type PG Complex = 'PGcomposite '[
+    "re" ::: 'NotNull 'PGfloat8,
+    "im" ::: 'NotNull 'PGfloat8]
+instance ToPG db Complex where
+  toPG = rowParam $ real `as` #re #. imaginary `as` #im
+:}
+-}
+rowParam
+  :: (PG x ~ 'PGcomposite row, SOP.All (OidOfField db) row)
+  => EncodeParams db row x
+  -> x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
+rowParam (enc :: EncodeParams db row x) x = do
+  let
+    compositeSize
+      = int4_int32
+      $ fromIntegral
+      $ SOP.lengthSList
+      $ SOP.Proxy @row
+    each
+      :: OidOfField db field
+      => SOP.K (Maybe Encoding) field
+      -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
+    each (SOP.K field :: SOP.K (Maybe Encoding) field) = do
+      oid <- getOid <$> oidOfField @db @field
+      return $ int4_word32 oid <> maybe null4 sized field
+  fields <- runEncodeParams enc x
+  compositePayload <- hcfoldMapM
+    (SOP.Proxy @(OidOfField db)) each fields
+  return $ compositeSize <> compositePayload
+
+(.#)
+  :: forall db x0 fld ty x tys. (ToParam db ty x0, ty ~ NullPG x0)
+  => Aliased ((->) x) (fld ::: x0) -- ^ head
+  -> EncodeParams db tys x -- ^ tail
+  -> EncodeParams db (fld ::: ty ': tys) x
+(f `As` _) .# EncodeParams params = EncodeParams $ \x ->
+  (:*) <$> (SOP.K <$> toParam @db @ty (f x)) <*> params x
+infixr 5 .#
+
+(#.)
+  :: forall db x x0 fld0 ty0 x1 fld1 ty1
+   . ( ToParam db ty0 x0
+     , ty0 ~ NullPG x0
+     , ToParam db ty1 x1
+     , ty1 ~ NullPG x1
+     )
+  => Aliased ((->) x) (fld0 ::: x0) -- ^ second to last
+  -> Aliased ((->) x) (fld1 ::: x1) -- ^ last
+  -> EncodeParams db '[fld0 ::: ty0, fld1 ::: ty1] x
+f #. g = f .# g .# nilParams
+infixl 8 #.
+
+instance (ToParam db ty x, ty ~ NullPG x)
+  => IsLabel fld (EncodeParams db '[fld ::: ty] x) where
+    fromLabel
+      = EncodeParams
+      $ fmap (\param -> SOP.K param :* Nil)
+      . toParam @db @(NullPG x)
+
+{- |
+>>> import GHC.Generics as GHC
+>>> :{
+data L = L {frst :: Int16, scnd :: Char}
+  deriving stock (GHC.Generic, Show)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+data R = R {thrd :: Bool, frth :: Bool}
+  deriving stock (GHC.Generic, Show)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+instance IsPG (L,R) where
+  type PG (L,R) = 'PGcomposite '[
+    "frst" ::: 'NotNull 'PGint2,
+    "scnd" ::: 'NotNull ('PGchar 1),
+    "thrd" ::: 'NotNull 'PGbool,
+    "frth" ::: 'NotNull 'PGbool]
+instance ToPG db (L,R) where
+  toPG = rowParam $
+    contramap fst genericRowParams
+    `appendParams`
+    contramap snd genericRowParams
+:}
+-}
+genericRowParams
+  ::  forall db row x xs.
+      ( SOP.IsRecord x xs
+      , SOP.AllZip (ToField db) row xs
+      )
+  => EncodeParams db row x
+genericRowParams
+  = EncodeParams
+  $ hctransverse (SOP.Proxy @(ToField db)) (toField @db)
+  . SOP.toRecord
