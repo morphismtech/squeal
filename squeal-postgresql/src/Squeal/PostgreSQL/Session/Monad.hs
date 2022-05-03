@@ -43,7 +43,7 @@ module Squeal.PostgreSQL.Session.Monad
   , forPrepared
   , traversePrepared_
   , forPrepared_
-  , withPrepared
+  , preparedFor
   ) where
 
 import Control.Category (Category (..))
@@ -267,11 +267,7 @@ class Monad pq => MonadPQ db pq | pq -> db where
     :: Statement db x ()
     -- ^ query or manipulation
     -> pq (Prepared pq x ())
-  prepare_ statement = do
-    prepared <- prepare statement
-    return $ Prepared
-      (void . runPrepared prepared)
-      (deallocate prepared)
+  prepare_ = fmap void . prepare
 
 {- |
 * `prepare` a statement
@@ -279,20 +275,20 @@ class Monad pq => MonadPQ db pq | pq -> db where
   run the `Prepared` statement
 * deallocate the `Prepared` statement
 
->>> :type withPrepared traverse'
-withPrepared traverse'
+>>> :type preparedFor traverse'
+preparedFor traverse'
   :: (MonadPQ db pq, Traversable f) =>
      Statement db a b -> f a -> pq (f (Result b))
 -}
-withPrepared
+preparedFor
   :: MonadPQ db pq
   => (Prepared pq a (Result b) -> Prepared pq s t)
   -- ^ transform the input and output
   -> Statement db a b -- ^ query or manipulation
   -> s -> pq t
-withPrepared optic statement x' = do
-  prepared <- optic <$> prepare statement
-  y' <- runPrepared prepared x'
+preparedFor optic statement x' = do
+  prepared <- prepare statement
+  y' <- runPrepared (optic prepared) x'
   deallocate prepared
   return y'
 
@@ -324,7 +320,7 @@ executePrepared
   -> list x
   -- ^ list of parameters
   -> pq (list (Result y))
-executePrepared = withPrepared traverse'
+executePrepared = preparedFor traverse'
 
 {- |
 `executePrepared_` runs a returning-free `Statement` on a `Foldable`
@@ -363,7 +359,7 @@ executePrepared_
   -> list x
   -- ^ list of parameters
   -> pq ()
-executePrepared_ = withPrepared (wander traverse_)
+executePrepared_ = preparedFor (wander traverse_)
 
 {- |
 `manipulateParams` runs a `Squeal.PostgreSQL.Manipulation.Manipulation`.
