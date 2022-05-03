@@ -98,7 +98,7 @@ library
     , exceptions >= 0.10.3
     , free-categories >= 0.2.0.0
     , generics-sop >= 0.5.1.0
-    , hashable
+    , hashable >= 1.3.5.0
     , mmorph >= 1.1.3
     , monad-control >= 1.0.2.3
     , mtl >= 2.2.2
