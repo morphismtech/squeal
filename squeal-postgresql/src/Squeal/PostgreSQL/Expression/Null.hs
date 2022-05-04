@@ -20,7 +20,7 @@ null expressions and handlers
 module Squeal.PostgreSQL.Expression.Null
   ( -- * Null
     null_
-  , notNull
+  , just_
   , unsafeNotNull
   , monoNotNull
   , coalesce
@@ -30,6 +30,8 @@ module Squeal.PostgreSQL.Expression.Null
   , matchNull
   , nullIf
   , CombineNullity
+    -- deprecated
+  , notNull
   ) where
 
 import Squeal.PostgreSQL.Expression
@@ -49,8 +51,13 @@ null_ = UnsafeExpression "NULL"
 
 -- | analagous to `Just`
 --
--- >>> printSQL $ notNull true
+-- >>> printSQL $ just_ true
 -- TRUE
+just_ :: 'NotNull ty --> 'Null ty
+just_ = UnsafeExpression . renderSQL
+
+-- | Deprecated, use `just_` instead.
+{-# DEPRECATED notNull "use just_ instead" #-}
 notNull :: 'NotNull ty --> 'Null ty
 notNull = UnsafeExpression . renderSQL
 
