@@ -460,6 +460,7 @@ K (Just "\NUL\NUL\ACK\240") :* Nil
 aParam
   :: forall db x ty. (ToParam db ty x, ty ~ NullPG x)
   => EncodeParams db '[ty] x
+  -- ^ a single parameter
 aParam = EncodeParams $
   fmap (\param -> SOP.K param :* Nil) . toParam @db @(NullPG x)
 
@@ -503,7 +504,8 @@ instance ToPG db Dir where
 enumParam
   :: (PG x ~ 'PGenum labels, SOP.All KnownSymbol labels)
   => (x -> SOP.NS PGlabel labels)
-  -> x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
+  -- ^ match cases with enum `label`s
+  -> (x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding)
 enumParam casesOf
   = return
   . text_strict
@@ -537,7 +539,8 @@ instance ToPG db Complex where
 rowParam
   :: (PG x ~ 'PGcomposite row, SOP.All (OidOfField db) row)
   => EncodeParams db row x
-  -> x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
+  -- ^ use `(.#)` and `(#.)` to define a row parameter encoding
+  -> (x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding)
 rowParam (enc :: EncodeParams db row x) x = do
   let
     compositeSize
