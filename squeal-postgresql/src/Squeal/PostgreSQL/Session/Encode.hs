@@ -486,51 +486,6 @@ appendParams encode0 encode1 = EncodeParams $ \x -> also
   <$> runEncodeParams encode1 x
   <*> runEncodeParams encode0 x
 
-getOid :: LibPQ.Oid -> Word32
-getOid (LibPQ.Oid (CUInt oid)) = oid
-
-encodeArray :: Int32 -> Bool -> LibPQ.Oid -> [Int32] -> Encoding -> Encoding
-encodeArray ndim nulls oid dimensions payload = mconcat
-  [ int4_int32 ndim
-  , if nulls then true4 else false4
-  , int4_word32 (getOid oid)
-  , foldMap (\dimension -> int4_int32 dimension <> true4) dimensions
-  , payload ]
-
-dimArray
-  :: Functor m
-  => (forall b. (b -> a -> m b) -> b -> c -> m b)
-  -> (a -> m Encoding) -> c -> m Encoding
-dimArray folder elementArray = folder step mempty
-  where
-    step builder element = (builder <>) <$> elementArray element
-
-null4, true4, false4 :: Encoding
-null4 = int4_int32 (-1)
-true4 = int4_word32 1
-false4 = int4_word32 0
-
-sized :: Encoding -> Encoding
-sized bs = int4_int32 (fromIntegral (builderLength bs)) <> bs
-
-hctransverse
-  :: (SOP.AllZip c ys xs, Applicative m)
-  => SOP.Proxy c
-  -> (forall y x. c y x => f x -> m (g y))
-  -> NP f xs -> m (NP g ys)
-hctransverse c f = \case
-  Nil -> pure Nil
-  x :* xs -> (:*) <$> f x <*> hctransverse c f xs
-
-hcfoldMapM
-  :: (Monoid r, Applicative m, SOP.All c xs)
-  => SOP.Proxy c
-  -> (forall x. c x => f x -> m r)
-  -> NP f xs -> m r
-hcfoldMapM c f = \case
-  Nil -> pure mempty
-  x :* xs -> (<>) <$> f x <*> hcfoldMapM c f xs
-
 {- |
 >>> :set -XLambdaCase -XFlexibleInstances
 >>> :{
@@ -602,6 +557,7 @@ rowParam (enc :: EncodeParams db row x) x = do
     (SOP.Proxy @(OidOfField db)) each fields
   return $ compositeSize <> compositePayload
 
+{- | Cons a row parameter encoding for `rowParam`. -}
 (.#)
   :: forall db x0 fld ty x tys. (ToParam db ty x0, ty ~ NullPG x0)
   => Aliased ((->) x) (fld ::: x0) -- ^ head
@@ -611,6 +567,7 @@ rowParam (enc :: EncodeParams db row x) x = do
   (:*) <$> (SOP.K <$> toParam @db @ty (f x)) <*> params x
 infixr 5 .#
 
+{- | End a row parameter encoding for `rowParam`. -}
 (#.)
   :: forall db x x0 fld0 ty0 x1 fld1 ty1
    . ( ToParam db ty0 x0
@@ -663,3 +620,50 @@ genericRowParams
   = EncodeParams
   $ hctransverse (SOP.Proxy @(ToField db)) (toField @db)
   . SOP.toRecord
+
+-- helper functions
+
+getOid :: LibPQ.Oid -> Word32
+getOid (LibPQ.Oid (CUInt oid)) = oid
+
+encodeArray :: Int32 -> Bool -> LibPQ.Oid -> [Int32] -> Encoding -> Encoding
+encodeArray ndim nulls oid dimensions payload = mconcat
+  [ int4_int32 ndim
+  , if nulls then true4 else false4
+  , int4_word32 (getOid oid)
+  , foldMap (\dimension -> int4_int32 dimension <> true4) dimensions
+  , payload ]
+
+dimArray
+  :: Functor m
+  => (forall b. (b -> a -> m b) -> b -> c -> m b)
+  -> (a -> m Encoding) -> c -> m Encoding
+dimArray folder elementArray = folder step mempty
+  where
+    step builder element = (builder <>) <$> elementArray element
+
+null4, true4, false4 :: Encoding
+null4 = int4_int32 (-1)
+true4 = int4_word32 1
+false4 = int4_word32 0
+
+sized :: Encoding -> Encoding
+sized bs = int4_int32 (fromIntegral (builderLength bs)) <> bs
+
+hctransverse
+  :: (SOP.AllZip c ys xs, Applicative m)
+  => SOP.Proxy c
+  -> (forall y x. c y x => f x -> m (g y))
+  -> NP f xs -> m (NP g ys)
+hctransverse c f = \case
+  Nil -> pure Nil
+  x :* xs -> (:*) <$> f x <*> hctransverse c f xs
+
+hcfoldMapM
+  :: (Monoid r, Applicative m, SOP.All c xs)
+  => SOP.Proxy c
+  -> (forall x. c x => f x -> m r)
+  -> NP f xs -> m r
+hcfoldMapM c f = \case
+  Nil -> pure mempty
+  x :* xs -> (<>) <$> f x <*> hcfoldMapM c f xs
