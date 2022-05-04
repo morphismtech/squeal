@@ -56,10 +56,7 @@ null_ = UnsafeExpression "NULL"
 just_ :: 'NotNull ty --> 'Null ty
 just_ = UnsafeExpression . renderSQL
 
--- | analagous to `Just`
---
--- >>> printSQL $ notNull true
--- TRUE
+-- | Deprecated, use `just_` instead.
 {-# DEPRECATED notNull "use just_ instead" #-}
 notNull :: 'NotNull ty --> 'Null ty
 notNull = UnsafeExpression . renderSQL

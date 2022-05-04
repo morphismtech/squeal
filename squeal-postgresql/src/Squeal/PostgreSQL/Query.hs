@@ -323,7 +323,7 @@ data Row = Row { col1 :: Maybe Int64, col2 :: String }
 >>> :{
 let
   qry :: Query_ (Public Schema) (Int64, Bool) Row
-  qry = select Star (from (table #tab) & where_ (#col1 .> param @1 .&& notNull (param @2)))
+  qry = select Star (from (table #tab) & where_ (#col1 .> param @1 .&& just_ (param @2)))
   stmt :: Statement (Public Schema) (Int64, Bool) Row
   stmt = query qry
 :}
