@@ -38,6 +38,7 @@ module Squeal.PostgreSQL.Expression.Type
   , typetable
   , typeview
   , typerow
+  , typeenum
   , bool
   , int2
   , smallint
@@ -185,6 +186,18 @@ typerow
   -- ^ type alias
   -> TypeExpression db (null ('PGcomposite row))
 typerow = UnsafeTypeExpression . renderSQL
+
+-- | An enumerated type corresponding can be expressed by its alias.
+-- `typeenum` is overlapped by `typedef`.
+typeenum
+  :: ( enumss ~ DbEnums db
+     , Has sch enumss enums
+     , Has enum enums labels
+     )
+  => QualifiedAlias sch enum
+  -- ^ type alias
+  -> TypeExpression db (null ('PGenum labels))
+typeenum = UnsafeTypeExpression . renderSQL
 
 -- | The enum or composite type in a `Typedef` can be expressed by its alias.
 typedef
