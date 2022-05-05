@@ -111,8 +111,12 @@ module Squeal.PostgreSQL.Type.Schema
   , IsNotElem
     -- * User Type Lookup
   , DbEnums
+  , SchemaEnums
   , DbRelations
+  , SchemaRelations
   , FindQualified
+  , FindName
+  , FindNamespace
   ) where
 
 import Control.Category
@@ -756,6 +760,8 @@ type Updatable table columns =
   , AllUnique columns
   , SListI (TableToColumns table) )
 
+{- | Filters a schema down to labels of all enum typedefs.
+-}
 type family SchemaEnums schema where
   SchemaEnums '[] = '[]
   SchemaEnums (enum ::: 'Typedef ('PGenum labels) ': schema) =
@@ -769,14 +775,17 @@ type family DbEnums db where
   DbEnums (sch ::: schema ': schemas) =
     sch ::: SchemaEnums schema ': DbEnums schemas
 
+{- | Filters a schema down to rows of relations;
+all composites, tables and views.
+-}
 type family SchemaRelations schema where
   SchemaRelations '[] = '[]
+  SchemaRelations (ty ::: 'Typedef ('PGcomposite row) ': schema) =
+    ty ::: row ': SchemaRelations schema
   SchemaRelations (tab ::: 'Table table ': schema) =
     tab ::: TableToRow table ': SchemaRelations schema
   SchemaRelations (vw ::: 'View row ': schema) =
     vw ::: row ': SchemaRelations schema
-  SchemaRelations (ty ::: 'Typedef ('PGcomposite row) ': schema) =
-    ty ::: row ': SchemaRelations schema
   SchemaRelations (_ ': schema) = SchemaRelations schema
 
 {- | Filters schemas down to rows of relations;
@@ -787,11 +796,13 @@ type family DbRelations db where
   DbRelations (sch ::: schema ': schemas) =
     sch ::: SchemaRelations schema ': DbRelations schemas
 
+-- | Used in `FindQualified`
 type family FindName xs x where
   FindName '[] xs = 'Nothing
   FindName ( '(name, x) ': _) x = 'Just name
   FindName (_ ': xs) x = FindName xs x
 
+-- | Used in `FindQualified`
 type family FindNamespace err nsp name xss x where
   FindNamespace err _ 'Nothing xss x = FindQualified err xss x
   FindNamespace _ nsp ('Just name) _ _ = '(nsp, name)
