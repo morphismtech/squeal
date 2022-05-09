@@ -812,7 +812,7 @@ This is used to find the qualified name of a user defined type.
 
 >>> :kind! FindQualified "my error message:"
 FindQualified "my error message:" :: [(k1, [(k2, k3)])]
-                                      -> k3 -> (k1, k2)
+                                     -> k3 -> (k1, k2)
 = FindQualified "my error message:"
 
 >>> :kind! FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Double
