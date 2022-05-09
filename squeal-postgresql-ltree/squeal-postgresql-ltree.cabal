@@ -1,5 +1,5 @@
 name: squeal-postgresql-ltree
-version: 0.1.0.0
+version: 0.2.0.0
 synopsis: LTree extension for Squeal
 description: LTree extension for Squeal
 homepage: https://github.com/morphismtech/squeal/ltree
