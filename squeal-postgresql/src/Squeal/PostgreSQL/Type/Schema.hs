@@ -820,12 +820,13 @@ FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Double ::
                                                                                   Symbol)
 = '("foo", "bar")
 
->>> :kind! FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Bool
-FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Bool :: (Symbol,
+>>> :kind! FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Bool
+FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Bool :: (Symbol,
                                                                                 Symbol)
 = (TypeError ...)
 -}
 type family FindQualified err xss x where
-  FindQualified err '[] x = TypeError ('Text err ':<>: 'ShowType x)
+  FindQualified err '[] x = TypeError
+    ('Text err ':<>: 'Text "\n" ':<>: 'ShowType x)
   FindQualified err ( '(nsp, xs) ': xss) x =
     FindNamespace err nsp (FindName xs x) xss x
