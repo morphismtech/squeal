@@ -817,12 +817,12 @@ FindQualified "my error message:" :: [(k1, [(k2, k3)])]
 
 >>> :kind! FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Double
 FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Double :: (Symbol,
-                                                                                  Symbol)
+                                                                                 Symbol)
 = '("foo", "bar")
 
 >>> :kind! FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Bool
 FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Bool :: (Symbol,
-                                                                                Symbol)
+                                                                               Symbol)
 = (TypeError ...)
 -}
 type family FindQualified err xss x where
