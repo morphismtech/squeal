@@ -810,22 +810,23 @@ type family FindNamespace err nsp name xss x where
 {- | Find fully qualified name with a type error if lookup fails.
 This is used to find the qualified name of a user defined type.
 
->>> :kind! FindQualified "my error message: "
-FindQualified "my error message: " :: [(k1, [(k2, k3)])]
-                                      -> k3 -> (k1, k2)
-= FindQualified "my error message: "
+>>> :kind! FindQualified "my error message:"
+FindQualified "my error message:" :: [(k1, [(k2, k3)])]
+                                     -> k3 -> (k1, k2)
+= FindQualified "my error message:"
 
->>> :kind! FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Double
-FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Double :: (Symbol,
-                                                                                  Symbol)
+>>> :kind! FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Double
+FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Double :: (Symbol,
+                                                                                 Symbol)
 = '("foo", "bar")
 
->>> :kind! FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Bool
-FindQualified "couldn't find type: " '[ "foo" ::: '["bar" ::: Double]] Bool :: (Symbol,
-                                                                                Symbol)
+>>> :kind! FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Bool
+FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Bool :: (Symbol,
+                                                                               Symbol)
 = (TypeError ...)
 -}
 type family FindQualified err xss x where
-  FindQualified err '[] x = TypeError ('Text err ':<>: 'ShowType x)
+  FindQualified err '[] x = TypeError
+    ('Text err ':<>: 'Text "\n" ':<>: 'ShowType x)
   FindQualified err ( '(nsp, xs) ': xss) x =
     FindNamespace err nsp (FindName xs x) xss x
