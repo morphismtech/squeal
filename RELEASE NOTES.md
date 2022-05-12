@@ -177,6 +177,8 @@ The operators `(.<@)` and `(@>.)` as well as the functions `arrAny`
 and `arrAll` have been generalized to allow `Null` arguments. Previously,
 they had been improperly restricted to have `NotNull` arguments.
 
+`PQ` has been given `MonadFix`, `Alternative` and `MonadPlus` instances.
+
 ## Version 0.8.1.1
 
 Fix a bug in how the new `Has` type mismatch errors

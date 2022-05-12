@@ -47,17 +47,20 @@ module Squeal.PostgreSQL.Type.Alias
   , HasErr
   , HasAll
   , HasIn
-    -- * Error reporting
-  , LookupFailedError
-  , PrettyPrintHaystack
-  , PrettyPrintInfo(..)
-  , MismatchError
     -- * Qualified Aliases
   , QualifiedAlias (..)
   , IsQualified (..)
     -- * Grouping
   , Grouping (..)
   , GroupedBy
+    -- * Error reporting
+  , LookupFailedError
+  , PrettyPrintHaystack
+  , PrettyPrintInfo(..)
+  , MismatchError
+  , LookupFailedError'
+  , DefaultPrettyPrinter
+  , MismatchError'
   ) where
 
 import Control.DeepSeq

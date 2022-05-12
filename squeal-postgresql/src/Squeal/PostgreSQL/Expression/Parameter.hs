@@ -30,6 +30,10 @@ module Squeal.PostgreSQL.Expression.Parameter
   ( -- * Parameter
     HasParameter (parameter)
   , param
+    -- * Parameter Internals
+  , HasParameter'
+  , ParamOutOfBoundsError
+  , ParamTypeMismatchError
   ) where
 
 import Data.Kind (Constraint)
@@ -74,8 +78,7 @@ instance {-# OVERLAPS #-} (TypeError ('Text "Tried to get the param at index 0, 
 instance {-# OVERLAPS #-} (KnownNat ix, HasParameter' ix params ix params x) => HasParameter ix params x
 
 -- | @HasParameter'@ is an implementation detail of 'HasParameter' allowing us to
--- include the full parameter list in our errors. Generally speaking it shouldn't leak to users
--- of the library
+-- include the full parameter list in our errors.
 class KnownNat ix => HasParameter'
   (originalIx :: Nat)
   (allParams :: [NullType])
