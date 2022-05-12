@@ -208,7 +208,7 @@ typedef
 typedef = UnsafeTypeExpression . renderSQL
 
 -- | The composite type corresponding to a `Table` definition can be expressed
--- by its alias.
+-- by its alias. It is subsumed by `typerow`
 typetable
   :: (Has sch db schema, Has tab schema ('Table table))
   => QualifiedAlias sch tab
@@ -217,7 +217,7 @@ typetable
 typetable = UnsafeTypeExpression . renderSQL
 
 -- | The composite type corresponding to a `View` definition can be expressed
--- by its alias.
+-- by its alias. It is subsumed by `typerow`.
 typeview
   :: (Has sch db schema, Has vw schema ('View view))
   => QualifiedAlias sch vw

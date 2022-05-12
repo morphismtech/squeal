@@ -28,7 +28,7 @@ prepare
 prepare_
   :: MonadPQ pq
   => Statement db x ()
-  -> pq (Prepared pq x (Result ()))
+  -> pq (Prepared pq x ())
 ```
 
 They may then be run using `runPrepared` and manually cleaned up
@@ -176,6 +176,8 @@ terms `null_` and `just_` now intentionally connote `Nothing` and
 The operators `(.<@)` and `(@>.)` as well as the functions `arrAny`
 and `arrAll` have been generalized to allow `Null` arguments. Previously,
 they had been improperly restricted to have `NotNull` arguments.
+
+`PQ` has been given `MonadFix`, `Alternative` and `MonadPlus` instances.
 
 ## Version 0.8.1.1
 

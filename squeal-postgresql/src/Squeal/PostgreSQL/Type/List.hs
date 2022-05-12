@@ -32,19 +32,25 @@ module Squeal.PostgreSQL.Type.List
     SOP.NP (..)
   , (*:)
   , one
-  , Join
-  , disjoin
-  , Additional (..)
     -- * Path
   , Path (..)
     -- * Type Level List
+  , Join
+  , disjoin
+  , Additional (..)
   , Elem
   , In
   , Length
-  , MapFst
-  , Sort
   , SubList
   , SubsetList
+    -- * Type Level Sort
+  , Sort
+  , MergeSort
+  , Twos
+  , FoldMerge
+  , Merge
+  , MergeHelper
+  , MapFst
   ) where
 
 import Control.Category.Free

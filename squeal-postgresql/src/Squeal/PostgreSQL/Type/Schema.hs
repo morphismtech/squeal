@@ -49,17 +49,7 @@ module Squeal.PostgreSQL.Type.Schema
   , ReturnsType (..)
   , SchemaType
   , SchemasType
-  , PrettyPrintPartitionedSchema
   , Public
-  , PartitionedSchema(..)
-  , PartitionSchema
-  , SchemaFunctions
-  , SchemaIndexes
-  , SchemaProcedures
-  , SchemaTables
-  , SchemaTypes
-  , SchemaUnsafes
-  , SchemaViews
     -- * Database Subsets
   , SubDB
   , SubsetDB
@@ -117,6 +107,21 @@ module Squeal.PostgreSQL.Type.Schema
   , FindQualified
   , FindName
   , FindNamespace
+    -- * Schema Error Printing
+  , PrettyPrintPartitionedSchema
+  , PartitionedSchema(..)
+  , PartitionSchema
+  , SchemaFunctions
+  , SchemaIndexes
+  , SchemaProcedures
+  , SchemaTables
+  , SchemaTypes
+  , SchemaUnsafes
+  , SchemaViews
+  , IntersperseNewlines
+  , FilterNonEmpty
+  , FieldIfNonEmpty
+  , PartitionSchema'
   ) where
 
 import Control.Category
@@ -612,6 +617,7 @@ data PartitionedSchema = PartitionedSchema
 -- | @PartitionSchema@ partitions a @SchemaType@ into a @PartitionedSchema@
 type PartitionSchema schema = PartitionSchema' schema ('PartitionedSchema '[] '[] '[] '[] '[] '[] '[])
 
+-- | Utility type family for `PartitionSchema`.
 type family PartitionSchema' (remaining :: SchemaType) (acc :: PartitionedSchema) :: PartitionedSchema where
   PartitionSchema' '[] ps = ps
   PartitionSchema' ('(s, 'Table table) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
@@ -665,15 +671,18 @@ type family PrettyPrintPartitionedSchema (schema :: PartitionedSchema) :: ErrorM
     , FieldIfNonEmpty "Unsafe schema items" (SchemaUnsafes schema)
     ])
 
+-- | Print field name (if corresponding values are non-empty).
 type family FieldIfNonEmpty (fieldName :: Symbol) (value :: [(Symbol, k)]) :: ErrorMessage where
   FieldIfNonEmpty _ '[] = 'Text ""
   FieldIfNonEmpty n xs = 'Text "  " ':<>: 'Text n ':<>: 'Text ":" ':$$: 'Text "    " ':<>: 'ShowType (Sort (MapFst xs))
 
+-- | Filter out empty error messages.
 type family FilterNonEmpty (ls :: [ErrorMessage]) :: [ErrorMessage] where
   FilterNonEmpty ('Text "" ': rest) = FilterNonEmpty rest
   FilterNonEmpty (x ': rest) = x ': FilterNonEmpty rest
   FilterNonEmpty '[] = '[]
 
+-- | Vertically concatenate error messages.
 type family IntersperseNewlines (ls :: [ErrorMessage]) :: ErrorMessage where
   IntersperseNewlines (x ': y ': '[]) = x ':$$: y
   IntersperseNewlines (x ': xs) = x ':$$: IntersperseNewlines xs
@@ -827,6 +836,6 @@ FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Bool :: (S
 -}
 type family FindQualified err xss x where
   FindQualified err '[] x = TypeError
-    ('Text err ':<>: 'Text "\n" ':<>: 'ShowType x)
+    ('Text err ':$$: 'ShowType x)
   FindQualified err ( '(nsp, xs) ': xss) x =
     FindNamespace err nsp (FindName xs x) xss x
