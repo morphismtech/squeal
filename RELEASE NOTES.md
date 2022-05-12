@@ -143,11 +143,10 @@ instance ToPG db (L,R) where
 All of this is made possible by generalizing the `EncodeParams`
 type to polykinded:
 
-```
+```Haskell
 newtype EncodeParams
   (db :: SchemasType)
--  (tys :: [NullType])
-+  (tys :: [k])
+  (tys :: [k])
   (x :: Type)
 ```
 
