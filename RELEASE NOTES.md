@@ -2,7 +2,7 @@
 
 ## Version 0.9.0.0
 
-Thanks to William Yao and Cullin Poresky for new contributions!
+Thanks to William Yao and Cullin Poresky for their contributions!
 
 ### Prepared Statements
 
@@ -143,7 +143,7 @@ instance ToPG db (L,R) where
 All of this is made possible by generalizing the `EncodeParams`
 type to polykinded:
 
-```Haskell
+```
 newtype EncodeParams
   (db :: SchemasType)
 -  (tys :: [NullType])
