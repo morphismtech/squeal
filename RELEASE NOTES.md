@@ -28,7 +28,7 @@ prepare
 prepare_
   :: MonadPQ pq
   => Statement db x ()
-  -> pq (Prepared pq x (Result ()))
+  -> pq (Prepared pq x ())
 ```
 
 They may then be run using `runPrepared` and manually cleaned up
