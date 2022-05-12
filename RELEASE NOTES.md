@@ -1,5 +1,183 @@
 ## RELEASE NOTES
 
+## Version 0.9.0.0
+
+Thanks to William Yao and Cullin Poresky for new contributions!
+
+### Prepared Statements
+
+Squeal 0.9 adds a new `Prepared` type for prepared statements.
+
+```Haskell
+data Prepared m x y = Prepared
+  { runPrepared :: x -> m y -- ^ execute a prepared statement
+  , deallocate :: m () -- ^ manually clean up a prepared statement
+  }
+```
+
+This allows to factor and generalize the functions `executePrepared`
+and `executePrepared_`. Squeal 0.9 adds new methods `prepare` and
+`prepare_` to the `MonadPQ` typeclass.
+
+```Haskell
+prepare
+  :: MonadPQ pq
+  => Statement db x y
+  -> pq (Prepared pq x (Result y))
+
+prepare_
+  :: MonadPQ pq
+  => Statement db x ()
+  -> pq (Prepared pq x (Result ()))
+```
+
+They may then be run using `runPrepared` and manually cleaned up
+using `deallocate`. The `Prepared` type has a cornucopia of instances
+allowing you to combine prepared statements in lots of ways. Instances
+`Prepared` supports include `Category`, `Arrow`, `Profunctor` and more.
+
+A function `preparedFor` abstracts the pattern of preparing a statement,
+then doing _something_ with it and finally deallocating. That something
+can be thought of as an "optic", a generalization of lenses.
+
+```Haskell
+preparedFor
+  :: MonadPQ db pq
+  => (Prepared pq a (Result b) -> Prepared pq s t)
+  -- ^ transform the input and output using an "optic"
+  -> Statement db a b -- ^ query or manipulation
+  -> s -> pq t
+```
+
+For instance, using the optic `traverse'` recovers the function
+`executePrepared` and using the optic `wander traverse_` recovers the
+function `executePrepared_`, which are used for running prepared statements
+over `Traversable` or `Foldable` containers of parameters respectively.
+
+With the generalized notion of a `Prepared` object, you can prepare statments
+and optionally combine them at the beginning of a database session and
+have a `Prepared` object to use with `runPrepared` throughout the session.
+This is a lower level primitive and closer to the model that PostgreSQL
+actually provides than what Squeal previously allowed.
+
+### Row and Enum Types
+
+Squeal 0.9 adds a number of new features for row and enum types.
+
+First, a new type families `DbRelations` and `DbEnums` have been added,
+which filter a `SchemasType` down to all row or enum types.
+A relation means a table, view or composite type;
+other kinds of relations are not currently supported. Previously,
+Squeal's support for row types only covered composite types but
+Squeal 0.9 adds more support for tables and views. New `TypeExpression`s
+`typerow` and `typeenum` have been added. A new type family `FindQualified`,
+which looks through database schemas to find a row or enum type has been added.
+Squeal will now look through all tables, views and composite types when
+trying to find a user-defined relation to match your row type where previously
+it had only looked for composites.
+
+Next, new functions have been added to allow users to define manual encodings
+for row and enum types. Previously, Squeal only had functions to allow users to
+define manual decodings for row and enum types. For enum types,
+you can now use `enumParam` like so:
+
+```Haskell
+data Dir = North | South | East | West
+instance IsPG Dir where
+  type PG Dir = 'PGenum '["north", "south", "east", "west"]
+instance ToPG db Dir where
+  toPG = enumParam $ \case
+    North -> label @"north"
+    South -> label @"south"
+    East -> label @"east"
+    West -> label @"west"
+```
+
+For row types you can now use `rowParam` together with new combinators
+`.#` to cons and `#.` to end the row like so:
+
+```Haskell
+data Quaternion = Quaternion
+  { real :: Double
+  , imaginaryI :: Double
+  , imaginaryJ :: Double
+  , imaginaryK :: Double
+  }
+instance IsPG Complex where
+  type PG Complex = 'PGcomposite '[
+    "re" ::: 'NotNull 'PGfloat8,
+    "im" ::: 'NotNull 'PGfloat8,
+    "jim" ::: 'NotNull 'PGfloat8,
+    "kim" ::: 'NotNull 'PGfloat8]
+instance ToPG db Complex where
+  toPG = rowParam $
+             real `as` #re
+    .# imaginaryI `as` #im
+    .# imaginaryJ `as` #jim
+    #. imaginaryK `as` #kim
+```
+
+There is also a function `genericRowParams`, which can
+be used with combinators like so:
+
+```Haskell
+data L = L {frst :: Int16, scnd :: Char}
+  deriving stock (GHC.Generic, Show)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+data R = R {thrd :: Bool, frth :: Bool}
+  deriving stock (GHC.Generic, Show)
+  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+instance IsPG (L,R) where
+  type PG (L,R) = 'PGcomposite '[
+    "frst" ::: 'NotNull 'PGint2,
+    "scnd" ::: 'NotNull ('PGchar 1),
+    "thrd" ::: 'NotNull 'PGbool,
+    "frth" ::: 'NotNull 'PGbool]
+instance ToPG db (L,R) where
+  toPG = rowParam $
+    contramap fst genericRowParams
+    `appendParams`
+    contramap snd genericRowParams
+```
+
+All of this is made possible by generalizing the `EncodeParams`
+type to polykinded:
+
+```Haskell
+newtype EncodeParams
+  (db :: SchemasType)
+-  (tys :: [NullType])
++  (tys :: [k])
+  (x :: Type)
+```
+
+Since it is polykinded, the `tys` parameter can have either
+the kind `[NullType]` or the kind `RowType`.
+
+### Other Changes
+
+Squeal 0.9 adds support for GHC 9, which required fully saturating
+a number of functions that involved `RankNTypes`, a change
+required by the "simplified subsumption" proposal.
+
+A bug for `Has` custom type errors, which made it expensive
+in the case of a lookup failure because of use of the strict `If`
+type family, has been fixed, thanks to Cullin.
+
+Missing images and some small fixes were added for the Squeal
+"Core Concepts Handbook", thanks to William.
+
+CI has been fixed to properly test across different versions of GHC.
+
+The function `notNull` which has a non-intuitive name has been
+deprecated and a replacement function `just_` has been added. The
+terms `null_` and `just_` now intentionally connote `Nothing` and
+`Just` from Haskell's `Maybe` type.
+
+The operators `(.<@)` and `(@>.)` as well as the functions `arrAny`
+and `arrAll` have been generalized to allow `Null` arguments. Previously,
+they had been improperly restricted to have `NotNull` arguments.
+
 ## Version 0.8.1.1
 
 Fix a bug in how the new `Has` type mismatch errors
@@ -13,19 +191,22 @@ Improvements to type errors for `Has`/`HasErr`, `HasParameter`,
 and trying to aggregate without grouping.
 
 ### `Has`
+
 #### Lookup failed
+
 Now tells you specifically that lookup failed,
 the kind of thing we were trying to look up and in what,
 and a pretty-printed (usually, alphabetized and names-only)
 version of what we were looking in.
+
 ```
 exe/Example.hs:112:11-41: error:
     • Could not find table, view, typedef, index, function, or procedure (SchemumType) named "sers"
       in schema (SchemaType):
         Tables:
           '["emails", "users"]
-      
-      
+
+
       *Raw schema (SchemaType)*:
       '[ '("users",
            'Table
@@ -40,7 +221,7 @@ exe/Example.hs:112:11-41: error:
                 :=> '["id" ::: ('Def :=> 'NotNull 'PGint4),
                       "user_id" ::: ('NoDef :=> 'NotNull 'PGint4),
                       "email" ::: ('NoDef :=> 'Null 'PGtext)])]
-      
+
     • In the first argument of ‘(&)’, namely
         ‘table ((#user ! #sers) `as` #u)’
       In the first argument of ‘from’, namely
@@ -59,11 +240,11 @@ exe/Example.hs:(106,15)-(107,92): error:
     • Could not find schema (SchemaType) named "use"
       in database (SchemasType):
         '["org", "public", "user"]
-      
+
       *Raw database (SchemasType)*:
       '[ '("public", PublicSchema), "user" ::: UserSchema,
          "org" ::: OrgSchema]
-      
+
     • In the expression:
         insertInto_
           (#use ! #emails)
@@ -81,19 +262,22 @@ exe/Example.hs:(106,15)-(107,92): error:
 106 | insertEmail = insertInto_ (#use ! #emails)
     |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^...
 ```
+
 #### Lookup succeeded, but types don't match
+
 Now specifies the lookup that the type mismatch comes from with kind
 information. Does not pretty-print because the value of the key is important.
+
 ```
 exe/Example.hs:111:4-12: error:
     • Type mismatch when looking up column (NullType) named "vec"
       in row (RowType):
       '[ '("id", 'NotNull 'PGint4), "name" ::: 'NotNull 'PGtext,
          "vec" ::: 'NotNull ('PGvararray ('Null 'PGint2))]
-      
+
       Expected: 'NotNull 'PGtext
       But found: 'NotNull ('PGvararray ('Null 'PGint2))
-      
+
     • In the first argument of ‘as’, namely ‘#u ! #vec’
       In the first argument of ‘(:*)’, namely ‘#u ! #vec `as` #userName’
       In the first argument of ‘select_’, namely
@@ -103,8 +287,11 @@ exe/Example.hs:111:4-12: error:
 111 |   (#u ! #vec `as` #userName :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)
     |    ^^^^^^^^^
 ```
+
 #### Ambiguous types
+
 Generally identical, except complains about being unable to satisfy `Has` instead of exposing `HasErr`
+
 ```
 
 exe/Example.hs:103:16-37: error:
@@ -133,9 +320,13 @@ exe/Example.hs:103:16-37: error:
 103 |   (OnConflict (OnConstraint #pk_users) DoNothing) (Returning_ (#id `as` #fromOnly))
     |                ^^^^^^^^^^^^^^^^^^^^^^
 ```
+
 ### `HasParameter`
+
 #### Looking up index 0
+
 Now gives a special error about params being 1-indexed.
+
 ```
 exe/Example.hs:118:18-25: error:
     • Tried to get the param at index 0, but params are 1-indexed
@@ -146,10 +337,13 @@ exe/Example.hs:118:18-25: error:
 118 |   (Values_ (Set (param @0) `as` #id :* setUser))
     |                  ^^^^^^^^
 ```
+
 #### Looking up an out-of-bounds parameter
+
 Now gives a special error, returning the entire parameter list as well.
 Does not pretty-print since order is important, and there's no separate
 keys and values.
+
 ```
 
 exe/Example.hs:118:18-25: error:
@@ -163,18 +357,21 @@ exe/Example.hs:118:18-25: error:
 118 |   (Values_ (Set (param @4) `as` #id :* setUser))
     |                  ^^^^^^^^
 ```
+
 #### Type mismatch when doing lookup
+
 Now gives a custom error similar to the one added for `Has`.
+
 ```
 exe/Example.hs:118:18: error:
     • Type mismatch when looking up param at index 2
       in 1-indexed parameter list:
         '[ 'NotNull 'PGint4, 'NotNull 'PGtext,
            'NotNull ('PGvararray ('Null 'PGint2))]
-      
+
       Expected: 'NotNull 'PGtext
       But found: 'NotNull 'PGint4
-      
+
     • In the first argument of ‘Set’, namely ‘(param @2)’
       In the first argument of ‘as’, namely ‘Set (param @2)’
       In the first argument of ‘(:*)’, namely ‘Set (param @2) `as` #id’
@@ -182,8 +379,11 @@ exe/Example.hs:118:18: error:
 118 |   (Values_ (Set (param @2) `as` #id :* setUser))
     |                  ^^^^^^^^
 ```
+
 ### Using aggregates with an `'Ungrouped` `Expression`
+
 Now gives a custom error with some guidance.
+
 ```
 exe/Example.hs:118:4: error:
     • Cannot use aggregate functions to construct an Ungrouped Expression. Add a 'groupBy' to your TableExpression. If you want to aggregate across the entire result set, use 'groupBy Nil'.
@@ -1639,7 +1839,6 @@ In addition to enum types, you can define composite types.
 A composite type represents the structure of a row or record;
 it is essentially just a list of field names and their data types.
 
-
 `createTypeComposite` creates a composite type. The composite type is
 specified by a list of attribute names and data types.
 
@@ -1752,6 +1951,7 @@ quoted. Thanks to Petter Rasmussen for the fix.
 ### Version 0.2 - March 26, 2018
 
 **Changes**
+
 - **Constraints** - Type level table constraints like primary and foreign keys and column constraints like having `DEFAULT`.
 - **Migrations** - Support for linear, invertible migrations tracked in an auxiliary table
 - **Arrays** - Support for fixed- and variable-length arrays

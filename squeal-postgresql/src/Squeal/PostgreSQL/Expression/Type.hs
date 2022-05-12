@@ -407,12 +407,12 @@ instance
   ( relss ~ DbRelations db
   , Has sch relss rels
   , Has rel rels row
-  , FindQualified "no relation found with row: " relss row ~ '(sch,rel)  
+  , FindQualified "no relation found with row:" relss row ~ '(sch,rel)  
   ) => PGTyped db ('PGcomposite row) where
     pgtype = typerow (QualifiedAlias @sch @rel)
 instance
   ( enums ~ DbEnums db
-  , FindQualified "no enum found with labels: " enums labels ~ '(sch,td)
+  , FindQualified "no enum found with labels:" enums labels ~ '(sch,td)
   , Has sch db schema
   , Has td schema ('Typedef ('PGenum labels))
   ) => PGTyped db ('PGenum labels) where
