@@ -37,6 +37,7 @@ module Squeal.PostgreSQL.Session
   , withConnection
   ) where
 
+import Control.Applicative
 import Control.Category
 import Control.Monad.Base (MonadBase(..))
 import Control.Monad.Catch
@@ -46,10 +47,10 @@ import Control.Monad.Reader
 import Control.Monad.Trans.Control (MonadBaseControl(..), MonadTransControl(..))
 import UnliftIO (MonadUnliftIO(..))
 import Data.ByteString (ByteString)
-import Data.Foldable
 import Data.Functor ((<&>))
+import Data.Hashable
 import Data.Kind
-import Data.Traversable
+import Data.String
 import Generics.SOP
 import PostgreSQL.Binary.Encoding (encodingBytes)
 import Prelude hiding (id, (.))
@@ -60,6 +61,7 @@ import qualified PostgreSQL.Binary.Encoding as Encoding
 
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Manipulation
+import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Session.Connection
 import Squeal.PostgreSQL.Session.Encode
 import Squeal.PostgreSQL.Session.Exception
@@ -155,93 +157,49 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
   executeParams (Query encode decode q) x =
     executeParams (Manipulation encode decode (queryStatement q)) x
 
-  executePrepared (Manipulation encode decode (UnsafeManipulation q :: Manipulation '[] db params row)) list =
-    PQ $ \ kconn@(K conn) -> liftIO $ do
-      let
+  prepare (Manipulation encode decode (UnsafeManipulation q :: Manipulation '[] db params row)) = do
+    let
+      statementNum = fromString $ case show (hash q) of
+        '-':num -> "negative_" <> num
+        num -> num
 
-        temp = "temporary_statement"
+      prepName = "prepared_statement_" <> statementNum
 
-        oidOfParam :: forall p. OidOfNull db p => (IO :.: K LibPQ.Oid) p
-        oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) kconn
-        oidsOfParams :: NP (IO :.: K LibPQ.Oid) params
-        oidsOfParams = hcpure (Proxy @(OidOfNull db)) oidOfParam
+      prepare' = PQ $ \ kconn@(K conn) -> liftIO $ do
+        let
+          oidOfParam :: forall p. OidOfNull db p => (IO :.: K LibPQ.Oid) p
+          oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) kconn
+          oidsOfParams :: NP (IO :.: K LibPQ.Oid) params
+          oidsOfParams = hcpure (Proxy @(OidOfNull db)) oidOfParam
+        oids <- hcollapse <$> hsequence' oidsOfParams
+        prepResultMaybe <- LibPQ.prepare conn prepName (q <> ";") (Just oids)
+        case prepResultMaybe of
+          Nothing -> throwM $ ConnectionException "LibPQ.prepare"
+          Just prepResult -> K <$> okResult_ prepResult
 
-        prepare = do
-          oids <- hcollapse <$> hsequence' oidsOfParams
-          prepResultMaybe <- LibPQ.prepare conn temp (q <> ";") (Just oids)
-          case prepResultMaybe of
-            Nothing -> throwM $ ConnectionException "LibPQ.prepare"
-            Just prepResult -> okResult_ prepResult
+      deallocate' = manipulate_ . UnsafeManipulation $
+        "DEALLOCATE" <+> prepName
 
-        deallocate = do
-          deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
-          case deallocResultMaybe of
-            Nothing -> throwM $ ConnectionException "LibPQ.exec"
-            Just deallocResult -> okResult_ deallocResult
+      runPrepared' params = PQ $ \ kconn@(K conn) -> liftIO $ do
+        encodedParams <- runReaderT (runEncodeParams encode params) kconn
+        let
+          formatParam encoding = (encodingBytes encoding, LibPQ.Binary)
+          formattedParams =
+            [ formatParam <$> maybeParam
+            | maybeParam <- hcollapse encodedParams
+            ]
+        resultMaybe <-
+          LibPQ.execPrepared conn prepName formattedParams LibPQ.Binary
+        case resultMaybe of
+          Nothing -> throwM $ ConnectionException "LibPQ.runPrepared"
+          Just result -> do
+            okResult_ result
+            return . K $ Result decode result
 
-        execPrepared = for list $ \ params -> do
-          encodedParams <- runReaderT (runEncodeParams encode params) kconn
-          let
-            formatParam encoding = (encodingBytes encoding, LibPQ.Binary)
-            formattedParams =
-              [ formatParam <$> maybeParam
-              | maybeParam <- hcollapse encodedParams
-              ]
-          resultMaybe <-
-            LibPQ.execPrepared conn temp formattedParams LibPQ.Binary
-          case resultMaybe of
-            Nothing -> throwM $ ConnectionException "LibPQ.execPrepared"
-            Just result -> do
-              okResult_ result
-              return $ Result decode result
+    prepare'
+    return $ Prepared runPrepared' deallocate'
 
-      liftIO (K <$> bracket_ prepare deallocate execPrepared)
-
-  executePrepared (Query encode decode q) list =
-    executePrepared (Manipulation encode decode (queryStatement q)) list
-
-  executePrepared_ (Manipulation encode _ (UnsafeManipulation q :: Manipulation '[] db params row)) list =
-    PQ $ \ kconn@(K conn) -> do
-      let
-
-        temp = "temporary_statement"
-
-        oidOfParam :: forall p. OidOfNull db p => (IO :.: K LibPQ.Oid) p
-        oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) kconn
-        oidsOfParams :: NP (IO :.: K LibPQ.Oid) params
-        oidsOfParams = hcpure (Proxy @(OidOfNull db)) oidOfParam
-
-        prepare = do
-          oids <- hcollapse <$> hsequence' oidsOfParams
-          prepResultMaybe <- LibPQ.prepare conn temp (q <> ";") (Just oids)
-          case prepResultMaybe of
-            Nothing -> throwM $ ConnectionException "LibPQ.prepare"
-            Just prepResult -> okResult_ prepResult
-
-        deallocate = do
-          deallocResultMaybe <- LibPQ.exec conn ("DEALLOCATE " <> temp <> ";")
-          case deallocResultMaybe of
-            Nothing -> throwM $ ConnectionException "LibPQ.exec"
-            Just deallocResult -> okResult_ deallocResult
-
-        execPrepared_ = for_ list $ \ params -> do
-          encodedParams <- runReaderT (runEncodeParams encode params) kconn
-          let
-            formatParam encoding = (encodingBytes encoding, LibPQ.Binary)
-            formattedParams =
-              [ formatParam <$> maybeParam
-              | maybeParam <- hcollapse encodedParams
-              ]
-          resultMaybe <-
-            LibPQ.execPrepared conn temp formattedParams LibPQ.Binary
-          case resultMaybe of
-            Nothing -> throwM $ ConnectionException "LibPQ.execPrepared"
-            Just result -> okResult_ result
-
-      liftIO (K <$> bracket_ prepare deallocate execPrepared_)
-
-  executePrepared_ (Query encode decode q) list =
-    executePrepared_ (Manipulation encode decode (queryStatement q)) list
+  prepare (Query encode decode q) = prepare (Manipulation encode decode (queryStatement q))
 
 instance (Monad m, db0 ~ db1)
   => Applicative (PQ db0 db1 m) where
@@ -334,6 +292,17 @@ instance (Monad m, Semigroup r, db0 ~ db1) => Semigroup (PQ db0 db1 m r) where
 
 instance (Monad m, Monoid r, db0 ~ db1) => Monoid (PQ db0 db1 m r) where
   mempty = pure mempty
+
+instance MonadFix m => MonadFix (PQ db db m) where
+  mfix f = PQ $ \conn -> mfix $ \ (K a) -> K <$> evalPQ (f a) conn
+
+instance (Monad m, Alternative m, db0 ~ db1)
+  => Alternative (PQ db0 db1 m) where
+    empty = lift empty
+    altL <|> altR = PQ $ \ conn -> fmap K $
+      evalPQ altL conn <|> evalPQ altR conn
+
+instance (MonadPlus m, db0 ~ db1) => MonadPlus (PQ db0 db1 m)
 
 -- | Do `connectdb` and `finish` before and after a computation.
 withConnection

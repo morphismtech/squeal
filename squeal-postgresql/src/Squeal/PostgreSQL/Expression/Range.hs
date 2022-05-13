@@ -147,11 +147,11 @@ whole :: Range x
 whole = NonEmpty Infinite Infinite
 
 -- | range is contained by
-(.<@) :: Operator ('NotNull ty) (null ('PGrange ty)) ('Null 'PGbool)
+(.<@) :: Operator (null0 ty) (null1 ('PGrange ty)) ('Null 'PGbool)
 (.<@) = unsafeBinaryOp "<@"
 
 -- | contains range
-(@>.) :: Operator (null ('PGrange ty)) ('NotNull ty) ('Null 'PGbool)
+(@>.) :: Operator (null0 ('PGrange ty)) (null1 ty) ('Null 'PGbool)
 (@>.) = unsafeBinaryOp "@>"
 
 -- | strictly left of,

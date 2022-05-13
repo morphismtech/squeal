@@ -50,8 +50,8 @@ enabling use of standard @do@ notation for endo-index operations.
 -}
 class
   ( forall i j m. Monad m => Functor (t i j m)
-  , forall i j m. (i ~ j, Monad m) => Monad (t i j m)
-  , forall i j. i ~ j => MonadTrans (t i j)
+  , forall i m. Monad m => Monad (t i i m)
+  , forall i. MonadTrans (t i i)
   ) => IndexedMonadTrans t where
 
   {-# MINIMAL pqJoin | pqBind #-}

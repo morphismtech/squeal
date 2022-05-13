@@ -155,12 +155,12 @@ instance TypeError ('Text "LTree binary instances not yet implemented.")
   => ToPG db LTree where
     toPG = pure . Encoding.text_strict . getLTree
 instance Inline LTree where
-  inline
+  inline (UnsafeLTree x)
     = UnsafeExpression
     . parenthesized
     . (<> " :: ltree")
     . escapeQuotedText
-    . getLTree
+    $ x
 
 {- |
 lquery represents a regular-expression-like pattern for matching ltree values.
@@ -228,12 +228,12 @@ instance TypeError ('Text "LQuery binary instances not yet implemented.")
   => ToPG db LQuery where
   toPG = pure . Encoding.text_strict . getLQuery
 instance Inline LQuery where
-  inline
+  inline (UnsafeLQuery x)
     = UnsafeExpression
     . parenthesized
     . (<> " :: lquery")
     . escapeQuotedText
-    . getLQuery
+    $ x
 
 {- |
 ltxtquery represents a full-text-search-like pattern for matching ltree values.
@@ -269,12 +269,12 @@ instance TypeError ('Text "LTxtQuery binary instances not yet implemented.")
   => ToPG db LTxtQuery where
   toPG = pure . Encoding.text_strict . getLTxtQuery
 instance Inline LTxtQuery where
-  inline
+  inline (UnsafeLTxtQuery x)
     = UnsafeExpression
     . parenthesized
     . (<> " :: ltxtquery")
     . escapeQuotedText
-    . getLTxtQuery
+    $ x
 
 instance IsString
   (Expression grp lat with db params from (null PGltree)) where

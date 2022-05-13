@@ -49,17 +49,7 @@ module Squeal.PostgreSQL.Type.Schema
   , ReturnsType (..)
   , SchemaType
   , SchemasType
-  , PrettyPrintPartitionedSchema
   , Public
-  , PartitionedSchema(..)
-  , PartitionSchema
-  , SchemaFunctions
-  , SchemaIndexes
-  , SchemaProcedures
-  , SchemaTables
-  , SchemaTypes
-  , SchemaUnsafes
-  , SchemaViews
     -- * Database Subsets
   , SubDB
   , SubsetDB
@@ -109,10 +99,29 @@ module Squeal.PostgreSQL.Type.Schema
   , Updatable
   , AllUnique
   , IsNotElem
-    -- * User Types
-  , UserType
-  , UserTypeName
-  , UserTypeNamespace
+    -- * User Type Lookup
+  , DbEnums
+  , SchemaEnums
+  , DbRelations
+  , SchemaRelations
+  , FindQualified
+  , FindName
+  , FindNamespace
+    -- * Schema Error Printing
+  , PrettyPrintPartitionedSchema
+  , PartitionedSchema(..)
+  , PartitionSchema
+  , SchemaFunctions
+  , SchemaIndexes
+  , SchemaProcedures
+  , SchemaTables
+  , SchemaTypes
+  , SchemaUnsafes
+  , SchemaViews
+  , IntersperseNewlines
+  , FilterNonEmpty
+  , FieldIfNonEmpty
+  , PartitionSchema'
   ) where
 
 import Control.Category
@@ -608,6 +617,7 @@ data PartitionedSchema = PartitionedSchema
 -- | @PartitionSchema@ partitions a @SchemaType@ into a @PartitionedSchema@
 type PartitionSchema schema = PartitionSchema' schema ('PartitionedSchema '[] '[] '[] '[] '[] '[] '[])
 
+-- | Utility type family for `PartitionSchema`.
 type family PartitionSchema' (remaining :: SchemaType) (acc :: PartitionedSchema) :: PartitionedSchema where
   PartitionSchema' '[] ps = ps
   PartitionSchema' ('(s, 'Table table) ': rest) ('PartitionedSchema tables views types indexes functions procedures unsafe)
@@ -661,15 +671,18 @@ type family PrettyPrintPartitionedSchema (schema :: PartitionedSchema) :: ErrorM
     , FieldIfNonEmpty "Unsafe schema items" (SchemaUnsafes schema)
     ])
 
+-- | Print field name (if corresponding values are non-empty).
 type family FieldIfNonEmpty (fieldName :: Symbol) (value :: [(Symbol, k)]) :: ErrorMessage where
   FieldIfNonEmpty _ '[] = 'Text ""
   FieldIfNonEmpty n xs = 'Text "  " ':<>: 'Text n ':<>: 'Text ":" ':$$: 'Text "    " ':<>: 'ShowType (Sort (MapFst xs))
 
+-- | Filter out empty error messages.
 type family FilterNonEmpty (ls :: [ErrorMessage]) :: [ErrorMessage] where
   FilterNonEmpty ('Text "" ': rest) = FilterNonEmpty rest
   FilterNonEmpty (x ': rest) = x ': FilterNonEmpty rest
   FilterNonEmpty '[] = '[]
 
+-- | Vertically concatenate error messages.
 type family IntersperseNewlines (ls :: [ErrorMessage]) :: ErrorMessage where
   IntersperseNewlines (x ': y ': '[]) = x ':$$: y
   IntersperseNewlines (x ': xs) = x ':$$: IntersperseNewlines xs
@@ -715,6 +728,12 @@ instance labels ~ '[label]
   => IsPGlabel label (NP PGlabel labels) where label = PGlabel :* Nil
 instance IsPGlabel label (y -> K y label) where label = K
 instance IsPGlabel label (y -> NP (K y) '[label]) where label y = K y :* Nil
+instance {-# OVERLAPPING #-}
+  IsPGlabel label0 (NS PGlabel (label0 ': labels)) where
+    label = Z PGlabel
+instance {-# OVERLAPPABLE #-} IsPGlabel label0 (NS PGlabel labels)
+  => IsPGlabel label0 (NS PGlabel (label1 ': labels)) where
+    label = S (label @label0)
 -- | A `PGlabel` unit type with an `IsPGlabel` instance
 data PGlabel (label :: Symbol) = PGlabel
 instance KnownSymbol label => RenderSQL (PGlabel label) where
@@ -750,24 +769,73 @@ type Updatable table columns =
   , AllUnique columns
   , SListI (TableToColumns table) )
 
--- | Calculate the name of a user defined type.
-type family UserTypeName (schema :: SchemaType) (ty :: PGType) where
-  UserTypeName '[] ty = 'Nothing
-  UserTypeName (td ::: 'Typedef ty ': _) ty = 'Just td
-  UserTypeName (_ ': schema) ty = UserTypeName schema ty
+{- | Filters a schema down to labels of all enum typedefs.
+-}
+type family SchemaEnums schema where
+  SchemaEnums '[] = '[]
+  SchemaEnums (enum ::: 'Typedef ('PGenum labels) ': schema) =
+    enum ::: labels ': SchemaEnums schema
+  SchemaEnums (_ ': schema) = SchemaEnums schema
 
--- | Helper to calculate the schema of a user defined type.
-type family UserTypeNamespace
-  (sch :: Symbol)
-  (td :: Maybe Symbol)
-  (schemas :: SchemasType)
-  (ty :: PGType) where
-    UserTypeNamespace sch 'Nothing schemas ty = UserType schemas ty
-    UserTypeNamespace sch ('Just td) schemas ty = '(sch, td)
+{- | Filters schemas down to labels of all enum typedefs.
+-}
+type family DbEnums db where
+  DbEnums '[] = '[]
+  DbEnums (sch ::: schema ': schemas) =
+    sch ::: SchemaEnums schema ': DbEnums schemas
 
--- | Calculate the schema and name of a user defined type.
-type family UserType (db :: SchemasType) (ty :: PGType) where
-  UserType '[] ty = TypeError
-    ('Text "No such user type: " ':<>: 'ShowType ty)
-  UserType (sch ::: schema ': schemas) ty =
-    UserTypeNamespace sch (UserTypeName schema ty) schemas ty
+{- | Filters a schema down to rows of relations;
+all composites, tables and views.
+-}
+type family SchemaRelations schema where
+  SchemaRelations '[] = '[]
+  SchemaRelations (ty ::: 'Typedef ('PGcomposite row) ': schema) =
+    ty ::: row ': SchemaRelations schema
+  SchemaRelations (tab ::: 'Table table ': schema) =
+    tab ::: TableToRow table ': SchemaRelations schema
+  SchemaRelations (vw ::: 'View row ': schema) =
+    vw ::: row ': SchemaRelations schema
+  SchemaRelations (_ ': schema) = SchemaRelations schema
+
+{- | Filters schemas down to rows of relations;
+all composites, tables and views.
+-}
+type family DbRelations db where
+  DbRelations '[] = '[]
+  DbRelations (sch ::: schema ': schemas) =
+    sch ::: SchemaRelations schema ': DbRelations schemas
+
+-- | Used in `FindQualified`
+type family FindName xs x where
+  FindName '[] xs = 'Nothing
+  FindName ( '(name, x) ': _) x = 'Just name
+  FindName (_ ': xs) x = FindName xs x
+
+-- | Used in `FindQualified`
+type family FindNamespace err nsp name xss x where
+  FindNamespace err _ 'Nothing xss x = FindQualified err xss x
+  FindNamespace _ nsp ('Just name) _ _ = '(nsp, name)
+
+{- | Find fully qualified name with a type error if lookup fails.
+This is used to find the qualified name of a user defined type.
+
+>>> :kind! FindQualified "my error message:"
+FindQualified "my error message:" :: [(k1, [(k2, k3)])]
+                                     -> k3 -> (k1, k2)
+= FindQualified "my error message:"
+
+>>> :kind! FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Double
+FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Double :: (Symbol,
+                                                                                 Symbol)
+= '("foo", "bar")
+
+>>> :kind! FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Bool
+FindQualified "couldn't find type:" '[ "foo" ::: '["bar" ::: Double]] Bool :: (Symbol,
+                                                                               Symbol)
+= (TypeError ...)
+-}
+type family FindQualified err xss x where
+  FindQualified err '[] x = TypeError
+    ('Text err ':$$: 'ShowType x)
+  FindQualified err ( '(nsp, xs) ': xss) x =
+    FindNamespace err nsp (FindName xs x) xss x

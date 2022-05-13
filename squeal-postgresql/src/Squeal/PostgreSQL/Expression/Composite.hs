@@ -81,13 +81,15 @@ rowStar tab = UnsafeExpression $ "ROW" <>
 -- >>> printSQL $ i & field #complex #imaginary
 -- (ROW((0.0 :: float8), (1.0 :: float8))::"complex")."imaginary"
 field
-  :: ( Has sch db schema
-     , Has tydef schema ('Typedef ('PGcomposite row))
-     , Has field row ty)
-  => QualifiedAlias sch tydef -- ^ row type
+  :: ( relss ~ DbRelations db
+     , Has sch relss rels
+     , Has rel rels row
+     , Has field row ty
+     )
+  => QualifiedAlias sch rel -- ^ row type
   -> Alias field -- ^ field name
   -> Expression grp lat with db params from ('NotNull ('PGcomposite row))
   -> Expression grp lat with db params from ty
-field td fld expr = UnsafeExpression $
-  parenthesized (renderSQL expr <> "::" <> renderSQL td)
+field rel fld expr = UnsafeExpression $
+  parenthesized (renderSQL expr <> "::" <> renderSQL rel)
     <> "." <> renderSQL fld
