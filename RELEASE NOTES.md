@@ -64,7 +64,7 @@ actually provides than what Squeal previously allowed.
 
 Squeal 0.9 adds a number of new features for row and enum types.
 
-First, a new type families `DbRelations` and `DbEnums` have been added,
+First, new type families `DbRelations` and `DbEnums` have been added,
 which filter a `SchemasType` down to all row or enum types.
 A relation means a table, view or composite type;
 other kinds of relations are not currently supported. Previously,
