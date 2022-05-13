@@ -9,7 +9,7 @@ license: BSD-3-Clause
 license-file: LICENSE
 author: Eitan Chatav
 maintainer: eitan.chatav@gmail.com
-copyright: Copyright (c) 2021 Morphism, LLC
+copyright: Copyright (c) 2022 Morphism, LLC
 category: Database
 build-type: Simple
 extra-doc-files: README.md
