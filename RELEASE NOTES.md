@@ -103,13 +103,13 @@ data Quaternion = Quaternion
   , imaginaryJ :: Double
   , imaginaryK :: Double
   }
-instance IsPG Complex where
-  type PG Complex = 'PGcomposite '[
+instance IsPG Quaternion where
+  type PG Quaternion = 'PGcomposite '[
     "re" ::: 'NotNull 'PGfloat8,
     "im" ::: 'NotNull 'PGfloat8,
     "jim" ::: 'NotNull 'PGfloat8,
     "kim" ::: 'NotNull 'PGfloat8]
-instance ToPG db Complex where
+instance ToPG db Quaternion where
   toPG = rowParam $
              real `as` #re
     .# imaginaryI `as` #im
