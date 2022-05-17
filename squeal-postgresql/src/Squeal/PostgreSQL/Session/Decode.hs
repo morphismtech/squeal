@@ -566,13 +566,17 @@ instance
     . ReaderT
     $ fmap SOP.fromRecord
     . SOP.hsequence'
-    . SOP.htrans (SOP.Proxy @FromField) (SOP.Comp . runField)
+    . SOP.htrans (SOP.Proxy @FromField) runField
     where
       runField
         :: forall ty z. FromField ty z
         => SOP.K (Maybe Strict.ByteString) ty
-        -> Except Strict.Text (SOP.P z)
-      runField = liftEither . fromField @ty . SOP.unK
+        -> (Except Strict.Text SOP.:.: SOP.P) z
+      runField
+        = SOP.Comp
+        . liftEither
+        . fromField @ty
+        . SOP.unK
 
 {- | Assistant class for `genericProductRow`,
 this class forgets the name of a field while decoding it.
@@ -596,15 +600,18 @@ genericProductRow
   . ReaderT
   $ fmap SOP.productTypeTo
   . SOP.hsequence'
-  . SOP.htrans
-      (SOP.Proxy @FromAliasedValue)
-      (SOP.Comp . fmap SOP.I . runField)
+  . SOP.htrans (SOP.Proxy @FromAliasedValue) runField
   where
     runField
       :: forall ty z. FromAliasedValue ty z
       => SOP.K (Maybe Strict.ByteString) ty
-      -> Except Strict.Text z
-    runField = liftEither . fromAliasedValue @ty . SOP.unK
+      -> (Except Strict.Text SOP.:.: SOP.I) z
+    runField
+      = SOP.Comp
+      . fmap SOP.I
+      . liftEither
+      . fromAliasedValue @ty
+      . SOP.unK
 
 {- |
 >>> :{
