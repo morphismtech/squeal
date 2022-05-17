@@ -596,7 +596,9 @@ genericProductRow
     . ReaderT
     $ fmap SOP.productTypeTo
     . SOP.hsequence'
-    . SOP.htrans (SOP.Proxy @FromAliasedValue) (SOP.Comp . fmap SOP.I . runField)
+    . SOP.htrans
+        (SOP.Proxy @FromAliasedValue)
+        (SOP.Comp . fmap SOP.I . runField)
     where
       runField
         :: forall ty z. FromAliasedValue ty z
