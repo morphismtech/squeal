@@ -40,11 +40,13 @@ module Squeal.PostgreSQL.Session.Decode
   , decodeRow
   , runDecodeRow
   , GenericRow (..)
+  , genericProductRow
   , appendRows
   , consRow
     -- * Decoding Classes
   , FromValue (..)
   , FromField (..)
+  , FromAliasedValue (..)
   , FromArray (..)
   , StateT (..)
   , ExceptT (..)
@@ -571,6 +573,36 @@ instance
         => SOP.K (Maybe Strict.ByteString) ty
         -> Except Strict.Text (SOP.P z)
       runField = liftEither . fromField @ty . SOP.unK
+
+{- | Assistant class for `genericProductRow`,
+this class forgets the name of a field while decoding it.
+-}
+class FromAliasedValue (field :: (Symbol, NullType)) (y :: Type) where
+  fromAliasedValue :: Maybe Strict.ByteString -> Either Strict.Text y
+instance FromValue ty y => FromAliasedValue (fld ::: ty) y where
+  fromAliasedValue = fromValue @ty
+
+{- | Positionally `DecodeRow`. More general than `genericRow`,
+which matches records both positionally and by field name,
+`genericProductRow` matches records _or_ tuples purely positionally.
+-}
+genericProductRow
+  :: ( SOP.IsProductType y ys
+     , SOP.AllZip FromAliasedValue row ys
+     )
+  => DecodeRow row y
+genericProductRow
+    = DecodeRow
+    . ReaderT
+    $ fmap SOP.productTypeTo
+    . SOP.hsequence'
+    . SOP.htrans (SOP.Proxy @FromAliasedValue) (SOP.Comp . fmap SOP.I . runField)
+    where
+      runField
+        :: forall ty z. FromAliasedValue ty z
+        => SOP.K (Maybe Strict.ByteString) ty
+        -> Except Strict.Text z
+      runField = liftEither . fromAliasedValue @ty . SOP.unK
 
 {- |
 >>> :{
