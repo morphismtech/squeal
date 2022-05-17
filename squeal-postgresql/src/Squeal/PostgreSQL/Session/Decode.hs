@@ -589,6 +589,16 @@ instance FromValue ty y => FromAliasedValue (fld ::: ty) y where
 {- | Positionally `DecodeRow`. More general than `genericRow`,
 which matches records both positionally and by field name,
 `genericProductRow` matches records _or_ tuples purely positionally.
+
+>>> import qualified GHC.Generics as GHC
+>>> import qualified Generics.SOP as SOP
+>>> :{
+let
+  decode :: DecodeRow '[ "foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGtext] (Int16, String)
+  decode = genericProductRow
+in runDecodeRow decode (SOP.K (Just "\NUL\STX") :* SOP.K (Just "two") :* Nil)
+:}
+Right (2,"two")
 -}
 genericProductRow
   :: ( SOP.IsProductType y ys
