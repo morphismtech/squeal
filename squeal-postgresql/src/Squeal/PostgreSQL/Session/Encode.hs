@@ -70,7 +70,7 @@ import Data.Word (Word32)
 import Foreign.C.Types (CUInt(CUInt))
 import GHC.TypeLits
 import Network.IP.Addr (NetAddr, IP)
-import PostgreSQL.Binary.Encoding
+import PostgreSQL.Binary.Encoding hiding (Composite, field)
 
 import qualified Data.Aeson as Aeson
 import qualified Data.ByteString.Lazy as Lazy.ByteString
