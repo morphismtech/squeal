@@ -1,0 +1,8 @@
+resolver: nightly-2022-11-14
+packages:
+- squeal-postgresql
+- squeal-postgresql-ltree
+- squeal-postgresql-uuid-ossp
+extra-deps:
+- git: https://github.com/kosmikus/records-sop.git
+  commit: abab99b4b870fce55e81dd03d4e41fb50502ca4e

@@ -40,11 +40,13 @@ module Squeal.PostgreSQL.Session.Decode
   , decodeRow
   , runDecodeRow
   , GenericRow (..)
+  , genericProductRow
   , appendRows
   , consRow
     -- * Decoding Classes
   , FromValue (..)
   , FromField (..)
+  , FromAliasedValue (..)
   , FromArray (..)
   , StateT (..)
   , ExceptT (..)
@@ -564,13 +566,62 @@ instance
     . ReaderT
     $ fmap SOP.fromRecord
     . SOP.hsequence'
-    . SOP.htrans (SOP.Proxy @FromField) (SOP.Comp . runField)
+    . SOP.htrans (SOP.Proxy @FromField) runField
     where
       runField
         :: forall ty z. FromField ty z
         => SOP.K (Maybe Strict.ByteString) ty
-        -> Except Strict.Text (SOP.P z)
-      runField = liftEither . fromField @ty . SOP.unK
+        -> (Except Strict.Text SOP.:.: SOP.P) z
+      runField
+        = SOP.Comp
+        . liftEither
+        . fromField @ty
+        . SOP.unK
+
+{- | Assistant class for `genericProductRow`,
+this class forgets the name of a field while decoding it.
+-}
+class FromAliasedValue (field :: (Symbol, NullType)) (y :: Type) where
+  fromAliasedValue :: Maybe Strict.ByteString -> Either Strict.Text y
+instance FromValue ty y => FromAliasedValue (fld ::: ty) y where
+  fromAliasedValue = fromValue @ty
+
+{- | Positionally `DecodeRow`. More general than `genericRow`,
+which matches records both positionally and by field name,
+`genericProductRow` matches records _or_ tuples purely positionally.
+
+>>> import qualified GHC.Generics as GHC
+>>> import qualified Generics.SOP as SOP
+>>> :{
+let
+  decode :: DecodeRow '[ "foo" ::: 'NotNull 'PGint2, "bar" ::: 'NotNull 'PGtext] (Int16, String)
+  decode = genericProductRow
+in runDecodeRow decode (SOP.K (Just "\NUL\STX") :* SOP.K (Just "two") :* Nil)
+:}
+Right (2,"two")
+-}
+genericProductRow
+  :: ( SOP.IsProductType y ys
+     , SOP.AllZip FromAliasedValue row ys
+     )
+  => DecodeRow row y
+genericProductRow
+  = DecodeRow
+  . ReaderT
+  $ fmap SOP.productTypeTo
+  . SOP.hsequence'
+  . SOP.htrans (SOP.Proxy @FromAliasedValue) runField
+  where
+    runField
+      :: forall ty z. FromAliasedValue ty z
+      => SOP.K (Maybe Strict.ByteString) ty
+      -> (Except Strict.Text SOP.:.: SOP.I) z
+    runField
+      = SOP.Comp
+      . fmap SOP.I
+      . liftEither
+      . fromAliasedValue @ty
+      . SOP.unK
 
 {- |
 >>> :{
