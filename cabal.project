@@ -1,0 +1,10 @@
+packages:
+      squeal-postgresql
+    , squeal-postgresql-ltree
+    , squeal-postgresql-uuid-ossp
+
+if impl(ghc >= 9.2)
+    source-repository-package
+        type: git
+        location: https://github.com/kosmikus/records-sop.git
+        tag: abab99b4b870fce55e81dd03d4e41fb50502ca4e
