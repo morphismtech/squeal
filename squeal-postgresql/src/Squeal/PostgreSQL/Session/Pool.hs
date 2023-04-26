@@ -82,8 +82,10 @@ createConnectionPool
   -- ^ Maximum number of connections to keep open per stripe. The smallest acceptable value is 1.
   -- Requests for connections will block if this limit is reached on a single stripe, even if other stripes have idle connections available.
   -> io (Pool (K Connection db))
-createConnectionPool conninfo stripes idle maxResrc =
-  liftIO $ createPool (connectdb conninfo) finish stripes idle maxResrc
+createConnectionPool conninfo stripes idle maxResrc = liftIO . newPool $
+  setNumStripes
+    (Just stripes)
+    (defaultPoolConfig (connectdb conninfo) finish (realToFrac idle) maxResrc)
 
 {-|
 Temporarily take a connection from a `Pool`, perform an action with it,
