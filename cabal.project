@@ -3,8 +3,14 @@ packages:
     , squeal-postgresql-ltree
     , squeal-postgresql-uuid-ossp
 
-if impl(ghc >= 9.2)
+if impl(ghc >= 9.4)
     source-repository-package
         type: git
-        location: https://github.com/kosmikus/records-sop.git
+        location: https://github.com/space-vacuum/records-sop
+        tag: db2d052a1dfa6feed27c46db8dc401ff9e55685e
+
+elif impl(ghc >= 9.2)
+    source-repository-package
+        type: git
+        location: https://github.com/kosmikus/records-sop
         tag: abab99b4b870fce55e81dd03d4e41fb50502ca4e

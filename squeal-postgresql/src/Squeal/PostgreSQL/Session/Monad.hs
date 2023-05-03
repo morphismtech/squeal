@@ -16,12 +16,13 @@ typeclass `MonadPQ`.
   , FlexibleInstances
   , FunctionalDependencies
   , GADTs
-  , PolyKinds
   , MultiParamTypeClasses
+  , PolyKinds
   , QuantifiedConstraints
   , RankNTypes
   , TypeApplications
   , TypeFamilies
+  , TypeOperators
   , UndecidableInstances
 #-}
 
