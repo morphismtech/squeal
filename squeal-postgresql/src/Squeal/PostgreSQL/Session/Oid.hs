@@ -34,8 +34,9 @@ module Squeal.PostgreSQL.Session.Oid
   , OidOfField (..)
   ) where
 
-import Control.Monad.Catch
-import Control.Monad.Reader
+import Control.Monad (when)
+import Control.Monad.Catch (throwM)
+import Control.Monad.Reader (ReaderT(ReaderT))
 import Data.String
 import GHC.TypeLits
 import PostgreSQL.Binary.Decoding (valueParser, int)
