@@ -31,7 +31,8 @@ a
 -}
 
 {-# LANGUAGE
-    DeriveFunctor
+    CPP
+  , DeriveFunctor
   , FlexibleContexts
   , FlexibleInstances
   , InstanceSigs
@@ -83,7 +84,13 @@ createConnectionPool
   -- Requests for connections will block if this limit is reached on a single stripe, even if other stripes have idle connections available.
   -> io (Pool (K Connection db))
 createConnectionPool conninfo stripes idle maxResrc =
+#if MIN_VERSION_resource_pool(0,4,0)
+  liftIO . newPool $ setNumStripes
+    (Just stripes)
+    (defaultPoolConfig (connectdb conninfo) finish (realToFrac idle) maxResrc)
+#else
   liftIO $ createPool (connectdb conninfo) finish stripes idle maxResrc
+#endif
 
 {-|
 Temporarily take a connection from a `Pool`, perform an action with it,
