@@ -45,7 +45,8 @@ module Squeal.PostgreSQL.LTree
   ) where
 
 import Control.Exception hiding (TypeError)
-import Control.Monad.Reader
+import Control.Monad (when)
+import Control.Monad.Reader (ReaderT(ReaderT))
 import Data.String
 import Data.Text
 import GHC.Generics

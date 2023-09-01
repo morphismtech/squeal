@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: squeal-postgresql-ltree
-version: 0.1.0.1
+version: 0.1.0.2
 synopsis: LTree extension for Squeal
 description: LTree extension for Squeal
 homepage: https://github.com/morphismtech/squeal/ltree
