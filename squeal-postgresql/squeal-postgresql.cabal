@@ -1,6 +1,6 @@
 cabal-version: 2.2
 name: squeal-postgresql
-version: 0.9.1.0
+version: 0.9.1.1
 synopsis: Squeal PostgreSQL Library
 description: Squeal is a type-safe embedding of PostgreSQL in Haskell
 homepage: https://github.com/morphismtech/squeal
