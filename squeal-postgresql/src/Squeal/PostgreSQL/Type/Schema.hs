@@ -27,7 +27,8 @@ It also defines useful type families to operate on these.
   , StandaloneDeriving
   , TypeApplications
   , TypeFamilyDependencies
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , UndecidableInstances
   , UndecidableSuperClasses
@@ -206,7 +207,7 @@ data Optionality
 -- | `ColumnType` encodes the allowance of @DEFAULT@ and @NULL@ and the
 -- base `PGType` for a column.
 --
--- >>> :set -XTypeFamilies -XTypeInType
+-- >>> :set -XTypeFamilies -XDataKinds -XPolyKinds
 -- >>> import GHC.TypeLits
 -- >>> type family IdColumn :: ColumnType where IdColumn = 'Def :=> 'NotNull 'PGint4
 -- >>> type family EmailColumn :: ColumnType where EmailColumn = 'NoDef :=> 'Null 'PGtext

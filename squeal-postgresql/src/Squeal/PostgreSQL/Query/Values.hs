@@ -25,7 +25,8 @@ values statements
   , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , RankNTypes
   , UndecidableInstances

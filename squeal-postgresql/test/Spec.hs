@@ -15,7 +15,8 @@
   , TypeApplications
   , TypeFamilies
   , TypeSynonymInstances
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , UndecidableInstances
 #-}

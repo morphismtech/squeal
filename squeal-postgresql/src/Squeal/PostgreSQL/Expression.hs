@@ -25,7 +25,8 @@ Expressions are the atoms used to build statements.
   , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , UndecidableInstances
   , RankNTypes

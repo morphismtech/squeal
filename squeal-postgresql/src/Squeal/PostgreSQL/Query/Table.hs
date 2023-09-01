@@ -25,7 +25,8 @@ intermediate table expressions
   , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , RankNTypes
   , UndecidableInstances

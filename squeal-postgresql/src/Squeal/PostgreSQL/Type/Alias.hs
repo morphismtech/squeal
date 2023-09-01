@@ -27,7 +27,8 @@ Squeal can reference aliases by prepending with a @#@.
   , StandaloneDeriving
   , TypeApplications
   , TypeFamilyDependencies
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , UndecidableInstances
   , UndecidableSuperClasses

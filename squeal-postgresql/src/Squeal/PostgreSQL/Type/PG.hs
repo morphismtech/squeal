@@ -27,7 +27,8 @@ into corresponding Postgres types.
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , UndecidableInstances
   , UndecidableSuperClasses

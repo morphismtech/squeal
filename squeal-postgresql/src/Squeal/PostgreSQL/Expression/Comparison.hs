@@ -11,7 +11,8 @@ comparison functions and operators
 {-# LANGUAGE
     OverloadedStrings
   , RankNTypes
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
 #-}
 
