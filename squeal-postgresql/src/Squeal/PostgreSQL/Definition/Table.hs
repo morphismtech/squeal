@@ -24,7 +24,8 @@ create, drop and alter tables
   , RankNTypes
   , ScopedTypeVariables
   , TypeApplications
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , UndecidableSuperClasses
 #-}

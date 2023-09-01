@@ -25,7 +25,8 @@ set returning functions
   , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , RankNTypes
   , UndecidableInstances

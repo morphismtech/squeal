@@ -24,7 +24,8 @@ application's monad transformer stack, giving it an instance of `MonadPQ` @DB@.
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , UndecidableInstances
 #-}
@@ -39,11 +40,13 @@ module Squeal.PostgreSQL.Session
 
 import Control.Applicative
 import Control.Category
+import Control.Monad (MonadPlus(..))
 import Control.Monad.Base (MonadBase(..))
+import Control.Monad.Fix (MonadFix(..))
 import Control.Monad.Catch
-import Control.Monad.Except
+import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Morph
-import Control.Monad.Reader
+import Control.Monad.Reader (ReaderT(..))
 import Control.Monad.Trans.Control (MonadBaseControl(..), MonadTransControl(..))
 import UnliftIO (MonadUnliftIO(..))
 import Data.ByteString (ByteString)

@@ -24,7 +24,8 @@ constraint expressions
   , RankNTypes
   , ScopedTypeVariables
   , TypeApplications
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , UndecidableSuperClasses
 #-}

@@ -41,7 +41,8 @@ a
   , RankNTypes
   , ScopedTypeVariables
   , TypeFamilies
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , UndecidableInstances
 #-}
 

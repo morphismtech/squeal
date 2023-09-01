@@ -24,7 +24,8 @@ update statements
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , UndecidableInstances
 #-}

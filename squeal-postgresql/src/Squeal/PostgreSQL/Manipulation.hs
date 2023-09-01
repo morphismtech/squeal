@@ -24,7 +24,8 @@ data manipulation language
   , ScopedTypeVariables
   , TypeApplications
   , TypeFamilies
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , UndecidableInstances
 #-}

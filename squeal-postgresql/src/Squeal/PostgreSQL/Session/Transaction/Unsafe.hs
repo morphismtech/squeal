@@ -13,7 +13,8 @@ transaction control language permitting arbitrary `IO`
   , FlexibleContexts
   , LambdaCase
   , OverloadedStrings
-  , TypeInType
+  , DataKinds
+  , PolyKinds
 #-}
 
 module Squeal.PostgreSQL.Session.Transaction.Unsafe
