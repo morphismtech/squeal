@@ -46,7 +46,7 @@ import Control.Monad.Fix (MonadFix(..))
 import Control.Monad.Catch
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Morph
-import Control.Monad.Reader (ReaderT(..))
+import Control.Monad.Reader
 import Control.Monad.Trans.Control (MonadBaseControl(..), MonadTransControl(..))
 import UnliftIO (MonadUnliftIO(..))
 import Data.ByteString (ByteString)
