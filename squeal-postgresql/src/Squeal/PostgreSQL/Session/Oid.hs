@@ -36,7 +36,7 @@ module Squeal.PostgreSQL.Session.Oid
 
 import Control.Monad (when)
 import Control.Monad.Catch (throwM)
-import Control.Monad.Reader (ReaderT(ReaderT))
+import Control.Monad.Reader
 import Data.String
 import GHC.TypeLits
 import PostgreSQL.Binary.Decoding (valueParser, int)
