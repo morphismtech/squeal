@@ -2,8 +2,6 @@
 
 ![squeal-icon](https://raw.githubusercontent.com/morphismtech/squeal/dev/squeal.gif)
 
-[![GitHub CI](https://github.com/morphismtech/squeal/workflows/CI/badge.svg)](https://github.com/morphismtech/squeal/actions)
-
 [Github](https://github.com/morphismtech/squeal)
 
 [Hackage](https://hackage.haskell.org/package/squeal-postgresql)
