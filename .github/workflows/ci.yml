@@ -23,8 +23,8 @@ jobs:
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
-      - uses: actions/checkout@v2
-      - uses: haskell/actions/setup@v1
+      - uses: actions/checkout@v4
+      - uses: haskell-actions/setup@v2
         with:
           enable-stack: true
           stack-version: 'latest'
@@ -50,7 +50,7 @@ jobs:
         run: stack haddock --fast
 
       - name: cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ".stack-work"
@@ -73,7 +73,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - uses: haskell/actions/setup@v1
+      - uses: haskell-actions/setup@v2
         with:
           enable-stack: true
           stack-version: 'latest'
@@ -99,7 +99,7 @@ jobs:
         run: stack haddock --fast --stack-yaml stack-ghc8_10.yaml
 
       - name: cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ".stack-work"
@@ -122,7 +122,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-      - uses: haskell/actions/setup@v1
+      - uses: haskell-actions/setup@v2
         with:
           enable-stack: true
           stack-version: 'latest'
@@ -148,7 +148,7 @@ jobs:
         run: stack haddock --fast --stack-yaml stack-ghc8_8.yaml
 
       - name: cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ".stack-work"
