@@ -123,13 +123,21 @@ getOrganizations = select_
   (#o ! #id `as` #orgId :* #o ! #name `as` #orgName)
   (from (table (#org ! #organizations `as` #o)))
 
-getOrganizationsBy :: Query_ Schemas (Only Int32) Organization
-getOrganizationsBy =
+getOrganizationsBy ::
+  Condition
+    'Ungrouped
+    '[]
+    '[]
+    Schemas
+    '[ 'NotNull 'PGint4]
+    '["o" ::: ["id" ::: NotNull PGint4, "name" ::: NotNull PGtext]] ->
+  Query_ Schemas (Only Int32) Organization
+getOrganizationsBy condition =
   select_
     (#o ! #id `as` #orgId :* #o ! #name `as` #orgName)
     (
       from (table (#org ! #organizations `as` #o))
-      & where_ (#o ! #id .== param @1)
+      & where_ condition
     )
 
 upsertUser :: Manipulation_ Schemas (Int32, String, VarArray [Maybe Int16]) ()
@@ -192,7 +200,8 @@ session = do
   organizationRows <- getRows organizationsResult
   liftIO $ print (organizationRows :: [Organization])
 
-  organizationsResult2 <- runQueryParams getOrganizationsBy (Only (1 :: Int32))
+  organizationsResult2 <- runQueryParams
+    (getOrganizationsBy ((#o ! #id) .== param @1)) (Only (1 :: Int32))
   organizationRows2 <- getRows organizationsResult2
   liftIO $ print (organizationRows2 :: [Organization])
 
