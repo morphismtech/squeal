@@ -9,6 +9,9 @@
   , TypeOperators
 #-}
 
+{-# LANGUAGE ScopedTypeVariables #-}
+
+
 module Main (main, main2, upsertUser) where
 
 import Control.Monad.IO.Class (MonadIO (..))
@@ -124,14 +127,15 @@ getOrganizations = select_
   (from (table (#org ! #organizations `as` #o)))
 
 getOrganizationsBy ::
+  forall pgty hsty.
   Condition
     'Ungrouped
     '[]
     '[]
     Schemas
-    '[ 'NotNull 'PGint4]
+    '[ 'NotNull pgty ]
     '["o" ::: ["id" ::: NotNull PGint4, "name" ::: NotNull PGtext]] ->
-  Query_ Schemas (Only Int32) Organization
+  Query_ Schemas (Only hsty) Organization
 getOrganizationsBy condition =
   select_
     (#o ! #id `as` #orgId :* #o ! #name `as` #orgName)
@@ -203,6 +207,11 @@ session = do
   organizationsResult2 <- runQueryParams
     (getOrganizationsBy ((#o ! #id) .== param @1)) (Only (1 :: Int32))
   organizationRows2 <- getRows organizationsResult2
+  liftIO $ print (organizationRows2 :: [Organization])
+
+  organizationsResult3 <- runQueryParams
+    (getOrganizationsBy ((#o ! #name) .== param @1)) (Only ("ACME" :: Text))
+  organizationRows3 <- getRows organizationsResult3
   liftIO $ print (organizationRows2 :: [Organization])
 
 main :: IO ()
