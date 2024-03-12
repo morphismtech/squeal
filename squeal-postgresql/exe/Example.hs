@@ -54,7 +54,7 @@ type OrgSchema =
          , "organization" ::: 'NoDef :=> 'NotNull 'PGint4 ])
    ]
 
-type Schemas 
+type Schemas
   = '[ "public" ::: PublicSchema, "user" ::: UserSchema, "org" ::: OrgSchema ]
 
 setup :: Definition (Public '[]) Schemas
@@ -93,7 +93,7 @@ setup =
         (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_member :*
       foreignKey #organization (#org ! #organizations) #id
         (OnDelete Cascade) (OnUpdate Cascade) `as` #fk_organization )
-      
+
 teardown :: Definition Schemas (Public '[])
 teardown = dropType #positive >>> dropSchemaCascade #user >>> dropSchemaCascade #org
 
@@ -106,12 +106,31 @@ insertEmail :: Manipulation_ Schemas (Int32, Maybe Text) ()
 insertEmail = insertInto_ (#user ! #emails)
   (Values_ (Default `as` #id :* Set (param @1) `as` #user_id :* Set (param @2) `as` #email))
 
+insertOrganization :: Manipulation_ Schemas (Only Text) (Only Int32)
+insertOrganization = insertInto (#org ! #organizations)
+  (Values_ (Default `as` #id :* Set (param @1) `as` #name))
+  (OnConflict (OnConstraint #pk_organizations) DoNothing) (Returning_ (#id `as` #fromOnly))
+
 getUsers :: Query_ Schemas () User
 getUsers = select_
   (#u ! #name `as` #userName :* #e ! #email `as` #userEmail :* #u ! #vec `as` #userVec)
   ( from (table ((#user ! #users) `as` #u)
     & innerJoin (table ((#user ! #emails) `as` #e))
       (#u ! #id .== #e ! #user_id)) )
+
+getOrganizations :: Query_ Schemas () Organization
+getOrganizations = select_
+  (#o ! #id `as` #orgId :* #o ! #name `as` #orgName)
+  (from (table (#org ! #organizations `as` #o)))
+
+getOrganizationsBy :: Query_ Schemas (Only Int32) Organization
+getOrganizationsBy =
+  select_
+    (#o ! #id `as` #orgId :* #o ! #name `as` #orgName)
+    (
+      from (table (#org ! #organizations `as` #o))
+      & where_ (#o ! #id .== param @1)
+    )
 
 upsertUser :: Manipulation_ Schemas (Int32, String, VarArray [Maybe Int16]) ()
 upsertUser = insertInto (#user ! #users `as` #u)
@@ -137,28 +156,59 @@ users =
   , User "Carole" (Just "carole@hotmail.com") (VarArray [Just 3,Nothing, Just 4])
   ]
 
+data Organization
+  = Organization
+  { orgId :: Int32
+  , orgName :: Text
+  } deriving (Show, GHC.Generic)
+instance SOP.Generic Organization
+instance SOP.HasDatatypeInfo Organization
+
+organizations :: [Organization]
+organizations =
+  [ Organization { orgId = 1, orgName = "ACME" }
+  , Organization { orgId = 2, orgName = "Haskell Foundation" }
+  ]
+
 session :: (MonadIO pq, MonadPQ Schemas pq) => pq ()
 session = do
-  liftIO $ Char8.putStrLn "manipulating"
-  idResults <- traversePrepared insertUser ([(userName user, userVec user) | user <- users])
-  ids <- traverse (fmap fromOnly . getRow 0) (idResults :: [Result (Only Int32)])
-  traversePrepared_ insertEmail (zip (ids :: [Int32]) (userEmail <$> users))
-  liftIO $ Char8.putStrLn "querying"
+  liftIO $ Char8.putStrLn "===> manipulating"
+  userIdResults <- traversePrepared insertUser [(userName user, userVec user) | user <- users]
+  userIds <- traverse (fmap fromOnly . getRow 0) (userIdResults :: [Result (Only Int32)])
+  traversePrepared_ insertEmail (zip (userIds :: [Int32]) (userEmail <$> users))
+
+  orgIdResults <- traversePrepared
+    insertOrganization
+    [Only (orgName organization) | organization <- organizations]
+  _ <- traverse (fmap fromOnly . getRow 0) (orgIdResults :: [Result (Only Int32)])
+
+  liftIO $ Char8.putStrLn "===> querying: users"
   usersResult <- runQuery getUsers
   usersRows <- getRows usersResult
   liftIO $ print (usersRows :: [User])
 
+  liftIO $ Char8.putStrLn "===> querying: organizations"
+  organizationsResult <- runQuery getOrganizations
+  organizationRows <- getRows organizationsResult
+  liftIO $ print (organizationRows :: [Organization])
+
+  organizationsResult2 <- runQueryParams getOrganizationsBy (Only (1 :: Int32))
+  organizationRows2 <- getRows organizationsResult2
+  liftIO $ print (organizationRows2 :: [Organization])
+
 main :: IO ()
 main = do
-  Char8.putStrLn "squeal"
+  Char8.putStrLn "===> squeal"
   connectionString <- pure
     "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
   Char8.putStrLn $ "connecting to " <> connectionString
   connection0 <- connectdb connectionString
-  Char8.putStrLn "setting up schema"
+
+  Char8.putStrLn "===> setting up schema"
   connection1 <- execPQ (define setup) connection0
   connection2 <- execPQ session connection1
-  Char8.putStrLn "tearing down schema"
+
+  Char8.putStrLn "===> tearing down schema"
   connection3 <- execPQ (define teardown) connection2
   finish connection3
 
