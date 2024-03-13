@@ -9,11 +9,15 @@
   , TypeOperators
 #-}
 
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Main (main, main2, upsertUser) where
 
+import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Int (Int16, Int32)
 import Data.Text (Text)
@@ -49,6 +53,7 @@ type OrgSchema =
         '[ "pk_organizations" ::: 'PrimaryKey '["id"] ] :=>
         '[ "id" ::: 'Def :=> 'NotNull 'PGint4
          , "name" ::: 'NoDef :=> 'NotNull 'PGtext
+         , "type" ::: 'NoDef :=> 'NotNull 'PGtext
          ])
    , "members" ::: 'Table (
         '[ "fk_member" ::: 'ForeignKey '["member"] "user" "users" '["id"]
@@ -86,7 +91,8 @@ setup =
   >>>
   createTable (#org ! #organizations)
     ( serial `as` #id :*
-      (text & notNullable) `as` #name )
+      (text & notNullable) `as` #name :*
+      (text & notNullable) `as` #type )
     ( primaryKey #id `as` #pk_organizations )
   >>>
   createTable (#org ! #members)
@@ -109,9 +115,9 @@ insertEmail :: Manipulation_ Schemas (Int32, Maybe Text) ()
 insertEmail = insertInto_ (#user ! #emails)
   (Values_ (Default `as` #id :* Set (param @1) `as` #user_id :* Set (param @2) `as` #email))
 
-insertOrganization :: Manipulation_ Schemas (Only Text) (Only Int32)
+insertOrganization :: Manipulation_ Schemas (Text, OrganizationType) (Only Int32)
 insertOrganization = insertInto (#org ! #organizations)
-  (Values_ (Default `as` #id :* Set (param @1) `as` #name))
+  (Values_ (Default `as` #id :* Set (param @1) `as` #name :* Set (param @2) `as` #type))
   (OnConflict (OnConstraint #pk_organizations) DoNothing) (Returning_ (#id `as` #fromOnly))
 
 getUsers :: Query_ Schemas () User
@@ -123,7 +129,10 @@ getUsers = select_
 
 getOrganizations :: Query_ Schemas () Organization
 getOrganizations = select_
-  (#o ! #id `as` #orgId :* #o ! #name `as` #orgName)
+  ( #o ! #id `as` #orgId :*
+    #o ! #name `as` #orgName :*
+    #o ! #type `as` #orgType
+  )
   (from (table (#org ! #organizations `as` #o)))
 
 getOrganizationsBy ::
@@ -135,11 +144,14 @@ getOrganizationsBy ::
     '[]
     Schemas
     '[NullPG hsty]
-    '["o" ::: ["id" ::: NotNull PGint4, "name" ::: NotNull PGtext]] ->
+    '["o" ::: ["id" ::: NotNull PGint4, "name" ::: NotNull PGtext, "type" ::: NotNull PGtext]] ->
   Query_ Schemas (Only hsty) Organization
 getOrganizationsBy condition =
   select_
-    (#o ! #id `as` #orgId :* #o ! #name `as` #orgName)
+    ( #o ! #id `as` #orgId :*
+      #o ! #name `as` #orgName :*
+      #o ! #type `as` #orgType
+    )
     (
       from (table (#org ! #organizations `as` #o))
       & where_ condition
@@ -173,14 +185,39 @@ data Organization
   = Organization
   { orgId :: Int32
   , orgName :: Text
+  , orgType :: OrganizationType
   } deriving (Show, GHC.Generic)
 instance SOP.Generic Organization
 instance SOP.HasDatatypeInfo Organization
 
+data OrganizationType
+  = ForProfit
+  | NonProfit
+  deriving (Show, GHC.Generic)
+instance SOP.Generic OrganizationType
+instance SOP.HasDatatypeInfo OrganizationType
+
+instance IsPG OrganizationType where
+  type PG OrganizationType = 'PGtext
+instance ToPG db OrganizationType where
+  toPG = toPG . toText
+    where
+      toText ForProfit = "for-profit" :: Text
+      toText NonProfit = "non-profit" :: Text
+
+instance FromPG OrganizationType where
+  fromPG = do
+    value <- fromPG @Text
+    fromText value
+    where
+      fromText "for-profit" = pure ForProfit
+      fromText "non-profit" = pure NonProfit
+      fromText value = throwError $ "Invalid organization type: \"" <> value <> "\""
+
 organizations :: [Organization]
 organizations =
-  [ Organization { orgId = 1, orgName = "ACME" }
-  , Organization { orgId = 2, orgName = "Haskell Foundation" }
+  [ Organization { orgId = 1, orgName = "ACME", orgType = ForProfit }
+  , Organization { orgId = 2, orgName = "Haskell Foundation", orgType = NonProfit }
   ]
 
 session :: (MonadIO pq, MonadPQ Schemas pq) => pq ()
@@ -192,7 +229,7 @@ session = do
 
   orgIdResults <- traversePrepared
     insertOrganization
-    [Only (orgName organization) | organization <- organizations]
+    [(orgName organization, orgType organization) | organization <- organizations]
   _ <- traverse (fmap fromOnly . getRow 0) (orgIdResults :: [Result (Only Int32)])
 
   liftIO $ Char8.putStrLn "===> querying: users"
@@ -200,20 +237,28 @@ session = do
   usersRows <- getRows usersResult
   liftIO $ print (usersRows :: [User])
 
-  liftIO $ Char8.putStrLn "===> querying: organizations"
-  organizationsResult <- runQuery getOrganizations
-  organizationRows <- getRows organizationsResult
-  liftIO $ print (organizationRows :: [Organization])
+  liftIO $ Char8.putStrLn "===> querying: organizations: all"
+  organizationsResult1 <- runQuery getOrganizations
+  organizationRows1 <- getRows organizationsResult1
+  liftIO $ print (organizationRows1 :: [Organization])
 
+  liftIO $ Char8.putStrLn "===> querying: organizations: by ID (2)"
   organizationsResult2 <- runQueryParams
-    (getOrganizationsBy @Int32 ((#o ! #id) .== param @1)) (Only (1 :: Int32))
+    (getOrganizationsBy @Int32 ((#o ! #id) .== param @1)) (Only (2 :: Int32))
   organizationRows2 <- getRows organizationsResult2
   liftIO $ print (organizationRows2 :: [Organization])
 
+  liftIO $ Char8.putStrLn "===> querying: organizations: by name (ACME)"
   organizationsResult3 <- runQueryParams
     (getOrganizationsBy @Text ((#o ! #name) .== param @1)) (Only ("ACME" :: Text))
   organizationRows3 <- getRows organizationsResult3
   liftIO $ print (organizationRows3 :: [Organization])
+
+  liftIO $ Char8.putStrLn "===> querying: organizations: by type (non-profit)"
+  organizationsResult4 <- runQueryParams
+    (getOrganizationsBy @Text ((#o ! #type) .== param @1)) (Only NonProfit)
+  organizationRows4 <- getRows organizationsResult4
+  liftIO $ print (organizationRows4 :: [Organization])
 
 main :: IO ()
 main = do
