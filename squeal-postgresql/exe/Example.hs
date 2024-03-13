@@ -127,14 +127,14 @@ getOrganizations = select_
   (from (table (#org ! #organizations `as` #o)))
 
 getOrganizationsBy ::
-  forall pgty hsty.
-  NullPG hsty ~ NotNull pgty =>
+  forall hsty.
+  (ToPG Schemas hsty) =>
   Condition
     'Ungrouped
     '[]
     '[]
     Schemas
-    '[ 'NotNull pgty ]
+    '[NullPG hsty]
     '["o" ::: ["id" ::: NotNull PGint4, "name" ::: NotNull PGtext]] ->
   Query_ Schemas (Only hsty) Organization
 getOrganizationsBy condition =
@@ -206,12 +206,12 @@ session = do
   liftIO $ print (organizationRows :: [Organization])
 
   organizationsResult2 <- runQueryParams
-    (getOrganizationsBy @'PGint4 @Int32 ((#o ! #id) .== param @1)) (Only (1 :: Int32))
+    (getOrganizationsBy @Int32 ((#o ! #id) .== param @1)) (Only (1 :: Int32))
   organizationRows2 <- getRows organizationsResult2
   liftIO $ print (organizationRows2 :: [Organization])
 
   organizationsResult3 <- runQueryParams
-    (getOrganizationsBy @'PGtext @Text ((#o ! #name) .== param @1)) (Only ("Haskell Foundation" :: Text))
+    (getOrganizationsBy @Text ((#o ! #name) .== param @1)) (Only ("ACME" :: Text))
   organizationRows3 <- getRows organizationsResult3
   liftIO $ print (organizationRows3 :: [Organization])
 
