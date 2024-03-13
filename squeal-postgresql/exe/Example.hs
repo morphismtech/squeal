@@ -10,7 +10,7 @@
 #-}
 
 {-# LANGUAGE ScopedTypeVariables #-}
-
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Main (main, main2, upsertUser) where
 
@@ -128,6 +128,7 @@ getOrganizations = select_
 
 getOrganizationsBy ::
   forall pgty hsty.
+  NullPG hsty ~ NotNull pgty =>
   Condition
     'Ungrouped
     '[]
@@ -205,14 +206,14 @@ session = do
   liftIO $ print (organizationRows :: [Organization])
 
   organizationsResult2 <- runQueryParams
-    (getOrganizationsBy ((#o ! #id) .== param @1)) (Only (1 :: Int32))
+    (getOrganizationsBy @'PGint4 @Int32 ((#o ! #id) .== param @1)) (Only (1 :: Int32))
   organizationRows2 <- getRows organizationsResult2
   liftIO $ print (organizationRows2 :: [Organization])
 
   organizationsResult3 <- runQueryParams
-    (getOrganizationsBy ((#o ! #name) .== param @1)) (Only ("ACME" :: Text))
+    (getOrganizationsBy @'PGtext @Text ((#o ! #name) .== param @1)) (Only ("Haskell Foundation" :: Text))
   organizationRows3 <- getRows organizationsResult3
-  liftIO $ print (organizationRows2 :: [Organization])
+  liftIO $ print (organizationRows3 :: [Organization])
 
 main :: IO ()
 main = do
