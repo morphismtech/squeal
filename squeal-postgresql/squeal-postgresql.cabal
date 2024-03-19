@@ -126,8 +126,8 @@ test-suite doctest
   build-depends:
       base >= 4.12.0.0 && < 5.0
     , doctest >= 0.16.3
-  if impl(ghc >= 9.0.0)
-    buildable: False
+  -- if impl(ghc >= 9.0.0)
+  --   buildable: False
 
 test-suite properties
   default-language: Haskell2010
