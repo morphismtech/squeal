@@ -56,55 +56,6 @@ jobs:
             ".stack-work"
             "/root/.stack/"
           key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
-  ghc9_6:
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:11
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: exampledb
-        ports:
-        - 5432:5432
-        # needed because the postgres container does not provide a healthcheck
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-
-    steps:
-      - uses: actions/checkout@v2
-      - uses: haskell-actions/setup@v2
-        with:
-          enable-stack: true
-          stack-version: 'latest'
-          stack-no-global: true
-          stack-setup-ghc: true
-
-      - name: build
-        run: stack build --fast --stack-yaml stack-ghc9_6.yaml
-
-      - name: test
-        run: stack test --fast --stack-yaml stack-ghc9_6.yaml
-        env:
-          PG_USER: postgres
-          PG_HOST: localhost
-          PG_DATABASE: exampledb
-          PG_PASSWORD: postgres
-          PG_PORT: ${{ job.services.postgres.ports['5432'] }}
-
-      - name: benchmark
-        run: stack bench --fast --stack-yaml stack-ghc9_6.yaml
-      
-      - name: documentation
-        run: stack haddock --fast --stack-yaml stack-ghc9_6.yaml
-
-      - name: cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ".stack-work"
-            "/root/.stack/"
-          key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
   ghc9_4:
     runs-on: ubuntu-latest
 
@@ -146,6 +97,55 @@ jobs:
       
       - name: documentation
         run: stack haddock --fast --stack-yaml stack-ghc9_4.yaml
+
+      - name: cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ".stack-work"
+            "/root/.stack/"
+          key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+  ghc9_2:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: exampledb
+        ports:
+        - 5432:5432
+        # needed because the postgres container does not provide a healthcheck
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: haskell-actions/setup@v2
+        with:
+          enable-stack: true
+          stack-version: 'latest'
+          stack-no-global: true
+          stack-setup-ghc: true
+
+      - name: build
+        run: stack build --fast --stack-yaml stack-ghc9_2.yaml
+
+      - name: test
+        run: stack test --fast --stack-yaml stack-ghc9_2.yaml
+        env:
+          PG_USER: postgres
+          PG_HOST: localhost
+          PG_DATABASE: exampledb
+          PG_PASSWORD: postgres
+          PG_PORT: ${{ job.services.postgres.ports['5432'] }}
+
+      - name: benchmark
+        run: stack bench --fast --stack-yaml stack-ghc9_2.yaml
+      
+      - name: documentation
+        run: stack haddock --fast --stack-yaml stack-ghc9_2.yaml
 
       - name: cache
         uses: actions/cache@v3
