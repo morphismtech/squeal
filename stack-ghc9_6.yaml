@@ -1,7 +1,0 @@
-resolver: nightly-2023-08-29
-packages:
-- squeal-postgresql
-- squeal-postgresql-ltree
-- squeal-postgresql-uuid-ossp
-extra-deps:
-- records-sop-0.1.1.1

@@ -7,7 +7,7 @@ on:
     branches: [ dev ]
 
 jobs:
-  ghc9_0:
+  ghc_default:
     runs-on: ubuntu-latest
 
     services:
@@ -56,7 +56,7 @@ jobs:
             ".stack-work"
             "/root/.stack/"
           key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
-  ghc8_10:
+  ghc9_4:
     runs-on: ubuntu-latest
 
     services:
@@ -81,10 +81,10 @@ jobs:
           stack-setup-ghc: true
 
       - name: build
-        run: stack build --fast --stack-yaml stack-ghc8_10.yaml
+        run: stack build --fast --stack-yaml stack-ghc9_4.yaml
 
       - name: test
-        run: stack test --fast --stack-yaml stack-ghc8_10.yaml
+        run: stack test --fast --stack-yaml stack-ghc9_4.yaml
         env:
           PG_USER: postgres
           PG_HOST: localhost
@@ -93,10 +93,10 @@ jobs:
           PG_PORT: ${{ job.services.postgres.ports['5432'] }}
 
       - name: benchmark
-        run: stack bench --fast --stack-yaml stack-ghc8_10.yaml
+        run: stack bench --fast --stack-yaml stack-ghc9_4.yaml
       
       - name: documentation
-        run: stack haddock --fast --stack-yaml stack-ghc8_10.yaml
+        run: stack haddock --fast --stack-yaml stack-ghc9_4.yaml
 
       - name: cache
         uses: actions/cache@v3
@@ -105,7 +105,7 @@ jobs:
             ".stack-work"
             "/root/.stack/"
           key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
-  ghc8_8:
+  ghc9_2:
     runs-on: ubuntu-latest
 
     services:
@@ -130,10 +130,10 @@ jobs:
           stack-setup-ghc: true
 
       - name: build
-        run: stack build --fast --stack-yaml stack-ghc8_8.yaml
+        run: stack build --fast --stack-yaml stack-ghc9_2.yaml
 
       - name: test
-        run: stack test --fast --stack-yaml stack-ghc8_8.yaml
+        run: stack test --fast --stack-yaml stack-ghc9_2.yaml
         env:
           PG_USER: postgres
           PG_HOST: localhost
@@ -142,10 +142,10 @@ jobs:
           PG_PORT: ${{ job.services.postgres.ports['5432'] }}
 
       - name: benchmark
-        run: stack bench --fast --stack-yaml stack-ghc8_8.yaml
+        run: stack bench --fast --stack-yaml stack-ghc9_2.yaml
       
       - name: documentation
-        run: stack haddock --fast --stack-yaml stack-ghc8_8.yaml
+        run: stack haddock --fast --stack-yaml stack-ghc9_2.yaml
 
       - name: cache
         uses: actions/cache@v3
