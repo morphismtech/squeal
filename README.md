@@ -63,6 +63,7 @@ composable and cover a large portion of SQL.
 ## testing
 
 Start postgres on localhost port `5432` and create a database named `exampledb`.
+On macOS, you can create the database using `createdb exampledb`.
 
 `stack test`
 
