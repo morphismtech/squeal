@@ -207,7 +207,7 @@ combinations of null values.
 arrAll
   :: Expression grp lat with db params from ty1 -- ^ expression
   -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
-  -> Expression grp lat with db params from ('Null ('PGvararray ty2)) -- ^ array
+  -> Expression grp lat with db params from (null ('PGvararray ty2)) -- ^ array
   -> Condition grp lat with db params from
 arrAll x (?) xs = x ? (UnsafeExpression $ "ALL" <+> parenthesized (renderSQL xs))
 
@@ -237,6 +237,6 @@ Boolean combinations of null values.
 arrAny
   :: Expression grp lat with db params from ty1 -- ^ expression
   -> Operator ty1 ty2 ('Null 'PGbool) -- ^ operator
-  -> Expression grp lat with db params from ('Null ('PGvararray ty2)) -- ^ array
+  -> Expression grp lat with db params from (null ('PGvararray ty2)) -- ^ array
   -> Condition grp lat with db params from
 arrAny x (?) xs = x ? (UnsafeExpression $ "ANY" <+> parenthesized (renderSQL xs))

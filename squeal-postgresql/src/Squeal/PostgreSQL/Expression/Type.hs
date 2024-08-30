@@ -34,6 +34,8 @@ module Squeal.PostgreSQL.Expression.Type
   , inferredtype
     -- * Type Expression
   , TypeExpression (..)
+  , typerow
+  , typeenum
   , typedef
   , typetable
   , typeview
@@ -172,6 +174,31 @@ newtype TypeExpression (db :: SchemasType) (ty :: NullType)
 instance RenderSQL (TypeExpression db ty) where
   renderSQL = renderTypeExpression
 
+-- | The composite type corresponding to a relation can be expressed
+-- by its alias. A relation is either a composite type, a table or a view.
+-- It subsumes `typetable` and `typeview` and partly overlaps `typedef`.
+typerow
+  :: ( relss ~ DbRelations db
+     , Has sch relss rels
+     , Has rel rels row
+     )
+  => QualifiedAlias sch rel
+  -- ^ type alias
+  -> TypeExpression db (null ('PGcomposite row))
+typerow = UnsafeTypeExpression . renderSQL
+
+-- | An enumerated type can be expressed by its alias.
+-- `typeenum` is subsumed by `typedef`.
+typeenum
+  :: ( enumss ~ DbEnums db
+     , Has sch enumss enums
+     , Has enum enums labels
+     )
+  => QualifiedAlias sch enum
+  -- ^ type alias
+  -> TypeExpression db (null ('PGenum labels))
+typeenum = UnsafeTypeExpression . renderSQL
+
 -- | The enum or composite type in a `Typedef` can be expressed by its alias.
 typedef
   :: (Has sch db schema, Has td schema ('Typedef ty))
@@ -181,7 +208,7 @@ typedef
 typedef = UnsafeTypeExpression . renderSQL
 
 -- | The composite type corresponding to a `Table` definition can be expressed
--- by its alias.
+-- by its alias. It is subsumed by `typerow`
 typetable
   :: (Has sch db schema, Has tab schema ('Table table))
   => QualifiedAlias sch tab
@@ -190,7 +217,7 @@ typetable
 typetable = UnsafeTypeExpression . renderSQL
 
 -- | The composite type corresponding to a `View` definition can be expressed
--- by its alias.
+-- by its alias. It is subsumed by `typerow`.
 typeview
   :: (Has sch db schema, Has vw schema ('View view))
   => QualifiedAlias sch vw
@@ -377,13 +404,15 @@ instance PGTyped db ('PGrange 'PGtimestamp) where pgtype = tsrange
 instance PGTyped db ('PGrange 'PGtimestamptz) where pgtype = tstzrange
 instance PGTyped db ('PGrange 'PGdate) where pgtype = daterange
 instance
-  ( UserType db ('PGcomposite row) ~ '(sch,td)
-  , Has sch db schema
-  , Has td schema ('Typedef ('PGcomposite row))
+  ( relss ~ DbRelations db
+  , Has sch relss rels
+  , Has rel rels row
+  , FindQualified "no relation found with row:" relss row ~ '(sch,rel)  
   ) => PGTyped db ('PGcomposite row) where
-    pgtype = typedef (QualifiedAlias @sch @td)
+    pgtype = typerow (QualifiedAlias @sch @rel)
 instance
-  ( UserType db ('PGenum labels) ~ '(sch,td)
+  ( enums ~ DbEnums db
+  , FindQualified "no enum found with labels:" enums labels ~ '(sch,td)
   , Has sch db schema
   , Has td schema ('Typedef ('PGenum labels))
   ) => PGTyped db ('PGenum labels) where

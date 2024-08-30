@@ -2,7 +2,7 @@
 
 ![squeal-icon](https://raw.githubusercontent.com/morphismtech/squeal/dev/squeal.gif)
 
-[![GitHub CI](https://github.com/morphismtech/squeal/workflows/CI/badge.svg)](https://github.com/morphismtech/squeal/actions)
+[![GithubWorkflowCI](https://github.com/morphismtech/squeal/actions/workflows/ci.yml/badge.svg)](https://github.com/morphismtech/squeal/actions/workflows/ci.yml)
 
 [Github](https://github.com/morphismtech/squeal)
 
@@ -63,6 +63,7 @@ composable and cover a large portion of SQL.
 ## testing
 
 Start postgres on localhost port `5432` and create a database named `exampledb`.
+On macOS, you can create the database using `createdb exampledb`.
 
 `stack test`
 

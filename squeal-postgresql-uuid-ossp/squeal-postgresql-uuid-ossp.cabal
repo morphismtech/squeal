@@ -1,17 +1,17 @@
+cabal-version: 2.2
 name: squeal-postgresql-uuid-ossp
-version: 0.1.0.0
+version: 0.1.0.1
 synopsis: UUID OSSP extension for Squeal
 description: UUID OSSP extension for Squeal
 homepage: https://github.com/morphismtech/squeal/uuid-ossp
 bug-reports: https://github.com/morphismtech/squeal/issues
-license: BSD3
+license: BSD-3-Clause
 license-file: LICENSE
 author: Eitan Chatav
 maintainer: eitan.chatav@gmail.com
-copyright: Copyright (c) 2021 Morphism, LLC
+copyright: Copyright (c) 2022 Morphism, LLC
 category: Database
 build-type: Simple
-cabal-version: >=1.18
 extra-doc-files: README.md
 
 source-repository head

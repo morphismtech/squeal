@@ -25,7 +25,8 @@ Expressions are the atoms used to build statements.
   , StandaloneDeriving
   , TypeApplications
   , TypeFamilies
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , UndecidableInstances
   , RankNTypes
@@ -342,7 +343,7 @@ function
   :: (Has sch db schema, Has fun schema ('Function ('[x] :=> 'Returns y)))
   => QualifiedAlias sch fun -- ^ function name
   -> Fun db x y
-function = unsafeFunction . renderSQL
+function f = unsafeFunction $ renderSQL f
 
 -- | >>> printSQL $ unsafeFunctionN "f" (currentTime :* localTimestamp :* false *: inline 'a')
 -- f(CURRENT_TIME, LOCALTIMESTAMP, FALSE, (E'a' :: char(1)))
@@ -369,7 +370,7 @@ functionN
      , SListI xs )
   => QualifiedAlias sch fun -- ^ function alias
   -> FunN db xs y
-functionN = unsafeFunctionN . renderSQL
+functionN f = unsafeFunctionN $ renderSQL f
 
 instance
   Num (Expression grp lat with db params from (null 'PGint2)) where

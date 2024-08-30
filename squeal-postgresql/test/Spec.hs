@@ -15,7 +15,8 @@
   , TypeApplications
   , TypeFamilies
   , TypeSynonymInstances
-  , TypeInType
+  , DataKinds
+  , PolyKinds
   , TypeOperators
   , UndecidableInstances
 #-}
@@ -109,7 +110,7 @@ spec = before_ setupDB . after_ dropDB $ do
     let
       testUser = User "TestUser"
       newUser :: User -> Transaction DB ()
-      newUser = manipulateParams_ insertUser
+      newUser usr = manipulateParams_ insertUser usr
       insertUserTwice :: Transaction DB ()
       insertUserTwice = newUser testUser >> newUser testUser
       err23505 = UniqueViolation $ Char8.unlines
