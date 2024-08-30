@@ -28,18 +28,19 @@ data ObjSchemum = ObjSchemum
     deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
     deriving (IsPG, Inline, FromPG) via Composite ObjSchemum
 deriving via VarArray [Composite ObjSchemum]
-  instance IsPG [Composite ObjSchemum]
+  instance IsPG [ObjSchemum]
 deriving via VarArray [Composite ObjSchemum]
-  instance Inline [Composite ObjSchemum]
+  instance Inline [ObjSchemum]
 
-getEnums
-  :: VarArray [Composite ObjSchemum]
-  -> Statement DB () (ObjSchemum, Type)
+getEnums :: [ObjSchemum] -> Statement DB () (ObjSchemum, Type)
 getEnums objs =
   let
+    cond = case objs of
+      [] -> true
+      _ -> arrAny #obj (.==) (inline objs)
     sql
       = from (subquery (selectEnums `as` #enums))
-      & where_ (arrAny #obj (.==) (inline objs))
+      & where_ cond
       & select Star
     enc = nilParams
     dec = do
