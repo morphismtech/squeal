@@ -1,17 +1,63 @@
 {-# LANGUAGE
     DataKinds
+  , DeriveAnyClass
+  , DeriveGeneric
+  , DerivingStrategies
+  , DerivingVia
+  , FlexibleInstances
   , OverloadedLabels
+  , PolyKinds
+  , StandaloneDeriving
   , TypeOperators
+  , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Catalog.Query where
 
+import Data.Foldable
+import qualified Generics.SOP as SOP
+import qualified GHC.Generics as GHC
+import Language.Haskell.TH.Syntax hiding (Inline)
 import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Catalog
 
+data ObjSchemum = ObjSchemum
+  { nspname :: String
+  , objname :: String
+  } deriving stock GHC.Generic
+    deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+    deriving (IsPG, Inline, FromPG) via Composite ObjSchemum
+deriving via VarArray [Composite ObjSchemum]
+  instance IsPG [Composite ObjSchemum]
+deriving via VarArray [Composite ObjSchemum]
+  instance Inline [Composite ObjSchemum]
+
+getEnums
+  :: VarArray [Composite ObjSchemum]
+  -> Statement DB () (ObjSchemum, Type)
+getEnums objs =
+  let
+    sql
+      = from (subquery (selectEnums `as` #enums))
+      & where_ (arrAny #obj (.==) (inline objs))
+      & select Star
+    enc = nilParams
+    dec = do
+      obj <- #obj
+      VarArray enumlabels <- #enumlabels
+      let
+        consLabel ty str = AppT
+          (AppT PromotedConsT (LitT (StrTyLit str))) ty
+        labels = foldl' consLabel PromotedNilT (enumlabels :: [String])
+        enumType = AppT
+          (PromotedT (mkName "Typedef"))
+          (AppT (PromotedT (mkName "PGenum")) labels)
+      return (obj, enumType)
+  in
+    Query enc dec sql
+
 selectEnums :: Query lat with DB params '[
-  "nspname" ::: 'NotNull 'PGtext,
-  "typname" ::: 'NotNull 'PGtext,
+  "obj" ::: NullPG ObjSchemum,
   "enumlabels" ::: 'NotNull ('PGvararray ('NotNull 'PGtext))]
 selectEnums =
   from
@@ -19,29 +65,27 @@ selectEnums =
       & innerJoin (table (#pg_catalog ! #pg_type `as` #typ))
         (#typ ! #typnamespace .== #nsp ! #oid)
       & innerJoin (table (#pg_catalog ! #pg_enum `as` #enum))
-        (#enum ! #enumtypid .== #typ ! #oid)
-    )
+        (#enum ! #enumtypid .== #typ ! #oid) )
   & groupBy (#nsp ! #nspname :* #typ ! #typname)
   & select_
-    ( mapAliased (cast text) (#nsp ! #nspname) :*
-      mapAliased (cast text) (#typ ! #typname) :*
+    ( row
+        ( mapAliased (cast text) (#nsp ! #nspname) :*
+          cast text (#typ ! #typname) `as` #objname
+        ) `as` #obj :*
       fromNull (array0 text)
         ( arrayAgg
           ( All (cast text (#enum ! #enumlabel))
             & orderBy [Asc (#enum ! #enumsortorder)]
-          )
-        ) `as` #enumlabels
-    )
+          ) ) `as` #enumlabels )
 
 selectRelations :: Query lat with DB params '[
-  "nspname" ::: 'NotNull 'PGtext,
-  "relname" ::: 'NotNull 'PGtext,
+  "obj" ::: 'NotNull (PG ObjSchemum),
   "relkind" ::: 'NotNull ('PGchar 1),
   "attributes" ::: 'NotNull ('PGvararray ('NotNull ('PGcomposite '[
-    "nspname" ::: 'NotNull 'PGtext,
     "attname" ::: 'NotNull 'PGtext,
     "atthasdef" ::: 'NotNull 'PGbool,
-    "typname" ::: 'NotNull 'PGtext])))]
+    "typname" ::: 'NotNull 'PGtext,
+    "typtype" ::: 'NotNull ('PGchar 1)])))]
 selectRelations =
   from
     ( table (#pg_catalog ! #pg_namespace `as` #nsp)
@@ -52,39 +96,23 @@ selectRelations =
       & innerJoin (table (#pg_catalog ! #pg_type `as` #atttyp))
         (#atttyp ! #oid .== #att ! #atttypid)
       & innerJoin (table (#pg_catalog ! #pg_namespace `as` #attnsp))
-        (#attnsp ! #oid .== #atttyp ! #typnamespace)
-    )
+        (#attnsp ! #oid .== #atttyp ! #typnamespace) )
   & groupBy (#nsp ! #nspname :* #rel ! #relname :* #rel ! #relkind)
   & select_
-    ( mapAliased (cast text) (#nsp ! #nspname) :*
-      mapAliased (cast text) (#rel ! #relname) :*
+    ( row
+        ( mapAliased (cast text) (#nsp ! #nspname) :*
+          cast text (#rel ! #relname) `as` #objname
+        ) `as` #obj :*
       #rel ! #relkind :*
       fromNull (array0 record)
         ( arrayAgg
           ( All (row (
-              mapAliased (cast text) (#attnsp ! #nspname) :*
               mapAliased (cast text) (#att ! #attname) :*
-              #att ! #atthasdef *:
-              mapAliased (cast text) (#atttyp ! #typname)
-              ))
+              #att ! #atthasdef :*
+              mapAliased (cast text) (#atttyp ! #typname) :*
+              #atttyp ! #typtype ))
             & orderBy [Asc (#att ! #attnum)]
-          )
-        ) `as` #attributes
-    )
-
-selectRelationsKind :: Char -> Query lat with DB params '[
-  "nspname" ::: 'NotNull 'PGtext,
-  "relname" ::: 'NotNull 'PGtext,
-  "relkind" ::: 'NotNull ('PGchar 1),
-  "attributes" ::: 'NotNull ('PGvararray ('NotNull ('PGcomposite '[
-    "nspname" ::: 'NotNull 'PGtext,
-    "attname" ::: 'NotNull 'PGtext,
-    "atthasdef" ::: 'NotNull 'PGbool,
-    "typname" ::: 'NotNull 'PGtext])))]
-selectRelationsKind c =
-  from (subquery (selectRelations `as` #rel))
-  & where_ (#rel ! #relkind .== inline c)
-  & select Star
+          ) ) `as` #attributes )
 
 selectTableConstraints :: Query lat with DB params '[
   "nspname" ::: 'NotNull 'PGtext,

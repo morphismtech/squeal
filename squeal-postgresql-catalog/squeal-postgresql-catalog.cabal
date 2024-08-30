@@ -27,4 +27,6 @@ library
   ghc-options: -Wall -freduction-depth=5000
   build-depends:
       base >= 4.13.0.0 && < 5.0
+    , generics-sop
     , squeal-postgresql
+    , template-haskell
