@@ -79,7 +79,7 @@ type Tables = ('[
   -- ,"pg_cast" ::: 'Table PgCastTable
   ,"pg_class" ::: 'Table PgClassTable
   -- ,"pg_collation" ::: 'Table PgCollationTable
-  -- ,"pg_constraint" ::: 'Table PgConstraintTable
+  ,"pg_constraint" ::: 'Table PgConstraintTable
   -- ,"pg_conversion" ::: 'Table PgConversionTable
   -- ,"pg_database" ::: 'Table PgDatabaseTable
   -- ,"pg_db_role_setting" ::: 'Table PgDbRoleSettingTable
