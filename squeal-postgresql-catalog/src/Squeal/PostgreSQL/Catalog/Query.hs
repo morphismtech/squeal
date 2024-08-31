@@ -19,6 +19,20 @@ import qualified GHC.Generics as GHC
 import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Catalog
 
+data ObjSchemas = ObjSchemas
+  { schemas :: [ObjSchemum]
+  , schEnums :: [ObjEnum]
+  , schTbls :: [ObjTbl]
+  }
+
+data ObjTbl = ObjTbl
+  { tblobj :: ObjSchemum
+  , tblcons :: [ObjCon]
+  , tblcols :: [ObjAtt]
+  } deriving stock GHC.Generic
+    deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+    deriving (IsPG, Inline, FromPG) via Composite ObjTbl
+
 data ObjSchemum = ObjSchemum
   { nspname :: String
   , objname :: String
@@ -53,6 +67,12 @@ data ObjAtt = ObjAtt
   } deriving stock GHC.Generic
     deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
     deriving (IsPG, Inline, FromPG) via Composite ObjAtt
+deriving via VarArray [Composite ObjAtt]
+  instance IsPG [ObjAtt]
+deriving via VarArray [Composite ObjAtt]
+  instance Inline [ObjAtt]
+deriving via VarArray [Composite ObjAtt]
+  instance FromPG [ObjAtt]
 
 data ObjEnum = ObjEnum
   { enumobj :: ObjSchemum
@@ -127,23 +147,41 @@ selectEnums =
             & orderBy [Asc (#enum ! #enumsortorder)]
           ) ) `as` #enumlabels )
 
-getColumns
-  :: Maybe [ObjSchemum]
-  -> Statement DB () ObjCols
-getColumns objsMaybe =
+getTables :: Maybe [ObjSchemum] -> Statement DB () ObjTbl
+getTables objsMaybe =
   let
-    cond = case objsMaybe of
-      Nothing -> true
-      Just objs -> arrAny #obj (.==) (inline objs)
-    sql
+    selectCols
       = from (subquery (selectRelations `as` #rels))
       & where_ (#relkind .== inline 'r')
-      & where_ cond
       & select_
-        ( #obj `as` #colstbl :*
+        ( #obj :*
           #attributes )
+    selectCons
+      = from (subquery (selectTableConstraints `as` #cons))
+      & groupBy #obj
+      & select_
+        ( #obj :*
+          fromNull (array0 record) (arrayAgg (All (row (
+            #conname :*
+            #contype :*
+            #conkey_columns :*
+            #confrel_schema :*
+            #confrel_name :*
+            #confkey_columns )))) `as` #constraints )
+    selectTbls
+      = from
+        ( subquery (selectCons `as` #cons)
+          & innerJoin (subquery (selectCols `as` #cols))
+            (#cons ! #obj .== #cols ! #obj) )
+      & where_ ( case objsMaybe of
+          Nothing -> true
+          Just objs -> arrAny (#cons ! #obj) (.==) (inline objs) )
+      & select_
+        ( #cons ! #obj `as` #tblobj :*
+          #cons ! #constraints `as` #tblcons :*
+          #cols ! #attributes `as` #tblcols )
   in
-    query sql
+    query selectTbls
 
 selectRelations :: Query lat with DB params '[
   "obj" ::: 'NotNull (PG ObjSchemum),
@@ -195,32 +233,8 @@ selectRelations =
             & orderBy [Asc (#att ! #attnum)]
           ) ) `as` #attributes )
 
-getTableConstraints
-  :: Maybe [ObjSchemum]
-  -> Statement DB () ObjCons
-getTableConstraints objsMaybe =
-  let
-    cond = case objsMaybe of
-      Nothing -> true
-      Just objs -> arrAny #tbl (.==) (inline objs)
-    sql
-      = from (subquery (selectTableConstraints `as` #cons))
-      & where_ cond
-      & groupBy #tbl
-      & select_
-        ( #tbl `as` #constbl :*
-          fromNull (array0 record) (arrayAgg (All (row (
-            #conname :*
-            #contype :*
-            #conkey_columns :*
-            #confrel_schema :*
-            #confrel_name :*
-            #confkey_columns )))) `as` #constraints )
-  in
-    query sql
-
 selectTableConstraints :: Query lat with DB params '[
-  "tbl" ::: NullPG ObjSchemum,
+  "obj" ::: NullPG ObjSchemum,
   "conname" ::: 'NotNull 'PGtext,
   "contype" ::: 'NotNull ('PGchar 1),
   "conkey_columns" ::: 'NotNull ('PGvararray ('NotNull 'PGtext)),
@@ -255,7 +269,7 @@ selectTableConstraints =
     ( row
         ( mapAliased (cast text) (#nsp ! #nspname) :*
           cast text (#rel ! #relname) `as` #objname
-        ) `as` #tbl :*
+        ) `as` #obj :*
       mapAliased (cast text) (#con ! #conname) :*
       #con ! #contype :*
       fromNull (array0 text)
