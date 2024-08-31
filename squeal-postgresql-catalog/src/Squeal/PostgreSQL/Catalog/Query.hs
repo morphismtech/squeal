@@ -20,18 +20,9 @@ import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Catalog
 
 data ObjSchemas = ObjSchemas
-  { schemas :: [ObjSchemum]
-  , schEnums :: [ObjEnum]
+  { schEnums :: [ObjEnum]
   , schTbls :: [ObjTbl]
   }
-
-data ObjTbl = ObjTbl
-  { tblobj :: ObjSchemum
-  , tblcons :: [ObjCon]
-  , tblcols :: [ObjAtt]
-  } deriving stock GHC.Generic
-    deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-    deriving (IsPG, Inline, FromPG) via Composite ObjTbl
 
 data ObjSchemum = ObjSchemum
   { nspname :: String
@@ -43,6 +34,21 @@ deriving via VarArray [Composite ObjSchemum]
   instance IsPG [ObjSchemum]
 deriving via VarArray [Composite ObjSchemum]
   instance Inline [ObjSchemum]
+
+data ObjEnum = ObjEnum
+  { enumobj :: ObjSchemum
+  , enumlabels :: VarArray [String]
+  } deriving stock GHC.Generic
+    deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+    deriving (IsPG, Inline, FromPG) via Composite ObjEnum
+
+data ObjTbl = ObjTbl
+  { tblobj :: ObjSchemum
+  , tblcons :: [ObjCon]
+  , tblcols :: [ObjAtt]
+  } deriving stock GHC.Generic
+    deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
+    deriving (IsPG, Inline, FromPG) via Composite ObjTbl
 
 data ObjType = ObjType
   { typobj :: ObjSchemum
@@ -74,20 +80,6 @@ deriving via VarArray [Composite ObjAtt]
 deriving via VarArray [Composite ObjAtt]
   instance FromPG [ObjAtt]
 
-data ObjEnum = ObjEnum
-  { enumobj :: ObjSchemum
-  , enumlabels :: VarArray [String]
-  } deriving stock GHC.Generic
-    deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-    deriving (IsPG, Inline, FromPG) via Composite ObjEnum
-
-data ObjCols = ObjCols
-  { colstbl :: ObjSchemum
-  , attributes :: VarArray [ObjAtt]
-  } deriving stock GHC.Generic
-    deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-    deriving (IsPG, Inline, FromPG) via Composite ObjCols
-
 data ObjCon = ObjCon
   { conname :: String
   , contype :: Char
@@ -104,13 +96,6 @@ deriving via VarArray [Composite ObjCon]
   instance Inline [ObjCon]
 deriving via VarArray [Composite ObjCon]
   instance FromPG [ObjCon]
-
-data ObjCons = ObjCons
-  { constbl :: ObjSchemum
-  , constraints :: [ObjCon]
-  } deriving stock GHC.Generic
-    deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-    deriving (IsPG, Inline, FromPG) via Composite ObjCons
 
 getEnums :: Maybe [ObjSchemum] -> Statement DB () ObjEnum
 getEnums objsMaybe =
