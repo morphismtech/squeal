@@ -7,6 +7,7 @@
   , FlexibleInstances
   , OverloadedLabels
   , PolyKinds
+  , RecordWildCards
   , StandaloneDeriving
   , TypeOperators
   , UndecidableInstances
@@ -14,13 +15,16 @@
 
 module Squeal.PostgreSQL.Catalog.Query where
 
+import Data.Foldable
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
+import Language.Haskell.TH.Syntax hiding (Inline)
 import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Catalog
 
 data ObjSchemas = ObjSchemas
-  { schEnums :: [ObjEnum]
+  { schemas :: [String]
+  , schEnums :: [ObjEnum]
   , schTbls :: [ObjTbl]
   }
 
@@ -96,6 +100,46 @@ deriving via VarArray [Composite ObjCon]
   instance Inline [ObjCon]
 deriving via VarArray [Composite ObjCon]
   instance FromPG [ObjCon]
+objConTy :: ObjCon -> Type
+objConTy ObjCon{..} =
+  let
+    conkey_columnsT = promotedListT
+      [ LitT (StrTyLit str)
+      | str <- getVarArray conkey_columns
+      ]
+    confrel_err = mconcat
+      [ "ForeignKey "
+      , conname
+      , " expected reference metadata."
+      ]
+    conty_err ty = mconcat
+      [ "Constraint "
+      , conname
+      , " has unsupported type \'"
+      , [ty]
+      , "\'."
+      ]
+    confrel_schemaT = case confrel_schema of
+      Nothing -> tyErrT confrel_err
+      Just refsch -> LitT (StrTyLit refsch)
+    confrel_nameT = case confrel_name of
+      Nothing -> tyErrT confrel_err
+      Just reftbl -> LitT (StrTyLit reftbl)
+    confkey_columnsT = case confkey_columns of
+      Nothing -> tyErrT confrel_err
+      Just (VarArray refcols) ->
+        promotedListT [LitT (StrTyLit refcol) | refcol <- refcols]
+    conTy = case contype of
+      'c' -> PromotedT (mkName "Check") `AppT` conkey_columnsT
+      'u' -> PromotedT (mkName "Unique") `AppT` conkey_columnsT
+      'p' -> PromotedT (mkName "PrimaryKey") `AppT` conkey_columnsT
+      'f' -> PromotedT (mkName "ForeignKey") `AppT` conkey_columnsT
+        `AppT` confrel_schemaT
+        `AppT` confrel_nameT
+        `AppT` confkey_columnsT
+      ty -> tyErrT (conty_err ty)
+  in
+    InfixT (LitT (StrTyLit conname)) (mkName ":=>") conTy
 
 getEnums :: Maybe [ObjSchemum] -> Statement DB () ObjEnum
 getEnums objsMaybe =
@@ -264,3 +308,11 @@ selectTableConstraints =
       cast text (#confrel ! #relname) `as` #confrel_name :*
       arrayAgg (All (cast text (#confatt ! #attname)))
         `as` #confkey_columns )
+
+promotedListT :: [Type] -> Type
+promotedListT =
+  foldl' (\tyL tyR -> PromotedConsT `AppT` tyL `AppT` tyR) PromotedNilT
+
+tyErrT :: String -> Type
+tyErrT msg = ConT (mkName "TypeError") `AppT`
+  (ParensT (PromotedT (mkName "Text") `AppT` LitT (StrTyLit msg)))
