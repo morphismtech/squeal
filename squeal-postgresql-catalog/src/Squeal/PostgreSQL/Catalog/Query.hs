@@ -4,9 +4,13 @@
   , DeriveGeneric
   , DerivingStrategies
   , DerivingVia
+  , FlexibleContexts
   , FlexibleInstances
+  , MonoLocalBinds
+  , MultiWayIf
   , OverloadedLabels
   , PolyKinds
+  , RankNTypes
   , RecordWildCards
   , StandaloneDeriving
   , TypeOperators
@@ -15,12 +19,41 @@
 
 module Squeal.PostgreSQL.Catalog.Query where
 
+import Control.Monad
 import Data.Foldable
+import Data.Int
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
 import Language.Haskell.TH.Syntax hiding (Inline)
 import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Catalog
+
+getDB
+  :: Maybe [ObjSchemum] -- filter by qualified name
+  -> (ObjSchemum -> String) -- format by qualified name
+  -> Transaction DB [Dec]
+getDB fltr frmt = do
+  enums <- getRows =<< execute (objEnumTy <$> getEnums fltr)
+  tables <- getRows =<< execute (getTables fltr)
+  let
+    mkqName str qname = mkName (str <> "_" <> frmt qname)
+    enumDecls =
+      [ TySynD (mkqName "Enum" qname) [] enumTy
+      | (qname, enumTy) <- enums
+      ]
+    tableDecls = join
+      [ [ TySynD (mkqName "Table" qname) [] $ InfixT
+            (ConT (mkqName "Constraints" qname))
+            (mkName ":=>")
+            (ConT (mkqName "Columns" qname))
+        , TySynD (mkqName "Columns" qname) [] $ promotedListT
+            [objAttTy frmt obj | obj <- objAtts]
+        , TySynD (mkqName "Constraints" qname) [] $ promotedListT
+            [objConTy obj | obj <- objCons]
+        ]
+      | ObjTbl qname objCons objAtts <- tables
+      ]
+  return (enumDecls <> tableDecls)
 
 data ObjSchemas = ObjSchemas
   { schemas :: [String]
@@ -45,6 +78,15 @@ data ObjEnum = ObjEnum
   } deriving stock GHC.Generic
     deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
     deriving (IsPG, Inline, FromPG) via Composite ObjEnum
+objEnumTy :: ObjEnum -> (ObjSchemum, Type)
+objEnumTy ObjEnum{..} =
+  let
+    enumlabelsT = promotedListT
+      [ LitT (StrTyLit lbl)
+      | lbl <- getVarArray enumlabels
+      ]
+  in
+    (enumobj, PromotedT (mkName "PGenum") `AppT` enumlabelsT)
 
 data ObjTbl = ObjTbl
   { tblobj :: ObjSchemum
@@ -57,18 +99,19 @@ data ObjTbl = ObjTbl
 data ObjType = ObjType
   { typobj :: ObjSchemum
   , typtype :: Char
-  , typarray :: ObjArrayType
+  , typcategory :: Char
+  , typlen :: Int16
   } deriving stock GHC.Generic
     deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
     deriving (IsPG, Inline, FromPG) via Composite ObjType
-
-data ObjArrayType = ObjArrayType
-  { arrtypnspname :: Maybe String
-  , arrtypname :: Maybe String
-  , arrtyptype :: Maybe Char
-  } deriving stock GHC.Generic
-    deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-    deriving (IsPG, Inline, FromPG) via Composite ObjArrayType
+objTypeTy :: (ObjSchemum -> String) -> ObjType -> Type
+objTypeTy frmt ObjType{..} =
+  if | typtype == 'b' && typcategory /= 'A' ->
+       PromotedT (mkName ("PG" <> objname typobj))
+     | typtype == 'e' && typcategory /= 'A' ->
+       ConT (mkName ("Enum_" <> frmt typobj))
+     | otherwise ->
+       errorT "objTypeTy case not implemented."
 
 data ObjAtt = ObjAtt
   { attname :: String
@@ -83,6 +126,12 @@ deriving via VarArray [Composite ObjAtt]
   instance Inline [ObjAtt]
 deriving via VarArray [Composite ObjAtt]
   instance FromPG [ObjAtt]
+objAttTy :: (ObjSchemum -> String) -> ObjAtt -> Type
+objAttTy frmt ObjAtt{..} =
+  let
+    def = PromotedT (mkName (if atthasdef then "Def" else "NoDef"))
+  in
+    attname `fieldT` (InfixT def (mkName ":=>") (objTypeTy frmt typ))
 
 data ObjCon = ObjCon
   { conname :: String
@@ -120,13 +169,13 @@ objConTy ObjCon{..} =
       , "\'."
       ]
     confrel_schemaT = case confrel_schema of
-      Nothing -> tyErrT confrel_err
+      Nothing -> errorT confrel_err
       Just refsch -> LitT (StrTyLit refsch)
     confrel_nameT = case confrel_name of
-      Nothing -> tyErrT confrel_err
+      Nothing -> errorT confrel_err
       Just reftbl -> LitT (StrTyLit reftbl)
     confkey_columnsT = case confkey_columns of
-      Nothing -> tyErrT confrel_err
+      Nothing -> errorT confrel_err
       Just (VarArray refcols) ->
         promotedListT [LitT (StrTyLit refcol) | refcol <- refcols]
     conTy = case contype of
@@ -137,9 +186,9 @@ objConTy ObjCon{..} =
         `AppT` confrel_schemaT
         `AppT` confrel_nameT
         `AppT` confkey_columnsT
-      ty -> tyErrT (conty_err ty)
+      ty -> errorT (conty_err ty)
   in
-    InfixT (LitT (StrTyLit conname)) (mkName ":=>") conTy
+    conname `fieldT` conTy
 
 getEnums :: Maybe [ObjSchemum] -> Statement DB () ObjEnum
 getEnums objsMaybe =
@@ -230,10 +279,9 @@ selectRelations =
         (#typ ! #oid .== #att ! #atttypid)
       & innerJoin (table (#pg_catalog ! #pg_namespace `as` #typnsp))
         (#typnsp ! #oid .== #typ ! #typnamespace)
-      & leftOuterJoin (table (#pg_catalog ! #pg_type `as` #arrtyp))
-        (#arrtyp ! #oid .== #typ ! #typarray)
-      & leftOuterJoin (table (#pg_catalog ! #pg_namespace `as` #arrnsp))
-        (#arrnsp ! #oid .== #arrtyp ! #typnamespace) )
+      & leftOuterJoin (table (#pg_catalog ! #pg_type `as` #arr))
+        (#arr ! #typarray .== #typ ! #oid)
+    )
   & groupBy (#nsp ! #nspname :* #rel ! #relname :* #rel ! #relkind)
   & select_
     ( row
@@ -251,12 +299,9 @@ selectRelations =
                     ( mapAliased (cast text) (#typnsp ! #nspname) :*
                       cast text (#typ ! #typname) `as` #objname
                     ) `as` #typobj :*
-                  #typ ! #typtype `as` #typtype :*
-                  row
-                    ( cast text (#arrnsp ! #nspname) `as` #arrtypnspname :*
-                      cast text (#arrtyp ! #typname) `as` #arrtypname :*
-                      #arrtyp ! #typtype `as` #arrtyptype
-                    ) `as` #typarray
+                  #typ ! #typtype :*
+                  #typ ! #typcategory :*
+                  #typ ! #typlen
                 ) `as` #typ
               ) )
             & orderBy [Asc (#att ! #attnum)]
@@ -313,6 +358,9 @@ promotedListT :: [Type] -> Type
 promotedListT =
   foldl' (\tyL tyR -> PromotedConsT `AppT` tyL `AppT` tyR) PromotedNilT
 
-tyErrT :: String -> Type
-tyErrT msg = ConT (mkName "TypeError") `AppT`
+errorT :: String -> Type
+errorT msg = ConT (mkName "TypeError") `AppT`
   (ParensT (PromotedT (mkName "Text") `AppT` LitT (StrTyLit msg)))
+
+fieldT :: String -> Type -> Type
+fieldT str ty = InfixT (LitT (StrTyLit str)) (mkName ":::") ty
