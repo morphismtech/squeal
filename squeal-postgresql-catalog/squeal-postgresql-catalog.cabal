@@ -23,10 +23,12 @@ library
   exposed-modules:
     Squeal.PostgreSQL.Catalog
     Squeal.PostgreSQL.Catalog.Query
+    Squeal.PostgreSQL.Catalog.Query2
   default-language: Haskell2010
   ghc-options: -Wall -freduction-depth=5000
   build-depends:
       base >= 4.13.0.0 && < 5.0
     , generics-sop
+    , haskell-src-exts
     , squeal-postgresql
     , template-haskell
