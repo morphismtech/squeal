@@ -11,6 +11,7 @@ encoding of statement parameters
 {-# LANGUAGE
     AllowAmbiguousTypes
   , ConstraintKinds
+  , CPP
   , DataKinds
   , DefaultSignatures
   , FlexibleContexts
@@ -59,6 +60,11 @@ import Data.Functor.Const (Const(Const))
 import Data.Functor.Constant (Constant(Constant))
 import Data.Functor.Contravariant
 import Data.Int (Int16, Int32, Int64)
+#if MIN_VERSION_postgresql_binary(0, 14, 0)
+import Data.IP (IPRange)
+#else
+import Network.IP.Addr (NetAddr, IP)
+#endif
 import Data.Kind
 import Data.Scientific (Scientific)
 import Data.Text as Strict (Text)
@@ -69,7 +75,6 @@ import Data.Vector (Vector)
 import Data.Word (Word32)
 import Foreign.C.Types (CUInt(CUInt))
 import GHC.TypeLits
-import Network.IP.Addr (NetAddr, IP)
 import PostgreSQL.Binary.Encoding hiding (Composite, field)
 
 import qualified Data.Aeson as Aeson
@@ -121,7 +126,11 @@ instance ToPG db Double where toPG = pure . float8
 instance ToPG db Scientific where toPG = pure . numeric
 instance ToPG db Money where toPG = pure . int8_int64 . cents
 instance ToPG db UUID where toPG = pure . uuid
+#if MIN_VERSION_postgresql_binary(0, 14, 0)
+instance ToPG db IPRange where toPG = pure . inet
+#else
 instance ToPG db (NetAddr IP) where toPG = pure . inet
+#endif
 instance ToPG db Char where toPG = pure . char_utf8
 instance ToPG db Strict.Text where toPG = pure . text_strict
 instance ToPG db Lazy.Text where toPG = pure . text_lazy

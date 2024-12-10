@@ -68,6 +68,11 @@ import Data.Bits
 import Data.Coerce (coerce)
 import Data.Functor.Constant (Constant(Constant))
 import Data.Int (Int16, Int32, Int64)
+#if MIN_VERSION_postgresql_binary(0, 14, 0)
+import Data.IP (IPRange)
+#else
+import Network.IP.Addr (NetAddr, IP)
+#endif
 import Data.Kind
 import Data.Scientific (Scientific)
 import Data.String (fromString)
@@ -78,7 +83,6 @@ import Data.Vector (Vector)
 import Database.PostgreSQL.LibPQ (Oid(Oid))
 import GHC.OverloadedLabels
 import GHC.TypeLits
-import Network.IP.Addr (NetAddr, IP)
 import PostgreSQL.Binary.Decoding hiding (Composite)
 import Unsafe.Coerce
 
@@ -200,8 +204,11 @@ instance FromPG Money where
   fromPG = devalue $  Money <$> int
 instance FromPG UUID where
   fromPG = devalue uuid
-instance FromPG (NetAddr IP) where
-  fromPG = devalue inet
+#if MIN_VERSION_postgresql_binary(0, 14, 0)
+instance FromPG IPRange where fromPG = devalue inet
+#else
+instance FromPG (NetAddr IP) where fromPG = devalue inet
+#endif
 instance FromPG Char where
   fromPG = devalue char
 instance FromPG Strict.Text where
