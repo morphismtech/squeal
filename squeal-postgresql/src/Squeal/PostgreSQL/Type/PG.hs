@@ -10,6 +10,7 @@ into corresponding Postgres types.
 -}
 {-# LANGUAGE
     AllowAmbiguousTypes
+  , CPP
   , DeriveAnyClass
   , DeriveFoldable
   , DeriveFunctor
@@ -57,12 +58,16 @@ import Data.Functor.Const (Const)
 import Data.Functor.Constant (Constant)
 import Data.Kind (Type)
 import Data.Int (Int16, Int32, Int64)
+#if MIN_VERSION_postgresql_binary(0, 14, 0)
+import Data.IP (IPRange)
+#else
+import Network.IP.Addr (NetAddr, IP)
+#endif
 import Data.Scientific (Scientific)
 import Data.Time (Day, DiffTime, LocalTime, TimeOfDay, TimeZone, UTCTime)
 import Data.Vector (Vector)
 import Data.UUID.Types (UUID)
 import GHC.TypeLits
-import Network.IP.Addr (NetAddr, IP)
 
 import qualified Data.ByteString.Lazy as Lazy (ByteString)
 import qualified Data.ByteString as Strict (ByteString)
@@ -166,7 +171,11 @@ instance IsPG DiffTime where type PG DiffTime = 'PGinterval
 -- | `PGuuid`
 instance IsPG UUID where type PG UUID = 'PGuuid
 -- | `PGinet`
+#if MIN_VERSION_postgresql_binary(0, 14, 0)
+instance IsPG IPRange where type PG IPRange = 'PGinet
+#else
 instance IsPG (NetAddr IP) where type PG (NetAddr IP) = 'PGinet
+#endif
 -- | `PGjson`
 instance IsPG Value where type PG Value = 'PGjson
 -- | `PGvarchar`
