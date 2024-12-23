@@ -43,6 +43,7 @@ module Squeal.PostgreSQL.Session.Decode
   , genericProductRow
   , appendRows
   , consRow
+  , ArrayField (..)
     -- * Decoding Classes
   , FromValue (..)
   , FromField (..)
@@ -539,6 +540,42 @@ instance {-# OVERLAPPABLE #-} IsLabel fld (MaybeT (DecodeRow row) y)
   => IsLabel fld (MaybeT (DecodeRow (field ': row)) y) where
     fromLabel = MaybeT . decodeRow $ \(_ SOP.:* bs) ->
       runDecodeRow (runMaybeT (fromLabel @fld)) bs
+
+{- | Utility for decoding array fields in a `DecodeRow`,
+accessed via overloaded labels.
+-}
+newtype ArrayField row y = ArrayField
+  { runArrayField
+      :: StateT Strict.ByteString (Except Strict.Text) y
+      -> DecodeRow row [y]
+  }
+instance {-# OVERLAPPING #-}
+  ( KnownSymbol fld
+  , PG y ~ ty
+  , arr ~ 'NotNull ('PGvararray ('NotNull ty))
+  ) => IsLabel fld (ArrayField (fld ::: arr ': row) y) where
+    fromLabel = ArrayField $ \yval ->
+      decodeRow $ \(SOP.K bytesMaybe SOP.:* _) -> do
+        let
+          flderr = mconcat
+            [ "field name: "
+            , "\"", fromString (symbolVal (SOP.Proxy @fld)), "\"; "
+            ]
+          yarr
+            = devalue
+            . array
+            . dimensionArray replicateM
+            . valueArray
+            . revalue
+            $ yval
+        case bytesMaybe of
+          Nothing -> Left (flderr <> "encountered unexpected NULL")
+          Just bytes -> runExcept (evalStateT yarr bytes)
+instance {-# OVERLAPPABLE #-} IsLabel fld (ArrayField row y)
+  => IsLabel fld (ArrayField (field ': row) y) where
+    fromLabel = ArrayField $ \yval ->
+      decodeRow $ \(_ SOP.:* bytess) ->
+        runDecodeRow (runArrayField (fromLabel @fld) yval) bytess
 
 -- | A `GenericRow` constraint to ensure that a Haskell type
 -- is a record type,
