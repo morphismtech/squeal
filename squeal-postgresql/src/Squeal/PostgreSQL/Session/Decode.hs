@@ -43,6 +43,7 @@ module Squeal.PostgreSQL.Session.Decode
   , genericProductRow
   , appendRows
   , consRow
+  , ArrayField (..)
     -- * Decoding Classes
   , FromValue (..)
   , FromField (..)
@@ -68,6 +69,11 @@ import Data.Bits
 import Data.Coerce (coerce)
 import Data.Functor.Constant (Constant(Constant))
 import Data.Int (Int16, Int32, Int64)
+#if MIN_VERSION_postgresql_binary(0, 14, 0)
+import Data.IP (IPRange)
+#else
+import Network.IP.Addr (NetAddr, IP)
+#endif
 import Data.Kind
 import Data.Scientific (Scientific)
 import Data.String (fromString)
@@ -78,7 +84,6 @@ import Data.Vector (Vector)
 import Database.PostgreSQL.LibPQ (Oid(Oid))
 import GHC.OverloadedLabels
 import GHC.TypeLits
-import Network.IP.Addr (NetAddr, IP)
 import PostgreSQL.Binary.Decoding hiding (Composite)
 import Unsafe.Coerce
 
@@ -200,8 +205,11 @@ instance FromPG Money where
   fromPG = devalue $  Money <$> int
 instance FromPG UUID where
   fromPG = devalue uuid
-instance FromPG (NetAddr IP) where
-  fromPG = devalue inet
+#if MIN_VERSION_postgresql_binary(0, 14, 0)
+instance FromPG IPRange where fromPG = devalue inet
+#else
+instance FromPG (NetAddr IP) where fromPG = devalue inet
+#endif
 instance FromPG Char where
   fromPG = devalue char
 instance FromPG Strict.Text where
@@ -532,6 +540,42 @@ instance {-# OVERLAPPABLE #-} IsLabel fld (MaybeT (DecodeRow row) y)
   => IsLabel fld (MaybeT (DecodeRow (field ': row)) y) where
     fromLabel = MaybeT . decodeRow $ \(_ SOP.:* bs) ->
       runDecodeRow (runMaybeT (fromLabel @fld)) bs
+
+{- | Utility for decoding array fields in a `DecodeRow`,
+accessed via overloaded labels.
+-}
+newtype ArrayField row y = ArrayField
+  { runArrayField
+      :: StateT Strict.ByteString (Except Strict.Text) y
+      -> DecodeRow row [y]
+  }
+instance {-# OVERLAPPING #-}
+  ( KnownSymbol fld
+  , PG y ~ ty
+  , arr ~ 'NotNull ('PGvararray ('NotNull ty))
+  ) => IsLabel fld (ArrayField (fld ::: arr ': row) y) where
+    fromLabel = ArrayField $ \yval ->
+      decodeRow $ \(SOP.K bytesMaybe SOP.:* _) -> do
+        let
+          flderr = mconcat
+            [ "field name: "
+            , "\"", fromString (symbolVal (SOP.Proxy @fld)), "\"; "
+            ]
+          yarr
+            = devalue
+            . array
+            . dimensionArray replicateM
+            . valueArray
+            . revalue
+            $ yval
+        case bytesMaybe of
+          Nothing -> Left (flderr <> "encountered unexpected NULL")
+          Just bytes -> runExcept (evalStateT yarr bytes)
+instance {-# OVERLAPPABLE #-} IsLabel fld (ArrayField row y)
+  => IsLabel fld (ArrayField (field ': row) y) where
+    fromLabel = ArrayField $ \yval ->
+      decodeRow $ \(_ SOP.:* bytess) ->
+        runDecodeRow (runArrayField (fromLabel @fld) yval) bytess
 
 -- | A `GenericRow` constraint to ensure that a Haskell type
 -- is a record type,

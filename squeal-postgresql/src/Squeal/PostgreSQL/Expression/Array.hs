@@ -37,6 +37,15 @@ module Squeal.PostgreSQL.Expression.Array
   , unnest
   , arrAny
   , arrAll
+  , arrayAppend
+  , arrayPrepend
+  , arrayCat
+  , arrayPosition
+  , arrayPositionBegins
+  , arrayPositions
+  , arrayRemoveNull
+  , arrayReplace
+  , trimArray
   ) where
 
 import Data.String
@@ -47,6 +56,7 @@ import qualified Generics.SOP as SOP
 
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Expression.Logic
+import Squeal.PostgreSQL.Expression.Null
 import Squeal.PostgreSQL.Expression.Type
 import Squeal.PostgreSQL.Query.From.Set
 import Squeal.PostgreSQL.Render
@@ -240,3 +250,42 @@ arrAny
   -> Expression grp lat with db params from (null ('PGvararray ty2)) -- ^ array
   -> Condition grp lat with db params from
 arrAny x (?) xs = x ? (UnsafeExpression $ "ANY" <+> parenthesized (renderSQL xs))
+
+arrayAppend :: '[null ('PGvararray ty), ty] ---> null ('PGvararray ty)
+arrayAppend = unsafeFunctionN "array_append"
+
+arrayPrepend :: '[ty, null ('PGvararray ty)] ---> null ('PGvararray ty)
+arrayPrepend = unsafeFunctionN "array_prepend"
+
+arrayCat
+  :: '[null ('PGvararray ty), null ('PGvararray ty)]
+  ---> null ('PGvararray ty)
+arrayCat = unsafeFunctionN "array_cat"
+
+arrayPosition :: '[null ('PGvararray ty), ty] ---> 'Null 'PGint8
+arrayPosition = unsafeFunctionN "array_position"
+
+arrayPositionBegins
+  :: '[null ('PGvararray ty), ty, null 'PGint8] ---> 'Null 'PGint8
+arrayPositionBegins = unsafeFunctionN "array_position"
+
+arrayPositions
+  :: '[null ('PGvararray ty), ty]
+  ---> null ('PGvararray ('NotNull 'PGint8))
+arrayPositions = unsafeFunctionN "array_positions"
+
+arrayRemove :: '[null ('PGvararray ty), ty] ---> null ('PGvararray ty)
+arrayRemove = unsafeFunctionN "array_remove"
+
+arrayRemoveNull :: null ('PGvararray ('Null ty)) --> null ('PGvararray ('NotNull ty))
+arrayRemoveNull arr = UnsafeExpression (renderSQL (arrayRemove (arr *: null_)))
+
+arrayReplace
+  :: '[null ('PGvararray ty), ty, ty]
+  ---> null ('PGvararray ty)
+arrayReplace = unsafeFunctionN "array_replace"
+
+trimArray
+  :: '[null ('PGvararray ty), 'NotNull 'PGint8]
+  ---> null ('PGvararray ty)
+trimArray = unsafeFunctionN "trim_array"

@@ -44,9 +44,8 @@ import Control.Monad (MonadPlus(..))
 import Control.Monad.Base (MonadBase(..))
 import Control.Monad.Fix (MonadFix(..))
 import Control.Monad.Catch
-import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Morph
-import Control.Monad.Reader (ReaderT(..))
+import Control.Monad.Reader
 import Control.Monad.Trans.Control (MonadBaseControl(..), MonadTransControl(..))
 import UnliftIO (MonadUnliftIO(..))
 import Data.ByteString (ByteString)
@@ -214,9 +213,9 @@ instance (Monad m, db0 ~ db1)
   return = pure
   (>>=) = flip pqBind
 
-instance (Monad m, db0 ~ db1)
+instance (MonadFail m, db0 ~ db1)
   => Fail.MonadFail (PQ db0 db1 m) where
-  fail = Fail.fail
+  fail = lift . Fail.fail
 
 instance db0 ~ db1 => MFunctor (PQ db0 db1) where
   hoist f (PQ pq) = PQ (f . pq)

@@ -1,5 +1,13 @@
 ## RELEASE NOTES
 
+## Version 0.9.2.0
+
+Thanks to MangoIV, Peter Becich, Daniel Gasienica and Michael Xavier Well
+for their contributions!
+
+Fixes for various bugs and updates added as well as some new array functions
+and array decoding functionality.
+
 ## Version 0.9.0.0
 
 Thanks to William Yao and Cullin Poresky for their contributions!
