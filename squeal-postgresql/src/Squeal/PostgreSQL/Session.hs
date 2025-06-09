@@ -13,6 +13,7 @@ application's monad transformer stack, giving it an instance of `MonadPQ` @DB@.
 {-# OPTIONS_GHC -fno-warn-redundant-constraints #-}
 {-# LANGUAGE
     DefaultSignatures
+  , DerivingVia
   , FunctionalDependencies
   , FlexibleContexts
   , FlexibleInstances
@@ -26,15 +27,13 @@ application's monad transformer stack, giving it an instance of `MonadPQ` @DB@.
   , TypeFamilies
   , DataKinds
   , PolyKinds
+  , StandaloneDeriving
   , TypeOperators
   , UndecidableInstances
 #-}
 
 module Squeal.PostgreSQL.Session
   ( PQ (PQ, unPQ)
-  , runPQ
-  , execPQ
-  , evalPQ
   , withConnection
   ) where
 
@@ -47,6 +46,7 @@ import Control.Monad.Catch
 import Control.Monad.Morph
 import Control.Monad.Reader
 import Control.Monad.Trans.Control (MonadBaseControl(..), MonadTransControl(..))
+import Control.Monad.Trans.Indexed
 import UnliftIO (MonadUnliftIO(..))
 import Data.ByteString (ByteString)
 import Data.Functor ((<&>))
@@ -57,14 +57,12 @@ import Generics.SOP
 import PostgreSQL.Binary.Encoding (encodingBytes)
 import Prelude hiding (id, (.))
 
-import qualified Control.Monad.Fail as Fail
 import qualified Database.PostgreSQL.LibPQ as LibPQ
 import qualified PostgreSQL.Binary.Encoding as Encoding
 
-import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Render
-import Squeal.PostgreSQL.Session.Connection
+import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Session.Encode
 import Squeal.PostgreSQL.Session.Exception
 import Squeal.PostgreSQL.Session.Indexed
@@ -81,72 +79,69 @@ newtype PQ
   (db1 :: SchemasType)
   (m :: Type -> Type)
   (x :: Type) =
-    PQ { unPQ :: K LibPQ.Connection db0 -> m (K x db1) }
+    PQ { unPQ :: LibPQ.Connection -> m x }
 
-instance Monad m => Functor (PQ db0 db1 m) where
-  fmap f (PQ pq) = PQ $ \ conn -> do
-    K x <- pq conn
-    return $ K (f x)
+deriving via ReaderT LibPQ.Connection m
+  instance Functor m => Functor (PQ db0 db1 m)
 
--- | Run a `PQ` and keep the result and the `LibPQ.Connection`.
-runPQ
-  :: Functor m
-  => PQ db0 db1 m x
-  -> K LibPQ.Connection db0
-  -> m (x, K LibPQ.Connection db1)
-runPQ (PQ pq) conn = (\ x -> (unK x, K (unK conn))) <$> pq conn
-  -- K x <- pq conn
-  -- return (x, K (unK conn))
+deriving via ReaderT LibPQ.Connection m
+  instance (Applicative m, db0 ~ db1)
+    => Applicative (PQ db0 db1 m)
 
--- | Execute a `PQ` and discard the result but keep the `LibPQ.Connection`.
-execPQ
-  :: Functor m
-  => PQ db0 db1 m x
-  -> K LibPQ.Connection db0
-  -> m (K LibPQ.Connection db1)
-execPQ (PQ pq) conn = mapKK (\ _ -> unK conn) <$> pq conn
+deriving via ReaderT LibPQ.Connection m
+  instance (Monad m, db0 ~ db1)
+    => Monad (PQ db0 db1 m)
 
--- | Evaluate a `PQ` and discard the `LibPQ.Connection` but keep the result.
-evalPQ
-  :: Functor m
-  => PQ db0 db1 m x
-  -> K LibPQ.Connection db0
-  -> m x
-evalPQ (PQ pq) conn = unK <$> pq conn
+deriving via ReaderT LibPQ.Connection m
+  instance (MonadFail m, db0 ~ db1)
+    => MonadFail (PQ db0 db1 m)
 
-instance IndexedMonadTrans PQ where
+deriving via ReaderT LibPQ.Connection
+  instance MFunctor (PQ db0 db1)
 
-  pqAp (PQ f) (PQ x) = PQ $ \ conn -> do
-    K f' <- f conn
-    K x' <- x (K (unK conn))
-    return $ K (f' x')
+deriving via ReaderT LibPQ.Connection
+  instance db0 ~ db1 => MonadTrans (PQ db0 db1)
 
-  pqBind f (PQ x) = PQ $ \ conn -> do
-    K x' <- x conn
-    unPQ (f x') (K (unK conn))
+deriving via ReaderT LibPQ.Connection
+  instance db0 ~ db1 => MMonad (PQ db0 db1)
 
-instance IndexedMonadTransPQ PQ where
+deriving via ReaderT LibPQ.Connection m
+  instance (MonadIO m, db0 ~ db1)
+    => MonadIO (PQ db0 db1 m)
 
-  define (UnsafeDefinition q) = PQ $ \ (K conn) -> liftIO $ do
+instance IxMonadTrans PQ where
+
+  apIx (PQ f) (PQ x) = PQ $ \ conn -> do
+    f' <- f conn
+    x' <- x conn
+    return $ f' x'
+
+  bindIx f (PQ x) = PQ $ \ conn -> do
+    x' <- x conn
+    unPQ (f x') conn
+
+instance IxMonadTransPQ PQ where
+
+  define (UnsafeDefinition q) = PQ $ \ conn -> liftIO $ do
     resultMaybe <-  LibPQ.exec conn q
     case resultMaybe of
       Nothing -> throwM $ ConnectionException "LibPQ.exec"
-      Just result -> K <$> okResult_ result
+      Just result -> okResult_ result
 
 instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
 
   executeParams (Manipulation encode decode (UnsafeManipulation q)) x =
-    PQ $ \ kconn@(K conn) -> liftIO $ do
+    PQ $ \ conn -> liftIO $ do
       let
         formatParam
           :: forall param. OidOfNull db param
           => K (Maybe Encoding.Encoding) param
           -> IO (K (Maybe (LibPQ.Oid, ByteString, LibPQ.Format)) param)
         formatParam (K maybeEncoding) = do
-          oid <- runReaderT (oidOfNull @db @param) kconn
+          oid <- runReaderT (oidOfNull @db @param) (K conn)
           return . K $ maybeEncoding <&> \encoding ->
             (oid, encodingBytes encoding, LibPQ.Binary)
-      encodedParams <- runReaderT (runEncodeParams encode x) kconn
+      encodedParams <- runReaderT (runEncodeParams encode x) (K conn)
       formattedParams <- hcollapse <$>
         hctraverse' (Proxy @(OidOfNull db)) formatParam encodedParams
       resultMaybe <-
@@ -155,7 +150,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
         Nothing -> throwM $ ConnectionException "LibPQ.execParams"
         Just result -> do
           okResult_ result
-          return $ K (Result decode result)
+          return $ Result decode result
   executeParams (Query encode decode q) x =
     executeParams (Manipulation encode decode (queryStatement q)) x
 
@@ -167,10 +162,10 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
 
       prepName = "prepared_statement_" <> statementNum
 
-      prepare' = PQ $ \ kconn@(K conn) -> liftIO $ do
+      prepare' = PQ $ \ conn -> liftIO $ do
         let
           oidOfParam :: forall p. OidOfNull db p => (IO :.: K LibPQ.Oid) p
-          oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) kconn
+          oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) (K conn)
           oidsOfParams :: NP (IO :.: K LibPQ.Oid) params
           oidsOfParams = hcpure (Proxy @(OidOfNull db)) oidOfParam
         oids <- hcollapse <$> hsequence' oidsOfParams
@@ -182,8 +177,8 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
       deallocate' = manipulate_ . UnsafeManipulation $
         "DEALLOCATE" <+> prepName
 
-      runPrepared' params = PQ $ \ kconn@(K conn) -> liftIO $ do
-        encodedParams <- runReaderT (runEncodeParams encode params) kconn
+      runPrepared' params = PQ $ \ conn -> liftIO $ do
+        encodedParams <- runReaderT (runEncodeParams encode params) (K conn)
         let
           formatParam encoding = (encodingBytes encoding, LibPQ.Binary)
           formattedParams =
@@ -196,42 +191,12 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
           Nothing -> throwM $ ConnectionException "LibPQ.runPrepared"
           Just result -> do
             okResult_ result
-            return . K $ Result decode result
+            return $ Result decode result
 
     prepare'
     return $ Prepared runPrepared' deallocate'
 
   prepare (Query encode decode q) = prepare (Manipulation encode decode (queryStatement q))
-
-instance (Monad m, db0 ~ db1)
-  => Applicative (PQ db0 db1 m) where
-  pure x = PQ $ \ _conn -> pure (K x)
-  (<*>) = pqAp
-
-instance (Monad m, db0 ~ db1)
-  => Monad (PQ db0 db1 m) where
-  return = pure
-  (>>=) = flip pqBind
-
-instance (MonadFail m, db0 ~ db1)
-  => Fail.MonadFail (PQ db0 db1 m) where
-  fail = lift . Fail.fail
-
-instance db0 ~ db1 => MFunctor (PQ db0 db1) where
-  hoist f (PQ pq) = PQ (f . pq)
-
-instance db0 ~ db1 => MonadTrans (PQ db0 db1) where
-  lift m = PQ $ \ _conn -> do
-    x <- m
-    return (K x)
-
-instance db0 ~ db1 => MMonad (PQ db0 db1) where
-  embed f (PQ pq) = PQ $ \ conn -> do
-    evalPQ (f (pq conn)) conn
-
-instance (MonadIO m, schema0 ~ schema1)
-  => MonadIO (PQ schema0 schema1 m) where
-  liftIO = lift . liftIO
 
 instance (MonadUnliftIO m, db0 ~ db1)
   => MonadUnliftIO (PQ db0 db1 m) where
@@ -240,7 +205,7 @@ instance (MonadUnliftIO m, db0 ~ db1)
       -> PQ db0 schema1 m b
   withRunInIO inner = PQ $ \conn ->
     withRunInIO $ \(run :: (forall x . m x -> IO x)) ->
-      K <$> inner (\pq -> run $ unK <$> unPQ pq conn)
+      inner (\pq -> run $ unPQ pq conn)
 
 instance (MonadBase b m)
   => MonadBase b (PQ schema schema m) where
@@ -248,23 +213,22 @@ instance (MonadBase b m)
 
 instance db0 ~ db1 => MonadTransControl (PQ db0 db1) where
   type StT (PQ db0 db1) a = a
-  liftWith f = PQ $ \conn -> K <$> (f $ \pq -> unK <$> unPQ pq conn)
-  restoreT ma = PQ . const $ K <$> ma
+  liftWith f = PQ $ \conn -> (f $ \pq -> unPQ pq conn)
+  restoreT ma = PQ . const $ ma
 
 -- | A snapshot of the state of a `PQ` computation, used in MonadBaseControl Instance
-type PQRun schema =
-  forall m x. Monad m => PQ schema schema m x -> m (K x schema)
+type PQRun db =
+  forall m x. Monad m => PQ db db m x -> m x
 
-instance (MonadBaseControl b m, schema0 ~ schema1)
-  => MonadBaseControl b (PQ schema0 schema1 m) where
-  type StM (PQ schema0 schema1 m) x = StM m (K x schema0)
+instance (MonadBaseControl b m, db0 ~ db1)
+  => MonadBaseControl b (PQ db0 db1 m) where
+  type StM (PQ db0 db1 m) x = StM m x
   restoreM = PQ . const . restoreM
   liftBaseWith f =
     pqliftWith $ \ run -> liftBaseWith $ \ runInBase -> f $ runInBase . run
     where
-      pqliftWith :: Functor m => (PQRun schema -> m a) -> PQ schema schema m a
-      pqliftWith g = PQ $ \ conn ->
-        fmap K (g $ \ pq -> unPQ pq conn)
+      pqliftWith :: Functor m => (PQRun db -> m a) -> PQ db db m a
+      pqliftWith g = PQ $ \ conn -> g $ \ pq -> unPQ pq conn
 
 instance (MonadThrow m, db0 ~ db1)
   => MonadThrow (PQ db0 db1 m) where
@@ -284,25 +248,25 @@ instance (MonadMask m, db0 ~ db1)
       where q u (PQ b) = PQ (u . b)
 
   generalBracket acquire release use = PQ $ \k ->
-    K <$> generalBracket
-      (unK <$> unPQ acquire k)
-      (\resource exitCase -> unK <$> unPQ (release resource exitCase) k)
-      (\resource -> unK <$> unPQ (use resource) k)
+    generalBracket
+      (unPQ acquire k)
+      (\resource exitCase -> unPQ (release resource exitCase) k)
+      (\resource -> unPQ (use resource) k)
 
 instance (Monad m, Semigroup r, db0 ~ db1) => Semigroup (PQ db0 db1 m r) where
-  f <> g = pqAp (fmap (<>) f) g
+  f <> g = apIx (fmap (<>) f) g
 
 instance (Monad m, Monoid r, db0 ~ db1) => Monoid (PQ db0 db1 m r) where
   mempty = pure mempty
 
 instance MonadFix m => MonadFix (PQ db db m) where
-  mfix f = PQ $ \conn -> mfix $ \ (K a) -> K <$> evalPQ (f a) conn
+  mfix f = PQ $ \conn -> mfix $ \ a -> unPQ (f a) conn
 
 instance (Monad m, Alternative m, db0 ~ db1)
   => Alternative (PQ db0 db1 m) where
     empty = lift empty
-    altL <|> altR = PQ $ \ conn -> fmap K $
-      evalPQ altL conn <|> evalPQ altR conn
+    altL <|> altR = PQ $ \ conn ->
+      unPQ altL conn <|> unPQ altR conn
 
 instance (MonadPlus m, db0 ~ db1) => MonadPlus (PQ db0 db1 m)
 
@@ -313,8 +277,10 @@ withConnection
   => ByteString
   -> PQ db0 db1 io x
   -> io x
-withConnection connString action =
-  unK <$> bracket (connectdb connString) finish (unPQ action)
+withConnection connString action = bracket
+  (liftIO (LibPQ.connectdb connString))
+  (liftIO . LibPQ.finish)
+  (unPQ action)
 
 okResult_ :: MonadIO io => LibPQ.Result -> io ()
 okResult_ result = liftIO $ do

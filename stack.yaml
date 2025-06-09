@@ -1,5 +1,10 @@
-resolver: lts-22.13
+resolver: lts-23.23
 packages:
 - squeal-postgresql
 - squeal-postgresql-ltree
 - squeal-postgresql-uuid-ossp
+extra-deps:
+  - github: kosmikus/records-sop
+    commit: fb149f453a816ff14d0cb20b3ea56b80ff49d9f1
+  - github: morphismtech/indexed-transformers
+    commit: 12a6cee2160a3724d25ab25ed0983b4952527b58

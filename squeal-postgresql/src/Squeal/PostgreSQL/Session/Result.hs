@@ -67,7 +67,7 @@ An instance of `MonadIO` implies an instance of `MonadResult`.
 However, the constraint `MonadResult`
 does not imply the constraint `MonadIO`.
 -}
-class Monad m => MonadResult m where
+class MonadCatch m => MonadResult m where
   -- | Get a row corresponding to a given row number from a `LibPQ.Result`,
   -- throwing an exception if the row number is out of bounds.
   getRow :: LibPQ.Row -> Result y -> m y
@@ -112,7 +112,7 @@ class Monad m => MonadResult m where
   -- https://www.postgresql.org/docs/current/static/errcodes-appendix.html
   resultErrorCode :: Result y -> m (Maybe ByteString)
 
-instance (Monad io, MonadIO io) => MonadResult io where
+instance (MonadCatch io, MonadIO io) => MonadResult io where
   getRow r (Result decode result) = liftIO $ do
     numRows <- LibPQ.ntuples result
     numCols <- LibPQ.nfields result

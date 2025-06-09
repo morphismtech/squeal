@@ -5,6 +5,7 @@
   , OverloadedLabels
   , OverloadedStrings
   , OverloadedLists
+  , QualifiedDo
   , TypeApplications
   , TypeOperators
 #-}
@@ -25,6 +26,7 @@ import Data.Vector (Vector)
 
 import Squeal.PostgreSQL
 
+import qualified Control.Monad.Trans.Indexed.Do as Ix
 import qualified Data.ByteString.Char8 as Char8
 import qualified Generics.SOP as SOP
 import qualified GHC.Generics as GHC
@@ -220,7 +222,7 @@ organizations =
   , Organization { orgId = 2, orgName = "Haskell Foundation", orgType = NonProfit }
   ]
 
-session :: (MonadIO pq, MonadPQ Schemas pq) => pq ()
+session :: (MonadResult pq, MonadIO pq, MonadPQ Schemas pq) => pq ()
 session = do
   liftIO $ Char8.putStrLn "===> manipulating"
   userIdResults <- traversePrepared insertUser [(userName user, userVec user) | user <- users]
@@ -262,23 +264,20 @@ session = do
 
 main :: IO ()
 main = do
+  let connStr = "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
   Char8.putStrLn "===> squeal"
-  connectionString <- pure
-    "host=localhost port=5432 dbname=exampledb user=postgres password=postgres"
-  Char8.putStrLn $ "connecting to " <> connectionString
-  connection0 <- connectdb connectionString
-
-  Char8.putStrLn "===> setting up schema"
-  connection1 <- execPQ (define setup) connection0
-  connection2 <- execPQ session connection1
-
-  Char8.putStrLn "===> tearing down schema"
-  connection3 <- execPQ (define teardown) connection2
-  finish connection3
+  Char8.putStrLn $ "connecting to " <> connStr
+  withConnection connStr $ Ix.do
+    liftIO $ Char8.putStrLn "===> setting up schema"
+    define setup
+    liftIO $ Char8.putStrLn "===> setting up schema"
+    session
+    liftIO $ Char8.putStrLn "===> tearing down schema"
+    define teardown
 
 main2 :: IO ()
 main2 =
-  withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
+  withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $ Ix.do
     define setup
-    & pqThen session
-    & pqThen (define teardown)
+    session
+    define teardown

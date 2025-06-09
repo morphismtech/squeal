@@ -87,10 +87,10 @@ Now run the migrations.
 withConnection "host=localhost port=5432 dbname=exampledb user=postgres password=postgres" $
   manipulate_ (UnsafeManipulation "SET client_min_messages TO WARNING;")
     -- suppress notices
-  & pqThen (liftIO (putStrLn "Migrate"))
-  & pqThen (migrateUp migrations)
-  & pqThen (liftIO (putStrLn "Rollback"))
-  & pqThen (migrateDown migrations)
+  & thenIx (liftIO (putStrLn "Migrate"))
+  & thenIx (migrateUp migrations)
+  & thenIx (liftIO (putStrLn "Rollback"))
+  & thenIx (migrateDown migrations)
 :}
 Migrate
 Rollback
@@ -168,9 +168,10 @@ import Control.Category
 import Control.Category.Free
 import Control.Monad
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Indexed
 import Data.ByteString (ByteString)
+import Data.Coerce (coerce)
 import Data.Foldable (traverse_)
-import Data.Function ((&))
 import Data.List ((\\))
 import Data.Quiver
 import Data.Quiver.Functor
@@ -269,7 +270,7 @@ instance Migratory (IsoQ Definition) (IsoQ (Indexed PQ IO ())) where
   runMigrations = runMigrations . qmap (qmap (qmap ixDefine))
 
 unsafePQ :: (Functor m) => PQ db0 db1 m x -> PQ db0' db1' m x
-unsafePQ (PQ pq) = PQ $ fmap (SOP.K . SOP.unK) . pq . SOP.K . SOP.unK
+unsafePQ = coerce
 
 -- | Run migrations.
 migrate
@@ -367,8 +368,8 @@ mainMigrate connectTo migrations = do
         suppressNotices >> migrateStatus
       ["migrate"] -> withConnection connectTo $
         suppressNotices
-        & pqThen (runIndexed (runMigrations migrations))
-        & pqThen migrateStatus
+        & thenIx (runIndexed (runMigrations migrations))
+        & thenIx migrateStatus
       args -> displayUsage args
 
     migrateStatus :: PQ schema schema IO ()
@@ -407,12 +408,12 @@ mainMigrateIso connectTo migrations = performCommand =<< getArgs
         suppressNotices >> migrateStatus
       ["migrate"] -> withConnection connectTo $
         suppressNotices
-        & pqThen (migrateUp migrations)
-        & pqThen migrateStatus
+        & thenIx (migrateUp migrations)
+        & thenIx migrateStatus
       ["rollback"] -> withConnection connectTo $
         suppressNotices
-        & pqThen (migrateDown migrations)
-        & pqThen migrateStatus
+        & thenIx (migrateDown migrations)
+        & thenIx migrateStatus
       args -> displayUsage args
 
     migrateStatus :: PQ schema schema IO ()
@@ -437,7 +438,7 @@ getRunMigrationNames :: PQ db0 db0 IO [Text]
 getRunMigrationNames =
   fmap name <$>
     (unsafePQ (define createMigrations
-    & pqThen (execute selectMigrations)) >>= getRows)
+    & thenIx (execute selectMigrations)) >>= getRows)
 
 displayListOfNames :: [Text] -> IO ()
 displayListOfNames [] = Text.putStrLn "  None"

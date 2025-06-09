@@ -60,14 +60,14 @@ import Data.ByteString
 import Data.Time
 import Data.Pool
 
-import Squeal.PostgreSQL.Type.Schema
+import qualified Database.PostgreSQL.LibPQ as LibPQ
+
 import Squeal.PostgreSQL.Session (PQ (..))
-import Squeal.PostgreSQL.Session.Connection
 
 -- | Create a striped pool of connections.
 -- Although the garbage collector will destroy all idle connections when the pool is garbage collected it's recommended to manually `destroyConnectionPool` when you're done with the pool so that the connections are freed up as soon as possible.
 createConnectionPool
-  :: forall (db :: SchemasType) io. MonadIO io
+  :: forall io. MonadIO io
   => ByteString
   -- ^ The passed string can be empty to use all default parameters, or it can
   -- contain one or more parameter settings separated by whitespace.
@@ -83,14 +83,14 @@ createConnectionPool
   -> Int
   -- ^ Maximum number of connections to keep open per stripe. The smallest acceptable value is 1.
   -- Requests for connections will block if this limit is reached on a single stripe, even if other stripes have idle connections available.
-  -> io (Pool (K Connection db))
+  -> io (Pool LibPQ.Connection)
 createConnectionPool conninfo stripes idle maxResrc =
 #if MIN_VERSION_resource_pool(0,4,0)
   liftIO . newPool $ setNumStripes
     (Just stripes)
-    (defaultPoolConfig (connectdb conninfo) finish (realToFrac idle) maxResrc)
+    (defaultPoolConfig (LibPQ.connectdb conninfo) LibPQ.finish (realToFrac idle) maxResrc)
 #else
-  liftIO $ createPool (connectdb conninfo) finish stripes idle maxResrc
+  liftIO $ createPool (LibPQ.connectdb conninfo) LibPQ.finish stripes idle maxResrc
 #endif
 
 {-|
@@ -105,7 +105,7 @@ until a connection becomes available.
 -}
 usingConnectionPool
   :: (MonadIO io, MonadMask io)
-  => Pool (K Connection db) -- ^ pool
+  => Pool LibPQ.Connection -- ^ pool
   -> PQ db db io x -- ^ session
   -> io x
 usingConnectionPool pool (PQ session) = mask $ \restore -> do
@@ -113,7 +113,7 @@ usingConnectionPool pool (PQ session) = mask $ \restore -> do
   ret <- restore (session conn) `onException`
             liftIO (destroyResource pool local conn)
   liftIO $ putResource local conn
-  return $ unK ret
+  return ret
 
 {- |
 Destroy all connections in all stripes in the pool.
@@ -133,6 +133,6 @@ thus freeing up those connections sooner.
 -}
 destroyConnectionPool
   :: MonadIO io
-  => Pool (K Connection db) -- ^ pool
+  => Pool LibPQ.Connection -- ^ pool
   -> io ()
 destroyConnectionPool = liftIO . destroyAllResources
