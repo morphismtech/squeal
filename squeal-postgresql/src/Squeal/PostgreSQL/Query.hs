@@ -35,7 +35,6 @@ structured query language
 module Squeal.PostgreSQL.Query
   ( -- * Query
     Query (..)
-  , Query_
     -- ** Set Operations
   , union
   , unionAll
@@ -47,11 +46,9 @@ module Squeal.PostgreSQL.Query
 
 import Control.DeepSeq
 import Data.ByteString (ByteString)
-import Data.Kind (Type)
 
 import qualified GHC.Generics as GHC
 
-import Squeal.PostgreSQL.Type.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Type.Schema
 
@@ -290,66 +287,6 @@ newtype Query
     deriving stock (GHC.Generic,Show,Eq,Ord)
     deriving newtype (NFData)
 instance RenderSQL (Query lat with db params row) where renderSQL = renderQuery
-
-{- |
-The `Query_` type is parameterized by a @db@ `SchemasType`,
-against which the query is type-checked, an input @params@ Haskell `Type`,
-and an ouput row Haskell `Type`.
-
-A `Query_` can be run
-using `Squeal.PostgreSQL.Session.runQueryParams`, or if @params = ()@
-using `Squeal.PostgreSQL.Session.runQuery`.
-
-Generally, @params@ will be a Haskell tuple or record whose entries
-may be referenced using positional
-`Squeal.PostgreSQL.Expression.Parameter.parameter`s and @row@ will be a
-Haskell record, whose entries will be targeted using overloaded labels.
-
-`Query_` is a type family which resolves into a `Query`,
-so don't be fooled by the input params and output row Haskell `Type`s,
-which are converted into appropriate
-Postgres @[@`NullType`@]@ params and `RowType` rows.
-Use `Squeal.PostgreSQL.Session.Statement.query` to
-fix actual Haskell input params and output rows.
-
->>> :set -XDeriveAnyClass -XDerivingStrategies
->>> type Columns = '["col1" ::: 'NoDef :=> 'Null 'PGint8, "col2" ::: 'Def :=> 'NotNull 'PGtext]
->>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
->>> :{
-data Row = Row { col1 :: Maybe Int64, col2 :: String }
-  deriving stock (GHC.Generic)
-  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-:}
-
->>> :{
-let
-  qry :: Query_ (Public Schema) (Int64, Bool) Row
-  qry = select Star (from (table #tab) & where_ (#col1 .> param @1 .&& just_ (param @2)))
-  stmt :: Statement (Public Schema) (Int64, Bool) Row
-  stmt = query qry
-:}
-
->>> :type qry
-qry
-  :: Query
-       '[]
-       '[]
-       '["public" ::: '["tab" ::: 'Table ('[] :=> Columns)]]
-       '[ 'NotNull 'PGint8, 'NotNull 'PGbool]
-       '["col1" ::: 'Null 'PGint8, "col2" ::: 'NotNull 'PGtext]
->>> :type stmt
-stmt
-  :: Statement
-       '["public" ::: '["tab" ::: 'Table ('[] :=> Columns)]]
-       (Int64, Bool)
-       Row
--}
-type family Query_
-  (db :: SchemasType)
-  (params :: Type)
-  (row :: Type) where
-    Query_ db params row =
-      Query '[] '[] db (TuplePG params) (RowPG row)
 
 -- | The results of two queries can be combined using the set operation
 -- `union`. Duplicate rows are eliminated.

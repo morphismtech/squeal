@@ -65,7 +65,6 @@ import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Definition
 import Squeal.PostgreSQL.Session.Encode
 import Squeal.PostgreSQL.Session.Exception
-import Squeal.PostgreSQL.Session.Indexed
 import Squeal.PostgreSQL.Session.Oid
 import Squeal.PostgreSQL.Session.Monad
 import Squeal.PostgreSQL.Session.Result
@@ -109,6 +108,8 @@ deriving via ReaderT LibPQ.Connection m
   instance (MonadIO m, db0 ~ db1)
     => MonadIO (PQ db0 db1 m)
 
+instance (MonadResult m, db0 ~ db1) => MonadResult (PQ db0 db1 m)
+
 instance IxMonadTrans PQ where
 
   apIx (PQ f) (PQ x) = PQ $ \ conn -> do
@@ -128,7 +129,8 @@ instance IxMonadTransPQ PQ where
       Nothing -> throwM $ ConnectionException "LibPQ.exec"
       Just result -> okResult_ result
 
-instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
+instance (MonadIO io, MonadResult io, db0 ~ db, db1 ~ db)
+  => MonadPQ db (PQ db0 db1 io) where
 
   executeParams (Manipulation encode decode (UnsafeManipulation q)) x =
     PQ $ \ conn -> liftIO $ do
@@ -174,7 +176,7 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
           Nothing -> throwM $ ConnectionException "LibPQ.prepare"
           Just prepResult -> K <$> okResult_ prepResult
 
-      deallocate' = manipulate_ . UnsafeManipulation $
+      deallocate' = execute_ . manipulation . UnsafeManipulation $
         "DEALLOCATE" <+> prepName
 
       runPrepared' params = PQ $ \ conn -> liftIO $ do
@@ -196,7 +198,8 @@ instance (MonadIO io, db0 ~ db, db1 ~ db) => MonadPQ db (PQ db0 db1 io) where
     prepare'
     return $ Prepared runPrepared' deallocate'
 
-  prepare (Query encode decode q) = prepare (Manipulation encode decode (queryStatement q))
+  prepare (Query encode decode q) = prepare $
+    Manipulation encode decode (queryStatement q)
 
 instance (MonadUnliftIO m, db0 ~ db1)
   => MonadUnliftIO (PQ db0 db1 m) where

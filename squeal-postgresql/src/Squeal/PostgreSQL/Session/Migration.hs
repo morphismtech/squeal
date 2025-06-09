@@ -198,7 +198,6 @@ import Squeal.PostgreSQL.Manipulation.Insert
 import Squeal.PostgreSQL.Session
 import Squeal.PostgreSQL.Session.Decode
 import Squeal.PostgreSQL.Session.Encode
-import Squeal.PostgreSQL.Session.Indexed
 import Squeal.PostgreSQL.Session.Monad
 import Squeal.PostgreSQL.Session.Result
 import Squeal.PostgreSQL.Session.Statement
@@ -294,7 +293,7 @@ migrateDown
 migrateDown = runIndexed . down . runMigrations
 
 ixDefine :: Definition db0 db1 -> Indexed PQ IO () db0 db1
-ixDefine = indexedDefine
+ixDefine = Indexed . define
 
 -- | The `TableType` for a Squeal migration.
 type MigrationsTable =
@@ -380,7 +379,7 @@ mainMigrate connectTo migrations = do
       liftIO $ displayRunned runNames >> displayUnrunned unrunNames
 
     suppressNotices :: PQ schema schema IO ()
-    suppressNotices = manipulate_ $
+    suppressNotices = execute_ . manipulation $
       UnsafeManipulation "SET client_min_messages TO WARNING;"
 
     displayUsage :: [String] -> IO ()
@@ -424,7 +423,7 @@ mainMigrateIso connectTo migrations = performCommand =<< getArgs
       liftIO $ displayRunned runNames >> displayUnrunned unrunNames
 
     suppressNotices :: PQ schema schema IO ()
-    suppressNotices = manipulate_ $
+    suppressNotices = execute_ . manipulation $
       UnsafeManipulation "SET client_min_messages TO WARNING;"
 
     displayUsage :: [String] -> IO ()

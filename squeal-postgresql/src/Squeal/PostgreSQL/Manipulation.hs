@@ -33,7 +33,6 @@ data manipulation language
 module Squeal.PostgreSQL.Manipulation
   ( -- * Manipulation
     Manipulation (..)
-  , Manipulation_
   , queryStatement
   , ReturningClause (..)
   , pattern Returning_
@@ -42,7 +41,6 @@ module Squeal.PostgreSQL.Manipulation
 
 import Control.DeepSeq
 import Data.ByteString hiding (foldr)
-import Data.Kind (Type)
 import Data.Quiver.Functor
 
 import qualified Generics.SOP as SOP
@@ -51,7 +49,6 @@ import qualified GHC.Generics as GHC
 import Squeal.PostgreSQL.Type.Alias
 import Squeal.PostgreSQL.Expression
 import Squeal.PostgreSQL.Type.List
-import Squeal.PostgreSQL.Type.PG
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Query
 import Squeal.PostgreSQL.Query.From
@@ -237,61 +234,6 @@ instance With Manipulation where
   with Done manip = manip
   with ctes manip = UnsafeManipulation $
     "WITH" <+> commaSeparated (qtoList renderSQL ctes) <+> renderSQL manip
-
-{- |
-The `Manipulation_` type is parameterized by a @db@ `SchemasType`,
-against which it is type-checked, an input @params@ Haskell `Type`,
-and an ouput row Haskell `Type`.
-
-Generally, @params@ will be a Haskell tuple or record whose entries
-may be referenced using positional
-`Squeal.PostgreSQL.Expression.Parameter.param`s and @row@ will be a
-Haskell record, whose entries will be targeted using overloaded labels.
-
-A `Manipulation_` can be run
-using `Squeal.PostgreSQL.Session.manipulateParams`, or if @params = ()@
-using `Squeal.PostgreSQL.Session.manipulate`.
-
-`Manipulation_` is a type family which resolves into a `Manipulation`,
-so don't be fooled by the input params and output row Haskell `Type`s,
-which are converted into appropriate
-Postgres @[@`NullType`@]@ params and `RowType` rows.
-Use `Squeal.PostgreSQL.Session.Statement.manipulation` to
-fix actual Haskell input params and output rows.
-
->>> :set -XDeriveAnyClass -XDerivingStrategies
->>> type Columns = '["col1" ::: 'NoDef :=> 'Null 'PGint8, "col2" ::: 'Def :=> 'NotNull 'PGtext]
->>> type Schema = '["tab" ::: 'Table ('[] :=> Columns)]
->>> :{
-data Row = Row { col1 :: Maybe Int64, col2 :: String }
-  deriving stock (GHC.Generic)
-  deriving anyclass (SOP.Generic, SOP.HasDatatypeInfo)
-:}
-
->>> :{
-let
-  manp :: Manipulation_ (Public Schema) (Int64, Int64) Row
-  manp = deleteFrom #tab NoUsing (#col1 .== param @1 + param @2) (Returning Star)
-  stmt :: Statement (Public Schema) (Int64, Int64) Row
-  stmt = manipulation manp
-:}
-
->>> :type manp
-manp
-  :: Manipulation
-       '[]
-       '["public" ::: '["tab" ::: 'Table ('[] :=> Columns)]]
-       '[ 'NotNull 'PGint8, 'NotNull 'PGint8]
-       '["col1" ::: 'Null 'PGint8, "col2" ::: 'NotNull 'PGtext]
->>> :type stmt
-stmt
-  :: Statement
-       '["public" ::: '["tab" ::: 'Table ('[] :=> Columns)]]
-       (Int64, Int64)
-       Row
--}
-type family Manipulation_ (db :: SchemasType) (params :: Type) (row :: Type) where
-  Manipulation_ db params row = Manipulation '[] db (TuplePG params) (RowPG row)
 
 -- | Convert a `Query` into a `Manipulation`.
 queryStatement

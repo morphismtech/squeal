@@ -206,6 +206,7 @@ executable example
       base >= 4.10.0.0 && < 5.0
     , bytestring >= 0.10.10.0
     , generics-sop >= 0.5.1.0
+    , indexed-transformers >= 0.1.0.4
     , mtl >= 2.2.2
     , squeal-postgresql
     , text >= 1.2.3.2

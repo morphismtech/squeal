@@ -247,11 +247,9 @@ import Squeal.PostgreSQL.Query.Values as X
 import Squeal.PostgreSQL.Query.With as X
 import Squeal.PostgreSQL.Render (RenderSQL(..), printSQL)
 import Squeal.PostgreSQL.Session as X
-import Squeal.PostgreSQL.Session.Connection as X
 import Squeal.PostgreSQL.Session.Decode as X
 import Squeal.PostgreSQL.Session.Encode as X
 import Squeal.PostgreSQL.Session.Exception as X
-import Squeal.PostgreSQL.Session.Indexed as X
 import Squeal.PostgreSQL.Session.Migration as X
 import Squeal.PostgreSQL.Session.Monad as X
 import Squeal.PostgreSQL.Session.Oid as X

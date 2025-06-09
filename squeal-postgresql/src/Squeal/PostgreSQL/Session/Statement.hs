@@ -18,6 +18,7 @@ together with an `EncodeParams` and a `DecodeRow`.
   , DeriveTraversable
   , FlexibleContexts
   , GADTs
+  , KindSignatures
   , RankNTypes
 #-}
 

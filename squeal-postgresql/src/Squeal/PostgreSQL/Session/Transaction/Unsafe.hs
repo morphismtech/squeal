@@ -30,6 +30,7 @@ module Squeal.PostgreSQL.Session.Transaction.Unsafe
   , rollback
   , withSavepoint
     -- * Transaction Mode
+  , TransactionType (..)
   , TransactionMode (..)
   , defaultMode
   , retryMode
@@ -48,6 +49,7 @@ import Squeal.PostgreSQL.Manipulation
 import Squeal.PostgreSQL.Render
 import Squeal.PostgreSQL.Session.Exception
 import Squeal.PostgreSQL.Session.Monad
+import Squeal.PostgreSQL.Session.Statement
 
 {- | Run a computation `transactionally`;
 first `begin`,
@@ -61,9 +63,9 @@ transactionally
   -> tx x -- ^ run inside a transaction
   -> tx x
 transactionally mode tx = mask $ \restore -> do
-  manipulate_ $ begin mode
-  result <- restore tx `onException` manipulate_ rollback
-  manipulate_ commit
+  execute_ $ begin mode
+  result <- restore tx `onException` execute_ rollback
+  execute_ commit
   return result
 
 -- | Run a computation `transactionally_`, in `defaultMode`.
@@ -91,20 +93,20 @@ transactionallyRetry
 transactionallyRetry mode tx = mask $ \restore ->
   loop . try $ do
     x <- restore tx
-    manipulate_ commit
+    execute_ commit
     return x
   where
     loop attempt = do
-      manipulate_ $ begin mode
+      execute_ $ begin mode
       attempt >>= \case
         Left (SerializationFailure _) -> do
-          manipulate_ rollback
+          execute_ rollback
           loop attempt
         Left (DeadlockDetected _) -> do
-          manipulate_ rollback
+          execute_ rollback
           loop attempt
         Left err -> do
-          manipulate_ rollback
+          execute_ rollback
           throwM err
         Right x -> return x
 
@@ -124,9 +126,9 @@ ephemerally
   -> tx x -- ^ run inside an ephemeral transaction
   -> tx x
 ephemerally mode tx = mask $ \restore -> do
-  manipulate_ $ begin mode
-  result <- restore tx `onException` (manipulate_ rollback)
-  manipulate_ rollback
+  execute_ $ begin mode
+  result <- restore tx `onException` (execute_ rollback)
+  execute_ rollback
   return result
 
 {- | Run a computation `ephemerally` in `defaultMode`. -}
@@ -137,16 +139,17 @@ ephemerally_
 ephemerally_ = ephemerally defaultMode
 
 -- | @BEGIN@ a transaction.
-begin :: TransactionMode -> Manipulation_ db () ()
-begin mode = UnsafeManipulation $ "BEGIN" <+> renderSQL mode
+begin :: TransactionMode -> Statement db () ()
+begin mode = manipulation . UnsafeManipulation $
+  "BEGIN" <+> renderSQL mode
 
 -- | @COMMIT@ a transaction.
-commit :: Manipulation_ db () ()
-commit = UnsafeManipulation "COMMIT"
+commit :: Statement db () ()
+commit = manipulation $ UnsafeManipulation "COMMIT"
 
 -- | @ROLLBACK@ a transaction.
-rollback :: Manipulation_ db () ()
-rollback = UnsafeManipulation "ROLLBACK"
+rollback :: Statement db () ()
+rollback = manipulation $ UnsafeManipulation "ROLLBACK"
 
 {- | `withSavepoint`, used in a transaction block,
 allows a form of nested transactions,
@@ -164,12 +167,18 @@ withSavepoint
   -> tx (Either e x)
 withSavepoint savepoint tx = do
   let svpt = "SAVEPOINT" <+> savepoint
-  manipulate_ $ UnsafeManipulation $ svpt
+  execute_ $ manipulation $ UnsafeManipulation $ svpt
   e_x <- tx
   when (isLeft e_x) $
-    manipulate_ $ UnsafeManipulation $ "ROLLBACK TO" <+> svpt
-  manipulate_ $ UnsafeManipulation $ "RELEASE" <+> svpt
+    execute_ $ manipulation $ UnsafeManipulation $ "ROLLBACK TO" <+> svpt
+  execute_ $ manipulation $ UnsafeManipulation $ "RELEASE" <+> svpt
   return e_x
+
+data TransactionType
+  = Untransactional
+  | Transactional TransactionMode
+  | TransactionalRetry TransactionMode
+  | Ephemeral TransactionMode
 
 -- | The available transaction characteristics are the transaction `IsolationLevel`,
 -- the transaction `AccessMode` (`ReadWrite` or `ReadOnly`), and the `DeferrableMode`.
