@@ -61,22 +61,22 @@ import Squeal.PostgreSQL.Type.Schema
 --
 -- >>> finish conn
 class OidOf (db :: SchemasType) (pg :: PGType) where
-  oidOf :: ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
+  oidOf :: ReaderT LibPQ.Connection IO LibPQ.Oid
 -- | The `LibPQ.Oid` of an array
 class OidOfArray (db :: SchemasType) (pg :: PGType) where
-  oidOfArray :: ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
+  oidOfArray :: ReaderT LibPQ.Connection IO LibPQ.Oid
 instance OidOfArray db pg => OidOf db ('PGvararray (null pg)) where
   oidOf = oidOfArray @db @pg
 instance OidOfArray db pg => OidOf db ('PGfixarray dims (null pg)) where
   oidOf = oidOfArray @db @pg
 -- | The `LibPQ.Oid` of a `NullType`
 class OidOfNull (db :: SchemasType) (ty :: NullType) where
-  oidOfNull :: ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
+  oidOfNull :: ReaderT LibPQ.Connection IO LibPQ.Oid
 instance OidOf db pg => OidOfNull db (null pg) where
   oidOfNull = oidOf @db @pg
 -- | The `LibPQ.Oid` of a field
 class OidOfField (db :: SchemasType) (field :: (Symbol, NullType)) where
-  oidOfField :: ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
+  oidOfField :: ReaderT LibPQ.Connection IO LibPQ.Oid
 instance OidOfNull db ty => OidOfField db (fld ::: ty) where
   oidOfField = oidOfNull @db @ty
 
@@ -172,9 +172,9 @@ instance
     oidOfArray = oidOfArrayTypedef @sch @td
 
 oidOfTypedef
-  :: forall sch ty db. (KnownSymbol sch, KnownSymbol ty)
-  => ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
-oidOfTypedef = ReaderT $ \(SOP.K conn) -> do
+  :: forall sch ty. (KnownSymbol sch, KnownSymbol ty)
+  => ReaderT LibPQ.Connection IO LibPQ.Oid
+oidOfTypedef = ReaderT $ \conn -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
     Nothing -> throwM $ ConnectionException oidErr
@@ -203,9 +203,9 @@ oidOfTypedef = ReaderT $ \(SOP.K conn) -> do
       , ";" ]
 
 oidOfArrayTypedef
-  :: forall sch ty db. (KnownSymbol sch, KnownSymbol ty)
-  => ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
-oidOfArrayTypedef = ReaderT $ \(SOP.K conn) -> do
+  :: forall sch ty. (KnownSymbol sch, KnownSymbol ty)
+  => ReaderT LibPQ.Connection IO LibPQ.Oid
+oidOfArrayTypedef = ReaderT $ \conn -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
     Nothing -> throwM $ ConnectionException oidErr

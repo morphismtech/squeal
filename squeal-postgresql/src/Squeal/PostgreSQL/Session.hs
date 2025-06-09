@@ -140,10 +140,10 @@ instance (MonadIO io, MonadResult io, db0 ~ db, db1 ~ db)
           => K (Maybe Encoding.Encoding) param
           -> IO (K (Maybe (LibPQ.Oid, ByteString, LibPQ.Format)) param)
         formatParam (K maybeEncoding) = do
-          oid <- runReaderT (oidOfNull @db @param) (K conn)
+          oid <- runReaderT (oidOfNull @db @param) conn
           return . K $ maybeEncoding <&> \encoding ->
             (oid, encodingBytes encoding, LibPQ.Binary)
-      encodedParams <- runReaderT (runEncodeParams encode x) (K conn)
+      encodedParams <- runReaderT (runEncodeParams encode x) conn
       formattedParams <- hcollapse <$>
         hctraverse' (Proxy @(OidOfNull db)) formatParam encodedParams
       resultMaybe <-
@@ -167,7 +167,7 @@ instance (MonadIO io, MonadResult io, db0 ~ db, db1 ~ db)
       prepare' = PQ $ \ conn -> liftIO $ do
         let
           oidOfParam :: forall p. OidOfNull db p => (IO :.: K LibPQ.Oid) p
-          oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) (K conn)
+          oidOfParam = Comp $ K <$> runReaderT (oidOfNull @db @p) conn
           oidsOfParams :: NP (IO :.: K LibPQ.Oid) params
           oidsOfParams = hcpure (Proxy @(OidOfNull db)) oidOfParam
         oids <- hcollapse <$> hsequence' oidsOfParams
@@ -180,7 +180,7 @@ instance (MonadIO io, MonadResult io, db0 ~ db, db1 ~ db)
         "DEALLOCATE" <+> prepName
 
       runPrepared' params = PQ $ \ conn -> liftIO $ do
-        encodedParams <- runReaderT (runEncodeParams encode params) (K conn)
+        encodedParams <- runReaderT (runEncodeParams encode params) conn
         let
           formatParam encoding = (encodingBytes encoding, LibPQ.Binary)
           formattedParams =

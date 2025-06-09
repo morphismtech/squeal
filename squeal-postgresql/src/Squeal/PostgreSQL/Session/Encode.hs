@@ -115,7 +115,7 @@ class IsPG x => ToPG (db :: SchemasType) (x :: Type) where
   -- "\NUL\NUL\NUL\NUL\NUL\NUL\NUL\NUL"
   --
   -- >>> finish conn
-  toPG :: x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
+  toPG :: x -> ReaderT LibPQ.Connection IO Encoding
 instance ToPG db Bool where toPG = pure . bool
 instance ToPG db Int16 where toPG = pure . int2_int16
 instance ToPG db Int32 where toPG = pure . int4_int32
@@ -215,7 +215,7 @@ instance
   , SOP.All (OidOfField db) fields
   , RowPG x ~ fields
   ) => ToPG db (Composite x) where
-    toPG = rowParam (contramap getComposite genericRowParams)
+    toPG = rowParam @db (contramap getComposite genericRowParams)
 instance ToPG db x => ToPG db (Range x) where
   toPG r = do
     payload <- case r of
@@ -245,7 +245,7 @@ instance ToPG db x => ToPG db (Range x) where
 -- You should not define instances for `ToParam`,
 -- just use the provided instances.
 class ToParam (db :: SchemasType) (ty :: NullType) (x :: Type) where
-  toParam :: x -> ReaderT (SOP.K LibPQ.Connection db) IO (Maybe Encoding)
+  toParam :: x -> ReaderT LibPQ.Connection IO (Maybe Encoding)
 instance (ToPG db x, pg ~ PG x) => ToParam db ('NotNull pg) x where
   toParam = fmap Just . toPG @db
 instance (ToPG db x, pg ~ PG x) => ToParam db ('Null pg) (Maybe x) where
@@ -260,7 +260,7 @@ class ToField
   (field :: (Symbol, NullType))
   (x :: (Symbol, Type)) where
   toField :: SOP.P x
-    -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K (Maybe Encoding) field)
+    -> ReaderT LibPQ.Connection IO (SOP.K (Maybe Encoding) field)
 instance (fld0 ~ fld1, ToParam db ty x)
   => ToField db (fld0 ::: ty) (fld1 ::: x) where
     toField (SOP.P x) = SOP.K <$> toParam @db @ty x
@@ -274,7 +274,7 @@ class ToArray
   (dims :: [Nat])
   (ty :: NullType)
   (x :: Type) where
-  arrayPayload :: x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
+  arrayPayload :: x -> ReaderT LibPQ.Connection IO Encoding
   arrayDims :: [Int32]
   arrayNulls :: Bool
 instance (ToPG db x, pg ~ PG x)
@@ -342,7 +342,7 @@ newtype EncodeParams
   (tys :: [k])
   (x :: Type) = EncodeParams
   { runEncodeParams :: x
-    -> ReaderT (SOP.K LibPQ.Connection db) IO (NP (SOP.K (Maybe Encoding)) tys) }
+    -> ReaderT LibPQ.Connection IO (NP (SOP.K (Maybe Encoding)) tys) }
 instance Contravariant (EncodeParams db tys) where
   contramap f (EncodeParams g) = EncodeParams (g . f)
 
@@ -394,7 +394,7 @@ instance
     where
       encodeNullParam
         :: forall ty y. ToParam db ty y
-        => SOP.I y -> ReaderT (SOP.K LibPQ.Connection db) IO (SOP.K (Maybe Encoding) ty)
+        => SOP.I y -> ReaderT LibPQ.Connection IO (SOP.K (Maybe Encoding) ty)
       encodeNullParam = fmap SOP.K . toParam @db @ty . SOP.unI
 
 -- | Encode 0 parameters.
@@ -514,7 +514,7 @@ enumParam
   :: (PG x ~ 'PGenum labels, SOP.All KnownSymbol labels)
   => (x -> SOP.NS PGlabel labels)
   -- ^ match cases with enum `label`s
-  -> (x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding)
+  -> (x -> ReaderT LibPQ.Connection IO Encoding)
 enumParam casesOf
   = return
   . text_strict
@@ -546,10 +546,10 @@ instance ToPG db Complex where
 :}
 -}
 rowParam
-  :: (PG x ~ 'PGcomposite row, SOP.All (OidOfField db) row)
+  :: forall db row x. (PG x ~ 'PGcomposite row, SOP.All (OidOfField db) row)
   => EncodeParams db row x
   -- ^ use `(.#)` and `(#.)` to define a row parameter encoding
-  -> (x -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding)
+  -> (x -> ReaderT LibPQ.Connection IO Encoding)
 rowParam (enc :: EncodeParams db row x) x = do
   let
     compositeSize
@@ -560,7 +560,7 @@ rowParam (enc :: EncodeParams db row x) x = do
     each
       :: OidOfField db field
       => SOP.K (Maybe Encoding) field
-      -> ReaderT (SOP.K LibPQ.Connection db) IO Encoding
+      -> ReaderT LibPQ.Connection IO Encoding
     each (SOP.K field :: SOP.K (Maybe Encoding) field) = do
       oid <- getOid <$> oidOfField @db @field
       return $ int4_word32 oid <> maybe null4 sized field

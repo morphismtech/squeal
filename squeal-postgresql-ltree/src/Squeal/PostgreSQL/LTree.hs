@@ -55,7 +55,6 @@ import Squeal.PostgreSQL
 import Squeal.PostgreSQL.Render
 
 import qualified Database.PostgreSQL.LibPQ as LibPQ
-import qualified Generics.SOP as SOP
 import qualified PostgreSQL.Binary.Decoding as Decoding
 import qualified PostgreSQL.Binary.Encoding as Encoding
 
@@ -102,8 +101,8 @@ instance OidOfArray db PGltxtquery where
 oidLtreeLookup
   :: String
   -> String
-  -> ReaderT (SOP.K LibPQ.Connection db) IO LibPQ.Oid
-oidLtreeLookup tyOrArr name = ReaderT $ \(SOP.K conn) -> do
+  -> ReaderT LibPQ.Connection IO LibPQ.Oid
+oidLtreeLookup tyOrArr name = ReaderT $ \conn -> do
   resultMaybe <- LibPQ.execParams conn q [] LibPQ.Binary
   case resultMaybe of
     Nothing -> throwIO $ ConnectionException oidErr
