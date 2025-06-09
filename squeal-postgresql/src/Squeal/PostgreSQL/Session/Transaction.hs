@@ -17,13 +17,11 @@ module Squeal.PostgreSQL.Session.Transaction
   ( -- * Transaction
     Transaction
   , transactionally
-  , transactionally_
   , transactionallyRetry
-  , transactionallyRetry_
   , ephemerally
-  , ephemerally_
   , withSavepoint
     -- * Transaction Mode
+  , TransactionType (..)
   , TransactionMode (..)
   , defaultMode
   , longRunningMode
@@ -39,6 +37,7 @@ import Data.ByteString
 import Squeal.PostgreSQL.Session.Monad
 import Squeal.PostgreSQL.Session.Transaction.Unsafe
   ( TransactionMode (..)
+  , TransactionType (..)
   , defaultMode
   , longRunningMode
   , retryMode
@@ -82,17 +81,10 @@ otherwise `Unsafe.commit` and `return` the result.
 -}
 transactionally
   :: (MonadMask tx, MonadPQ db tx)
-  => TransactionMode
-  -> Transaction db x -- ^ run inside a transaction
-  -> tx x
-transactionally mode tx = Unsafe.transactionally mode tx
-
--- | Run a computation `transactionally_`, in `defaultMode`.
-transactionally_
-  :: (MonadMask tx, MonadPQ db tx)
   => Transaction db x -- ^ run inside a transaction
   -> tx x
-transactionally_ tx = Unsafe.transactionally_ tx
+transactionally =
+  Unsafe.runTransaction (Unsafe.Transactional defaultMode)
 
 {- |
 `transactionallyRetry` a computation;
@@ -106,35 +98,20 @@ transactionally_ tx = Unsafe.transactionally_ tx
 -}
 transactionallyRetry
   :: (MonadMask tx, MonadPQ db tx)
-  => TransactionMode
-  -> Transaction db x -- ^ run inside a transaction
-  -> tx x
-transactionallyRetry mode tx = Unsafe.transactionallyRetry mode tx
-
-{- | `transactionallyRetry` in `retryMode`. -}
-transactionallyRetry_
-  :: (MonadMask tx, MonadPQ db tx)
   => Transaction db x -- ^ run inside a transaction
   -> tx x
-transactionallyRetry_ tx = Unsafe.transactionallyRetry_ tx
+transactionallyRetry =
+  Unsafe.runTransaction (Unsafe.TransactionalRetry retryMode)
 
 {- | Run a computation `ephemerally`;
 Like `transactionally` but always `Unsafe.rollback`, useful in testing.
 -}
 ephemerally
   :: (MonadMask tx, MonadPQ db tx)
-  => TransactionMode
-  -> Transaction db x -- ^ run inside an ephemeral transaction
-  -> tx x
-ephemerally mode tx = Unsafe.ephemerally mode tx
-
-{- | Run a computation `ephemerally` in `defaultMode`. -}
-ephemerally_
-  :: (MonadMask tx, MonadPQ db tx)
   => Transaction db x -- ^ run inside an ephemeral transaction
   -> tx x
-ephemerally_ tx = Unsafe.ephemerally_ tx
-
+ephemerally =
+  Unsafe.runTransaction (Unsafe.Ephemeral defaultMode)
 {- | `withSavepoint`, used in a transaction block,
 allows a form of nested transactions,
 creating a savepoint, then running a transaction,
@@ -148,4 +125,4 @@ withSavepoint
   :: ByteString -- ^ savepoint name
   -> Transaction db (Either e x)
   -> Transaction db (Either e x)
-withSavepoint sv tx = Unsafe.withSavepoint sv tx
+withSavepoint = Unsafe.withSavepoint

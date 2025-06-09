@@ -19,12 +19,7 @@ transaction control language permitting arbitrary `IO`
 
 module Squeal.PostgreSQL.Session.Transaction.Unsafe
   ( -- * Transaction
-    transactionally
-  , transactionally_
-  , transactionallyRetry
-  , transactionallyRetry_
-  , ephemerally
-  , ephemerally_
+    runTransaction
   , begin
   , commit
   , rollback
@@ -51,6 +46,17 @@ import Squeal.PostgreSQL.Session.Exception
 import Squeal.PostgreSQL.Session.Monad
 import Squeal.PostgreSQL.Session.Statement
 
+runTransaction
+  :: (MonadMask tx, MonadPQ db tx)
+  => TransactionType
+  -> tx x
+  -> tx x
+runTransaction = \case
+  Untransactional -> id
+  Transactional mode -> transactionally mode
+  TransactionalRetry mode -> transactionallyRetry mode
+  Ephemeral mode -> ephemerally mode
+
 {- | Run a computation `transactionally`;
 first `begin`,
 then run the computation,
@@ -67,13 +73,6 @@ transactionally mode tx = mask $ \restore -> do
   result <- restore tx `onException` execute_ rollback
   execute_ commit
   return result
-
--- | Run a computation `transactionally_`, in `defaultMode`.
-transactionally_
-  :: (MonadMask tx, MonadPQ db tx)
-  => tx x -- ^ run inside a transaction
-  -> tx x
-transactionally_ = transactionally defaultMode
 
 {- |
 `transactionallyRetry` a computation;
@@ -110,13 +109,6 @@ transactionallyRetry mode tx = mask $ \restore ->
           throwM err
         Right x -> return x
 
-{- | `transactionallyRetry` in `retryMode`. -}
-transactionallyRetry_
-  :: (MonadMask tx, MonadPQ db tx)
-  => tx x -- ^ run inside a transaction
-  -> tx x
-transactionallyRetry_ = transactionallyRetry retryMode
-
 {- | Run a computation `ephemerally`;
 Like `transactionally` but always `rollback`, useful in testing.
 -}
@@ -130,13 +122,6 @@ ephemerally mode tx = mask $ \restore -> do
   result <- restore tx `onException` (execute_ rollback)
   execute_ rollback
   return result
-
-{- | Run a computation `ephemerally` in `defaultMode`. -}
-ephemerally_
-  :: (MonadMask tx, MonadPQ db tx)
-  => tx x -- ^ run inside an ephemeral transaction
-  -> tx x
-ephemerally_ = ephemerally defaultMode
 
 -- | @BEGIN@ a transaction.
 begin :: TransactionMode -> Statement db () ()

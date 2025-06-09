@@ -154,7 +154,7 @@ instance (MonadIO io, MonadResult io, db0 ~ db, db1 ~ db)
           okResult_ result
           return $ Result decode result
   executeParams (Query encode decode q) x =
-    executeParams (Manipulation encode decode (queryStatement q)) x
+    executeParams (Manipulation encode decode (queryManip q)) x
 
   prepare (Manipulation encode decode (UnsafeManipulation q :: Manipulation '[] db params row)) = do
     let
@@ -199,7 +199,7 @@ instance (MonadIO io, MonadResult io, db0 ~ db, db1 ~ db)
     return $ Prepared runPrepared' deallocate'
 
   prepare (Query encode decode q) = prepare $
-    Manipulation encode decode (queryStatement q)
+    Manipulation encode decode (queryManip q)
 
 instance (MonadUnliftIO m, db0 ~ db1)
   => MonadUnliftIO (PQ db0 db1 m) where

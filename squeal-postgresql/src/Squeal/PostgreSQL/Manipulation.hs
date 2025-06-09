@@ -33,7 +33,7 @@ data manipulation language
 module Squeal.PostgreSQL.Manipulation
   ( -- * Manipulation
     Manipulation (..)
-  , queryStatement
+  , queryManip
   , ReturningClause (..)
   , pattern Returning_
   , UsingClause (..)
@@ -67,7 +67,7 @@ but does not alter its schemas. Examples are
 `Squeal.PostgreSQL.Manipulation.Insert.insertInto`s,
 `Squeal.PostgreSQL.Manipulation.Update.update`s and
 `Squeal.PostgreSQL.Manipulation.Delete.deleteFrom`s.
-A `queryStatement` is also considered a `Manipulation` even though it does not modify data.
+A `queryManip` is also considered a `Manipulation` even though it does not modify data.
 
 The general `Manipulation` type is parameterized by
 
@@ -236,11 +236,11 @@ instance With Manipulation where
     "WITH" <+> commaSeparated (qtoList renderSQL ctes) <+> renderSQL manip
 
 -- | Convert a `Query` into a `Manipulation`.
-queryStatement
+queryManip
   :: Query '[] with db params columns
   -- ^ `Query` to embed as a `Manipulation`
   -> Manipulation with db params columns
-queryStatement q = UnsafeManipulation $ renderSQL q
+queryManip q = UnsafeManipulation $ renderSQL q
 
 -- | A `ReturningClause` computes and returns value(s) based
 -- on each row actually inserted, updated or deleted. This is primarily
