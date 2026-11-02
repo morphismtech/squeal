@@ -195,14 +195,33 @@ type HasUnique alias fields field = fields ~ '[alias ::: field]
 -- @fields@ has a field of @alias ::: field@, inferring @field@
 -- from @alias@ and @fields@.
 class (KnownSymbol alias) => Has (alias :: Symbol) (fields :: [(Symbol, kind)]) (field :: kind) | alias fields -> field
--- having these instances forces 'Has' to inspect 'alias' and 'fields' and thereby fail before delegating to
--- 'HasErr', which means 'Has' shows up in error messages instead of 'HasErr'
-instance {-# OVERLAPPING #-} (KnownSymbol alias, HasErr (alias ::: field0 ': fields) alias (alias ::: field0 ': fields) field1)
-  => Has alias (alias ::: field0 ': fields) field1
-instance {-# OVERLAPPABLE #-} (KnownSymbol alias, HasErr (field' ': fields) alias (field' ': fields) field)
+-- The lookup is a closed type family rather than a chain of overlapping
+-- instances: resolving the k-th field then needs constant-size evidence
+-- (a 'KnownSymbol' dictionary) instead of a chain of k dictionaries that
+-- each mention the whole list.
+-- 'HasLookup' reports the same errors as 'HasErr' once the lookup is done.
+-- The instances match on the list’s shape, as the overlapping ones did, so
+-- a 'Has' constraint over a list variable in a signature stays as written
+-- rather than being simplified through the instance.
+instance (KnownSymbol alias, HasLookup alias (field' ': fields) (Lookup alias (field' ': fields)) field)
   => Has alias (field' ': fields) field
-instance (KnownSymbol alias, HasErr '[] alias '[] field)
+instance (KnownSymbol alias, HasLookup alias '[] 'Nothing field)
   => Has alias '[] field
+
+-- | @Lookup alias fields@ is the field under @alias@, if there is one.
+type family Lookup (alias :: Symbol) (fields :: [(Symbol, kind)]) :: Maybe kind where
+  Lookup alias (alias ::: field ': _) = 'Just field
+  Lookup alias (_ ': fields) = Lookup alias fields
+  Lookup _ '[] = 'Nothing
+
+-- | Turns the result of 'Lookup' into the field, or into the error
+-- 'HasErr' would report.
+class HasLookup (alias :: Symbol) (fields :: [(Symbol, kind)]) (found :: Maybe kind) (field :: kind)
+  | alias fields found -> field
+instance (field0 ~ field1, MismatchError alias fields field0 field1)
+  => HasLookup alias fields ('Just field0) field1
+instance (LookupFailedError alias fields, field ~ Any)
+  => HasLookup alias fields 'Nothing field
 
 {- | 'HasErr' is like `Has` except it also retains the original
 list of fields being searched, so that error messages are more
